@@ -1,7 +1,7 @@
 params.sqlRead =    'SELECT p.ID, p.R1, p.R2, opts.cpus, opts.memory, opts.fastp ' +
                     'FROM preprocess p ' +
                     'JOIN pre_opts opts ON p.pre_opts = opts.pre_opts ' +
-                    'WHERE EXISTS (SELECT 1 FROM assemble a WHERE t.ID = a.ID AND a.assemble_switch = 1)'
+                    'WHERE EXISTS (SELECT 1 FROM assemble a WHERE p.ID = a.ID AND a.assemble_switch = 1)'
 
 params.sqlWrite = 'UPDATE preprocess SET reads = ?, trimmed_reads = ?, mean_length = ?, time_stamp = ? WHERE ID = ?'
 
@@ -53,9 +53,9 @@ workflow PRE {
                     fastp: it[5]                                                // fastp args
                 )
             }
-            .take(params.preprocess.take) // optional subsetting for development
+            //.take(params.preprocess.take) // optional subsetting for development
             .view()
-            .set { preprocess_in }
+            //.set { preprocess_in }
 
         // Run trim
         //preprocess(preprocess_in).set { preprocess_out }
