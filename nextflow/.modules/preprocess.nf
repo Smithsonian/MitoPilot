@@ -53,7 +53,7 @@ workflow PRE {
                     fastp: it[5]                                                // fastp args
                 )
             }
-            .take(params.trim.take) // optional subsetting for development
+            .take(params.preprocess.take) // optional subsetting for development
             .set { preprocess_in }
 
         // Run trim
