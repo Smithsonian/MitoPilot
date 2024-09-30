@@ -12,8 +12,8 @@ process preprocess {
 
     publishDir params.publishDir, overwrite: true, pattern: "${id}/${id}_preprocess.json", mode: 'copy'
 
-    cpus opts.cpus
-    memory opts.memory
+    cpus {opts.cpus}
+    memory {opts.memory}
 
     tag "${id}"
 
