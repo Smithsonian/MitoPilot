@@ -8,7 +8,7 @@ import java.time.Instant
 params.ts = workflow.start.toInstant().getEpochSecond().toString()
 
 // Modules
-include {TRIM} from 'nextflow/.modules/preprocess.nf'
+include {TRIM} from './nextflow/.modules/preprocess.nf'
 //include {ASSEMBLE} from './.modules/assemble.nf'
 //include {COVERAGE} from './.modules/coverage.nf'
 //include {ANNOTATE} from './.modules/annotate.nf'
