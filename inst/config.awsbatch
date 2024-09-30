@@ -1,0 +1,62 @@
+plugins {
+  id 'nf-amazon'
+	id 'nf-sqldb@0.5.0'
+}
+
+docker {
+  enabled = true
+}
+
+process {
+  executor = 'local'
+  container = '<<CONTAINER_ID>>'
+  queue = '<<BATCH_QUEUE>>'
+}
+
+// AWS Batch parameters (modify as needed, see: https://www.nextflow.io/docs/latest/aws.html#aws-batch)
+aws {
+  region = '<<AWS_REGION>>'
+  batch {
+    cliPath = '<<AWS_CLI_PATH>>' // Path to the AWS CLI on your custom AMI
+    maxParallelTransfers = 8
+  }
+  client {
+    maxConnections = 16
+  }
+}
+
+// SQL database configuration (https://github.com/nextflow-io/nf-sqldb)
+sql {
+  db {
+    sqlite {
+      url = 'jdbc:sqlite:sample.db'url = 'jdbc:sqlite:.sqlite'
+    }
+  }
+}
+
+// Pipeline parameters
+params {
+    trim {
+        take = -1
+        maxRetries = 0
+        container = process.container
+        executor = process.executor
+    }
+    assemble {
+        take = -1
+        maxRetries = 1
+        container = process.container
+        executor = process.executor
+    }
+    coverage {
+        take = -1
+        maxRetries = 0
+        container = process.container
+        executor = process.executor
+    }
+    annotate {
+        maxRetries = 0
+        container = process.container
+        executor = process.executor
+    }
+}

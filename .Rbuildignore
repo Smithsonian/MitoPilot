@@ -1,0 +1,14 @@
+^renv$
+^renv\.lock$
+^.*\.Rproj$
+^\.Rproj\.user$
+^data-raw$
+dev_history.R
+^dev$
+$run_dev.*
+^.here$
+^README\.Rmd$
+^ref_dbs$
+^test_data$
+^nextflow$
+^docker$

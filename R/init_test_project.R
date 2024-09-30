@@ -1,0 +1,104 @@
+#' Initialize a test project
+#'
+#' This function will set up a test project and fectch associated data from ENA.
+#' The `n` parameter can be used to limit the number of species used in the test
+#' project for faster set up.
+#'
+#' @param path path the the directory for the test project (default = currect
+#'   working directory). Will be created if it does not already exists.
+#' @param n how many samples to include in the test project (max = 8)
+#' @param executor The executor to use for running the nextflow pipeline. Must
+#'   be one of "local" (default) or "awsbatch".
+#' @param container The container to use for running the pipeline.
+#' @param Rproj (logical) Initialize and open an RStudio project in the project
+#'   directory (default = TRUE). This has now effect if not running
+#'   interactively in RStudio.
+#' @param force (logical) Force recreating of existing project database and
+#'   config files (default = FALSE).
+#' @param config (optional) provide a path to an existing custom nextflow config
+#'   file. If not provided a config file template will be created based on the
+#'   specified executor.
+#'
+#' @export
+init_test_project <- function(
+  path = here::here(),
+  n = 2,
+  full_size = FALSE,
+  executor = 'local',
+  container = 'drleopold/mitopilot:dev',
+  config = NULL,
+  Rproj = TRUE,
+  force = FALSE
+  ){
+
+  if(!dir.exists(path)){
+    dir.create(path, recursive = TRUE)
+  }
+  mapping <- app_sys("mapping_test.csv") |>
+    read.csv() |>
+    dplyr::slice(seq_len(n))
+  write.csv(mapping, file.path(path, "mapping.csv"), row.names = FALSE)
+
+  # Get Data ----
+
+  dir.create(file.path(path,"data"))
+
+  if(full_size){
+    # TODO - make parallel
+    message("Fetching test data. Go grab a coffee, this may take a while...")
+    purrr::pwalk(mapping, function(...){
+      cur <- list(...)
+      message(glue::glue("{cur$ID} - {cur$Taxon}"))
+      acc <- cur$ID
+      pre <- stringr::str_sub(acc,1,6)
+      suf <- stringr::str_extract(acc,"..$") |> stringr::str_pad(3, "left", "0")
+      # R1
+      fn_R1 <- file.path(path,"data",glue::glue("{acc}_R1.fastq.gz"))
+      status <- glue::glue(
+        "-t {fn_R1} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
+      ) |> system2("gzip", args=_, stdout=T)
+      while(status=="incomplete"){
+        glue::glue(
+          "curl",
+          "http://ftp.sra.ebi.ac.uk/vol1/fastq/{pre}/{suf}/{acc}/{acc}_1.fastq.gz",
+          "--silent -o {fn_R1}",
+          .sep=" "
+        ) |> system()
+        status <- glue::glue(
+          "-t {fn_R1} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
+        ) |> system2("gzip", args=_, stdout=T)
+      }
+      # R2
+      fn_R2 <- file.path(path,"data",glue::glue("{acc}_R2.fastq.gz"))
+      status <- glue::glue(
+        "-t {fn_R2} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
+      ) |> system2("gzip", args=_, stdout=T)
+      while(status=="incomplete"){
+        glue::glue(
+          "curl",
+          "http://ftp.sra.ebi.ac.uk/vol1/fastq/{pre}/{suf}/{acc}/{acc}_2.fastq.gz",
+          "--silent -o {fn_R2}",
+          .sep=" "
+        ) |> system()
+        status <- glue::glue(
+          "-t {fn_R2} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
+        ) |> system2("gzip", args=_, stdout=T)
+      }
+    })
+  }
+  if(!full_size){
+
+  }
+
+
+  # Initialize project ----
+  init(
+    path = path,
+    mapping_fn = file.path(path, "mapping.csv"),
+    mapping_id = "ID",
+    executor = executor,
+    config = config,
+    Rproj = Rproj
+  )
+
+}
