@@ -54,16 +54,17 @@ workflow PRE {
                 )
             }
             .take(params.preprocess.take) // optional subsetting for development
+            .view()
             .set { preprocess_in }
 
         // Run trim
-        preprocess(preprocess_in).set { preprocess_out }
+        //preprocess(preprocess_in).set { preprocess_out }
 
         // Update DB
-        preprocess_out[1]
-            .sqlInsert(statement: params.sqlWrite, db: 'sqlite')
+        //preprocess_out[1]
+            //.sqlInsert(statement: params.sqlWrite, db: 'sqlite')
 
-    emit:
-        ch = preprocess_out[0]
+    //emit:
+        //ch = preprocess_out[0]
 
 }
