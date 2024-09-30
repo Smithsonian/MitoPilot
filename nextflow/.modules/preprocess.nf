@@ -12,13 +12,13 @@ process preprocess {
 
     publishDir params.publishDir, overwrite: true, pattern: "${id}/${id}_preprocess.json", mode: 'copy'
 
-    cpus cpus
-    memory memory
+    cpus opts.cpus
+    memory opts.memory
 
     tag "${id}"
 
     input:
-    tuple val(id), path(R1), path(R2), val(cpus), val(memory), val(fastp)
+    tuple val(id), path(R1), path(R2), val(opts)
 
     output:
     tuple val("${id}"), path("${id}/${id}_preprocess_*"), env(after)                          // output for processing
@@ -31,7 +31,7 @@ process preprocess {
     out2 = "${id}/${id}_preprocess_R2.fastq.gz"
     '''
     mkdir !{id}
-    fastp --in1 !{R1} --in2 !{R2} --out1 !{out1} --out2 !{out2} --json !{json_out} --thread !{cpus} !{fastp}
+    fastp --in1 !{R1} --in2 !{R2} --out1 !{out1} --out2 !{out2} --json !{json_out} --thread !{opts.cpus} !{opts.fastp}
     before=$(jq '.summary.before_filtering.total_reads' !{json_out})
     after=$(jq '.summary.after_filtering.total_reads' !{json_out})
     meanLen=$(jq '.summary.after_filtering.read1_mean_length' !{json_out})
@@ -48,9 +48,11 @@ workflow PRE {
                     it[0],                                                      // ID
                     file(params.rawDir + "/" + it[1]),                          // fwd
                     file(params.rawDir + "/" + it[2]),                          // rev
-                    cpus: it[3],                                                // cpus
-                    memory: it[4],                                              // memory
-                    fastp: it[5]                                                // fastp args
+                    [
+                      cpus: it[3],                                              // cpus
+                      memory: it[4],                                            // memory
+                      fastp: it[5]                                              // fastp args
+                    ]
                 )
             }
             //.take(params.preprocess.take) // optional subsetting for development
