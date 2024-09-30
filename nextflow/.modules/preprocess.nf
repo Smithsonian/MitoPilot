@@ -39,7 +39,7 @@ process preprocess {
 
 }
 
-workflow PREPROCESS {
+workflow PRE {
     main:
         // Prepare input
         channel.fromQuery(params.sqlRead, db: 'sqlite')
