@@ -36,6 +36,10 @@ sql {
 
 // Pipeline parameters
 params {
+    rawDir = '<<rawDir>>'               // Directory (or s3 bucket) containing raw data
+    bucket-dir = '<<bucket-dir>>'       // Path to s3 bucket for stroing intermediate data
+    publishDir = '$launchDir/out/'      // Directory (or s3 bucket) to publish pipeline outputs
+    minDepth = 2000000                  // Skip samples with less than this read depth
     trim {
         take = -1
         maxRetries = 0

@@ -1,5 +1,6 @@
-params.sqlRead =    'SELECT t.ID, t.R1, t.R1, t.cpus, t.memory, t.fastp ' +
-                    'FROM preprocess t ' +
+params.sqlRead =    'SELECT p.ID, p.R1, p.R2, opts.cpus, opts.memory, opts.fastp ' +
+                    'FROM preprocess p ' +
+                    'JOIN pre_opts opts ON p.pre_opts = opts.pre_opts ' +
                     'WHERE EXISTS (SELECT 1 FROM assemble a WHERE t.ID = a.ID AND a.assemble_switch = 1)'
 
 params.sqlWrite = 'UPDATE preprocess SET reads = ?, trimmed_reads = ?, mean_length = ?, time_stamp = ? WHERE ID = ?'

@@ -22,6 +22,9 @@ sql {
 
 // Pipeline parameters
 params {
+    rawDir = '<<rawDir>>'                   // Directory containing raw data
+    publishDir = '$launchDir/out/'          // Directory to publish pipeline outputs
+    minDepth = 2000000                      // Skip samples with less than this read depth
     trim {
         take = -1
         maxRetries = 0
