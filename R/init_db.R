@@ -147,6 +147,8 @@ init_db <- function(
       cpus INTEGER,
       memory INTEGER,
       getOrganelle TEXT,
+      seeds_db TEXT,
+      labels_db TEXT,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -156,7 +158,8 @@ init_db <- function(
         assemble_opts = "default",
         cpus = 6,
         memory = 16,
-        db = target,
+        seeds_db = glue::glue("/mpgs/getOrganelle/seeds/{target}.fasta"),
+        labels_db = glue::glue("/mpgs/getOrganelle/labels/{target}.fasta"),
         getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500"
       ),
       in_place = TRUE,

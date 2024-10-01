@@ -1,6 +1,6 @@
 include {assemble} from './assemble.nf'
 
-params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, opts.db, opts.getOrganelle ' +
+params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, opts.seeds_db, opts.labels_db, opts.getOrganelle ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ON a.assemble_opts = opts.assemble_opts ' +
                   'WHERE a.assemble_switch = 1 AND a.lock = 0 '
@@ -26,36 +26,37 @@ workflow ASSEMBLE {
                     [                                                           //## assembly options ##//
                         cpus: it[2],                                            // cpus
                         memory: it[3],                                          // memory
-                        db: it[4],                                              // getOrganelle database
-                        getOrganelle: it[5]                                     // getOrganelle options
+                        seeds_db: it[4],                                        // getOrganelle seeds
+                        labels_db: it[5],                                       // getOrganelle labels
+                        getOrganelle: it[6]                                     // getOrganelle options
                     ]
                 )
             }
             .set { assemble_opts }
+assemble_opts.view()
+        // // Assemble Input Channel
+        // input
+        //     // filter on min seq depth
+        //     .filter{
+        //         try {
+        //             it[2].toInteger() >= params.minDepth
+        //         } catch (Exception e) {
+        //             return false
+        //         }
+        //     }
+        //     // cross with assembly options
+        //     .cross(assemble_opts)
+        //     .map{ it ->
+        //         tuple(
+        //             it[0][0],                                                   // ID
+        //             it[1][1],                                                   // assembly options id
+        //             it[0][1],                                                   // trimmed reads in
+        //             it[1][2],                                                   // assembly options
+        //         )
+        //     }
+        //     .take(params.assemble.take) // optional subsetting for development
+        //     .set { assemble_in }
 
-        // Assemble Input Channel
-        input
-            // filter on min seq depth
-            .filter{
-                try {
-                    it[2].toInteger() >= params.minDepth
-                } catch (Exception e) {
-                    return false
-                }
-            }
-            // cross with assembly options
-            .cross(assemble_opts)
-            .map{ it ->
-                tuple(
-                    it[0][0],                                                   // ID
-                    it[1][1],                                                   // assembly options id
-                    it[0][1],                                                   // trimmed reads in
-                    it[1][2],                                                   // assembly options
-                )
-            }
-            .take(params.assemble.take) // optional subsetting for development
-            .set { assemble_in }
-assemble_in.view()
         // // Assemble
         // assemble(assemble_in).set { assemble_out }
 

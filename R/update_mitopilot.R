@@ -1,7 +1,7 @@
 update_mitopilot <- function(
   path = here::here(),
   workflow = c("both", "assemble", "annotate"),
-  source = "https://github.com/JonahVentures/MitoPilot"
+  source =
 
   ){
 
@@ -11,7 +11,6 @@ update_mitopilot <- function(
       "nextflow",
       "-log .logs/nextflow.log",
       "run {source}",
-      "-r main -main-script nextflow/main.nf",
       "-c {file.path(path, 'nextflow.config')}",
       "-entry WF1",
       "-resume",
