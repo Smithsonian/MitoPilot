@@ -5,9 +5,10 @@
 \title{Initialize a test project}
 \usage{
 init_test_project(
-  path = here::here,
-  n = 2,
-  executor = NULL,
+  path = here::here(),
+  n = Inf,
+  full_size = FALSE,
+  executor = "local",
   container = "drleopold/mitopilot:dev",
   config = NULL,
   Rproj = TRUE,
@@ -18,10 +19,16 @@ init_test_project(
 \item{path}{path the the directory for the test project (default = currect
 working directory). Will be created if it does not already exists.}
 
-\item{n}{how many samples to include in the test project (max = 8)}
+\item{n}{how many samples to include in the test project (Default = Inf,
+include all)}
+
+\item{full_size}{(logical) Use the full size test data set (default = FALSE).
+Setting to TRUE will download the raw data from ENA, which will require
+10GB and will take some time to complete. By default a set of smaller
+pre-filtered input files will be fetched from the MitoPilot github repo.}
 
 \item{executor}{The executor to use for running the nextflow pipeline. Must
-be one of "local" or "awsbatch".}
+be one of "local" (default) or "awsbatch".}
 
 \item{container}{The container to use for running the pipeline.}
 

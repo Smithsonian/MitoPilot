@@ -34,7 +34,7 @@ file. If not provided a config file template will be created based on the
 specified executor.}
 
 \item{Rproj}{(logical) Initialize and open an RStudio project in the project
-directory (default = TRUE). This has now effect if not running
+directory (default = TRUE). This option has no effect if not running
 interactively in RStudio.}
 
 \item{force}{(logical) Force recreating of existing project database and
