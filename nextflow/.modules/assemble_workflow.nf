@@ -1,4 +1,4 @@
-include {assemble} from './.modules/assemble.nf'
+include {assemble} from './assemble.nf'
 
 params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, opts.db, opts.getOrganelle, ' +
                   'FROM assemble a '  +

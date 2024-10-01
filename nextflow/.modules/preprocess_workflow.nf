@@ -1,4 +1,4 @@
-include { preprocess } from './.modules/preprocess.nf'
+include { preprocess } from './preprocess.nf'
 
 // Database interactions
 params.sqlRead =    'SELECT p.ID, p.R1, p.R2, opts.cpus, opts.memory, opts.fastp ' +
