@@ -3,7 +3,7 @@ process preprocess {
     executor params.preprocess.executor
     container params.preprocess.container
 
-    publishDir params.publishDir, overwrite: true, pattern: "${id}/${id}_preprocess.json", mode: 'copy'
+    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/${id}_preprocess.json", mode: 'copy'
 
     cpus {opts.cpus}
     memory {opts.memory.GB}

@@ -86,10 +86,10 @@ init <- function(
     return()
   }
   readLines(config) |>
-    stringr::str_replace("<<CONTAINER_ID>>", container) |>
-    writeLines(file.path(path, "nextflow.config"))
+    stringr::str_replace("<<CONTAINER_ID>>", container %||% "<<CONTAINER_ID>>") |>
+    writeLines(file.path(path, ".config"))
 
   message("Project initialized successfully.")
-  message("Please open and review the nextflow.config file to ensure all required options are specified.")
+  message("Please open and review the .config file to ensure all required options are specified.")
 
 }

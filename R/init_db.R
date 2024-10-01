@@ -158,8 +158,8 @@ init_db <- function(
         assemble_opts = "default",
         cpus = 6,
         memory = 16,
-        seeds_db = glue::glue("/mpgs/getOrganelle/seeds/{target}.fasta"),
-        labels_db = glue::glue("/mpgs/getOrganelle/labels/{target}.fasta"),
+        seeds_db = glue::glue("/ref_dbs/getOrganelle/seeds/{target}.fasta"),
+        labels_db = glue::glue("/ref_dbs/getOrganelle/labels/{target}.fasta"),
         getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500"
       ),
       in_place = TRUE,
@@ -167,6 +167,26 @@ init_db <- function(
       by = "assemble_opts"
     )
 
+  # Add assemblies table
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE assemblies (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL,
+      scaffold INTEGER NOT NULL,
+      topology TEXT,
+      length INTEGER,
+      sequence TEXT,
+      depth TEXT,
+      d_depth TEXT,
+      gc TEXT,
+      errors TEXT,
+      ignore INTEGER,
+      edited INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
+    );"
+  )
 
   invisible(return())
 

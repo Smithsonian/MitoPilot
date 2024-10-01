@@ -104,6 +104,18 @@ init_test_project <- function(
     })
   }
 
+  # Config file ----
+  config <- config %||% app_sys(paste0("config.", executor))
+  if(!file.exists(config)){
+    stop("Config file not found.")
+    return()
+  }
+  readLines(config) |>
+    stringr::str_replace("<<CONTAINER_ID>>", container %||% "<<CONTAINER_ID>>") |>
+    stringr::str_replace("<<RAW_DIR>>", file.path(path,"data","")) |>
+    stringr::str_replace("<<MIN_DEPTH>>", ifelse(full_size,'200000','2500')) |>
+    writeLines(file.path(path, ".config"))
+
 
   # Initialize project ----
   init(
@@ -111,8 +123,9 @@ init_test_project <- function(
     mapping_fn = file.path(path, "mapping.csv"),
     mapping_id = "ID",
     executor = executor,
-    config = config,
+    config = file.path(path, ".config"),
     Rproj = Rproj
   )
+
 
 }
