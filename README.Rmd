@@ -39,10 +39,17 @@ devtools::install()
 
 # Usage
 
+A `{MitoPilot}` project can be created using the `init()` function. This function will create a new project directory (or update an existing directory) with the necessary files and directories to run the pipeline. A path to a mapping file is required to create a project and must minimally include a column to serve as a unique identifier for each sample and columns providing the forward and reverse raw paired-read input files, `R1` and `R2`, respectively. The default Nextflow executor must also be specified when initializing a project to populate the `.config` file. Currently only the `local` and `awsbatch` executors are supported. After project initialization, please review the `.config` file in the project directory to ensure that the all necissary parameters are provided (missing values will be indicated with placeholders in the format, <<SOMETHING_HERE>>).
 
+An example project can be created to test the pipeline installation:
 
+```{r, eval = FALSE}
+init_test_project(
+  path = "MitoPilot-test",
+  executor = "local"
+)
+```
 
-# Development
+This function will load pre-filtered data sets for relatively quick testing of the pipeline. Alternatively, you can set the parameter `full_size=TRUE` to download all raw data for the test assemblies from ENA (though you should be prepared to wait a while).
 
-# Dependencies
-
+Currently, running the pipeline requires the use of the Nextflow command line interface. A helper function `update_mitopilot()` is provided to show the nextflow command needed to update the pipeline from the terminal.

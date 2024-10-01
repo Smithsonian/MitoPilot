@@ -3,6 +3,7 @@
 export(init)
 export(init_test_project)
 export(run_app)
+export(update_mitopilot)
 import(shiny)
 importFrom(golem,activate_js)
 importFrom(golem,add_resource_path)

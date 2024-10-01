@@ -15,14 +15,14 @@
 #' @param executor The executor to use for running the nextflow pipeline. Must
 #'   be one of "local" (default) or "awsbatch".
 #' @param container The container to use for running the pipeline.
+#' @param config (optional) provide a path to an existing custom nextflow config
+#'   file. If not provided a config file template will be created based on the
+#'   specified executor.
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
 #'   directory (default = TRUE). This has now effect if not running
 #'   interactively in RStudio.
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
-#' @param config (optional) provide a path to an existing custom nextflow config
-#'   file. If not provided a config file template will be created based on the
-#'   specified executor.
 #'
 #' @export
 init_test_project <- function(
@@ -44,9 +44,9 @@ init_test_project <- function(
   path <- normalizePath(path)
 
   mapping <- app_sys("mapping_test.csv") |>
-    read.csv() |>
+    utils::read.csv() |>
     dplyr::slice_head(n=n)
-  write.csv(mapping, file.path(path, "mapping.csv"), row.names = FALSE)
+  utils::write.csv(mapping, file.path(path, "mapping.csv"), row.names = FALSE)
 
   # Get Data ----
 

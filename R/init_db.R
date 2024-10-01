@@ -11,7 +11,7 @@ init_db <- function(
       stop("Mapping file not found")
     }
   }
-  mapping <- read.csv(mapping_fn)
+  mapping <- utils::read.csv(mapping_fn)
 
   # Validate ID col
   if(any(duplicated(mapping[[mapping_id]]))){
