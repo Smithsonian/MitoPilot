@@ -9,6 +9,5 @@ $run_dev.*
 ^.here$
 ^README\.Rmd$
 ^ref_dbs$
-^test_data$
 ^nextflow$
 ^docker$

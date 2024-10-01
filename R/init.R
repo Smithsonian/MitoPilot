@@ -41,14 +41,20 @@ init <- function(
     message("Creating project directory: ", path)
     dir.create(path, recursive = TRUE)
   }
+  path <- normalizePath(path)
 
-  # Initialize RStudio Project (optional & only if running form RStudio) ----
+  # Initialize RStudio Project ----
+  # (optional & only if running form RStudio)
   if(Rproj && !isFALSE(Sys.getenv("RSTUDIO", FALSE))){
-    rstudioapi::initializeProject(path)
-    on.exit(rstudioapi::openProject(path))
+    if(isFALSE(requireNamespace('rstudioapi', quietly = TRUE))){
+      message("package 'rstudioapi' not available. Skipping RStudio project initialization.")
+    }else{
+      rstudioapi::initializeProject(path)
+      on.exit(rstudioapi::openProject(path, newSession = TRUE))
+    }
   }
 
-  # Read mapping file
+  # Read mapping file ----
   if(is.null(mapping_fn) || !file.exists(mapping_fn)){
     stop("A mapping file is required to initialize a new project")
   }
@@ -69,6 +75,7 @@ init <- function(
   }
   init_db(
     file.path(path, ".sqlite"),
+    mapping_fn = mapping_out,
     mapping_id = mapping_id
   )
 
@@ -83,6 +90,6 @@ init <- function(
     writeLines(file.path(path, "nextflow.config"))
 
   message("Project initialized successfully.")
-  message("Please open and review the nextflow.config file to ensure all required optionas are specified.")
+  message("Please open and review the nextflow.config file to ensure all required options are specified.")
 
 }

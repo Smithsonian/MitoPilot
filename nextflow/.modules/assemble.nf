@@ -1,0 +1,60 @@
+process assemble {
+
+    debug params.assemble.debug
+
+    executor params.assemble.executor
+    container params.assemble.container
+
+    publishDir params.publishDir, overwrite: true
+
+    errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'finish' }
+    maxRetries { params.assemble.maxRetries }
+    cpus { opts.cpus }
+    memory { opts.memory.GB * task.attempt }
+
+    tag "${id}"
+
+    input:
+    tuple val(id), val(target), path(reads), val(opts)
+
+    output:
+    tuple val("${id}"), val("${target}"), val("${opts.hash}"),
+        path("${id}/${target}/${opts.hash}/${id}_assembly_*.fasta"),             // Assemblies Output
+        path("${id}/${target}/${opts.hash}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
+        path("${id}/${target}/${opts.hash}/${id}_summary.txt"),                  // getOrganelle summary
+        env(time_stamp)                                                          // time stamp
+    path("${id}/${target}/${opts.hash}/get_org.log.txt")                         // getOrganelle log
+
+
+    shell:
+    workingDir = "${id}/${target}"
+    outDir = "${workingDir}/${opts.hash}"
+    '''
+    mkdir -p !{workingDir}
+    get_organelle_from_reads.py \
+        -1 !{reads[0]} \
+        -2 !{reads[1]} \
+        -o !{workingDir}/ --overwrite \
+        -s /mpgs/getOrganelle/seeds/!{opts.db}.fasta \
+        --genes /mpgs/getOrganelle/labels/!{opts.db}.fasta \
+        -t !{task.cpus} \
+        !{opts.getOrganelle}
+    mkdir -p !{outDir}
+    ### LOGS ####
+    cp !{workingDir}/get_org.log.txt !{outDir}/get_org.log.txt
+    echo "!{opts.getOrganelle}" > !{outDir}/opts.txt
+    summary_get_organelle_output.py !{workingDir} -o !{outDir}/!{id}_summary.txt
+    ### ARCHIVE READS ###
+    tar -czvf !{outDir}/!{id}_reads.tar.gz !{workingDir}/extended*.fq
+    ### FORMAT ASSEMBLIES ###
+    export topology=$(awk -F'\t' 'NR==1{for(i=1;i<=NF;i++){if($i=="circular"){col=i;break;}}} NR>1{if($col=="yes") print "circular"; else if($col=="no") print "linear";}' !{outDir}/!{id}_summary.txt)
+    shopt -s nullglob
+    files=(!{workingDir}/*.fasta)
+    if [ ${#files[@]} -eq 0 ]; then
+        echo ">No assembly found" > !{outDir}/!{id}_assembly_0.fasta
+    else
+        parallel -j !{task.cpus} 'awk -v topo=$topology "/^>/ {print \\">!{id}.!{target}.!{opts.hash}.{#}.\\" ++count[\\">\\"] \\" \\" topo} !/^>/ {print}" {} > !{outDir}/!{id}_assembly_{#}.fasta' ::: "${files[@]}"
+    fi
+    time_stamp=$(date +%s)
+    '''
+}

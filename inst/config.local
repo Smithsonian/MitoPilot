@@ -15,7 +15,7 @@ process {
 sql {
   db {
     sqlite {
-      url = 'jdbc:sqlite:sample.db'url = 'jdbc:sqlite:.sqlite'
+      url = 'jdbc:sqlite:.sqlite'
     }
   }
 }

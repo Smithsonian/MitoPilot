@@ -6,7 +6,12 @@
 #'
 #' @param path path the the directory for the test project (default = currect
 #'   working directory). Will be created if it does not already exists.
-#' @param n how many samples to include in the test project (max = 8)
+#' @param n how many samples to include in the test project (Default = Inf,
+#'   include all)
+#' @param full_size (logical) Use the full size test data set (default = FALSE).
+#'   Setting to TRUE will download the raw data from ENA, which will require
+#'   10GB and will take some time to complete. By default a set of smaller
+#'   pre-filtered input files will be fetched from the MitoPilot github repo.
 #' @param executor The executor to use for running the nextflow pipeline. Must
 #'   be one of "local" (default) or "awsbatch".
 #' @param container The container to use for running the pipeline.
@@ -22,7 +27,7 @@
 #' @export
 init_test_project <- function(
   path = here::here(),
-  n = 2,
+  n = Inf,
   full_size = FALSE,
   executor = 'local',
   container = 'drleopold/mitopilot:dev',
@@ -31,12 +36,16 @@ init_test_project <- function(
   force = FALSE
   ){
 
+  # TODO add check for curl available
+
   if(!dir.exists(path)){
     dir.create(path, recursive = TRUE)
   }
+  path <- normalizePath(path)
+
   mapping <- app_sys("mapping_test.csv") |>
     read.csv() |>
-    dplyr::slice(seq_len(n))
+    dplyr::slice_head(n=n)
   write.csv(mapping, file.path(path, "mapping.csv"), row.names = FALSE)
 
   # Get Data ----
@@ -87,7 +96,12 @@ init_test_project <- function(
     })
   }
   if(!full_size){
-
+    purrr::pwalk(mapping, function(...){
+      cur <- list(...)
+      message(glue::glue("{cur$ID} - {cur$Taxon}"))
+      file.copy(app_sys(file.path("test_data", cur$R1)), file.path(path,"data"))
+      file.copy(app_sys(file.path("test_data", cur$R2)), file.path(path,"data"))
+    })
   }
 
 

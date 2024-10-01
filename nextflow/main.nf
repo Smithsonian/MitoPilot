@@ -8,8 +8,8 @@ import java.time.Instant
 params.ts = workflow.start.toInstant().getEpochSecond().toString()
 
 // Modules
-include {PRE} from './.modules/preprocess.nf'
-//include {ASSEMBLE} from './.modules/assemble.nf'
+include {PREPROCESS} from './.modules/preprocess_workflow.nf'
+include {ASSEMBLE} from './.modules/assemble_workflow.nf'
 //include {COVERAGE} from './.modules/coverage.nf'
 //include {ANNOTATE} from './.modules/annotate.nf'
 //include {AMPLICONS} from './.modules/amplicons.nf'
@@ -17,8 +17,8 @@ include {PRE} from './.modules/preprocess.nf'
 // ASSEMBLY WORKFLOW
 workflow WF1 {
 
-    PRE()
-    //ASSEMBLE(PREPROCESS.out[0])
+    PREPROCESS()
+    ASSEMBLE(PREPROCESS.out[0])
     //COVERAGE(ASSEMBLE.out[0])
 
 }

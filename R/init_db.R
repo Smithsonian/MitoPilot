@@ -22,7 +22,7 @@ init_db <- function(
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db_path)
   on.exit(DBI::dbDisconnect(con))
 
-  # Add sample metadata table
+  # Metadata table ----
   if(mapping_id != "ID"){
     mapping <- mapping |>
       dplyr::mutate(
@@ -45,57 +45,126 @@ init_db <- function(
       by = "ID"
     )
 
-  # Add pre-processing table
+  # Preprocessing table ----
   DBI::dbExecute(
     con,
     "CREATE TABLE preprocess (
       ID TEXT NOT NULL,
-      opts TEXT NOT NULL,
+      R1 TEXT,
+      R2 TEXT,
+      pre_opts TEXT NOT NULL,
       reads INTEGER,
       trimmed_reads INTEGER,
-      mean_length INTEGER
+      mean_length INTEGER,
+      time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
   )
   dplyr::tbl(con, "preprocess") |>
     dplyr::rows_upsert(
-      dat |>
-        dplyr::select(ID, fwd, rev) |>
+      mapping |>
+        dplyr::select(ID, R1, R2) |>
         dplyr::mutate(
-          opts = "default",
+          pre_opts = "default",
           reads = NA_real_,
           trimmed_reads = NA_real_,
-          mean_length = NA_real_
+          mean_length = NA_real_,
+          time_stamp = NA_integer_
         ),
       in_place = TRUE,
       copy = TRUE,
       by = "ID"
     )
 
-  # Add pre-processing options table
+  # Preprocessing options table ----
   DBI::dbExecute(
     con,
-    "CREATE TABLE preprocess_opts (
-      opts TEXT NOT NULL,
+    "CREATE TABLE pre_opts (
+      pre_opts TEXT NOT NULL,
       cpus INTEGER,
       memory INTEGER,
       fastp TEXT,
-      PRIMARY KEY (opts)
+      PRIMARY KEY (pre_opts)
     );"
   )
-  dplyr::tbl(con, "preprocess_opts") |>
+  dplyr::tbl(con, "pre_opts") |>
     dplyr::rows_upsert(
       data.frame(
-        opts = "default",
+        pre_opts = "default",
         cpus = 8,
-        memory = '8.GB',
+        memory = 4,
         fastp = "--trim_poly_g --correction"
       ),
       in_place = TRUE,
       copy = TRUE,
-      by = "opts"
+      by = "pre_opts"
     )
 
-  return()
+  # Assemble table ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE assemble (
+      ID TEXT NOT NULL,
+      length TEXT,
+      topology TEXT,
+      paths INTEGER,
+      scaffolds INTEGER,
+      assembly_notes TEXT,
+      assemble_switch INTEGER,
+      lock INTEGER,
+      hide_switch INTEGER,
+      assemble_opts TEXT,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID)
+    );"
+  )
+  dplyr::tbl(con, "assemble") |>
+    dplyr::rows_upsert(
+      mapping |>
+        dplyr::select(ID) |>
+        dplyr::mutate(
+          length = NA_character_,
+          topology = NA_character_,
+          paths = NA_integer_,
+          scaffolds = NA_integer_,
+          assembly_notes = NA_character_,
+          assemble_switch = 1,
+          lock = 0,
+          hide_switch = 0,
+          assemble_opts = "default",
+          time_stamp = NA_integer_
+        ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "ID"
+    )
+
+  # Assemble options table ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE assemble_opts (
+      assemble_opts TEXT NOT NULL,
+      cpus INTEGER,
+      memory INTEGER,
+      getOrganelle TEXT,
+      PRIMARY KEY (assemble_opts)
+    );"
+  )
+  dplyr::tbl(con, "assemble_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        assemble_opts = "default",
+        cpus = 6,
+        memory = 16,
+        db = target,
+        getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500"
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "assemble_opts"
+    )
+
+
+  invisible(return())
 
 }
