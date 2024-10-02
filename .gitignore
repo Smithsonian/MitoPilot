@@ -1,2 +1,13 @@
-.Rproj.user
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Rproj.user/
+.Rproj.user/*
+.Rproj.user/**
+*.Rproj
+.Rbuildignore
+.Rcheck/
+.httr-oauth
+.DS_Store
 .here
