@@ -15,18 +15,12 @@ RUN conda config --add channels defaults && \
     mamba install -c bioconda bowtie2 && \
     mamba install -c bioconda samtools
 
-# Install R
 RUN mamba install -c conda-forge r-base=4.3.0 && \
-    mamba install r-dplyr && \
-    mamba install r-stringr && \
-    mamba install r-jsonlite && \
-    mamba install r-optparse && \
-    mamba install r-tidyr && \
-    mamba install r-ggplot2  && \
-    mamba install r-readr  && \
-    mamba install r-remotes && \
-    mamba install -c r r-zoo && \
-    mamba install -c bioconda bioconductor-biostrings
+    mamba install r-remotes
+
+RUN R -e "remotes::install_github('rstudio/renv')"
+COPY renv.lock renv.lock
+RUN R -e 'renv::restore()'
 
 # Install MitoPilot
 COPY docker/MitoPilot_*.tar.gz /pkg.tar.gz
