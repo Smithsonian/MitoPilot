@@ -11,3 +11,4 @@
 .httr-oauth
 .DS_Store
 .here
+docker/MitoPilot*
