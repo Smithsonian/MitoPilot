@@ -5,6 +5,7 @@ process preprocess {
 
     publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/${id}_preprocess.json", mode: 'copy'
 
+    errorStrategy 'finish'
     cpus {opts.cpus}
     memory {opts.memory.GB}
 

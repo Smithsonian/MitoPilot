@@ -74,7 +74,7 @@ init <- function(
     file.remove(db)
   }
   init_db(
-    file.path(path, ".sqlite"),
+    db_path = file.path(path, ".sqlite"),
     mapping_fn = mapping_out,
     mapping_id = mapping_id
   )

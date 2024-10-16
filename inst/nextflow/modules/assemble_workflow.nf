@@ -104,7 +104,7 @@ workflow ASSEMBLE {
             // Add summary stats
             .map { it ->
                 tuple(
-                    it[0],                              // ID
+                    it[0],                                          // ID
                     it[1].toInteger(),                              // paths
                     it[2].toInteger(),                              // scaffold
                     it[3].toInteger(),                              // length
@@ -118,7 +118,7 @@ workflow ASSEMBLE {
                     it[2].max(),                                    // # scaffolds
                     it[3].unique().sort().reverse().join(";"),      // length(s)
                     it[4].unique().sort().join(";"),                // topology(s)
-                    '2',                                            // assembly status
+                    '1',                                            // assembly status ###
                     '',                                             // assembly notes
                     params.ts,                                      // time stamp
                     it[0]                                           // ID

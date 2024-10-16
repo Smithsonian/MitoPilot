@@ -24,7 +24,14 @@ RUN mamba install -c conda-forge r-base=4.3.0 && \
     mamba install r-tidyr && \
     mamba install r-ggplot2  && \
     mamba install r-readr  && \
+    mamba install r-remotes && \
     mamba install -c r r-zoo && \
     mamba install -c bioconda bioconductor-biostrings
 
+# Install MitoPilot
+COPY docker/MitoPilot_*.tar.gz /pkg.tar.gz
+RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never")'
+RUN rm /pkg.tar.gz
+
+# Default Reference DBs
 COPY ref_dbs/getOrganelle /ref_dbs/getOrganelle

@@ -18,11 +18,12 @@ process assemble {
     tuple val(id), val(opts_id), path(reads), val(opts)
 
     output:
-    tuple val("${id}"), //val("${opts_id}"), //val("${opts.hash}"),
+    tuple val("${id}"), 
         path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
         path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
         path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
-        env(time_stamp)                                                       // time stamp
+        env(time_stamp),                                                      // time stamp
+        val("${opts_id}"),                                                    // options id
     path("${id}/assemble/${opts_id}/get_org.log.txt")                         // getOrganelle log
 
 

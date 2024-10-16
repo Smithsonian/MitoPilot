@@ -22,13 +22,12 @@ sql {
 
 // Pipeline parameters
 params {
-    rawDir = '<<RAW_DIR>>'                  // Directory containing raw data
-    publishDir = 'out'                      // Directory to publish pipeline outputs
-    minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
-    minAssemblyLength = 500                 // min contig size to retain for annotation
+    rawDir = '<<RAW_DIR>>'
+    publishDir = 'out'
+    minDepth = <<MIN_DEPTH>>
+    minAssemblyLength = 500
     preprocess {
         take = -1
-        maxRetries = 0
         container = process.container
         executor = process.executor
     }
@@ -40,7 +39,8 @@ params {
     }
     coverage {
         take = -1
-        maxRetries = 0
+        cpus = 4
+        memory = 8
         container = process.container
         executor = process.executor
     }

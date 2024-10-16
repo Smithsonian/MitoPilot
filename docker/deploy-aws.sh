@@ -9,6 +9,10 @@ then
  exit 1
 fi
 
+# Build R pkg for install
+Rscript -e 'devtools::document()'
+Rscript -e 'devtools::build(path="docker", vignettes = FALSE)'
+
 # Build image
 docker build -f docker/Dockerfile --progress=plain -t ${repo}:${tag} .
 if [ $? -ne 0 ]; then

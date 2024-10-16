@@ -2,7 +2,17 @@ init_db <- function(
     db_path=file.path(here::here(),".sqlite"),
     mapping_fn=NULL,
     mapping_id="ID",
-    target="fish_mito"){
+    # Default assembly options
+    assemble_cpus = 6,
+    assemble_memory = 16,
+    seeds_db = glue::glue("/ref_dbs/getOrganelle/seeds/fish_mito.fasta"),
+    labels_db = glue::glue("/ref_dbs/getOrganelle/labels/fish_mito.fasta"),
+    getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500",
+    # Default annotation options
+    annotate_cpus = 6,
+    annotate_memory = 16,
+    mitos_refDb = "Chordata"
+  ){
 
   # Read mapping file
   if(is.null(mapping_fn)){
@@ -76,7 +86,7 @@ init_db <- function(
       by = "ID"
     )
 
-  # Preprocessing options table ----
+  ## Preprocessing options ----
   DBI::dbExecute(
     con,
     "CREATE TABLE pre_opts (
@@ -93,7 +103,7 @@ init_db <- function(
         pre_opts = "default",
         cpus = 8,
         memory = 4,
-        fastp = "--trim_poly_g --correction"
+        fastp = "--trim_poly_g --correction --detect_adapter_for_pe"
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -139,7 +149,7 @@ init_db <- function(
       by = "ID"
     )
 
-  # Assemble options table ----
+  ## Assemble options ----
   DBI::dbExecute(
     con,
     "CREATE TABLE assemble_opts (
@@ -156,18 +166,18 @@ init_db <- function(
     dplyr::rows_upsert(
       data.frame(
         assemble_opts = "default",
-        cpus = 6,
-        memory = 16,
-        seeds_db = glue::glue("/ref_dbs/getOrganelle/seeds/{target}.fasta"),
-        labels_db = glue::glue("/ref_dbs/getOrganelle/labels/{target}.fasta"),
-        getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500"
+        cpus = assemble_cpus,
+        memory = assemble_memory,
+        seeds_db = seeds_db,
+        labels_db = labels_db,
+        getOrganelle = getOrganelle
       ),
       in_place = TRUE,
       copy = TRUE,
       by = "assemble_opts"
     )
 
-  # Add assemblies table
+  ## Add assemblies output ----
   DBI::dbExecute(
     con,
     "CREATE TABLE assemblies (
@@ -187,6 +197,66 @@ init_db <- function(
       PRIMARY KEY (ID, path, scaffold)
     );"
   )
+
+  # Add Annotate table ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE annotate (
+      ID TEXT NOT NULL,
+      annotate_opts TEXT,
+      annotate_switch INTEGER,
+      annotate_lock INTEGER,
+      annotate_notes TEXT,
+      scaffolds INTEGER,
+      genes INTEGER,
+      tRNA INTEGER,
+      rRNA INTEGER,
+      missing INTEGER,
+      duplicated INTEGER,
+      warnings INTEGER,
+      structure TEXT,
+      length TEXT,
+      topology TEXT,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID)
+    );"
+  )
+  dplyr::tbl(con, "annotate") |>
+    dplyr::rows_upsert(
+      data.frame(
+        ID = mapping$ID,
+        annotate_opts = "fish_mito",
+        annotate_switch = 0,
+        annotate_lock = 0
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "ID"
+    )
+
+  ## Annotate options ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE annotate_opts (
+      annotate_opts TEXT NOT NULL,
+      cpus INTEGER,
+      memory INTEGER,
+      mitos_refDb TEXT,
+      PRIMARY KEY (annotate_opts)
+    );"
+  )
+  dplyr::tbl(con, "annotate_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        annotate_opts = "default",
+        cpus = annotate_cpus,
+        memory = annotate_memory,
+        mitos_refDb = mitos_refDb
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "annotate_opts"
+    )
 
   invisible(return())
 

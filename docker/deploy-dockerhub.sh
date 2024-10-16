@@ -10,16 +10,19 @@ then
 fi
 
 # Prompt for Docker Hub username and password
-  read -p "Enter your Docker Hub username: " username
-  read -s -p "Enter your Docker Hub password: " password
-  echo
+read -p "Enter your Docker Hub username: " username
+read -s -p "Enter your Docker Hub password: " password
 
-  echo "Logging into Docker Hub..."
-  echo "$password" | docker login -u "$username" --password-stdin
-  if [ $? -ne 0 ]; then
-    echo "Failed to log in to Docker Hub"
-    exit 1
-  fi
+echo "Logging into Docker Hub..."
+echo "$password" | docker login -u "$username" --password-stdin
+if [ $? -ne 0 ]; then
+  echo "Failed to log in to Docker Hub"
+  exit 1
+fi
+
+# Build R pkg for install
+Rscript -e 'devtools::document()'
+Rscript -e 'devtools::build(path="docker", vignettes = FALSE)'
 
 # Build image
 docker build -f docker/Dockerfile --progress=plain -t ${repo}:${tag} .
