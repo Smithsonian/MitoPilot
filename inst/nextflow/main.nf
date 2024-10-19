@@ -24,15 +24,9 @@ workflow WF1 {
 }
 
 // ANNOTATION WORKFLOW
-//workflow WF2 {
+workflow WF2 {
 
-   // ANNOTATE()
+   ANNOTATE()
 
-//}
+}
 
-// EXTRACT AMPLICONS
-//workflow WF3 {
-
-    //AMPLICONS()
-
-//}

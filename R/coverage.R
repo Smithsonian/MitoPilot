@@ -25,10 +25,11 @@ coverage <- function(
 
   # If the assembly is circular and only has one sequence, add a 500bp overlap for mapping
   if (circular && length(seq_ids) == 1) {
-    Biostrings::xscat(assembly, Biostrings::subseq(assembly, start = 1, end = 500)) |>
-      setNames(seq_ids) |>
-      Biostrings::writeXStringSet(assembly_fn)
+    assembly <- Biostrings::xscat(assembly, Biostrings::subseq(assembly, start = 1, end = 500)) |>
+      setNames(seq_ids)
   }
+  assembly_working <- assembly_fn |> stringr::str_remove("\\.[^\\.]+$") |> paste0("_working.fasta")
+  Biostrings::writeXStringSet(assembly, assembly_working)
 
   # Create output directory
   if (!dir.exists(outDir)) {
@@ -38,7 +39,7 @@ coverage <- function(
   # Map Reads
   mapped_fn <- file.path(outDir, paste0(basename_prefix, ".bam"))
   stringr::str_glue(
-    "bowtie2-build {assembly_fn} index"
+    "bowtie2-build {assembly_working} index"
   ) |> system()
   stringr::str_glue(
     "bowtie2 --very-sensitive-local --no-unal -x index -1 {paired_reads_1} -2 {paired_reads_2} -U {unpaired_reads} --threads {cpus} ",
@@ -48,7 +49,7 @@ coverage <- function(
   # Get coverage stats
   coverage_fn <- file.path(outDir, paste0(basename_prefix, "_coverage.csv"))
   stringr::str_glue(
-    "conda run -n bam-readcount bam-readcount -w1 -f {assembly_fn} {mapped_fn} > {coverage_fn}"
+    "conda run -n bam-readcount bam-readcount -w1 -f {assembly_working} {mapped_fn} > {coverage_fn}"
   ) |> system()
 
   # Load mapping results ----

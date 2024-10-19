@@ -15,10 +15,11 @@ process coverage {
         tuple val(id), val(opt_id), path(reads), path(assembly)
 
     output:
-        path("${id}/assemble/${opt_id}/*")
+        path("${outDir}/*")
 
     shell:
     outDir = "${id}/assemble/${opt_id}"
+    output_name = assembly.baseName
     '''
     # Unzip reads
     tar -xzf !{reads} --strip-components=2  

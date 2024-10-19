@@ -7,14 +7,13 @@ workflow COVERAGE {
         input
     
     main:
-
-        // Map Coverage
+        
         input
             .filter{ it[1] ==~ /(?!.*assembly_0\.fasta$).*$/ }      // skip empty assemblies
             .map{ it ->
                 tuple( 
                     it[0],                                          // ID
-                    it[5],                                          // assemble opt_id
+                    it[4],                                          // assemble opt_id
                     it[2],                                          // reads
                     (it[1] instanceof List) ? it[1] : [it[1]]       // assembly
                 )                      
