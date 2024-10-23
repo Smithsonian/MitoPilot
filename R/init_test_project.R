@@ -25,7 +25,7 @@
 #'   config files (default = FALSE).
 #'
 #' @export
-init_test_project <- function(
+new_test_project <- function(
   path = here::here(),
   n = Inf,
   full_size = FALSE,
@@ -118,7 +118,7 @@ init_test_project <- function(
 
 
   # Initialize project ----
-  init(
+  new_project(
     path = path,
     mapping_fn = file.path(path, "mapping.csv"),
     mapping_id = "ID",

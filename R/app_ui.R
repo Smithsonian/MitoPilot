@@ -2,15 +2,60 @@
 #'
 #' @param request Internal parameter for `{shiny}`.
 #'     DO NOT REMOVE.
-#' @import shiny
+#' @import shiny reactable
 #' @noRd
 app_ui <- function(request) {
   tagList(
-    # Leave this function for adding external resources
-    golem_add_external_resources(),
-    # Your application UI logic
+    add_external_resources(),
     fluidPage(
-      golem::golem_welcome_page() # Remove this line to start building your UI
+      div(
+        style = "display: flex; flex-direction: column;",
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
+          div(
+            shinyWidgets::pickerInput(
+              inputId = "mode",
+              width = 150,
+              label = "",
+              choices = c("Assemble", "Annotate", "Submit")
+            )
+          ),
+          shinyWidgets::actionBttn(
+            "refresh",
+            label = NULL,
+            icon= icon("sync"),
+            style = "material-flat",
+            size='sm'
+          ),
+          shinyWidgets::actionBttn(
+            "state",
+            label = "State",
+            style = "material-flat",
+            size='sm'
+          ),
+          shinyWidgets::actionBttn(
+            "lock",
+            label = "Lock",
+            style = "material-flat",
+            size='sm'
+          )
+        ),
+        div(
+          style = "padding: 1em;",
+          conditionalPanel(
+            condition = "input.mode == 'Assemble'",
+            assemble_ui("assemble")
+          )
+        )
+      )
+      # conditionalPanel(
+      #   condition = "input.mode == 'Annotate'",
+      #   mod_Annotate_ui("Annotate")
+      # ),
+      # conditionalPanel(
+      #   condition = "input.mode == 'Submit'",
+      #   mod_Submit_ui("Submit")
+      # )
     )
   )
 }
@@ -23,19 +68,19 @@ app_ui <- function(request) {
 #' @import shiny
 #' @importFrom golem add_resource_path activate_js favicon bundle_resources
 #' @noRd
-golem_add_external_resources <- function() {
+add_external_resources <- function() {
   add_resource_path(
     "www",
     app_sys("app/www")
   )
-
   tags$head(
     favicon(),
     bundle_resources(
       path = app_sys("app/www"),
       app_title = "MitoPilot"
-    )
-    # Add here other external resources
-    # for example, you can add shinyalert::useShinyalert()
+    ),
+    waiter::useWaiter(),
+    rclipboard::rclipboardSetup(),
+    shinyjs::useShinyjs()
   )
 }

@@ -7,9 +7,9 @@
 #' @export
 #' @importFrom shiny shinyApp
 #' @importFrom golem with_golem_options
-run_app <- function(
+gui <- function(
   onStart = NULL,
-  options = list(),
+  options = list(shiny.launch.browser = T),
   enableBookmarking = NULL,
   uiPattern = "/",
   ...
@@ -25,4 +25,14 @@ run_app <- function(
     ),
     golem_opts = list(...)
   )
+}
+
+#' Golem dev link
+#'
+#' @param ... parameters to forward
+#'
+#' @noRd
+#' @export
+run_app <- function(...) {
+  gui(...)
 }

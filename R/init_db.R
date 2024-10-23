@@ -1,4 +1,20 @@
-init_db <- function(
+#' Initialize a new project database
+#'
+#' @param db_path Path to the new database file
+#' @param mapping_fn Path to the mapping file
+#' @param mapping_id Column name of the mapping file to use as the primary key
+#' @param assemble_cpus Default # cpus for assembly
+#' @param assemble_memory default memory (GB) for assembly
+#' @param seeds_db Path to the gotOrganelle seeds database
+#' @param labels_db Path to the gotOrganelle labels database
+#' @param getOrganelle Default getOrganelle command line options
+#' @param annotate_cpus Default # cpus for annotation
+#' @param annotate_memory Default memory (GB) for annotation
+#' @param mitos_refDb Default mitos2 reference database
+#'
+#' @export
+#'
+new_db <- function(
     db_path=file.path(here::here(),".sqlite"),
     mapping_fn=NULL,
     mapping_id="ID",

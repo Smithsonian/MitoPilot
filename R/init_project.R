@@ -20,7 +20,7 @@
 #'
 #' @export
 #'
-init <- function(
+new_project <- function(
   path = here::here(),
   mapping_fn = NULL,
   mapping_id = "ID",
@@ -32,6 +32,7 @@ init <- function(
   ){
 
   # Validate executor ----
+  print("FOO")
   if(executor %nin% c("local", "awsbatch")){
     stop("Invalid executor.")
   }
