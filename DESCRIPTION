@@ -9,6 +9,7 @@ Description: An R package for mitogenome assembly and annotation from
 License: file LICENSE
 URL: https://github.com/JonahVentures/MitoPilot
 BugReports: https://github.com/JonahVentures/MitoPilot/issues
+biocViews:
 Imports: 
     Biostrings,
     config,
