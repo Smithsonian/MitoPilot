@@ -74,7 +74,7 @@ new_project <- function(
     message("Overwriting existing database")
     file.remove(db)
   }
-  init_db(
+  new_db(
     db_path = file.path(path, ".sqlite"),
     mapping_fn = mapping_out,
     mapping_id = mapping_id

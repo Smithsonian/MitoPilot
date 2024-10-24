@@ -118,7 +118,7 @@ workflow ASSEMBLE {
                     it[2].max(),                                    // # scaffolds
                     it[3].unique().sort().reverse().join(";"),      // length(s)
                     it[4].unique().sort().join(";"),                // topology(s)
-                    '1',                                            // assembly status ###
+                    '2',                                            // assembly status
                     '',                                             // assembly notes
                     params.ts,                                      // time stamp
                     it[0]                                           // ID

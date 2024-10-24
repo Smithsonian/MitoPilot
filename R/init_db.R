@@ -204,7 +204,6 @@ new_db <- function(
       length INTEGER,
       sequence TEXT,
       depth TEXT,
-      d_depth TEXT,
       gc TEXT,
       errors TEXT,
       ignore INTEGER,
