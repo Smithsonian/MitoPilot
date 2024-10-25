@@ -11,7 +11,7 @@ params.ts = workflow.start.toInstant().getEpochSecond().toString()
 include {PREPROCESS} from './modules/preprocess_workflow.nf'
 include {ASSEMBLE} from './modules/assemble_workflow.nf'
 include {COVERAGE} from './modules/coverage_workflow.nf'
-//include {ANNOTATE} from './modules/annotate.nf'
+include {ANNOTATE} from './modules/annotate_workflow.nf'
 //include {AMPLICONS} from './modules/amplicons.nf'
 
 // ASSEMBLY WORKFLOW
@@ -24,9 +24,9 @@ workflow WF1 {
 }
 
 // ANNOTATION WORKFLOW
-workflow WF2 {
+//workflow WF2 {
 
-   ANNOTATE()
+   //ANNOTATE()
 
-}
+//}
 

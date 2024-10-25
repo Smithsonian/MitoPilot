@@ -29,7 +29,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       paths,
       scaffolds,
       time_stamp,
-      assembly_notes
+      assemble_notes
     ) |>
     dplyr::mutate(view = NA_character_)
 }

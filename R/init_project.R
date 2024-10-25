@@ -32,7 +32,6 @@ new_project <- function(
   ){
 
   # Validate executor ----
-  print("FOO")
   if(executor %nin% c("local", "awsbatch")){
     stop("Invalid executor.")
   }

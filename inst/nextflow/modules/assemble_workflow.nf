@@ -5,7 +5,7 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
-                  'WHERE a.assemble_switch = 1 AND a.lock = 0'
+                  'WHERE a.assemble_switch = 1 AND a.assemble_lock = 0'
 
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
@@ -14,7 +14,7 @@ params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
                             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)'
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
-                            'assemble_switch=?, assembly_notes=?, time_stamp=? WHERE ID=?'
+                            'assemble_switch=?, assemble_notes=?, time_stamp=? WHERE ID=?'
 
 workflow ASSEMBLE {
     take:
@@ -124,7 +124,7 @@ workflow ASSEMBLE {
                     it[0]                                           // ID
                 ).flatten()
             }
-            .map { it ->                                
+            .map { it ->
                 if(it[1] > 1){                      // mark fragmented assemblies
                     it[2] = 'fragmented'
                     it[4] = '3'

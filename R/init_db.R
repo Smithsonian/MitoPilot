@@ -135,9 +135,9 @@ new_db <- function(
       topology TEXT,
       paths INTEGER,
       scaffolds INTEGER,
-      assembly_notes TEXT,
+      assemble_notes TEXT,
       assemble_switch INTEGER,
-      lock INTEGER,
+      assemble_lock INTEGER,
       hide_switch INTEGER,
       assemble_opts TEXT,
       time_stamp INTEGER,
@@ -153,9 +153,9 @@ new_db <- function(
           topology = NA_character_,
           paths = NA_integer_,
           scaffolds = NA_integer_,
-          assembly_notes = NA_character_,
+          assemble_notes = NA_character_,
           assemble_switch = 1,
-          lock = 0,
+          assemble_lock = 0,
           hide_switch = 0,
           assemble_opts = "default",
           time_stamp = NA_integer_
@@ -240,7 +240,7 @@ new_db <- function(
     dplyr::rows_upsert(
       data.frame(
         ID = mapping$ID,
-        annotate_opts = "fish_mito",
+        annotate_opts = "default",
         annotate_switch = 0,
         annotate_lock = 0
       ),

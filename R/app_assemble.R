@@ -143,7 +143,7 @@ assemble_server <- function(id) {
               width = 150,
               cell = rt_ts_date()
             ),
-            assembly_notes = colDef(
+            assemble_notes = colDef(
               show = TRUE,
               name = "Notes",
               html = TRUE,
