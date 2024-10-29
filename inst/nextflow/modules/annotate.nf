@@ -6,8 +6,8 @@ process annotate {
     // publishDir "$launchDir/${params.publishDir}", overwrite: true
 
     errorStrategy 'finish'
-    cpus { opts.cpus }
-    memory { opts.memory.GB }
+    //cpus {params.annotate.cpus}
+    //memory {params.annotate.memory.GB}
 
     tag "${id}"
 

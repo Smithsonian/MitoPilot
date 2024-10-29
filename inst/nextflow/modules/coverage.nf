@@ -5,9 +5,8 @@ process coverage {
     publishDir params.publishDir, overwrite: true, mode: 'copy'
 
     errorStrategy 'finish'
-    cpus {params.coverage.cpus}
-    memory {params.coverage.memory}
-    clusterOptions {params.coverage.clusterOptions}
+    //cpus {params.coverage.cpus}
+    //memory {params.coverage.memory.GB}
 
     tag "${id}"
 
