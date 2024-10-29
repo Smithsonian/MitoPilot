@@ -54,7 +54,7 @@ assemble_server <- function(id) {
           defaultColDef = colDef(align = "left", show = F),
           columns = list(
             `.selection` = colDef(show=T),
-            lock = colDef(
+            assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
               name = "",

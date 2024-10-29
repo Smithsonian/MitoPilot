@@ -16,7 +16,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::relocate(
-      lock,
+      assemble_lock,
       assemble_switch,
       ID,
       pre_opts,
