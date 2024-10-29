@@ -1,0 +1,62 @@
+# How to use MitoPilot on the NOAA NMFS SENDA computing cluster
+
+You will need an account to access the SEDNA computing cluster. Detailed instructionca can be found [here](https://docs.google.com/document/d/1nn0T0OWEsQCBoCdaH6DSY69lQSbK3XnPlseyyQuU2Lc/edit?usp=sharing). Or contact Krista Nichols (<krista.nichols@noaa.gov>) for more information. 
+
+First, you will need to create a Mamba environment for two MitoPilot dependencies, Nextflow and Singularity.
+
+```
+mamba create --name MitoPilot_deps bioconda::nextflow conda-forge::singularity -y
+mamba activate MitoPilot_deps
+```
+ 
+You can now call `nextflow` and `singularity` from anywhere on the cluster, as long as this `mamba` environment is activated.
+
+If this is your first time, you will also need to run the following commands to set up RStudio server. 
+
+```
+# Make a directory to host R-studio. 
+mkdir -p ~/rstudio
+cd ~/rstudio
+
+# Start an interactive session
+srun -c 2 --mem=4GB -p standard --pty /bin/bash
+
+# Pull R studio from singularity. Note, you can change the version
+mamba activate singularity-3.8.6
+singularity pull docker://rocker/rstudio:4.2
+
+mkdir -p run var-lib-rstudio-server
+printf 'provider=sqlite\ndirectory=/var/lib/rstudio-server\n' > database.conf
+```
+
+Now you're ready to start using MitoPilot on SENDA!
+
+- Login to the NOAA NMFS VPN
+- Login to SEDNA
+- Start an interactive session by running `srun -c 2 --mem=12GB -p standard --pty /bin/bash`
+- Run `mamba activate MitoPilot_deps`
+- Assign yourself a port for RStudio by running `PORT=$(shuf -i 8000-9000 -n 1);echo "Connect to $PORT"`
+- Launch RStudio. Note version 4.2 is specified here. If you changed version installed, change it here too.
+
+<div style="page-break-after: always; visibility: hidden"> 
+\pagebreak 
+</div>
+
+```
+singularity exec \
+  --bind run:/run,var-lib-rstudio-server:/var/lib/rstudio-server,database.conf:/etc/rstudio/database.conf \
+  ${HOME}/rstudio/rstudio_4.2.sif \
+  rserver --www-address=0.0.0.0 --www-port=${PORT} --server-user=${USER}
+```
+- Leave this cluster terminal window open 
+- In a new terminal window on your local computer:
+	- Start an ssh tunnel by running something like `ssh -N -L POR:node30.cluster:8001 username@sedna.nwfsc2.noaa.gov`
+		- Note the port matches $PORT assigned above and will more than likely NOT be 8001
+		- Also, you must use the node name you are logged into instead of "node30"
+	- Leave this terminal window open
+	- Open a web browser and enter `http://localhost:8787` in the URL bar
+	- Any commands run in this new window will execute on the cluster in the interactive session
+- To install MitoPilot, use the RStudio server window
+	- Run `remotes::install_github("JonahVentures/MitoPilot", auth_token = gh_token)` (this will not work for now b/c repo is private)
+	- Check that installation was successful by loading the library with `library(MitoPilot)`
+- You can now follow instructions on the [MitoPilot GitHub page](https://github.com/JonahVentures/MitoPilot) to run the test dataset
