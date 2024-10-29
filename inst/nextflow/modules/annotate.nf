@@ -6,8 +6,8 @@ process annotate {
     publishDir params.publishDir, overwrite: true, mode: 'copy'
 
     errorStrategy 'finish'
-    cpus {params.annotate.cpus}
-    memory {params.annotate.memory.GB}
+    //cpus {params.annotate.cpus}
+    //memory {params.annotate.memory.GB}
 
     tag "${opts.assemblyID}"
 
