@@ -20,13 +20,13 @@ new_db <- function(
     mapping_id="ID",
     # Default assembly options
     assemble_cpus = 6,
-    assemble_memory = 16,
+    assemble_memory = 8,
     seeds_db = glue::glue("/ref_dbs/getOrganelle/seeds/fish_mito.fasta"),
     labels_db = glue::glue("/ref_dbs/getOrganelle/labels/fish_mito.fasta"),
     getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500",
     # Default annotation options
     annotate_cpus = 6,
-    annotate_memory = 16,
+    annotate_memory = 8,
     mitos_refDb = "Chordata"
   ){
 
