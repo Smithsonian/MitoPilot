@@ -26,6 +26,7 @@ You can now call `nextflow` from anywhere on the cluster. Now you're ready to st
 
 - login to Hydra
 - start an interactive session by running `qrsh`
+- run `conda deactivate` to avoid package conflicts (may not be necessary for all users)
 - run `module load tools/R/RStudio/server`
 - run `start-rstudio-server` (you may be asked to run a different command if this is your first time)
 - leave this cluster terminal window open 
