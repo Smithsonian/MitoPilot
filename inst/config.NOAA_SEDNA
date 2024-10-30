@@ -43,6 +43,8 @@ params {
     }
     coverage {
         take = -1
+        cpus = 4
+        memory = "8 GB"
         maxRetries = 0
         container = process.container
         executor = process.executor
