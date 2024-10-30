@@ -44,8 +44,9 @@ params {
     }
     coverage {
         take = -1
+        clusterOptions = "-l mres=8G,h_data=8G,h_vmem=8G -S /bin/bash"
         cpus = 4
-        memory = 8
+        memory = null
         maxRetries = 0
         container = process.container
         executor = process.executor
