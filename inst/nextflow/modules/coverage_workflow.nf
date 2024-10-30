@@ -4,8 +4,8 @@ params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ?, time_s
                     'WHERE ID=? and path=? and scaffold=?'
 
 // set memory and cpus based on values in config file
-opts.cpus = {params.coverage.cpus}
-opts.memory = {params.coverage.memory}
+def opts.cpus = {params.coverage.cpus}
+def opts.memory = {params.coverage.memory}
 
 workflow COVERAGE {
     take:
