@@ -1,12 +1,16 @@
 process coverage {
+	// set memory and cpus based on values in config file
+	def opts.cpus = {params.coverage.cpus}
+	def opts.memory = {params.coverage.memory}
     executor params.coverage.executor
     container params.coverage.container
 
     publishDir params.publishDir, overwrite: true, mode: 'copy'
 
     errorStrategy 'finish'
-    //cpus {params.coverage.cpus}
-    //memory {params.coverage.memory.GB}
+    cpus {params.coverage.cpus}
+    memory {params.coverage.memory.GB}
+    clusterOptions {params.coverage.clusterOptions}
 
     tag "${id}"
 

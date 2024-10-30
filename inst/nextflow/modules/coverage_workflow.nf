@@ -3,9 +3,6 @@ include {coverage} from './coverage.nf'
 params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ?, time_stamp = ? ' +
                     'WHERE ID=? and path=? and scaffold=?'
 
-opts.cpus = {params.coverage.cpus}
-opts.memory = {params.coverage.memory}
-
 workflow COVERAGE {
     take:
         input
