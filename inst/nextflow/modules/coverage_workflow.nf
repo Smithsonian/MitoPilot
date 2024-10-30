@@ -3,9 +3,7 @@ include {coverage} from './coverage.nf'
 params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ?, time_stamp = ? ' +
                     'WHERE ID=? and path=? and scaffold=?'
 
-// set memory and cpus based on values in config file
-def opts.cpus = {params.coverage.cpus}
-def opts.memory = {params.coverage.memory}
+
 
 workflow COVERAGE {
     take:
