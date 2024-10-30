@@ -6,7 +6,7 @@ process coverage {
 
     errorStrategy 'finish'
     cpus {params.coverage.cpus}
-    memory {params.coverage.memory.GB}
+    memory {params.coverage.memory}
     clusterOptions {params.coverage.clusterOptions}
 
     tag "${id}"
