@@ -1,7 +1,3 @@
-// set memory and cpus based on values in config file
-opts.cpus = {params.coverage.cpus}
-opts.memory = {params.coverage.memory}
-
 process coverage {
 
     executor params.coverage.executor
