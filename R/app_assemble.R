@@ -180,7 +180,7 @@ assemble_server <- function(id) {
     # Set State ----
     on("state", {
       req(session$userData$mode == "Assemble")
-      req(all(rv$data$lock[req(selected())]==0))
+      req(all(rv$data$assemble_lock[req(selected())]==0))
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
         dplyr::slice(selected())
@@ -224,10 +224,10 @@ assemble_server <- function(id) {
       req(session$userData$mode == "Assemble")
       req(selected())
       rv$updating <- rv$data |>
-        dplyr::select(ID, lock) |>
+        dplyr::select(ID, assemble_lock) |>
         dplyr::slice(selected())
-      lock_current <- as.numeric(names(which.max(table(rv$updating$lock))))
-      rv$updating$lock <- as.numeric(!lock_current)
+      lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
+      rv$updating$assemble_lock <- as.numeric(!lock_current)
       dplyr::tbl(session$userData$db, "assemble") |>
         dplyr::rows_update(
           rv$updating,
@@ -250,7 +250,7 @@ assemble_server <- function(id) {
         }else{
           rv$updating <- rv$data |> dplyr::slice(row)
         }
-        req(all(rv$updating$lock==0))
+        req(all(rv$updating$assemble_lock==0))
         pre_opts_modal(rv)
     })
     observeEvent(input$pre_opts, ignoreInit = T, {
@@ -334,7 +334,7 @@ assemble_server <- function(id) {
       }else{
         rv$updating <- rv$data |> dplyr::slice(row)
       }
-      req(all(rv$updating$lock==0))
+      req(all(rv$updating$assemble_lock==0))
       assemble_opts_modal(rv)
     })
     observeEvent(input$assemble_opts, ignoreInit = T, {
