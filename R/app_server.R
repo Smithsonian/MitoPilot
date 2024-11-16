@@ -5,10 +5,9 @@
 #' @import shiny gargoyle dbplyr
 #' @noRd
 app_server <- function(input, output, session) {
-
   # db connection ----
   db <- getOption("MitoPilot.db") %||% here::here(".sqlite")
-  if(!file.exists(db)) {
+  if (!file.exists(db)) {
     shinyWidgets::sendSweetAlert(
       title = "Database not found",
       text = "The MitoPilot::gui() app requires a database to run. Please make sure your working directory is set to an active MitoPilot project, or use set the location of the database using, options(MitoPilot.db = 'path/to/the/.sqlite').",
@@ -55,5 +54,4 @@ app_server <- function(input, output, session) {
   assemble_server("assemble")
   # mod_Annotate_server("Annotate", grv)
   # mod_Submit_server("Submit", grv)
-
 }

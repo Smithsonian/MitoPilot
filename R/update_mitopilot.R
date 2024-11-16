@@ -8,13 +8,10 @@
 #'
 #' @export
 update_mitopilot <- function(
-  path = here::here(),
-  workflow = c("both", "assemble", "annotate"),
-  source = app_sys("nextflow")
-
-  ){
-
-  if(any(c("assemble", "both") %in% workflow)){
+    path = here::here(),
+    workflow = c("both", "assemble", "annotate"),
+    source = app_sys("nextflow")) {
+  if (any(c("assemble", "both") %in% workflow)) {
     message("To update the assembly module, run in terminal:")
     glue::glue(
       "nextflow",
@@ -28,8 +25,7 @@ update_mitopilot <- function(
       print()
   }
 
-  if(any(c("annotate", "both") %in% workflow)){
+  if (any(c("annotate", "both") %in% workflow)) {
     message("Annotation module coming soon...")
   }
-
 }

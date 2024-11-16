@@ -5,15 +5,16 @@
 \title{Title}
 \usage{
 annotate_trnaScan(
-  seqs = NULL,
+  assembly = NULL,
   rotate = TRUE,
   trnaScan_opts = "-M vert",
   cpus = 4,
-  out = "test.trnascan"
+  out = NULL,
+  condaenv = "base"
 )
 }
 \arguments{
-\item{seqs}{text string of the assembly to annotate}
+\item{assembly}{text string of the assembly to annotate}
 
 \item{rotate}{should the assembly be rotated? default = TRUE}
 

@@ -58,7 +58,6 @@ workflow ASSEMBLE {
                     it[1][2],                                                   // assembly options
                 )
             }
-            .take(params.assemble.take) // optional subsetting for development
             .set { assemble_in }
 
         // Assemble

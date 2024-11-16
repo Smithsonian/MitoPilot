@@ -15,9 +15,9 @@
 #' @export
 #'
 new_db <- function(
-    db_path=file.path(here::here(),".sqlite"),
-    mapping_fn=NULL,
-    mapping_id="ID",
+    db_path = file.path(here::here(), ".sqlite"),
+    mapping_fn = NULL,
+    mapping_id = "ID",
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 16,
@@ -27,20 +27,143 @@ new_db <- function(
     # Default annotation options
     annotate_cpus = 6,
     annotate_memory = 16,
-    mitos_refDb = "Chordata"
-  ){
-
+    annotate_ref_db = "Chordata",
+    annotate_ref_dir = "/ref_dbs/Mitos2",
+    mitos_opts = "--intron 0 --oril 0 --trna 0",
+    trnaScan_opts = "-M vert",
+    # Default curation options
+    curate_cpus = 4,
+    curate_memory = 8,
+    curate_target = "fish_mito",
+    curate_params = list(
+      ref_dbs = list(
+        default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas"
+      ),
+      hit_threshold = 90,
+      max_overlap = 0.25,
+      default_rules = list(
+        rRNA = list(
+          count = 1,
+          max_len = NA,
+          min_len = NA,
+          overlap = list(start = 0, stop = F)
+        ),
+        PCG = list(
+          count = 1,
+          max_len = NA,
+          min_len = NA,
+          overlap = list(start = 2, stop = F),
+          stop_codons = c("TAA", "TAG", "AGA", "AGG", "AG", "TA", "T"),
+          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC")
+        ),
+        tRNA = list(
+          count = 1,
+          max_len = NA,
+          min_len = NA
+        )
+      ),
+      rules = list(
+        ctrl = list(
+          count = 1,
+          type = "ctrl",
+          min_len = 350
+        ),
+        rrnL = list(
+          type = "rRNA",
+          max_len = 1850
+        ),
+        rrnS = list(
+          type = "rRNA",
+          max_len = 1000
+        ),
+        nad1 = list(
+          type = "PCG",
+          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "TTG")
+        ),
+        nad2 = list(
+          type = "PCG"
+        ),
+        cox1 = list(
+          type = "PCG",
+          overlap = list(start = 2, stop = T)
+        ),
+        cox2 = list(
+          type = "PCG",
+          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "TTG")
+        ),
+        atp8 = list(
+          type = "PCG",
+          overlap = list(start = 2, stop = T)
+        ),
+        atp6 = list(
+          type = "PCG",
+          overlap = list(start = 20, stop = F),
+          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "CTG")
+        ),
+        cox3 = list(
+          type = "PCG"
+        ),
+        nad3 = list(
+          type = "PCG"
+        ),
+        nad4l = list(
+          type = "PCG",
+          overlap = list(start = 2, stop = T)
+        ),
+        nad4 = list(
+          type = "PCG",
+          overlap = list(start = 20, stop = F)
+        ),
+        nad5 = list(
+          type = "PCG",
+          overlap = list(start = 2, stop = T)
+        ),
+        nad6 = list(
+          type = "PCG",
+          overlap = list(start = 2, stop = T)
+        ),
+        cob = list(
+          type = "PCG"
+        ),
+        trnA = list(type = "tRNA"),
+        trnC = list(type = "tRNA"),
+        trnD = list(type = "tRNA"),
+        trnE = list(type = "tRNA"),
+        trnF = list(type = "tRNA"),
+        trnG = list(type = "tRNA"),
+        trnH = list(type = "tRNA"),
+        trnI = list(type = "tRNA"),
+        trnK = list(type = "tRNA"),
+        trnL = list(
+          type = "tRNA",
+          count = 2
+        ),
+        trnM = list(type = "tRNA"),
+        trnN = list(type = "tRNA"),
+        trnP = list(type = "tRNA"),
+        trnQ = list(type = "tRNA"),
+        trnR = list(type = "tRNA"),
+        trnS = list(
+          type = "tRNA",
+          count = 2
+        ),
+        trnT = list(type = "tRNA"),
+        trnV = list(type = "tRNA"),
+        trnW = list(type = "tRNA"),
+        trnY = list(type = "tRNA")
+      )
+    )) {
   # Read mapping file
-  if(is.null(mapping_fn)){
+  if (is.null(mapping_fn)) {
     mapping_fn <- here::here("mapping.csv")
-    if(!file.exists(mapping_fn)){
+    if (!file.exists(mapping_fn)) {
       stop("Mapping file not found")
     }
   }
   mapping <- utils::read.csv(mapping_fn)
 
   # Validate ID col
-  if(any(duplicated(mapping[[mapping_id]]))){
+  if (any(duplicated(mapping[[mapping_id]]))) {
     stop("Duplicate IDs found in mapping file")
   }
 
@@ -49,7 +172,7 @@ new_db <- function(
   on.exit(DBI::dbDisconnect(con))
 
   # Metadata table ----
-  if(mapping_id != "ID"){
+  if (mapping_id != "ID") {
     mapping <- mapping |>
       dplyr::mutate(
         ID = .data[[ID_col]]
@@ -219,6 +342,7 @@ new_db <- function(
     "CREATE TABLE annotate (
       ID TEXT NOT NULL,
       annotate_opts TEXT,
+      curate_opts TEXT,
       annotate_switch INTEGER,
       annotate_lock INTEGER,
       annotate_notes TEXT,
@@ -241,7 +365,8 @@ new_db <- function(
       data.frame(
         ID = mapping$ID,
         annotate_opts = "default",
-        annotate_switch = 0,
+        curate_opts = "default",
+        annotate_switch = 1,
         annotate_lock = 0
       ),
       in_place = TRUE,
@@ -256,7 +381,10 @@ new_db <- function(
       annotate_opts TEXT NOT NULL,
       cpus INTEGER,
       memory INTEGER,
-      mitos_refDb TEXT,
+      ref_db TEXT,
+      ref_dir TEXT,
+      mitos_opts TEXT,
+      trnaScan_opts TEXT,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -266,13 +394,41 @@ new_db <- function(
         annotate_opts = "default",
         cpus = annotate_cpus,
         memory = annotate_memory,
-        mitos_refDb = mitos_refDb
+        ref_db = annotate_ref_db,
+        ref_dir = annotate_ref_dir,
+        mitos_opts = "--intron 0 --oril 0 --trna 0",
+        trnaScan_opts = "-M vert"
       ),
       in_place = TRUE,
       copy = TRUE,
       by = "annotate_opts"
     )
 
-  invisible(return())
+  ## Curate options ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE curate_opts (
+      curate_opts TEXT NOT NULL,
+      cpus INTEGER,
+      memory INTEGER,
+      target TEXT,
+      params JSON,
+      PRIMARY KEY (curate_opts)
+    );"
+  )
+  dplyr::tbl(con, "curate_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        curate_opts = "default",
+        cpus = curate_cpus,
+        memory = curate_memory,
+        target = curate_target,
+        params = jsonlite::toJSON(curate_params)
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "curate_opts"
+    )
 
+  invisible(return())
 }

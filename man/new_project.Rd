@@ -9,10 +9,11 @@ new_project(
   mapping_fn = NULL,
   mapping_id = "ID",
   executor = NULL,
-  container = "drleopold/mitopilot:dev",
+  container = "drleopold/mitopilot",
   config = NULL,
   Rproj = TRUE,
-  force = FALSE
+  force = FALSE,
+  ...
 )
 }
 \arguments{
@@ -29,6 +30,8 @@ the unique sample identifiers (default = "ID").}
 \item{executor}{The executor to use for running the nextflow pipeline. Must
 be one of "local" or "awsbatch".}
 
+\item{container}{The docker container to use for pipeline execution.}
+
 \item{config}{(optional) provide a path to an existing custom nextflow config
 file. If not provided a config file template will be created based on the
 specified executor.}
@@ -39,6 +42,9 @@ interactively in RStudio.}
 
 \item{force}{(logical) Force recreating of existing project database and
 config files (default = FALSE).}
+
+\item{...}{Additional arguments passed as default processing parameters to
+`new_db()`}
 }
 \description{
 Initialize new MitoPilot Project

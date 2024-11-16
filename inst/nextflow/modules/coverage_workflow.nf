@@ -24,7 +24,7 @@ workflow COVERAGE {
 
         coverage(coverage_in).set { coverage_out }
 
-        // // Coverage
+        // Coverage
         coverage_out
             .flatten()
             .filter{ it =~ /(.*coverageStats.csv)$/ }

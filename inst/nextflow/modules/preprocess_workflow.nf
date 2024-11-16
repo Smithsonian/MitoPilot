@@ -24,8 +24,6 @@ workflow PREPROCESS {
                     ]
                 )
             }
-            .take(params.preprocess.take) // optional subsetting for development
-            //.view()
             .set { preprocess_in }
 
         // Run trim

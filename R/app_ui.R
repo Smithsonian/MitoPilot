@@ -23,21 +23,21 @@ app_ui <- function(request) {
           shinyWidgets::actionBttn(
             "refresh",
             label = NULL,
-            icon= icon("sync"),
+            icon = icon("sync"),
             style = "material-flat",
-            size='sm'
+            size = "sm"
           ),
           shinyWidgets::actionBttn(
             "state",
             label = "State",
             style = "material-flat",
-            size='sm'
+            size = "sm"
           ),
           shinyWidgets::actionBttn(
             "lock",
             label = "Lock",
             style = "material-flat",
-            size='sm'
+            size = "sm"
           )
         ),
         div(

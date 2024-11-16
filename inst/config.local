@@ -26,26 +26,33 @@ params {
     publishDir = 'out'
     minDepth = <<MIN_DEPTH>>
     minAssemblyLength = 500
+    genetic_code = 2
+    mitos_condaenv = 'mitos'
+    trnaScan_condaenv = 'trnascan-se'
     preprocess {
-        take = -1
         container = process.container
         executor = process.executor
     }
     assemble {
-        take = -1
         maxRetries = 1
         container = process.container
         executor = process.executor
     }
     coverage {
-        take = -1
         cpus = 4
         memory = 8
         container = process.container
         executor = process.executor
     }
     annotate {
-        maxRetries = 0
+        container = process.container
+        executor = process.executor
+    }
+    curate {
+        container = process.container
+        executor = process.executor
+    }
+    validate {
         container = process.container
         executor = process.executor
     }

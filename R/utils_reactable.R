@@ -1,7 +1,7 @@
 #' Highlight selected row(s)
 #'
 #' @noRd
-rt_highlight_row <- function(){
+rt_highlight_row <- function() {
   htmlwidgets::JS(
     "
     function(rowInfo) {
@@ -18,16 +18,18 @@ rt_highlight_row <- function(){
 #' @param icons a named character vector list of icons to use.
 #'
 #' @noRd
-rt_dynamicIcon <- function(icons=NULL) {
-  if(length(icons) == 0) {
+rt_dynamicIcon <- function(icons = NULL) {
+  if (length(icons) == 0) {
     return({
       htmlwidgets::JS("function(cellInfo) {return cellInfo.value}")
     })
   }
 
-  key <- purrr::imap_chr(icons, ~{
+  key <- purrr::imap_chr(icons, ~ {
     paste0(.y, ": '", .x, "'")
-  }) |> unname() |> paste(collapse = ", ")
+  }) |>
+    unname() |>
+    paste(collapse = ", ")
 
   sprintf(
     "
@@ -62,8 +64,7 @@ rt_longtext <- function() {
 #'
 #' @param InputId shiny input id to use
 #' @noRd
-rt_link <- function(InputId){
-
+rt_link <- function(InputId) {
   sprintf(
     "function(cellInfo) {
                 var clickid = '%s';
@@ -76,7 +77,6 @@ rt_link <- function(InputId){
     InputId
   ) |>
     htmlwidgets::JS()
-
 }
 
 #' Format unix timestamp as a date in UI

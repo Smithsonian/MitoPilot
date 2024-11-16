@@ -28,7 +28,9 @@ coverage <- function(
     assembly <- Biostrings::xscat(assembly, Biostrings::subseq(assembly, start = 1, end = 500)) |>
       setNames(seq_ids)
   }
-  assembly_working <- assembly_fn |> stringr::str_remove("\\.[^\\.]+$") |> paste0("_working.fasta")
+  assembly_working <- assembly_fn |>
+    stringr::str_remove("\\.[^\\.]+$") |>
+    paste0("_working.fasta")
   Biostrings::writeXStringSet(assembly, assembly_working)
 
   # Create output directory
@@ -203,8 +205,8 @@ coverage <- function(
     dplyr::select(!dplyr::ends_with("_mask")) |>
     readr::write_csv(
       file = file.path(outDir, paste0(basename_prefix, "_coverageStats.csv")),
-      quote = "none")
+      quote = "none"
+    )
 
   return(invisible(stats_out))
-
 }

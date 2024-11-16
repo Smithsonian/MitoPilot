@@ -1,6 +1,6 @@
 process assemble {
 
-    debug params.assemble.debug
+    // debug true
 
     executor params.assemble.executor
     container params.assemble.container

@@ -53,7 +53,7 @@ assemble_server <- function(id) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "left", show = F),
           columns = list(
-            `.selection` = colDef(show=T),
+            `.selection` = colDef(show = T),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
@@ -65,8 +65,8 @@ assemble_server <- function(id) {
                 c(
                   `0` = "fa fa-lock-open",
                   `1` = "fa fa-lock"
-                  )
                 )
+              )
             ),
             assemble_switch = colDef(
               show = TRUE,
@@ -81,8 +81,8 @@ assemble_server <- function(id) {
                   `1` = "fa fa-hourglass",
                   `2` = "fa fa-circle-check",
                   `3` = "fa fa-triangle-exclamation"
-                  )
                 )
+              )
             ),
             ID = colDef(
               show = T,
@@ -106,7 +106,8 @@ assemble_server <- function(id) {
             mean_length = colDef(
               show = T,
               name = "Read Length",
-              width = 100),
+              width = 100
+            ),
             assemble_opts = colDef(
               show = T,
               name = "Assembly Opts.",
@@ -180,7 +181,7 @@ assemble_server <- function(id) {
     # Set State ----
     on("state", {
       req(session$userData$mode == "Assemble")
-      req(all(rv$data$assemble_lock[req(selected())]==0))
+      req(all(rv$data$assemble_lock[req(selected())] == 0))
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
         dplyr::slice(selected())
@@ -190,9 +191,9 @@ assemble_server <- function(id) {
           shinyWidgets::pickerInput(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Assembly"=0, "Ready to Assemble"=1, "Successful Assembly"=2, "Failed / Problematic Assembly"=3),
+            choices = c("Pre-Assembly" = 0, "Ready to Assemble" = 1, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
           ),
-          size="m",
+          size = "m",
           footer = tagList(
             actionButton(ns("update_state"), "Update"),
             modalButton("Cancel")
@@ -213,7 +214,7 @@ assemble_server <- function(id) {
       rv$data <- rv$data |>
         dplyr::rows_update(
           rv$updating,
-          by="ID"
+          by = "ID"
         )
       trigger("update_assemble_table")
       removeModal()
@@ -237,29 +238,31 @@ assemble_server <- function(id) {
           by = "ID"
         )
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating, by="ID")
+        dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_assemble_table")
     })
 
     # Set Pre-process Opts ----
     observeEvent(input$set_pre_opts, {
-        row <- as.numeric(input$set_pre_opts)
-        if(length(selected())>0 && !row %in% selected()){req(F)}
-        if(isTRUE(row %in% selected())){
-          rv$updating <- rv$data |> dplyr::slice(selected())
-        }else{
-          rv$updating <- rv$data |> dplyr::slice(row)
-        }
-        req(all(rv$updating$assemble_lock==0))
-        pre_opts_modal(rv)
+      row <- as.numeric(input$set_pre_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      }
+      if (isTRUE(row %in% selected())) {
+        rv$updating <- rv$data |> dplyr::slice(selected())
+      } else {
+        rv$updating <- rv$data |> dplyr::slice(row)
+      }
+      req(all(rv$updating$assemble_lock == 0))
+      pre_opts_modal(rv)
     })
     observeEvent(input$pre_opts, ignoreInit = T, {
       exists <- input$pre_opts %in% rv$pre_opts$pre_opts
       shinyjs::toggleState("pre_opts_cpus", condition = !exists)
       shinyjs::toggleState("pre_opts_memory", condition = !exists)
       shinyjs::toggleState("fastp", condition = !exists)
-      if(exists){
-        cur <- rv$pre_opts[rv$pre_opts$pre_opts==input$pre_opts,]
+      if (exists) {
+        cur <- rv$pre_opts[rv$pre_opts$pre_opts == input$pre_opts, ]
         updateNumericInput(
           inputId = "pre_opts_cpus",
           value = cur$cpus
@@ -276,7 +279,7 @@ assemble_server <- function(id) {
     })
     observeEvent(input$update_pre_opts, ignoreInit = T, {
       ## Add to params table if new ----
-      if(!input$pre_opts %in% rv$pre_opts$pre_opts){
+      if (!input$pre_opts %in% rv$pre_opts$pre_opts) {
         dplyr::tbl(session$userData$db, "pre_opts") |>
           dplyr::rows_insert(
             data.frame(
@@ -297,11 +300,11 @@ assemble_server <- function(id) {
         pre_opts = input$pre_opts,
         assemble_switch = rv$updating$assemble_switch
       )
-      if(input$set_state){
+      if (input$set_state) {
         update$assemble_switch <- 1
         dplyr::tbl(session$userData$db, "assemble") |>
           dplyr::rows_update(
-            update[,c("ID","assemble_switch")],
+            update[, c("ID", "assemble_switch")],
             unmatched = "ignore",
             in_place = TRUE,
             copy = TRUE,
@@ -310,7 +313,7 @@ assemble_server <- function(id) {
       }
       dplyr::tbl(session$userData$db, "preprocess") |>
         dplyr::rows_update(
-          update[,c("ID","pre_opts")],
+          update[, c("ID", "pre_opts")],
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
@@ -328,13 +331,15 @@ assemble_server <- function(id) {
     # Set Assemble Opts ----
     observeEvent(input$set_assemble_opts, {
       row <- as.numeric(input$set_assemble_opts)
-      if(length(selected())>0 && !row %in% selected()){req(F)}
-      if(isTRUE(row %in% selected())){
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      }
+      if (isTRUE(row %in% selected())) {
         rv$updating <- rv$data |> dplyr::slice(selected())
-      }else{
+      } else {
         rv$updating <- rv$data |> dplyr::slice(row)
       }
-      req(all(rv$updating$assemble_lock==0))
+      req(all(rv$updating$assemble_lock == 0))
       assemble_opts_modal(rv)
     })
     observeEvent(input$assemble_opts, ignoreInit = T, {
@@ -343,8 +348,8 @@ assemble_server <- function(id) {
       shinyjs::toggleState("assemble_opts_memory", condition = !exists)
       shinyjs::toggleState("getOrganelle", condition = !exists)
       shinyjs::toggleState("seeds_db", condition = FALSE) # TODO - allow for alt seed database
-      if(exists){
-        cur <- rv$assemble_opts[rv$assemble_opts$assemble_opts==input$assemble_opts,]
+      if (exists) {
+        cur <- rv$assemble_opts[rv$assemble_opts$assemble_opts == input$assemble_opts, ]
         updateNumericInput(
           inputId = "assemble_opts_cpus",
           value = cur$cpus
@@ -368,7 +373,7 @@ assemble_server <- function(id) {
     })
     observeEvent(input$update_assemble_opts, ignoreInit = T, {
       ## Add to params table if new ----
-      if(!input$assemble_opts %in% rv$assemble_opts$assemble_opts){
+      if (!input$assemble_opts %in% rv$assemble_opts$assemble_opts) {
         dplyr::tbl(session$userData$db, "assemble_opts") |>
           dplyr::rows_insert(
             data.frame(
@@ -391,7 +396,7 @@ assemble_server <- function(id) {
         assemble_opts = input$assemble_opts,
         assemble_switch = rv$updating$assemble_switch
       )
-      if(input$set_state){
+      if (input$set_state) {
         update$assemble_switch <- 1
       }
       dplyr::tbl(session$userData$db, "assemble") |>

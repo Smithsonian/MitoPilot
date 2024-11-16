@@ -9,13 +9,13 @@ Description: An R package for mitogenome assembly and annotation from
 License: file LICENSE
 URL: https://github.com/JonahVentures/MitoPilot
 BugReports: https://github.com/JonahVentures/MitoPilot/issues
-biocViews:
 Imports: 
     Biostrings,
     config,
     crayon,
     DBI,
     dbplyr,
+    DECIPHER,
     dplyr,
     gargoyle,
     ggplot2,
@@ -23,10 +23,12 @@ Imports:
     golem,
     here,
     htmlwidgets,
+    jsonlite,
     purrr,
     rclipboard,
     reactable,
     readr,
+    reticulate,
     RSQLite,
     rstudioapi,
     shiny,
@@ -37,6 +39,7 @@ Imports:
     utils,
     waiter,
     zoo
+biocViews:
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.2

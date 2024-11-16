@@ -12,7 +12,8 @@ include {PREPROCESS} from './modules/preprocess_workflow.nf'
 include {ASSEMBLE} from './modules/assemble_workflow.nf'
 include {COVERAGE} from './modules/coverage_workflow.nf'
 include {ANNOTATE} from './modules/annotate_workflow.nf'
-//include {AMPLICONS} from './modules/amplicons.nf'
+include {CURATE} from './modules/curate_workflow.nf'
+include {VALIDATE} from './modules/validate_workflow.nf'
 
 // ASSEMBLY WORKFLOW
 workflow WF1 {
@@ -24,9 +25,11 @@ workflow WF1 {
 }
 
 // ANNOTATION WORKFLOW
-//workflow WF2 {
+workflow WF2 {
 
-   //ANNOTATE()
+   ANNOTATE()
+   CURATE(ANNOTATE.out)
+   VALIDATE(CURATE.out)
 
-//}
+}
 

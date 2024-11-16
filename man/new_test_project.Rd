@@ -9,10 +9,11 @@ new_test_project(
   n = Inf,
   full_size = FALSE,
   executor = "local",
-  container = "drleopold/mitopilot:dev",
+  container = "drleopold/mitopilot",
   config = NULL,
   Rproj = TRUE,
-  force = FALSE
+  force = FALSE,
+  ...
 )
 }
 \arguments{
