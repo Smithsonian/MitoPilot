@@ -8,7 +8,6 @@ process annotate {
     errorStrategy 'finish'
     cpus { opts.cpus }
     memory { opts.memory.GB }
-
     tag "${id}"
 
     input:
