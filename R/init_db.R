@@ -26,7 +26,7 @@ new_db <- function(
     getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500",
     # Default annotation options
     annotate_cpus = 6,
-    annotate_memory = 8,
+    annotate_memory = 16,
     annotate_ref_db = "Chordata",
     annotate_ref_dir = "/ref_dbs/Mitos2",
     mitos_opts = "--intron 0 --oril 0 --trna 0",
