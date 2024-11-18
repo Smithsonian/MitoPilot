@@ -6,6 +6,7 @@ process annotate {
     // publishDir "$launchDir/${params.publishDir}", overwrite: true
 
     errorStrategy 'finish'
+
     //cpus {params.annotate.cpus}
     //memory {params.annotate.memory.GB}
 
