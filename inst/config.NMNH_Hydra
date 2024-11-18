@@ -30,24 +30,22 @@ params {
     publishDir = 'out'                      // Directory to publish pipeline outputs
     minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
     minAssemblyLength = 500                 // min contig size to retain for annotation
+    genetic_code = 2
+    mitos_condaenv = 'mitos'
+    trnaScan_condaenv = 'trnascan-se'
     preprocess {
-        take = -1
-        maxRetries = 0
         container = process.container
         executor = process.executor
     }
     assemble {
-        take = -1
         maxRetries = 1
         container = process.container
         executor = process.executor
     }
     coverage {
-        take = -1
         clusterOptions = "-l mres=8G,h_data=8G,h_vmem=8G -S /bin/bash"
         cpus = 4
         memory = null
-        maxRetries = 0
         container = process.container
         executor = process.executor
     }
