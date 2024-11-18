@@ -153,7 +153,6 @@ new_db <- function(
         trnY = list(type = "tRNA")
       )
     )) {
-  ){
   # Read mapping file
   if (is.null(mapping_fn)) {
     mapping_fn <- here::here("mapping.csv")
