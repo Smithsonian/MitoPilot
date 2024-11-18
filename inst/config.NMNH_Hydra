@@ -52,7 +52,14 @@ params {
         executor = process.executor
     }
     annotate {
-        maxRetries = 0
+        container = process.container
+        executor = process.executor
+    }
+    curate {
+        container = process.container
+        executor = process.executor
+    }
+    validate {
         container = process.container
         executor = process.executor
     }
