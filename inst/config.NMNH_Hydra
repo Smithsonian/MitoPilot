@@ -11,7 +11,7 @@ process {
   container = '<<CONTAINER_ID>>'
   queue = 'sThC.q'
   penv = 'mthread'
-  \\ check if "himem" is needed (requesting more than 8 Gb RAM per CPU)
+  // check if "himem" is needed (requesting more than 8 Gb RAM per CPU)
   clusterOptions = { 
     if (opts.memory >= 8) { 
       "-l mres=${opts.memory * opts.cpus}G,h_data=${opts.memory}G,h_vmem=${opts.memory}G,himem -S /bin/bash" 
