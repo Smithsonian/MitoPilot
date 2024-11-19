@@ -42,7 +42,7 @@ new_test_project <- function(
   }
   path <- normalizePath(path)
 
-  mapping <- app_sys("mapping_test.csv") |>
+  mapping <- app_sys(file.path("test_data","mapping_test.csv")) |>
     utils::read.csv() |>
     dplyr::slice_head(n = n)
   utils::write.csv(mapping, file.path(path, "mapping.csv"), row.names = FALSE)
