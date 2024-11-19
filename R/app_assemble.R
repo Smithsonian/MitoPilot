@@ -30,6 +30,7 @@ assemble_server <- function(id) {
     # Refresh ----
     on("refresh", {
       rv$data <- fetch_assemble_data()
+
       updateReactable(
         "table",
         data = rv$data
@@ -158,7 +159,7 @@ assemble_server <- function(id) {
               html = TRUE,
               width = 40,
               align = "center",
-              cell = rt_icon_bttn(ns("view"), "fa fa-eye")
+              cell = rt_icon_bttn(ns("details"), "fas fa-square-arrow-up-right")
             )
           )
         )
@@ -247,20 +248,20 @@ assemble_server <- function(id) {
       row <- as.numeric(input$set_pre_opts)
       if (length(selected()) > 0 && !row %in% selected()) {
         req(F)
+      }else{
+        selected <- c(row, selected()) |> unique()
       }
-      if (isTRUE(row %in% selected())) {
-        rv$updating <- rv$data |> dplyr::slice(selected())
-      } else {
-        rv$updating <- rv$data |> dplyr::slice(row)
-      }
-      req(all(rv$updating$assemble_lock == 0))
+      req(all(rv$data$assemble_lock[selected] == 0))
+      rv$updating <- rv$data |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       pre_opts_modal(rv)
     })
     observeEvent(input$pre_opts, ignoreInit = T, {
       exists <- input$pre_opts %in% rv$pre_opts$pre_opts
-      shinyjs::toggleState("pre_opts_cpus", condition = !exists)
-      shinyjs::toggleState("pre_opts_memory", condition = !exists)
-      shinyjs::toggleState("fastp", condition = !exists)
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_pre_opts",
+        value = !exists
+      )
       if (exists) {
         cur <- rv$pre_opts[rv$pre_opts$pre_opts == input$pre_opts, ]
         updateNumericInput(
@@ -277,11 +278,54 @@ assemble_server <- function(id) {
         )
       }
     })
+    observeEvent(input$edit_pre_opts, ignoreInit = T, {
+      shinyjs::toggleState("pre_opts_cpus", condition = input$edit_pre_opts)
+      shinyjs::toggleState("pre_opts_memory", condition = input$edit_pre_opts)
+      shinyjs::toggleState("fastp", condition = input$edit_pre_opts)
+      # Check if editing opts that apply beyond selection
+      if(input$edit_pre_opts && input$pre_opts %in% rv$data$pre_opts){
+        rv$updating_indirect <- rv$data |>
+          dplyr::filter(pre_opts == input$pre_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+
+        # Prevent editing opts that apply to locked
+        if(nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)){
+          shinyWidgets::sendSweetAlert(
+            title = "Editing locked samples",
+            text = "Processing parameters associated with locked samples can not be edited."
+          )
+          shinyWidgets::updatePrettyCheckbox(
+            inputId = "edit_pre_opts",
+            value = FALSE
+          )
+          req(F)
+        }
+
+        if(nrow(rv$updating_indirect) > 0L){
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit pre-processing options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+          )
+        }
+      }else{
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    # Confirm editing opts that apply beyond selection
+    observeEvent(input$editing_opts_indirect, ignoreInit = T, {
+      if(!input$editing_opts_indirect){
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "edit_pre_opts",
+          value = FALSE
+        )
+      }
+    })
     observeEvent(input$update_pre_opts, ignoreInit = T, {
-      ## Add to params table if new ----
-      if (!input$pre_opts %in% rv$pre_opts$pre_opts) {
+      if (input$edit_pre_opts) {
         dplyr::tbl(session$userData$db, "pre_opts") |>
-          dplyr::rows_insert(
+          dplyr::rows_upsert(
             data.frame(
               pre_opts = req(input$pre_opts),
               cpus = req(input$pre_opts_cpus),
@@ -289,31 +333,29 @@ assemble_server <- function(id) {
               fastp = req(input$fastp)
             ),
             in_place = TRUE,
-            conflict = "ignore",
             copy = TRUE,
             by = "pre_opts"
           )
+        rv$pre_opts <- dplyr::tbl(session$userData$db, "pre_opts") |>
+          dplyr::collect()
       }
-      ## Update Assembly / Preprocessing Tables ----
+      ## Update Assembly / Pre-processing Tables ----
       update <- data.frame(
-        ID = rv$updating$ID,
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
         pre_opts = input$pre_opts,
-        assemble_switch = rv$updating$assemble_switch
+        assemble_switch = 1
       )
-      if (input$set_state) {
-        update$assemble_switch <- 1
-        dplyr::tbl(session$userData$db, "assemble") |>
-          dplyr::rows_update(
-            update[, c("ID", "assemble_switch")],
-            unmatched = "ignore",
-            in_place = TRUE,
-            copy = TRUE,
-            by = "ID"
-          )
-      }
       dplyr::tbl(session$userData$db, "preprocess") |>
         dplyr::rows_update(
           update[, c("ID", "pre_opts")],
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      dplyr::tbl(session$userData$db, "assemble") |>
+        dplyr::rows_update(
+          update[, c("ID", "assemble_switch")],
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
@@ -324,6 +366,7 @@ assemble_server <- function(id) {
           update,
           by = "ID"
         )
+      rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
     })
@@ -333,21 +376,20 @@ assemble_server <- function(id) {
       row <- as.numeric(input$set_assemble_opts)
       if (length(selected()) > 0 && !row %in% selected()) {
         req(F)
+      }else{
+        selected <- c(row, selected()) |> unique()
       }
-      if (isTRUE(row %in% selected())) {
-        rv$updating <- rv$data |> dplyr::slice(selected())
-      } else {
-        rv$updating <- rv$data |> dplyr::slice(row)
-      }
-      req(all(rv$updating$assemble_lock == 0))
+      req(all(rv$data$assemble_lock[selected] == 0))
+      rv$updating <- rv$data |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       assemble_opts_modal(rv)
     })
     observeEvent(input$assemble_opts, ignoreInit = T, {
       exists <- input$assemble_opts %in% rv$assemble_opts$assemble_opts
-      shinyjs::toggleState("assemble_opts_cpus", condition = !exists)
-      shinyjs::toggleState("assemble_opts_memory", condition = !exists)
-      shinyjs::toggleState("getOrganelle", condition = !exists)
-      shinyjs::toggleState("seeds_db", condition = FALSE) # TODO - allow for alt seed database
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_assemble_opts",
+        value = !exists
+      )
       if (exists) {
         cur <- rv$assemble_opts[rv$assemble_opts$assemble_opts == input$assemble_opts, ]
         updateNumericInput(
@@ -362,20 +404,65 @@ assemble_server <- function(id) {
           inputId = "getOrganelle",
           value = cur$getOrganelle
         )
-        # TODO - allow for alt seed database
-        # Need to modify nextflow to pass seeds database to worker or
-        # the specific path must exist in the workers docker container
-        # updateTextInput(
-        #   inputId = "seeds_db",
-        #   value = cur$seeds_db
-        # )
+        updateTextInput(
+          inputId = "seeds_db",
+          value = cur$seeds_db
+        )
       }
     })
+    observeEvent(input$edit_assemble_opts, ignoreInit = T, {
+      shinyjs::toggleState("assemble_opts_cpus", condition = !input$edit_assemble_opts)
+      shinyjs::toggleState("assemble_opts_memory", condition = !input$edit_assemble_opts)
+      shinyjs::toggleState("getOrganelle", condition = !input$edit_assemble_opts)
+      # TODO - allow for alt seed database
+      # Need to modify nextflow to pass seeds database to worker or
+      # the specific path must exist in the workers docker container
+      shinyjs::toggleState("seeds_db", condition = FALSE)
+      # Check if editing opts that apply beyond selection
+      if(input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts){
+        rv$updating_indirect <- rv$data |>
+          dplyr::filter(assemble_opts == input$assemble_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        # Prevent editing opts that apply to locked samples
+        if(nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)){
+          shinyWidgets::sendSweetAlert(
+            title = "Editing locked samples",
+            text = "Processing parameters associated with locked samples can not be edited."
+          )
+          shinyWidgets::updatePrettyCheckbox(
+            inputId = "edit_assemble_opts",
+            value = FALSE
+          )
+          req(F)
+        }
+        # Confirm editing opts that apply beyond selection
+        if(nrow(rv$updating_indirect) > 0L){
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_assemble_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+          )
+        }
+      }else{
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    # Confirm editing opts that apply beyond selection
+    observeEvent(input$editing_assemble_opts_indirect, ignoreInit = T, {
+      if(!input$editing_assemble_opts_indirect){
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "edit_assemble_opts",
+          value = FALSE
+        )
+      }
+    })
+    ## Save Changes ----
     observeEvent(input$update_assemble_opts, ignoreInit = T, {
       ## Add to params table if new ----
-      if (!input$assemble_opts %in% rv$assemble_opts$assemble_opts) {
+      if (input$edit_assemble_opts) {
         dplyr::tbl(session$userData$db, "assemble_opts") |>
-          dplyr::rows_insert(
+          dplyr::rows_iupsert(
             data.frame(
               assemble_opts = req(input$assemble_opts),
               cpus = req(input$assemble_opts_cpus),
@@ -385,20 +472,18 @@ assemble_server <- function(id) {
               labels_db = rv$assemble_opts$labels_db[1]
             ),
             in_place = TRUE,
-            conflict = "ignore",
             copy = TRUE,
             by = "assemble_opts"
           )
+        rv$assemble_opts <- dplyr::tbl(session$userData$db, "assemble_opts") |>
+          dplyr::collect()
       }
       ## Update Assembly Table ----
       update <- data.frame(
-        ID = rv$updating$ID,
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
         assemble_opts = input$assemble_opts,
-        assemble_switch = rv$updating$assemble_switch
+        assemble_switch = 1
       )
-      if (input$set_state) {
-        update$assemble_switch <- 1
-      }
       dplyr::tbl(session$userData$db, "assemble") |>
         dplyr::rows_update(
           update,
@@ -416,198 +501,13 @@ assemble_server <- function(id) {
       trigger("update_assemble_table")
     })
 
+    # Open Assembly Details ----
+    observeEvent(input$details, ignoreInit = T, {
+      # row <- as.numeric(input$details)
+      # rv$updating <- rv$data |> dplyr::slice(row)
+      # trigger("coverage_modal")
+    })
+    # mod_assembly_coverage_details_server(ns("coverage_details"), rv)
 
-    # # Set Params ----
-    # observeEvent(input$set_assembly_params, {
-    #   row <- as.numeric(input$set_assembly_params)
-    #   if(length(selected())>0 & !row %in% selected()){req(F)}
-    #   if(row %in% selected()){
-    #     rv$updating <- rv$data |> dplyr::slice(selected())
-    #   }else{
-    #     rv$updating <- rv$data |> dplyr::slice(row)
-    #   }
-    #   # Prevent update to multiple targets (TODO add popup)
-    #   req(length(unique(rv$updating$target))==1)
-    #
-    #   # Current Values
-    #   cpus <- unique(rv$updating$opt_cpus) |> {
-    #     \(x) ifelse(length(x)==1, x, numeric())
-    #   }()
-    #   memory <- unique(rv$updating$opt_memory) |> {
-    #     \(x) ifelse(length(x)==1, x, numeric())
-    #   }()
-    #   assembly_params <- unique(rv$updating$opt_getOrganelle) |> {
-    #     \(x) ifelse(length(x)==1, x, character())
-    #   }()
-    #   assembly_params_opts <- rv$assembly_opts |>
-    #     dplyr::filter(target==unique(rv$updating$target)) |>
-    #     dplyr::pull(opt_getOrganelle)
-    #   showModal(
-    #     modalDialog(
-    #       title = stringr::str_glue("Set Assembly Parameters for {nrow(rv$updating)} Samples"),
-    #       numericInput(ns("set_cpus"), "CPUs:", value=cpus ),
-    #       numericInput(ns("set_memory"), "Memory (GB):", value=memory ),
-    #       shinyWidgets::pickerInput(
-    #         ns("existing_params_selector"), "Existing Parameter Settings",
-    #         choices = assembly_params_opts, selected = assembly_params, width="100%"
-    #       ),
-    #       textAreaInput(
-    #         ns("updated_params"), "Updated Assembly Params",
-    #         value=assembly_params, width="100%"
-    #       ),
-    #       shinyWidgets::prettyCheckbox(
-    #         ns("assembly_set_state"),
-    #         label = "Toggle State",
-    #         status='primary',
-    #         inline=TRUE,
-    #         value = TRUE
-    #       ),
-    #       shinyWidgets::prettyCheckbox(
-    #         ns("save_old_assembly"),
-    #         label = "Save Old Assembly",
-    #         status='primary',
-    #         inline=TRUE,
-    #         value = FALSE
-    #       ),
-    #       size="xl",
-    #       footer = tagList(
-    #         actionButton(ns("params_update"), "Update"),
-    #         modalButton("Cancel")
-    #       )
-    #     )
-    #   )
-    # })
-    # # Choose from existing
-    # observeEvent(input$existing_params_selector, {
-    #   req(input$existing_params_selector != input$updated_params)
-    #   updateTextAreaInput(
-    #     inputId = "updated_params",
-    #     value = input$existing_params_selector
-    #   )
-    # })
-    # # Set changes
-    # observeEvent(input$params_update, {
-    #   updated_data <- rv$updating |>
-    #     dplyr::transmute(
-    #       ID=ID,
-    #       target=target,
-    #       hash_old = hash,
-    #       opt_cpus = req(input$set_cpus),
-    #       opt_memory = req(input$set_memory),
-    #       opt_db = opt_db, # TODO - make modifiable for custom seed db
-    #       opt_getOrganelle = req(input$updated_params) |>
-    #         stringr::str_squish(),
-    #       topology=NA_character_,
-    #       length=NA_character_,
-    #       paths=NA_real_,
-    #       scaffolds=NA_real_,
-    #       time_stamp=as.integer(Sys.time())
-    #     ) |>
-    #     tidyr::unite(
-    #       hash, sep=" ", remove=FALSE,
-    #       dplyr::all_of(c("opt_cpus", "opt_memory", "opt_db", "opt_getOrganelle")),
-    #     ) |>
-    #     dplyr::mutate(
-    #       hash = as.character(openssl::md5(hash))
-    #     ) |>
-    #     filter(hash_old != hash)
-    #   # Stop if nothing to update
-    #   if(nrow(updated_data)==0){
-    #     removeModal()
-    #     req(F)
-    #   }
-    #   # Set state to '1/assemble'
-    #   if(input$assembly_set_state){
-    #     updated_data$assemble_switch <- 1
-    #   }
-    #   # Delete old data
-    #   if(!input$save_old_assembly){
-    #     out.path <- getOption('out.path')
-    #     updated_data |>
-    #       select(ID, target, hash_old) |>
-    #       purrr::pwalk(function(ID, target, hash_old){
-    #         stringr::str_glue(
-    #           "-rf {out.path}/{ID}/{target}/{hash_old}"
-    #         ) |> system2("rm", args=_)
-    #       })
-    #   }
-    #   updated_data <- updated_data |> select(-hash_old)
-    #   update_assembly_table(updated_data)
-    #   rv$data <- rv$data |>
-    #     dplyr::rows_update(updated_data, by=c("ID", "target"))
-    #   reactable::updateReactable(
-    #     "table",
-    #     data = rv$data,
-    #     selected = selected(),
-    #     page = reactable::getReactableState("table", "page")
-    #   )
-    #   rv$assembly_opts <- get_assembly_params()
-    #   rv$updating <- NULL
-    #   removeModal()
-    # })
-    #
-    # # Toggle State ----
-    # on("state", {
-    #   req(grv$mode=="Assemble")
-    #   req(all(rv$data$lock[req(selected())]==0))
-    #   rv$updating <- rv$data |>
-    #     select(ID, target, assemble_switch) |>
-    #     dplyr::slice(selected())
-    #
-    #   showModal(
-    #     modalDialog(
-    #       title = "Select New State:",
-    #       shinyWidgets::pickerInput(
-    #         ns("new_state"),
-    #         label = NULL,
-    #         choices = c("Pre-Assembly"=0, "Ready to Assemble"=1, "Successful Assembly"=2, "Failed / Problematic Assembly"=3),
-    #         choicesOpt = list(
-    #           icon = c("fa fa-circle-notch", "fa fa-hourglass", "fa fa-circle-check", "fa fa-triangle-exclamation")
-    #         )
-    #       ),
-    #       size="m",
-    #       footer = tagList(
-    #         actionButton(ns("update_state"), "Update"),
-    #         modalButton("Cancel")
-    #       )
-    #     )
-    #   )
-    # })
-    # observeEvent(input$update_state, {
-    #   rv$updating$assemble_switch <- as.numeric(input$new_state)
-    #   update_assembly_table(rv$updating)
-    #   rv$data <- rv$data |>
-    #     dplyr::rows_update(rv$updating, by=c("ID", "target"))
-    #   trigger("update_asembly_table")
-    #   removeModal()
-    # })
-    #
-    # # Toggle Lock ----
-    # on("lock", {
-    #   req(grv$mode=="Assemble")
-    #   req(selected())
-    #   rv$updating <- rv$data |>
-    #     select(ID, target, lock) |>
-    #     dplyr::slice(selected())
-    #   lock_current <- as.numeric(names(which.max(table(rv$updating$lock))))
-    #   rv$updating$lock <- as.numeric(!lock_current)
-    #   update_assembly_table(rv$updating)
-    #   rv$data <- rv$data |>
-    #     dplyr::rows_update(rv$updating, by=c("ID", "target"))
-    #   trigger("update_asembly_table")
-    # })
-    #
-    # # Open Assembly Details ----
-    # init("assembly_modal")
-    # observeEvent(input$assembly_details, {
-    #   row <- as.numeric(input$assembly_details)
-    #   reactable::updateReactable(
-    #     "table",
-    #     selected = row,
-    #   )
-    #   rv$updating <- rv$data |> slice(row)
-    #   trigger("assembly_modal")
-    # })
-    # mod_assembly_modal_server("assembly_details", rv)
   })
 }

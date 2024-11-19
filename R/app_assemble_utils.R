@@ -43,38 +43,51 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
 pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   ns <- session$ns
 
-  current <- character(0)
+  current <- list()
   if (length(unique(rv$updating$pre_opts)) == 1) {
-    current <- rv$updating$pre_opts[1]
+    current <- rv$pre_opts[rv$pre_opts$pre_opts == rv$updating$pre_opts[1], ]
   }
 
   showModal(
     modalDialog(
       title = stringr::str_glue("Setting Pre-processing Options for {nrow(rv$updating)} Samples"),
-      selectizeInput(
-        ns("pre_opts"),
-        label = "Parameter set name:",
-        choices = rv$pre_opts$pre_opts,
-        selected = current,
-        options = list(
-          create = TRUE,
-          maxItems = 1
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        selectizeInput(
+          ns("pre_opts"),
+          label = "Parameter set name:",
+          choices = rv$pre_opts$pre_opts,
+          selected = current$pre_opts,
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ),
+        div(
+          class = "form-group shiny-input-container",
+          style = "margin-top: 39px;",
+          shinyWidgets::prettyCheckbox(
+            ns("edit_pre_opts"),
+            label = "Edit",
+            value = FALSE,
+            status = "primary"
+          )
         )
       ),
-      numericInput(ns("pre_opts_cpus"), "CPUs:", value = numeric(0)),
-      numericInput(ns("pre_opts_memory"), "Memory (GB):", value = numeric(0)),
+      numericInput(
+        ns("pre_opts_cpus"), "CPUs:",
+        value = current$cpus %||% numeric(0)
+      ) |> shinyjs::disabled(),
+      numericInput(
+        ns("pre_opts_memory"), "Memory (GB):",
+        value = current$memory %||% numeric(0)
+      ) |> shinyjs::disabled(),
       textAreaInput(
         ns("fastp"),
         label = "fastp options",
-        value = character(0),
+        value =  current$fastp %||% character(0),
         width = "100%"
-      ),
-      shinyWidgets::prettyCheckbox(
-        ns("set_state"),
-        label = "Toggle State",
-        value = TRUE,
-        status = "primary"
-      ),
+      ) |> shinyjs::disabled(),
       size = "xl",
       footer = tagList(
         actionButton(ns("update_pre_opts"), "Update"),
@@ -93,39 +106,55 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
 assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   ns <- session$ns
 
-  current <- character(0)
+  current <- list()
   if (length(unique(rv$updating$assemble_opts)) == 1) {
-    current <- rv$updating$assemble_opts[1]
+    current <- rv$assemble_opts[rv$assemble_opts$assemble_opts == rv$updating$assemble_opts[1], ]
   }
 
   showModal(
     modalDialog(
       title = stringr::str_glue("Setting Assembly Options for {nrow(rv$updating)} Samples"),
-      selectizeInput(
-        ns("assemble_opts"),
-        label = "Parameter set name:",
-        choices = rv$assemble_opts$assemble_opts,
-        selected = current,
-        options = list(
-          create = TRUE,
-          maxItems = 1
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        selectizeInput(
+          ns("assemble_opts"),
+          label = "Parameter set name:",
+          choices = rv$assemble_opts$assemble_opts,
+          selected = current$assemble_opts,
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ),
+        div(
+          class = "form-group shiny-input-container",
+          style = "margin-top: 39px;",
+          shinyWidgets::prettyCheckbox(
+            ns("edit_assemble_opts"),
+            label = "Edit",
+            value = FALSE,
+            status = "primary"
+          )
         )
       ),
-      numericInput(ns("assemble_opts_cpus"), "CPUs:", value = numeric(0)),
-      numericInput(ns("assemble_opts_memory"), "Memory (GB):", value = numeric(0)),
+      numericInput(
+        ns("assemble_opts_cpus"), "CPUs:",
+        value = current$cpus %||% numeric(0)
+        ) |> shinyjs::disabled(),
+      numericInput(
+        ns("assemble_opts_memory"), "Memory (GB):",
+        value = current$memory %||% numeric(0)
+        ) |> shinyjs::disabled(),
       textAreaInput(
         ns("getOrganelle"),
         label = "getOrganelle options",
-        value = character(0),
+        value = current$getOrganelle %||% character(0),
         width = "100%"
-      ),
-      textInput(ns("seeds_db"), "getOrganelle Seeds:", value = rv$assemble_opts$seeds_db[1]),
-      shinyWidgets::prettyCheckbox(
-        ns("set_state"),
-        label = "Toggle State",
-        value = TRUE,
-        status = "primary"
-      ),
+      ) |> shinyjs::disabled(),
+      textInput(
+        ns("seeds_db"), "getOrganelle Seeds:",
+        value = current$seeds_db %||% character(0),
+        ) |> shinyjs::disabled(),
       size = "xl",
       footer = tagList(
         actionButton(ns("update_assemble_opts"), "Update"),
