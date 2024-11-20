@@ -32,11 +32,9 @@ app_server <- function(input, output, session) {
   })
 
   # Reload Data
-  init("refresh")
   observeEvent(input$refresh, {
-    trigger("refresh")
+    trigger(paste0("refresh_",tolower(session$userData$mode)))
   })
-
   # State
   init("state")
   observeEvent(input$state, {
@@ -65,6 +63,6 @@ app_server <- function(input, output, session) {
   # Sub-modules ----
   mod_run_pipline_server("run")
   assemble_server("assemble")
-  # mod_Annotate_server("Annotate", grv)
+  annotate_server("annotate")
   # mod_Submit_server("Submit", grv)
 }

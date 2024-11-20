@@ -51,17 +51,13 @@ app_ui <- function(request) {
           conditionalPanel(
             condition = "input.mode == 'Assemble'",
             assemble_ui("assemble")
+          ),
+          conditionalPanel(
+            condition = "input.mode == 'Annotate'",
+            annotate_ui("annotate")
           )
         )
       )
-      # conditionalPanel(
-      #   condition = "input.mode == 'Annotate'",
-      #   mod_Annotate_ui("Annotate")
-      # ),
-      # conditionalPanel(
-      #   condition = "input.mode == 'Submit'",
-      #   mod_Submit_ui("Submit")
-      # )
     )
   )
 }

@@ -341,12 +341,12 @@ new_db <- function(
     con,
     "CREATE TABLE annotate (
       ID TEXT NOT NULL,
+      scaffolds INTEGER,
       annotate_opts TEXT,
       curate_opts TEXT,
       annotate_switch INTEGER,
       annotate_lock INTEGER,
       annotate_notes TEXT,
-      scaffolds INTEGER,
       genes INTEGER,
       tRNA INTEGER,
       rRNA INTEGER,

@@ -10,6 +10,7 @@ License: file LICENSE
 URL: https://github.com/JonahVentures/MitoPilot
 BugReports: https://github.com/JonahVentures/MitoPilot/issues
 Imports: 
+    base64enc,
     Biostrings,
     config,
     crayon,
@@ -24,6 +25,8 @@ Imports:
     here,
     htmlwidgets,
     jsonlite,
+    msaR,
+    processx,
     purrr,
     rclipboard,
     reactable,

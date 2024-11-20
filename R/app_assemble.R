@@ -28,7 +28,8 @@ assemble_server <- function(id) {
     )
 
     # Refresh ----
-    on("refresh", {
+    init("refresh_assemble")
+    on("refresh_assemble", {
       rv$data <- fetch_assemble_data()
       updateReactable(
         "table",
@@ -241,6 +242,18 @@ assemble_server <- function(id) {
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_lock) |>
         dplyr::slice(selected())
+      ## Ensure single assemble ---
+      # TODO - could relax this constraint
+      assemblies <- dplyr::tbl(session$userData$con, "assemblies") |>
+        dplyr::filter(ignore == 0 & ID %in% rv$updating$ID) |>
+        dplyr::pull(ID)
+      if(any(duplicated(assemblies))){
+        shinyWidgets::sendSweetAlert(
+          title = "Multiple assemblies detected.",
+          text = "Only one assembly 'path' for each sample can be locked for annotation. Please open the assembly details and 'ignore' all but one assembly or use the consensus trimming feature."
+        )
+        req(F)
+      }
       lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
       rv$updating$assemble_lock <- as.numeric(!lock_current)
       dplyr::tbl(session$userData$con, "assemble") |>
@@ -254,6 +267,7 @@ assemble_server <- function(id) {
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_assemble_table")
+      trigger("refresh_annotate")
     })
 
     # Set Pre-process Opts ----
