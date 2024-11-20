@@ -38,6 +38,12 @@ app_ui <- function(request) {
             label = "Lock",
             style = "material-flat",
             size = "sm"
+          ),
+          shinyWidgets::actionBttn(
+            "run",
+            label = "Run",
+            style = "material-flat",
+            size = "sm"
           )
         ),
         div(

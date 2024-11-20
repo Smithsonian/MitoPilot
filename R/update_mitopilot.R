@@ -1,31 +1,32 @@
 #' Update Pipeline Helper
 #'
-#' @param path MitoPilot project directory (defualt = here::here())
-#' @param workflow Which module to update (default = c("both", "assemble",
+#' @param path MitoPilot project directory
+#' @param workflow Which module to update (default = c("assemble",
 #'   "annotate"))
 #' @param source Nextflow script source. By default, this will be in the
 #'   `nextflow/` subdirectory of the package installation.
 #'
 #' @export
 update_mitopilot <- function(
-    path = here::here(),
-    workflow = c("both", "assemble", "annotate"),
+    workflow = c("assemble", "annotate"),
+    path = NULL,
     source = app_sys("nextflow")) {
-  if (any(c("assemble", "both") %in% workflow)) {
-    message("To update the assembly module, run in terminal:")
-    glue::glue(
-      "nextflow",
-      "-log .logs/nextflow.log",
-      "run {source}",
-      "-c {file.path(path, '.config')}",
-      "-entry WF1",
-      "-resume",
-      .sep = " "
-    ) |>
-      print()
+
+  path <- path %||% dirname(getOption("MitoPilot.db") %||% here::here(".sqlite"))
+  workflow <- tolower(workflow[1])
+
+  if(workflow %nin% c("assemble", "annotate")) {
+    stop("Invalid workflow.")
   }
 
-  if (any(c("annotate", "both") %in% workflow)) {
-    message("Annotation module coming soon...")
-  }
+  cmd <- c(
+    "-log", "{file.path(path, '.logs', 'nextflow.log')}",
+    "run", "{source}",
+    "-c", "{file.path(path, '.config')}",
+    "-entry", "{ifelse(workflow == 'assemble', 'WF1', 'WF2')}",
+    "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '--resume', '')}"
+  ) |> purrr::map_chr(~stringr::str_glue(.x))
+
+  return(invisible(cmd))
+
 }

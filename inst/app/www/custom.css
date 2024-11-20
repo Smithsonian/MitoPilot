@@ -3,3 +3,16 @@
   transform: scale(1.15);
 }
 
+.code-block {
+  background-color: #2d2d2d; /* Dark gray background */
+  color: #dcdcdc; /* Light text color */
+  font-family: "Courier New", Courier, monospace; /* Monospaced font */
+  font-size: 12px; /* Adjust font size */
+  line-height: 1.25; /* Better line spacing */
+  padding: 0.5em; /* Space around the code */
+  border-radius: 4px; /* Rounded corners */
+  border: 1px solid #444; /* Subtle border for structure */
+  overflow-y: auto;
+  max-height: 300px;
+  white-space: pre-wrap; /* Preserve formatting and allow wrapping */
+}

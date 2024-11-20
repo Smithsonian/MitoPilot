@@ -19,9 +19,9 @@ assemble_server <- function(id) {
 
     # Prepare data ----
     rv <- reactiveValues(
-      pre_opts = dplyr::tbl(session$userData$db, "pre_opts") |>
+      pre_opts = dplyr::tbl(session$userData$con, "pre_opts") |>
         dplyr::collect(),
-      assemble_opts = dplyr::tbl(session$userData$db, "assemble_opts") |>
+      assemble_opts = dplyr::tbl(session$userData$con, "assemble_opts") |>
         dplyr::collect(),
       data = fetch_assemble_data(),
       updating = NULL
@@ -199,11 +199,12 @@ assemble_server <- function(id) {
       showModal(
         modalDialog(
           title = "Select New State:",
-          shinyWidgets::prettyCheckboxGroup(
+          shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
             choices = c("Pre-Assembly" = 0, "Ready to Assemble" = 1, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
             selected = current,
+            shape = "square",
             status = "primary"
           ),
           size = "m",
@@ -216,7 +217,7 @@ assemble_server <- function(id) {
     })
     observeEvent(input$update_state, {
       rv$updating$assemble_switch <- as.numeric(input$new_state)
-      dplyr::tbl(session$userData$db, "assemble") |>
+      dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           rv$updating,
           unmatched = "ignore",
@@ -242,7 +243,7 @@ assemble_server <- function(id) {
         dplyr::slice(selected())
       lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
       rv$updating$assemble_lock <- as.numeric(!lock_current)
-      dplyr::tbl(session$userData$db, "assemble") |>
+      dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           rv$updating,
           unmatched = "ignore",
@@ -336,7 +337,7 @@ assemble_server <- function(id) {
     })
     observeEvent(input$update_pre_opts, ignoreInit = T, {
       if (input$edit_pre_opts) {
-        dplyr::tbl(session$userData$db, "pre_opts") |>
+        dplyr::tbl(session$userData$con, "pre_opts") |>
           dplyr::rows_upsert(
             data.frame(
               pre_opts = req(input$pre_opts),
@@ -348,7 +349,7 @@ assemble_server <- function(id) {
             copy = TRUE,
             by = "pre_opts"
           )
-        rv$pre_opts <- dplyr::tbl(session$userData$db, "pre_opts") |>
+        rv$pre_opts <- dplyr::tbl(session$userData$con, "pre_opts") |>
           dplyr::collect()
       }
       ## Update Assembly / Pre-processing Tables ----
@@ -357,7 +358,7 @@ assemble_server <- function(id) {
         pre_opts = input$pre_opts,
         assemble_switch = 1
       )
-      dplyr::tbl(session$userData$db, "preprocess") |>
+      dplyr::tbl(session$userData$con, "preprocess") |>
         dplyr::rows_update(
           update[, c("ID", "pre_opts")],
           unmatched = "ignore",
@@ -365,7 +366,7 @@ assemble_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      dplyr::tbl(session$userData$db, "assemble") |>
+      dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           update[, c("ID", "assemble_switch")],
           unmatched = "ignore",
@@ -473,7 +474,7 @@ assemble_server <- function(id) {
     observeEvent(input$update_assemble_opts, ignoreInit = T, {
       ## Add to params table if new ----
       if (input$edit_assemble_opts) {
-        dplyr::tbl(session$userData$db, "assemble_opts") |>
+        dplyr::tbl(session$userData$con, "assemble_opts") |>
           dplyr::rows_iupsert(
             data.frame(
               assemble_opts = req(input$assemble_opts),
@@ -487,7 +488,7 @@ assemble_server <- function(id) {
             copy = TRUE,
             by = "assemble_opts"
           )
-        rv$assemble_opts <- dplyr::tbl(session$userData$db, "assemble_opts") |>
+        rv$assemble_opts <- dplyr::tbl(session$userData$con, "assemble_opts") |>
           dplyr::collect()
       }
       ## Update Assembly Table ----
@@ -496,7 +497,7 @@ assemble_server <- function(id) {
         assemble_opts = input$assemble_opts,
         assemble_switch = 1
       )
-      dplyr::tbl(session$userData$db, "assemble") |>
+      dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           update,
           unmatched = "ignore",

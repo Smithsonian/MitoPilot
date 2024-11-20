@@ -5,16 +5,16 @@
 \title{Update Pipeline Helper}
 \usage{
 update_mitopilot(
-  path = here::here(),
-  workflow = c("both", "assemble", "annotate"),
+  workflow = c("assemble", "annotate"),
+  path = NULL,
   source = app_sys("nextflow")
 )
 }
 \arguments{
-\item{path}{MitoPilot project directory (defualt = here::here())}
-
-\item{workflow}{Which module to update (default = c("both", "assemble",
+\item{workflow}{Which module to update (default = c("assemble",
 "annotate"))}
+
+\item{path}{MitoPilot project directory}
 
 \item{source}{Nextflow script source. By default, this will be in the
 `nextflow/` subdirectory of the package installation.}

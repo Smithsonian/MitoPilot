@@ -8,18 +8,19 @@ app_server <- function(input, output, session) {
 
   # db connection ----
   db <- getOption("MitoPilot.db") %||% here::here(".sqlite")
+  session$userData$dir <- dirname(db)
   if (!file.exists(db)) {
     shinyWidgets::sendSweetAlert(
       title = "Database not found",
       text = "The MitoPilot::gui() app requires a database to run. Please make sure your working directory is set to an active MitoPilot project, or use set the location of the database using, options(MitoPilot.db = 'path/to/the/.sqlite').",
     )
   }
-  session$userData$db <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
+  session$userData$con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
 
   # Publish / output directory ----
-  pub_dir <- readLines(file.path(dirname(db), ".config")) |> stringr::str_extract("publishDir.*") |>
+  dir_out <- readLines(file.path(dirname(db), ".config")) |> stringr::str_extract("publishDir.*") |>
     na.omit() |> stringr::str_remove("^[^'|^\"]+['\"]") |> stringr::str_extract("^[^'|^\"]+")
-  session$userData$pub_dir <- file.path(dirname(db), pub_dir)
+  session$userData$dir_out <- file.path(dirname(db), dir_out)
 
   # View mode ----
   observeEvent(input$mode, {
@@ -46,6 +47,11 @@ app_server <- function(input, output, session) {
   observeEvent(input$lock, {
     trigger("lock")
   })
+  # Run
+  init("run")
+  observeEvent(input$run, {
+    trigger("run")
+  })
   # Group
   init("pregroup")
   observeEvent(input$pregroup, {
@@ -57,6 +63,7 @@ app_server <- function(input, output, session) {
   })
 
   # Sub-modules ----
+  mod_run_pipline_server("run")
   assemble_server("assemble")
   # mod_Annotate_server("Annotate", grv)
   # mod_Submit_server("Submit", grv)

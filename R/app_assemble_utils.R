@@ -5,7 +5,7 @@
 #'
 #' @noRd
 fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
-  db <- session$userData$db
+  db <- session$userData$con
 
   preprocess <- dplyr::tbl(db, "preprocess") |>
     dplyr::select(!time_stamp)

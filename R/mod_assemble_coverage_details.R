@@ -11,7 +11,7 @@ mod_assembly_coverage_details_server <- function(id, rv){
     on("coverage_modal", {
 
       rv$alignment <- NULL
-      rv$focal_assembly <- dplyr::tbl(session$userData$db, "assemblies") |>
+      rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ID == rv$updating$ID) |>
         dplyr::select(ID, path, scaffold, topology, length, sequence, ignore) |>
         dplyr::collect() |>
@@ -102,7 +102,7 @@ mod_assembly_coverage_details_server <- function(id, rv){
     observeEvent(input$ignore, {
       row <- as.numeric(input$ignore)
       rv$focal_assembly$ignore[row] <- as.numeric(!rv$focal_assembly$ignore[row])
-      dplyr::tbl(session$userData$db, "assemblies") |>
+      dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::rows_update(
           data.frame(
             ID = rv$focal_assembly$ID[row],
@@ -130,7 +130,7 @@ mod_assembly_coverage_details_server <- function(id, rv){
       req( input$notes != (rv$updating$assemble_notes %|NA|% ""))
       rv$updating$assemble_notes <- input$notes |>
         stringr::str_remove_all(",")
-      dplyr::tbl(session$userData$db, "assemble") |>
+      dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           rv$updating[,c("ID", "assemble_notes")],
           in_place = TRUE,
@@ -294,7 +294,7 @@ mod_assembly_coverage_details_server <- function(id, rv){
       Biostrings::writeXStringSet(
         trimmed,
         file.path(
-          session$userData$pub_dir,
+          session$userData$dir_out,
           rv$updating$ID,
           "assemble",
           rv$updating$assemble_opts,
@@ -304,7 +304,7 @@ mod_assembly_coverage_details_server <- function(id, rv){
 
       # Updated coverage stats file
       coverage <- file.path(
-        session$userData$pub_dir,
+        session$userData$dir_out,
         rv$updating$ID,
         "assemble",
         rv$updating$assemble_opts,
@@ -324,7 +324,7 @@ mod_assembly_coverage_details_server <- function(id, rv){
       write.csv(
         coverage,
         file.path(
-          session$userData$pub_dir,
+          session$userData$dir_out,
           rv$updating$ID,
           "assemble",
           rv$updating$assemble_opts,
