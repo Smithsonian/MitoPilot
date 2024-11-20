@@ -5,6 +5,7 @@
 #' @import shiny gargoyle dbplyr
 #' @noRd
 app_server <- function(input, output, session) {
+
   # db connection ----
   db <- getOption("MitoPilot.db") %||% here::here(".sqlite")
   if (!file.exists(db)) {
@@ -14,6 +15,11 @@ app_server <- function(input, output, session) {
     )
   }
   session$userData$db <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
+
+  # Publish / output directory ----
+  pub_dir <- readLines(file.path(dirname(db), ".config")) |> stringr::str_extract("publishDir.*") |>
+    na.omit() |> stringr::str_remove("^[^'|^\"]+['\"]") |> stringr::str_extract("^[^'|^\"]+")
+  session$userData$pub_dir <- file.path(dirname(db), pub_dir)
 
   # View mode ----
   observeEvent(input$mode, {

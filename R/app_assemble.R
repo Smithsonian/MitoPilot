@@ -30,7 +30,6 @@ assemble_server <- function(id) {
     # Refresh ----
     on("refresh", {
       rv$data <- fetch_assemble_data()
-
       updateReactable(
         "table",
         data = rv$data
@@ -86,6 +85,13 @@ assemble_server <- function(id) {
               )
             ),
             ID = colDef(
+              show = T,
+              width = 150,
+              sticky = "left",
+              html = T,
+              cell = rt_longtext()
+            ),
+            Taxon = colDef(
               show = T,
               width = 150,
               sticky = "left",
@@ -186,13 +192,19 @@ assemble_server <- function(id) {
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
         dplyr::slice(selected())
+      current <- character(0)
+      if (length(unique(rv$updating$assemble_switch)) == 1) {
+        current <- rv$updating$assemble_switch[1]
+      }
       showModal(
         modalDialog(
           title = "Select New State:",
-          shinyWidgets::pickerInput(
+          shinyWidgets::prettyCheckboxGroup(
             ns("new_state"),
             label = NULL,
             choices = c("Pre-Assembly" = 0, "Ready to Assemble" = 1, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
+            selected = current,
+            status = "primary"
           ),
           size = "m",
           footer = tagList(
@@ -497,17 +509,17 @@ assemble_server <- function(id) {
           update,
           by = "ID"
         )
+      rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
     })
 
     # Open Assembly Details ----
     observeEvent(input$details, ignoreInit = T, {
-      # row <- as.numeric(input$details)
-      # rv$updating <- rv$data |> dplyr::slice(row)
-      # trigger("coverage_modal")
+      rv$updating <- rv$data |> dplyr::slice(as.numeric(input$details))
+      trigger("coverage_modal")
     })
-    # mod_assembly_coverage_details_server(ns("coverage_details"), rv)
+    mod_assembly_coverage_details_server(ns("coverage_details"), rv)
 
   })
 }

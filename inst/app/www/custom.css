@@ -1,0 +1,5 @@
+.reactable-bttn:hover {
+  transition: all .1s ease-in-out;
+  transform: scale(1.15);
+}
+
