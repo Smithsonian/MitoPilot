@@ -9,7 +9,7 @@ singularity {
 process {
   executor = 'sge'
   container = '<<CONTAINER_ID>>'
-  queue = 'sThC.q'
+  //queue = 'sThC.q'
   penv = 'mthread'
   // check if "himem" is needed (requesting more than 8 Gb RAM per CPU)
   clusterOptions = { 
