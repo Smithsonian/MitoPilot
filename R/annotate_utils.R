@@ -10,7 +10,7 @@
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  alignment <- Biostrings::pairwiseAlignment(subject=s1, pattern=s2, substitutionMatrix = subMx)
+  alignment <- Biostrings::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
 
   # Return query-centric percent identity
   if (type[1] == "pctId") {
@@ -37,7 +37,6 @@ get_top_hits <- function(
     ref_db,
     query,
     condaenv = "base") {
-
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
 
   if (!is.null(condaenv)) {
@@ -109,7 +108,7 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
   end <- end[1]
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  aln <- Biostrings::pairwiseAlignment(subject=s1, pattern=s2, substitutionMatrix = subMx)
+  aln <- Biostrings::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
   if (end == "leading") {
     return({
       nchar(stringr::str_extract(as.character(Biostrings::alignedSubject(aln)), "^-*")) -

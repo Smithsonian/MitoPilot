@@ -261,6 +261,5 @@ annotate_server <- function(id) {
     observeEvent(input$details, {
       coming_soon()
     })
-
   })
 }

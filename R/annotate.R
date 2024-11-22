@@ -30,7 +30,6 @@ annotate <- function(
     trnaScan_opts = "-M vert",
     trnaScan_condaenv = "base",
     out_dir = NULL) {
-
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
   # Coverage trimming (optional)
@@ -119,7 +118,7 @@ annotate <- function(
     }
 
     if (idx == max(which(annotations$contig == annotations$contig[idx]))) {
-      annotations$pos2[idx] <- assembly[stringr::str_detect(names(assembly), paste(annotations$contig[idx],"\\w.*"))]@ranges@width
+      annotations$pos2[idx] <- assembly[stringr::str_detect(names(assembly), paste(annotations$contig[idx], "\\w.*"))]@ranges@width
     } else {
       annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
     }
@@ -148,5 +147,4 @@ annotate <- function(
   }
 
   return(invisible(annotations))
-
 }

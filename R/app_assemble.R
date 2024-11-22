@@ -536,6 +536,6 @@ assemble_server <- function(id) {
       rv$updating <- rv$data |> dplyr::slice(as.numeric(input$details))
       trigger("coverage_modal")
     })
-    mod_assembly_coverage_details_server(ns("coverage_details"), rv)
+    assembly_coverage_details_server(ns("coverage_details"), rv)
   })
 }

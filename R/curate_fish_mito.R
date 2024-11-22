@@ -464,7 +464,8 @@ curate_fish_mito <- function(
             s <- stringr::str_extract(.x, paste0("^", stop_opts)) |>
               na.omit()
             s[1] |> unlist()
-          }) |> rev()
+          }) |>
+          rev()
         alt_idx <- 1
         while (alt_idx <= length(alt_stops)) {
           if (is.na(alt_stops[[alt_idx]])) {
@@ -512,7 +513,8 @@ curate_fish_mito <- function(
             s <- stringr::str_extract(.x, paste0("^", stop_opts)) |>
               na.omit()
             s[1] |> unlist()
-          }) |> rev()
+          }) |>
+          rev()
         alt_idx <- 1
         while (alt_idx <= length(alt_stops)) {
           if (is.na(alt_stops[[alt_idx]])) {

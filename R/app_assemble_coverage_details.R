@@ -1,7 +1,7 @@
 #' coverage_details Server Functions
 #'
 #' @noRd
-mod_assembly_coverage_details_server <- function(id, rv) {
+assembly_coverage_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
