@@ -7,7 +7,9 @@
 coverage_trim(assembly, stats)
 }
 \arguments{
-\item{stats}{}
+\item{assembly}{a DNAString object}
+
+\item{stats}{a data frame of coverage stats}
 }
 \description{
 Title

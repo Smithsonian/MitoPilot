@@ -10,7 +10,7 @@
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  alignment <- Biostrings::pairwiseAlignment(s1, s2, substitutionMatrix = subMx)
+  alignment <- Biostrings::pairwiseAlignment(subject=s1, pattern=s2, substitutionMatrix = subMx)
 
   # Return query-centric percent identity
   if (type[1] == "pctId") {
@@ -37,6 +37,7 @@ get_top_hits <- function(
     ref_db,
     query,
     condaenv = "base") {
+
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
 
   if (!is.null(condaenv)) {
@@ -95,12 +96,12 @@ get_top_hits <- function(
     dplyr::arrange(dplyr::desc(similarity))
 }
 
-#' Title
+#' Count end gaps in a pairwise alignment
 #'
-#' @param query
-#' @param target
-#' @param end
-#' @param subMx
+#' @param query The focal sequence
+#' @param target The target sequence
+#' @param end The end to count gaps. Options are 'leading' and 'trailing'
+#' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
 #'
 #' @export
 #'
@@ -108,24 +109,17 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
   end <- end[1]
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  aln <- Biostrings::pairwiseAlignment(s1, s2, substitutionMatrix = subMx)
+  aln <- Biostrings::pairwiseAlignment(subject=s1, pattern=s2, substitutionMatrix = subMx)
   if (end == "leading") {
     return({
-      nchar(stringr::str_extract(as.character(Biostrings::subject(aln)), "^-*")) -
-        nchar(stringr::str_extract(as.character(Biostrings::pattern(aln)), "^-*"))
+      nchar(stringr::str_extract(as.character(Biostrings::alignedSubject(aln)), "^-*")) -
+        nchar(stringr::str_extract(as.character(Biostrings::alignedPattern(aln)), "^-*"))
     })
   }
   if (end == "trailing") {
     return({
-      nchar(stringr::str_extract(as.character(Biostrings::subject(aln)), "-*$")) -
-        nchar(stringr::str_extract(as.character(Biostrings::pattern(aln)), "-*$"))
+      nchar(stringr::str_extract(as.character(Biostrings::alignedSubject(aln)), "-*$")) -
+        nchar(stringr::str_extract(as.character(Biostrings::alignedPattern(aln)), "-*$"))
     })
   }
-}
-
-alignment_gap_mx <- function(seqs) {
-  Biostrings::AAStringSet(seqs) |>
-    DECIPHER::AlignSeqs(verbose = F) |>
-    as.matrix() |>
-    apply(1:2, \(x) stringr::str_detect(x, "-"))
 }

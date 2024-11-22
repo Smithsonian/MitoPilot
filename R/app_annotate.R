@@ -19,8 +19,8 @@ annotate_ui <- function(id) {
 #' annotate Server Functions
 #'
 #' @noRd
-annotate_server <- function(id){
-  moduleServer(id, function(input, output, session){
+annotate_server <- function(id) {
+  moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     # Prepare data ----
@@ -60,7 +60,7 @@ annotate_server <- function(id){
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "left"),
           columns = list(
-            `.selection` = colDef(show = T),
+            `.selection` = colDef(show = T, sticky = "left"),
             annotate_lock = colDef(
               show = TRUE,
               sticky = "left",
@@ -120,19 +120,19 @@ annotate_server <- function(id){
               cell = rt_link(ns("set_curate_opts"))
             ),
             length = colDef(
-              show=TRUE,
+              show = TRUE,
               width = 120,
               name = "Length",
-              html=TRUE,
-              cell=rt_longtext()
+              html = TRUE,
+              cell = rt_longtext()
             ),
             topology = colDef(show = TRUE),
             scaffolds = colDef(show = TRUE),
-            genes = colDef(show = TRUE),
-            tRNA = colDef(show = TRUE),
-            rRNA = colDef(show = TRUE),
+            PCGCount = colDef(show = TRUE, name = "# PCGs"),
+            tRNACount = colDef(show = TRUE, name = "# tRNAs"),
+            rRNACount = colDef(show = TRUE, name = "# rRNAs"),
             missing = colDef(show = TRUE),
-            duplicated = colDef(show = TRUE),
+            extra = colDef(show = TRUE),
             warnings = colDef(show = TRUE),
             time_stamp = colDef(
               show = TRUE,
@@ -170,8 +170,5 @@ annotate_server <- function(id){
     observeEvent(input$set_curate_opts, {
       coming_soon()
     })
-
-
   })
 }
-

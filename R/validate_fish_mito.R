@@ -1,15 +1,17 @@
 #' Title
 #'
-#' @param annotations
-#' @param coverage
-#' @param params
+#' @param annotations_fn path to annotations file (csv)
+#' @param coverage_fn path to coverage file (csv)
+#' @param params nested list of curation/validation parameters. Can also be
+#'   provided as a base64 encoded JSON string.
+#' @param out_dir output directory
 #'
 #' @export
 #'
 validate_fish_mito <- function(
-    annotations_fn = "~/Jonah/MitoPilot-testing/out/SRR22396740/annotate/SRR22396740_annotations_1.csv",
-    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR22396740/annotate/SRR22396740_coverageStats_1.csv",
-    params = NULL,
+    annotations_fn = "~/Downloads/tmp/SRR22396640_annotations_1.csv",
+    coverage_fn = "~/Downloads/tmp/SRR22396640_coverageStats_1.csv",
+    params = list(),
     out_dir = NULL) {
   # Prepare environment ----
 
@@ -73,7 +75,7 @@ validate_fish_mito <- function(
     ## Duplication ----
     if (nrow(gene_annotations) > max(gene_rules$count)) {
       extra <- extra + nrow(gene_annotations) - max(gene_rules$count)
-      annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings, "possible duplicate")
+      annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "possible duplicate")
     }
   }
 
@@ -85,9 +87,9 @@ validate_fish_mito <- function(
     ## Overlaps ----
     overlapping <- annotations[-i, ] |>
       dplyr::filter(contig == {{ contig }} & direction == {{ direction }}) |>
+      dplyr::rowwise() |>
       dplyr::mutate(
-        overlap = length(intersect(seq(pos1, pos2), seq({{ pos1 }}, {{ pos2 }}))),
-        .by = dplyr::everything()
+        overlap = length(intersect(seq(pos1, pos2), seq({{ pos1 }}, {{ pos2 }})))
       ) |>
       dplyr::filter(overlap > 0L)
     # Max Overlap
@@ -151,6 +153,7 @@ validate_fish_mito <- function(
     if (!is.null(coverage)) {
       gene_coverage <- coverage |>
         dplyr::filter(SeqId == {{ contig }}) |>
+        dplyr::rowwise() |>
         dplyr::filter(Position %in% pos1:pos2)
       if (sum(gene_coverage$MeanDepth <= 10) / nrow(gene_coverage) > 0.05) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low coverage region")
@@ -179,8 +182,6 @@ validate_fish_mito <- function(
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "non-standard start codon")
     }
 
-
-
     ## Ref Similarity ----
     if (!any(refHits$similarity >= hit_threshold)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low reference similarity")
@@ -197,7 +198,6 @@ validate_fish_mito <- function(
   }
 
   # Final Summary ----
-
   summary <- data.frame(
     scaffolds = length(unique(annotations$contig)),
     structure = annotations |>
@@ -212,21 +212,21 @@ validate_fish_mito <- function(
   )
 
   # Outputs ----
-  write.csv(
+  readr::write_tsv(
     annotations,
     file.path(
       out_dir,
-      basename(annotations_fn)
+      basename(annotations_fn) |> stringr::str_replace(".csv$", ".tsv")
     ),
-    row.names = F
+    na = "", escape = "none"
   )
-  write.csv(
+  readr::write_csv(
     summary,
     file.path(
       out_dir,
       stringr::str_replace(basename(annotations_fn), "_annotations_", "_summary_")
     ),
-    row.names = F
+    quote = "none", na = ""
   )
 
   return(invisible(list(annotations = annotations, summary = summary)))

@@ -145,11 +145,11 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       numericInput(
         ns("assemble_opts_cpus"), "CPUs:",
         value = current$cpus %||% numeric(0)
-        ) |> shinyjs::disabled(),
+      ) |> shinyjs::disabled(),
       numericInput(
         ns("assemble_opts_memory"), "Memory (GB):",
         value = current$memory %||% numeric(0)
-        ) |> shinyjs::disabled(),
+      ) |> shinyjs::disabled(),
       textAreaInput(
         ns("getOrganelle"),
         label = "getOrganelle options",
@@ -159,7 +159,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       textInput(
         ns("seeds_db"), "getOrganelle Seeds:",
         value = current$seeds_db %||% character(0),
-        ) |> shinyjs::disabled(),
+      ) |> shinyjs::disabled(),
       size = "xl",
       footer = tagList(
         actionButton(ns("update_assemble_opts"), "Update"),

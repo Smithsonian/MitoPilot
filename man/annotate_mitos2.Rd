@@ -2,7 +2,7 @@
 % Please edit documentation in R/annotate_mitos2.R
 \name{annotate_mitos2}
 \alias{annotate_mitos2}
-\title{Title}
+\title{Annotate mitochondrial genomes using MITOS2}
 \usage{
 annotate_mitos2(
   assembly = NULL,
@@ -16,8 +16,22 @@ annotate_mitos2(
 )
 }
 \arguments{
-\item{condaenv}{}
+\item{assembly}{a DNAString object}
+
+\item{topology}{"circular" or "linear"}
+
+\item{genetic_code}{NCBI genetic code number (default: 2)}
+
+\item{ref_db}{Mitos2 reference database (default: "Chordata")}
+
+\item{ref_dir}{Path to Mitos2 reference database}
+
+\item{mitos_opts}{Additional command line options for MITOS2}
+
+\item{out}{output directory}
+
+\item{condaenv}{Conda environment to run MITOS2 (default: "mitos")}
 }
 \description{
-Title
+Annotate mitochondrial genomes using MITOS2
 }

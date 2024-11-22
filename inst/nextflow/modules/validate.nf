@@ -1,5 +1,5 @@
 process validate {
-
+    
     executor params.curate.executor
     container params.curate.container
     
@@ -16,7 +16,7 @@ process validate {
 
     output: 
     tuple val(id), val(path),
-        path("${id}/annotate/${id}_annotations_*.csv"),
+        path("${id}/annotate/${id}_annotations_*.tsv"),
         path("${id}/annotate/${id}_summary_*.csv")
 
     shell:

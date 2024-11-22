@@ -90,7 +90,7 @@ coverage <- function(
       dplyr::mutate(
         ErrorRate = (Depth - Correct) / Depth
       )
-    readr::write_csv(coverage, file = coverage_fn, quote = "none")
+    readr::write_csv(coverage, file = coverage_fn, quote = "none", na = "")
   }
 
   # Calculate rolling window stats ----
@@ -205,7 +205,7 @@ coverage <- function(
     dplyr::select(!dplyr::ends_with("_mask")) |>
     readr::write_csv(
       file = file.path(outDir, paste0(basename_prefix, "_coverageStats.csv")),
-      quote = "none"
+      quote = "none", na = ""
     )
 
   return(invisible(stats_out))

@@ -5,16 +5,21 @@
 \title{Title}
 \usage{
 validate_fish_mito(
-  annotations_fn =
-    "~/Jonah/MitoPilot-testing/out/SRR22396740/annotate/SRR22396740_annotations_1.csv",
-  coverage_fn =
-    "~/Jonah/MitoPilot-testing/out/SRR22396740/annotate/SRR22396740_coverageStats_1.csv",
-  params = NULL,
+  annotations_fn = "~/Downloads/tmp/SRR22396640_annotations_1.csv",
+  coverage_fn = "~/Downloads/tmp/SRR22396640_coverageStats_1.csv",
+  params = list(),
   out_dir = NULL
 )
 }
 \arguments{
-\item{params}{}
+\item{annotations_fn}{path to annotations file (csv)}
+
+\item{coverage_fn}{path to coverage file (csv)}
+
+\item{params}{nested list of curation/validation parameters. Can also be
+provided as a base64 encoded JSON string.}
+
+\item{out_dir}{output directory}
 }
 \description{
 Title

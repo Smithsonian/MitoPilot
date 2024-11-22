@@ -2,13 +2,13 @@
 % Please edit documentation in R/annotate.R
 \name{annotate}
 \alias{annotate}
-\title{Title}
+\title{Mitogenome Annotation Wrapper}
 \usage{
 annotate(
   assembly_fn =
-    "/home/harpua/Jonah/MitoPilot-test/out/SRR22396740/assemble/default/SRR22396740_assembly_1.fasta",
+    "~/Jonah/MitoPilot-testing/out/SRR22396940/assemble/default/SRR22396940_assembly_1.fasta",
   coverage_fn =
-    "/home/harpua/Jonah/MitoPilot-test/out/SRR22396740/assemble/default/SRR22396740_assembly_1_coverageStats.csv",
+    "~/Jonah/MitoPilot-testing/out/SRR22396940/assemble/default/SRR22396940_assembly_1_coverageStats.csv",
   cpus = 4,
   genetic_code = "2",
   ref_db = "Chordata",
@@ -21,8 +21,30 @@ annotate(
 )
 }
 \arguments{
-\item{out}{}
+\item{assembly_fn}{Path to the mitogenome assembly FASTA file.}
+
+\item{coverage_fn}{Path to the mitogenome assembly coverage stats CSV file.}
+
+\item{cpus}{Number of CPUs to use.}
+
+\item{genetic_code}{Genetic code to use for annotation (default: 2).}
+
+\item{ref_db}{Reference Mitos2 database to use for annotation (default:
+"Chordata").}
+
+\item{ref_dir}{Path to the Mitos2 reference database.}
+
+\item{mitos_opts}{Additional command line options for MITOS2.}
+
+\item{mitos_condaenv}{Conda environment to run MITOS2 (default: "mitos").}
+
+\item{trnaScan_opts}{Additional command line options for tRNAscan-SE.}
+
+\item{trnaScan_condaenv}{Conda environment to run tRNAscan-SE (default:
+"base").}
+
+\item{out_dir}{Output directory.}
 }
 \description{
-Title
+Uses Mito2 and tRNAscan-SE to annotate a mitogenome assembly.
 }

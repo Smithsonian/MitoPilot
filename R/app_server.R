@@ -5,7 +5,6 @@
 #' @import shiny gargoyle dbplyr
 #' @noRd
 app_server <- function(input, output, session) {
-
   # db connection ----
   db <- getOption("MitoPilot.db") %||% here::here(".sqlite")
   session$userData$dir <- dirname(db)
@@ -13,13 +12,17 @@ app_server <- function(input, output, session) {
     shinyWidgets::sendSweetAlert(
       title = "Database not found",
       text = "The MitoPilot::gui() app requires a database to run. Please make sure your working directory is set to an active MitoPilot project, or use set the location of the database using, options(MitoPilot.db = 'path/to/the/.sqlite').",
+      type = "error"
     )
   }
   session$userData$con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
 
   # Publish / output directory ----
-  dir_out <- readLines(file.path(dirname(db), ".config")) |> stringr::str_extract("publishDir.*") |>
-    na.omit() |> stringr::str_remove("^[^'|^\"]+['\"]") |> stringr::str_extract("^[^'|^\"]+")
+  dir_out <- readLines(file.path(dirname(db), ".config")) |>
+    stringr::str_extract("publishDir.*") |>
+    na.omit() |>
+    stringr::str_remove("^[^'|^\"]+['\"]") |>
+    stringr::str_extract("^[^'|^\"]+")
   session$userData$dir_out <- file.path(dirname(db), dir_out)
 
   # View mode ----
@@ -33,7 +36,7 @@ app_server <- function(input, output, session) {
 
   # Reload Data
   observeEvent(input$refresh, {
-    trigger(paste0("refresh_",tolower(session$userData$mode)))
+    trigger(paste0("refresh_", tolower(session$userData$mode)))
   })
   # State
   init("state")
@@ -46,9 +49,9 @@ app_server <- function(input, output, session) {
     trigger("lock")
   })
   # Run
-  init("run")
-  observeEvent(input$run, {
-    trigger("run")
+  init("run_modal")
+  observeEvent(input$run_modal, {
+    trigger("run_modal")
   })
   # Group
   init("pregroup")
@@ -61,7 +64,7 @@ app_server <- function(input, output, session) {
   })
 
   # Sub-modules ----
-  mod_run_pipline_server("run")
+  mod_run_pipeline_server("run")
   assemble_server("assemble")
   annotate_server("annotate")
   # mod_Submit_server("Submit", grv)

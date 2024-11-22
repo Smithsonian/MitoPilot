@@ -2,23 +2,31 @@
 % Please edit documentation in R/curate_fish_mito.R
 \name{curate_fish_mito}
 \alias{curate_fish_mito}
-\title{Title}
+\title{Annotation curation for fish mitogenomes}
 \usage{
 curate_fish_mito(
-  annotations_fn =
-    "~/Jonah/MitoPilot-testing/work/36/1b84646ab90f4dc787453529cd1162/SRR22396740/annotate/SRR22396740_annotations_1.csv",
-  assembly_fn =
-    "~/Jonah/MitoPilot-testing/work/36/1b84646ab90f4dc787453529cd1162/SRR22396740/annotate/SRR22396740_assembly_1.fasta",
-  coverage_fn =
-    "~/Jonah/MitoPilot-testing/work/36/1b84646ab90f4dc787453529cd1162/SRR22396740/annotate/SRR22396740_coverageStats_1.csv",
+  annotations_fn = "~/Downloads/tmp2/SRR22396940_annotations_1.csv",
+  assembly_fn = "~/Downloads/tmp2/SRR22396940_assembly_1.fasta",
+  coverage_fn = "~/Downloads/tmp2/SRR22396940_coverageStats_1.csv",
   genetic_code = 2,
   out_dir = NULL,
   params = NULL
 )
 }
 \arguments{
-\item{params}{}
+\item{annotations_fn}{Path to the annotations file (csv)}
+
+\item{assembly_fn}{Path to the assembly file (fasta)}
+
+\item{coverage_fn}{Path to the coverage file (csv)}
+
+\item{genetic_code}{Genetic code to use (default = 2)}
+
+\item{out_dir}{Path to the output directory}
+
+\item{params}{Nested list of curation parameters. Can also provided as a
+base64 encoded json string.}
 }
 \description{
-Title
+Annotation curation for fish mitogenomes
 }

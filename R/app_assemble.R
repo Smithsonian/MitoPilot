@@ -54,7 +54,7 @@ assemble_server <- function(id) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "left", show = F),
           columns = list(
-            `.selection` = colDef(show = T),
+            `.selection` = colDef(show = T, sticky = "left"),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
@@ -141,9 +141,7 @@ assemble_server <- function(id) {
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
             scaffolds = colDef(
-              show = TRUE, width = 100, name = "# Scaffolds", align = "center",
-              cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
-              style = JS("function(rowInfo){ if (rowInfo.values.scaffolds < 0) return { backgroundColor: '#00000020' }}")
+              show = TRUE, width = 100, name = "# Scaffolds", align = "center"
             ),
             time_stamp = colDef(
               show = TRUE,
@@ -203,7 +201,7 @@ assemble_server <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Assembly" = 0, "Ready to Assemble" = 1, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
+            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
             selected = current,
             shape = "square",
             status = "primary"
@@ -247,10 +245,11 @@ assemble_server <- function(id) {
       assemblies <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ignore == 0 & ID %in% rv$updating$ID) |>
         dplyr::pull(ID)
-      if(any(duplicated(assemblies))){
+      if (any(duplicated(assemblies))) {
         shinyWidgets::sendSweetAlert(
           title = "Multiple assemblies detected.",
-          text = "Only one assembly 'path' for each sample can be locked for annotation. Please open the assembly details and 'ignore' all but one assembly or use the consensus trimming feature."
+          text = "Only one assembly 'path' for each sample can be locked for annotation. Please open the assembly details and 'ignore' all but one assembly or use the consensus trimming feature.",
+          type = "warning"
         )
         req(F)
       }
@@ -275,7 +274,7 @@ assemble_server <- function(id) {
       row <- as.numeric(input$set_pre_opts)
       if (length(selected()) > 0 && !row %in% selected()) {
         req(F)
-      }else{
+      } else {
         selected <- c(row, selected()) |> unique()
       }
       req(all(rv$data$assemble_lock[selected] == 0))
@@ -310,16 +309,17 @@ assemble_server <- function(id) {
       shinyjs::toggleState("pre_opts_memory", condition = input$edit_pre_opts)
       shinyjs::toggleState("fastp", condition = input$edit_pre_opts)
       # Check if editing opts that apply beyond selection
-      if(input$edit_pre_opts && input$pre_opts %in% rv$data$pre_opts){
+      if (input$edit_pre_opts && input$pre_opts %in% rv$data$pre_opts) {
         rv$updating_indirect <- rv$data |>
           dplyr::filter(pre_opts == input$pre_opts) |>
           dplyr::anti_join(rv$updating, by = "ID")
 
         # Prevent editing opts that apply to locked
-        if(nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)){
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
           shinyWidgets::sendSweetAlert(
-            title = "Editing locked samples",
-            text = "Processing parameters associated with locked samples can not be edited."
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
             inputId = "edit_pre_opts",
@@ -328,20 +328,20 @@ assemble_server <- function(id) {
           req(F)
         }
 
-        if(nrow(rv$updating_indirect) > 0L){
+        if (nrow(rv$updating_indirect) > 0L) {
           shinyWidgets::confirmSweetAlert(
             inputId = "editing_opts_indirect",
             title = "Editing beyond selection",
             text = "You are attempting to edit pre-processing options that apply to samples beyond the current selection. Are you sure you want to proceed?",
           )
         }
-      }else{
+      } else {
         rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       }
     })
     # Confirm editing opts that apply beyond selection
     observeEvent(input$editing_opts_indirect, ignoreInit = T, {
-      if(!input$editing_opts_indirect){
+      if (!input$editing_opts_indirect) {
         rv$updating_indirect <- rv$updating |> dplyr::slice(0)
         shinyWidgets::updatePrettyCheckbox(
           inputId = "edit_pre_opts",
@@ -403,7 +403,7 @@ assemble_server <- function(id) {
       row <- as.numeric(input$set_assemble_opts)
       if (length(selected()) > 0 && !row %in% selected()) {
         req(F)
-      }else{
+      } else {
         selected <- c(row, selected()) |> unique()
       }
       req(all(rv$data$assemble_lock[selected] == 0))
@@ -438,23 +438,24 @@ assemble_server <- function(id) {
       }
     })
     observeEvent(input$edit_assemble_opts, ignoreInit = T, {
-      shinyjs::toggleState("assemble_opts_cpus", condition = !input$edit_assemble_opts)
-      shinyjs::toggleState("assemble_opts_memory", condition = !input$edit_assemble_opts)
-      shinyjs::toggleState("getOrganelle", condition = !input$edit_assemble_opts)
+      shinyjs::toggleState("assemble_opts_cpus", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("assemble_opts_memory", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("getOrganelle", condition = input$edit_assemble_opts)
       # TODO - allow for alt seed database
       # Need to modify nextflow to pass seeds database to worker or
       # the specific path must exist in the workers docker container
       shinyjs::toggleState("seeds_db", condition = FALSE)
       # Check if editing opts that apply beyond selection
-      if(input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts){
+      if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
           dplyr::filter(assemble_opts == input$assemble_opts) |>
           dplyr::anti_join(rv$updating, by = "ID")
         # Prevent editing opts that apply to locked samples
-        if(nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)){
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
           shinyWidgets::sendSweetAlert(
-            title = "Editing locked samples",
-            text = "Processing parameters associated with locked samples can not be edited."
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
             inputId = "edit_assemble_opts",
@@ -463,20 +464,20 @@ assemble_server <- function(id) {
           req(F)
         }
         # Confirm editing opts that apply beyond selection
-        if(nrow(rv$updating_indirect) > 0L){
+        if (nrow(rv$updating_indirect) > 0L) {
           shinyWidgets::confirmSweetAlert(
             inputId = "editing_assemble_opts_indirect",
             title = "Editing beyond selection",
             text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
           )
         }
-      }else{
+      } else {
         rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       }
     })
     # Confirm editing opts that apply beyond selection
     observeEvent(input$editing_assemble_opts_indirect, ignoreInit = T, {
-      if(!input$editing_assemble_opts_indirect){
+      if (!input$editing_assemble_opts_indirect) {
         rv$updating_indirect <- rv$updating |> dplyr::slice(0)
         shinyWidgets::updatePrettyCheckbox(
           inputId = "edit_assemble_opts",
@@ -486,10 +487,10 @@ assemble_server <- function(id) {
     })
     ## Save Changes ----
     observeEvent(input$update_assemble_opts, ignoreInit = T, {
-      ## Add to params table if new ----
+      ## Add to params table if new or editing ----
       if (input$edit_assemble_opts) {
         dplyr::tbl(session$userData$con, "assemble_opts") |>
-          dplyr::rows_iupsert(
+          dplyr::rows_upsert(
             data.frame(
               assemble_opts = req(input$assemble_opts),
               cpus = req(input$assemble_opts_cpus),
@@ -535,6 +536,5 @@ assemble_server <- function(id) {
       trigger("coverage_modal")
     })
     mod_assembly_coverage_details_server(ns("coverage_details"), rv)
-
   })
 }

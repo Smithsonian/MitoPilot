@@ -1,18 +1,19 @@
-#' Title
+#' Annotation curation for fish mitogenomes
 #'
-#' @param annotations_fn
-#' @param assembly_fn
-#' @param coverage_fn
-#' @param genetic_code
-#' @param out_dir
-#' @param params
+#' @param annotations_fn Path to the annotations file (csv)
+#' @param assembly_fn Path to the assembly file (fasta)
+#' @param coverage_fn Path to the coverage file (csv)
+#' @param genetic_code Genetic code to use (default = 2)
+#' @param out_dir Path to the output directory
+#' @param params Nested list of curation parameters. Can also provided as a
+#'   base64 encoded json string.
 #'
 #' @export
 #'
 curate_fish_mito <- function(
-    annotations_fn = "~/Jonah/MitoPilot-testing/work/36/1b84646ab90f4dc787453529cd1162/SRR22396740/annotate/SRR22396740_annotations_1.csv",
-    assembly_fn = "~/Jonah/MitoPilot-testing/work/36/1b84646ab90f4dc787453529cd1162/SRR22396740/annotate/SRR22396740_assembly_1.fasta",
-    coverage_fn = "~/Jonah/MitoPilot-testing/work/36/1b84646ab90f4dc787453529cd1162/SRR22396740/annotate/SRR22396740_coverageStats_1.csv",
+    annotations_fn = "~/Downloads/tmp2/SRR22396940_annotations_1.csv",
+    assembly_fn = "~/Downloads/tmp2/SRR22396940_assembly_1.fasta",
+    coverage_fn = "~/Downloads/tmp2/SRR22396940_coverageStats_1.csv",
     genetic_code = 2,
     out_dir = NULL,
     params = NULL) {
@@ -113,7 +114,7 @@ curate_fish_mito <- function(
       coverage_flip <- coverage |>
         filter(SeqId == seqid) |>
         arrange(desc(Position)) |>
-        mutate(Position = row_number())
+        dplyr::mutate(Position = dplyr::row_number())
       coverage <- bind_rows(
         coverage |> filter(SeqId != seqid),
         coverage_flip
@@ -138,7 +139,7 @@ curate_fish_mito <- function(
           annotations$pos1[idx] <- pos1_new
           annotations$notes[idx] <- semicolon_paste(
             annotations$notes[idx],
-            stringr::str_glue("Applied punctutation model- moved pos1 by {pos1_change} bp")
+            stringr::str_glue("Applied punctuation model- moved pos1 by {pos1_change} bp")
           )
         }
       }
@@ -153,7 +154,7 @@ curate_fish_mito <- function(
           annotations$pos2[idx] <- pos2_new
           annotations$notes[idx] <- semicolon_paste(
             annotations$notes[idx],
-            stringr::str_glue("Applied punctutation model - moved pos2 by {pos2_change} bp")
+            stringr::str_glue("Applied punctuation model - moved pos2 by {pos2_change} bp")
           )
         }
       }
@@ -164,8 +165,8 @@ curate_fish_mito <- function(
   # PCGs ----
   ## Get top ref hits for each PCG ----
   annotations$refHits <- annotations |>
-    dplyr::select(type, gene, geneId, contig, translation) |>
-    purrr::pmap(function(type, gene, geneId, contig, translation) {
+    dplyr::select(type, gene, translation) |>
+    purrr::pmap(function(type, gene, translation) {
       if (type != "PCG") {
         return(NA)
       }
@@ -179,7 +180,7 @@ curate_fish_mito <- function(
     })
 
   ## Curate against top hits ----
-  annotations <- annotations |> purrr::pmap_dfr(function(...) {
+  annotations <- purrr::pmap_dfr(annotations, function(...) {
     cur <- list(...)
     if (cur$type != "PCG") {
       return(cur)
@@ -274,7 +275,7 @@ curate_fish_mito <- function(
       gaps_target <- max(refHits$gap_trailing)
       if (direction == "+") {
         while (gaps_target > 0) {
-          pos2_new <- pos2 - nchar(stop_codon) + (3 * gaps_target)
+          pos2_new <- pos2 - nchar(stop_codon) + 3 + (3 * gaps_target)
           if ((pos2_new + 1) > assembly[contig_key[contig]]@ranges@width) {
             gaps_target <- gaps_target - 1
             next
@@ -316,7 +317,7 @@ curate_fish_mito <- function(
       }
       if (direction == "-") {
         while (gaps_target > 0) {
-          pos1_new <- pos1 + nchar(stop_codon) - (3 * gaps_target)
+          pos1_new <- pos1 + nchar(stop_codon) - 3 - (3 * gaps_target)
           if (pos1_new - 1 <= 1) {
             gaps_target <- gaps_target - 1
             next
@@ -363,7 +364,7 @@ curate_fish_mito <- function(
         alt_starts <- Biostrings::subseq(
           assembly[contig_key[contig]],
           pos1 + 3,
-          pos1 + (3 * max(abs(refHits$gap_leading[refHits$gap_leading < 0]))) - 1
+          pos1 + 3 + (3 * max(abs(refHits$gap_leading[refHits$gap_leading < 0]))) - 1
         ) |>
           as.character() |>
           stringr::str_extract_all(".{1,3}") |>
@@ -405,7 +406,7 @@ curate_fish_mito <- function(
       if (direction == "-") {
         alt_starts <- Biostrings::subseq(
           assembly[contig_key[contig]],
-          pos2 - (3 * max(abs(refHits$gap_leading[refHits$gap_leading < 0]))) + 1,
+          pos2 - 3 - (3 * max(abs(refHits$gap_leading[refHits$gap_leading < 0]))) + 1,
           pos2 - 3
         ) |>
           Biostrings::reverseComplement() |>
@@ -463,14 +464,14 @@ curate_fish_mito <- function(
             s <- stringr::str_extract(.x, paste0("^", stop_opts)) |>
               na.omit()
             s[1] |> unlist()
-          })
+          }) |> rev()
         alt_idx <- 1
         while (alt_idx <= length(alt_stops)) {
           if (is.na(alt_stops[[alt_idx]])) {
             alt_idx <- alt_idx + 1
             next
           }
-          pos2_new <- pos2 - nchar(stop_codon) - (3 * alt_idx) - (3 - nchar(alt_stops[[alt_idx]]))
+          pos2_new <- pos2 - nchar(stop_codon) + 3 - (3 * alt_idx) - (3 - nchar(alt_stops[[alt_idx]]))
           translation_new <- Biostrings::subseq(
             assembly[contig_key[contig]],
             pos1,
@@ -511,14 +512,14 @@ curate_fish_mito <- function(
             s <- stringr::str_extract(.x, paste0("^", stop_opts)) |>
               na.omit()
             s[1] |> unlist()
-          })
+          }) |> rev()
         alt_idx <- 1
         while (alt_idx <= length(alt_stops)) {
           if (is.na(alt_stops[[alt_idx]])) {
             alt_idx <- alt_idx + 1
             next
           }
-          pos1_new <- pos1 + nchar(stop_codon) + (3 * alt_idx) + (3 - nchar(alt_stops[[alt_idx]]))
+          pos1_new <- pos1 + nchar(stop_codon) - 3 + (3 * alt_idx) + (3 - nchar(alt_stops[[alt_idx]]))
           translation_new <- Biostrings::subseq(
             assembly[contig_key[contig]],
             pos1 + nchar(alt_stops[[alt_idx]]),
@@ -557,7 +558,6 @@ curate_fish_mito <- function(
   for (idx in seq_len(nrow(annotations))) {
     if (annotations$type[idx] != "PCG") next
     gene <- annotations$gene[idx]
-    print(gene)
     overlap_rules <- rules[[gene]][["overlap"]]
     stop_opts <- rules[[gene]][["stop_codons"]]
     while (annotations$direction[idx] == "+") {
@@ -616,7 +616,7 @@ curate_fish_mito <- function(
       dplyr::filter(contig == .y) |>
       dplyr::pull(pos1) |>
       min()
-    if (min_annotation > 1) {
+    if (min_ann > 1) {
       assembly[.x] <<- Biostrings::subseq(assembly[.x], min_ann, -1)
       annotations <<- annotations |>
         dplyr::mutate(
@@ -643,7 +643,7 @@ curate_fish_mito <- function(
       dplyr::filter(contig == .y) |>
       dplyr::pull(pos2) |>
       max()
-    if (max_annotation < assembly[.x]@ranges@width) {
+    if (max_ann < assembly[.x]@ranges@width) {
       assembly[.x] <<- Biostrings::subseq(assembly[.x], 1, max_ann)
       coverage <<- coverage |>
         dplyr::filter(
@@ -653,10 +653,14 @@ curate_fish_mito <- function(
   })
 
   # Outputs ----
-  write.csv(annotations, file.path(out_dir, basename(annotations_fn)), row.names = F)
+  readr::write_csv(
+    annotations,
+    file.path(out_dir, basename(annotations_fn)),
+    na = ""
+  )
   Biostrings::writeXStringSet(assembly, file.path(out_dir, basename(assembly_fn)))
   if (!is.null(coverage_fn)) {
-    write.csv(coverage, file.path(out_dir, basename(coverage_fn)), row.names = F)
+    readr::write_csv(coverage, file.path(out_dir, basename(coverage_fn)), quote = "none", na = "")
   }
 
   return(invisible(annotations))

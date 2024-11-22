@@ -40,8 +40,8 @@ app_ui <- function(request) {
             size = "sm"
           ),
           shinyWidgets::actionBttn(
-            "run",
-            label = "Run",
+            "run_modal",
+            label = "Update",
             style = "material-flat",
             size = "sm"
           )

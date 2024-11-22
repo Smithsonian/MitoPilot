@@ -15,13 +15,13 @@ process annotate {
         tuple val(id), val(path), path(assembly), path(coverage), val(opts)
 
     output: 
-    tuple val(id), val(path), 
+    tuple val(id), val(path),
         path("${id}/annotate/${id}_annotations_*.csv"),
         path("${id}/annotate/${id}_assembly_*.fasta"),
         path("${id}/annotate/${id}_coverageStats_*.csv")
 
     shell:
-    dir = "${id}/annotate"
+    dir = "${id}/annotate/"
     '''
     mkdir -p !{dir}
     Rscript -e "MitoPilot::annotate( \

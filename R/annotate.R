@@ -1,22 +1,26 @@
-#' Title
+#' Mitogenome Annotation Wrapper
 #'
-#' @param assembly
-#' @param coverage
-#' @param cpus
-#' @param memory
-#' @param genetic_code
-#' @param ref_db
-#' @param ref_dir
-#' @param mitos_condaenv
-#' @param trnaScan
-#' @param trnaScan_condaenv
-#' @param out
+#' Uses Mito2 and tRNAscan-SE to annotate a mitogenome assembly.
+#'
+#' @param assembly_fn Path to the mitogenome assembly FASTA file.
+#' @param coverage_fn Path to the mitogenome assembly coverage stats CSV file.
+#' @param cpus Number of CPUs to use.
+#' @param genetic_code Genetic code to use for annotation (default: 2).
+#' @param ref_db Reference Mitos2 database to use for annotation (default:
+#'   "Chordata").
+#' @param ref_dir Path to the Mitos2 reference database.
+#' @param mitos_opts Additional command line options for MITOS2.
+#' @param mitos_condaenv Conda environment to run MITOS2 (default: "mitos").
+#' @param trnaScan_opts Additional command line options for tRNAscan-SE.
+#' @param trnaScan_condaenv Conda environment to run tRNAscan-SE (default:
+#'   "base").
+#' @param out_dir Output directory.
 #'
 #' @export
 #'
 annotate <- function(
-    assembly_fn = "/home/harpua/Jonah/MitoPilot-test/out/SRR22396740/assemble/default/SRR22396740_assembly_1.fasta",
-    coverage_fn = "/home/harpua/Jonah/MitoPilot-test/out/SRR22396740/assemble/default/SRR22396740_assembly_1_coverageStats.csv",
+    assembly_fn = "~/Jonah/MitoPilot-testing/out/SRR22396940/assemble/default/SRR22396940_assembly_1.fasta",
+    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR22396940/assemble/default/SRR22396940_assembly_1_coverageStats.csv",
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
@@ -26,6 +30,7 @@ annotate <- function(
     trnaScan_opts = "-M vert",
     trnaScan_condaenv = "base",
     out_dir = NULL) {
+
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
   # Coverage trimming (optional)
@@ -86,13 +91,52 @@ annotate <- function(
   ) |>
     dplyr::arrange(contig, pos1)
 
+  ## Fix D-loop annotations ----
+  # Filter spurious OH annotations
+  if (sum(annotations$gene == "OH") > 1) {
+    oh_idx <- which(annotations$gene == "OH") |> rev()
+    for (idx in oh_idx) {
+      # Check if contained in other gene
+      containing <- annotations |>
+        dplyr::filter(!idx) |>
+        dplyr::filter(pos1 >= annotations$pos1[idx] & pos2 <= annotations$pos2[idx])
+      if (nrow(containing) > 0L) {
+        annotations <- annotations[-idx, ]
+        next
+      }
+      # remove if not best
+      if (stringr::str_detect(annotations$geneId[idx], "OH_0") | stringr::str_detect(annotations$geneId[idx], "OH$")) next
+      annotations <- annotations[-idx, ]
+    }
+  }
+  # Extend OH annotations to (putative) full length ctrl region
+  oh_idx <- which(annotations$gene == "OH")
+  for (idx in oh_idx) {
+    if (idx == min(which(annotations$contig == annotations$contig[idx]))) {
+      annotations$pos1[idx] <- 1
+    } else {
+      annotations$pos1[idx] <- annotations$pos2[idx - 1] + 1
+    }
+
+    if (idx == max(which(annotations$contig == annotations$contig[idx]))) {
+      annotations$pos2[idx] <- assembly[stringr::str_detect(names(assembly), paste(annotations$contig[idx],"\\w.*"))]@ranges@width
+    } else {
+      annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
+    }
+    annotations$length[idx] <- abs(annotations$pos2[idx] - annotations$pos1[idx]) + 1
+    annotations$gene[idx] <- "ctrl"
+  }
+
+  annotations <- annotations |>
+    dplyr::select(-geneId)
+
   # Write outputs
   file.path(
     out_dir,
     stringr::str_replace(basename(assembly_fn), "\\w+$", "csv") |>
       stringr::str_replace("assembly", "annotations")
   ) |>
-    write.csv(annotations, file = _, row.names = F)
+    readr::write_csv(annotations, file = _, na = "")
   Biostrings::writeXStringSet(assembly, file.path(out_dir, basename(assembly_fn)))
   if (!is.null(coverage_fn)) {
     file.path(
@@ -100,8 +144,9 @@ annotate <- function(
       stringr::str_replace(basename(assembly_fn), "\\w+$", "csv") |>
         stringr::str_replace("assembly", "coverageStats")
     ) |>
-      write.csv(coverage, file = _, row.names = F)
+      readr::write_csv(coverage, file = _, quote = "none", na = "")
   }
 
   return(invisible(annotations))
+
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/annotate_utils.R
 \name{count_end_gaps}
 \alias{count_end_gaps}
-\title{Title}
+\title{Count end gaps in a pairwise alignment}
 \usage{
 count_end_gaps(
   query,
@@ -12,8 +12,14 @@ count_end_gaps(
 )
 }
 \arguments{
-\item{subMx}{}
+\item{query}{The focal sequence}
+
+\item{target}{The target sequence}
+
+\item{end}{The end to count gaps. Options are 'leading' and 'trailing'}
+
+\item{subMx}{The substitution matrix to use for the comparison. Default is BLOSUM80}
 }
 \description{
-Title
+Count end gaps in a pairwise alignment
 }

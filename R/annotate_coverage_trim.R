@@ -1,7 +1,7 @@
 #' Title
 #'
-#' @param assembly
-#' @param stats
+#' @param assembly a DNAString object
+#' @param stats a data frame of coverage stats
 #'
 #' @export
 #'
@@ -58,8 +58,8 @@ coverage_trim <- function(assembly, stats) {
     }
     assembly <- Biostrings::subseq(assembly, leading_trim + 1, -1)
     stats <- stats[-1:-leading_trim, ] |>
-      mutate(
-        Position = row_number()
+      dplyr::mutate(
+        Position = dplyr::row_number()
       )
   }
 

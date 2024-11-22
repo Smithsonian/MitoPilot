@@ -16,6 +16,8 @@ params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
                             'assemble_switch=?, assemble_notes=?, time_stamp=? WHERE ID=?'
 
+
+
 workflow ASSEMBLE {
     take:
         input
@@ -178,6 +180,18 @@ workflow ASSEMBLE {
             }
             .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
 
+        // Reset annotation data for updated assemblies
+        assemble_out[0]
+          .map { it ->
+            tuple(
+              it[0]
+            )
+          }
+          .set { update_ids }
+        channel.fromQuery('SELECT ID, annotate_opts, curate_opts FROM annotate;', db: 'sqlite')
+            .join(update_ids)
+            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, annotate_switch, annotate_lock) VALUES (?, ?, ?, 1, 0)', db: 'sqlite')
+    
         emit:
            ch = assemble_out[0]
 

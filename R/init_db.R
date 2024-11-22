@@ -341,20 +341,21 @@ new_db <- function(
     con,
     "CREATE TABLE annotate (
       ID TEXT NOT NULL,
+      path TEXT,
       scaffolds INTEGER,
       annotate_opts TEXT,
       curate_opts TEXT,
       annotate_switch INTEGER,
       annotate_lock INTEGER,
       annotate_notes TEXT,
-      genes INTEGER,
-      tRNA INTEGER,
-      rRNA INTEGER,
+      PCGCount INTEGER,
+      tRNACount INTEGER,
+      rRNACount INTEGER,
       missing INTEGER,
-      duplicated INTEGER,
+      extra INTEGER,
       warnings INTEGER,
       structure TEXT,
-      length TEXT,
+      length INTEGER,
       topology TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
@@ -429,6 +430,33 @@ new_db <- function(
       copy = TRUE,
       by = "curate_opts"
     )
+
+  # Annotations table
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE annotations (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL,
+      scaffold INTEGER NOT NULL,
+      type TEXT,
+      gene TEXT,
+      product TEXT,
+      pos1 INTEGER,
+      pos2 INTEGER,
+      length INTEGER,
+      direction TEXT,
+      anticodon TEXT,
+      start_codon TEXT,
+      stop_codon TEXT,
+      translation TEXT,
+      notes TEXT,
+      warnings TEXT,
+      refHits JSON,
+      edited INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold, gene, pos1)
+    );"
+  )
 
   invisible(return())
 }

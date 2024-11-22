@@ -1,13 +1,13 @@
-#' Title
+#' Annotate mitochondrial genomes using MITOS2
 #'
-#' @param assembly
-#' @param topology
-#' @param genetic_code
-#' @param ref_db
-#' @param ref_dir
-#' @param mitos_opts
-#' @param out
-#' @param condaenv
+#' @param assembly a DNAString object
+#' @param topology "circular" or "linear"
+#' @param genetic_code NCBI genetic code number (default: 2)
+#' @param ref_db Mitos2 reference database (default: "Chordata")
+#' @param ref_dir Path to Mitos2 reference database
+#' @param mitos_opts Additional command line options for MITOS2
+#' @param out output directory
+#' @param condaenv Conda environment to run MITOS2 (default: "mitos")
 #'
 #' @export
 #'
@@ -130,41 +130,6 @@ annotate_mitos2 <- function(
               )
             )
         }()
-
-      # Filter spurious OH annotations
-      if (sum(annotations$gene == "OH") > 1) {
-        oh_idx <- which(annotations$gene == "OH") |> rev()
-        for (idx in oh_idx) {
-          # Check if contained in other gene
-          containing <- annotations |>
-            dplyr::filter(!idx) |>
-            dplyr::filter(pos1 >= annotations$pos1[idx] & pos2 <= annotations$pos2[idx])
-          if (nrow(containing) > 0L) {
-            annotations <- annotations[-idx, ]
-            next
-          }
-          # remove if not best
-          if (stringr::str_detect(annotations$geneId[idx], "OH_0") | stringr::str_detect(annotations$geneId[idx], "OH$")) next
-          annotations <- annotations[-idx, ]
-        }
-      }
-      # Extend OH annotations to (putative) full length ctrl region
-      oh_idx <- which(annotations$gene == "OH")
-      for (idx in oh_idx) {
-        if (idx == min(which(annotations$contig == annotations$contig[idx]))) {
-          annotations$pos1[idx] <- 1
-        } else {
-          annotations$pos1[idx] <- annotations$pos2[idx - 1] + 1
-        }
-
-        if (idx == max(which(annotations$contig == annotations$contig[idx]))) {
-          annotations$pos2[idx] <- assembly[annotations$contig[idx]]@ranges@width
-        } else {
-          annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
-        }
-        annotations$length[idx] <- abs(annotations$pos2[idx] - annotations$pos1[idx]) + 1
-        annotations$gene[idx] <- "ctrl"
-      }
 
       ###################
       return(annotations)

@@ -1,6 +1,6 @@
 include {coverage} from './coverage.nf'
 
-params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ? ' +
+params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ?, time_stamp = ? ' +
                     'WHERE ID=? and path=? and scaffold=?'
 
 workflow COVERAGE {
@@ -29,6 +29,7 @@ workflow COVERAGE {
             .flatten()
             .filter{ it =~ /(.*coverageStats.csv)$/ }
             .splitCsv(header: true, sep: ',')
+            .take(2)
             .map { it -> 
                 tuple(
                     it.SeqId,
@@ -43,6 +44,7 @@ workflow COVERAGE {
                     it[1].join(' '),                   // mean depth  
                     it[2].join(' '),                   // gc
                     it[3].join(' '),                   // error rate
+                    params.ts,                         // timestamp
                     it[0].split('\\.'),                // id, path, scaffold
                 ).flatten()
             }

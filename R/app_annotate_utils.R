@@ -29,11 +29,11 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       topology,
       scaffolds,
       structure,
-      genes,
-      tRNA,
-      rRNA,
+      PCGCount,
+      tRNACount,
+      rRNACount,
       missing,
-      duplicated,
+      extra,
       warnings,
       time_stamp,
       annotate_notes
@@ -41,6 +41,4 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::collect() |>
     dplyr::mutate(view = NA_character_)
-
 }
-

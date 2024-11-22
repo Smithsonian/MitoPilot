@@ -42,4 +42,5 @@ workflow ANNOTATE {
 
     emit:
            ch = annotate_out
+           
 }
