@@ -1,5 +1,4 @@
 process coverage {
-
     executor params.coverage.executor
     container params.coverage.container
 
