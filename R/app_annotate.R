@@ -161,6 +161,92 @@ annotate_server <- function(id) {
         )
     })
 
+    # update table ----
+    init("update_annotate_table")
+    on("update_annotate_table", {
+      reactable::updateReactable(
+        "table",
+        data = rv$data,
+        selected = reactable::getReactableState("table", "selected"),
+        page = reactable::getReactableState("table", "page")
+      )
+    })
+
+    # table selection ----
+    selected <- reactive(reactable::getReactableState("table", "selected"))
+
+    # Set State ----
+    on("state", {
+      req(session$userData$mode == "Annotate")
+      req(selected())
+      req(all(rv$data$annotate_lock[req(selected())] == 0))
+      rv$updating <- rv$data |>
+        dplyr::select(ID, annotate_switch) |>
+        dplyr::slice(selected())
+      current <- character(0)
+      if (length(unique(rv$updating$annotate_switch)) == 1) {
+        current <- rv$updating$annotate_switch[1]
+      }
+      showModal(
+        modalDialog(
+          title = "Select New State:",
+          shinyWidgets::prettyRadioButtons(
+            ns("new_state"),
+            label = NULL,
+            choices = c("Pre-Annotate (wait)" = 0, "Ready to Annotate" = 1, "Successful Aannotation" = 2),
+            selected = current,
+            shape = "square",
+            status = "primary"
+          ),
+          size = "m",
+          footer = tagList(
+            actionButton(ns("update_state"), "Update"),
+            modalButton("Cancel")
+          )
+        )
+      )
+    })
+    observeEvent(input$update_state, {
+      rv$updating$annotate_switch <- as.numeric(input$new_state)
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          rv$updating,
+          by = "ID"
+        )
+      trigger("update_annotate_table")
+      removeModal()
+    })
+
+    # Toggle lock ----
+    on("lock", {
+      req(session$userData$mode == "Annotate")
+      req(selected())
+      rv$updating <- rv$data |>
+        dplyr::select(ID, annotate_lock) |>
+        dplyr::slice(selected())
+      lock_current <- as.numeric(names(which.max(table(rv$updating$annotate_lock))))
+      rv$updating$annotate_lock <- as.numeric(!lock_current)
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(rv$updating, by = "ID")
+      trigger("update_annotate_table")
+    })
+
     # Set Annotate Options ----
     observeEvent(input$set_annotate_opts, {
       coming_soon()
@@ -170,5 +256,11 @@ annotate_server <- function(id) {
     observeEvent(input$set_curate_opts, {
       coming_soon()
     })
+
+    # Open annotation details ----
+    observeEvent(input$details, {
+      coming_soon()
+    })
+
   })
 }

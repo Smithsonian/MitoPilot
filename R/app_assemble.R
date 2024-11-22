@@ -187,6 +187,7 @@ assemble_server <- function(id) {
     # Set State ----
     on("state", {
       req(session$userData$mode == "Assemble")
+      req(selected())
       req(all(rv$data$assemble_lock[req(selected())] == 0))
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
