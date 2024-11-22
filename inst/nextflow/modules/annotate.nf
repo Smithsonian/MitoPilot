@@ -7,8 +7,8 @@ process annotate {
 
     errorStrategy 'finish'
 
-    //cpus {params.annotate.cpus}
-    //memory {params.annotate.memory.GB}
+    // cpus { opts.cpus }
+    // memory { opts.memory.GB }
 
     tag "${id}"
 
