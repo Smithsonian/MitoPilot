@@ -3,7 +3,7 @@ process validate {
     executor params.curate.executor
     container params.curate.container
     
-    publishDir "$launchDir/${params.publishDir}", overwrite: true
+    publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy'
 
     errorStrategy 'finish'
     //cpus { opts.cpus }

@@ -3,7 +3,7 @@ process curate {
     executor params.curate.executor
     container params.curate.container
     
-    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/*"
+    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/*", mode: 'copy'
 
     errorStrategy 'finish'
     //cpus { opts.cpus }

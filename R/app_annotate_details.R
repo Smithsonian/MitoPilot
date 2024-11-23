@@ -387,7 +387,7 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$confirm_delete, {
       req(input$confirm_delete)
       update <- rv$annotations[selected(), ] |>
-        mutate(
+        dplyr::mutate(
           pos1 = 0,
           pos2 = 0,
           length = 0
@@ -411,7 +411,10 @@ annotations_details_server <- function(id, rv) {
         )
       dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::rows_insert(
-          rv$annotations,
+          rv$annotations |>
+            dplyr::select(-faa, -fas),
+          by = "ID",
+          conflict = "ignore",
           copy = TRUE,
           in_place = TRUE
         )
@@ -477,7 +480,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::collect() |>
         dplyr::pull(sequence) |>
         setNames(
-          paste(rv$annotations$ID[selected(), c("ID", "path", "scaffold")], collapse = ".") |>
+          paste(rv$annotations[selected(), c("ID", "path", "scaffold")], collapse = ".") |>
             paste("linear")
         ) |>
         Biostrings::DNAStringSet()
@@ -491,10 +494,11 @@ annotations_details_server <- function(id, rv) {
 
         ## Rotate coverage ----
         # TODO! use database
-        rv$coverage <- bind_rows(
+        rv$coverage <- dplyr::bind_rows(
           rv$coverage[start:assembly@ranges@width, ],
           rv$coverage[1:(start - 1), ]
-        ) |> mutate(Position = row_number())
+        ) |>
+          dplyr::mutate(Position = dplyr::row_number())
         readr::write_csv(
           rv$coverage,
           file.path(
@@ -503,7 +507,7 @@ annotations_details_server <- function(id, rv) {
             "annotate",
             paste0(rv$updating$ID, "_coverageStats_", rv$annotations$path[selected()], ".csv")
           ),
-          row.names = FALSE, quote = "none"
+          quote = "none"
         )
 
         ## Update annotations ----
@@ -530,7 +534,10 @@ annotations_details_server <- function(id, rv) {
           )
         dplyr::tbl(session$userData$con, "annotations") |>
           dplyr::rows_insert(
-            rv$annotations,
+            rv$annotations |>
+              dplyr::select(-faa, -fas),
+            by = "ID",
+            conflict = "ignore",
             copy = TRUE,
             in_place = TRUE
           )
@@ -589,6 +596,9 @@ annotations_details_server <- function(id, rv) {
           by = "ID"
         )
     }) # END LINEARIZE
+
+    # Edit Annotation ----
+
   })
 }
 
