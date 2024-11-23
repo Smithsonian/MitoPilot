@@ -259,7 +259,9 @@ annotate_server <- function(id) {
 
     # Open annotation details ----
     observeEvent(input$details, {
-      coming_soon()
+      rv$updating <- rv$data |> dplyr::slice(as.numeric(input$details))
+      trigger("annotations_modal")
     })
+    annotations_details_server(ns("annotations"), rv)
   })
 }

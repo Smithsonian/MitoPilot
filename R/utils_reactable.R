@@ -116,6 +116,34 @@ rt_icon_bttn <- function(inputId, icon) {
     htmlwidgets::JS()
 }
 
+#' Add reactable icon button with text
+#'
+#' @param inputId shiny input id to use
+#' @param icon font awesome icon name
+#'
+#' @noRd
+rt_icon_bttn_text <- function(inputId, icon) {
+  sprintf(
+    "
+    function(cellInfo) {
+      var { index, value } = cellInfo;
+      if (value === undefined || value === null) {{
+        return;
+      }}
+      return `<span>` +
+        `<i class='%s reactable-bttn' ` +
+        `id='${index+1}' ` +
+        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})' ` +
+        `style='padding: 0 0.2em;'></i>` +
+        `<small>${value}</small>` +
+        `</span>`
+    }
+    ",
+    icon, inputId
+  ) |>
+    htmlwidgets::JS()
+}
+
 #' Add reactable icon button
 #'
 #' @param inputId shiny input id to use

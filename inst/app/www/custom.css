@@ -65,3 +65,35 @@
 .gears.paused::after {
   animation-play-state: paused;
 }
+
+details {
+  margin-bottom: 1em;
+}
+
+details summary {
+    display: inline-block; /* Allows adding padding and margins like a button */
+    background-color: #007bff; /* Button-like background color */
+    color: white; /* Text color */
+    border: none; /* Remove default border */
+    border-radius: 4px; /* Rounded corners */
+    padding: 4px 8px; /* Add padding for size */
+    font-size: 14px; /* Adjust font size */
+    font-weight: bold; /* Make text bold */
+    text-align: center; /* Center the text */
+    cursor: pointer; /* Show pointer cursor on hover */
+    user-select: none; /* Prevent text selection */
+    outline: none; /* Remove focus outline */
+    margin: 8px 0; /* Add space below the button */
+}
+
+details summary:hover {
+    background-color: #0056b3; /* Darker shade for hover effect */
+}
+
+details summary:active {
+    background-color: #004494; /* Even darker shade for active state */
+}
+
+details[open] summary {
+    background-color: #004494; /* Different color for when the details are open */
+}
