@@ -5,7 +5,7 @@ process assemble {
     executor params.assemble.executor
     container params.assemble.container
 
-    publishDir "$launchDir/${params.publishDir}", overwrite: true
+    publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy'
 
     errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'finish' }
     maxRetries { params.assemble.maxRetries }
