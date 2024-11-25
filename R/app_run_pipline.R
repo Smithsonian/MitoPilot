@@ -107,7 +107,7 @@ mod_run_pipeline_server <- function(id) {
         args = c(nf_cmd(), "-ansi-log"),
         stdout = "|",
         stderr = "|",
-        #env = c("current", NXF_ANSI_SUMMARY = TRUE),
+        env = c(Sys.getenv(), NXF_ANSI_SUMMARY = TRUE),
         wd = dirname(getOption("MitoPilot.db") %||% here::here(".sqlite"))
       )
       process(p)
