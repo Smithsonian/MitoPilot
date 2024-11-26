@@ -18,6 +18,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 
   dplyr::left_join(assemble, annotate, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
+    dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::select(
       annotate_lock,
       annotate_switch,
@@ -38,7 +39,15 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       time_stamp,
       annotate_notes
     ) |>
-    dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::collect() |>
-    dplyr::mutate(view = NA_character_)
+    dplyr::mutate(
+      output = dplyr::case_when(
+        annotate_switch > 1 ~ "output",
+        .default = NA_character_
+      ),
+      view = dplyr::case_when(
+        annotate_switch > 1 ~ "details",
+        .default = NA_character_
+      )
+    )
 }

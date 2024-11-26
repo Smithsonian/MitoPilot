@@ -21,3 +21,22 @@ $( document ).ready(function(){
     navigator.clipboard.writeText(params.text)
   });
 });
+
+
+$(document).ready(function() {
+  Shiny.addCustomMessageHandler('rightScroll', function(params) {
+    function waitForElement(selector, callback) {
+      const checkExist = setInterval(() => {
+        const elmnt = document.querySelector(selector);
+        if (elmnt) {
+          clearInterval(checkExist);
+          callback(elmnt);
+        }
+      }, 50); // Check every 50ms
+    }
+
+    waitForElement('.biojs_msa_rheader', function(elmnt) {
+      elmnt.scrollLeft = elmnt.scrollWidth - elmnt.clientWidth;
+    });
+  });
+});

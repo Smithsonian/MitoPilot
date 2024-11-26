@@ -5,8 +5,6 @@ assembly_coverage_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    modal_table <- reactiveVal()
-
     init("coverage_modal")
     on("coverage_modal", {
       rv$alignment <- NULL
@@ -28,6 +26,35 @@ assembly_coverage_details_server <- function(id, rv) {
         req(F)
       }
 
+      modalDialog(
+        title = stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
+        size = "l",
+        reactableOutput(ns("table"), width = "100%"),
+        uiOutput(ns("msa_div")),
+        div(
+          style = "margin: 10px;",
+          textAreaInput(
+            ns("notes"),
+            label = "Notes:",
+            value = rv$updating$assemble_notes %|NA|% character(0),
+            width = "100%"
+          )
+        ),
+        footer = tagList(
+          div(
+            style = "display: flex; justify-content: right; gap: 0.5em;",
+            uiOutput(ns("clip")) |> shinyjs::hidden(),
+            actionButton(ns("align"), "Align", icon("align-justify")) |> shinyjs::hidden(),
+            actionButton(ns("close_modal"), "Close")
+          )
+        )
+      ) |>
+        showModal()
+
+    })
+
+    # Render table ----
+    output$table <- renderReactable({
       rv$focal_assembly |>
         reactable(
           compact = TRUE,
@@ -52,43 +79,20 @@ assembly_coverage_details_server <- function(id, rv) {
               cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
             ),
             view_coverage = colDef(
-              name = "", html = T, width = 32, align = "center", sticky = "right",
-              cell = rt_icon_bttn(ns("view_coverage"), "fas fa-eye")
+              name = "", html = T, width = 70, align = "center", sticky = "right",
+              cell = rt_icon_bttn_text(ns("view_coverage"), "fas fa-eye fa-xs", "view")
             )
           )
-        ) |>
-        modal_table()
-
-      modalDialog(
-        title = stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
-        size = "l",
-        reactableOutput(ns("modal_table"), width = "100%"),
-        uiOutput(ns("msa_div")),
-        div(
-          style = "margin: 10px;",
-          textAreaInput(
-            ns("notes"),
-            label = "Notes:",
-            value = rv$updating$assemble_notes %|NA|% character(0),
-            width = "100%"
-          )
-        ),
-        footer = tagList(
-          div(
-            style = "display: flex; justify-content: right; gap: 0.5em;",
-            uiOutput(ns("clip")) |> shinyjs::hidden(),
-            actionButton(ns("align"), "Align", icon("align-justify")) |> shinyjs::hidden(),
-            actionButton(ns("close_modal"), "Close")
-          )
         )
-      ) |>
-        showModal()
     })
+
+    # Close modal ----
     observeEvent(input$close_modal, ignoreInit = T, {
       removeModal()
       trigger("update_assemble_table")
     })
-    output$modal_table <- renderReactable(modal_table())
+
+    # Table selection ----
     selected <- reactive(reactable::getReactableState("modal_table", "selected"))
     observe({
       shinyjs::toggle("clip", condition = length(selected()) > 0)

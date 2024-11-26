@@ -69,7 +69,7 @@ rt_link <- function(InputId) {
     "function(cellInfo) {
                 var clickid = '%s';
                 var sampid = cellInfo.index+1;
-                return `<a href='#' id=${sampid} class='reactable-bttn'` +
+                return `<a href='#' id=${sampid} class='grow'` +
                 `onclick='event.stopPropagation(); Shiny.onInputChange(&#39;${clickid}&#39;, this.id, {priority: &#39;event&#39;})'>` +
                 cellInfo.value +
                 `</a>`;
@@ -105,7 +105,7 @@ rt_icon_bttn <- function(inputId, icon) {
     "
     function(cellInfo) {
       var { index } = cellInfo;
-      return `<i class='%s reactable-bttn' ` +
+      return `<i class='%s grow' ` +
         `id='${index+1}' ` +
         `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})' ` +
         `style='padding-left: 0.2em;'></i>`
@@ -122,24 +122,25 @@ rt_icon_bttn <- function(inputId, icon) {
 #' @param icon font awesome icon name
 #'
 #' @noRd
-rt_icon_bttn_text <- function(inputId, icon) {
-  sprintf(
+rt_icon_bttn_text <- function(inputId, icon, text='') {
+  stringr::str_glue(
     "
-    function(cellInfo) {
-      var { index, value } = cellInfo;
-      if (value === undefined || value === null) {{
+    function(cellInfo) {{
+      var {{ index, value }} = cellInfo;
+      value = value ? value : '{text}';
+      if (value === undefined || value === null || value==='') {{
         return;
       }}
-      return `<span>` +
-        `<i class='%s reactable-bttn' ` +
-        `id='${index+1}' ` +
-        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})' ` +
-        `style='padding: 0 0.2em;'></i>` +
-        `<small>${value}</small>` +
-        `</span>`
-    }
-    ",
-    icon, inputId
+      return `<button ` +
+        `class='icon-bttn-text grow' ` +
+        `id='${{index+1}}' ` +
+        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;{inputId}&#39;, this.id, {{priority: &#39;event&#39;}})'>` +
+        `<i class='{icon}' ` +
+        `style='margin-right: 4px;'></i>` +
+        `<small>${{value}}</small>` +
+        `</button>`
+    }}
+    "
   ) |>
     htmlwidgets::JS()
 }
@@ -156,7 +157,7 @@ rt_bool_bttn <- function(inputId, ticon, ficon) {
     function(cellInfo) {{
       var {{ index }} = cellInfo;
       var icon = cellInfo.value ? '{ticon}' : '{ficon}';
-      return `<i class='${{icon}} reactable-bttn' ` +
+      return `<i class='${{icon}} grow' ` +
         `id='${{index+1}}' ` +
         `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;{inputId}&#39;, this.id, {{priority: &#39;event&#39;}})' ` +
         `style='padding-left: 0.2em;'></i>`

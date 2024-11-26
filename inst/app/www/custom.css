@@ -1,4 +1,4 @@
-.reactable-bttn:hover {
+.grow:hover {
   transition: all .1s ease-in-out;
   transform: scale(1.15);
 }
@@ -96,4 +96,40 @@ details summary:active {
 
 details[open] summary {
     background-color: #004494; /* Different color for when the details are open */
+}
+
+.icon-circle {
+  position: relative;
+  display: inline-flex; /* Aligns the icon */
+  justify-content: center; /* Centers the icon horizontally */
+  align-items: center; /* Centers the icon vertically */
+  width: 20px; /* Set the width of the circle */
+  height: 20px; /* Set the height of the circle */
+  border-radius: 50%; /* Makes it circular */
+  background-color: #f0f0f0; /* Background color of the circle */
+  border: 1px solid #ccc;
+}
+
+.icon-circle i { /* Adjust for the icon inside */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.icon-bttn-text {
+  display: inline-flex;
+  padding: 0;
+  justify-content: center;
+  align-items: center; /* Centers the icon vertically */
+  height: 18px; /* Set the height of the circle */
+  width: 100%;
+  border-radius: 8px; /* Makes it circular */
+  background-color: #f0f0f0; /* Background color of the circle */
+  border: 1px solid #ccc; /* Optional border around the circle */
+}
+
+.modal-lg {
+  width: auto !important;
+  max-width: 80%;
 }

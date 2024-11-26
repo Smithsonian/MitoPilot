@@ -34,7 +34,12 @@ annotations_details_server <- function(id, rv) {
         list.files(pattern = "coverageStats", full.names = T) |>
         read.csv()
 
-      rv$annotations |>
+      annotate_details_modal(rv) |> showModal()
+    })
+
+    # Render table ----
+    output$table <- reactable::renderReactable({
+      isolate(rv$annotations) |>
         reactable(
           compact = TRUE,
           wrap = FALSE,
@@ -44,7 +49,7 @@ annotations_details_server <- function(id, rv) {
           defaultPageSize = 50,
           height = 250,
           rowStyle = rt_highlight_row(),
-          defaultColDef = colDef(width = 60, align = "center", show = F),
+          defaultColDef = colDef(maxWidth = 80, align = "center", show = F),
           columns = list(
             type = colDef(
               show = T, align = "left",
@@ -60,23 +65,62 @@ annotations_details_server <- function(id, rv) {
             gene = colDef(show = T, align = "left"),
             pos1 = colDef(show = T),
             pos2 = colDef(show = T),
-            length = colDef(show = T, width = 70),
-            direction = colDef(show = T, width = 75),
-            notes = colDef(show = T, width = 175, html = T, cell = rt_longtext(), align = "center"),
-            warnings = colDef(show = T, width = 180, html = T, cell = rt_longtext(), align = "center"),
+            length = colDef(show = T),
+            direction = colDef(show = T),
+            notes = colDef(
+              show = T,
+              maxWidth = 1000,
+              html = T,
+              cell = rt_longtext(),
+              align = "left"
+            ),
+            warnings = colDef(
+              show = T,
+              maxWidth = 1000,
+              html = T,
+              cell = rt_longtext(),
+              align = "left"
+            ),
             fas = colDef(
-              name = "", show = T, html = T, sticky = "right", width = 44,
-              cell = rt_icon_bttn_text(ns("copy_fas"), "fas fa-copy")
+              name = "", show = T, html = T, width = 60, sticky = "right",
+              cell = rt_icon_bttn_text(ns("copy_fas"), "fas fa-copy fa-xs")
             ),
             faa = colDef(
-              name = "", show = T, html = T, sticky = "right", width = 44,
-              cell = rt_icon_bttn_text(ns("copy_faa"), "fas fa-copy")
+              name = "", show = T, html = T, width = 60, sticky = "right",
+              cell = rt_icon_bttn_text(ns("copy_faa"), "fas fa-copy fa-xs")
             )
           )
-        ) |>
-        table()
-
-      annotate_details_modal(rv) |> showModal()
+        )
+    })
+    ## Table selection ----
+    selected <- reactive({
+      sel <- reactable::getReactableState("table", "selected")
+      shinyjs::toggle("aln_ctlr_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
+      # Check for unsaved edits
+      isolate({
+        if (identical(sel, rv$editing$idx)) {
+          return(sel)
+        }
+        if (!identical(rv$editing$translation, rv$editing$backup$translation)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Unsaved Edits!",
+            text = "Discard or save edits before selecting a new annotation"
+          )
+          reactable::updateReactable(
+            "table",
+            selected = rv$editing$idx
+          )
+          return(rv$editing$idx)
+        }
+        if (rv$annotations$type[sel] == "PCG" & length(rv$alignment) != 0) {
+          trigger("align_now")
+        } else {
+          toggleDetails(ns("alignment_div"), FALSE)
+          rv$alignment <- NULL
+        }
+      })
+      shinyWidgets::updateSwitchInput(inputId = "edit_mode", value = FALSE)
+      return(sel)
     })
 
     # Copy Fasta ----
@@ -113,7 +157,7 @@ annotations_details_server <- function(id, rv) {
 
     # Close Modal ----
     observeEvent(input$close, {
-      if (length(rv$editing$idx) > 0) {
+      if (!identical(rv$editing$translation, rv$editing$backup$translation)) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
           text = "Discard or save edits before selecting a new annotation"
@@ -130,7 +174,7 @@ annotations_details_server <- function(id, rv) {
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
-      if (length(rv$editing$idx) > 0) {
+      if (!identical(rv$editing$translation, rv$editing$backup$translation)) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
           text = "Discard or save edits before selecting a new annotation"
@@ -151,37 +195,6 @@ annotations_details_server <- function(id, rv) {
           dplyr::rows_update(rv$updating[, c("ID", "annotate_lock")], by = "ID")
       }
       shinyjs::click("close")
-    })
-
-    # Render table ----
-    table <- reactiveVal()
-    output$table <- reactable::renderReactable(table())
-    selected <- reactive({
-      sel <- reactable::getReactableState("table", "selected")
-      isolate(idx <- rv$editing$idx)
-      if (length(idx) == 1 && sel != idx) {
-        shinyWidgets::sendSweetAlert(
-          title = "Unsaved Edits!",
-          text = "Discard or save edits before selecting a new annotation"
-        )
-        reactable::updateReactable(
-          "table",
-          selected = idx
-        )
-        return(idx)
-      }
-      if (length(sel) == 0 | length(idx) == 1 && sel == idx) {
-        return(sel)
-      }
-      isolate({
-        if (rv$annotations$type[sel] == "PCG" & length(rv$alignment) != 0) {
-          trigger("align_now")
-        } else {
-          rv$alignment <- NULL
-        }
-      })
-      shinyWidgets::updateSwitchInput(inputId = "edit_mode", value = FALSE)
-      return(sel)
     })
 
     # Coverage Map ----
@@ -291,9 +304,11 @@ annotations_details_server <- function(id, rv) {
       trigger("align_now")
     })
     on("align_now", {
+
       req(rv$annotations$type[selected()] == "PCG")
 
-      hits <- rv$annotations$refHits[selected()] |> json_parse(T)
+      hits <- rv$annotations$refHits[selected()] |>
+        json_parse(T)
 
       rv$alignment$seqs <- hits |>
         dplyr::pull(target, name = Taxon)
@@ -312,41 +327,50 @@ annotations_details_server <- function(id, rv) {
     })
     output$msa_div <- renderUI({
       req(rv$alignment$aln)
-      rv$alignment$stop <- stringr::str_glue(
-        "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
-      )
-      rv$alignment$start <- stringr::str_glue(
-        "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
-      )
-      rv$alignment$internal_stop <- ifelse(
-        stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-        paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
-        ""
-      )
-      msa <- msaR::renderMsaR(
-        msaR::msaR(
-          rv$alignment$aln,
-          overviewbox = FALSE,
-          seqlogo = FALSE,
-          menu = FALSE,
-          conservation = TRUE,
-          labelNameLength = 150,
-          colorscheme = "zappo",
-          rowheight = 20,
-          alignmentHeight = min(rv$alignment$alignmentHeight, 200)
+      isolate({
+        rv$alignment$stop <- stringr::str_glue(
+          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
         )
-      )
-      div(
-        style = "margin: 30px 5px 5px 5px;",
-        div(
-          style = "display: flex; gap: 25px;",
-          p(HTML(isolate(rv$alignment$id))),
-          p(HTML(isolate(rv$alignment$start))),
-          p(HTML(isolate(rv$alignment$stop))),
-          p(HTML(isolate(rv$alignment$internal_stop)))
-        ),
-        msa
-      ) |> tagList()
+        rv$alignment$start <- stringr::str_glue(
+          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
+        )
+        rv$alignment$internal_stop <- ifelse(
+          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
+          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
+          ""
+        )
+        msa <- msaR::renderMsaR(
+          msaR::msaR(
+            rv$alignment$aln,
+            overviewbox = FALSE,
+            seqlogo = FALSE,
+            menu = FALSE,
+            conservation = TRUE,
+            labelNameLength = 150,
+            colorscheme = "zappo",
+            rowheight = 20,
+            alignmentHeight = min(rv$alignment$alignmentHeight, 200)
+          )
+        )
+
+        # Scroll right if editing stops
+        if (rv$editing$stop_aln %||% FALSE) {
+          session$sendCustomMessage("rightScroll", list(foo = "bar"))
+        }
+        return({
+          div(
+            style = "margin: 30px 5px 5px 5px;",
+            div(
+              style = "display: flex; gap: 25px;",
+              p(HTML(isolate(rv$alignment$id))),
+              p(HTML(isolate(rv$alignment$start))),
+              p(HTML(isolate(rv$alignment$stop))),
+              p(HTML(isolate(rv$alignment$internal_stop)))
+            ),
+            msa
+          ) |> tagList()
+        })
+      })
     })
 
     # Notes ----
@@ -473,18 +497,12 @@ annotations_details_server <- function(id, rv) {
       }
 
       ## Get Sequence ----
-      assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
-        dplyr::filter(ID == !!rv$annotations$ID[selected()]) |>
-        dplyr::filter(path == !!rv$annotations$path[selected()]) |>
-        dplyr::filter(scaffold == !!rv$annotations$scaffold[selected()]) |>
-        dplyr::collect() |>
-        dplyr::pull(sequence) |>
-        setNames(
-          paste(rv$annotations[selected(), c("ID", "path", "scaffold")], collapse = ".") |>
-            paste("linear")
-        ) |>
-        Biostrings::DNAStringSet()
-
+      assembly <- get_assembly(
+        ID = rv$annotations$ID[selected()],
+        path = rv$annotations$path[selected()],
+        scaffold = rv$annotations$scaffold[selected()],
+        con = session$userData$con
+      )
       ## Rotate to cut point ----
       if (start > 1) {
         assembly <- Biostrings::xscat(
@@ -598,7 +616,322 @@ annotations_details_server <- function(id, rv) {
     }) # END LINEARIZE
 
     # Edit Annotation ----
+    observeEvent(input$edit_mode, {
+      shinyjs::show("edit_mode_ctrls")
+      shinyjs::show("save_edits")
+      shinyjs::show("discard_edits")
+      shinyjs::hide("edit_mode")
+      rv$editing$idx <- selected()
+      rv$editing$backup <- rv$annotations[selected(), ]
+      rv$editing$params <- dplyr::left_join(
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::select(ID, curate_opts) |>
+          dplyr::filter(ID == !!rv$updating$ID),
+        dplyr::tbl(session$userData$con, "curate_opts"),
+        by = "curate_opts"
+      ) |>
+        dplyr::pull(params) |>
+        json_parse() |>
+        {
+          \(x) modifyList(x$rules[[rv$annotations$gene[selected()]]], x$default_rules[[rv$annotations$type[selected()]]])
+        }()
+      rv$editing$assembly <- get_assembly(
+        ID = rv$annotations$ID[selected()],
+        path = rv$annotations$path[selected()],
+        scaffold = rv$annotations$scaffold[selected()],
+        con = session$userData$con
+      )
+    })
+    ## Edit start-add ----
+    observeEvent(input$`start-add`, {
+      rv$editing$stop_aln <- FALSE
+      codon <- "INIT"
+      pos1 <- rv$annotations$pos1[selected()]
+      pos2 <- rv$annotations$pos2[selected()]
+      if (rv$annotations$direction[selected()] == "+") {
+        while (codon %nin% rv$editing$params$start_codons) {
+          pos1 <- pos1 - 3
+          req(pos1 > 0)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos1, pos1 + 2) |>
+            as.character()
+          if (isTRUE(input$single_codon)) break
+        }
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+      }
+      if (rv$annotations$direction[selected()] == "-") {
+        while (codon %nin% rv$editing$params$start_codons) {
+          pos2 <- pos2 + 3
+          req(pos2 <= rv$editing$assembly@ranges@width)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos2 - 2, pos2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          if (isTRUE(input$single_codon)) break
+        }
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
+          Biostrings::reverseComplement() |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          as.character()
+      }
+      rv$annotations$pos1[selected()] <- pos1
+      rv$annotations$pos2[selected()] <- pos2
+      rv$annotations$start_codon[selected()] <- codon
+      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$start_codon[selected()] <- unname(codon)
+      rv$alignment$aln <- NULL
+      trigger("re_align")
+    })
+    ## Edit start-minus ----
+    observeEvent(input$`start-minus`, {
+      rv$editing$stop_aln <- FALSE
+      codon <- "INIT"
+      pos1 <- rv$annotations$pos1[selected()]
+      pos2 <- rv$annotations$pos2[selected()]
+      if (rv$annotations$direction[selected()] == "+") {
+        while (codon %nin% rv$editing$params$start_codons) {
+          pos1 <- pos1 + 3
+          req(pos1 < pos2)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos1, pos1 + 2) |>
+            as.character()
+          if (isTRUE(input$single_codon)) break
+        }
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          as.character()
+      }
+      if (rv$annotations$direction[selected()] == "-") {
+        while (codon %nin% rv$start_opts) {
+          pos2 <- pos2 - 3
+          req(pos2 > pos1)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos2 - 2, pos2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          if (isTRUE(input$single_codon)) break
+        }
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
+          Biostrings::reverseComplement() |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          as.character()
+      }
+      rv$annotations$pos1[selected()] <- pos1
+      rv$annotations$pos2[selected()] <- pos2
+      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$start_codon[selected()] <- unname(codon)
+      rv$alignment$aln <- NULL
+      trigger("re_align")
+    })
+    ## Edit stop-add ----
+    observeEvent(input$`stop-add`, {
+      rv$editing$stop_aln <- TRUE
+      codon <- "INIT"
+      pos1 <- rv$annotations$pos1[selected()]
+      pos2 <- rv$annotations$pos2[selected()]
+      if (rv$annotations$direction[selected()] == "+") {
+        pos2 <- pos2 + (3-nchar(rv$annotations$stop_codon[selected()]))
+        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
+          pos2 <- pos2 + 3
+          req(pos2 <= rv$editing$assembly@ranges@width)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos2 - 2, pos2) |>
+            as.character() |>
+            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
+            na.omit() |>
+            purrr::pluck(1)
+          if (isTRUE(input$single_codon) && length(codon) > 0) break
+          if (isTRUE(input$single_codon) && length(codon) == 0) {
+            codon <- rv$editing$assembly |>
+              Biostrings::subseq(pos2 - 2, pos2) |>
+              as.character()
+            break
+          }
+          codon <- codon %||% "INIT"
+        }
+        pos2 <- pos2 - (3 - nchar(codon))
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          as.character()
+      }
+      if (rv$annotations$direction[selected()] == "-") {
+        pos1 <- pos1 - (3-nchar(rv$annotations$stop_codon[selected()]))
+        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
+          pos1 <- pos1 - 3
+          req(pos1 >= 1)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos1, pos1 + 2) |>
+            Biostrings::reverseComplement() |>
+            as.character() |>
+            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
+            na.omit() |>
+            purrr::pluck(1)
+          if (isTRUE(input$single_codon) && length(codon) > 0) break
+          if (isTRUE(input$single_codon) && length(codon) == 0) {
+            codon <- rv$editing$assembly |>
+              Biostrings::subseq(pos2 - 2, pos2) |>
+              as.character()
+            break
+          }
+          codon <- codon %||% "INIT"
+        }
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1 + nchar(rv$editing$backup$stop_codon), pos2) |>
+          Biostrings::reverseComplement() |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          as.character()
+      }
+      rv$annotations$pos1[selected()] <- pos1
+      rv$annotations$pos2[selected()] <- pos2
+      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$stop_codon[selected()] <- unname(codon)
+      rv$alignment$aln <- NULL
+      trigger("re_align")
+    })
+    ## Edit stop-minus ----
+    observeEvent(input$`stop-minus`, {
+      rv$editing$stop_aln <- TRUE
+      codon <- "INIT"
+      pos1 <- rv$annotations$pos1[selected()]
+      pos2 <- rv$annotations$pos2[selected()]
+      if (rv$annotations$direction[selected()] == "+") {
+        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
+        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
+          pos2 <- pos2 - 3
+          req(pos2 > pos1)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos2 - 2, pos2) |>
+            as.character() |>
+            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
+            na.omit() |>
+            purrr::pluck(1)
+          if (isTRUE(input$single_codon) && length(codon) > 0) break
+          if (isTRUE(input$single_codon) && length(codon) == 0) {
+            codon <- rv$editing$assembly |>
+              Biostrings::subseq(pos2 - 2, pos2) |>
+              as.character()
+            break
+          }
+          codon <- codon %||% "INIT"
+        }
+        pos2 <- pos2 - (3 - nchar(codon))
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          as.character()
+      }
+      if (rv$annotations$direction[selected()] == "-") {
+        pos1 <- pos1 + (3 - nchar(rv$annotations$stop_codon[selected()]))
+        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
+          pos1 <- pos1 + 3
+          req(pos1 < pos2)
+          codon <- rv$editing$assembly |>
+            Biostrings::subseq(pos2 - 2, pos2) |>
+            as.character() |>
+            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
+            na.omit() |>
+            purrr::pluck(1)
+          if (isTRUE(input$single_codon) && length(codon) > 0) break
+          if (isTRUE(input$single_codon) && length(codon) == 0) {
+            codon <- rv$editing$assembly |>
+              Biostrings::subseq(pos2 - 2, pos2) |>
+              as.character()
+            break
+          }
+          codon <- codon %||% "INIT"
+        }
+        rv$annotations$translation[selected()] <- rv$editing$assembly |>
+          Biostrings::subseq(pos1 + nchar(rv$editing$backup$stop_codon), pos2) |>
+          Biostrings::reverseComplement() |>
+          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          as.character()
+      }
+      rv$annotations$pos1[selected()] <- pos1
+      rv$annotations$pos2[selected()] <- pos2
+      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$start_codon[selected()] <- unname(codon)
+      rv$alignment$aln <- NULL
+      trigger("re_align")
+    })
 
+    ## RE-align after edit ----
+    init("re_align")
+    on("re_align", {
+
+      ### Calculate new stats ----
+      focal <- rv$annotations$translation[selected()]
+      refHits <- rv$annotations$refHits[selected()] |>
+        json_parse(T) |>
+        dplyr::mutate(
+          pctid = compare_aa(focal, target, "pctId"),
+          similarity = compare_aa(focal, target, "similarity"),
+          gap_leading = count_end_gaps(focal, target, "leading"),
+          gap_trailing = count_end_gaps(focal, target, "trailing"),
+          .after = "eval",
+          .by = dplyr::everything()
+        ) |>
+        dplyr::arrange(dplyr::desc(similarity))
+      rv$annotations$refHits[selected()] <- json_string(refHits)
+
+      ### New alignment ----
+      rv$alignment$id <- stringr::str_glue(
+        "<b>Max Similarity:</b> {round(max(refHits$similarity),1)}%"
+      )
+      focal <- rv$annotations$translation[selected()] |>
+        setNames(paste(rv$annotations$gene[selected()], "(focal)"))
+      rv$alignment$aln <- c(focal, rv$alignment$seqs) |>
+        Biostrings::AAStringSet() |>
+        DECIPHER::AlignSeqs(verbose = FALSE)
+    })
+
+    # Discard edits ----
+    observeEvent(input$discard_edits, {
+      rv$annotations <- rv$annotations[-selected(), ] |>
+        dplyr::bind_rows(rv$editing$backup) |>
+        dplyr::arrange(pos1)
+      reactable::updateReactable(
+        "table",
+        data = rv$annotations
+      )
+      shinyjs::hide("edit_mode_ctrls")
+      shinyjs::hide("save_edits")
+      shinyjs::hide("discard_edits")
+      shinyjs::show("edit_mode")
+      rv$editing <- NULL
+      trigger("align_now")
+    })
+
+    # Save edits ----
+    observeEvent(input$save_edits, {
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_delete(
+          dplyr::distinct(rv$annotations[, c("ID")]),
+          by = "ID",
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_insert(
+          rv$annotations |>
+            dplyr::select(-faa, -fas),
+          by = "ID",
+          conflict = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      shinyjs::hide("edit_mode_ctrls")
+      shinyjs::hide("discard_edits")
+      shinyjs::hide("save_edits")
+      shinyjs::show("edit_mode")
+      rv$editing <- NULL
+    })
   })
 }
 
@@ -613,6 +946,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   modalDialog(
     title = stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}"),
     size = "l",
+    easyClose = F,
     tags$details(
       open = TRUE,
       tags$summary("Annotation Table"),
@@ -635,60 +969,72 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         onclick = sprintf("Shiny.onInputChange('%s', Math.random())", ns("align"))
       ),
       div(
-        style = "display: flex; gap: 10px;",
-        shinyWidgets::switchInput(
-          ns("edit_mode"),
-          label = "Edit Mode",
-          onStatus = "primary",
-          labelWidth = "60px",
-          size = "mini",
-          width = "auto"
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em; margin-top: 0.5em; height: 50px;",
+        id = ns("aln_ctlr_div"),
+        div(
+          style = "gap: 0.5em;",
+          shinyWidgets::actionBttn(
+            ns("edit_mode"),
+            label = "Edit",
+            style = "material-flat",
+            size = "xs",
+            icon = icon("edit")
+          ),
+          shinyWidgets::actionBttn(
+            ns("save_edits"),
+            label = "Save",
+            style = "material-flat",
+            size = "xs",
+            icon = icon("save")
+          ) |> shinyjs::hidden(),
+          shinyWidgets::actionBttn(
+            ns("discard_edits"),
+            label = "Reset",
+            style = "material-flat",
+            size = "xs",
+            icon = icon("rotate-left")
+          ) |> shinyjs::hidden()
         ),
-        shinyjs::hidden(
+        div(
+          id = ns("edit_mode_ctrls"),
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 3em;",
           div(
-            id = ns("edit_mode_ctrls"),
-            style = "display: flex; gap: 40px;",
-            fluidRow(
-              #   shinyWidgets::prettyCheckbox(
-              #     ns("single_codon"),
-              #     label = "single codon",
-              #     inline = TRUE
-              #   ),
-              #   actionBttn_with_style(
-              #     ns("start_add"), label=NULL, icon('plus'),
-              #     style='jelly', size='xs', custom_style="color: #787878 !important; display: flex; align-items: center;"
-              #   ),
-              #   div(
-              #     style = "display: flex; align-items: center;",
-              #     p("START")
-              #   ),
-              #   actionBttn_with_style(
-              #     ns("start_minus"), label=NULL, icon('minus'),
-              #     style='jelly', size='xs', custom_style="color: #787878 !important; display: flex; align-items: center;"
-              #   )
-              # ),
-              # fluidRow(
-              #   actionBttn_with_style(
-              #     ns("stop_add"), label=NULL, icon('plus'),
-              #     style='jelly', size='xs', custom_style="color: #787878 !important; display: flex; align-items: center;"
-              #   ),
-              #   div(
-              #     style = "display: flex; align-items: center;",
-              #     p("STOP")
-              #   ),
-              #   actionBttn_with_style(
-              #     ns("stop_minus"), label=NULL, icon('minus'),
-              #     style='jelly', size='xs', custom_style="color: #787878 !important; display: flex; align-items: center;"
-              #   )
-              # ),
-              # fluidRow(
-              #   actionBttn_with_style(
-              #     ns("save_edits"), label="Save", icon=icon('save'),
-              #     style='jelly', size='xs', custom_style="display: flex; align-items: center; color: #787878 !important;"
-              #   )
+            style = "display: flex; flex-flow: row nowrap; align-items: center;",
+            tags$button(
+              class = "icon-circle grow",
+              onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
+              tags$i(class = "fas fa-minus fa-xs")
+            ),
+            div(style = "margin: 00.5em;", "START"),
+            tags$button(
+              class = "icon-circle grow",
+              onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
+              tags$i(class = "fas fa-plus fa-xs")
+            )
+          ),
+          div(
+            style = "display: flex; flex-flow: row nowrap; align-items: center;",
+            tags$button(
+              class = "icon-circle grow",
+              onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
+              tags$i(class = "fas fa-minus fa-xs")
+            ),
+            div(style = "margin: 00.5em;", "STOP"),
+            tags$button(
+              class = "icon-circle grow",
+              onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add')}', 'plus', {{priority: 'event'}})"),
+              tags$i(class = "fas fa-plus fa-xs")
+            )
+          ),
+          div(
+            style = "padding-top: 14px;",
+            shinyWidgets::prettyCheckbox(
+              ns("single_codon"),
+              label = "single codon",
+              inline = TRUE
             )
           )
-        )
+        ) |> shinyjs::hidden()
       ),
       uiOutput(ns("msa_div")),
     ),
@@ -701,43 +1047,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         width = "100%"
       )
     ),
-    # tags$details(
-    #   style = "margin-bottom: 1em;",
-    #   tags$summary(
-    #     "Manual Annotation",
-    #     style="margin: 0.5em;"
-    #   ),
-    #   div(
-    #     id=ns("manualDiv"),
-    #     style = "width: 100%; overflow-x: auto; padding: 5mm;",
-    #     fluidRow(
-    #       style="display: flex; gap: 40px; align-items: center;",
-    #       shinyWidgets::pickerInput(
-    #         ns("manual_type"),
-    #         choices=c("","ctrl"),
-    #         width = "120px"
-    #       ),
-    #       numericInput(
-    #         ns("manual_start"),
-    #         "Start",
-    #         value=0,
-    #         min=1, step=1, width="80px"
-    #       ),
-    #       numericInput(
-    #         ns("manual_stop"),
-    #         "Stop",
-    #         value=0,
-    #         min=1, step=1, width="80px"
-    #       ),
-    #       actionButton(
-    #         ns("manual_add"),
-    #         "Add Annotation",
-    #         icon("plus")
-    #       )
-    #     )
-    #   )
-    # ),
-    easyClose = F,
     footer = tagList(
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
