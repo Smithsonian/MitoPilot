@@ -38,6 +38,7 @@ annotate_trnaScan <- function(
   do.call(process, process_args)
 
   if (rotate && length(assembly) == 1L) {
+
     seq_length <- Biostrings::width(assembly)
 
     # Find start position for rotation
