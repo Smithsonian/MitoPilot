@@ -19,8 +19,8 @@
 #' @export
 #'
 annotate <- function(
-    assembly_fn = "~/Jonah/MitoPilot-testing/out/SRR22396940/assemble/default/SRR22396940_assembly_1.fasta",
-    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR22396940/assemble/default/SRR22396940_assembly_1_coverageStats.csv",
+    assembly_fn = "~/Jonah/MitoPilot-testing/out/SRR22396843/assemble/default/SRR22396843_assembly_1.fasta",
+    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR22396843/assemble/default/SRR22396843_assembly_1_coverageStats.csv",
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
@@ -30,6 +30,7 @@ annotate <- function(
     trnaScan_opts = "-M vert",
     trnaScan_condaenv = "base",
     out_dir = NULL) {
+
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
   # Coverage trimming (optional)
@@ -71,6 +72,28 @@ annotate <- function(
   )
   assembly <- trnaScan_out$assembly
   annotations_trnaScan <- trnaScan_out$annotations
+
+  # Update coverage if rotated ----
+  rotate <- assembly@metadata[["rotate_to"]]
+  if(!is.null(rotate) && rotate > 0){
+    coverage <- dplyr::bind_rows(
+      coverage[rotate:nrow(coverage), ],
+      coverage[1:(rotate - 1), ]
+    ) |>
+      dplyr::mutate(
+        Postion = dplyr::row_number()
+      )
+  }
+  if(!is.null(rotate) && rotate < 0){
+    rotate <- abs(rotate)
+    coverage <- dplyr::bind_rows(
+      coverage[rotate:1, ],
+      coverage[nrow(coverage):(rotate + 1), ]
+    ) |>
+      dplyr::mutate(
+        Postion = dplyr::row_number()
+      )
+  }
 
   # Mitos2 annotation ----
   annotations_mitos <- annotate_mitos2(
