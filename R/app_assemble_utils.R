@@ -25,10 +25,10 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       ID,
       Taxon,
       pre_opts,
+      assemble_opts,
       reads,
       trimmed_reads,
       mean_length,
-      assemble_opts,
       topology,
       length,
       paths,
@@ -36,7 +36,16 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       time_stamp,
       assemble_notes
     ) |>
-    dplyr::mutate(view = NA_character_)
+    dplyr::mutate(
+      output = dplyr::case_when(
+        assemble_switch > 1 ~ "output",
+        .default = NA_character_
+      ),
+      view = dplyr::case_when(
+        assemble_switch > 1 ~ "details",
+        .default = NA_character_
+      )
+    )
 }
 
 #' Update the preprocessing options
@@ -167,4 +176,27 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       )
     )
   )
+}
+
+#' Get assembly from database
+#'
+#' @param ID sample ID
+#' @param path assembly getOrganelle path
+#' @param con database connection
+#'
+#' @export
+get_assembly <- function(ID, path, scaffold=NULL, con){
+  qry <- dplyr::tbl(con, "assemblies") |>
+    dplyr::filter(ID == !!ID & path == !!path) |>
+    dplyr::select(ID, path, scaffold, topology, sequence) |>
+    dplyr::arrange(scaffold) |>
+    dplyr::collect()
+  if(!is.null(scaffold)){
+    qry <- dplyr::filter(qry, scaffold %in% !!scaffold)
+  }
+  qry |>
+    tidyr::unite("scaffold_name", c(ID, path, scaffold), sep = ".") |>
+    tidyr::unite("seq_name", c(scaffold_name, topology), sep = " ") |>
+    dplyr::pull(sequence, name = 'seq_name') |>
+    Biostrings::DNAStringSet()
 }

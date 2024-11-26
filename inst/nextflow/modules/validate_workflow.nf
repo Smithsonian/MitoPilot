@@ -13,7 +13,7 @@ params.sqlWriteAnnotate =   'UPDATE annotate SET structure = ?, PCGCount = ?, tR
                                 'rRNACount = ?, missing = ?, extra = ?, warnings = ?, annotate_switch = 2 ' +
                             'WHERE ID = ?'
 
-// params.sqlDeleteAnnotations =  'DELETE FROM annotations WHERE ID = ? AND time_stamp != ?'
+params.sqlDeleteAnnotations =  'DELETE FROM annotations WHERE ID = ? AND time_stamp != ?'
 
 params.sqlWriteAnnotations =    'INSERT OR REPLACE INTO annotations ' +
                                 '(ID, path, scaffold, type, gene, product, pos1, pos2, length, direction, start_codon, ' +
@@ -69,15 +69,14 @@ workflow VALIDATE {
         .sqlInsert(statement: params.sqlWriteAnnotate, db: 'sqlite')
 
     // Clear old annotations from db
-    // validate_out
-    //     .map { it ->
-    //         def 
-    //         tuple(            
-    //             ID = it[0]
-    //             time_stamp = params.ts
-    //         )
-    //     }
-    //     .sqlInsert( statement: params.sqlDeleteAnnotations, db: 'sqlite')
+    validate_out
+        .map { it ->
+            tuple(            
+                ID = it[0],
+                time_stamp = params.ts
+            )
+        }
+        .sqlInsert( statement: params.sqlDeleteAnnotations, db: 'sqlite')
 
     // Write new annotations
     validate_out

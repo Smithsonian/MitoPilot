@@ -24,6 +24,11 @@ app_server <- function(input, output, session) {
     stringr::str_remove("^[^'|^\"]+['\"]") |>
     stringr::str_extract("^[^'|^\"]+")
   session$userData$dir_out <- file.path(dirname(db), dir_out)
+  # Genetic code ----
+  session$userData$genetic_code <- readLines(file.path(dirname(db), ".config")) |>
+    stringr::str_extract("genetic_code.*") |>
+    na.omit() |>
+    stringr::str_extract("[0-9]+$")
 
   # View mode ----
   observeEvent(input$mode, {

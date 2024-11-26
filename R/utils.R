@@ -119,12 +119,3 @@ add_cols <- function(dat, cols, .after = dplyr::everything()) {
     dplyr::bind_rows(dplyr::tibble(!!!cols[!names(cols) %in% names(dat)], .rows = 0)) |>
     dplyr::relocate(names(cols), .after = .after)
 }
-
-#' Feature not ready message
-#' @noRd
-coming_soon <- function() {
-  shinyWidgets::sendSweetAlert(
-    title = "Coming soon...",
-    text = "This feature is not yet implemented."
-  )
-}

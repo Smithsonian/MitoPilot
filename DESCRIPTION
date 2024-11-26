@@ -4,11 +4,13 @@ Version: 0.0.0.9000
 Authors@R: 
     person("Devin", "Leopold", , "devin.leopold@gmail.com", role = c("aut", "cre"))
 Description: An R package for mitogenome assembly and annotation from
-    genome skimming data that uses Nexflow and includes (Shiny) web app
-    for project management and final curation of results.
+    genome skimming data that uses Nexflow and includes an R-Shiny app for
+    project management and curation of results.
 License: file LICENSE
 URL: https://github.com/JonahVentures/MitoPilot
 BugReports: https://github.com/JonahVentures/MitoPilot/issues
+Depends: 
+    R (>= 4.0.0)
 Imports: 
     base64enc,
     Biostrings,

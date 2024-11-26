@@ -54,13 +54,13 @@ assemble_server <- function(id) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "left", show = F),
           columns = list(
-            `.selection` = colDef(show = T, sticky = "left"),
+            `.selection` = colDef(show = T, sticky = "left", width = 28),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
               name = "",
               html = TRUE,
-              width = 30,
+              width = 32,
               align = "center",
               cell = rt_dynamicIcon(
                 c(
@@ -87,14 +87,14 @@ assemble_server <- function(id) {
             ),
             ID = colDef(
               show = T,
-              width = 150,
+              width = 120,
               sticky = "left",
               html = T,
               cell = rt_longtext()
             ),
             Taxon = colDef(
               show = T,
-              width = 150,
+              width = 140,
               sticky = "left",
               html = T,
               cell = rt_longtext()
@@ -155,16 +155,26 @@ assemble_server <- function(id) {
               name = "Notes",
               html = TRUE,
               align = "left",
-              minWidth = 150
+              minWidth = 150,
+              cell = rt_longtext()
             ),
             view = colDef(
               show = TRUE,
               sticky = "right",
               name = "",
               html = TRUE,
-              width = 40,
+              width = 80,
               align = "center",
-              cell = rt_icon_bttn(ns("details"), "fas fa-square-arrow-up-right")
+              cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
+            ),
+            output = colDef(
+              show = TRUE,
+              sticky = "right",
+              name = "",
+              html = TRUE,
+              width = 80,
+              align = "center",
+              cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
             )
           )
         )
@@ -175,7 +185,17 @@ assemble_server <- function(id) {
     on("update_assemble_table", {
       reactable::updateReactable(
         "table",
-        data = rv$data,
+        data = rv$data  |>
+          dplyr::mutate(
+            output = dplyr::case_when(
+              assemble_switch > 1 ~ "output",
+              .default = NA_character_
+            ),
+            view = dplyr::case_when(
+              assemble_switch > 1 ~ "details",
+              .default = NA_character_
+            )
+          ),
         selected = reactable::getReactableState("table", "selected"),
         page = reactable::getReactableState("table", "page")
       )
@@ -393,6 +413,16 @@ assemble_server <- function(id) {
         dplyr::rows_update(
           update,
           by = "ID"
+        )  |>
+        dplyr::mutate(
+          output = dplyr::case_when(
+            assemble_switch > 1 ~ "output",
+            .default = NA_character_
+          ),
+          view = dplyr::case_when(
+            assemble_switch > 1 ~ "details",
+            .default = NA_character_
+          )
         )
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
@@ -529,6 +559,17 @@ assemble_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
+    })
+
+    # Open output folder ----
+    observeEvent(input$output, ignoreInit = T, {
+      file.path(
+        session$userData$dir_out,
+        rv$data$ID[as.numeric(input$output)],
+        "assemble",
+        rv$data$assemble_opts[as.numeric(input$output)]
+      ) |>
+        utils::browseURL()
     })
 
     # Open Assembly Details ----
