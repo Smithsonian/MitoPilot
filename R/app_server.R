@@ -33,10 +33,8 @@ app_server <- function(input, output, session) {
   # View mode ----
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
-    shinyjs::toggle("lock", condition = input$mode != "Submit")
-    shinyjs::toggle("state", condition = input$mode != "Submit")
-    shinyjs::toggle("group", condition = input$mode == "Submit")
-    shinyjs::toggle("pregroup", condition = input$mode == "Submit")
+    shinyjs::toggle("ctrls", condition = input$mode != "Export")
+    shinyjs::toggle("export_ctrls", condition = input$mode == "Export")
   })
 
   # Reload Data

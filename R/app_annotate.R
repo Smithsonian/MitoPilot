@@ -277,9 +277,25 @@ annotate_server <- function(id) {
       coming_soon()
     })
 
-    # Download files ----
-    observeEvent(input$download, {
-      comming_soon()
+    # Open output folder ----
+    observeEvent(input$output, ignoreInit = T, {
+      pth <- file.path(
+        session$userData$dir_out,
+        rv$data$ID[as.numeric(input$output)],
+        "annotate",
+        rv$data$assemble_opts[as.numeric(input$output)]
+      )
+      req(file.exists(pth))
+      if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
+        owd <- setwd(pth)
+        later::later(function() {
+          rstudioapi::executeCommand("goToWorkingDir")
+          setwd(owd)
+        })
+        req(F)
+      } else {
+        utils::browseURL(pth)
+      }
     })
 
     # Open annotation details ----

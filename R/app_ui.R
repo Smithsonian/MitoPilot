@@ -12,38 +12,50 @@ app_ui <- function(request) {
         style = "display: flex; flex-direction: column;",
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
+          shinyWidgets::pickerInput(
+            inputId = "mode",
+            width = 150,
+            label = "",
+            choices = c("Assemble", "Annotate", "Export")
+          ),
           div(
-            shinyWidgets::pickerInput(
-              inputId = "mode",
-              width = 150,
-              label = "",
-              choices = c("Assemble", "Annotate", "Submit")
+            id = "ctrls",
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
+            shinyWidgets::actionBttn(
+              "refresh",
+              label = NULL,
+              icon = icon("sync"),
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "state",
+              label = "State",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "lock",
+              label = "Lock",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "run_modal",
+              label = "Update",
+              style = "material-flat",
+              size = "sm"
             )
           ),
-          shinyWidgets::actionBttn(
-            "refresh",
-            label = NULL,
-            icon = icon("sync"),
-            style = "material-flat",
-            size = "sm"
-          ),
-          shinyWidgets::actionBttn(
-            "state",
-            label = "State",
-            style = "material-flat",
-            size = "sm"
-          ),
-          shinyWidgets::actionBttn(
-            "lock",
-            label = "Lock",
-            style = "material-flat",
-            size = "sm"
-          ),
-          shinyWidgets::actionBttn(
-            "run_modal",
-            label = "Update",
-            style = "material-flat",
-            size = "sm"
+          div(
+            id = "export_ctrls",
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
+            shinyWidgets::actionBttn(
+              "group",
+              label = "Group",
+              style = "material-flat",
+              size = "sm"
+            )
           )
         ),
         div(
@@ -55,6 +67,10 @@ app_ui <- function(request) {
           conditionalPanel(
             condition = "input.mode == 'Annotate'",
             annotate_ui("annotate")
+          ),
+          conditionalPanel(
+            condition = "input.mode == 'Export'",
+            annotate_ui("export")
           )
         )
       )

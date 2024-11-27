@@ -185,7 +185,7 @@ assemble_server <- function(id) {
     on("update_assemble_table", {
       reactable::updateReactable(
         "table",
-        data = rv$data  |>
+        data = rv$data |>
           dplyr::mutate(
             output = dplyr::case_when(
               assemble_switch > 1 ~ "output",
@@ -413,7 +413,7 @@ assemble_server <- function(id) {
         dplyr::rows_update(
           update,
           by = "ID"
-        )  |>
+        ) |>
         dplyr::mutate(
           output = dplyr::case_when(
             assemble_switch > 1 ~ "output",
@@ -563,13 +563,23 @@ assemble_server <- function(id) {
 
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {
-      file.path(
+      pth <- file.path(
         session$userData$dir_out,
         rv$data$ID[as.numeric(input$output)],
         "assemble",
         rv$data$assemble_opts[as.numeric(input$output)]
-      ) |>
-        utils::browseURL()
+      )
+      req(file.exists(pth))
+      if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
+        owd <- setwd(pth)
+        later::later(function() {
+          rstudioapi::executeCommand("goToWorkingDir")
+          setwd(owd)
+        })
+        req(F)
+      } else {
+        utils::browseURL(pth)
+      }
     })
 
     # Open Assembly Details ----
