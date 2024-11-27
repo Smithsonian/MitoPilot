@@ -56,19 +56,18 @@ app_server <- function(input, output, session) {
   observeEvent(input$run_modal, {
     trigger("run_modal")
   })
-  # Group
-  init("pregroup")
-  observeEvent(input$pregroup, {
-    trigger("pregroup")
-  })
-  init("group")
+  # Export
   observeEvent(input$group, {
     trigger("group")
   })
+  observeEvent(input$export, {
+    trigger("export")
+  })
 
   # Sub-modules ----
-  mod_run_pipeline_server("run")
+  pipeline_server("run")
   assemble_server("assemble")
   annotate_server("annotate")
-  # mod_Submit_server("Submit", grv)
+  export_server("export")
+
 }

@@ -14,7 +14,11 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(ID, topology, structure) |>
     dplyr::left_join(dplyr::tbl(db, "samples"), by = "ID") |>
+    dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
-    dplyr::collect()
+    dplyr::collect() |>
+    dplyr::mutate(
+      structure = stringr::str_replace_all(structure, "trn[A-Z]", "•")
+    )
 
 }

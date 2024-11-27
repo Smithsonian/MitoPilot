@@ -422,7 +422,8 @@ annotations_details_server <- function(id, rv) {
       shinyWidgets::confirmSweetAlert(
         inputId = ns("confirm_delete"),
         title = "Delete annotation",
-        text = "This will completely remove the selected annotation. Details of the gene name and position of the deleted annotation will be added to the notes section."
+        text = "This will completely remove the selected annotation. Details of the gene name and position of the deleted annotation will be added to the notes section.",
+        btn_colors = c("#0056b3", "#0056b3")
       )
     })
     observeEvent(input$confirm_delete, {

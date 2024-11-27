@@ -18,16 +18,16 @@ app_ui <- function(request) {
             label = "",
             choices = c("Assemble", "Annotate", "Export")
           ),
+          shinyWidgets::actionBttn(
+            "refresh",
+            label = NULL,
+            icon = icon("sync"),
+            style = "material-flat",
+            size = "sm"
+          ),
           div(
             id = "ctrls",
             style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-            shinyWidgets::actionBttn(
-              "refresh",
-              label = NULL,
-              icon = icon("sync"),
-              style = "material-flat",
-              size = "sm"
-            ),
             shinyWidgets::actionBttn(
               "state",
               label = "State",
@@ -53,6 +53,12 @@ app_ui <- function(request) {
             shinyWidgets::actionBttn(
               "group",
               label = "Group",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "export",
+              label = "Export Data",
               style = "material-flat",
               size = "sm"
             )

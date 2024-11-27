@@ -1,7 +1,7 @@
 #' run_pipeline Server Functions
 #'
 #' @noRd
-mod_run_pipeline_server <- function(id) {
+pipeline_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -107,7 +107,7 @@ mod_run_pipeline_server <- function(id) {
         args = c(nf_cmd(), "-ansi-log"),
         stdout = "|",
         stderr = "|",
-        env = c(Sys.getenv(), NXF_ANSI_SUMMARY = TRUE,
+        env = c("current", NXF_ANSI_SUMMARY = TRUE,
                SGE = "/cm/shared/apps/uge/8.8.1/age",
                SGE_ARCH = "lx-amd64",
                SGE_CELL = "age",

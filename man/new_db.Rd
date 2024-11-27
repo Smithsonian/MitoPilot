@@ -8,8 +8,9 @@ new_db(
   db_path = file.path(here::here(), ".sqlite"),
   mapping_fn = NULL,
   mapping_id = "ID",
+  mapping_taxon = "Taxon",
   assemble_cpus = 6,
-  assemble_memory = 16,
+  assemble_memory = 8,
   seeds_db = glue::glue("/ref_dbs/getOrganelle/seeds/fish_mito.fasta"),
   labels_db = glue::glue("/ref_dbs/getOrganelle/labels/fish_mito.fasta"),
   getOrganelle =
@@ -61,6 +62,9 @@ new_db(
 
 \item{mapping_id}{Column name of the mapping file to use as the primary key}
 
+\item{mapping_taxon}{Column name of the mapping file contaning a Taxonomic
+identifier (eg, species name)}
+
 \item{assemble_cpus}{Default # cpus for assembly}
 
 \item{assemble_memory}{default memory (GB) for assembly}
@@ -74,8 +78,6 @@ new_db(
 \item{annotate_cpus}{Default # cpus for annotation}
 
 \item{annotate_memory}{Default memory (GB) for annotation}
-
-\item{mitos_refDb}{Default mitos2 reference database}
 }
 \description{
 Initialize a new project database
