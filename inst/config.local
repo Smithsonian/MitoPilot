@@ -43,7 +43,6 @@ params {
     coverage {
         cpus = 4
         memory = 8
-        clusterOptions = null
         container = process.container
         executor = process.executor
     }
