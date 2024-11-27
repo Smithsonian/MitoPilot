@@ -1,9 +1,9 @@
 #' Feature not ready message
 #' @noRd
-coming_soon <- function() {
+coming_soon <- function(text = "This feature is not yet implemented.") {
   shinyWidgets::sendSweetAlert(
     title = "Coming soon...",
-    text = "This feature is not yet implemented."
+    text = text
   )
 }
 

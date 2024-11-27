@@ -43,7 +43,8 @@ get_top_hits <- function(
     hits_refSeq <- stringr::str_glue(
       "run -n {condaenv}",
       "echo -e '{query}' |",
-      "blastp -db {ref_db}",
+      "blastp ",
+      "-db {ref_db}",
       "-best_hit_score_edge 0.01",
       "-max_hsps 1",
       "-qcov_hsp_perc 80",
@@ -122,3 +123,4 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
     })
   }
 }
+

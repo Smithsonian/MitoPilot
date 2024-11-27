@@ -93,15 +93,16 @@ annotations_details_server <- function(id, rv) {
         )
     })
     ## Table selection ----
+    sel <- reactiveVal("init")
     selected <- reactive({
       sel <- reactable::getReactableState("table", "selected")
-      shinyjs::toggle("aln_ctlr_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
+      shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
       # Check for unsaved edits
       isolate({
         if (identical(sel, rv$editing$idx)) {
           return(sel)
         }
-        if (!identical(rv$editing$translation, rv$editing$backup$translation)) {
+        if (!is.null(rv$editing$backup$translation) && rv$annotations$translation[sel] != rv$editing$backup$translation) {
           shinyWidgets::sendSweetAlert(
             title = "Unsaved Edits!",
             text = "Discard or save edits before selecting a new annotation"
@@ -112,14 +113,13 @@ annotations_details_server <- function(id, rv) {
           )
           return(rv$editing$idx)
         }
+        rv$alignment <- rv$local_hits <- NULL
         if (rv$annotations$type[sel] == "PCG" & length(rv$alignment) != 0) {
           trigger("align_now")
         } else {
           toggleDetails(ns("alignment_div"), FALSE)
-          rv$alignment <- NULL
         }
       })
-      shinyWidgets::updateSwitchInput(inputId = "edit_mode", value = FALSE)
       return(sel)
     })
 
@@ -157,7 +157,7 @@ annotations_details_server <- function(id, rv) {
 
     # Close Modal ----
     observeEvent(input$close, {
-      if (!identical(rv$editing$translation, rv$editing$backup$translation)) {
+      if (!is.null(rv$editing$backup$translation) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
           text = "Discard or save edits before selecting a new annotation"
@@ -174,7 +174,7 @@ annotations_details_server <- function(id, rv) {
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
-      if (!identical(rv$editing$translation, rv$editing$backup$translation)) {
+      if (!is.null(rv$editing$backup$translation) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
           text = "Discard or save edits before selecting a new annotation"
@@ -301,14 +301,17 @@ annotations_details_server <- function(id, rv) {
     # MSA ----
     init("align_now")
     observeEvent(input$align, ignoreInit = T, {
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "local_blast",
+        value = FALSE
+      )
       trigger("align_now")
     })
     on("align_now", {
 
       req(rv$annotations$type[selected()] == "PCG")
 
-      hits <- rv$annotations$refHits[selected()] |>
-        json_parse(T)
+      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
 
       rv$alignment$seqs <- hits |>
         dplyr::pull(target, name = Taxon)
@@ -324,54 +327,68 @@ annotations_details_server <- function(id, rv) {
       rv$alignment$id <- stringr::str_glue(
         "<b>Max Similarity:</b> {round(max(hits$similarity),1)}%"
       )
+      rv$alignment$stop <- stringr::str_glue(
+        "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
+      )
+      rv$alignment$start <- stringr::str_glue(
+        "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
+      )
+      rv$alignment$internal_stop <- ifelse(
+        stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
+        paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
+        ""
+      )
     })
-    output$msa_div <- renderUI({
-      req(rv$alignment$aln)
-      isolate({
-        rv$alignment$stop <- stringr::str_glue(
-          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
-        )
-        rv$alignment$start <- stringr::str_glue(
-          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
-        )
-        rv$alignment$internal_stop <- ifelse(
-          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
-          ""
-        )
-        msa <- msaR::renderMsaR(
-          msaR::msaR(
-            rv$alignment$aln,
-            overviewbox = FALSE,
-            seqlogo = FALSE,
-            menu = FALSE,
-            conservation = TRUE,
-            labelNameLength = 150,
-            colorscheme = "zappo",
-            rowheight = 20,
-            alignmentHeight = min(rv$alignment$alignmentHeight, 200)
-          )
-        )
-
-        # Scroll right if editing stops
-        if (rv$editing$stop_aln %||% FALSE) {
-          session$sendCustomMessage("rightScroll", list(foo = "bar"))
-        }
-        return({
-          div(
-            style = "margin: 30px 5px 5px 5px;",
-            div(
-              style = "display: flex; gap: 25px;",
-              p(HTML(isolate(rv$alignment$id))),
-              p(HTML(isolate(rv$alignment$start))),
-              p(HTML(isolate(rv$alignment$stop))),
-              p(HTML(isolate(rv$alignment$internal_stop)))
-            ),
-            msa
-          ) |> tagList()
-        })
-      })
+    output$msa_header <- renderUI({
+      div(
+        style = "display: flex; gap: 25px;",
+        p(HTML(rv$alignment$id)),
+        p(HTML(rv$alignment$start)),
+        p(HTML(rv$alignment$stop)),
+        p(HTML(rv$alignment$internal_stop))
+      )
     })
+    output$msa <- msaR::renderMsaR({
+      msaR::msaR(
+        rv$alignment$aln,
+        overviewbox = FALSE,
+        seqlogo = FALSE,
+        menu = FALSE,
+        conservation = TRUE,
+        labelNameLength = 150,
+        colorscheme = "zappo",
+        rowheight = 20,
+        alignmentHeight = min(rv$alignment$alignmentHeight, 200)
+      )
+    })
+    # output$msa_div <- renderUI({
+    #   req(rv$alignment$aln)
+    #   isolate({
+    #
+    #     msa <- msaR::renderMsaR(
+    #
+    #     )
+    #
+    #     # Scroll right if editing stops
+    #     if (rv$editing$stop_aln %||% FALSE) {
+    #       session$sendCustomMessage("rightScroll", list(foo = "bar"))
+    #     }
+    #     return({
+    #       div(
+    #         id = ns("msa_div"),
+    #         style = "margin: 30px 5px 5px 5px;",
+    #         div(
+    #           style = "display: flex; gap: 25px;",
+    #           p(HTML(isolate(rv$alignment$id))),
+    #           p(HTML(isolate(rv$alignment$start))),
+    #           p(HTML(isolate(rv$alignment$stop))),
+    #           p(HTML(isolate(rv$alignment$internal_stop)))
+    #         ),
+    #         msa
+    #       ) |> tagList()
+    #     })
+    #   })
+    # })
 
     # Notes ----
     notes_update <- debounce(reactive(input$notes), 500)
@@ -682,7 +699,6 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- codon
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
-      rv$alignment$aln <- NULL
       trigger("re_align")
     })
     ## Edit start-minus ----
@@ -725,7 +741,6 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
-      rv$alignment$aln <- NULL
       trigger("re_align")
     })
     ## Edit stop-add ----
@@ -735,7 +750,7 @@ annotations_details_server <- function(id, rv) {
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
-        pos2 <- pos2 + (3-nchar(rv$annotations$stop_codon[selected()]))
+        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos2 <- pos2 + 3
           req(pos2 <= rv$editing$assembly@ranges@width)
@@ -761,7 +776,7 @@ annotations_details_server <- function(id, rv) {
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 - (3-nchar(rv$annotations$stop_codon[selected()]))
+        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos1 <- pos1 - 3
           req(pos1 >= 1)
@@ -791,7 +806,6 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$stop_codon[selected()] <- unname(codon)
-      rv$alignment$aln <- NULL
       trigger("re_align")
     })
     ## Edit stop-minus ----
@@ -856,18 +870,15 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
-      rv$alignment$aln <- NULL
       trigger("re_align")
     })
 
     ## RE-align after edit ----
     init("re_align")
     on("re_align", {
-
       ### Calculate new stats ----
       focal <- rv$annotations$translation[selected()]
-      refHits <- rv$annotations$refHits[selected()] |>
-        json_parse(T) |>
+      refHits <- {rv$local_hits %||% json_parse(rv$annotations$refHits[selected()],T)} |>
         dplyr::mutate(
           pctid = compare_aa(focal, target, "pctId"),
           similarity = compare_aa(focal, target, "similarity"),
@@ -897,7 +908,8 @@ annotations_details_server <- function(id, rv) {
         dplyr::arrange(pos1)
       reactable::updateReactable(
         "table",
-        data = rv$annotations
+        data = rv$annotations,
+        selected = selected()
       )
       shinyjs::hide("edit_mode_ctrls")
       shinyjs::hide("save_edits")
@@ -932,6 +944,66 @@ annotations_details_server <- function(id, rv) {
       shinyjs::show("edit_mode")
       rv$editing <- NULL
     })
+
+    # Local Blast ----
+    observeEvent(input$local_blast, ignoreInit = T, {
+      req(input$local_blast)
+      req(is.null(rv$local_hits))
+      # Check for local blast db
+      rv$local_db <- rv$local_db %||% getOption("MitoPilot.local.db")
+      if (length(rv$local_db) == 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "No local database found!",
+          text = "Run options('MitoPilot.local.db' = '/path/to/local/blastp/db') - add to .Rprofile for persistence."
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "local_blast",
+          value = FALSE
+        )
+        req(F)
+      }
+      # Check for edit mode
+      if (length(rv$editing) > 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "In edit mode!"
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "local_blast",
+          value = !input$local_blast
+        )
+        req(F)
+      }
+      shinyjs::toggle("refresh_blast", condition = input$local_blast)
+      shinyjs::click("refresh_blast")
+    })
+    observeEvent(input$local_blast, ignoreInit = T, {
+      req(!input$local_blast)
+      req(!is.null(rv$local_hits))
+      # Check for edit mode
+      if (length(rv$editing) > 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "In edit mode!"
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "local_blast",
+          value = !input$local_blast
+        )
+        req(F)
+      }
+      rv$local_hits <- NULL
+      trigger("align_now")
+      shinyjs::toggle("refresh_blast", condition = input$local_blast)
+    })
+    observeEvent(input$run_blast, ignoreInit = T, {
+      rv$alignment <- NULL
+      rv$local_hits <- get_top_hits_local(
+        req(rv$local_db),
+        rv$annotations$translation[selected()]
+      )
+      trigger("align_now")
+    })
+
+
   })
 }
 
@@ -969,74 +1041,99 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         onclick = sprintf("Shiny.onInputChange('%s', Math.random())", ns("align"))
       ),
       div(
-        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em; margin-top: 0.5em; height: 50px;",
-        id = ns("aln_ctlr_div"),
+        id = ns("aln_div"),
         div(
-          style = "gap: 0.5em;",
-          shinyWidgets::actionBttn(
-            ns("edit_mode"),
-            label = "Edit",
-            style = "material-flat",
-            size = "xs",
-            icon = icon("edit")
+          id = ns("aln_ctlr_div"),
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em; margin-top: 0.5em; height: 50px;",
+          div(
+            style = "gap: 0.5em;",
+            shinyWidgets::actionBttn(
+              ns("edit_mode"),
+              label = "Edit",
+              style = "material-flat",
+              size = "xs",
+              icon = icon("edit")
+            ),
+            shinyWidgets::actionBttn(
+              ns("save_edits"),
+              label = "Save",
+              style = "material-flat",
+              size = "xs",
+              icon = icon("save")
+            ) |> shinyjs::hidden(),
+            shinyWidgets::actionBttn(
+              ns("discard_edits"),
+              label = "Reset",
+              style = "material-flat",
+              size = "xs",
+              icon = icon("rotate-left")
+            ) |> shinyjs::hidden()
           ),
-          shinyWidgets::actionBttn(
-            ns("save_edits"),
-            label = "Save",
-            style = "material-flat",
-            size = "xs",
-            icon = icon("save")
+          div(
+            id = ns("edit_mode_ctrls"),
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 3em;",
+            div(
+              style = "display: flex; flex-flow: row nowrap; align-items: center;",
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
+                tags$i(class = "fas fa-minus fa-xs")
+              ),
+              div(style = "margin: 00.5em;", "START"),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
+                tags$i(class = "fas fa-plus fa-xs")
+              )
+            ),
+            div(
+              style = "display: flex; flex-flow: row nowrap; align-items: center;",
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
+                tags$i(class = "fas fa-minus fa-xs")
+              ),
+              div(style = "margin: 00.5em;", "STOP"),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add')}', 'plus', {{priority: 'event'}})"),
+                tags$i(class = "fas fa-plus fa-xs")
+              )
+            ),
+            div(
+              style = "padding-top: 14px;",
+              shinyWidgets::prettyCheckbox(
+                ns("single_codon"),
+                label = "single codon",
+                status = "primary",
+                inline = TRUE
+              )
+            )
           ) |> shinyjs::hidden(),
-          shinyWidgets::actionBttn(
-            ns("discard_edits"),
-            label = "Reset",
-            style = "material-flat",
-            size = "xs",
-            icon = icon("rotate-left")
-          ) |> shinyjs::hidden()
+          div(
+            style = "display: flex; flex: 1; justify-content: right; gap: 0; align-items: center; padding-right: 2em;",
+            shinyWidgets::prettyCheckbox(
+              ns("local_blast"),
+              label = "Local blast",
+              status = "primary",
+              inline = TRUE
+            ),
+            tags$i(
+              id = ns("refresh_blast"),
+              class = "fas fa-sync grow",
+              style="margin-bottom: 15px; margin-left: -15px;",
+              onclick = stringr::str_glue(
+                "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
+              )
+            ) |> shinyjs::hidden()
+          )
         ),
         div(
-          id = ns("edit_mode_ctrls"),
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 3em;",
-          div(
-            style = "display: flex; flex-flow: row nowrap; align-items: center;",
-            tags$button(
-              class = "icon-circle grow",
-              onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
-              tags$i(class = "fas fa-minus fa-xs")
-            ),
-            div(style = "margin: 00.5em;", "START"),
-            tags$button(
-              class = "icon-circle grow",
-              onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
-              tags$i(class = "fas fa-plus fa-xs")
-            )
-          ),
-          div(
-            style = "display: flex; flex-flow: row nowrap; align-items: center;",
-            tags$button(
-              class = "icon-circle grow",
-              onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
-              tags$i(class = "fas fa-minus fa-xs")
-            ),
-            div(style = "margin: 00.5em;", "STOP"),
-            tags$button(
-              class = "icon-circle grow",
-              onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add')}', 'plus', {{priority: 'event'}})"),
-              tags$i(class = "fas fa-plus fa-xs")
-            )
-          ),
-          div(
-            style = "padding-top: 14px;",
-            shinyWidgets::prettyCheckbox(
-              ns("single_codon"),
-              label = "single codon",
-              inline = TRUE
-            )
-          )
-        ) |> shinyjs::hidden()
-      ),
-      uiOutput(ns("msa_div")),
+          style = "margin: 30px 5px 5px 5px;",
+          uiOutput(ns("msa_header")),
+          msaR::msaROutput(ns("msa"))
+        )
+      ) |> shinyjs::hidden()
     ),
     tags$details(
       tags$summary("Notes"),
