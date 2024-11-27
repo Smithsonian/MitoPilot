@@ -11,15 +11,15 @@
 #' @param labels_db Path to the gotOrganelle labels database
 #' @param getOrganelle Default getOrganelle command line options
 #' @param annotate_cpus Default # cpus for annotation
-#' @param annotate_ref_db
-#' @param annotate_ref_dir
-#' @param mitos_opts
-#' @param trnaScan_opts
-#' @param curate_cpus
-#' @param curate_memory
-#' @param curate_target
-#' @param curate_params
 #' @param annotate_memory Default memory (GB) for annotation
+#' @param annotate_ref_db Default Mitos2 reference database
+#' @param annotate_ref_dir Default Mitos2 reference database directory
+#' @param mitos_opts Default MITOS2 command line options
+#' @param trnaScan_opts Default tRNAscan-SE command line options
+#' @param curate_cpus Default # cpus for curation
+#' @param curate_memory Default memory (GB) for curation
+#' @param curate_target Default target database for curation
+#' @param curate_params Default curation parameters
 #'
 #' @export
 #'
@@ -45,124 +45,8 @@ new_db <- function(
     curate_cpus = 4,
     curate_memory = 8,
     curate_target = "fish_mito",
-    curate_params = list(
-      ref_dbs = list(
-        default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas"
-      ),
-      hit_threshold = 90,
-      max_overlap = 0.25,
-      default_rules = list(
-        rRNA = list(
-          count = 1,
-          max_len = NA,
-          min_len = NA,
-          overlap = list(start = 0, stop = F)
-        ),
-        PCG = list(
-          count = 1,
-          max_len = NA,
-          min_len = NA,
-          overlap = list(start = 2, stop = F),
-          stop_codons = c("TAA", "TAG", "AGA", "AGG", "AG", "TA", "T"),
-          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC")
-        ),
-        tRNA = list(
-          count = 1,
-          max_len = NA,
-          min_len = NA
-        )
-      ),
-      rules = list(
-        ctrl = list(
-          count = 1,
-          type = "ctrl",
-          min_len = 350
-        ),
-        rrnL = list(
-          type = "rRNA",
-          max_len = 1850
-        ),
-        rrnS = list(
-          type = "rRNA",
-          max_len = 1000
-        ),
-        nad1 = list(
-          type = "PCG",
-          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "TTG")
-        ),
-        nad2 = list(
-          type = "PCG"
-        ),
-        cox1 = list(
-          type = "PCG",
-          overlap = list(start = 2, stop = T)
-        ),
-        cox2 = list(
-          type = "PCG",
-          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "TTG")
-        ),
-        atp8 = list(
-          type = "PCG",
-          overlap = list(start = 2, stop = T)
-        ),
-        atp6 = list(
-          type = "PCG",
-          overlap = list(start = 20, stop = F),
-          start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "CTG")
-        ),
-        cox3 = list(
-          type = "PCG"
-        ),
-        nad3 = list(
-          type = "PCG"
-        ),
-        nad4l = list(
-          type = "PCG",
-          overlap = list(start = 2, stop = T)
-        ),
-        nad4 = list(
-          type = "PCG",
-          overlap = list(start = 20, stop = F)
-        ),
-        nad5 = list(
-          type = "PCG",
-          overlap = list(start = 2, stop = T)
-        ),
-        nad6 = list(
-          type = "PCG",
-          overlap = list(start = 2, stop = T)
-        ),
-        cob = list(
-          type = "PCG"
-        ),
-        trnA = list(type = "tRNA"),
-        trnC = list(type = "tRNA"),
-        trnD = list(type = "tRNA"),
-        trnE = list(type = "tRNA"),
-        trnF = list(type = "tRNA"),
-        trnG = list(type = "tRNA"),
-        trnH = list(type = "tRNA"),
-        trnI = list(type = "tRNA"),
-        trnK = list(type = "tRNA"),
-        trnL = list(
-          type = "tRNA",
-          count = 2
-        ),
-        trnM = list(type = "tRNA"),
-        trnN = list(type = "tRNA"),
-        trnP = list(type = "tRNA"),
-        trnQ = list(type = "tRNA"),
-        trnR = list(type = "tRNA"),
-        trnS = list(
-          type = "tRNA",
-          count = 2
-        ),
-        trnT = list(type = "tRNA"),
-        trnV = list(type = "tRNA"),
-        trnW = list(type = "tRNA"),
-        trnY = list(type = "tRNA")
-      )
-    )) {
+    curate_params = NULL
+    ) {
   # Read mapping file
   if (is.null(mapping_fn)) {
     mapping_fn <- here::here("mapping.csv")
@@ -177,6 +61,11 @@ new_db <- function(
     stop("Duplicate IDs found in mapping file")
   }
 
+  # Load default curation parameters
+  if(is.null(curate_params)) {
+    curate_params <- do.call(paste0("params_", curate_target), list())
+  }
+
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db_path)
   on.exit(DBI::dbDisconnect(con))
@@ -186,7 +75,7 @@ new_db <- function(
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
-      submission_group = NA_character_
+      export_group = NA_character_
     )
   glue::glue_sql(
     "CREATE TABLE samples (

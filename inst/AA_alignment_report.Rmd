@@ -22,7 +22,7 @@ con <- DBI::dbConnect(RSQLite::SQLite(), dbname = params$db_path)
 group <- params$group
 
 annotations <- tbl(con, "samples") |>
-  filter(submission_group == !!group) |>
+  filter(export_group == !!group) |>
   select(ID) |>
   left_join(
     tbl(con, "annotations") |>

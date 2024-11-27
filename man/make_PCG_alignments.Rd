@@ -4,10 +4,12 @@
 \alias{make_PCG_alignments}
 \title{Generate HTML report woth PCG alignments}
 \usage{
-make_PCG_alignments(submission_group = NULL, db = NULL, out_path = NULL)
+make_PCG_alignments(export_group = NULL, db = NULL, out_path = NULL)
 }
 \arguments{
-\item{db_path}{}
+\item{export_group}{Name of the submission group}
+
+\item{db_path}{Path to the SQLite database}
 }
 \description{
 Generate HTML report woth PCG alignments

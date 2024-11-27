@@ -15,7 +15,7 @@ export_files <- function(
 
   if(length(group)==1){
     IDs <- dplyr::tbl(con, "samples") |>
-      dplyr::filter(submission_group == !!group) |>
+      dplyr::filter(export_group == !!group) |>
       dplyr::pull("ID")
     group_pth <- file.path(
       out_dir,
@@ -205,7 +205,7 @@ export_files <- function(
 
   if(length(group)==1 && generateAAalignments){
     make_PCG_alignments(
-      submission_group=group,
+      export_group=group,
       db=file.path(dirname(out_dir), ".sqlite"),
       out_path=group_pth
     )
@@ -215,25 +215,25 @@ export_files <- function(
 
 #' Generate HTML report woth PCG alignments
 #'
-#' @param submission_group
-#' @param db_path
+#' @param export_group Name of the submission group
+#' @param db_path Path to the SQLite database
 #'
 #' @export
 #'
 make_PCG_alignments <- function(
-    submission_group=NULL,
+    export_group=NULL,
     db=NULL,
     out_path=NULL
 ){
 
   rmarkdown::render(
     input = system.file("AA_alignment_report.Rmd", package='MitoPilot'),
-    output_file = stringr::str_glue("AA_alignments_{submission_group}.html"),
+    output_file = stringr::str_glue("AA_alignments_{export_group}.html"),
     output_dir = out_path,
     intermediates_dir = getwd(),
     knit_root_dir = getwd(),
     params = list(
-      group = submission_group,
+      group = export_group,
       db_path = db
     ))
 

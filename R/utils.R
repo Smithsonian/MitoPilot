@@ -119,3 +119,21 @@ add_cols <- function(dat, cols, .after = dplyr::everything()) {
     dplyr::bind_rows(dplyr::tibble(!!!cols[!names(cols) %in% names(dat)], .rows = 0)) |>
     dplyr::relocate(names(cols), .after = .after)
 }
+
+
+#' Recursively modify nested list
+#'
+#' @param l named list to modify
+#' @param alt named list of modifications
+#'
+#' @noRd
+modify_list_recursive <- function(l, alt){
+  purrr::iwalk(alt, ~{
+    if(is.list(.x)){
+      l[[.y]] <<- modify_params_recursive(l[[.y]], .x)
+    } else {
+      l[[.y]] <<- .x
+    }
+  })
+  return(params)
+}

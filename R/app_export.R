@@ -57,7 +57,7 @@ export_server <- function(id){
           ID = colDef(show = T, width = 120, sticky = "left"),
           topology = colDef(show = T, width = 100),
           structure = colDef(show = T, maxWidth = 600),
-          submission_group = colDef(name = "Group", sticky = "right")
+          export_group = colDef(name = "Group", sticky = "right")
         )
       )
     })
@@ -81,7 +81,7 @@ export_server <- function(id){
     on("group", {
       req(session$userData$mode == "Export")
       req(selected())
-      if(any(!is.na(rv$data$submission_group[selected()]))) {
+      if(any(!is.na(rv$data$export_group[selected()]))) {
         shinyWidgets::confirmSweetAlert(
           title = "Re-assign group?",
           text = "Some selected samples are already assigned to an export group. Assigning them to a new group will not automatically remove them from previously generated export files. Do you want to continue?",
@@ -103,7 +103,7 @@ export_server <- function(id){
       rv$updating <- rv$data |> dplyr::slice(selected())
       topologies <- rv$updating |> dplyr::pull(topology) |> unique()
       structures <- rv$updating |> dplyr::pull(structure) |> unique()
-      group_current <- rv$updating |> dplyr::pull(submission_group) |> unique()
+      group_current <- rv$updating |> dplyr::pull(export_group) |> unique()
       modalDialog(
         title = "Submission Group",
         size = "l",
@@ -120,7 +120,7 @@ export_server <- function(id){
         selectizeInput(
           ns("group_name"),
           label = "Group Name:",
-          choices = c("", sort(unique(rv$data$submission_group))),
+          choices = c("", sort(unique(rv$data$export_group))),
           selected = character(0),
           options = list(
             create = TRUE,
@@ -137,12 +137,12 @@ export_server <- function(id){
 
     # Make Group ----
     observeEvent(input$make_group, {
-      rv$updating$submission_group <- req(input$group_name)
+      rv$updating$export_group <- req(input$group_name)
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[,c("ID", "submission_group")], by = "ID")
+        dplyr::rows_update(rv$updating[,c("ID", "export_group")], by = "ID")
       dplyr::tbl(session$userData$con, "samples") |>
         dplyr::rows_update(
-          rv$updating[,c("ID", "submission_group")],
+          rv$updating[,c("ID", "export_group")],
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
@@ -156,7 +156,7 @@ export_server <- function(id){
     init("export")
     on("export", {
       req(nrow(rv$data) > 0)
-      choices <- sort(unique(rv$data$submission_group))
+      choices <- sort(unique(rv$data$export_group))
       req(length(choices) > 0)
       modalDialog(
         title = div(
