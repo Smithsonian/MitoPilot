@@ -9,6 +9,8 @@ docker {
 process {
   executor = 'local'
   container = '<<CONTAINER_ID>>'
+  cpus = { opts.cpus } // set number of CPUs based on value pulled from SQL database  
+  memory = { opts.memory.GB * opts.cpus } // set amount of memory based on value pulled from SQL database
 }
 
 // SQL database configuration (https://github.com/nextflow-io/nf-sqldb)
@@ -41,6 +43,7 @@ params {
     coverage {
         cpus = 4
         memory = 8
+        clusterOptions = null
         container = process.container
         executor = process.executor
     }
