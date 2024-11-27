@@ -48,6 +48,9 @@ annotate_server <- function(id) {
       isolate(req(rv$data)) |>
         reactable(
           compact = TRUE,
+          language = reactable::reactableLang(
+            noData = "No Completed / Locked Assemblies Found"
+          ),
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
           onClick = "select",
@@ -265,6 +268,7 @@ annotate_server <- function(id) {
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
+      trigger("refresh_export")
     })
 
     # Set Annotate Options ----

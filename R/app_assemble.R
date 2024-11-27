@@ -288,6 +288,7 @@ assemble_server <- function(id) {
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_assemble_table")
       trigger("refresh_annotate")
+      trigger("refresh_export")
     })
 
     # Set Pre-process Opts ----
@@ -354,6 +355,7 @@ assemble_server <- function(id) {
             inputId = "editing_opts_indirect",
             title = "Editing beyond selection",
             text = "You are attempting to edit pre-processing options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
           )
         }
       } else {
@@ -500,6 +502,7 @@ assemble_server <- function(id) {
             inputId = "editing_assemble_opts_indirect",
             title = "Editing beyond selection",
             text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
           )
         }
       } else {

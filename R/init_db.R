@@ -3,14 +3,23 @@
 #' @param db_path Path to the new database file
 #' @param mapping_fn Path to the mapping file
 #' @param mapping_id Column name of the mapping file to use as the primary key
+#' @param mapping_taxon Column name of the mapping file contaning a Taxonomic
+#'   identifier (eg, species name)
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
 #' @param seeds_db Path to the gotOrganelle seeds database
 #' @param labels_db Path to the gotOrganelle labels database
 #' @param getOrganelle Default getOrganelle command line options
 #' @param annotate_cpus Default # cpus for annotation
+#' @param annotate_ref_db
+#' @param annotate_ref_dir
+#' @param mitos_opts
+#' @param trnaScan_opts
+#' @param curate_cpus
+#' @param curate_memory
+#' @param curate_target
+#' @param curate_params
 #' @param annotate_memory Default memory (GB) for annotation
-#' @param mitos_refDb Default mitos2 reference database
 #'
 #' @export
 #'
@@ -18,6 +27,7 @@ new_db <- function(
     db_path = file.path(here::here(), ".sqlite"),
     mapping_fn = NULL,
     mapping_id = "ID",
+    mapping_taxon = "Taxon",
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 16,
@@ -172,12 +182,12 @@ new_db <- function(
   on.exit(DBI::dbDisconnect(con))
 
   # Metadata table ----
-  if (mapping_id != "ID") {
-    mapping <- mapping |>
-      dplyr::mutate(
-        ID = .data[[ID_col]]
-      )
-  }
+  mapping <- mapping |>
+    dplyr::mutate(
+      ID = .data[[mapping_id]],
+      Taxon = .data[[mapping_taxon]],
+      submission_group = NA_character_
+    )
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},
