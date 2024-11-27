@@ -10,7 +10,7 @@ new_db(
   mapping_id = "ID",
   mapping_taxon = "Taxon",
   assemble_cpus = 6,
-  assemble_memory = 16,
+  assemble_memory = 8,
   seeds_db = glue::glue("/ref_dbs/getOrganelle/seeds/fish_mito.fasta"),
   labels_db = glue::glue("/ref_dbs/getOrganelle/labels/fish_mito.fasta"),
   getOrganelle =

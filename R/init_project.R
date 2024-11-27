@@ -8,7 +8,7 @@
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param executor The executor to use for running the nextflow pipeline. Must
-#'   be one of "local" or "awsbatch".
+#'   be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
 #'   directory (default = TRUE). This option has no effect if not running
 #'   interactively in RStudio.
@@ -34,7 +34,7 @@ new_project <- function(
     force = FALSE,
     ...) {
   # Validate executor ----
-  if (executor %nin% c("local", "awsbatch")) {
+  if(executor %nin% c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA")){
     stop("Invalid executor.")
   }
 

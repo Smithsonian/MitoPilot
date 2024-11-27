@@ -28,7 +28,7 @@ columns `fwd` and `rev` specifying the names of the raw paired read inputs.}
 the unique sample identifiers (default = "ID").}
 
 \item{executor}{The executor to use for running the nextflow pipeline. Must
-be one of "local" or "awsbatch".}
+be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
 
 \item{container}{The docker container to use for pipeline execution.}
 

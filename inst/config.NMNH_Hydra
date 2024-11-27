@@ -2,15 +2,24 @@ plugins {
 	id 'nf-sqldb@0.5.0'
 }
 
-docker {
+singularity {
   enabled = true
 }
 
 process {
-  executor = 'local'
+  executor = 'sge'
   container = '<<CONTAINER_ID>>'
+  //queue = 'sThC.q'
+  penv = 'mthread'
+  // check if "himem" is needed (requesting more than 8 Gb RAM per CPU)
+  clusterOptions = { 
+    if (opts.memory > 8) { 
+      "-l mres=${opts.memory * opts.cpus}G,h_data=${opts.memory}G,h_vmem=${opts.memory}G,himem -S /bin/bash" 
+    } else {
+      "-l mres=${opts.memory * opts.cpus}G,h_data=${opts.memory}G,h_vmem=${opts.memory}G -S /bin/bash"
+    }
+  }
   cpus = { opts.cpus } // set number of CPUs based on value pulled from SQL database  
-  memory = { opts.memory.GB * opts.cpus } // set amount of memory based on value pulled from SQL database
 }
 
 // SQL database configuration (https://github.com/nextflow-io/nf-sqldb)
@@ -24,10 +33,10 @@ sql {
 
 // Pipeline parameters
 params {
-    rawDir = '<<RAW_DIR>>'
-    publishDir = 'out'
-    minDepth = <<MIN_DEPTH>>
-    minAssemblyLength = 500
+    rawDir = '<<RAW_DIR>>'                  // Directory containing raw data
+    publishDir = 'out'                      // Directory to publish pipeline outputs
+    minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
+    minAssemblyLength = 500                 // min contig size to retain for annotation
     genetic_code = 2
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
@@ -42,7 +51,7 @@ params {
     }
     coverage {
         cpus = 4
-        memory = 8
+        clusterOptions = "-l mres=8G,h_data=8G,h_vmem=8G -S /bin/bash"
         container = process.container
         executor = process.executor
     }

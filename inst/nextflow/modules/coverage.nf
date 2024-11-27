@@ -1,5 +1,4 @@
 process coverage {
-
     executor params.coverage.executor
     container params.coverage.container
 
@@ -7,7 +6,8 @@ process coverage {
 
     errorStrategy 'finish'
     cpus {params.coverage.cpus}
-    memory {params.coverage.memory.GB}
+    memory = params.coverage.memory ?: 'null'
+    clusterOptions = params.coverage.clusterOptions ?: 'null'
 
     tag "${id}"
 

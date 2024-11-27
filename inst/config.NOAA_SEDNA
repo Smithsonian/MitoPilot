@@ -2,13 +2,14 @@ plugins {
 	id 'nf-sqldb@0.5.0'
 }
 
-docker {
+singularity {
   enabled = true
 }
 
 process {
-  executor = 'local'
+  executor = 'slurm'
   container = '<<CONTAINER_ID>>'
+  queue = 'standard'
   cpus = { opts.cpus } // set number of CPUs based on value pulled from SQL database  
   memory = { opts.memory.GB * opts.cpus } // set amount of memory based on value pulled from SQL database
 }
@@ -24,37 +25,32 @@ sql {
 
 // Pipeline parameters
 params {
-    rawDir = '<<RAW_DIR>>'
-    publishDir = 'out'
-    minDepth = <<MIN_DEPTH>>
-    minAssemblyLength = 500
-    genetic_code = 2
-    mitos_condaenv = 'mitos'
-    trnaScan_condaenv = 'trnascan-se'
+    rawDir = '<<RAW_DIR>>'                  // Directory containing raw data
+    publishDir = 'out'                      // Directory to publish pipeline outputs
+    minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
+    minAssemblyLength = 500                 // min contig size to retain for annotation
     preprocess {
+        take = -1
+        maxRetries = 0
         container = process.container
         executor = process.executor
     }
     assemble {
+        take = -1
         maxRetries = 1
         container = process.container
         executor = process.executor
     }
     coverage {
+        take = -1
         cpus = 4
-        memory = 8
+        memory = "8 GB"
+        maxRetries = 0
         container = process.container
         executor = process.executor
     }
     annotate {
-        container = process.container
-        executor = process.executor
-    }
-    curate {
-        container = process.container
-        executor = process.executor
-    }
-    validate {
+        maxRetries = 0
         container = process.container
         executor = process.executor
     }

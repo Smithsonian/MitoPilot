@@ -13,7 +13,7 @@
 #'   10GB and will take some time to complete. By default a set of smaller
 #'   pre-filtered input files will be fetched from the MitoPilot github repo.
 #' @param executor The executor to use for running the nextflow pipeline. Must
-#'   be one of "local" (default) or "awsbatch".
+#'   be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
 #' @param container The container to use for running the pipeline.
 #' @param config (optional) provide a path to an existing custom nextflow config
 #'   file. If not provided a config file template will be created based on the
