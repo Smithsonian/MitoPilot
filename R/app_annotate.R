@@ -273,7 +273,153 @@ annotate_server <- function(id) {
 
     # Set Annotate Options ----
     observeEvent(input$set_annotate_opts, {
-      coming_soon()
+      row <- as.numeric(input$set_annotate_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      } else {
+        selected <- c(row, selected()) |> unique()
+      }
+      req(all(rv$data$annotate_lock[selected] == 0))
+      rv$updating <- rv$data |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      annotate_opts_modal(rv)
+    })
+    observeEvent(input$annotate_opts, ignoreInit = T, {
+      exists <- input$annotate_opts %in% rv$annotate_opts$annotate_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_annotate_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$annotate_opts[rv$annotate_opts$annotate_opts == input$annotate_opts, ]
+        updateNumericInput(
+          inputId = "annotate_opts_cpus",
+          value = cur$cpus
+        )
+        updateNumericInput(
+          inputId = "annotate_opts_memory",
+          value = cur$memory
+        )
+        updateTextAreaInput(
+          inputId = "mitos_opts",
+          value = cur$mitos_opts
+        )
+        updateSelectizeInput(
+          inputId = "mitos_ref_dir",
+          selected = cur$ref_dir,
+          choices = unique(rv$annotate_opts$ref_dir),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        )
+        updateSelectizeInput(
+          inputId = "mitos_ref_db",
+          selected = cur$ref_db,
+          choices = unique(rv$annotate_opts$ref_db),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        )
+        updateTextInput(
+          inputId = "trnaScan_opts",
+          value = cur$trnaScan_opts
+        )
+      }
+    })
+    observeEvent(input$edit_annotate_opts, ignoreInit = T, {
+      shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotatee_opts)
+      shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
+      # Check if editing opts that apply beyond selection
+      if (input$edit_annotate_opts && input$annotate_opts %in% rv$data$annotate_opts) {
+        rv$updating_indirect <- rv$data |>
+          dplyr::filter(annotate_opts == input$annotate_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        # Prevent editing opts that apply to locked samples
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
+          )
+          shinyWidgets::updatePrettyCheckbox(
+            inputId = "edit_annotate_opts",
+            value = FALSE
+          )
+          req(F)
+        }
+        # Confirm editing opts that apply beyond selection
+        if (nrow(rv$updating_indirect) > 0L) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_annotate_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
+          )
+        }
+      } else {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    # Confirm editing opts that apply beyond selection
+    observeEvent(input$editing_annotate_opts_indirect, ignoreInit = T, {
+      if (!input$editing_annotate_opts_indirect) {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "edit_annotate_opts",
+          value = FALSE
+        )
+      }
+    })
+    ## Save Changes ----
+    observeEvent(input$update_annotate_opts, ignoreInit = T, {
+      ## Add to params table if new or editing ----
+      if (input$edit_annotate_opts) {
+        dplyr::tbl(session$userData$con, "annotate_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              annotate_opts = req(input$annotate_opts),
+              cpus = req(input$annotate_opts_cpus),
+              memory = req(input$annotate_opts_memory),
+              mitos_opts = req(input$mitos_opts),
+              ref_dir = req(input$mitos_ref_dir),
+              ref_db = req(input$mitos_ref_db),
+              trnaScan_opts = req(input$trnaScan_opts)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "annotate_opts"
+          )
+        rv$annotate_opts <- dplyr::tbl(session$userData$con, "annotate_opts") |>
+          dplyr::collect()
+      }
+      ## Update Annotate Table ----
+      update <- data.frame(
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
+        annotate_opts = input$annotate_opts,
+        annotate_switch = 1
+      )
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          update,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          update,
+          by = "ID"
+        )
+      rv$updating <- rv$updating_indirect <- NULL
+      removeModal()
+      trigger("update_annotate_table")
     })
 
     # Set Curate Options ----
