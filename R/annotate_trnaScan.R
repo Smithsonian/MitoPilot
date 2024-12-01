@@ -75,7 +75,7 @@ annotate_trnaScan <- function(
       ) |>
         setNames(names(assembly)) |>
         Biostrings::reverseComplement()
-      assembly@metadata["rotate_to"] <- -(start$begin + 1)
+      assembly@metadata["rotate_to"] <- -start$begin
     }
 
     unlink(out)

@@ -19,8 +19,8 @@
 #' @export
 #'
 annotate <- function(
-    assembly_fn = "~/Jonah/MitoPilot-testing/out/SRR22396843/assemble/default/SRR22396843_assembly_1.fasta",
-    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR22396843/assemble/default/SRR22396843_assembly_1_coverageStats.csv",
+    assembly_fn = "~/Jonah/MitoPilot-testing/out/SRR21843972/assemble/default/SRR21843972_assembly_1.fasta",
+    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR21843972/assemble/default/SRR21843972_assembly_1_coverageStats.csv",
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
@@ -85,13 +85,13 @@ annotate <- function(
       )
   }
   if(!is.null(rotate) && rotate < 0){
-    rotate <- abs(rotate)
     coverage <- dplyr::bind_rows(
-      coverage[rotate:1, ],
-      coverage[nrow(coverage):(rotate + 1), ]
+      coverage[abs(rotate):1, ],
+      coverage[nrow(coverage):(abs(rotate) + 1), ]
     ) |>
       dplyr::mutate(
-        Postion = dplyr::row_number()
+        Postion = dplyr::row_number(),
+        Call = as.character(assembly) |> stringr::str_split("") |> unlist()
       )
   }
 
