@@ -96,13 +96,14 @@ annotations_details_server <- function(id, rv) {
     sel <- reactiveVal("init")
     selected <- reactive({
       sel <- reactable::getReactableState("table", "selected")
-      shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
       # Check for unsaved edits
       isolate({
+        req(rv$annotations)
+        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
         if (identical(sel, rv$editing$idx)) {
           return(sel)
         }
-        if (!is.null(rv$editing$backup$translation) && rv$annotations$translation[sel] != rv$editing$backup$translation) {
+        if (!is.null(rv$editing) && rv$annotations$translation[sel] != rv$editing$backup$translation) {
           shinyWidgets::sendSweetAlert(
             title = "Unsaved Edits!",
             text = "Discard or save edits before selecting a new annotation"
@@ -157,7 +158,7 @@ annotations_details_server <- function(id, rv) {
 
     # Close Modal ----
     observeEvent(input$close, {
-      if (!is.null(rv$editing$backup$translation) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
+      if (!is.null(rv$editing) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
           text = "Discard or save edits before selecting a new annotation"
@@ -174,7 +175,7 @@ annotations_details_server <- function(id, rv) {
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
-      if (!is.null(rv$editing$backup$translation) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
+      if (!is.null(rv$editing) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
           text = "Discard or save edits before selecting a new annotation"
@@ -308,7 +309,6 @@ annotations_details_server <- function(id, rv) {
       trigger("align_now")
     })
     on("align_now", {
-
       req(rv$annotations$type[selected()] == "PCG")
 
       hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
@@ -349,6 +349,11 @@ annotations_details_server <- function(id, rv) {
       )
     })
     output$msa <- msaR::renderMsaR({
+      # if (rv$editing$stop_aln %||% FALSE) {
+      #   later::later({
+      #     ~session$sendCustomMessage("rightScroll", list(foo = "bar"))
+      #   })
+      # }
       msaR::msaR(
         rv$alignment$aln,
         overviewbox = FALSE,
@@ -879,7 +884,10 @@ annotations_details_server <- function(id, rv) {
     on("re_align", {
       ### Calculate new stats ----
       focal <- rv$annotations$translation[selected()]
-      refHits <- {rv$local_hits %||% json_parse(rv$annotations$refHits[selected()],T)} |>
+      refHits <-
+        {
+          rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
+        } |>
         dplyr::mutate(
           pctid = compare_aa(focal, target, "pctId"),
           similarity = compare_aa(focal, target, "similarity"),
@@ -1003,8 +1011,6 @@ annotations_details_server <- function(id, rv) {
       )
       trigger("align_now")
     })
-
-
   })
 }
 
@@ -1122,7 +1128,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
             tags$i(
               id = ns("refresh_blast"),
               class = "fas fa-sync grow",
-              style="margin-bottom: 15px; margin-left: -15px;",
+              style = "margin-bottom: 15px; margin-left: -15px;",
               onclick = stringr::str_glue(
                 "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
               )
