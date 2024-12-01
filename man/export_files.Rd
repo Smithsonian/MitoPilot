@@ -10,6 +10,8 @@ export_files(
   fasta_header =
     "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
   out_dir = NULL,
+  start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"),
+  stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
   generateAAalignments = T
 )
 }
