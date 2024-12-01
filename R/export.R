@@ -7,6 +7,8 @@ export_files <- function(
     IDs=NULL,
     fasta_header = "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
     out_dir=NULL,
+    start_codons=c("ATG", "GTG", "ATA", "ATT", "ATC"),
+    stop_codons=c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
     generateAAalignments=T
 ){
 
@@ -93,17 +95,6 @@ export_files <- function(
     }else{
       cat(paste(">Feature", .x), file=tbl_fn, sep="\n")
     }
-    params <- dplyr::left_join(
-      dplyr::tbl(con, "annotate") |>
-        dplyr::select(ID, curate_opts) |>
-        dplyr::filter(ID == .x),
-      dplyr::tbl(con, "curate_opts"),
-      by = "curate_opts"
-    ) |>
-      dplyr::pull(params) |>
-      json_parse()
-    params <- params$rules |>
-      purrr::map(~ modifyList(params$default_rules[[.x$type]] %||% list(), .x))
 
     purrr::pwalk(annotations, function(...){
       cur <- list(...)
@@ -116,10 +107,10 @@ export_files <- function(
         if(stringr::str_detect(cur$translation, "\\*")){
           message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
         }
-        if(cur$stop_codon %nin% params[[cur$gene]]$stop_codons){
+        if(cur$stop_codon %nin% stop_codons){
           message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
         }
-        if(cur$start_codon %nin% params[[cur$gene]]$start_codons){
+        if(cur$start_codon %nin% start_codons){
           message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
           if(cur$direction=='+'){
             pos[1] <- paste0("<", pos[1])
@@ -142,7 +133,7 @@ export_files <- function(
           cat(file=tbl_fn, sep="\n", append=TRUE)
         paste("\t\t\ttransl_table\t",2) |>
           cat(file=tbl_fn, sep="\n", append=TRUE)
-        if(!cur$start_codon %in% params[[cur$gene]]$start_codons){
+        if(!cur$start_codon %in% start_codons){
           paste("\t\t\tcodon_start\t",1) |>
             cat(file=tbl_fn, sep="\n", append=TRUE)
         }
