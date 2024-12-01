@@ -126,6 +126,7 @@ pipeline_server <- function(id) {
         new_output <- p$read_output_lines()
         if (length(new_output) > 0) {
           process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
+          trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
       } else {
         final_output <- p$read_output_lines()

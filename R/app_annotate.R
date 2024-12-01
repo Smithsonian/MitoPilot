@@ -332,8 +332,8 @@ annotate_server <- function(id) {
       shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotatee_opts)
-      shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitos_ref_dir", condition = FALSE) # TODO: custom / alt ref db for mitos
+      shinyjs::toggleState("mitos_ref_db", condition = FALSE)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% rv$data$annotate_opts) {
@@ -424,7 +424,54 @@ annotate_server <- function(id) {
 
     # Set Curate Options ----
     observeEvent(input$set_curate_opts, {
-      coming_soon()
+      row <- as.numeric(input$set_curate_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      } else {
+        selected <- c(row, selected()) |> unique()
+      }
+      req(all(rv$data$annotate_lock[selected] == 0))
+      rv$updating <- rv$data |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      curate_opts_modal(rv)
+    })
+    observeEvent(input$curate_opts, ignoreInit = T, {
+      exists <- input$curate_opts %in% rv$curate_opts$curate_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_curate_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$curate_opts[rv$curate_opts$curate_opts == input$curate_opts, ]
+        updateNumericInput(
+          inputId = "curate_opts_cpus",
+          value = cur$cpus
+        )
+        updateNumericInput(
+          inputId = "curate_opts_memory",
+          value = cur$memory
+        )
+        updateTextInput(
+          inputId = "target",
+          value = cur$target
+        )
+      }
+    })
+    output$params <- listviewer::renderReactjson({
+      listviewer::reactjson(
+        req(rv$params),
+        "Validataion Parameters",
+        theme = "monokai",
+        iconStyle = "triangle",
+        collapsed = 2,
+        enableClipboard = FALSE,
+        displayObjectSize = FALSE,
+        displayDataTypes = FALSE,
+        onEdit = FALSE,
+        onAdd = FALSE,
+        onDelete = FALSE,
+        onSelect = FALSE
+      )
     })
 
     # Open output folder ----

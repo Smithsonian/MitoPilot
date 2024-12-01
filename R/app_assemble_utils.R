@@ -88,21 +88,30 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         )
       ),
-      numericInput(
-        ns("pre_opts_cpus"), "CPUs:",
-        value = current$cpus %||% numeric(0)
-      ) |> shinyjs::disabled(),
-      numericInput(
-        ns("pre_opts_memory"), "Memory (GB):",
-        value = current$memory %||% numeric(0)
-      ) |> shinyjs::disabled(),
-      textAreaInput(
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("pre_opts_cpus"), "CPUs:", width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("pre_opts_memory"), "Memory (GB):", width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
+      textInput(
         ns("fastp"),
         label = "fastp options",
         value =  current$fastp %||% character(0),
         width = "100%"
       ) |> shinyjs::disabled(),
-      size = "xl",
+      size = "m",
       footer = tagList(
         actionButton(ns("update_pre_opts"), "Update"),
         modalButton("Cancel")
@@ -151,15 +160,24 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           )
         )
       ),
-      numericInput(
-        ns("assemble_opts_cpus"), "CPUs:",
-        value = current$cpus %||% numeric(0)
-      ) |> shinyjs::disabled(),
-      numericInput(
-        ns("assemble_opts_memory"), "Memory (GB):",
-        value = current$memory %||% numeric(0)
-      ) |> shinyjs::disabled(),
-      textAreaInput(
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("assemble_opts_cpus"), "CPUs:", width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("assemble_opts_memory"), "Memory (GB):", width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
+      textInput(
         ns("getOrganelle"),
         label = "getOrganelle options",
         value = current$getOrganelle %||% character(0),
@@ -168,8 +186,9 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       textInput(
         ns("seeds_db"), "getOrganelle Seeds:",
         value = current$seeds_db %||% character(0),
+        width = "100%"
       ) |> shinyjs::disabled(),
-      size = "xl",
+      size = "m",
       footer = tagList(
         actionButton(ns("update_assemble_opts"), "Update"),
         modalButton("Cancel")

@@ -135,5 +135,5 @@ modify_list_recursive <- function(l, alt){
       l[[.y]] <<- .x
     }
   })
-  return(params)
+  return(l)
 }

@@ -141,47 +141,143 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           )
         )
       ),
-      numericInput(
-        ns("annotate_opts_cpus"), "CPUs:",
-        value = current$cpus %||% numeric(0)
-      ) |> shinyjs::disabled(),
-      numericInput(
-        ns("annotate_opts_memory"), "Memory (GB):",
-        value = current$memory %||% numeric(0)
-      ) |> shinyjs::disabled(),
-      textAreaInput(
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("annotate_opts_cpus"), "CPUs:", width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("annotate_opts_memory"), "Memory (GB):", width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
+      textInput(
         ns("mitos_opts"),
         label = "Mitos2 options:",
         value = current$mitos_opts %||% character(0),
         width = "100%"
       ) |> shinyjs::disabled(),
-      selectizeInput(
-        ns("mitos_ref_dir"),
-        label = "ref_dir",
-        choices = unique(rv$annotate_opts$ref_dir),
-        selected = current$annotate_opts %||% character(0),
-        options = list(
-          create = TRUE,
-          maxItems = 1
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          selectizeInput(
+            ns("mitos_ref_dir"),
+            label = "ref_dir",
+            choices = unique(rv$annotate_opts$ref_dir),
+            selected = current$annotate_opts %||% character(0),
+            width = "100%",
+            options = list(
+              create = TRUE,
+              maxItems = 1
+            )
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          selectizeInput(
+            ns("mitos_ref_db"),
+            label = "ref_db",
+            choices = unique(rv$annotate_opts$ref_db),
+            selected = current$annotate_opts %||% character(0),
+            width = "100%",
+            options = list(
+              create = TRUE,
+              maxItems = 1
+            )
+          ) |> shinyjs::disabled()
         )
       ),
-      selectizeInput(
-        ns("mitos_ref_db"),
-        label = "ref_db",
-        choices = unique(rv$annotate_opts$ref_db),
-        selected = current$annotate_opts %||% character(0),
-        options = list(
-          create = TRUE,
-          maxItems = 1
-        )
-      ),
-      p("Note: 'ref_db' and 'ref_dir' must specify the Mitos database location within the nextflow execution environment (e.g. the docker container), not your local system."),
       textInput(
         ns("trnaScan_opts"),
         label = "trnAScan-SE options:",
         value = current$trnaScan_opts %||% character(0),
+        width = "100%"
       ) |> shinyjs::disabled(),
-      size = "xl",
+      size = "m",
+      footer = tagList(
+        actionButton(ns("update_annotate_opts"), "Update"),
+        modalButton("Cancel")
+      )
+    )
+  )
+}
+
+#' Update the curation options
+#'
+#' @param rv the local reactive vals object
+#' @param session current shiny session
+#'
+#' @noRd
+curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+
+  current <- list()
+  rv$params <- NULL
+  if (length(unique(rv$updating$curate_opts)) == 1) {
+    current <- rv$curate_opts[rv$curate_opts$curate_opts == rv$updating$curate_opts[1], ]
+    rv$params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]]
+  }
+
+
+  showModal(
+    modalDialog(
+      title = stringr::str_glue("Setting Curation Options for {nrow(rv$updating)} Samples"),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        selectizeInput(
+          ns("curate_opts"),
+          label = "Parameter set name:",
+          choices = rv$curate_opts$curate_opts,
+          selected = current$curate_opts,
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ),
+        div(
+          class = "form-group shiny-input-container",
+          style = "margin-top: 39px;",
+          shinyWidgets::prettyCheckbox(
+            ns("edit_curate_opts"),
+            label = "Edit",
+            value = FALSE,
+            status = "primary"
+          )
+        )
+      ),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("curate_opts_cpus"), "CPUs:", width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("curate_opts_memory"), "Memory (GB):", width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
+      textInput(
+        ns("target"),
+        label = "Target:",
+        value = current$target %||% character(0),
+        width = "100%"
+      ) |> shinyjs::disabled(),
+      listviewer::reactjsonOutput(ns("params")),
+      size = "m",
       footer = tagList(
         actionButton(ns("update_annotate_opts"), "Update"),
         modalButton("Cancel")
