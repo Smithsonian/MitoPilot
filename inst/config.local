@@ -9,6 +9,8 @@ docker {
 process {
   executor = 'local'
   container = '<<CONTAINER_ID>>'
+  cpus = { opts.cpus }
+  memory = { opts.memory.GB * task.attempt}
 }
 
 // SQL database configuration (https://github.com/nextflow-io/nf-sqldb)
