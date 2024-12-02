@@ -455,6 +455,7 @@ annotate_server <- function(id) {
           inputId = "target",
           value = cur$target
         )
+        rv$params <- cur$params |> jsonlite::fromJSON()
       }
     })
     output$params <- listviewer::renderReactjson({
@@ -473,6 +474,101 @@ annotate_server <- function(id) {
         onSelect = FALSE
       )
     })
+    observeEvent(input$edit_curate_opts, ignoreInit = T, {
+      shinyjs::toggleState("curate_opts_cpus", condition = input$edit_curate_opts)
+      shinyjs::toggleState("curate_opts_memory", condition = input$edit_curate_opts)
+      shinyjs::toggleState("target", condition = FALSE) # TODO: allow changes to target or params
+      # Check if editing opts that apply beyond selection
+      if (input$edit_curate_opts && input$curate_opts %in% rv$data$curate_opts) {
+        rv$updating_indirect <- rv$data |>
+          dplyr::filter(curate_opts == input$curate_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        # Prevent editing opts that apply to locked samples
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
+          )
+          shinyWidgets::updatePrettyCheckbox(
+            inputId = "edit_curate_opts",
+            value = FALSE
+          )
+          req(F)
+        }
+        # Confirm editing opts that apply beyond selection
+        if (nrow(rv$updating_indirect) > 0L) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_curate_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
+          )
+        }
+      } else {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    # Confirm editing opts that apply beyond selection
+    observeEvent(input$editing_curate_opts_indirect, ignoreInit = T, {
+      if (!input$editing_curate_opts_indirect) {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "edit_curate_opts",
+          value = FALSE
+        )
+      }
+    })
+    ## Save Changes ----
+    observeEvent(input$update_curate_opts, ignoreInit = T, {
+      ## Add to params table if new or editing ----
+      if (input$edit_curate_opts) {
+        params <- jsonlite::toJSON(req(rv$params), auto_unbox = TRUE)
+        dplyr::tbl(session$userData$con, "curate_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              curate_opts = req(input$curate_opts),
+              cpus = req(input$curate_opts_cpus),
+              memory = req(input$curate_opts_memory),
+              target = req(input$target)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "curate_opts"
+          )
+        DBI::dbExecute(
+          session$userData$con,
+          stringr::str_glue(
+            "UPDATE curate_opts SET params = '{params}' WHERE curate_opts = '{input$curate_opts}'"
+          )
+        )
+        rv$curate_opts <- dplyr::tbl(session$userData$con, "curate_opts") |>
+          dplyr::collect()
+      }
+      ## Update Annotate Table ----
+      update <- data.frame(
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
+        curate_opts = input$curate_opts,
+        annotate_switch = 1
+      )
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          update,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          update,
+          by = "ID"
+        )
+      rv$updating <- rv$updating_indirect <- NULL
+      removeModal()
+      trigger("update_annotate_table")
+    })
+
 
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {

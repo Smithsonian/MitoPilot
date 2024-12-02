@@ -218,12 +218,12 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
 #' @noRd
 curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   ns <- session$ns
-
+  req(rv$updating)
   current <- list()
-  rv$params <- NULL
+  rv$params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]] |>
+    jsonlite::fromJSON()
   if (length(unique(rv$updating$curate_opts)) == 1) {
     current <- rv$curate_opts[rv$curate_opts$curate_opts == rv$updating$curate_opts[1], ]
-    rv$params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]]
   }
 
 
@@ -279,7 +279,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
       listviewer::reactjsonOutput(ns("params")),
       size = "m",
       footer = tagList(
-        actionButton(ns("update_annotate_opts"), "Update"),
+        actionButton(ns("update_curate_opts"), "Update"),
         modalButton("Cancel")
       )
     )
