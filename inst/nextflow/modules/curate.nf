@@ -23,6 +23,7 @@ process curate {
     shell:
     dir = "${id}/annotate"
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
     Rscript -e "MitoPilot::curate_!{opts.target}( \
         annotations_fn = '!{annotations}', \
