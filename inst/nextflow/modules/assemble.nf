@@ -9,8 +9,8 @@ process assemble {
 
     errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'finish' }
     maxRetries { params.assemble.maxRetries }
-    cpus { opts.cpus }
-    memory { opts.memory.GB * task.attempt }
+    // cpus { opts.cpus }
+    // memory { opts.memory.GB * task.attempt }
 
     tag "${id}"
 

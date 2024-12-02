@@ -6,8 +6,8 @@ process curate {
     publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/*", mode: 'copy'
 
     errorStrategy 'finish'
-    cpus { opts.cpus }
-    memory { opts.memory.GB }
+    // cpus { opts.cpus }
+    // memory { opts.memory.GB }
 
     tag "${id}"
 
