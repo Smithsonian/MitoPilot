@@ -479,8 +479,7 @@ annotate_server <- function(id) {
       pth <- file.path(
         session$userData$dir_out,
         rv$data$ID[as.numeric(input$output)],
-        "annotate",
-        rv$data$assemble_opts[as.numeric(input$output)]
+        "annotate"
       )
       req(file.exists(pth))
       if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {

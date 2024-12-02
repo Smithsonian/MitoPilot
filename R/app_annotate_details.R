@@ -310,6 +310,7 @@ annotations_details_server <- function(id, rv) {
     })
     on("align_now", {
       req(rv$annotations$type[selected()] == "PCG")
+      rv$alignment <- NULL
 
       hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
 
@@ -349,13 +350,8 @@ annotations_details_server <- function(id, rv) {
       )
     })
     output$msa <- msaR::renderMsaR({
-      # if (rv$editing$stop_aln %||% FALSE) {
-      #   later::later({
-      #     ~session$sendCustomMessage("rightScroll", list(foo = "bar"))
-      #   })
-      # }
-      msaR::msaR(
-        rv$alignment$aln,
+      msa <- msaR::msaR(
+        req(rv$alignment$aln),
         overviewbox = FALSE,
         seqlogo = FALSE,
         menu = FALSE,
@@ -365,35 +361,15 @@ annotations_details_server <- function(id, rv) {
         rowheight = 20,
         alignmentHeight = min(rv$alignment$alignmentHeight, 200)
       )
+      # isolate({
+      #   if (rv$editing$stop_aln %||% FALSE) {
+      #     later::later({
+      #       ~session$sendCustomMessage("rightScroll", list(foo = "bar"))
+      #     })
+      #   }
+      # })
+      return(msa)
     })
-    # output$msa_div <- renderUI({
-    #   req(rv$alignment$aln)
-    #   isolate({
-    #
-    #     msa <- msaR::renderMsaR(
-    #
-    #     )
-    #
-    #     # Scroll right if editing stops
-    #     if (rv$editing$stop_aln %||% FALSE) {
-    #       session$sendCustomMessage("rightScroll", list(foo = "bar"))
-    #     }
-    #     return({
-    #       div(
-    #         id = ns("msa_div"),
-    #         style = "margin: 30px 5px 5px 5px;",
-    #         div(
-    #           style = "display: flex; gap: 25px;",
-    #           p(HTML(isolate(rv$alignment$id))),
-    #           p(HTML(isolate(rv$alignment$start))),
-    #           p(HTML(isolate(rv$alignment$stop))),
-    #           p(HTML(isolate(rv$alignment$internal_stop)))
-    #         ),
-    #         msa
-    #       ) |> tagList()
-    #     })
-    #   })
-    # })
 
     # Notes ----
     notes_update <- debounce(reactive(input$notes), 500)
@@ -875,7 +851,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$start_codon[selected()] <- unname(codon)
+      rv$annotations$stop_codon[selected()] <- unname(codon)
       trigger("re_align")
     })
 
@@ -884,7 +860,7 @@ annotations_details_server <- function(id, rv) {
     on("re_align", {
       ### Calculate new stats ----
       focal <- rv$annotations$translation[selected()]
-      refHits <-
+      hits <-
         {
           rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
         } |>
@@ -897,17 +873,9 @@ annotations_details_server <- function(id, rv) {
           .by = dplyr::everything()
         ) |>
         dplyr::arrange(dplyr::desc(similarity))
-      rv$annotations$refHits[selected()] <- json_string(refHits)
-
-      ### New alignment ----
-      rv$alignment$id <- stringr::str_glue(
-        "<b>Max Similarity:</b> {round(max(refHits$similarity),1)}%"
-      )
-      focal <- rv$annotations$translation[selected()] |>
-        setNames(paste(rv$annotations$gene[selected()], "(focal)"))
-      rv$alignment$aln <- c(focal, rv$alignment$seqs) |>
-        Biostrings::AAStringSet() |>
-        DECIPHER::AlignSeqs(verbose = FALSE)
+      rv$annotations$refHits[selected()] <- json_string(hits)
+      rv$alignment <- NULL
+      trigger("align_now")
     })
 
     # Discard edits ----
