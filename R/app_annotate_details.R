@@ -35,10 +35,13 @@ annotations_details_server <- function(id, rv) {
         read.csv()
 
       annotate_details_modal(rv) |> showModal()
+      render_annotations_table(Sys.time())
     })
 
     # Render table ----
+    render_annotations_table <- reactiveVal()
     output$table <- reactable::renderReactable({
+      req(render_annotations_table())
       isolate(rv$annotations) |>
         reactable(
           compact = TRUE,
@@ -92,6 +95,7 @@ annotations_details_server <- function(id, rv) {
           )
         )
     })
+
     ## Table selection ----
     sel <- reactiveVal("init")
     selected <- reactive({
@@ -170,6 +174,7 @@ annotations_details_server <- function(id, rv) {
       rv$table_filter <- NULL
       rv$alignment <- NULL
       rv$coverage_width <- NULL
+      rv$editing <- NULL
       trigger("update_annotate_table")
       removeModal()
     })

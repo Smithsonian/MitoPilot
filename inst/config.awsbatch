@@ -11,6 +11,8 @@ process {
   executor = 'local'
   container = '<<CONTAINER_ID>>'
   queue = '<<BATCH_QUEUE>>'
+  cpus = { opts.cpus }
+  memory = { opts.memory.GB * task.attempt}
 }
 
 // AWS Batch parameters (modify as needed, see: https://www.nextflow.io/docs/latest/aws.html#aws-batch)
@@ -41,26 +43,33 @@ params {
     publishDir = 'out'                      // Directory (or s3 bucket) to publish pipeline outputs
     minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
     minAssemblyLength = 500                 // min contig size to retain for annotation
+    genetic_code = 2
+    mitos_condaenv = 'mitos'
+    trnaScan_condaenv = 'trnascan-se'
     preprocess {
-        take = -1
-        maxRetries = 0
         container = process.container
         executor = process.executor
     }
     assemble {
-        take = -1
         maxRetries = 1
         container = process.container
         executor = process.executor
     }
     coverage {
-        take = -1
-        maxRetries = 0
+        cpus = 4
+        memory = 8
         container = process.container
         executor = process.executor
     }
     annotate {
-        maxRetries = 0
+        container = process.container
+        executor = process.executor
+    }
+    curate {
+        container = process.container
+        executor = process.executor
+    }
+    validate {
         container = process.container
         executor = process.executor
     }

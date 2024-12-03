@@ -7,7 +7,7 @@
 #' @export
 #' @importFrom shiny shinyApp
 #' @importFrom golem with_golem_options
-gui <- function(
+MitoPilot <- function(
     onStart = NULL,
     options = list(shiny.launch.browser = T),
     enableBookmarking = NULL,
@@ -33,5 +33,5 @@ gui <- function(
 #' @noRd
 #' @export
 run_app <- function(...) {
-  gui(...)
+  MitoPilot(...)
 }

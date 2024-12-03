@@ -19,8 +19,8 @@
 #' @export
 #'
 annotate <- function(
-    assembly_fn = "~/Jonah/MitoPilot-testing/out/SRR21843972/assemble/default/SRR21843972_assembly_1.fasta",
-    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR21843972/assemble/default/SRR21843972_assembly_1_coverageStats.csv",
+    assembly_fn = "~/Jonah/MitoPilot-testing/out/SRR22396865/assemble/default/SRR22396865_assembly_1.fasta",
+    coverage_fn = "~/Jonah/MitoPilot-testing/out/SRR22396865/assemble/default/SRR22396865_assembly_1_coverageStats.csv",
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
@@ -65,7 +65,7 @@ annotate <- function(
   # tRNA annotation ----
   trnaScan_out <- annotate_trnaScan(
     assembly = assembly,
-    rotate = TRUE,
+    rotate = stringr::str_detect(names(assembly), "circular"),
     trnaScan_opts = trnaScan_opts,
     cpus = cpus,
     condaenv = trnaScan_condaenv
@@ -81,7 +81,7 @@ annotate <- function(
       coverage[1:(rotate - 1), ]
     ) |>
       dplyr::mutate(
-        Postion = dplyr::row_number()
+        Position = dplyr::row_number()
       )
   }
   if(!is.null(rotate) && rotate < 0){
@@ -90,7 +90,7 @@ annotate <- function(
       coverage[nrow(coverage):(abs(rotate) + 1), ]
     ) |>
       dplyr::mutate(
-        Postion = dplyr::row_number(),
+        Position = dplyr::row_number(),
         Call = as.character(assembly) |> stringr::str_split("") |> unlist()
       )
   }
@@ -98,7 +98,7 @@ annotate <- function(
   # Mitos2 annotation ----
   annotations_mitos <- annotate_mitos2(
     assembly = assembly,
-    topology = ifelse(all(stringr::str_detect("circular", names(assembly))), "circular", "linear"),
+    topology = ifelse(all(stringr::str_detect(names(assembly), "circular")), "circular", "linear"),
     genetic_code = genetic_code,
     ref_db = ref_db,
     ref_dir = ref_dir,

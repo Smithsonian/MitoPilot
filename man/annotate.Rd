@@ -6,9 +6,9 @@
 \usage{
 annotate(
   assembly_fn =
-    "~/Jonah/MitoPilot-testing/out/SRR21843972/assemble/default/SRR21843972_assembly_1.fasta",
+    "~/Jonah/MitoPilot-testing/out/SRR22396865/assemble/default/SRR22396865_assembly_1.fasta",
   coverage_fn =
-    "~/Jonah/MitoPilot-testing/out/SRR21843972/assemble/default/SRR21843972_assembly_1_coverageStats.csv",
+    "~/Jonah/MitoPilot-testing/out/SRR22396865/assemble/default/SRR22396865_assembly_1_coverageStats.csv",
   cpus = 4,
   genetic_code = "2",
   ref_db = "Chordata",

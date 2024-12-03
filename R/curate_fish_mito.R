@@ -11,9 +11,9 @@
 #' @export
 #'
 curate_fish_mito <- function(
-    annotations_fn = "~/Downloads/tmp2/SRR22396940_annotations_1.csv",
-    assembly_fn = "~/Downloads/tmp2/SRR22396940_assembly_1.fasta",
-    coverage_fn = "~/Downloads/tmp2/SRR22396940_coverageStats_1.csv",
+    annotations_fn = "~/Downloads/tmp/SRR22396865_annotations_1.csv",
+    assembly_fn = "~/Downloads/tmp/SRR22396865_assembly_1.fasta",
+    coverage_fn = "~/Downloads/tmp/SRR22396865_coverageStats_1.csv",
     genetic_code = 2,
     out_dir = NULL,
     params = NULL) {
@@ -90,18 +90,19 @@ curate_fish_mito <- function(
     dplyr::pull(contig) |>
     unique()
   for (seqid in rRNA_rev) {
+    wdth <- assembly[contig_key[seqid]]@ranges@width
     annotations_updated <- annotations |>
-      dplyr::filter(contig == seqid) |>
+      dplyr::filter(contig == !!seqid) |>
       dplyr::mutate(
         pos1_old = pos1,
         pos2_old = pos2,
-        pos1 = assembly[seqid]@ranges@width - pos2_old + 1,
-        pos2 = assembly[seqid]@ranges@width - pos1_old + 1,
+        pos1 = wdth - pos2_old + 1,
+        pos2 = wdth - pos1_old + 1,
         direction = dplyr::case_match(
           direction, "+" ~ "-", "-" ~ "+"
         )
       ) |>
-      select(-pos1_old, -pos2_old)
+      dplyr::select(-pos1_old, -pos2_old)
 
     annotations <- annotations |>
       dplyr::filter(contig != seqid) |>
@@ -110,19 +111,24 @@ curate_fish_mito <- function(
       ) |>
       dplyr::arrange(contig, pos1)
 
+    assembly[contig_key[seqid]] <- assembly[contig_key[seqid]] |>
+      Biostrings::reverseComplement()
+
     if (!is.null(coverage)) {
       coverage_flip <- coverage |>
-        filter(SeqId == seqid) |>
-        arrange(desc(Position)) |>
-        dplyr::mutate(Position = dplyr::row_number())
-      coverage <- bind_rows(
-        coverage |> filter(SeqId != seqid),
+        dplyr::filter(SeqId == !!seqid) |>
+        dplyr::arrange(desc(Position)) |>
+        dplyr::mutate(
+          Position = dplyr::row_number(),
+          Call = as.character(assembly) |> stringr::str_split("") |> unlist()
+        )
+      coverage <- dplyr::bind_rows(
+        coverage |> dplyr::filter(SeqId != seqid),
         coverage_flip
       )
     }
 
-    assembly[seqid] <- assembly[seqid] |>
-      reverseComplement()
+
   }
 
   ## apply punctuation model ----
@@ -616,7 +622,8 @@ curate_fish_mito <- function(
     ## Check beginning ----
     min_ann <- annotations |>
       dplyr::filter(contig == .y) |>
-      dplyr::pull(pos1) |>
+      dplyr::mutate(min_ann = pmin(pos1, pos2)) |>
+      dplyr::pull(min_ann) |>
       min()
     if (min_ann > 1) {
       assembly[.x] <<- Biostrings::subseq(assembly[.x], min_ann, -1)
@@ -643,7 +650,8 @@ curate_fish_mito <- function(
     ## Check end ----
     max_ann <- annotations |>
       dplyr::filter(contig == .y) |>
-      dplyr::pull(pos2) |>
+      dplyr::mutate(max_ann = pmax(pos1, pos2)) |>
+      dplyr::pull(max_ann) |>
       max()
     if (max_ann < assembly[.x]@ranges@width) {
       assembly[.x] <<- Biostrings::subseq(assembly[.x], 1, max_ann)
