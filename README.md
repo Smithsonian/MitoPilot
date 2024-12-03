@@ -138,10 +138,10 @@ for one or more of the processing steps. After initializing a new
 project you should review the `.config` file to ensure that all
 necessary parameters are provided.
 
-## Database
+## Database / Default Processing Parameters
 
-`{MitoPilot}` makes use of the Nextflow plugin,
-[nf-sqldb](https://github.com/nextflow-io/nf-sqldb), to store and
+`{MitoPilot}` makes use of the Nextflow plugin
+[nf-sqldb](https://github.com/nextflow-io/nf-sqldb) to store and
 retrieve processing parameters and information about the samples and
 their processing status. The database is created automatically when the
 project is initialized and is stored in the project directory
@@ -162,10 +162,22 @@ MitoPilot::new_project(
 )
 ```
 
-## Test Data
+For complete list of available parameters that can be set during project
+initialization, see the `new_db()` function documentation.
 
-`{MitoPilot}` include a function to create a test project to validate
-the pipeline instillation and your execution environment settings.
+Although the MitoPilot GUI provides an interface to the database, during
+troubleshooting it is often helpful to directly explore the contents of
+the project’s .sqlite database. This can be easily done in R using the
+[{dbplyr}](https://dbplyr.tidyverse.org/), which is used extensively in
+the MitoPilot package. Alternatively, many interactive tools exist
+specifically for working with SQLite databases, such as [DB Browser for
+SQLite](https://sqlitebrowser.org/).
+
+## Test Project
+
+`{MitoPilot}` include a helper function to create a test project to
+validate the pipeline installation and your execution environment
+settings.
 
 ``` r
 init_test_project(
@@ -180,7 +192,7 @@ testing of the pipeline. Alternatively, you can set the parameter
 `full_size=TRUE` to download all raw data for the test assemblies from
 ENA (though you should be prepared to wait a while). An example mapping
 file will be automatically populated in the project directory along with
-a folder, `data/` with the raw data files. The configuraion file will
+a folder, `data/` with the raw data files. The configuration file will
 also be fully populated for the test project, but should still be
 inspected. The Samples included in the test data have been selected to
 not only include easily assembled mitogenomes, but also to demonstrate
