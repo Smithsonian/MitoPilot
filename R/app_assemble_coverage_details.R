@@ -93,7 +93,7 @@ assembly_coverage_details_server <- function(id, rv) {
     })
 
     # Table selection ----
-    selected <- reactive(reactable::getReactableState("modal_table", "selected"))
+    selected <- reactive(reactable::getReactableState("table", "selected"))
     observe({
       shinyjs::toggle("clip", condition = length(selected()) > 0)
       shinyjs::toggle("align", condition = length(selected()) > 1)
@@ -118,7 +118,7 @@ assembly_coverage_details_server <- function(id, rv) {
           by = c("ID", "path", "scaffold")
         )
       reactable::updateReactable(
-        "modal_table",
+        "table",
         data = rv$focal_assembly,
         selected = selected()
       )
@@ -180,7 +180,7 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # Align ----
     wait_align <- waiter::Waiter$new(
-      id = ns("modal_table"),
+      id = ns("table"),
       html = waiter::spin_3(),
       color = waiter::transparent(.5)
     )
