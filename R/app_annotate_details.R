@@ -170,6 +170,7 @@ annotations_details_server <- function(id, rv) {
       rv$table_filter <- NULL
       rv$alignment <- NULL
       rv$coverage_width <- NULL
+      rv$editing <- NULL
       trigger("update_annotate_table")
       removeModal()
     })
