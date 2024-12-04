@@ -106,13 +106,14 @@ add_external_resources <- function() {
     waiter::useWaiter(),
     rclipboard::rclipboardSetup(),
     shinyjs::useShinyjs(),
-    tags$script(HTML("
-      Shiny.addCustomMessageHandler('scrollToBottom', function(message) {
-        var modalContent = document.querySelector('.modal-content');
-        if (modalContent) {
-          modalContent.scrollTop = modalContent.scrollHeight;
+    tags$script(
+      '
+      Shiny.addCustomMessageHandler("scrollCallback",
+        function(color) {
+          var objDiv = document.getElementById("progress_div");
+          objDiv.scrollTop = objDiv.scrollHeight;
         }
-      });
-    "))
+      );'
+    ))
   )
 }
