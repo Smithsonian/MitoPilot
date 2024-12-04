@@ -30,3 +30,10 @@ $( document ).ready(function(){
   });
 });
 
+// auto scrolling of progress box
+$( document ).ready(function(){
+  Shiny.addCustomMessageHandler("scrollCallback", function() {
+    var objDiv = document.getElementById("progress_div");
+    objDiv.scrollTop = objDiv.scrollHeight;
+  });
+});

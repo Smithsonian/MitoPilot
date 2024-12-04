@@ -105,15 +105,6 @@ add_external_resources <- function() {
     ),
     waiter::useWaiter(),
     rclipboard::rclipboardSetup(),
-    shinyjs::useShinyjs(),
-    tags$script(
-      '
-      Shiny.addCustomMessageHandler("scrollCallback",
-        function(color) {
-          var objDiv = document.getElementById("progress_div");
-          objDiv.scrollTop = objDiv.scrollHeight;
-        }
-      );'
-    ))
+    shinyjs::useShinyjs()
   )
 }
