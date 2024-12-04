@@ -105,7 +105,7 @@ add_external_resources <- function() {
     ),
     waiter::useWaiter(),
     rclipboard::rclipboardSetup(),
-    shinyjs::useShinyjs()
+    shinyjs::useShinyjs(),
     tags$script(HTML("
       Shiny.addCustomMessageHandler('scrollToBottom', function(message) {
         var modalContent = document.querySelector('.modal-content');
