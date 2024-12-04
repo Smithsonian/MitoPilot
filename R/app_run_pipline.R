@@ -67,6 +67,8 @@ pipeline_server <- function(id) {
           id = ns("progress_div"),
           h5("Progress:"),
           div(
+            id = ns("progress_div_text")
+            style = "max-height: 300px; overflow-y: auto;",
             class = "code-block",
             textOutput(ns("progress_out"))
           )
@@ -127,14 +129,14 @@ pipeline_server <- function(id) {
         if (length(new_output) > 0) {
           process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
           # Send a message to scroll the progress_div
-          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div")))
+          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
           #trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
       } else {
         final_output <- p$read_output_lines()
         if (length(final_output) > 0) {
           process_out(paste(process_out(), paste(final_output, collapse = "\n"), sep = "\n"))
-          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div")))
+          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
         }
         process(NULL)
         shinyjs::hide("stop")
