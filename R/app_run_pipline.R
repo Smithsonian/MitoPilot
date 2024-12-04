@@ -144,7 +144,7 @@ pipeline_server <- function(id) {
     # Render progress ----
     output$progress_out <- renderText({
       req(process_out())
-	  session$sendCustomMessage(type = "scrollCallback", 1)
+      session$sendCustomMessage("scrollToBottom", NULL)
     })
 
     # Stop ----
