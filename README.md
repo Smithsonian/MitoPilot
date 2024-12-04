@@ -89,7 +89,7 @@ devtools::install()
 
 # Usage
 
-## Project Initialization
+## Initializing a new project
 
 The `{MitoPilot}` workflow begins by initializing a new project with the
 `new_project()` function. If running from within RStudio (recommended) a
@@ -125,7 +125,7 @@ MitoPilot::new_project(
     executor-specific .config file in the project directory that must be
     edited to specify additional parameters for the pipeline to run.
 
-## Nextflow configuration file
+### Nextflow configuration file
 
 Initializing a new project will populate the `.config` file in the
 project directory that may include place holders for important
@@ -138,7 +138,7 @@ for one or more of the processing steps. After initializing a new
 project you should review the `.config` file to ensure that all
 necessary parameters are provided.
 
-## Database / Default Processing Parameters
+### Database creation
 
 `{MitoPilot}` makes use of the Nextflow plugin
 [nf-sqldb](https://github.com/nextflow-io/nf-sqldb) to store and
@@ -173,7 +173,7 @@ the MitoPilot package. Alternatively, many interactive tools exist
 specifically for working with SQLite databases, such as [DB Browser for
 SQLite](https://sqlitebrowser.org/).
 
-## Test Project
+# Ceating A Test Project
 
 `{MitoPilot}` include a helper function to create a test project to
 validate the pipeline installation and your execution environment
