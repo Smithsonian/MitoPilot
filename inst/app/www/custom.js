@@ -32,8 +32,10 @@ $( document ).ready(function(){
 
 // auto scrolling of progress box
 $( document ).ready(function(){
-  Shiny.addCustomMessageHandler("scrollProgress", function(divID) {
-    var objDiv = document.getElementById(divID);
-    objDiv.scrollTop = objDiv.scrollHeight
+  Shiny.addCustomMessageHandler("scrollProgress", function(params) {
+    var objDiv = document.getElementById(params.id);
+    if(objDiv) {
+        objDiv.scrollTop = objDiv.scrollHeight
+    }
   });
 });

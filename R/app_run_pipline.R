@@ -126,13 +126,15 @@ pipeline_server <- function(id) {
         new_output <- p$read_output_lines()
         if (length(new_output) > 0) {
           process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
+          # Send a message to scroll the progress_div
+          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div")))
           trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
-        session$sendCustomMessage(type = "scrollProgress", ns("progress_div")) # Call custom javascript to scroll progress window
       } else {
         final_output <- p$read_output_lines()
         if (length(final_output) > 0) {
           process_out(paste(process_out(), paste(final_output, collapse = "\n"), sep = "\n"))
+          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div")))
         }
         process(NULL)
         shinyjs::hide("stop")
