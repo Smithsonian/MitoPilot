@@ -67,7 +67,7 @@ pipeline_server <- function(id) {
           id = ns("progress_div"),
           h5("Progress:"),
           div(
-            id = ns("progress_div_text")
+            id = ns("progress_div_text"),
             style = "max-height: 300px; overflow-y: auto;",
             class = "code-block",
             textOutput(ns("progress_out"))
