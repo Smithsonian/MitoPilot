@@ -128,7 +128,7 @@ pipeline_server <- function(id) {
           process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
           trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
-        session$sendCustomMessage(type = "scrollProgress", 1) # Call custom javascript to scroll progress window
+        session$sendCustomMessage(type = "scrollProgress", ns("progress_div")) # Call custom javascript to scroll progress window
       } else {
         final_output <- p$read_output_lines()
         if (length(final_output) > 0) {
