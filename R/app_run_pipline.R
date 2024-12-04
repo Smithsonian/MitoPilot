@@ -53,7 +53,7 @@ pipeline_server <- function(id) {
 
       modalDialog(
         title = div(
-          style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
+          style = "display: flex; justify-content: space-between; align-items: center; height: 42px; overflow-y: auto;",
           span(stringr::str_glue("Update {session$userData$mode} pipeline: {length(samples)} Samples")),
           span(id = ns("gears"), class = "gears paused")
         ),
@@ -128,7 +128,7 @@ pipeline_server <- function(id) {
           process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
           # Send a message to scroll the progress_div
           session$sendCustomMessage("scrollProgress", list(id = ns("progress_div")))
-          trigger(paste0("refresh_", tolower(session$userData$mode)))
+          #trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
       } else {
         final_output <- p$read_output_lines()
