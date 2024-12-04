@@ -128,12 +128,15 @@ pipeline_server <- function(id) {
         new_output <- p$read_output_lines()
         if (length(new_output) > 0) {
           process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
-          trigger(paste0("refresh_", tolower(session$userData$mode)))
+          # Send a message to scroll the progress_div
+          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
+          #trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
       } else {
         final_output <- p$read_output_lines()
         if (length(final_output) > 0) {
           process_out(paste(process_out(), paste(final_output, collapse = "\n"), sep = "\n"))
+          session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
         }
         process(NULL)
         shinyjs::hide("stop")
@@ -146,8 +149,6 @@ pipeline_server <- function(id) {
     # Render progress ----
     output$progress_out <- renderText({
       req(process_out())
-      # Send a message to scroll the progress_div
-      session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
     })
 
     # Stop ----
