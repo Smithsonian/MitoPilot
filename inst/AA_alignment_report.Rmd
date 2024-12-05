@@ -13,6 +13,12 @@ params:
   group: ""
 ---
 
+# force R to use the Cairo package to avoid issues rendering via R studio server
+# see https://stackoverflow.com/questions/44731625/rmarkdown-with-no-x11
+```{r setup, include=FALSE, dev="CairoPNG"}
+knitr::opts_chunk$set(echo = TRUE, dev="CairoPNG")
+```
+
 ```{r, echo=F, message=F, warning=F}
 library(dplyr)
 library(msaR)

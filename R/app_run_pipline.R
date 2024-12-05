@@ -67,6 +67,8 @@ pipeline_server <- function(id) {
           id = ns("progress_div"),
           h5("Progress:"),
           div(
+            id = ns("progress_div_text"),
+            style = "max-height: 300px; overflow-y: auto;",
             class = "code-block",
             textOutput(ns("progress_out"))
           )
@@ -143,6 +145,9 @@ pipeline_server <- function(id) {
 
     # Render progress ----
     output$progress_out <- renderText({
+      later::later({
+        ~session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
+      })
       req(process_out())
     })
 
