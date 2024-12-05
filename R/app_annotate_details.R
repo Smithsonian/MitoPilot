@@ -366,15 +366,16 @@ annotations_details_server <- function(id, rv) {
         rowheight = 20,
         alignmentHeight = min(rv$alignment$alignmentHeight, 200)
       )
-      # isolate({
-      #   if (rv$editing$stop_aln %||% FALSE) {
-      #     later::later({
-      #       ~session$sendCustomMessage("rightScroll", list(foo = "bar"))
-      #     })
-      #   }
-      # })
+      isolate({
+        if (rv$editing$stop_aln %||% FALSE) {
+          later::later({
+            ~session$sendCustomMessage("rightScroll", list(foo = "bar"))
+          })
+        }
+      })
       return(msa)
     })
+
 
     # Notes ----
     notes_update <- debounce(reactive(input$notes), 500)
@@ -1125,6 +1126,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
+      actionButton(ns("test"), "TEST"),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),

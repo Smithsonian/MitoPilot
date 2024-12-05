@@ -25,8 +25,12 @@ $( document ).ready(function(){
 
 $( document ).ready(function(){
   Shiny.addCustomMessageHandler('rightScroll', function(params) {
-    var elmnt = document.getElementsByClassName('biojs_msa_rheader')[0];
-    elmnt.scrollLeft = elmnt.scrollWidth - elmnt.clientWidth;
+    // Get the header element
+    var header = document.getElementsByClassName('biojs_msa_rheader')[0];
+    var maxScrollLeft = header.scrollWidth - header.clientWidth;
+    header.scrollLeft = maxScrollLeft;
+    var scrollEvent = new Event('scroll');
+    header.dispatchEvent(scrollEvent);
   });
 });
 
