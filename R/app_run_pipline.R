@@ -149,7 +149,6 @@ pipeline_server <- function(id) {
         ~session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
       })
       req(process_out())
-      process_out()
     })
 
     # Stop ----
