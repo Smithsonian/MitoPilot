@@ -9,7 +9,7 @@ docker {
 process {
   executor = 'local'
   container = '<<CONTAINER_ID>>'
-  cpus { opts.cpus }
+  cpus = { opts.cpus }
   memory = { opts.memory.GB * task.attempt }
 }
 
