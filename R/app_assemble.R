@@ -80,7 +80,7 @@ assemble_server <- function(id) {
                 c(
                   `0` = "fa fa-hourglass",
                   `1` = "fa fa-person-running",
-                  `2` = "fa fa-square-check",
+                  `2` = "fa fa-circle-check",
                   `3` = "fa fa-triangle-exclamation"
                 )
               )
