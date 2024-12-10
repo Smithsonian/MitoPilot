@@ -59,7 +59,7 @@ devtools::install()
 
 # Usage
 
-## Initializing a new project
+## Initializing A Project
 
 The `{MitoPilot}` workflow begins by initializing a new project with the `new_project()` function. If running from within RStudio (recommended) a new R-project will also be initialized and opened in a new RStudio session. 
 
@@ -78,13 +78,13 @@ MitoPilot::new_project(
 + Executor
    - The executor specifies where the computational work will be performed by Nextflow. For example choosing `loocal` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.
 
-### Nextflow configuration file
+### Nextflow Configuration File
 
 Initializing a new project will populate the `.config` file in the project directory that may include place holders for important parameters, in the format: `<<PARAMETER_NAME>>`. For example, all new configuration files will include the line `rawDir = '<<RAW_DIR>>'`, which should be  updated to `rawDir = '/path/to/your/data'` indicating the location of the raw data file specified in the mapping file. The configuration files can also be modified to specify custom docker images for one or more of the processing steps. After initializing a new project you should review the `.config` file to ensure that all necessary parameters are provided. 
 
-### Database creation
+### Database Creation
 
-`{MitoPilot}` makes use of the Nextflow plugin [nf-sqldb](https://github.com/nextflow-io/nf-sqldb) to store and retrieve processing parameters and information about the samples and their processing status. The database is created automatically when the project is initialized and is stored in the project directory (`.sqlite`). The interactive MitoPilot GUI also interacts with this database to allow you run the pipeline, modify parameters, and view the results. When initializing a new project, default processing parameters for the pipeline modules are stored in the database, but any processing parameters can also be passed to the `new_project()` function to modify the initial defaults. For example, the following options would modify the allocated memory and GetOrganelle command line options :
+`{MitoPilot}` makes use of the Nextflow plugin [nf-sqldb](https://github.com/nextflow-io/nf-sqldb) to store and retrieve processing parameters and information about the samples and their processing status. The database (`.sqlite`) is created automatically when the project is initialized and is stored in the project directory. The interactive MitoPilot GUI also interacts with this database to allow you run the pipeline, modify parameters, and view the results. When initializing a new project, default processing parameters for the pipeline modules are stored in the database, but any processing parameters can also be passed to the `new_project()` function to modify the initial defaults. For example, the following options would modify the allocated memory and GetOrganelle command line options :
 
 ```{r, eval = FALSE}
 MitoPilot::new_project(          
@@ -97,11 +97,11 @@ MitoPilot::new_project(
 
 For complete list of available parameters that can be set during project initialization, see the `new_db()` function documentation. 
 
-Although the MitoPilot GUI provides an interface to the database, during troubleshooting it is often helpful to directly explore the contents of the project's .sqlite database. This can be easily done in R using the [{dbplyr}](https://dbplyr.tidyverse.org/), which is used extensively in the MitoPilot package. Alternatively, many interactive tools exist specifically for working with SQLite databases, such as [DB Browser for SQLite](https://sqlitebrowser.org/). 
+Although the MitoPilot GUI provides an interface to the database, during troubleshooting it is often helpful to directly explore the contents of the project's `.sqlite` database. This can be easily done in R using the `{dplyr}` extension, [{dbplyr}](https://dbplyr.tidyverse.org/), which is used extensively in the MitoPilot package, along with [{DBI}](https://dbi.r-dbi.org/), for database interactions. Alternatively, many interactive tools exist specifically for working with SQLite databases, such as [DB Browser for SQLite](https://sqlitebrowser.org/). 
  
 # Ceating A Test Project
 
-`{MitoPilot}` include a helper function to create a test project to validate the pipeline installation and your execution environment settings.
+`{MitoPilot}` includes a helper function to create a test project to validate the pipeline installation and your execution environment settings.
 
 ```{r, eval = FALSE}
 init_test_project(
@@ -112,3 +112,37 @@ init_test_project(
 ```
 
 This function will load pre-filtered data sets for relatively quick testing of the pipeline. Alternatively, you can set the parameter `full_size=TRUE` to download all raw data for the test assemblies from ENA (though you should be prepared to wait a while). An example mapping file will be automatically populated in the project directory along with a folder, `data/` with the raw data files. The configuration file will also be fully populated for the test project, but should still be inspected. The Samples included in the test data have been selected to not only include easily assembled mitogenomes, but also to demonstrate many of the annotation curation / validation warnings and manual curation features of the pipeline - hopefully your samples are not as problematic!
+
+# Running The Pipeline
+
+Once a project is initialized, the pipeline status caa be viewed using the MitoPilot GUI. The GUI can be launched by running the `MitoPilot()` command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assembly, Annotate, Export), where each row represents a sample in the project. 
+
+## Sample Status
+
+In the Assemble and Annotate modules the icon at the start of each row indicates the sample status, where:
+
+1. (⏳) Hold / Waiting = Indicates that the sample is ready to be updated, but will not be updated the next time the pipeline is run.
+2. (🏃) Ready to Run = Indicates that the sample will be updated the next time the pipeline is run.
+3. (✅) Completed Successfully = Indicates that the sample has been successfully processed.
+4. (⚠️) Completed with Warning - Processing is complete but may have failed or needs manual review.
+
+There is an additional icon indicating whether a samples is locked () or unlocked (). A locked sample will be protected from further updates by Nextflow. Locking a sample will also make it available in the next MitoPilot module - a sample must be locked in the Assemble module to proceed with Annotatation and must be locked the the Annotation modules to proceed with data Export. Both the "state" and "locked" status of one or more samples can be modified by selecting the sample rows in the table and using the "STATE" and "LOCK" buttons at the top of the interface. 
+
+## Processing parameters
+
+In the Assemble and Annotate modules, the processing parameters for one or more samples can be modified by clicking on the link in the relevant column (e.g., `Assemble Opts.`). This will open a popup that can be used to modify options by either selecting an existing option set from the drop-down menu, or by entering a new name for the option set and modifying the parameters. If multiple rows are selected in the table when the options popup is triggered, the changes will apply to all selected samples (though selecting any locked sample will prevent this action). An existing options set can also be modified by checking the "editing" box in the popup, but this may trigger a warning that the edits will affect more samples than are currently selected (i.e., all sample that are using that options set).
+
+## Running Nextflow
+
+When one or more samples are in the "Ready to Run" state, the Nextflow pipeline can be run by clicking the "UPDATE" button at the top of the interface. This will open a popup where the `Start Nextflow` button can be pressed and output from the pipeline can be viewed to track progress. Alternatively, the Nextflow command displayed in the popup can be copied and run in the a terminal from the project directory, which can be useful if you would like to specify additional command line options or override input parameters. 
+
+# Development Notes
+
+  - This package uses [{renv}]() for package management. After cloning the repository, run `renv::restore()` to install the necessary packages.
+  - To work from the package repository, but reference a MitoPilot project in a different directory, set the `MitoPilot.db` option to the location of the `.sqlite` database for the project (e.g. `options("MitoPilot.db" = "~/Jonah/MitoPilot-testing/.sqlite")`).
+  - When modifying the underlying R-package functions references in the Nextflow pipeline, or modifying / adding reference databases specified in `docker/Dockerfile`, the docker image should be rebuilt. The `docker/deploy-local.sh` script can be used to build a local image, or the `docker/deploy-aws.sh` and `docker/deploy-dockerhub.sh` scripts can be modified to deploy a remote image to your account. In any case, the Nextflow `.config` file should be modified such that one or more of the processing steps reference the new image.
+
+
+
+
+
