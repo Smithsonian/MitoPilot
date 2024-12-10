@@ -78,9 +78,9 @@ assemble_server <- function(id) {
               align = "center",
               cell = rt_dynamicIcon(
                 c(
-                  `0` = "fa fa-circle-notch",
-                  `1` = "fa fa-hourglass",
-                  `2` = "fa fa-circle-check",
+                  `0` = "fa fa-hourglass",
+                  `1` = "fa fa-person-running",
+                  `2` = "fa fa-square-check",
                   `3` = "fa fa-triangle-exclamation"
                 )
               )
