@@ -5,7 +5,6 @@
 #' @param type The type of comparison to perform. Options are 'pctId' and 'similarity'
 #' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
 #'
-#' @import Biostrings
 #'
 #' @export
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
@@ -21,7 +20,7 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
   if (type[1] == "similarity") {
     data("BLOSUM80", package = "Biostrings")
     max_score <- sum(diag(BLOSUM80)[match(strsplit(query, NULL)[[1]], rownames(BLOSUM80))])
-    res <- 100 * Biostrings::score(alignment) / max_score
+    res <- 100 * BiocGenerics::score(alignment) / max_score
     return(res)
   }
 

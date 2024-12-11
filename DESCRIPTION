@@ -3,17 +3,20 @@ Title: Mitogenome assembly, annotation, and curation
 Version: 0.0.0.9000
 Authors@R: c(
     person("Devin", "Leopold", , "devin.leopold@gmail.com", role = c("aut", "cre")),
-    person("Dan", "MacGuigan", , "daniel.macguigan@noaa.gov", role = c("ctb")))
+    person("Dan", "MacGuigan", , "daniel.macguigan@noaa.gov", role = "ctb")
+  )
 Description: An R package for mitogenome assembly and annotation from
     genome skimming data that uses Nexflow and includes an R-Shiny app for
     project management and curation of results.
 License: file LICENSE
-URL: https://github.com/JonahVentures/MitoPilot, https://jonahventures.github.io/MitoPilot/
+URL: https://github.com/JonahVentures/MitoPilot,
+    https://jonahventures.github.io/MitoPilot/
 BugReports: https://github.com/JonahVentures/MitoPilot/issues
 Depends: 
     R (>= 4.0.0)
 Imports: 
     base64enc,
+    BiocGenerics,
     Biostrings,
     config,
     crayon,
@@ -53,10 +56,11 @@ Imports:
     utils,
     waiter,
     zoo
+Suggests: 
+    knitr
+VignetteBuilder: 
+    knitr
 biocViews:
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.2
-Suggests: 
-    knitr
-VignetteBuilder: knitr
