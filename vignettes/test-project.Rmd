@@ -1,0 +1,212 @@
+---
+title: "test-project"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{test-project}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# `{MitoPilot}` - Test Project Tutorial
+
+## Installation
+
+Before running MitoPilot with your own samples, we recommend trying out the included test project, consisting of Illumina data for 12 fish species. The following document will walk you through the process of analyzing this test dataset.
+
+First, make sure you have [R
+(\>=4.0.0)](https://www.r-project.org/) and
+[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](SI_NMNH_Hydra_README.md) and [NOAA SEDNA](NOAA_SEDNA_README.md) computing clusters.  
+
+Next you'll need to install the `{MitoPilot}` R package from GitHub. Within RStudio, run the following.
+
+``` r
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager")
+}
+BiocManager::install("JonahVentures/MitoPilot")
+```
+## Project Initialization
+
+Now we can initialize the test project. For your own data, you would use the function `MitoPilot::new_project`. However, for the test data, we'll use `MitoPilot::new_project`.
+
+```
+# load the package
+library(MitoPilot)
+
+# specify the directory where your test project will be created
+wd = "/pool/public/genomics/macguigand/MitoPilot/testing/2024_12_4-6"
+
+# specify an execution environment, "local", "NMNH_Hydra", or "NOAA_SEDNA"
+ex = "NMNH_Hydra
+
+# initialize the test project
+MitoPilot::new_test_project(
+    path = wd, 
+    executor = ex, 
+    container = "drleopold/mitopilot",
+    full_size = FALSE,
+    Rproj = FALSE
+)
+```
+
+> [!NOTE]
+> UNDER DEVELOPMENT. If you are using an execution environment that is not currently supported, you could use `config = config.MyEnv` to pass a custom Nextflow config to the `new_test_project` function.
+
+If the test project is successfully intialized, you should see the following.
+
+```
+SRR22396794 - Psychrolutes paradoxus  
+SRR22396940 - Psenes pellucidus
+SRR22396740 - Hoplostethus occidentalis
+SRR21844202 - Fundulus majalis
+SRR22396640 - Xyrichtys novacula
+SRR22396732 - Gephyroberyx darwinii
+SRR22396627 - Gigantura indica
+SRR21843972 - Stomias affinis
+SRR22396843 - Conger oceanicus
+SRR22396668 - Erotelis smaragdus
+SRR22396758 - Upeneus parvus
+SRR22396865 - Paraconger caudilimbatus
+Project initialized successfully.
+Please open and review the .config file to ensure all required options are specified.
+```
+
+## Exploring the MitoPilot GUI
+
+We can now launch the R Shiny Graphical User Interface (GUI) to examine our test project and start the analysis pipeline.
+
+```
+# the function to launch the GUI must be called from within your project's directory
+setwd(wd)
+MitoPilot::MitoPilot()
+```
+![new MitoPilot GUI](figures/test-project/1.png)
+
+Nice! We can see some basic information about our samples. When intializing your own project, this is pulled from the mapping CSV file.
+
+You can the samples by any column simply by clicking on the header. You can also filter samples using the search box in the top right.
+
+To the left of the sample ID column are two icons. The first shows whether the sample is locked or unlocked. If a sample is unlocked, it will be included when running the current pipeline stage. A locked sample cannot be edited for the current stage, but will be made available for the next stage of the pipeline. You can toggle the lock by slecting the sample (check mark), then pressing `LOCK` at the top of the window. Multiple samples can be locked or unlocked simultaneously.
+
+The other icon shows the state of the sample. These states vary depending on the analysis stage and will be automatically updated when running the pipeline. However, you can also manually change the state of a sample by selecingt the sample and using the `STATE` button. 
+
+## Modifying Pipeline Parameters
+
+Within the GUI, we can modify options for each stage of the pipeline. Select all samples by clicking the empty checkbox at the top left of the table. Then click on one of the `default` links in the `Preprocess Opts.` column.
+
+![MitoPilot default preprocess](figures/test-project/3.png)
+
+Here you can see the default options for pre-processing your raw FASTQ files. We can modify these by clicking the `edit` checkbox. Let's change the CPUs to 4 and the Memory to 40 GB. You could also change the options passed to [fastp](https://github.com/OpenGene/fastp), but let's keep those at the defaults.
+
+![MitoPilot preprocess params](figures/test-project/4.png)
+
+We can save these new parameter options by clicking on the `Parameter set name` box, typing a new name, and clicking  `Add YOUR NEW NAME...` in the dropdown. Finally, click `Update` in the bottom right to save your selection. 
+
+![MitoPilot preprocess test params](figures/test-project/5.png)
+
+Once you've saved a new parameter set, you can easily access again using the dropdown menu. In the screenshow below, you can see a couple of other parameter sets that I created. 
+
+![MitoPilot preprocess test params](figures/test-project/6.png)
+
+After clicking `Update`, your table should now show `test` for all samples in the Preprocess column.
+
+![MitoPilot updated params](figures/test-project/7.png)
+
+You can set different parameters for different samples by simply selecting the set you want to change and repeating the above process. But for this test dataset, let's keep everything consistent.
+
+Let's also change the `Assembly Opts.`. Repeat the process above, selecting all samples and creating a new `himem` setting.
+
+![MitoPilot asmb params](figures/test-project/8.png)
+
+## Runing MitoPilot Assembly
+
+Let's get started with the pipeline! Select all samples, then click the `UPDATE` button. A new window should appear.
+
+![MitoPilot update asmb](figures/test-project/9.png)
+
+
+You have two options for running the pipeline. First, you could copy the Nextflom command and run it within a terminal window on your computing system. This command could also be imbedded within a submission script for a computing cluster, if you would prefer. Running the Nextflow command externally from the GUI may be preferable for batches with large numbers of samples, since you can perform the analyses in the background.
+
+Alternatively, you press the `Start Nextflow` button to launch the pipeline from within the GUI. Since our test dataset is small, let's do that.
+
+![MitoPilot asmb running](figures/test-project/10.png)
+
+Awesome! You should see Nextflow output being printed the to `Progress` window. This window will continuely update as the pipeline progresses. If you're unsure whether the pipeline is still running, check to see if the gears in the top right are spinning.
+
+This stage of the pipeline has 3 steps: preprocessing (filtering) the raw FASTQ files, assembling the mitogenomes using [GetOrganelle](https://github.com/Kinggerm/GetOrganelle), and calculating coverage maps for the assembly.
+
+The test dataset should take a few minutes to finish. When it's done,, your `Progress` window should look something like this.
+
+![MitoPilot asmb running](figures/test-project/11.png)
+
+You can now click `Close` to go back to the samples table. 
+
+## Inspecting Assembly Results
+
+The sample table should now be updated with a bunch of new information. 
+
+![MitoPilot asmb results](figures/test-project/12.png)
+
+If you want to locate the results files for a sample, you can scroll all the way to the right and click `output`. This will open the appropriate folder in your RStudio session.
+
+You can also view the results within the MitoPilot GUI. For example, select SRR21843972 (_Stomias affinis_), then click `details`. This will show you a new window with the mitogenome sequence. 
+
+![SRR21843972 details](figures/test-project/14.png)
+
+Select that sequence and click the `Fasta` button in the bottom right. This will copy the FASTA formatted mitogenome to your clipboard. This could be useful for a quick BLAST search. 
+
+![SRR21843972 fasta](figures/test-project/15.png)
+
+You can also click the `view` button, which will open a summary figure in a new tab, including mean read depth, sequence error rate, and GC content. 
+
+![SRR21843972 fig](figures/test-project/16.png)
+
+Notice that in this figure, sequence depth drops off dramatically at both ends of the sequence. SRR21843972 was unable to assemble a circular mitogenome due to poor read coverage in this region. To try and recover a circular mitogenome, you could try running the assembly again with different `GetOrganelle` settings (see their [Wiki](https://github.com/Kinggerm/GetOrganelle/wiki/FAQ)) or more sequence data.
+
+## Problematic Samples
+
+In this test dataset, there are two problematic samples which returned failed states. You can see which samples failed by looking for the exclamation mark state icon. Selecting a sample with that icon and clicking on the `STATE` button will cofirm.
+
+![MitoPilot asmb failed state](figures/test-project/13.png)
+
+One failed sample is SRR22396758 (_Upeneus parvus_). We purposefully truncated the FASTQ file to 200 reads for this sample. With so few reads, this sample failed to assemble and returned a message "Insufficient sequencing depth" in the `Notes` column. 
+
+The other failed sample is SRR21844202
+(_Fundulus majalis_). This sample had plenty of data and was able to assemble a mitogenome. However, the message in the `Notes` columns says "Unable to resolve single assembly from reads". 
+
+[GetOrganelle](https://github.com/Kinggerm/GetOrganelle) produced two alternate assembly paths for this sample. This is usually due to tricky assembly near a repeat region. Please refer to [the GetOrganlle paper](https://doi.org/10.1186/s13059-020-02154-5) for more information about multiple assembly paths.
+
+Let's take a peek at SRR21844202. Select the sample, scroll all the way to the right, and click on `details`. 
+
+![SRR21844202 details](figures/test-project/17.png)
+
+We can see two assemblies listed here. Clicking on `view` will show us the coverage, error, and GC content graphs for each assembly.  
+
+Path #1
+
+![path 1](figures/test-project/18.png)
+
+Path #2
+
+![path 2](figures/test-project/19.png)
+
+The two assembly paths are very similar, differeing only slightly around 13,000 bp. 
+
+We can chose to move forward with just one assembly path and ignore the other.
+
+![path ignore](figures/test-project/22.png)
+
+Alternatively, we can determine the consensus sequence of both paths. Selecting both paths and click the `Align` button in the bottom right. The sequence alighment will pop up, showing us that the two paths have 99.9897% sequence similarity.
+
+If we scroll through the alignment, we can see a few bp differences. For example:
+
+![path align](figures/test-project/20.png)
+
+Selecting `Trim Consensus` will remove any conflicting regions of the aligned assemblies and produce a shorter consensus sequence of both alignments. Doing so will automatically ignore the original two assembly paths.
+
+![consensus align](figures/test-project/23.png)
+
+> [!IMPORTANT]
+> Carefully consider your options for problematic samples with multiple assembly paths. There is no one-size-fits-all solution.
+
+## Runing MitoPilot Annotation

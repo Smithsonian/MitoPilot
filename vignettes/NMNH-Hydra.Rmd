@@ -1,3 +1,12 @@
+---
+title: "NMNH-Hydra"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{NMNH-Hydra}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
 # How to use MitoPilot on the Smithsonian Hydra computing cluster
 
 You will need an account to access the Hyrda computing cluster. Instructions are available [here](https://confluence.si.edu/display/HPC/Hydra+Policies).

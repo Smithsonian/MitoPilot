@@ -11,3 +11,9 @@ $run_dev.*
 ^ref_dbs$
 ^nextflow$
 ^docker$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.github$
+^doc$
+^Meta$
