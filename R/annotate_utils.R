@@ -5,8 +5,9 @@
 #' @param type The type of comparison to perform. Options are 'pctId' and 'similarity'
 #' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
 #'
-#' @export
+#' @import Biostrings
 #'
+#' @export
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
