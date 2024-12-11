@@ -1,3 +1,12 @@
+---
+title: "NOAA-SEDNA"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{NOAA-SEDNA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
 # How to use MitoPilot on the NOAA NMFS SENDA computing cluster
 
 You will need an account to access the SEDNA computing cluster. Detailed instructionca can be found [here](https://docs.google.com/document/d/1nn0T0OWEsQCBoCdaH6DSY69lQSbK3XnPlseyyQuU2Lc/edit?usp=sharing). Or contact Krista Nichols (<krista.nichols@noaa.gov>) for more information. 

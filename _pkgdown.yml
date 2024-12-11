@@ -1,0 +1,21 @@
+url: https://jonahventures.github.io/MitoPilot/
+template:
+  bootstrap: 5
+  bootswatch: lux
+  bslib:
+    pkgdown-nav-height: 100px
+home:
+  sidebar:
+    structure:
+    - links
+    - authors
+    - dev
+navbar:
+  structure:
+    left:
+    - intro
+    - reference
+    - articles
+    right:
+    - search
+    - github
