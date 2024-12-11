@@ -13,3 +13,7 @@
 .here
 docker/MitoPilot*
 .sqlite
+docs
+inst/doc
+/doc/
+/Meta/
