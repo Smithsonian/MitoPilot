@@ -1,4 +1,4 @@
-source("renv/activate.R")
+# source("renv/activate.R")
 
 # Development Options
 options("gargoyle.talkative" = TRUE)
