@@ -1,4 +1,4 @@
-#' Title
+#' Use coverage info to trim linear assemblies
 #'
 #' @param assembly a DNAString object
 #' @param stats a data frame of coverage stats

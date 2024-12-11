@@ -1,4 +1,4 @@
-#' Title
+#' Use tRNAscan-SE to annotate tRNAs in a mitochondrial genome assembly
 #'
 #' @param assembly text string of the assembly to annotate
 #' @param rotate should the assembly be rotated? default = TRUE

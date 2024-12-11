@@ -5,8 +5,10 @@
 #' @param type The type of comparison to perform. Options are 'pctId' and 'similarity'
 #' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
 #'
+#' @familt Pipeline Utilities
 #'
 #' @export
+#'
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
@@ -104,6 +106,8 @@ get_top_hits <- function(
 #' @param target The target sequence
 #' @param end The end to count gaps. Options are 'leading' and 'trailing'
 #' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
+#'
+#' @familt Pipeline Utilities
 #'
 #' @export
 #'
