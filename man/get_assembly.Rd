@@ -11,6 +11,8 @@ get_assembly(ID, path, scaffold = NULL, con)
 
 \item{path}{assembly getOrganelle path}
 
+\item{scaffold}{scaffold name(s) to get (NULL for all, default)}
+
 \item{con}{database connection}
 }
 \description{

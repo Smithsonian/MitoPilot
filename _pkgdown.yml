@@ -21,3 +21,11 @@ navbar:
     right:
     - search
     - github
+articles:
+- title: "Usage"
+  contents:
+  - 'test-project'
+- title: "Nextflow Executors"
+  contents:
+  - 'NMNH-Hydra'
+  - 'NOAA-SEDNA'

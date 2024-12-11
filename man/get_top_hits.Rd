@@ -10,6 +10,8 @@ get_top_hits(ref_db, query, condaenv = "base")
 \item{ref_db}{reference database}
 
 \item{query}{query sequeencs}
+
+\item{condaenv}{Conda environment to use for running blastp}
 }
 \description{
 Get top BLASTP hits

@@ -31,9 +31,15 @@ new_db <- function(
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 16,
-    seeds_db = glue::glue("/ref_dbs/getOrganelle/seeds/fish_mito.fasta"),
-    labels_db = glue::glue("/ref_dbs/getOrganelle/labels/fish_mito.fasta"),
-    getOrganelle = "-F 'anonym' -R 10 -k '21,45,65,85,105,115' --larger-auto-ws --expected-max-size 20000 --target-genome-size 16500",
+    seeds_db = "/ref_dbs/getOrganelle/seeds/fish_mito.fasta",
+    labels_db = "/ref_dbs/getOrganelle/labels/fish_mito.fasta",
+    getOrganelle = paste(
+      "-F 'anonym'",
+      "-R 10 -k '21,45,65,85,105,115'",
+      "--larger-auto-ws",
+      "--expected-max-size 20000",
+      "-target-genome-size 16500"
+    ),
     # Default annotation options
     annotate_cpus = 6,
     annotate_memory = 16,

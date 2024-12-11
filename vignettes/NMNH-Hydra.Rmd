@@ -1,8 +1,8 @@
 ---
-title: "NMNH-Hydra"
+title: "NMNH Hydra"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{NMNH-Hydra}
+  %\VignetteIndexEntry{NMNH Hydra}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

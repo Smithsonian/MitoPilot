@@ -88,7 +88,7 @@ json_string <- function(x, dataframe = "columns", simplify_df = TRUE) {
 #' Parse JSON and handle empty input
 #'
 #' @param .x a string to check
-#' @export
+#'
 #' @noRd
 json_parse <- function(.x, tibble = F) {
   out <- tryCatch(

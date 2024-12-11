@@ -43,6 +43,8 @@ interactively in RStudio.}
 
 \item{force}{(logical) Force recreating of existing project database and
 config files (default = FALSE).}
+
+\item{...}{Additional arguments passed `init_db()`}
 }
 \description{
 This function will set up a test project and fectch associated data from ENA.

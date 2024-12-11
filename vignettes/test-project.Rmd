@@ -1,8 +1,8 @@
 ---
-title: "test-project"
+title: "Create a Test Project"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{test-project}
+  %\VignetteIndexEntry{Create a Test Project}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

@@ -1,8 +1,8 @@
 ---
-title: "NOAA-SEDNA"
+title: "NOAA SEDNA"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{NOAA-SEDNA}
+  %\VignetteIndexEntry{NOAA SEDNA}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

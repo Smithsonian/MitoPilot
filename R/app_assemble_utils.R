@@ -201,6 +201,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
 #'
 #' @param ID sample ID
 #' @param path assembly getOrganelle path
+#' @param scaffold scaffold name(s) to get (NULL for all, default)
 #' @param con database connection
 #'
 #' @export

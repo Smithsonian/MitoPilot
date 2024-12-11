@@ -18,8 +18,7 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::relocate(Taxon, .after = ID) |>
     dplyr::collect() |>
     dplyr::mutate(
-      structure = stringr::str_replace_all(structure, "trn[A-Z]", "•"),
+      structure = stringr::str_replace_all(structure, "trn[A-Z]", "\u2022"),
       export_group = as.character(export_group)
     )
-
 }

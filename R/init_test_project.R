@@ -23,6 +23,7 @@
 #'   interactively in RStudio.
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
+#' @param ... Additional arguments passed `init_db()`
 #'
 #' @export
 new_test_project <- function(

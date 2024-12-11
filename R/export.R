@@ -1,11 +1,25 @@
-#' Generate NCBI sumbission files
+#' Generate export NCBI files
+#'
+#' @param group (optioanl) exportgroup names
+#' @param IDs One or more sample IDs to export. If not provided all samples in
+#'   the export group will be exported
+#' @param fasta_header Template fot fasta headers. Uses glue syntax (i.e.
+#'   `{...}`) to insert values from the samples table
+#' @param out_dir directory to save the exported files
+#' @param start_codons NCBI recognized start codons
+#' @param stop_codons NCBI recognized stop codons
+#' @param generateAAalignments Generate group-level amino acid alignments
+#'   (default: TRUE)
 #'
 #' @export
 #'
 export_files <- function(
     group=NULL,
     IDs=NULL,
-    fasta_header = "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
+    fasta_header = paste(
+      "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2]",
+      "[location=mitochondrion] {Taxon} mitochondrion, complete genome"
+    ),
     out_dir=NULL,
     start_codons=c("ATG", "GTG", "ATA", "ATT", "ATC"),
     stop_codons=c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
@@ -206,8 +220,9 @@ export_files <- function(
 
 #' Generate HTML report woth PCG alignments
 #'
+#' @param db path for sqlite database
+#' @param out_path path for output files
 #' @param export_group Name of the submission group
-#' @param db_path Path to the SQLite database
 #'
 #' @export
 #'

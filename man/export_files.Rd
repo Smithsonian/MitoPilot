@@ -2,19 +2,37 @@
 % Please edit documentation in R/export.R
 \name{export_files}
 \alias{export_files}
-\title{Generate NCBI sumbission files}
+\title{Generate export NCBI files}
 \usage{
 export_files(
   group = NULL,
   IDs = NULL,
-  fasta_header =
-    "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
+  fasta_header = paste("{ID} [organism={Taxon}] [topology={topology}] [mgcode=2]",
+    "[location=mitochondrion] {Taxon} mitochondrion, complete genome"),
   out_dir = NULL,
   start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"),
   stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
   generateAAalignments = T
 )
 }
+\arguments{
+\item{group}{(optioanl) exportgroup names}
+
+\item{IDs}{One or more sample IDs to export. If not provided all samples in
+the export group will be exported}
+
+\item{fasta_header}{Template fot fasta headers. Uses glue syntax (i.e.
+`{...}`) to insert values from the samples table}
+
+\item{out_dir}{directory to save the exported files}
+
+\item{start_codons}{NCBI recognized start codons}
+
+\item{stop_codons}{NCBI recognized stop codons}
+
+\item{generateAAalignments}{Generate group-level amino acid alignments
+(default: TRUE)}
+}
 \description{
-Generate NCBI sumbission files
+Generate export NCBI files
 }

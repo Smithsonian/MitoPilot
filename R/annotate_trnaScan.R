@@ -5,6 +5,7 @@
 #' @param trnaScan_opts command line options for tRNAscan-SE (defatult = `-M vert`)
 #' @param cpus number of cpus to use (default = 4)
 #' @param out output file name
+#' @param condaenv conda environment to use (default = "base")
 #'
 #' @export
 #'
@@ -27,8 +28,7 @@ annotate_trnaScan <- function(
     )
   )
   if (!is.null(condaenv)) {
-    require(reticulate)
-    process <- "conda_run2"
+    process <- reticulate::conda_run2
     process_args$envname <- condaenv
     process_args$echo <- FALSE
   } else {

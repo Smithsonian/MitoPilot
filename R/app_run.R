@@ -31,7 +31,6 @@ MitoPilot <- function(
 #' @param ... parameters to forward
 #'
 #' @noRd
-#' @export
 run_app <- function(...) {
   MitoPilot(...)
 }

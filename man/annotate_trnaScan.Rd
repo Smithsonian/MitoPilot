@@ -23,6 +23,8 @@ annotate_trnaScan(
 \item{cpus}{number of cpus to use (default = 4)}
 
 \item{out}{output file name}
+
+\item{condaenv}{conda environment to use (default = "base")}
 }
 \description{
 Title

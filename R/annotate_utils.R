@@ -30,6 +30,7 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
 #'
 #' @param ref_db reference database
 #' @param query query sequeencs
+#' @param condaenv Conda environment to use for running blastp
 #'
 #' @export
 #'

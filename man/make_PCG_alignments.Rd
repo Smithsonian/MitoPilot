@@ -9,7 +9,9 @@ make_PCG_alignments(export_group = NULL, db = NULL, out_path = NULL)
 \arguments{
 \item{export_group}{Name of the submission group}
 
-\item{db_path}{Path to the SQLite database}
+\item{db}{path for sqlite database}
+
+\item{out_path}{path for output files}
 }
 \description{
 Generate HTML report woth PCG alignments
