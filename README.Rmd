@@ -66,7 +66,7 @@ The `{MitoPilot}` workflow begins by initializing a new project with the `new_pr
 ```{r, eval = FALSE}
 MitoPilot::new_project(
   path = "path/to/project",             
-  mapping = "path/to/mapping_file.csv", 
+  mapping_fn = "path/to/mapping_file.csv", 
   executor = "local"     
 )
 ```

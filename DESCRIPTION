@@ -1,8 +1,9 @@
 Package: MitoPilot
 Title: Mitogenome assembly, annotation, and curation
 Version: 0.0.0.9000
-Authors@R: 
-    person("Devin", "Leopold", , "devin.leopold@gmail.com", role = c("aut", "cre"))
+Authors@R: c(
+    person("Devin", "Leopold", , "devin.leopold@gmail.com", role = c("aut", "cre")),
+    person("Dan", "MacGuigan", , "daniel.macguigan@noaa.gov", role = c("ctb")))
 Description: An R package for mitogenome assembly and annotation from
     genome skimming data that uses Nexflow and includes an R-Shiny app for
     project management and curation of results.

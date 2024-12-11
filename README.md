@@ -99,7 +99,7 @@ session.
 ``` r
 MitoPilot::new_project(
   path = "path/to/project",             
-  mapping = "path/to/mapping_file.csv", 
+  mapping_fn = "path/to/mapping_file.csv", 
   executor = "local"     
 )
 ```

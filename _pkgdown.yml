@@ -4,10 +4,12 @@ template:
   bootswatch: lux
   bslib:
     pkgdown-nav-height: 100px
+authors:
+  sidebar:
+    roles: [aut, ctb]
 home:
   sidebar:
     structure:
-    - links
     - authors
     - dev
 navbar:
