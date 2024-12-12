@@ -88,7 +88,7 @@
 <p>Once you have R and Nextflow installed, install <a href="https://github.com/JonahVentures/MitoPilot" class="external-link">MitoPilot</a> in R from GitHub:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"JonahVentures/MitoPilot"</span><span class="op">)</span></span></code></pre></div>
 <p>Alternatively, you can clone this repository and install the package locally from the project folder:</p>
@@ -98,15 +98,17 @@
 <div class="section level1">
 <h1 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a>
 </h1>
+<p>MitoPilot includes a set of pre-filtered test data and a function for setting up an example project, <code><a href="reference/new_test_project.html">new_test_project()</a></code>. It is highly recommended that you use the test project to ensure successful instillation and familiarize yourself with the pipeline before running on your own data. A complete tutorial on running the test project is available in the package vignette, <a href="https://jonahventures.github.io/MitoPilot/articles/test-project.html">here</a>.</p>
 <div class="section level2">
 <h2 id="initializing-a-project">Initializing A Project<a class="anchor" aria-label="anchor" href="#initializing-a-project"></a>
 </h2>
 <p>The MitoPilot workflow begins by initializing a new project with the <code><a href="reference/new_project.html">new_project()</a></code> function. If running from within RStudio (recommended) a new R-project will also be initialized and opened in a new RStudio session.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"path/to/project"</span>,             </span>
-<span>  mapping_fn <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>, </span>
-<span>  executor <span class="op">=</span> <span class="st">"local"</span>     </span>
+<span>  path <span class="op">=</span> <span class="st">"path/to/project"</span>,</span>
+<span>  mapping_fn <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
+<span>  data_dir <span class="op">=</span> <span class="st">"path/to/raw_data"</span>,</span>
+<span>  executor <span class="op">=</span> <span class="st">"local"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <ul>
 <li>Path
@@ -117,6 +119,11 @@
 <li>Mapping File
 <ul>
 <li>The mapping file should be in csv format and must contain the columns ID (a unique identifier for each sample), Taxon (eg, species or genus name), along with R1, and R2 (specifying the forward and revers file names for the raw Illumina paired end data). In addition to the required fields any other sample metadata can be included in the mapping file. These fields can also be used when exporting files for NCBI GenBank Submissions, so metadata that is important for submission (e.g., BioSample ID) can be included here.</li>
+</ul>
+</li>
+<li>Data Directory
+<ul>
+<li>The data directory should contain the raw Illumina paired-end reads specified in the mapping file.</li>
 </ul>
 </li>
 <li>Executor
@@ -135,8 +142,8 @@
 </h3>
 <p>MitoPilot makes use of the Nextflow plugin <a href="https://github.com/nextflow-io/nf-sqldb" class="external-link">nf-sqldb</a> to store and retrieve processing parameters and information about the samples and their processing status. The database (<code>.sqlite</code>) is created automatically when the project is initialized and is stored in the project directory. The interactive MitoPilot GUI also interacts with this database to allow you run the pipeline, modify parameters, and view the results. When initializing a new project, default processing parameters for the pipeline modules are stored in the database, but any processing parameters can also be passed to the <code><a href="reference/new_project.html">new_project()</a></code> function to modify the initial defaults. For example, the following options would modify the allocated memory and GetOrganelle command line options :</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span>          </span>
-<span>  mapping <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>, </span>
+<code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span></span>
+<span>  mapping <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
 <span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>
 <span>  assemble_memory <span class="op">=</span> <span class="fl">24</span>,</span>
 <span>  getOrganelle <span class="op">=</span> <span class="st">"-F 'anonym' -R 20 -k '21,45,65,85,105,115' -J 1 -M 1 --expected-max-size 20000 --target-genome-size 16500"</span></span>
@@ -145,18 +152,6 @@
 <p>Although the MitoPilot GUI provides an interface to the database, during troubleshooting it is often helpful to directly explore the contents of the project’s <code>.sqlite</code> database. This can be easily done in R using the <a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a> extension, <a href="https://dbplyr.tidyverse.org/" class="external-link">{dbplyr}</a>, which is used extensively in the MitoPilot package, along with <a href="https://dbi.r-dbi.org/" class="external-link">{DBI}</a>, for database interactions. Alternatively, many interactive tools exist specifically for working with SQLite databases, such as <a href="https://sqlitebrowser.org/" class="external-link">DB Browser for SQLite</a>.</p>
 </div>
 </div>
-</div>
-<div class="section level1">
-<h1 id="ceating-a-test-project">Ceating A Test Project<a class="anchor" aria-label="anchor" href="#ceating-a-test-project"></a>
-</h1>
-<p><a href="https://github.com/JonahVentures/MitoPilot" class="external-link">MitoPilot</a> includes a helper function to create a test project to validate the pipeline installation and your execution environment settings.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">init_test_project</span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"MitoPilot-test"</span>,</span>
-<span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>
-<span>  full_size <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>This function will load pre-filtered data sets for relatively quick testing of the pipeline. Alternatively, you can set the parameter <code>full_size=TRUE</code> to download all raw data for the test assemblies from ENA (though you should be prepared to wait a while). An example mapping file will be automatically populated in the project directory along with a folder, <code>data/</code> with the raw data files. The configuration file will also be fully populated for the test project, but should still be inspected. The Samples included in the test data have been selected to not only include easily assembled mitogenomes, but also to demonstrate many of the annotation curation / validation warnings and manual curation features of the pipeline - hopefully your samples are not as problematic!</p>
 </div>
 <div class="section level1">
 <h1 id="running-the-pipeline">Running The Pipeline<a class="anchor" aria-label="anchor" href="#running-the-pipeline"></a>
