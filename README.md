@@ -73,7 +73,7 @@ GitHub:
 
 ``` r
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
-    install.packages("BiocManager")
+  install.packages("BiocManager")
 }
 BiocManager::install("JonahVentures/MitoPilot")
 ```
@@ -87,6 +87,14 @@ devtools::install()
 
 # Usage
 
+MitoPilot includes a set of pre-filtered test data and a function for
+setting up an example project, `new_test_project()`. It is highly
+recommended that you use the test project to ensure successful
+instillation and familiarize yourself with the pipeline before running
+on your own data. A complete tutorial on running the test project is
+available in the package vignette,
+[here](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
+
 ## Initializing A Project
 
 The MitoPilot workflow begins by initializing a new project with the
@@ -96,9 +104,10 @@ session.
 
 ``` r
 MitoPilot::new_project(
-  path = "path/to/project",             
-  mapping_fn = "path/to/mapping_file.csv", 
-  executor = "local"     
+  path = "path/to/project",
+  mapping_fn = "path/to/mapping_file.csv",
+  data_dir = "path/to/raw_data",
+  executor = "local"
 )
 ```
 
@@ -115,6 +124,9 @@ MitoPilot::new_project(
     the mapping file. These fields can also be used when exporting files
     for NCBI GenBank Submissions, so metadata that is important for
     submission (e.g., BioSample ID) can be included here.
+- Data Directory
+  - The data directory should contain the raw Illumina paired-end reads
+    specified in the mapping file.
 - Executor
   - The executor specifies where the computational work will be
     performed by Nextflow. For example choosing `loocal` will run the
@@ -152,8 +164,8 @@ to modify the initial defaults. For example, the following options would
 modify the allocated memory and GetOrganelle command line options :
 
 ``` r
-MitoPilot::new_project(          
-  mapping = "path/to/mapping_file.csv", 
+MitoPilot::new_project(
+  mapping = "path/to/mapping_file.csv",
   executor = "local",
   assemble_memory = 24,
   getOrganelle = "-F 'anonym' -R 20 -k '21,45,65,85,105,115' -J 1 -M 1 --expected-max-size 20000 --target-genome-size 16500"
@@ -172,33 +184,6 @@ used extensively in the MitoPilot package, along with
 Alternatively, many interactive tools exist specifically for working
 with SQLite databases, such as [DB Browser for
 SQLite](https://sqlitebrowser.org/).
-
-# Ceating A Test Project
-
-`{MitoPilot}` includes a helper function to create a test project to
-validate the pipeline installation and your execution environment
-settings.
-
-``` r
-init_test_project(
-  path = "MitoPilot-test",
-  executor = "local",
-  full_size = FALSE
-)
-```
-
-This function will load pre-filtered data sets for relatively quick
-testing of the pipeline. Alternatively, you can set the parameter
-`full_size=TRUE` to download all raw data for the test assemblies from
-ENA (though you should be prepared to wait a while). An example mapping
-file will be automatically populated in the project directory along with
-a folder, `data/` with the raw data files. The configuration file will
-also be fully populated for the test project, but should still be
-inspected. The Samples included in the test data have been selected to
-not only include easily assembled mitogenomes, but also to demonstrate
-many of the annotation curation / validation warnings and manual
-curation features of the pipeline - hopefully your samples are not as
-problematic!
 
 # Running The Pipeline
 
