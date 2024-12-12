@@ -59,7 +59,7 @@ semicolon_paste <- function(cur, new) {
 #' @param simplify_df simplify the json by removing columns with only `NA` and
 #'   dereplicating values when all values are the same
 #'
-#' @export
+#' @noRd
 #'
 json_string <- function(x, dataframe = "columns", simplify_df = TRUE) {
   if (length(x) == 0 || all(is.na(x))) {

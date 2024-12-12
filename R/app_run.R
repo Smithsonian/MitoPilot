@@ -1,13 +1,19 @@
+#' Open The MitoPilot GUI
+#'
+#' @export
+#'
+MitoPilot <- function() { run_app() }
+
 #' Run the Shiny Application
 #'
 #' @param ... arguments to pass to golem_opts.
 #' See `?golem::get_golem_options` for more details.
 #' @inheritParams shiny::shinyApp
 #'
-#' @export
+#' @noRd
 #' @importFrom shiny shinyApp
 #' @importFrom golem with_golem_options
-MitoPilot <- function(
+run_app <- function(
     onStart = NULL,
     options = list(shiny.launch.browser = T),
     enableBookmarking = NULL,
@@ -24,13 +30,4 @@ MitoPilot <- function(
     ),
     golem_opts = list(...)
   )
-}
-
-#' Golem dev link
-#'
-#' @param ... parameters to forward
-#'
-#' @noRd
-run_app <- function(...) {
-  MitoPilot(...)
 }

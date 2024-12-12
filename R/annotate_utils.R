@@ -5,8 +5,6 @@
 #' @param type The type of comparison to perform. Options are 'pctId' and 'similarity'
 #' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
 #'
-#' @familt Pipeline Utilities
-#'
 #' @export
 #'
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
@@ -35,7 +33,7 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
 #' @param query query sequeencs
 #' @param condaenv Conda environment to use for running blastp
 #'
-#' @export
+#' @noRd
 #'
 get_top_hits <- function(
     ref_db,
@@ -107,9 +105,7 @@ get_top_hits <- function(
 #' @param end The end to count gaps. Options are 'leading' and 'trailing'
 #' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
 #'
-#' @familt Pipeline Utilities
-#'
-#' @export
+#' @noRd
 #'
 count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx = "BLOSUM80") {
   end <- end[1]

@@ -2,7 +2,7 @@
 % Please edit documentation in R/annotate_trnaScan.R
 \name{annotate_trnaScan}
 \alias{annotate_trnaScan}
-\title{Title}
+\title{Use tRNAscan-SE to annotate tRNAs in a mitochondrial genome assembly}
 \usage{
 annotate_trnaScan(
   assembly = NULL,
@@ -27,5 +27,5 @@ annotate_trnaScan(
 \item{condaenv}{conda environment to use (default = "base")}
 }
 \description{
-Title
+Use tRNAscan-SE to annotate tRNAs in a mitochondrial genome assembly
 }

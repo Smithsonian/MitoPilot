@@ -11,7 +11,7 @@ pipeline_server <- function(id) {
 
     on("run_modal", {
       # Generate Nextflow params ----
-      nf_cmd(update_mitopilot(session$userData$mode))
+      nf_cmd(nextflow_cmd(session$userData$mode))
 
       # Count samples to update ----
       if (session$userData$mode == "Assemble") {

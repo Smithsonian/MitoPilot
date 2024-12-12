@@ -2,7 +2,7 @@
 % Please edit documentation in R/annotate_coverage_trim.R
 \name{coverage_trim}
 \alias{coverage_trim}
-\title{Title}
+\title{Use coverage info to trim linear assemblies}
 \usage{
 coverage_trim(assembly, stats)
 }
@@ -12,5 +12,5 @@ coverage_trim(assembly, stats)
 \item{stats}{a data frame of coverage stats}
 }
 \description{
-Title
+Use coverage info to trim linear assemblies
 }

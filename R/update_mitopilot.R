@@ -1,4 +1,4 @@
-#' Update Pipeline Helper
+#' Generate Nextflow command to run pipline
 #'
 #' @param path MitoPilot project directory
 #' @param workflow Which module to update (default = c("assemble",
@@ -7,7 +7,7 @@
 #'   `nextflow/` subdirectory of the package installation.
 #'
 #' @export
-update_mitopilot <- function(
+nextflow_cmd <- function(
     workflow = c("assemble", "annotate"),
     path = NULL,
     source = app_sys("nextflow")) {
