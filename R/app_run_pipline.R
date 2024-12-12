@@ -109,11 +109,13 @@ pipeline_server <- function(id) {
         args = c(nf_cmd(), "-ansi-log"),
         stdout = "|",
         stderr = "|",
-        env = c("current", NXF_ANSI_SUMMARY = TRUE,
-               SGE = "/cm/shared/apps/uge/8.8.1/age",
-               SGE_ARCH = "lx-amd64",
-               SGE_CELL = "age",
-               SGE_ROOT = "/cm/shared/apps/uge/8.8.1"),
+        env = c("current",
+          NXF_ANSI_SUMMARY = TRUE,
+          SGE = "/cm/shared/apps/uge/8.8.1/age",
+          SGE_ARCH = "lx-amd64",
+          SGE_CELL = "age",
+          SGE_ROOT = "/cm/shared/apps/uge/8.8.1"
+        ),
         wd = dirname(getOption("MitoPilot.db") %||% here::here(".sqlite"))
       )
       process(p)
@@ -146,7 +148,7 @@ pipeline_server <- function(id) {
     # Render progress ----
     output$progress_out <- renderText({
       later::later({
-        ~session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
+        ~ session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
       })
       req(process_out())
     })

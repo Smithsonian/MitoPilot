@@ -18,7 +18,6 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 
   dplyr::left_join(assemble, annotate, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
-    dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::select(
       annotate_lock,
       annotate_switch,
@@ -40,6 +39,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       annotate_notes
     ) |>
     dplyr::collect() |>
+    dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(
       output = dplyr::case_when(
         annotate_switch > 1 ~ "output",
@@ -64,9 +64,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #'
 get_top_hits_local <- function(
     ref_db = NULL,
-    query = NULL
-    ) {
-
+    query = NULL) {
   stringr::str_glue(
     "-db {ref_db}",
     "-best_hit_score_edge 0.01",
@@ -77,7 +75,7 @@ get_top_hits_local <- function(
     "-query -",
     .sep = " "
   ) |>
-    system2(getOption("MitoPilot.blastp","blastp"), args = _, input = query, stdout = TRUE)  |>
+    system2(getOption("MitoPilot.blastp", "blastp"), args = _, input = query, stdout = TRUE) |>
     purrr::map_dfr(~ {
       df <- data.frame(stringr::str_split(.x, "\\t", simplify = T))
       colnames(df) <- c("hit", "eval", "target")
@@ -98,7 +96,6 @@ get_top_hits_local <- function(
     ) |>
     dplyr::ungroup() |>
     dplyr::arrange(dplyr::desc(similarity))
-
 }
 
 #' Update the annotation options
@@ -146,14 +143,16 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         div(
           style = "flex: 1",
           numericInput(
-            ns("annotate_opts_cpus"), "CPUs:", width = "100%",
+            ns("annotate_opts_cpus"), "CPUs:",
+            width = "100%",
             value = current$cpus %||% numeric(0)
           ) |> shinyjs::disabled()
         ),
         div(
           style = "flex: 1",
           numericInput(
-            ns("annotate_opts_memory"), "Memory (GB):", width = "100%",
+            ns("annotate_opts_memory"), "Memory (GB):",
+            width = "100%",
             value = current$memory %||% numeric(0)
           ) |> shinyjs::disabled()
         )
@@ -258,14 +257,16 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         div(
           style = "flex: 1",
           numericInput(
-            ns("curate_opts_cpus"), "CPUs:", width = "100%",
+            ns("curate_opts_cpus"), "CPUs:",
+            width = "100%",
             value = current$cpus %||% numeric(0)
           ) |> shinyjs::disabled()
         ),
         div(
           style = "flex: 1",
           numericInput(
-            ns("curate_opts_memory"), "Memory (GB):", width = "100%",
+            ns("curate_opts_memory"), "Memory (GB):",
+            width = "100%",
             value = current$memory %||% numeric(0)
           ) |> shinyjs::disabled()
         )

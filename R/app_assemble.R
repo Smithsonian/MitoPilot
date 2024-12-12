@@ -264,7 +264,7 @@ assemble_server <- function(id) {
       ## Ensure single assemble ---
       # TODO - could relax this constraint
       assemblies <- dplyr::tbl(session$userData$con, "assemblies") |>
-        dplyr::filter(ignore == 0 & ID %in% rv$updating$ID) |>
+        dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
         dplyr::pull(ID)
       if (any(duplicated(assemblies))) {
         shinyWidgets::sendSweetAlert(

@@ -4,7 +4,7 @@
 #'
 #' @export
 #'
-params_fish_mito <- function(alt = list()){
+params_fish_mito <- function(alt = list()) {
   params <- list(
     ref_dbs = list(
       default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas"
@@ -124,6 +124,4 @@ params_fish_mito <- function(alt = list()){
     )
   )
   params <- modify_list_recursive(params, alt)
-
 }
-

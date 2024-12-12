@@ -127,9 +127,9 @@ add_cols <- function(dat, cols, .after = dplyr::everything()) {
 #' @param alt named list of modifications
 #'
 #' @noRd
-modify_list_recursive <- function(l, alt){
-  purrr::iwalk(alt, ~{
-    if(is.list(.x)){
+modify_list_recursive <- function(l, alt) {
+  purrr::iwalk(alt, ~ {
+    if (is.list(.x)) {
       l[[.y]] <<- modify_params_recursive(l[[.y]], .x)
     } else {
       l[[.y]] <<- .x

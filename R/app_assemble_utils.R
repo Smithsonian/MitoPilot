@@ -93,14 +93,16 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         div(
           style = "flex: 1",
           numericInput(
-            ns("pre_opts_cpus"), "CPUs:", width = "100%",
+            ns("pre_opts_cpus"), "CPUs:",
+            width = "100%",
             value = current$cpus %||% numeric(0)
           ) |> shinyjs::disabled()
         ),
         div(
           style = "flex: 1",
           numericInput(
-            ns("pre_opts_memory"), "Memory (GB):", width = "100%",
+            ns("pre_opts_memory"), "Memory (GB):",
+            width = "100%",
             value = current$memory %||% numeric(0)
           ) |> shinyjs::disabled()
         )
@@ -165,14 +167,16 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         div(
           style = "flex: 1",
           numericInput(
-            ns("assemble_opts_cpus"), "CPUs:", width = "100%",
+            ns("assemble_opts_cpus"), "CPUs:",
+            width = "100%",
             value = current$cpus %||% numeric(0)
           ) |> shinyjs::disabled()
         ),
         div(
           style = "flex: 1",
           numericInput(
-            ns("assemble_opts_memory"), "Memory (GB):", width = "100%",
+            ns("assemble_opts_memory"), "Memory (GB):",
+            width = "100%",
             value = current$memory %||% numeric(0)
           ) |> shinyjs::disabled()
         )
@@ -205,18 +209,18 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
 #' @param con database connection
 #'
 #' @export
-get_assembly <- function(ID, path, scaffold=NULL, con){
+get_assembly <- function(ID, path, scaffold = NULL, con) {
   qry <- dplyr::tbl(con, "assemblies") |>
     dplyr::filter(ID == !!ID & path == !!path) |>
     dplyr::select(ID, path, scaffold, topology, sequence) |>
     dplyr::arrange(scaffold) |>
     dplyr::collect()
-  if(!is.null(scaffold)){
+  if (!is.null(scaffold)) {
     qry <- dplyr::filter(qry, scaffold %in% !!scaffold)
   }
   qry |>
     tidyr::unite("scaffold_name", c(ID, path, scaffold), sep = ".") |>
     tidyr::unite("seq_name", c(scaffold_name, topology), sep = " ") |>
-    dplyr::pull(sequence, name = 'seq_name') |>
+    dplyr::pull(sequence, name = "seq_name") |>
     Biostrings::DNAStringSet()
 }

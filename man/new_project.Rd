@@ -8,6 +8,8 @@ new_project(
   path = here::here(),
   mapping_fn = NULL,
   mapping_id = "ID",
+  data_path = NULL,
+  min_depth = 2e+06,
   executor = NULL,
   container = "drleopold/mitopilot",
   config = NULL,
@@ -26,6 +28,12 @@ columns `fwd` and `rev` specifying the names of the raw paired read inputs.}
 
 \item{mapping_id}{The name of the column in the mapping file that contains
 the unique sample identifiers (default = "ID").}
+
+\item{data_path}{Path to the directory where the raw data is located. Can be
+a AWS s3 bucket even if not using AWS for pipeline execution..}
+
+\item{min_depth}{Minimum sequencing depth after pre-processing to proceed
+with assembly (default: 2000000)}
 
 \item{executor}{The executor to use for running the nextflow pipeline. Must
 be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}

@@ -125,4 +125,3 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
     })
   }
 }
-

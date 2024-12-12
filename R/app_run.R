@@ -2,7 +2,9 @@
 #'
 #' @export
 #'
-MitoPilot <- function() { run_app() }
+MitoPilot <- function() {
+  run_app()
+}
 
 #' Run the Shiny Application
 #'
@@ -10,7 +12,7 @@ MitoPilot <- function() { run_app() }
 #' See `?golem::get_golem_options` for more details.
 #' @inheritParams shiny::shinyApp
 #'
-#' @noRd
+#' @export
 #' @importFrom shiny shinyApp
 #' @importFrom golem with_golem_options
 run_app <- function(

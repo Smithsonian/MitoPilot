@@ -7,6 +7,10 @@
 #'   columns `fwd` and `rev` specifying the names of the raw paired read inputs.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
+#' @param data_path Path to the directory where the raw data is located. Can be
+#'   a AWS s3 bucket even if not using AWS for pipeline execution..
+#' @param min_depth Minimum sequencing depth after pre-processing to proceed
+#'   with assembly (default: 2000000)
 #' @param executor The executor to use for running the nextflow pipeline. Must
 #'   be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
@@ -27,6 +31,8 @@ new_project <- function(
     path = here::here(),
     mapping_fn = NULL,
     mapping_id = "ID",
+    data_path = NULL,
+    min_depth = 2000000,
     executor = NULL,
     container = "drleopold/mitopilot",
     config = NULL,
@@ -34,7 +40,7 @@ new_project <- function(
     force = FALSE,
     ...) {
   # Validate executor ----
-  if(executor %nin% c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA")){
+  if (executor %nin% c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA")) {
     stop("Invalid executor.")
   }
 
@@ -90,6 +96,8 @@ new_project <- function(
   }
   readLines(config) |>
     stringr::str_replace("<<CONTAINER_ID>>", container %||% "<<CONTAINER_ID>>") |>
+    stringr::str_replace("<<RAW_DIR>>", data_path %||% "<<RAW_DIR>>") |>
+    stringr::str_replace("<<MIN_DEPTH>>", format(min_depth %||% "<<MIN_DEPTH>>", scientific = F)) |>
     writeLines(file.path(path, ".config"))
 
   message("Project initialized successfully.")

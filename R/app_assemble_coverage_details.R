@@ -9,7 +9,7 @@ assembly_coverage_details_server <- function(id, rv) {
     on("coverage_modal", {
       rv$alignment <- NULL
       rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
-        dplyr::filter(ID == rv$updating$ID) |>
+        dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::select(ID, path, scaffold, topology, length, sequence, ignore) |>
         dplyr::collect() |>
         dplyr::mutate(
@@ -50,7 +50,6 @@ assembly_coverage_details_server <- function(id, rv) {
         )
       ) |>
         showModal()
-
     })
 
     # Render table ----
@@ -394,7 +393,7 @@ assembly_coverage_details_server <- function(id, rv) {
 
 
       rv$updating <- rv$data |>
-        dplyr::filter(ID == rv$updating$ID)
+        dplyr::filter(ID == !!rv$updating$ID)
 
       trigger("coverage_modal")
     })

@@ -17,8 +17,8 @@ export_ui <- function(id) {
 #' export Server Functions
 #'
 #' @noRd
-export_server <- function(id){
-  moduleServer(id, function(input, output, session){
+export_server <- function(id) {
+  moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     # Prepare data ----
@@ -81,7 +81,7 @@ export_server <- function(id){
     on("group", {
       req(session$userData$mode == "Export")
       req(selected())
-      if(any(!is.na(rv$data$export_group[selected()]))) {
+      if (any(!is.na(rv$data$export_group[selected()]))) {
         shinyWidgets::confirmSweetAlert(
           title = "Re-assign group?",
           text = "Some selected samples are already assigned to an export group. Assigning them to a new group will not automatically remove them from previously generated export files. Do you want to continue?",
@@ -101,9 +101,15 @@ export_server <- function(id){
     init("group_modal")
     on("group_modal", {
       rv$updating <- rv$data |> dplyr::slice(selected())
-      topologies <- rv$updating |> dplyr::pull(topology) |> unique()
-      structures <- rv$updating |> dplyr::pull(structure) |> unique()
-      group_current <- rv$updating |> dplyr::pull(export_group) |> unique()
+      topologies <- rv$updating |>
+        dplyr::pull(topology) |>
+        unique()
+      structures <- rv$updating |>
+        dplyr::pull(structure) |>
+        unique()
+      group_current <- rv$updating |>
+        dplyr::pull(export_group) |>
+        unique()
       modalDialog(
         title = "Submission Group",
         size = "l",
@@ -132,17 +138,16 @@ export_server <- function(id){
           modalButton("Close")
         )
       ) |> showModal()
-
     })
 
     # Make Group ----
     observeEvent(input$make_group, {
       rv$updating$export_group <- req(input$group_name)
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[,c("ID", "export_group")], by = "ID")
+        dplyr::rows_update(rv$updating[, c("ID", "export_group")], by = "ID")
       dplyr::tbl(session$userData$con, "samples") |>
         dplyr::rows_update(
-          rv$updating[,c("ID", "export_group")],
+          rv$updating[, c("ID", "export_group")],
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
@@ -164,7 +169,7 @@ export_server <- function(id){
           span("Export Data"),
           span(id = ns("gears"), class = "gears paused")
         ),
-        size = 'l',
+        size = "l",
         shinyWidgets::pickerInput(
           ns("export_group"),
           "Export Group:",
@@ -180,7 +185,7 @@ export_server <- function(id){
           ns("include_alignments"),
           "Generate Group-level PCG alignment summary",
           value = T,
-          status = 'primary'
+          status = "primary"
         ),
         footer = tagList(
           actionButton(ns("export_data"), "Export"),
@@ -202,11 +207,5 @@ export_server <- function(id){
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
     })
-
-
-
-
-
   })
 }
-

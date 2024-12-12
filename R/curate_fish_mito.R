@@ -127,8 +127,6 @@ curate_fish_mito <- function(
         coverage_flip
       )
     }
-
-
   }
 
   ## apply punctuation model ----

@@ -15,9 +15,6 @@
 #' @param executor The executor to use for running the nextflow pipeline. Must
 #'   be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
 #' @param container The container to use for running the pipeline.
-#' @param config (optional) provide a path to an existing custom nextflow config
-#'   file. If not provided a config file template will be created based on the
-#'   specified executor.
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
 #'   directory (default = TRUE). This has now effect if not running
 #'   interactively in RStudio.
@@ -32,7 +29,6 @@ new_test_project <- function(
     full_size = FALSE,
     executor = "local",
     container = "drleopold/mitopilot",
-    config = NULL,
     Rproj = TRUE,
     force = FALSE,
     ...) {
@@ -104,26 +100,14 @@ new_test_project <- function(
     })
   }
 
-  # Config file ----
-  config <- config %||% app_sys(paste0("config.", executor))
-  if (!file.exists(config)) {
-    stop("Config file not found.")
-    return()
-  }
-  readLines(config) |>
-    stringr::str_replace("<<CONTAINER_ID>>", container %||% "<<CONTAINER_ID>>") |>
-    stringr::str_replace("<<RAW_DIR>>", file.path(path, "data", "")) |>
-    stringr::str_replace("<<MIN_DEPTH>>", ifelse(full_size, "200000", "2500")) |>
-    writeLines(file.path(path, ".config"))
-
-
   # Initialize project ----
   new_project(
     path = path,
     mapping_fn = file.path(path, "mapping.csv"),
     mapping_id = "ID",
+    data_path = file.path(path, "data", ""),
+    min_depth = 500,
     executor = executor,
-    config = file.path(path, ".config"),
     Rproj = Rproj,
     ...
   )

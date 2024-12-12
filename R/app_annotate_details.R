@@ -14,7 +14,7 @@ annotations_details_server <- function(id, rv) {
 
       ## Load annotations ----
       rv$annotations <- dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::filter(ID == rv$updating$ID) |>
+        dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::arrange(pos1) |>
         dplyr::collect() |>
         dplyr::mutate(
@@ -54,17 +54,7 @@ annotations_details_server <- function(id, rv) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(maxWidth = 80, align = "center", show = F),
           columns = list(
-            type = colDef(
-              show = T, align = "left",
-              filterMethod =
-                JS("function(rows, columnId, filterValue) {
-                    const pattern = new RegExp(filterValue, 'i')
-
-                    return rows.filter(function(row) {
-                      return pattern.test(row.values[columnId])
-                    })
-              }")
-            ),
+            type = colDef(show = T, align = "left"),
             gene = colDef(show = T, align = "left"),
             pos1 = colDef(show = T),
             pos2 = colDef(show = T),
@@ -369,7 +359,7 @@ annotations_details_server <- function(id, rv) {
       isolate({
         if (rv$editing$stop_aln %||% FALSE) {
           later::later({
-            ~session$sendCustomMessage("rightScroll", list(foo = "bar"))
+            ~ session$sendCustomMessage("rightScroll", list(foo = "bar"))
           })
         }
       })
@@ -1126,7 +1116,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
-      actionButton(ns("test"), "TEST"),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),

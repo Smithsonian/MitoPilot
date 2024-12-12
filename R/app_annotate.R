@@ -129,13 +129,13 @@ annotate_server <- function(id) {
               cell = rt_longtext()
             ),
             topology = colDef(show = TRUE),
-            scaffolds = colDef(show = TRUE, align = 'center'),
-            PCGCount = colDef(show = TRUE, name = "# PCGs", align = 'center'),
-            tRNACount = colDef(show = TRUE, name = "# tRNAs", align = 'center'),
-            rRNACount = colDef(show = TRUE, name = "# rRNAs", align = 'center'),
-            missing = colDef(show = TRUE, align = 'center', html = TRUE, cell = rt_longtext()),
-            extra = colDef(show = TRUE, align = 'center'),
-            warnings = colDef(show = TRUE, align = 'center'),
+            scaffolds = colDef(show = TRUE, align = "center"),
+            PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
+            tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
+            rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),
+            missing = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
+            extra = colDef(show = TRUE, align = "center"),
+            warnings = colDef(show = TRUE, align = "center"),
             time_stamp = colDef(
               show = TRUE,
               name = "Last Updated",
@@ -179,7 +179,7 @@ annotate_server <- function(id) {
     on("update_annotate_table", {
       reactable::updateReactable(
         "table",
-        data = rv$data  |>
+        data = rv$data |>
           dplyr::mutate(
             output = dplyr::case_when(
               annotate_switch > 1 ~ "output",

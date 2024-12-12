@@ -38,7 +38,7 @@ new_db <- function(
       "-R 10 -k '21,45,65,85,105,115'",
       "--larger-auto-ws",
       "--expected-max-size 20000",
-      "-target-genome-size 16500"
+      "--target-genome-size 16500"
     ),
     # Default annotation options
     annotate_cpus = 6,
@@ -51,8 +51,7 @@ new_db <- function(
     curate_cpus = 4,
     curate_memory = 8,
     curate_target = "fish_mito",
-    curate_params = NULL
-    ) {
+    curate_params = NULL) {
   # Read mapping file
   if (is.null(mapping_fn)) {
     mapping_fn <- here::here("mapping.csv")
@@ -68,7 +67,7 @@ new_db <- function(
   }
 
   # Load default curation parameters
-  if(is.null(curate_params)) {
+  if (is.null(curate_params)) {
     curate_params <- do.call(paste0("params_", curate_target), list())
   }
 

@@ -10,7 +10,6 @@ new_test_project(
   full_size = FALSE,
   executor = "local",
   container = "drleopold/mitopilot",
-  config = NULL,
   Rproj = TRUE,
   force = FALSE,
   ...
@@ -32,10 +31,6 @@ pre-filtered input files will be fetched from the MitoPilot github repo.}
 be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
 
 \item{container}{The container to use for running the pipeline.}
-
-\item{config}{(optional) provide a path to an existing custom nextflow config
-file. If not provided a config file template will be created based on the
-specified executor.}
 
 \item{Rproj}{(logical) Initialize and open an RStudio project in the project
 directory (default = TRUE). This has now effect if not running

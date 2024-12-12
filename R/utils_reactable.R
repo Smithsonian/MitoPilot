@@ -122,7 +122,7 @@ rt_icon_bttn <- function(inputId, icon) {
 #' @param icon font awesome icon name
 #'
 #' @noRd
-rt_icon_bttn_text <- function(inputId, icon, text='') {
+rt_icon_bttn_text <- function(inputId, icon, text = "") {
   stringr::str_glue(
     "
     function(cellInfo) {{

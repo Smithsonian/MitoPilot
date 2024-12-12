@@ -30,7 +30,6 @@ annotate <- function(
     trnaScan_opts = "-M vert",
     trnaScan_condaenv = "base",
     out_dir = NULL) {
-
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
   # Coverage trimming (optional)
@@ -75,7 +74,7 @@ annotate <- function(
 
   # Update coverage if rotated ----
   rotate <- assembly@metadata[["rotate_to"]]
-  if(!is.null(rotate) && rotate > 0){
+  if (!is.null(rotate) && rotate > 0) {
     coverage <- dplyr::bind_rows(
       coverage[rotate:nrow(coverage), ],
       coverage[1:(rotate - 1), ]
@@ -84,7 +83,7 @@ annotate <- function(
         Position = dplyr::row_number()
       )
   }
-  if(!is.null(rotate) && rotate < 0){
+  if (!is.null(rotate) && rotate < 0) {
     coverage <- dplyr::bind_rows(
       coverage[abs(rotate):1, ],
       coverage[nrow(coverage):(abs(rotate) + 1), ]
