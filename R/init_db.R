@@ -144,9 +144,9 @@ new_db <- function(
     dplyr::rows_upsert(
       data.frame(
         pre_opts = "default",
-        cpus = 8,
+        cpus = 4,
         memory = 4,
-        fastp = "--trim_poly_g --correction --detect_adapter_for_pe"
+        fastp = "--trim_poly_g --correction --detect_adapter_for_pe --dont_eval_duplication"
       ),
       in_place = TRUE,
       copy = TRUE,
