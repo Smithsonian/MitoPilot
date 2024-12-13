@@ -7,11 +7,26 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+strong { font-weight: bold; }
+</style>
+
+
 # `{MitoPilot}` - Test Project Tutorial
 
 ## Installation
 
-Before running MitoPilot with your own samples, we recommend trying out the included test project, consisting of Illumina data for 12 fish species. The following document will walk you through the process of analyzing this test dataset.
+Before running MitoPilot with your own samples, we recommend trying out the included test project consisting of Illumina data for 12 fish species. The following document will walk you through the process of analyzing the test dataset.
 
 First, make sure you have [R
 (\>=4.0.0)](https://www.r-project.org/) and
@@ -19,7 +34,7 @@ First, make sure you have [R
 
 Next you'll need to install the `{MitoPilot}` R package from GitHub. Within RStudio, run the following.
 
-``` r
+```{r eval=F}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
     install.packages("BiocManager")
 }
@@ -29,15 +44,15 @@ BiocManager::install("JonahVentures/MitoPilot")
 
 Now we can initialize the test project. For your own data, you would use the function `MitoPilot::new_project`. However, for the test data, we'll use `MitoPilot::new_project`.
 
-```
+```{r eval=F}
 # load the package
 library(MitoPilot)
 
 # specify the directory where your test project will be created
-wd = "/pool/public/genomics/macguigand/MitoPilot/testing/2024_12_4-6"
+wd = "/pool/public/genomics/macguigand/MitoPilot/testing/2024_12_13"
 
 # specify an execution environment, "local", "NMNH_Hydra", or "NOAA_SEDNA"
-ex = "NMNH_Hydra
+ex = "NMNH_Hydra"
 
 # initialize the test project
 MitoPilot::new_test_project(
@@ -49,8 +64,9 @@ MitoPilot::new_test_project(
 )
 ```
 
-> [!NOTE]
-> UNDER DEVELOPMENT. If you are using an execution environment that is not currently supported, you could use `config = config.MyEnv` to pass a custom Nextflow config to the `new_test_project` function.
+<div class="alert alert-note">
+  <strong>Note:</strong> UNDER DEVELOPMENT. If you are using an execution environment that is not currently supported, you could use `config = config.MyEnv` to pass a custom Nextflow config to the `new_test_project` function.
+</div>
 
 If the test project is successfully intialized, you should see the following.
 
@@ -73,26 +89,26 @@ Please open and review the .config file to ensure all required options are speci
 
 ## Exploring the MitoPilot GUI
 
-We can now launch the R Shiny Graphical User Interface (GUI) to examine our test project and start the analysis pipeline.
+We can now launch the R Shiny Graphical User Interface (GUI) to examine our test project and start the MitoPilot analysis pipeline.
 
-```
+```{r eval=F}
 # the function to launch the GUI must be called from within your project's directory
 setwd(wd)
 MitoPilot::MitoPilot()
 ```
 ![new MitoPilot GUI](figures/test-project/1.png)
 
-Nice! We can see some basic information about our samples. When intializing your own project, this is pulled from the mapping CSV file.
+Nice! We can see some basic information about our samples. When initializing your own project, this is pulled from the mapping CSV file.
 
-You can the samples by any column simply by clicking on the header. You can also filter samples using the search box in the top right.
+You can sort the samples by any column simply by clicking on the header. You can also filter samples using the search box in the top right.
 
-To the left of the sample ID column are two icons. The first shows whether the sample is locked or unlocked. If a sample is unlocked, it will be included when running the current pipeline stage. A locked sample cannot be edited for the current stage, but will be made available for the next stage of the pipeline. You can toggle the lock by slecting the sample (check mark), then pressing `LOCK` at the top of the window. Multiple samples can be locked or unlocked simultaneously.
+To the left of the sample ID column are two icons. The first shows whether the sample is locked or unlocked. If a sample is unlocked, it will be included when running the current pipeline module. A locked sample cannot be edited for the current module, but will be made available for the next pipeline module. You can toggle the lock by selecting the sample (check mark), then pressing `LOCK` at the top of the window. Multiple samples can be locked or unlocked simultaneously.
 
-The other icon shows the state of the sample. These states vary depending on the analysis stage and will be automatically updated when running the pipeline. However, you can also manually change the state of a sample by selecingt the sample and using the `STATE` button. 
+The other icon shows the state of the sample. These states vary depending on the analysis module and will be automatically updated when running the pipeline. However, you can also manually change the state of a sample by selecting the sample and using the `STATE` button. 
 
 ## Modifying Pipeline Parameters
 
-Within the GUI, we can modify options for each stage of the pipeline. Select all samples by clicking the empty checkbox at the top left of the table. Then click on one of the `default` links in the `Preprocess Opts.` column.
+Within the GUI, we can modify options for each step of the current pipeline module. Select all samples by clicking the empty checkbox at the top left of the table. Then click on one of the `default` links in the `Preprocess Opts` column.
 
 ![MitoPilot default preprocess](figures/test-project/3.png)
 
@@ -104,7 +120,7 @@ We can save these new parameter options by clicking on the `Parameter set name` 
 
 ![MitoPilot preprocess test params](figures/test-project/5.png)
 
-Once you've saved a new parameter set, you can easily access again using the dropdown menu. In the screenshow below, you can see a couple of other parameter sets that I created. 
+Once you've saved a new parameter set, you can easily access it again using the dropdown menu. In the screenshot below, you can see a couple of other parameter sets that I created. 
 
 ![MitoPilot preprocess test params](figures/test-project/6.png)
 
@@ -114,26 +130,26 @@ After clicking `Update`, your table should now show `test` for all samples in th
 
 You can set different parameters for different samples by simply selecting the set you want to change and repeating the above process. But for this test dataset, let's keep everything consistent.
 
-Let's also change the `Assembly Opts.`. Repeat the process above, selecting all samples and creating a new `himem` setting.
+Let's also change the `Assembly Opts`. Repeat the process above, selecting all samples and creating a new `himem` setting.
 
 ![MitoPilot asmb params](figures/test-project/8.png)
 
-## Runing MitoPilot Assembly
+## Running the Assemble Module
 
 Let's get started with the pipeline! Select all samples, then click the `UPDATE` button. A new window should appear.
 
 ![MitoPilot update asmb](figures/test-project/9.png)
 
 
-You have two options for running the pipeline. First, you could copy the Nextflom command and run it within a terminal window on your computing system. This command could also be imbedded within a submission script for a computing cluster, if you would prefer. Running the Nextflow command externally from the GUI may be preferable for batches with large numbers of samples, since you can perform the analyses in the background.
+You have two options for running the pipeline. First, you could copy the Nextflow command and run it within a terminal window on your computing system. This command could also be embedded within a submission script for a computing cluster, if you would prefer. Running the Nextflow command externally from the GUI may be preferable for batches with large numbers of samples, since you can perform the analyses in the background.
 
 Alternatively, you press the `Start Nextflow` button to launch the pipeline from within the GUI. Since our test dataset is small, let's do that.
 
 ![MitoPilot asmb running](figures/test-project/10.png)
 
-Awesome! You should see Nextflow output being printed the to `Progress` window. This window will continuely update as the pipeline progresses. If you're unsure whether the pipeline is still running, check to see if the gears in the top right are spinning.
+Awesome! You should see Nextflow output being printed the to `Progress` window. This window will continually update as the pipeline progresses. If you're unsure whether the pipeline is still running, check to see if the gears in the top right are spinning.
 
-This stage of the pipeline has 3 steps: preprocessing (filtering) the raw FASTQ files, assembling the mitogenomes using [GetOrganelle](https://github.com/Kinggerm/GetOrganelle), and calculating coverage maps for the assembly.
+This pipeline module has 3 steps: preprocessing (filtering) the raw FASTQ files with [fastp](https://github.com/OpenGene/fastp), assembling the mitogenomes using [GetOrganelle](https://github.com/Kinggerm/GetOrganelle), and calculating coverage maps for the assemblies using [bowtie2](https://github.com/BenLangmead/bowtie2).
 
 The test dataset should take a few minutes to finish. When it's done,, your `Progress` window should look something like this.
 
@@ -206,7 +222,75 @@ Selecting `Trim Consensus` will remove any conflicting regions of the aligned as
 
 ![consensus align](figures/test-project/23.png)
 
-> [!IMPORTANT]
-> Carefully consider your options for problematic samples with multiple assembly paths. There is no one-size-fits-all solution.
+Click close and return to the samples table. You will see that the entry in the `# Paths` column for SRR21844202 is highlighted and there is a note indicating that the assembly was edited. This sample has also been automatically changed to a locked state.
 
-## Runing MitoPilot Annotation
+![consensus highlight](figures/test-project/24.png)
+
+<div class="alert alert-note">
+  <strong>Note:</strong> Carefully consider your options for problematic samples with multiple assembly paths. There is no one-size-fits-all solution.
+</div>
+
+## Running the Annotate Module
+We can now move on to the Annotate pipeline module. This module consists of an annotation step using [Mitos2](https://gitlab.com/Bernt/MITOS) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE), a taxon-specific curation step to refine the annotation models, and a validation step to flag possible issues or known errors that would be rejected by NCBI GenBank.  
+
+First, we need to lock all of the successful samples in th Assemble module. Select all of the samples and click the `LOCK` button. Then use the dropdown menu in the top left to navigate to the Annotate module.
+
+![annotate](figures/test-project/25.png)
+
+Like before, let's edit the `Annotate Opts` and increase the memory allocation to 36 GB. In this window, you could also edit the Mitos2 and tRNAscan-SE options. In the future, we will allow users to specify custom reference databases for annotation.
+
+![annotate opts](figures/test-project/26.png)
+
+You can also edit the curation options. Currently, we only have one set of curation parameters: `fish_mito`. This will be updated in the near future.
+
+![curation opts](figures/test-project/27.png)
+
+To run the Annotate module, select all samples, click `UPDATE`, then click `Start Nextflow`. This will take a few minutes. As long as the gears in the top right are spinning, the pipeline is still running. Once all steps are complete, click `Close` to return to the sample table.
+
+## Exploring Annotation Results
+There are a LOT of results to explore in the Annotate module. The sample table reports some basic stats about the number of protein-coding genes (PCGs), tRNAs, and rRNAs. The `missing` column reports the number of mitochondrial genes that were not annotated, based on the provided curation model. The `extra` column notes the number of potentially duplicated genes. 
+
+Lastly, the `warnings` column indicates how many warning flags were raised during the validation step. Samples with many warnings will require more manual curation to ensure that they are not rejected during submission to NCBI GenBank.
+
+![curation opts](figures/test-project/28.png)
+
+The annotation results for each sample can be examined more closely by clicking the `details` button. First, let's examine the details for a good sample, SRR19434536 (_Rhinecanthus rectangulus_). 
+
+![SRR19434536 annotation](figures/test-project/29.png)
+
+This sample had the expected number of genes and no warnings. However, the `notes` column shows that MitoPilot still made some tweaks to the annotation during the curation step. For example, the start position of rRNA rrnL was moved 22 bp upstream and the stop codon for NAD2 was trimmed by 2 bp.
+
+The nucleotide (and amino acid sequence for PCGs) can be copied to the clipboard using the `nt` and `aa` buttons on the far right. This could be helpful if you'd like to manually BLAST some results.
+
+Clicking on the `Coverage Map` button will show a plot of sequence depth, zooming to the position of the highlighted gene
+
+![SRR19434536 cov](figures/test-project/30.png)
+
+For protein coding genes, you can click the `Alignment` button to show the protein alignment of your annotated gene against a reference database. NEED TO ASK DEVIN ABOUT THIS. ONLY SHOWS TOP SCORING ALIGNMENT?
+
+![SRR19434536 align](figures/test-project/31.png)
+
+If you provided a path to a local BLAST database when initializing the project, you can choose to use that database here by checking the `Local blast` box. MitoPilot will rerun the BLAST search for the highlighted gene (CONFIRM WITH DEVIN).
+
+## Editing Annotation Results
+Editing the annotations does not work for DJM. Returns error message.
+
+```
+Warning: Error in dplyr::mutate: ℹ In argument: `similarity = compare_aa(focal, target, "similarity")`.
+ℹ In group 1: `acc = "NC_011941"`, `Taxon = "Rhinecanthus aculeatus"`, `eval = 0`, `pctid = 98.5632`,
+  `similarity = 98.8445`, `gap_leading = 0`, `gap_trailing = 0`, `target =
+  "MSPYILATLMFSLGLGTTITFMSSHWLLAWMGLEINTLAIIPLMTHQYHPRAIEAATKYFLAQATAAATLMFASTTNAWLTGQWDIQQTSHPLPITMITIALALKLGLAPLHSWLPEVLQGLNLTTGLIMSTWQKLAPFALLLQVQPTNSNLLIFLGLTSTVIGGWGGLNQTQLRKILAYSSIAHLGWMVLIIQFSPSLTLLALITYLIMTTATFLIFKLNASTNINTLATSWAKTPVLTALTPLVLLSLGGLPPLTGFMPKWLILQELTKQDLALPATLAALSALLSLYFYLRITYASTLTISPNTPTGTTPWRLPSTQLTLLLTTTTTATMCLLPLTPALTTFLAT"`.
+Caused by error in `compare_aa()`:
+! object 'BLOSUM80' not found
+  3: runApp
+  2: print.shiny.appobj
+  1: <Anonymous>
+```
+
+
+
+
+
+
+
+
