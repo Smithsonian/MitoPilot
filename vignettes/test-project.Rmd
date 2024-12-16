@@ -273,19 +273,48 @@ For protein coding genes, you can click the `Alignment` button to show the prote
 If you provided a path to a local BLAST database when initializing the project, you can choose to use that database here by checking the `Local blast` box. MitoPilot will rerun the BLAST search for the highlighted gene (CONFIRM WITH DEVIN).
 
 ## Editing Annotation Results
-Editing the annotations does not work for DJM. Returns error message.
+Editing annotation within the MitoPilot is currently bugged due to issues with the R package `Biostrings`. Devin and Dan are working on a solution.
 
-```
-Warning: Error in dplyr::mutate: ℹ In argument: `similarity = compare_aa(focal, target, "similarity")`.
-ℹ In group 1: `acc = "NC_011941"`, `Taxon = "Rhinecanthus aculeatus"`, `eval = 0`, `pctid = 98.5632`,
-  `similarity = 98.8445`, `gap_leading = 0`, `gap_trailing = 0`, `target =
-  "MSPYILATLMFSLGLGTTITFMSSHWLLAWMGLEINTLAIIPLMTHQYHPRAIEAATKYFLAQATAAATLMFASTTNAWLTGQWDIQQTSHPLPITMITIALALKLGLAPLHSWLPEVLQGLNLTTGLIMSTWQKLAPFALLLQVQPTNSNLLIFLGLTSTVIGGWGGLNQTQLRKILAYSSIAHLGWMVLIIQFSPSLTLLALITYLIMTTATFLIFKLNASTNINTLATSWAKTPVLTALTPLVLLSLGGLPPLTGFMPKWLILQELTKQDLALPATLAALSALLSLYFYLRITYASTLTISPNTPTGTTPWRLPSTQLTLLLTTTTTATMCLLPLTPALTTFLAT"`.
-Caused by error in `compare_aa()`:
-! object 'BLOSUM80' not found
-  3: runApp
-  2: print.shiny.appobj
-  1: <Anonymous>
-```
+## Running the Export Module
+Let's move to the final step of the pipeline: the Export module. This module allows you to create groups of samples, then generate alignments and files formatted for submission to GenBank.
+
+First, we need to lock the successful samples in the Annotate module. Select all of the samples and click the `LOCK` button. Then use the dropdown menu in the top left to navigate to the Export module.
+
+Next, let's create a group of samples. Sort the samples table by clicking on the `Taxon` column, then select the first five samples and click the `GROUP` button. 
+
+A new window will appear showing some summary information for the selected samples. Type a name for the group, then click `Create`. You can then click `Close` to return to the sample table.
+
+<div class="alert alert-note">
+  <strong>Note:</strong> You can assign new samples to an existing group. Simply select the samples you wish to add, click `GROUP`, then choose the existing group from the dropdown menu.
+</div>
+
+![export group](figures/test-project/32.png)
+
+The sample table should now show assignment to our newly created group. 
+
+<div class="alert alert-note">
+  <strong>Note:</strong> Each sample can only belong to one group. MitoPilot will produce a warning message if you attempt to re-assign a sample to a new group.
+</div>
+
+![table group](figures/test-project/33.png)
+
+We can proceed to exporting the data for this group. Click `EXPORT DATA`, which will open a new window.
+
+![export](figures/test-project/34.png)
+
+If you have multiple groups, you can select the appropriate one from the dropdown menu.
+
+MitoPilot allows you to create a custom FASTA header for your samples, pulling from extra columns in the CSV file you supplied for the `mapping_fn` argument of the `new_project` function. This conviniently allows you to include metadata needed for your NCBI GenBank submission. For this test project, we can leave the `Fasta Header Template` at the default value.
+
+There is also toggle `Generate Group-level PCG alignment summary`, which will run aligments of all the protein coding genes in your group. For large groups, this can take a while. But it's a useful final quality control.
+
+Click `Export` to generate the final files. It may take a couple of minutes. As long as the gears are spinning, MitoPilot is still running.
+
+
+
+
+
+
 
 
 
