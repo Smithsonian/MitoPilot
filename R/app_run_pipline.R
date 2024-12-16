@@ -122,31 +122,40 @@ pipeline_server <- function(id) {
     })
 
     # Monitor progress ----
-    progress <- reactiveValues(
-      header = NULL,
-      progress = NULL,
-      footer = NULL
+    progress <- reactiveVal(
+      list(
+        header = character(0),
+        progress = list(),
+        footer = character(0)
+      )
     )
     progress_update <- function(process_out, progress){
+      executor_lines <- stringr::str_detect(process_out, "^executor")
       keys <- stringr::str_match(
         process_out,
-        "^[.+] WF.+(?<key>\\w{10}) "
+        "^(?<prefix>\\[.+\\]) WF1:\\S+(?<key>\\S{10}) (?<suffix>.*)"
       )
-
-
-      executor_lines <- stringr::str_detect(process_out, "^executor")
-      lp <- stringr::str_detect(process_out, "^[.+] process >")
-      if (is.null(progress$progress)) {
-        header_stop <- ifelse(any(lp)|any(le), min(which(le|lp)), length(process_out))
-        header <- seq_len(header_stop)
-        keys <- process_out[lp] |> stringr::str_match("^[.+] process > (.+):")[,2]
+      progress_lines <- !is.na(keys[,1])
+      if (length(progress$progress)==0) {
+        header_stop <- min(which(executor_lines|progress_lines))
+        header_stop <- ifelse(length(header_stop)==0, length(process_out), header_stop - 1)
         progress$header <- process_out[seq_len(header_stop)] |> collapse_empty_lines()
-        process_out <- process_out[-seq_len(header_stop)]
       }
+      if(any(executor_lines)){
+        progress$executor <- process_out[max(which(executor_lines))]
+      }
+      for(key in unique(keys[,2])){
+        progress_update <- keys[keys[,2] == key,]
+        progress$progress[[key]] <- progress_update[nrow(progress_update),]
+      }
+      remaining <- process_out[!(executor_lines|progress_lines|!is.na(keys[,1]))] |> collapse_empty_lines()
+      if(any(nchar(remaining)>0)){
+        progress$footer <- remaining
+      }
+      return(progress)
     }
     collapse_empty_lines <- function(x) {
       is_empty <- grepl("^\\s*$", x)
-
       if (all(is_empty)) {
         return(character(0))
       }
@@ -164,13 +173,16 @@ pipeline_server <- function(id) {
       if (p$is_alive()) {
         new_output <- p$read_output_lines()
         if (length(new_output) > 0) {
-          process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
+          progress_update(new_output, progress()) |> progress()
+          print(progress())
+          # process_out(paste(process_out(), paste(new_output, collapse = "\n"), sep = "\n"))
           trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
       } else {
         final_output <- p$read_output_lines()
         if (length(final_output) > 0) {
-          process_out(paste(process_out(), paste(final_output, collapse = "\n"), sep = "\n"))
+          progress_update(final_output, progress)
+          # process_out(paste(process_out(), paste(final_output, collapse = "\n"), sep = "\n"))
         }
         process(NULL)
         shinyjs::hide("stop")
@@ -185,7 +197,15 @@ pipeline_server <- function(id) {
       later::later({
         ~ session$sendCustomMessage("scrollProgress", list(id = ns("progress_div_text")))
       })
-      req(process_out())
+      paste(
+        c(
+          req(progress$header),
+          progress$executor,
+          lapply(progress$progress, function(x) paste(x, collapse = "\n")),
+          progress$footer
+        ),
+        collapse = "\n"
+      )
     })
 
     # Stop ----
