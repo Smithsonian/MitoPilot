@@ -122,6 +122,41 @@ pipeline_server <- function(id) {
     })
 
     # Monitor progress ----
+    progress <- reactiveValues(
+      header = NULL,
+      progress = NULL,
+      footer = NULL
+    )
+    progress_update <- function(process_out, progress){
+      keys <- stringr::str_match(
+        process_out,
+        "^[.+] WF.+(?<key>\\w{10}) "
+      )
+
+
+      executor_lines <- stringr::str_detect(process_out, "^executor")
+      lp <- stringr::str_detect(process_out, "^[.+] process >")
+      if (is.null(progress$progress)) {
+        header_stop <- ifelse(any(lp)|any(le), min(which(le|lp)), length(process_out))
+        header <- seq_len(header_stop)
+        keys <- process_out[lp] |> stringr::str_match("^[.+] process > (.+):")[,2]
+        progress$header <- process_out[seq_len(header_stop)] |> collapse_empty_lines()
+        process_out <- process_out[-seq_len(header_stop)]
+      }
+    }
+    collapse_empty_lines <- function(x) {
+      is_empty <- grepl("^\\s*$", x)
+
+      if (all(is_empty)) {
+        return(character(0))
+      }
+      first_nonempty <- which(!is_empty)[1]
+      last_nonempty <- which(!is_empty)[length(which(!is_empty))]
+      x <- x[first_nonempty:last_nonempty]
+      is_empty <- is_empty[first_nonempty:last_nonempty]
+      keep <- !is_empty | (is_empty & c(TRUE, !is_empty[-length(is_empty)]))
+      x[keep]
+    }
     observe({
       req(process())
       invalidateLater(100)
