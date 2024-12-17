@@ -57,7 +57,8 @@ Imports:
     waiter,
     zoo
 Suggests: 
-    knitr
+    knitr,
+    pwalign
 VignetteBuilder: 
     knitr
 biocViews:

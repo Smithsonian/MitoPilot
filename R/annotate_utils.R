@@ -18,12 +18,16 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
   }
 
   if (type[1] == "similarity") {
-    data("BLOSUM80", package = "Biostrings")
+    if(requireNamespace("pwalign", quietly = TRUE)){
+      data(subMx, package = "pwalign")
+    }els{
+      data(subMx, package = "Biostrings")
+    }
+    data(subMx, package = "Biostrings")
     max_score <- sum(diag(BLOSUM80)[match(strsplit(query, NULL)[[1]], rownames(BLOSUM80))])
     res <- 100 * BiocGenerics::score(alignment) / max_score
     return(res)
   }
-
   return(alignment)
 }
 
