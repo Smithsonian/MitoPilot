@@ -137,7 +137,7 @@ pipeline_server <- function(id) {
       executor_lines <- stringr::str_detect(process_out, "^executor")
       keys <- stringr::str_match(
         process_out,
-        "^(?<prefix>\\[.+\\]) WF1[^\\s]+(?<key>\\S{10}) (?<suffix>.*)"
+        "^(?<prefix>\\[.+\\]) WF[^\\s]+(?<key>\\S{10}) (?<suffix>.*)"
       )
       progress_lines <- !is.na(keys[,1])
       if (length(prog_process)==0) {
