@@ -31,10 +31,9 @@ mkdir ~/bin
 mv ~/nextflow ~/bin/nextflow
 ```
  
-This allows you to call `nextflow` from anywhere on the cluster. Now you're ready to start using MitoPilot on Hydra!
+This allows you to call `nextflow` from anywhere on the cluster. Next, let's install MitoPilot.
 
 - login to Hydra
-- start an interactive session by running `qrsh`
 - run `conda deactivate` to avoid package conflicts (may not be necessary for all users)
 - run `module load tools/R/RStudio/server`
 - run `start-rstudio-server` (you may be asked to run a different command if this is your first time)
@@ -53,5 +52,24 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 }
 BiocManager::install("JonahVentures/MitoPilot")
 ```
-- check that installation was successful by loading the library with `library(MitoPilot)`
-- you can now follow instructions on the [MitoPilot GitHub page](https://github.com/JonahVentures/MitoPilot) to run the test dataset
+
+If the install was successful, you're ready to start using MitoPilot!
+
+We recommend running MitoPilot within an interactive session on the cluster to avoid unnecessary computational burden on the login nodes. First, initialize an interactive session.
+
+```{bash eval=F}
+qrsh -l h_rt=24:00:00 
+```
+
+Note that on Hydra, interactive sessions can run for a maximum of 24 hours, and users are limited to one active interactive session at a time.
+
+Once the interactive session starts, you can launch RStudio server.
+```{bash eval=F}
+conda deactivate
+module load tools/R/RStudio/server
+start-rstudio-server
+```
+
+Follow the login instructions as presnted above. Once you have an Rstudio server window open, run `library(MitoPilot)` to load the package.
+
+Want to learn how to use MitoPilot? Check out the [Test Project Tutorial](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
