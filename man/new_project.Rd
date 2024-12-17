@@ -10,7 +10,7 @@ new_project(
   mapping_id = "ID",
   data_path = NULL,
   min_depth = 2e+06,
-  executor = NULL,
+  executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
   container = "drleopold/mitopilot",
   config = NULL,
   Rproj = TRUE,

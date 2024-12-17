@@ -33,14 +33,25 @@ new_project <- function(
     mapping_id = "ID",
     data_path = NULL,
     min_depth = 2000000,
-    executor = NULL,
+    executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
     container = "drleopold/mitopilot",
     config = NULL,
     Rproj = TRUE,
     force = FALSE,
     ...) {
+
+  # Read mapping file ----
+  if (is.null(mapping_fn) || !file.exists(mapping_fn)) {
+    stop("A mapping file is required to initialize a new project")
+  }
+  mapping_out <- file.path(path, "mapping.csv")
+  if (!identical(mapping_fn, mapping_out)) {
+    file.copy(mapping_fn, mapping_out)
+  }
+
   # Validate executor ----
-  if (executor %nin% c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA")) {
+  executor <- executor[1]
+  if (is.null(executor) || executor %nin% c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA")) {
     stop("Invalid executor.")
   }
 
@@ -60,15 +71,6 @@ new_project <- function(
       rstudioapi::initializeProject(path)
       on.exit(rstudioapi::openProject(path, newSession = TRUE))
     }
-  }
-
-  # Read mapping file ----
-  if (is.null(mapping_fn) || !file.exists(mapping_fn)) {
-    stop("A mapping file is required to initialize a new project")
-  }
-  mapping_out <- file.path(path, "mapping.csv")
-  if (!identical(mapping_fn, mapping_out)) {
-    file.copy(mapping_fn, mapping_out)
   }
 
   # Initialize sqlite db ----
