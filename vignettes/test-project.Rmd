@@ -30,7 +30,7 @@ Before running MitoPilot with your own samples, we recommend trying out the incl
 
 First, make sure you have [R
 (\>=4.0.0)](https://www.r-project.org/) and
-[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](SI_NMNH_Hydra_README.md) and [NOAA SEDNA](NOAA_SEDNA_README.md) computing clusters.  
+[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html) and [NOAA SEDNA](https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html) computing clusters.  
 
 Next you'll need to install the `{MitoPilot}` R package from GitHub. Within RStudio, run the following.
 
