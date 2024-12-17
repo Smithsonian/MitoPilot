@@ -151,7 +151,7 @@ And we're off! You should see Nextflow output being printed the to `Progress` wi
 
 This pipeline module has 3 steps: preprocessing (filtering) the raw FASTQ files with [fastp](https://github.com/OpenGene/fastp), assembling the mitogenomes using [GetOrganelle](https://github.com/Kinggerm/GetOrganelle), and calculating coverage maps for the assemblies using [bowtie2](https://github.com/BenLangmead/bowtie2).
 
-If you're working on a computing cluster, Nextflow distributes the analyses across multiple batch jobs. You can use your cluster's job scheduler to check on the status of MitoPilot jobs. Some samples may finish faster than others.
+If you're working on a computing cluster, Nextflow distributes the analyses across multiple batch jobs. This can allow you to run hundreds of samples simultaneously. You can use your cluster's job scheduler to check on the status of MitoPilot jobs. Some samples may finish faster than others.
 
 ![](figures/test-project/10.png)
 
