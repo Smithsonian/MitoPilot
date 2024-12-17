@@ -20,7 +20,7 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
   if (type[1] == "similarity") {
     if(requireNamespace("pwalign", quietly = TRUE)){
       data(subMx, package = "pwalign")
-    }els{
+    }else{
       data(subMx, package = "Biostrings")
     }
     data(subMx, package = "Biostrings")
