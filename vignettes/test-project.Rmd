@@ -26,7 +26,7 @@ strong { font-weight: bold; }
 
 ## Installation
 
-Before running MitoPilot with your own samples, we recommend trying out the included test project, consisting of Illumina data for 12 fish species. The following tutorial provides a step-by-step walthrough.
+Before running MitoPilot with your own samples, we recommend trying out the included test project, consisting of Illumina data for 13 fish species. The following tutorial provides a step-by-step walthrough.
 
 First, make sure you have [R
 (\>=4.0.0)](https://www.r-project.org/) and
@@ -110,50 +110,58 @@ The other icon shows the state of the sample. These states vary depending on the
 
 Within the GUI, we can modify options for each step of the current pipeline module. Select all samples by clicking the empty checkbox at the top left of the table. Then click on one of the `default` links in the `Preprocess Opts` column.
 
+![](figures/test-project/2.png)
+
+Here you can see the default options for pre-processing your raw FASTQ files. We can modify these by clicking the `edit` checkbox. Let's change the CPUs to 4 and the Memory to 16 GB. You could also change the options passed to [fastp](https://github.com/OpenGene/fastp), but let's keep those at the defaults for now.
+
 ![](figures/test-project/3.png)
-
-Here you can see the default options for pre-processing your raw FASTQ files. We can modify these by clicking the `edit` checkbox. Let's change the CPUs to 4 and the Memory to 40 GB. You could also change the options passed to [fastp](https://github.com/OpenGene/fastp), but let's keep those at the defaults for now.
-
-![](figures/test-project/4.png)
 
 We can save these new parameter options by clicking on the `Parameter set name` box, typing a new name, and clicking  `Add YOUR NEW NAME...` in the dropdown. Finally, click `Update` in the bottom right to save your selection. 
 
-![](figures/test-project/5.png)
+![](figures/test-project/4.png)
 
 Once you've saved a new parameter set, you can easily access it again using the dropdown menu. In the screenshot below, you can see a couple of other parameter sets that I created. 
 
-![](figures/test-project/6.png)
+![](figures/test-project/5.png)
 
 After clicking `Update`, your table should now show `test` for all samples in the `Preprocess Opts` column.
 
-![](figures/test-project/7.png)
+![](figures/test-project/6.png)
 
 You can set different parameters for different samples by simply selecting the set you want to change and repeating the above process. But for this test dataset, let's keep everything consistent.
 
 Let's also change the `Assembly Opts`. Repeat the process above, selecting all samples and creating a new `himem` setting like so.
 
-![](figures/test-project/8.png)
+![](figures/test-project/7.png)
 
 ## Running the Assemble Module
 
 Let's get started with the pipeline! Select all samples, then click the `UPDATE` button. A new window should appear.
 
-![](figures/test-project/9.png)
+![](figures/test-project/8.png)
 
 
 You have two options for running the pipeline. First, you could copy the Nextflow command and run it in a terminal window on your computing system. This command could also be embedded within a batch job submission script for a computing cluster. Running the Nextflow command externally from the GUI may be preferable when working with a large numbers of samples, since you can run pipeline in the background.
 
 Alternatively, you can press the `Start Nextflow` button to launch the pipeline from within the GUI. This requires you to keep the GUI open while the pipeline is running. Since our test dataset is small, let's do that.
 
-![](figures/test-project/10.png)
+![](figures/test-project/9.png)
 
 And we're off! You should see Nextflow output being printed the to `Progress` window. This window will continually update as the pipeline progresses. If you're unsure whether the pipeline is still running, check to see if the gears in the top right are spinning.
 
 This pipeline module has 3 steps: preprocessing (filtering) the raw FASTQ files with [fastp](https://github.com/OpenGene/fastp), assembling the mitogenomes using [GetOrganelle](https://github.com/Kinggerm/GetOrganelle), and calculating coverage maps for the assemblies using [bowtie2](https://github.com/BenLangmead/bowtie2).
 
-The test dataset should take a few minutes to finish. When it's done, your `Progress` window should look something like this.
+If you're working on a computing cluster, Nextflow distributes the analyses across multiple batch jobs. You can use your cluster's job scheduler to check on the status of MitoPilot jobs. Some samples may finish faster than others.
+
+![](figures/test-project/10.png)
+
+Additionally, you may notice that some samples fail at certain steps. Often this is due to a memory error, so MitoPilot will retry failed samples with more RAM. The Nextflow log tracks the number of failed samples and retries.
 
 ![](figures/test-project/11.png)
+
+The test dataset should take a few minutes to finish. When it's done, your `Progress` window should look something like this.
+
+![](figures/test-project/12.png)
 
 You can now click `Close` to go back to the samples table. 
 
