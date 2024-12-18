@@ -16,7 +16,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID, Taxon)
 
   dplyr::left_join(assemble, preprocess, by = "ID") |>
-    dplyr::left_join(taxa, preprocess, by = "ID") |>
+    dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::relocate(
