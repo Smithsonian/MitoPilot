@@ -6,7 +6,7 @@
 #' @noRd
 app_server <- function(input, output, session) {
   # db connection ----
-  db <- getOption("MitoPilot.db") %||% here::here(".sqlite")
+  db <- getOption("MitoPilot.db") %||% normalizePath(".sqlite")
   session$userData$dir <- dirname(db)
   if (!file.exists(db)) {
     shinyWidgets::sendSweetAlert(
