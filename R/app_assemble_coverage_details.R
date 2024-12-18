@@ -146,7 +146,7 @@ assembly_coverage_details_server <- function(id, rv) {
     # View Coverage PDF ----
     observeEvent(input$view_coverage, {
       url <- file.path(
-        dirname(getOption("MitoPilot.db") %||% here::here(".sqlite")),
+        dirname(getOption("MitoPilot.db") %||% "."),
         "out", rv$updating$ID,
         "assemble", rv$updating$assemble_opts,
         paste0(rv$updating$ID, "_assembly_", rv$focal_assembly$path[as.numeric(input$view_coverage)], "_coverage.pdf")

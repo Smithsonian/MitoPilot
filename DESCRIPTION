@@ -30,7 +30,6 @@ Imports:
     ggthemes,
     glue,
     golem,
-    here,
     htmlwidgets,
     jsonlite,
     later,

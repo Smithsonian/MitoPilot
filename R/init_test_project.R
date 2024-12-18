@@ -24,7 +24,7 @@
 #'
 #' @export
 new_test_project <- function(
-    path = here::here(),
+    path = ".",
     n = Inf,
     full_size = FALSE,
     executor = "local",

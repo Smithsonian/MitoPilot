@@ -24,7 +24,7 @@
 #' @export
 #'
 new_db <- function(
-    db_path = file.path(here::here(), ".sqlite"),
+    db_path = "./.sqlite",
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
@@ -54,7 +54,7 @@ new_db <- function(
     curate_params = NULL) {
   # Read mapping file
   if (is.null(mapping_fn)) {
-    mapping_fn <- here::here("mapping.csv")
+    mapping_fn <- "./mapping.csv"
     if (!file.exists(mapping_fn)) {
       stop("Mapping file not found")
     }

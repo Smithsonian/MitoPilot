@@ -122,7 +122,7 @@ pipeline_server <- function(id) {
           SGE_CELL = "age",
           SGE_ROOT = "/cm/shared/apps/uge/8.8.1"
         ),
-        wd = dirname(getOption("MitoPilot.db") %||% here::here(".sqlite"))
+        wd = dirname(getOption("MitoPilot.db") %||% ".")
       )
       process(p)
     })

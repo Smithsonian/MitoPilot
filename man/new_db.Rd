@@ -5,7 +5,7 @@
 \title{Initialize a new project database}
 \usage{
 new_db(
-  db_path = file.path(here::here(), ".sqlite"),
+  db_path = "./.sqlite",
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",

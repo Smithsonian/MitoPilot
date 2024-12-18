@@ -11,7 +11,7 @@ nextflow_cmd <- function(
     workflow = c("assemble", "annotate"),
     path = NULL,
     source = app_sys("nextflow")) {
-  path <- path %||% dirname(getOption("MitoPilot.db") %||% here::here(".sqlite"))
+  path <- path %||% dirname(getOption("MitoPilot.db") %||% normalizePath(".sqlite"))
   workflow <- tolower(workflow[1])
 
   if (workflow %nin% c("assemble", "annotate")) {

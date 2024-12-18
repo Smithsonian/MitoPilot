@@ -5,7 +5,7 @@
 \title{Initialize new MitoPilot Project}
 \usage{
 new_project(
-  path = here::here(),
+  path = ".",
   mapping_fn = NULL,
   mapping_id = "ID",
   data_path = NULL,

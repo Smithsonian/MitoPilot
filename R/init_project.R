@@ -28,7 +28,7 @@
 #' @export
 #'
 new_project <- function(
-    path = here::here(),
+    path = ".",
     mapping_fn = NULL,
     mapping_id = "ID",
     data_path = NULL,

@@ -5,7 +5,7 @@
 \title{Initialize a test project}
 \usage{
 new_test_project(
-  path = here::here(),
+  path = ".",
   n = Inf,
   full_size = FALSE,
   executor = "local",
