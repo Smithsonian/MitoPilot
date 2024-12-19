@@ -32,7 +32,7 @@ pipeline_server <- function(id) {
         modalDialog(
           title = div(
             style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-            span(stringr::str_glue("Update {session$userData$mode} pipeline - O Samples")),
+            span(stringr::str_glue("{session$userData$mode} - nothing to update")),
             span(id = ns("gears"), class = "gears paused")
           ),
           size = "l",
@@ -54,7 +54,7 @@ pipeline_server <- function(id) {
       modalDialog(
         title = div(
           style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-          span(stringr::str_glue("Update {session$userData$mode} pipeline: {length(samples)} Samples")),
+          span(stringr::str_glue("{session$userData$mode}: updating {length(samples)} samples")),
           span(id = ns("gears"), class = "gears paused")
         ),
         size = "l",
