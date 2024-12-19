@@ -26,11 +26,11 @@ strong { font-weight: bold; }
 
 ## Installation
 
-Before running MitoPilot with your own samples, we recommend trying out the included test project, consisting of Illumina data for 12 fish species. The following tutorial provides a step-by-step walthrough.
+Before running MitoPilot with your own samples, we recommend trying out the included test project, consisting of Illumina data for 13 fish species. The following tutorial provides a step-by-step walthrough.
 
 First, make sure you have [R
 (\>=4.0.0)](https://www.r-project.org/) and
-[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](SI_NMNH_Hydra_README.md) and [NOAA SEDNA](NOAA_SEDNA_README.md) computing clusters.  
+[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html) and [NOAA SEDNA](https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html) computing clusters.  
 
 Next you'll need to install the `{MitoPilot}` R package from GitHub. Within RStudio, run the following.
 
@@ -104,56 +104,64 @@ You can sort the samples by any column, simply click on the header. You can also
 
 To the left of the sample ID column are two icons. The first shows whether the sample is locked or unlocked. If a sample is unlocked, it will be included when running the current pipeline module. A locked sample cannot be edited for the current module, but will be made available for the next pipeline module. You can toggle the lock by selecting the sample (check mark), then pressing `LOCK` at the top of the window. Multiple samples can be locked or unlocked simultaneously.
 
-The other icon shows the state of the sample. These states vary depending on the analysis module and will be automatically updated when running the pipeline. However, you can also manually change the state of a sample by selecting the sample and using the `STATE` button. 
+The other icon shows the state of the sample. These states vary depending on the analysis module and will be automatically updated when running the pipeline. However, you can also manually change the state of a sample using the `STATE` button. For example, in the Assemble module you could prevent samples from running through the pipeline by manually setting their states to `Hold / Waiting`.
 
 ## Modifying Pipeline Parameters
 
 Within the GUI, we can modify options for each step of the current pipeline module. Select all samples by clicking the empty checkbox at the top left of the table. Then click on one of the `default` links in the `Preprocess Opts` column.
 
+![](figures/test-project/2.png)
+
+Here you can see the default options for pre-processing your raw FASTQ files. We can modify these by clicking the `edit` checkbox. Let's change the CPUs to 4 and the Memory to 16 GB. You could also change the options passed to [fastp](https://github.com/OpenGene/fastp), but let's keep those at the defaults for now.
+
 ![](figures/test-project/3.png)
-
-Here you can see the default options for pre-processing your raw FASTQ files. We can modify these by clicking the `edit` checkbox. Let's change the CPUs to 4 and the Memory to 40 GB. You could also change the options passed to [fastp](https://github.com/OpenGene/fastp), but let's keep those at the defaults for now.
-
-![](figures/test-project/4.png)
 
 We can save these new parameter options by clicking on the `Parameter set name` box, typing a new name, and clicking  `Add YOUR NEW NAME...` in the dropdown. Finally, click `Update` in the bottom right to save your selection. 
 
-![](figures/test-project/5.png)
+![](figures/test-project/4.png)
 
 Once you've saved a new parameter set, you can easily access it again using the dropdown menu. In the screenshot below, you can see a couple of other parameter sets that I created. 
 
-![](figures/test-project/6.png)
+![](figures/test-project/5.png)
 
 After clicking `Update`, your table should now show `test` for all samples in the `Preprocess Opts` column.
 
-![](figures/test-project/7.png)
+![](figures/test-project/6.png)
 
 You can set different parameters for different samples by simply selecting the set you want to change and repeating the above process. But for this test dataset, let's keep everything consistent.
 
 Let's also change the `Assembly Opts`. Repeat the process above, selecting all samples and creating a new `himem` setting like so.
 
-![](figures/test-project/8.png)
+![](figures/test-project/7.png)
 
 ## Running the Assemble Module
 
 Let's get started with the pipeline! Select all samples, then click the `UPDATE` button. A new window should appear.
 
-![](figures/test-project/9.png)
+![](figures/test-project/8.png)
 
 
 You have two options for running the pipeline. First, you could copy the Nextflow command and run it in a terminal window on your computing system. This command could also be embedded within a batch job submission script for a computing cluster. Running the Nextflow command externally from the GUI may be preferable when working with a large numbers of samples, since you can run pipeline in the background.
 
 Alternatively, you can press the `Start Nextflow` button to launch the pipeline from within the GUI. This requires you to keep the GUI open while the pipeline is running. Since our test dataset is small, let's do that.
 
-![](figures/test-project/10.png)
+![](figures/test-project/9.png)
 
 And we're off! You should see Nextflow output being printed the to `Progress` window. This window will continually update as the pipeline progresses. If you're unsure whether the pipeline is still running, check to see if the gears in the top right are spinning.
 
 This pipeline module has 3 steps: preprocessing (filtering) the raw FASTQ files with [fastp](https://github.com/OpenGene/fastp), assembling the mitogenomes using [GetOrganelle](https://github.com/Kinggerm/GetOrganelle), and calculating coverage maps for the assemblies using [bowtie2](https://github.com/BenLangmead/bowtie2).
 
-The test dataset should take a few minutes to finish. When it's done, your `Progress` window should look something like this.
+If you're working on a computing cluster, Nextflow distributes the analyses across multiple batch jobs. This can allow you to run hundreds of samples simultaneously. You can use your cluster's job scheduler to check on the status of MitoPilot jobs. Some samples may finish faster than others.
+
+![](figures/test-project/10.png)
+
+Additionally, you may notice that some samples fail at certain steps. Often this is due to a memory error, so MitoPilot will retry failed samples with more RAM. The Nextflow log tracks the number of failed samples and retries.
 
 ![](figures/test-project/11.png)
+
+The test dataset should take a few minutes to finish. When it's done, your `Progress` window should look something like this.
+
+![](figures/test-project/12.png)
 
 You can now click `Close` to go back to the samples table. 
 
@@ -161,7 +169,7 @@ You can now click `Close` to go back to the samples table.
 
 The sample table should now be updated with a bunch of new information. 
 
-![](figures/test-project/12.png)
+![](figures/test-project/13.png)
 
 If you want to locate the results files for a sample, scroll all the way to the right and click `output`. This will open the appropriate folder in your RStudio session.
 
@@ -183,7 +191,7 @@ Notice that in this figure, read depth drops off dramatically at both ends of th
 
 In this test dataset, there are two problematic samples which returned failed states. You can see which samples failed by looking for the exclamation mark state icon. Selecting a sample with that icon and clicking on the `STATE` button will confirm.
 
-![](figures/test-project/13.png)
+![](figures/test-project/17.png)
 
 One failed sample is SRR22396758 (_Upeneus parvus_). We purposefully truncated this sample's FASTQ file to 200 reads. With so few reads, this sample failed to meet the `min_depth` threshold and returned a message "Insufficient sequencing depth" in the `Notes` column. When analyzing your own data, you can specify the `min_depth` threshold with the `new_project` function.
 
@@ -194,29 +202,29 @@ The other failed sample is SRR21844202
 
 Let's take a peek at SRR21844202. Select the sample, scroll all the way to the right, and click on `details`. 
 
-![](figures/test-project/17.png)
+![](figures/test-project/18.png)
 
 We can see two assemblies listed here. Clicking on `view` will show us the coverage, error, and GC content graphs for each assembly.  
 
 Path #1
 
-![](figures/test-project/18.png)
+![](figures/test-project/19.png)
 
 Path #2
 
-![](figures/test-project/19.png)
+![](figures/test-project/20.png)
 
 The two assembly paths are very similar, differing only slightly around 13,000 bp. 
 
 We can chose to move forward with just one assembly path and ignore the other.
 
-![](figures/test-project/22.png)
+![](figures/test-project/21.png)
 
 Alternatively, we can use the consensus sequence. Select both paths and click the `Align` button in the bottom right. The sequence alignment will pop up, showing us that the two paths have 99.9897% sequence similarity.
 
 If we scroll through the alignment, we can see a few base pair differences. For example:
 
-![](figures/test-project/20.png)
+![](figures/test-project/22.png)
 
 Selecting `Trim Consensus` will remove any conflicting regions of the assembly paths and produce a shorter consensus sequence of both alignments. Doing so will automatically ignore the original two assembly paths.
 
@@ -233,11 +241,11 @@ Click close and return to the samples table. You will see that the `# Paths` col
 ## Running the Annotate Module
 We can now move on to the Annotate pipeline module. This module consists of an annotation step using [Mitos2](https://gitlab.com/Bernt/MITOS) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE), a taxon-specific curation step to refine the annotation models, and a validation step to flag possible issues or known errors that would be rejected by NCBI GenBank.  
 
-First, we need to lock all of the successful samples in the Assemble module. Select all of the samples and click the `LOCK` button. Then use the dropdown menu in the top left to navigate to the Annotate module.
+First, we need to lock all of the successful samples in the Assemble module. Select all of the samples except SRR22396758 (_Upeneus parvus_) and click the `LOCK` button. Then use the dropdown menu in the top left to navigate to the Annotate module.
 
 ![](figures/test-project/25.png)
 
-Like before, let's edit the `Annotate Opts` and increase the memory allocation to 36 GB. In this window, you could also edit the Mitos2 and tRNAscan-SE options. In the future, we will allow users to specify custom reference databases for annotation.
+Like before, let's edit the `Annotate Opts` and increase the memory allocation to 60 GB. In this window, you could also edit the Mitos2 and tRNAscan-SE options. In the future, we will allow users to specify custom reference databases for annotation.
 
 ![](figures/test-project/26.png)
 
@@ -245,18 +253,24 @@ You can also edit the curation options. Currently, we only have one set of curat
 
 ![](figures/test-project/27.png)
 
-To run the Annotate module, select all samples, click `UPDATE`, then click `Start Nextflow`. This will take a few minutes. As long as the gears in the top right are spinning, the pipeline is still running. Once all steps are complete, click `Close` to return to the sample table.
+To run the Annotate module, select all samples, click `UPDATE`, then click `Start Nextflow`. This will take a few minutes. As long as the gears in the top right are spinning, the pipeline is still running. 
+
+![](figures/test-project/28.png)
+
+Once all steps are complete, you'll see a summary message printed at the bottom of the `Progress` window. Click `Close` to return to the sample table.
+
+![](figures/test-project/29.png)
 
 ## Exploring Annotation Results
 There are a LOT of results to explore from the Annotate module. The sample table reports some basic stats about the number of protein-coding genes (PCGs), tRNAs, and rRNAs. The `missing` column reports the number of mitochondrial genes that were not annotated (based on the provided curation model). The `extra` column notes the number of potentially duplicated genes. 
 
 Lastly, the `warnings` column indicates how many warning flags were raised during the validation step. Samples with many warnings will require more manual curation to ensure that they are not rejected during submission to NCBI GenBank.
 
-![](figures/test-project/28.png)
+![](figures/test-project/30.png)
 
 The annotation results for each sample can be examined more closely by clicking the `details` button. First, let's examine the details for a good sample, SRR19434536 (_Rhinecanthus rectangulus_). 
 
-![](figures/test-project/29.png)
+![](figures/test-project/31.png)
 
 This sample had the expected number of genes and no warnings. However, the `notes` column shows that MitoPilot still made some tweaks to the annotation during the curation step. For example, the start position of rRNA rrnL was moved 22 bp upstream and the stop codon for NAD2 was trimmed by 2 bp.
 
@@ -264,16 +278,26 @@ Nucleotide sequences (and amino acid sequence for PCGs) can be copied to the cli
 
 Clicking on the `Coverage Map` button will show a plot of sequence depth, zooming to the position of the highlighted gene
 
-![](figures/test-project/30.png)
+![](figures/test-project/32.png)
 
 For protein coding genes, you can click the `Alignment` button to show the protein alignment of your annotated gene against a reference database. Currently, this shows only the top hits (filtered in blast using `-best_hit_score_edge 0.01`) from the curation process, which may be one or more sequences.
 
-![](figures/test-project/31.png)
+![](figures/test-project/33.png)
 
-By default, MitoPilot uses RefSeq as the BLAST database. If you would like to use your own custom BLAST database, you can check the `Local blast` box. MitoPilot will return a message with the instructions: run `options('MitoPilot.local.db' = '/path/to/local/blastp/db')` within your RStudio session. You may need to restart the GUI for this change to take effect.
+By default, MitoPilot uses RefSeq as the BLAST database. If you would like to use your own custom BLAST database, you can check the `Local blast` box. MitoPilot will return a message with the instructions: run `options('MitoPilot.local.db' = '/path/to/local/blastp/db')` within your RStudio session. You will need to restart the MitoPilot GUI for this change to take effect.
 
 ## Editing Annotation Results
-Editing annotations within the MitoPilot GUI is currently bugged due to issues with the R package `Biostrings`. Devin and Dan are working on a solution.
+MitoPilot offers some basic functions to manually edit your annotation results. Let's open the alignment for the SRR19434536 (_Rhinecanthus rectangulus_) "cox1" gene. Clicking the `EDIT` button brings up a few options to change the start and stop position annotation. 
+
+Try clicking the `+` button next to `START`. It will take a few seconds, since MitoPilot has to redo the alignments. But you should see that the "cox1 (focal)" sequence start position has shifted.
+
+![](figures/test-project/34.png)
+
+This clearly looks like a worse alignment. Click `RESET` to undo your changes.
+
+You can also delete annotations by selecting them and clicking `Delete`. Be careful doing this, as there's no easy way to add the annotation back without running the sample through the Annotate module again.
+
+Please note that annotation editing is a bit temperamental and you may encounter bugs. Additional details about annotation editing will be made available soon.
 
 ## Running the Export Module
 Let's move to the final step of the pipeline: the Export module. This module allows you to create groups of samples, then generate alignments and files formatted for submission to GenBank.
@@ -288,7 +312,7 @@ A new window will appear showing some summary information for the selected sampl
   <strong>Note:</strong> You can assign new samples to an existing group. Simply select the samples you wish to add, click `GROUP`, then choose the existing group from the dropdown menu.
 </div>
 
-![](figures/test-project/32.png)
+![](figures/test-project/35.png)
 
 The sample table should now show assignment to our newly created group. 
 
@@ -296,11 +320,11 @@ The sample table should now show assignment to our newly created group.
   <strong>Note:</strong> Each sample can only belong to one group. MitoPilot will produce a warning message if you attempt to re-assign a sample to a new group.
 </div>
 
-![](figures/test-project/33.png)
+![](figures/test-project/36.png)
 
-We can proceed to exporting the data for this group. Click `EXPORT DATA`, which will open a new window.
+We can proceed to exporting the data for this group. Click `EXPORT DATA`, which will open a new window. Only samples that have been added to a group can be exported in this manner.
 
-![](figures/test-project/34.png)
+![](figures/test-project/37.png)
 
 If you have multiple groups, you can select the appropriate one from the dropdown menu.
 
@@ -316,16 +340,22 @@ Once the gears have stopped spinning, the export process should be done! Current
 
 MitoPilot will produce three output files. First, the `.html` file contains visualizations of each protein coding gene alignment in your export group. This may be useful to quickly identify samples with poor annotations that need additional manual curation.
 
+![](figures/test-project/38.png)
+
+For example, the ATP8 annotation for "SRR22396640" clearly stands out when compared with the other samples in this export group.
+
+![](figures/test-project/39.png)
+
 Next are the two files you will need for submission to NCBI GenBank. The `.fasta` file contains the mitogenome assemblies for each sample, following the header template you specified when exporting the data. MitoPilot attempts to adjust the start position of every assembly to the start of the trnF gene.
 
-![](figures/test-project/35.png)
+![](figures/test-project/40.png)
 
 Lastly is the `.tbl` file, a [standardized 5-column, tab-delimited feature table](https://www.ncbi.nlm.nih.gov/genbank/feature_table/) containing information about the annotated genes for each mitogenome.
 
-![](figures/test-project/36.png)
+![](figures/test-project/41.png)
 
-With a real dataset, the you could use these two files for [submission to NCBI GenBank](https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/).
+With a real dataset, you could use these two files for [submission to NCBI GenBank](https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/).
 
 ## Wrap-up
 
-Congratulations, you've reached the end of the test project tutorial! Hopefully you now have a solid understanding of the MitoPilot interface in order to begin exploring and analyzing your own samples.
+Congratulations, you've reached the end of the test project tutorial! Hopefully you now have a solid understanding of the MitoPilot interface and can begin to analyze and explore your own mitogenome datasets.
