@@ -38,7 +38,7 @@ raw input and performs the following steps:
     - Custom scripts to export data in a format suitable for submission
       to NCBI GenBank
 
-MitoPilot is currently optimized for Fish Mitogenome assembly, but has
+MitoPilot is currently optimized for fish mitogenome assembly, but has
 been developed with modularity and extensibility in mind to facilitate
 broader application in the future. In particular, the included reference
 databases for assembly and annotation, along with the default parameters
