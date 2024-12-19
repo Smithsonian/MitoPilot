@@ -321,7 +321,7 @@ annotations_details_server <- function(id, rv) {
 
       rv$alignment$alignmentHeight <- 20 + (length(rv$alignment$seqs) * 20)
       rv$alignment$id <- stringr::str_glue(
-        "<b>Max Similarity:</b> {round(max(hits$similarity),1)}%"
+        "<b>Max Similarity:</b> {ifelse(max(hits$similarity)<25,'-',paste0(round(max(hits$similarity),1),'%'))}"
       )
       rv$alignment$stop <- stringr::str_glue(
         "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
