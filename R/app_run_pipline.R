@@ -203,7 +203,7 @@ pipeline_server <- function(id) {
           prog_executor(update$prog_executor)
           prog_process(update$prog_process)
           prog_footer(update$prog_footer)
-          trigger(paste0("refresh_", tolower(session$userData$mode)))
+          # trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
       } else {
         final_output <- p$read_output_lines()

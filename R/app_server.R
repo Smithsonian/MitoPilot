@@ -16,6 +16,7 @@ app_server <- function(input, output, session) {
     )
   }
   session$userData$con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
+  print(paste("Database attached:", db))
 
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>
