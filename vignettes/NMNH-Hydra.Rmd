@@ -56,11 +56,12 @@ Next, let's launch RStudio server, which we'll use to install and run MitoPilot.
 
 ## Installing MitoPilot
 
-To install MitoPilot, use the RStudio server window to run the following.
+To install MitoPilot, use the RStudio server window to run the following. This might take a while.
 
 ```{R eval=F}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
+  install.packages("remotes")
 }
 BiocManager::install("JonahVentures/MitoPilot")
 ```
