@@ -13,37 +13,66 @@ You will need an account to access the SEDNA computing cluster. Detailed instruc
 
 ## First time setup
 
-For first time setup, you will need to create a Mamba environment for two MitoPilot dependencies, Nextflow and Singularity. Login to the NOAA NMFS VPN, login to SEDNA, then run the following.
+For first time setup, you will need to create a Mamba environment for two MitoPilot dependencies, Nextflow and Singularity. We will also include a version of R, as there are some issues running the pipeline with the cluster's R module.
+
+Login to the NOAA NMFS VPN, login to SEDNA, then run the following. This will take a while.
 
 ```{bash eval=F}
-mamba create --name MitoPilot_deps bioconda::nextflow conda-forge::singularity -y
+mamba create --name MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib
+conda-forge::r-base -y
 ```
  
 You can now call `nextflow` and `singularity` from anywhere on the cluster, as long as this `MitoPilot_deps` environment is activated.
 
-Next we need to set up RStudio server. First launch an interactive session on SENDA.
+## Installing MitoPilot
+
+Time to install MitoPilot! Activate your new mamba environment and launch R.
 
 ```{bash eval=F}
-srun -c 2 --mem=4GB -p standard --pty /bin/bash
+# activate the mamba environment you just created
+mamba activate MitoPilot_deps
+
+# launch R
+R 
+```
+In the new R session, run the following to install MitoPilot. This will take a while.
+
+```{R eval=F}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+  install.packages("remotes")
+}
+BiocManager::install("JonahVentures/MitoPilot")
 ```
 
-Then run the following. You can choose a different version of RStudio, if desired. It may take a few minutes to download and set up the Singularity image file.
+If install was successful, you can exit the R session using `quit()`.
+
+If you ever need to update MitoPilot, simply follow these instructions again. If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
+
+## Setting up RStudio server
+
+Next we need to set up RStudio server. The version of Rstudio server must match the R version in your `MitoPilot_deps` mamba environment. You should be able to see the R version by running `mamba activate MitoPilot_deps;mamba list`.
+
+In a SEDNA terminal, run the following. It may take a few minutes to download and set up the Singularity image file.
 
 ```{bash eval=F}
 # Make a directory to host R-studio. 
 mkdir -p ~/rstudio
 cd ~/rstudio
 
-# Pull R studio from singularity
+# activate cluster's singularity environment
 mamba activate singularity-3.8.6
-singularity pull docker://rocker/rstudio:4.4.1
+
+# Pull R studio from singularity
+# change version number if needed
+singularity pull docker://rocker/rstudio:4.4.2
 
 # additional setup
 mkdir -p run var-lib-rstudio-server
 printf 'provider=sqlite\ndirectory=/var/lib/rstudio-server\n' > database.conf
 ```
 
-Now let's make a helper script to launch RStudio server.
+Now let's make a helper script to launch RStudio server. Again, make sure you're setting `Rstudio_version` correctly.
 
 ```{bash eval=F}
 # set up bin directory if it doesn't exist
@@ -55,7 +84,8 @@ cat > ~/bin/start-rstudio-server-MitoPilot <<'EOL'
 # script to start Rstudio server 
 # and print instructions on how to connect
 
-Rstudio_version="4.4.1"
+# modify to match your Rstudio server version
+Rstudio_version="4.4.2"
 
 cd ~/rstudio
 source ~/.bashrc
@@ -89,8 +119,8 @@ echo ""
 #export SINGULARITY_TMPDIR="${HOME}/.singularity/temp"
 
 singularity exec \
- --bind run:/run,var-lib-rstudio-server:/var/lib/rstudio-server,database.conf:/etc/rstudio/database.conf,/opt/bioinformatics/R/R-4.4.1/lib64/R/library:/opt/bioinformatics/R/R-4.4.1/lib64/R/library \
- --env APPEND_PATH=${HOME}/.conda/envs/MitoPilot_deps/bin \
+ --bind run:/run,var-lib-rstudio-server:/var/lib/rstudio-server,database.conf:/etc/rstudio/database.conf,${HOME}/.conda/envs/MitoPilot_deps/bin,${HOME}/.conda/envs/MitoPilot_deps/lib \
+ --env APPEND_PATH="${HOME}/.conda/envs/MitoPilot_deps/bin:${HOME}/.conda/envs/MitoPilot_deps/lib" \
  rstudio_${Rstudio_version}.sif \
  rserver --www-address=0.0.0.0 --www-port=${PORT} --server-user=${USER}
 EOL
@@ -99,42 +129,12 @@ EOL
 chmod 755 ~/bin/start-rstudio-server-MitoPilot
 ```
 
-## Installing MitoPilot
-
-Time to install MitoPilot! Unfortunately, installation won't work within RStudio server. Instead, we'll need to use SEDNA's R module.
-
-```{bash eval=F}
-# need to deactivate mamba to avoid package conflicts
-# if mamba is fully deactivated, your terminal prompt should start with "[USER@sedna~]$"
-# if mamba is not fully deactivate, you will see something like "(base) [dmacguigan@sedna ~]$"
-mamba deactivate
-
-# load the module
-module load R/4.4.1
-
-# launch R
-R 
-```
-In the new R session, run the following to install MitoPilot. This may take a while.
-
-```{R eval=F}
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-  install.packages("remotes")
-}
-BiocManager::install("JonahVentures/MitoPilot")
-```
-
-If install was successful, you can exit the R session using `quit()`, then unload the R module with `module purge`.
-
-If you ever need to update MitoPilot, simply follow these instructions again. If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
-
 ## Launching RStudio server
 
-To launch RStudio server, first start an interactive session in SENDA. 
+To launch RStudio server, first start an interactive session in SENDA. You won't need much computing resources, since MitoPilot uses Nextflow to distribute the analyses.
 
 ```{bash eval=F}
-srun -c 2 --mem=4GB -p standard --pty /bin/bash
+srun -c 2 --mem=16GB -p standard --pty /bin/bash
 ```
 
 Then run the following.
@@ -161,16 +161,7 @@ must remain open in order to access the Rstudio server
 
 ## Launching MitoPilot
 
-Once you have opened the RStudio server session, run the following to load the package.
-
-```{R eval=F}
-# update the R libraries path to include the SEDNA R module libs
-# there may be more elegant solution, Dan MacGuigan is working on this
-.libPaths(c(.libPaths(), "/opt/bioinformatics/R/R-4.4.1/lib64/R/library"))
-
-# load the package
-library(MitoPilot)
-```
+Once you have opened the RStudio server session, run `library(MitoPilot)` to load the package. You should see a message about Nextflow if successful.
 
 Want to learn how to use MitoPilot? Check out the [Test Project Tutorial](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
 
