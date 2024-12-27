@@ -227,8 +227,15 @@ externally from the GUI may be preferable when working with a large
 numbers of samples, since you can run pipeline in the background.</p>
 <p>Alternatively, you can press the <code>Start Nextflow</code> button
 to launch the pipeline from within the GUI. This requires you to keep
-the GUI open while the pipeline is running. Since our test dataset is
-small, let’s do that.</p>
+the GUI open while the pipeline is running.</p>
+<div class="alert alert-note">
+<p><strong>Note:</strong>Currently, running Nextflow with the
+<code>Start Nextflow</code> button is not compatible with the NOAA SEDNA
+computing cluster. Please use the command line method, making sure to
+run <code>mamba activate MitoPilot_deps</code> prior to calling
+Nextflow.</p>
+</div>
+<p>Since our test dataset is small, let’s do that.</p>
 <p><img src="figures%2Ftest-project%2F9.png"></p>
 <p>And we’re off! You should see Nextflow output being printed the to
 <code>Progress</code> window. This window will continually update as the
