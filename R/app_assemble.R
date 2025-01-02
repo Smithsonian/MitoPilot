@@ -160,7 +160,7 @@ assemble_server <- function(id) {
               name = "Notes",
               html = TRUE,
               align = "left",
-              minminWidth = 150,
+              minWidth = 150,
               cell = rt_longtext()
             ),
             view = colDef(
