@@ -52,6 +52,7 @@ annotate_server <- function(id) {
             noData = "No Completed / Locked Assemblies Found"
           ),
           defaultPageSize = 100,
+          resizable = TRUE,
           showPageSizeOptions = TRUE,
           onClick = "select",
           selection = "multiple",

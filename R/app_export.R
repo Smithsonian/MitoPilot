@@ -37,6 +37,7 @@ export_server <- function(id) {
     # Render table ----
     output$table <- reactable::renderReactable({
       reactable::reactable(
+        resizable = TRUE,
         isolate(rv$data),
         compact = TRUE,
         language = reactable::reactableLang(
