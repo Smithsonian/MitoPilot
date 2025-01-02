@@ -4,7 +4,6 @@ plugins {
 
 singularity {
   enabled = true
-  engineOptions = "--bind ${opts.seeds_db},${opts.labels_db}"
 }
 
 process {
