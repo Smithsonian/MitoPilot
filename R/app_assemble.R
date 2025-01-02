@@ -41,7 +41,7 @@ assemble_server <- function(id) {
     output$table <- renderReactable({
       isolate(req(rv$data)) |>
         reactable(
-          resizable = TRUE
+          resizable = TRUE,
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
