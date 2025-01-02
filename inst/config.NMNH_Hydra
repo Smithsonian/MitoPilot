@@ -6,15 +6,6 @@ singularity {
   enabled = true
 }
 
-println "test start"
-println opts.seeds_db
-println process.opts.labels_db
-println opts.memory
-println process.opts.memory
-println ${opts.memory}
-println ${process.opts.memory}
-println "test end"
-
 // get paths to seed and labels db, bind these paths for Singularity
 def seeds_db_path = java.nio.file.Paths.get(opts.seeds_db).parent.toString()
 def labels_db_path = java.nio.file.Paths.get(opts.labels_db).parent.toString()
@@ -33,6 +24,16 @@ process {
     }
   }
   cpus = { opts.cpus } // set number of CPUs based on value pulled from SQL database
+
+  println "test start"
+  println opts.seeds_db
+  println process.opts.labels_db
+  println opts.memory
+  println process.opts.memory
+  println ${opts.memory}
+  println ${process.opts.memory}
+  println "test end"
+
 }
 
 // SQL database configuration (https://github.com/nextflow-io/nf-sqldb)
