@@ -7,6 +7,20 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+strong { font-weight: bold; }
+</style>
+
 # How to use MitoPilot on the Smithsonian Hydra computing cluster
 
 You will need an account to access the Hyrda computing cluster. Instructions are available [here](https://confluence.si.edu/display/HPC/Hydra+Policies).
@@ -91,3 +105,42 @@ Follow the login instructions as presented above. Once you have an Rstudio serve
 If you need to update MitoPilot, simply run the BiocManager installation command again. If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
 
 Want to learn how to use MitoPilot? Check out the [Test Project Tutorial](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
+
+## Running Large MitoPilot Jobs
+If you have a large number of samples to process (more than a few dozen), we recommend running the assemble and annotate MitoPilot modules as batch jobs. 
+
+Running these modules within the R Shiny GUI requires you to maintain an open connection to the cluster. There may be issues restarting if the connection breaks while Nextflow is running. Instead, we can "fire and forget" by submitting batch jobs.
+
+First, initialize your new project and modify any desired parameters using the GUI. Once ready, click `UPDATE`. A new window should appear.
+
+![](figures/test-project/8.png)
+
+Rather than clicking the `Start Nextflow` button, copy the Nextflow command and create a submission script. We have provided a template below. You may wish to modify the job name (`-N`) and the log file name (`-o`).
+
+```{bash eval=F}
+#!/bin/sh
+#$ -N MitoPilot_assembly # MODIFY THIS IF DESIRED
+#$ -o MitoPilot_assembly.log # MODIFY THIS IF DESIRED
+#$ -cwd -j y
+#$ -q lTWFM.sq
+#$ -l wfmq
+#$ -S /bin/sh
+
+echo + `date` job $JOB_NAME started in $QUEUE with jobID=$JOB_ID on $HOSTNAME
+
+source ~/.bashrc
+
+# NEXTFLOW COMMAND, example below
+nextflow -log /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.logs/nextflow.log run /home/macguigand/R/x86_64-pc-linux-gnu-library/4.4/MitoPilot/nextflow -c /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.config -entry WF1
+
+echo = `date` job $JOB_NAME done
+
+```
+
+<div class="alert alert-warning">
+  <strong>Warning:</strong> You must use the options `-q lTWFM.sq` and `-l wfmq`. This is a special Hydra queue for workflow managers like Nextflow. Nextflow will not work in other queues.
+</div>
+
+Move the submission script into your MitoPilot run directory (in the above example, `/pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/`). Then submit the job using `qsub MY_SCRIPT_NAME.sh`.
+
+You can monitor the progress of this job using the `qstat` command and by checking on the log files. Once the job is done, you can relaunch the GUI to inspect the results. The same approach can be used for the annotate module.
