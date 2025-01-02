@@ -41,7 +41,7 @@ assemble_server <- function(id) {
     output$table <- renderReactable({
       isolate(req(rv$data)) |>
         reactable(
-          resizable = TRUE,
+          resizable = TRUE
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
@@ -55,13 +55,13 @@ assemble_server <- function(id) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "left", show = F),
           columns = list(
-            `.selection` = colDef(show = T, sticky = "left", width = 28),
+            `.selection` = colDef(show = T, sticky = "left", minWidth = 28),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
               name = "",
               html = TRUE,
-              width = 32,
+              minWidth = 32,
               align = "center",
               cell = rt_dynamicIcon(
                 c(
@@ -75,7 +75,7 @@ assemble_server <- function(id) {
               sticky = "left",
               name = "",
               html = TRUE,
-              width = 30,
+              minWidth = 30,
               align = "center",
               cell = rt_dynamicIcon(
                 c(
@@ -88,14 +88,14 @@ assemble_server <- function(id) {
             ),
             ID = colDef(
               show = T,
-              width = 120,
+              minWidth = 120,
               sticky = "left",
               html = T,
               cell = rt_longtext()
             ),
             Taxon = colDef(
               show = T,
-              width = 140,
+              minWidth = 140,
               sticky = "left",
               html = T,
               cell = rt_longtext()
@@ -104,51 +104,51 @@ assemble_server <- function(id) {
               show = T,
               name = "Preprocess Opts.",
               html = T,
-              width = 130,
+              minWidth = 130,
               cell = rt_link(ns("set_pre_opts"))
             ),
             trimmed_reads = colDef(
               show = T,
               name = "Reads",
-              width = 100
+              minWidth = 100
             ),
             mean_length = colDef(
               show = T,
               name = "Read Length",
-              width = 100
+              minWidth = 100
             ),
             assemble_opts = colDef(
               show = T,
               name = "Assembly Opts.",
               html = T,
-              width = 130,
+              minWidth = 130,
               cell = rt_link(ns("set_assemble_opts"))
             ),
             topology = colDef(
               show = TRUE,
-              width = 100,
+              minWidth = 100,
               name = "Topology"
             ),
             length = colDef(
               show = TRUE,
-              width = 140,
+              minWidth = 140,
               name = "Assembly Length",
               html = TRUE,
               cell = rt_longtext()
             ),
             paths = colDef(
-              show = TRUE, width = 100, name = "# Paths", align = "center",
+              show = TRUE, minWidth = 100, name = "# Paths", align = "center",
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
             scaffolds = colDef(
-              show = TRUE, width = 100, name = "# Scaffolds", align = "center"
+              show = TRUE, minWidth = 100, name = "# Scaffolds", align = "center"
             ),
             time_stamp = colDef(
               show = TRUE,
               name = "Last Updated",
               html = T,
-              width = 150,
+              minWidth = 150,
               cell = rt_ts_date()
             ),
             assemble_notes = colDef(
@@ -156,7 +156,7 @@ assemble_server <- function(id) {
               name = "Notes",
               html = TRUE,
               align = "left",
-              minWidth = 150,
+              minminWidth = 150,
               cell = rt_longtext()
             ),
             view = colDef(
@@ -164,7 +164,7 @@ assemble_server <- function(id) {
               sticky = "right",
               name = "",
               html = TRUE,
-              width = 80,
+              minWidth = 80,
               align = "center",
               cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
             ),
@@ -173,7 +173,7 @@ assemble_server <- function(id) {
               sticky = "right",
               name = "",
               html = TRUE,
-              width = 80,
+              minWidth = 80,
               align = "center",
               cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
             )
