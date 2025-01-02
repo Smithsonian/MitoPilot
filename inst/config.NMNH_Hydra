@@ -6,6 +6,11 @@ singularity {
   enabled = true
 }
 
+println "test start"
+println opts.seeds_db
+println opts.labels_db
+println "test end"
+
 // get paths to seed and labels db, bind these paths for Singularity
 def seeds_db_path = java.nio.file.Paths.get(opts.seeds_db).parent.toString()
 def labels_db_path = java.nio.file.Paths.get(opts.labels_db).parent.toString()
