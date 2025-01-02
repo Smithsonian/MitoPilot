@@ -9,6 +9,7 @@ singularity {
 
 process {
   executor = 'sge'
+  singularity.engineOptions = "--bind ${opts.seeds_db},${opts.labels_db}"
   container = '<<CONTAINER_ID>>'
   penv = 'mthread'
   // check if "himem" is needed (requesting more than 8 Gb RAM per CPU)
