@@ -137,7 +137,7 @@ pipeline_server <- function(id) {
       executor_lines <- stringr::str_detect(process_out, "^executor")
       keys <- stringr::str_match(
         process_out,
-        "^(?<prefix>\\[.+\\]) WF[^\\s]+(?<key>\\S{10}) (?<suffix>.*)"
+        "^(?<prefix>\\[.+\\]) WF[^\\s]+(?<key>\\S{4}) (?<suffix>.*)"
       )
       progress_lines <- !is.na(keys[,1])
       if (length(prog_process)==0) {
@@ -203,7 +203,6 @@ pipeline_server <- function(id) {
           prog_executor(update$prog_executor)
           prog_process(update$prog_process)
           prog_footer(update$prog_footer)
-          # trigger(paste0("refresh_", tolower(session$userData$mode)))
         }
       } else {
         final_output <- p$read_output_lines()

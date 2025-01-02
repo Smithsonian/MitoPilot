@@ -66,6 +66,11 @@ new_db <- function(
     stop("Duplicate IDs found in mapping file")
   }
 
+  # Validate ID length
+  if (any(nchar(mapping[[mapping_id]]) > 18)) {
+    stop("IDs must be no more than 18 characters")
+  }
+
   # Load default curation parameters
   if (is.null(curate_params)) {
     curate_params <- do.call(paste0("params_", curate_target), list())
