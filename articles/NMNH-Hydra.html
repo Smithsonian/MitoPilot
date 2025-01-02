@@ -59,6 +59,19 @@
 
     
     
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+strong { font-weight: bold; }
+</style>
 <div class="section level2">
 <h2 id="how-to-use-mitopilot-on-the-smithsonian-hydra-computing-cluster">How to use MitoPilot on the Smithsonian Hydra computing cluster<a class="anchor" aria-label="anchor" href="#how-to-use-mitopilot-on-the-smithsonian-hydra-computing-cluster"></a>
 </h2>
@@ -161,6 +174,55 @@ using the latest MitoPilot version, run
 <code>remove.packages("MitoPilot")</code> prior to installation.</p>
 <p>Want to learn how to use MitoPilot? Check out the <a href="https://jonahventures.github.io/MitoPilot/articles/test-project.html">Test
 Project Tutorial</a>.</p>
+</div>
+<div class="section level3">
+<h3 id="running-large-mitopilot-jobs">Running Large MitoPilot Jobs<a class="anchor" aria-label="anchor" href="#running-large-mitopilot-jobs"></a>
+</h3>
+<p>If you have a large number of samples to process (more than a few
+dozen), we recommend running the assemble and annotate MitoPilot modules
+as batch jobs.</p>
+<p>Running these modules within the R Shiny GUI requires you to maintain
+an open connection to the cluster. There may be issues restarting if the
+connection breaks while Nextflow is running. Instead, we can “fire and
+forget” by submitting batch jobs.</p>
+<p>First, initialize your new project and modify any desired parameters
+using the GUI. Once ready, click <code>UPDATE</code>. A new window
+should appear.</p>
+<p><img src="figures%2Ftest-project%2F8.png"></p>
+<p>Rather than clicking the <code>Start Nextflow</code> button, copy the
+Nextflow command and create a submission script. We have provided a
+template below. You may wish to modify the job name (<code>-N</code>)
+and the log file name (<code>-o</code>).</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co">#!/bin/sh</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="co">#$ -N MitoPilot_assembly # MODIFY THIS IF DESIRED</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co">#$ -o MitoPilot_assembly.log # MODIFY THIS IF DESIRED</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="co">#$ -cwd -j y</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co">#$ -q lTWFM.sq</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co">#$ -l wfmq</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#$ -S /bin/sh</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="bu">echo</span> + <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$JOB_NAME</span> started in <span class="va">$QUEUE</span> with jobID=<span class="va">$JOB_ID</span> on <span class="va">$HOSTNAME</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co"># NEXTFLOW COMMAND, example below</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.logs/nextflow.log run /home/macguigand/R/x86_64-pc-linux-gnu-library/4.4/MitoPilot/nextflow <span class="at">-c</span> /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.config <span class="at">-entry</span> WF1</span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="bu">echo</span> = <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$JOB_NAME</span> done</span></code></pre></div>
+<div class="alert alert-warning">
+<p><strong>Warning:</strong> You must use the options
+<code>-q lTWFM.sq</code> and <code>-l wfmq</code>. This is a special
+Hydra queue for workflow managers like Nextflow. Nextflow will not work
+in other queues.</p>
+</div>
+<p>Move the submission script into your MitoPilot run directory (in the
+above example,
+<code>/pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/</code>).
+Then submit the job using <code>qsub MY_SCRIPT_NAME.sh</code>.</p>
+<p>You can monitor the progress of this job using the <code>qstat</code>
+command and by checking on the log files. Once the job is done, you can
+relaunch the GUI to inspect the results. The same approach can be used
+for the annotate module.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

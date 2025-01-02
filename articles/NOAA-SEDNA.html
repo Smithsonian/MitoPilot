@@ -72,8 +72,8 @@ Or contact Krista Nichols (<a href="mailto:krista.nichols@noaa.gov" class="email
 the MitoPilot dependencies Nextflow and Singularity. We will also
 include a version of R in this environment; there are some issues
 installing the pipeline with the cluster’s R module.</p>
-<p>Login to the NOAA NMFS VPN, login to SEDNA. If you’ve never used
-mamba on SEDNA before, run the following.</p>
+<p>Log in to the NOAA NMFS VPN, then log in to SEDNA. If you’ve never
+used mamba on SEDNA before, run the following.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">/opt/bioinformatics/mambaforge/bin/mamba</span> init</span></code></pre></div>
 <p>Let’s create the <code>MitoPilot_deps</code> mamba environment. This
 may take a while.</p>
@@ -217,6 +217,52 @@ must remain open in order to access the Rstudio server</code></pre>
 message about Nextflow if successful.</p>
 <p>Want to learn how to use MitoPilot? Check out the <a href="https://jonahventures.github.io/MitoPilot/articles/test-project.html">Test
 Project Tutorial</a>.</p>
+</div>
+<div class="section level3">
+<h3 id="running-large-mitopilot-jobs">Running Large MitoPilot Jobs<a class="anchor" aria-label="anchor" href="#running-large-mitopilot-jobs"></a>
+</h3>
+<p>SEDNA does not currently support running Nextflow within the R Shiny
+GUI. For a small number of samples, you could run Nextflow in an
+interactive session. However, this requires you to maintain an open
+connection to the cluster. For large datasets, there may be issues
+restarting if the connection breaks while Nextflow is running.</p>
+<p>Therefore, if you have a large number of samples to process (more
+than a few dozen), we recommend running the assemble and annotate
+MitoPilot modules as batch jobs.</p>
+<p>First, initialize your new project and modify any desired parameters
+using the GUI. Once ready, click <code>UPDATE</code>. A new window
+should appear.</p>
+<p><img src="figures%2Ftest-project%2F8.png"></p>
+<p>Rather than clicking the <code>Start Nextflow</code> button, copy the
+Nextflow command and create a submission script. We have provided a
+template below. You may wish to modify the job name
+(<code>--job-name</code>) and the output file names
+(<code>--output</code> and <code>--error</code>).</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="co">#!/bin/bash</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="co">#SBATCH --job-name=MitoPilot_assembly # MODIFY THIS IF DESIRED</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#SBATCH --output=MitoPilot_assembly.out # MODIFY THIS IF DESIRED</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="co">#SBATCH --error=MitoPilot_assembly.err # MODIFY THIS IF DESIRED</span></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co">#SBATCH -p standard</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#SBATCH -c 1</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#SBATCH --mem=8G</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#SBATCH -t 24:00:00</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a></span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="bu">echo</span> + <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$SLURM_JOB_NAME</span> started in <span class="va">$SLURM_JOB_PARTITION</span> with jobID=<span class="va">$SLURM_JOBID</span> on <span class="va">$SLURM_JOB_NODELIST</span></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a></span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a><span class="ex">mamba</span> activate MitoPilot_deps</span>
+<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a></span>
+<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="co"># NEXTFLOW COMMAND, example below</span></span>
+<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps_test/lib/R/library/MitoPilot/nextflow <span class="at">-c</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.config <span class="at">-entry</span> WF1</span>
+<span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a></span>
+<span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a><span class="bu">echo</span> = <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$SLURM_JOB_NAME</span> done</span></code></pre></div>
+<p>Move the submission script into your MitoPilot run directory (in the
+above example, <code>/home/dmacguigan/MitoPilot/test/2025_1_2/</code>).
+Then submit the job using <code>sbatch MY_SCRIPT_NAME.sh</code>.</p>
+<p>You can monitor the progress of this job using the
+<code>squeue</code> command and by checking on the log files. Once the
+job is done, you can relaunch the GUI to inspect the results. The same
+approach can be used for the annotate module.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
