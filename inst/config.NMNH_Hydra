@@ -7,9 +7,9 @@ singularity {
 }
 
 // get paths to seed and labels db, bind these paths for Singularity
-def seeds_db_path = java.nio.file.Paths.get(opts.seeds_db).parent.toString()
-def labels_db_path = java.nio.file.Paths.get(opts.labels_db).parent.toString()
-singularity.engineOptions = "--bind ${seeds_db_path},${labels_db_path}"
+// def seeds_db_path = java.nio.file.Paths.get(opts.seeds_db).parent.toString()
+// def labels_db_path = java.nio.file.Paths.get(opts.labels_db).parent.toString()
+// singularity.engineOptions = "--bind ${seeds_db_path},${labels_db_path}"
 
 process {
   executor = 'sge'
