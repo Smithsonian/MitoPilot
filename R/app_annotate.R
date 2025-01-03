@@ -64,13 +64,13 @@ annotate_server <- function(id) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "left", show = FALSE, maxWidth = 85),
           columns = list(
-            `.selection` = colDef(show = T, sticky = "left", minWidth = 28),
+            `.selection` = colDef(show = T, sticky = "left", width = 28),
             annotate_lock = colDef(
               show = TRUE,
               sticky = "left",
               name = "",
               html = TRUE,
-              minWidth = 32,
+              width = 32,
               align = "center",
               cell = rt_dynamicIcon(
                 c(
@@ -84,7 +84,7 @@ annotate_server <- function(id) {
               sticky = "left",
               name = "",
               html = TRUE,
-              minWidth = 30,
+              width = 30,
               align = "center",
               cell = rt_dynamicIcon(
                 c(
@@ -113,14 +113,14 @@ annotate_server <- function(id) {
               show = TRUE,
               name = "Annotate Opts.",
               html = TRUE,
-              minWidth = 130,
+              width = 130,
               cell = rt_link(ns("set_annotate_opts"))
             ),
             curate_opts = colDef(
               show = TRUE,
               name = "Curate Opts.",
               html = TRUE,
-              minWidth = 110,
+              width = 110,
               cell = rt_link(ns("set_curate_opts"))
             ),
             length = colDef(
@@ -141,7 +141,7 @@ annotate_server <- function(id) {
               show = TRUE,
               name = "Last Updated",
               html = T,
-              minWidth = 150,
+              width = 150,
               cell = rt_ts_date()
             ),
             annotate_notes = colDef(
@@ -150,7 +150,7 @@ annotate_server <- function(id) {
               html = TRUE,
               align = "left",
               minWidth = 150,
-              maxWidth = 400,
+              #maxWidth = 400,
               cell = rt_longtext()
             ),
             view = colDef(
@@ -158,7 +158,7 @@ annotate_server <- function(id) {
               sticky = "right",
               name = "",
               html = TRUE,
-              minWidth = 80,
+              width = 80,
               align = "center",
               cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
             ),
@@ -167,7 +167,7 @@ annotate_server <- function(id) {
               sticky = "right",
               name = "",
               html = TRUE,
-              minWidth = 80,
+              width = 80,
               align = "center",
               cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
             )
