@@ -16,11 +16,14 @@ process assemble {
     input:
     tuple val(id), val(opts_id), path(reads), val(opts)
 
-    beforeScript:
+    beforeScript 'echo "TEST"'
+
+    /*beforeScript:
     '''
     export SINGULARITY_BIND="/test/dir"
     echo "bind path = ${SINGULARITY_BIND}"       
     '''
+    */
 
     output:
     tuple val("${id}"), 
