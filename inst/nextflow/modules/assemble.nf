@@ -26,6 +26,9 @@ process assemble {
     shell:
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
+
+// old code for binding paths, doesn't work
+/*  
     seeds = "${opts.seeds_db}"
     labels = "${opts.labels_db}"
     // check if Singularity is being used
@@ -57,6 +60,7 @@ process assemble {
     } else {
         println "Singularity is NOT enabled"
     }
+*/
     '''
     echo "Singularity bind path = ${SINGULARITY_BIND}"
     mkdir -p !{workingDir}
