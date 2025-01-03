@@ -17,24 +17,15 @@ process assemble {
     // Dynamically determine Singularity bind paths needed for custom get organelle databases
     // check if we're using Singularity
     if (workflow.containerEngine == 'singularity') {
-        def bindPathsList = []
-        println "Singularity is enabled."
-        def test = "/test/path/to/file.txt"
-        def test_db_path = java.nio.file.Paths.get(test).parent.toString()
-        println test_db_path
+        // get base paths for databases
+        def seeds = { opts.seeds_db }
+        def labels = { opts.labels_db }
+        def seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
+        def labels_path = java.nio.file.Paths.get(labels).parent.toString()
+        println seeds_path
+        println labels_path
     }
 /*
-
-        // get base paths for databases
-        // def seeds_db_path = java.nio.file.Paths.get({opts.seeds_db}).parent.toString()
-        // def labels_db_path = java.nio.file.Paths.get({opts.labels_db}).parent.toString()
-        //println seeds_db_path
-        //println labels_db_path
-
-        def test "/test/path/to/file.txt"
-        def test_db_path = java.nio.file.Paths.get(test).parent.toString()
-        println test_db_path
-
         // check if the bind paths were actually changed
         if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
             if (seeds_db_path != "/ref_dbs/getOrganelle/seeds"){
