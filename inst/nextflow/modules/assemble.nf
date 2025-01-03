@@ -32,8 +32,8 @@ process assemble {
         // get base paths for databases
         seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
         labels_path = java.nio.file.Paths.get(labels).parent.toString()
-        println "seed path = ${seeds_path}"
-        println "labels path = ${labels_path}"
+        // println "seed path = ${seeds_path}"
+        // println "labels path = ${labels_path}"
         if (seeds_path != "/ref_dbs/getOrganelle/seeds" || labels_path != "/ref_dbs/getOrganelle/seeds") {
             bindPathsList = []
             if (seeds_path != "/ref_dbs/getOrganelle/seeds"){
@@ -45,9 +45,9 @@ process assemble {
             // Combine the paths into a comma-separated string
             dynamicBindPaths = bindPathsList.join(',')
             // Print the bind paths for debugging
-            println "Dynamic Singularity bind paths set to: $dynamicBindPaths"
-            // set bind path env variable
-            //SINGULARITY_BIND = dynamicBindPaths
+            println "Singularity bind paths set to: $dynamicBindPaths"
+            // set bind paths
+            session.config.singularity.bindPaths = dynamicBindPaths
         } else {
             println "Using default databases, no custom bind paths are needed"
         }
