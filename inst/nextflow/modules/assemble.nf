@@ -12,6 +12,10 @@ process assemble {
 
     tag "${id}"
 
+    println "${opts}"
+    println "${opts.cpus}"
+    println "${opts.seeds_db}"
+
     input:
     tuple val(id), val(opts_id), path(reads), val(opts)
 
@@ -28,7 +32,7 @@ process assemble {
     shell:
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
-    if (workflow.containerEngine == 'singularity') {
+/*     if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
         def seeds = ${opts.seeds_db}
         def labels = ${opts.labels_db}
@@ -55,7 +59,7 @@ process assemble {
         }
     } else {
         println "Singularity is NOT enabled"
-    }
+    } */
     '''
     echo "bind path is ${SINGULARITY_BIND}"       
     mkdir -p !{workingDir}
