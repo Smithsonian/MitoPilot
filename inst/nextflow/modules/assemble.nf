@@ -43,10 +43,10 @@ process assemble {
             }
             // Combine the paths into a comma-separated string
             def dynamicBindPaths = bindPathsList.join(',')
-            // Update the Singularity configuration at runtime
-            session.config.singularity.bindPaths = dynamicBindPaths
             // Print the bind paths for debugging
             println "Dynamic Singularity bind paths set to: $dynamicBindPaths"
+            // Update the Singularity configuration at runtime
+            session.config.singularity.bindPaths = dynamicBindPaths 
         } else {
             println "Using default databases, no custom bind paths are needed"
         }
