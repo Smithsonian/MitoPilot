@@ -78,7 +78,7 @@ new_project <- function(
   }
   if(!is.null(custom_seeds_db) | !is.null(custom_labels_db)){
     if (!dir.exists(paste0(path,"/work/ref_dbs"))) {
-      message("Creating ref database directory: ", paste0(path, "/work/ref_dbs"))
+      message("Creating ref database directory: ", paste0(path, "/ref_dbs"))
       dir.create(paste0(path, "/work/ref_dbs/getOrganelle/seeds"), recursive = TRUE)
       dir.create(paste0(path, "/work/ref_dbs/getOrganelle/labels"), recursive = TRUE)
       if(!is.null(custom_seeds_db)){
