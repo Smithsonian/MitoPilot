@@ -4,7 +4,6 @@ process assemble {
 
     executor params.assemble.executor
     container params.assemble.container
-
  
     errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'finish' }
     maxRetries { params.assemble.maxRetries }
@@ -16,15 +15,6 @@ process assemble {
     input:
     tuple val(id), val(opts_id), path(reads), val(opts)
 
-    beforeScript 'echo "TEST"'
-
-    /*beforeScript:
-    '''
-    export SINGULARITY_BIND="/test/dir"
-    echo "bind path = ${SINGULARITY_BIND}"       
-    '''
-    */
-
     output:
     tuple val("${id}"), 
         path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
@@ -32,6 +22,35 @@ process assemble {
         path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
         val("${opts_id}"),                                                    // options id
         path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
+
+    if (workflow.containerEngine == 'singularity') {
+        // get base paths for databases
+        def seeds = "${opts.seeds_db}"
+        def labels = "${opts.labels_db}"
+        def seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
+        def labels_path = java.nio.file.Paths.get(labels).parent.toString()
+        println seeds_path
+        println labels_path
+        if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
+            def bindPathsList = []
+            if (seeds_db_path != "/ref_dbs/getOrganelle/seeds"){
+                bindPathsList << seeds_db_path
+            }
+            if (labels_db_path != "/ref_dbs/getOrganelle/seeds"){
+                bindPathsList << labels_db_path
+            }
+            // Combine the paths into a comma-separated string
+            def dynamicBindPaths = bindPathsList.join(',')
+            // Print the bind paths for debugging
+            println "Dynamic Singularity bind paths set to: $dynamicBindPaths"
+            // set bind path env variable
+            //SINGULARITY_BIND = dynamicBindPaths
+        } else {
+            println "Using default databases, no custom bind paths are needed"
+        }
+    } else {
+        println "Singularity is NOT enabled"
+    }
 
     shell:
     workingDir = "${id}/assemble"
