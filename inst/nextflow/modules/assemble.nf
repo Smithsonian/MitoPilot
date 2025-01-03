@@ -23,10 +23,15 @@ process assemble {
         val("${opts_id}"),                                                    // options id
         path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
 
+
+
+    shell:
+    workingDir = "${id}/assemble"
+    outDir = "${workingDir}/${opts_id}"
     if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
-        def seeds = opts.seeds_db
-        def labels = opts.labels_db
+        def seeds = ${opts.seeds_db}
+        def labels = ${opts.labels_db}
         def seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
         def labels_path = java.nio.file.Paths.get(labels).parent.toString()
         println seeds_path
@@ -51,10 +56,6 @@ process assemble {
     } else {
         println "Singularity is NOT enabled"
     }
-
-    shell:
-    workingDir = "${id}/assemble"
-    outDir = "${workingDir}/${opts_id}"
     '''
     echo "bind path is ${SINGULARITY_BIND}"       
     mkdir -p !{workingDir}
