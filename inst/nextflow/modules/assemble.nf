@@ -62,7 +62,6 @@ process assemble {
     }
 */
     '''
-    echo "Singularity bind path = ${SINGULARITY_BIND}"
     mkdir -p !{workingDir}
     get_organelle_from_reads.py \
         -1 !{reads[0]} \
