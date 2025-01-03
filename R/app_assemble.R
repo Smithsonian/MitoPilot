@@ -55,13 +55,13 @@ assemble_server <- function(id) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "left", show = F),
           columns = list(
-            `.selection` = colDef(show = T, sticky = "left", minWidth = 28),
+            `.selection` = colDef(show = T, sticky = "left", width = 28),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
               name = "",
               html = TRUE,
-              minWidth = 32,
+              width = 32,
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
@@ -76,7 +76,7 @@ assemble_server <- function(id) {
               sticky = "left",
               name = "",
               html = TRUE,
-              minWidth = 30,
+              width = 30,
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
@@ -106,7 +106,7 @@ assemble_server <- function(id) {
               show = T,
               name = "Preprocess Opts.",
               html = T,
-              minWidth = 130,
+              width = 130,
               cell = rt_link(ns("set_pre_opts"))
             ),
             trimmed_reads = colDef(
@@ -123,12 +123,12 @@ assemble_server <- function(id) {
               show = T,
               name = "Assembly Opts.",
               html = T,
-              minWidth = 130,
+              width = 130,
               cell = rt_link(ns("set_assemble_opts"))
             ),
             topology = colDef(
               show = TRUE,
-              minWidth = 100,
+              width = 100,
               name = "Topology"
             ),
             length = colDef(
@@ -140,19 +140,19 @@ assemble_server <- function(id) {
               cell = rt_longtext()
             ),
             paths = colDef(
-              show = TRUE, minWidth = 100, name = "# Paths", align = "center",
+              show = TRUE, width = 100, name = "# Paths", align = "center",
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
             scaffolds = colDef(
-              show = TRUE, minWidth = 100, name = "# Scaffolds", align = "center"
+              show = TRUE, width = 100, name = "# Scaffolds", align = "center"
             ),
             time_stamp = colDef(
               show = TRUE,
               name = "Last Updated",
               filterable = FALSE,
               html = T,
-              minWidth = 150,
+              width = 150,
               cell = rt_ts_date()
             ),
             assemble_notes = colDef(
@@ -169,7 +169,7 @@ assemble_server <- function(id) {
               filterable = FALSE,
               name = "",
               html = TRUE,
-              minWidth = 80,
+              width = 80,
               align = "center",
               cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
             ),
@@ -179,7 +179,7 @@ assemble_server <- function(id) {
               filterable = FALSE,
               name = "",
               html = TRUE,
-              minWidth = 80,
+              width = 80,
               align = "center",
               cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
             )

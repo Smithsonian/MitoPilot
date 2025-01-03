@@ -84,13 +84,13 @@ new_project <- function(
   }
 
   # Copy custom databases into project directory, if needed
-  if (!file.exists(custom_seeds_db)) {
-    stop("Custom seed database does not exist")
-  }
-  if (!file.exists(custom_labels_db)) {
-    stop("Custom labels database does not exist")
-  }
   if(!is.null(custom_seeds_db) | !is.null(custom_labels_db)){
+    if (!file.exists(custom_seeds_db) & !is.null(custom_labels_db)) {
+      stop("Custom seed database does not exist")
+    }
+    if (!file.exists(custom_labels_db) & !is.null(custom_labels_db)) {
+      stop("Custom labels database does not exist")
+    }
     if (!dir.exists(paste0(path,"/work/ref_dbs"))) {
       message("Creating ref database directory: ", paste0(path, "/ref_dbs"))
       dir.create(paste0(path, "/work/ref_dbs/getOrganelle/seeds"), recursive = TRUE)
