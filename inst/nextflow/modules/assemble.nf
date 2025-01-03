@@ -16,9 +16,15 @@ process assemble {
 
     // Dynamically determine Singularity bind paths needed for custom get organelle databases
     // check if we're using Singularity
- /*   if (workflow.containerEngine == 'singularity') {
+    if (workflow.containerEngine == 'singularity') {
         def bindPathsList = []
         println "Singularity is enabled."
+        def test = "/test/path/to/file.txt"
+        def test_db_path = java.nio.file.Paths.get(test).parent.toString()
+        println test_db_path
+    }
+/*
+
         // get base paths for databases
         // def seeds_db_path = java.nio.file.Paths.get({opts.seeds_db}).parent.toString()
         // def labels_db_path = java.nio.file.Paths.get({opts.labels_db}).parent.toString()
