@@ -14,17 +14,6 @@ process assemble {
 
     tag "${id}"
 
-    input:
-    tuple val(id), val(opts_id), path(reads), val(opts)
-
-    output:
-    tuple val("${id}"), 
-        path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
-        path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
-        path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
-        val("${opts_id}"),                                                    // options id
-        path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
-
     // Dynamically determine Singularity bind paths needed for custom get organelle databases
     // check if we're using Singularity
     if (workflow.containerEngine == 'singularity') {
@@ -55,6 +44,17 @@ process assemble {
     } else {
         println "Singularity is NOT enabled"
     }
+
+    input:
+    tuple val(id), val(opts_id), path(reads), val(opts)
+
+    output:
+    tuple val("${id}"), 
+        path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
+        path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
+        path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
+        val("${opts_id}"),                                                    // options id
+        path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
 
     shell:
     workingDir = "${id}/assemble"
