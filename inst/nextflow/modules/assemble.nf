@@ -26,7 +26,7 @@ process assemble {
         //println labels_db_path
 
         def test "/test/path/to/file.txt"
-        def test_db_path = java.nio.file.Paths.get({test}).parent.toString()
+        def test_db_path = java.nio.file.Paths.get(test).parent.toString()
         println test_db_path
 
         // check if the bind paths were actually changed
