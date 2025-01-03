@@ -28,12 +28,15 @@ process assemble {
     outDir = "${workingDir}/${opts_id}"
     seeds = "${opts.seeds_db}"
     labels = "${opts.labels_db}"
+    // check if Singularity is being used
+    // if so, may need to set special bind paths for custom GetOrganelle databases
     if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
         seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
         labels_path = java.nio.file.Paths.get(labels).parent.toString()
         // println "seed path = ${seeds_path}"
         // println "labels path = ${labels_path}"
+        // check if using the default databases, only update bind paths if needed
         if (seeds_path != "/ref_dbs/getOrganelle/seeds" || labels_path != "/ref_dbs/getOrganelle/seeds") {
             bindPathsList = []
             if (seeds_path != "/ref_dbs/getOrganelle/seeds"){
