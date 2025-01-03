@@ -50,7 +50,7 @@ process assemble {
             // Print the bind paths for debugging
             println "Singularity bind paths set to: $dynamicBindPaths"
             // set bind paths
-            session.config.singularity.bindPaths = dynamicBindPaths
+            containerOptions "--bind ${dynamicBindPaths}"
         } else {
             println "Using default databases, no custom bind paths are needed"
         }
