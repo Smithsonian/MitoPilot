@@ -26,10 +26,10 @@ process assemble {
     shell:
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
-    println "${opts}"
+ // println "${opts}"
     println "${opts.cpus}"
-    println "${opts.seeds_db}"
-/*     if (workflow.containerEngine == 'singularity') {
+ /* println "${opts.seeds_db}"
+    if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
         def seeds = ${opts.seeds_db}
         def labels = ${opts.labels_db}
@@ -58,7 +58,7 @@ process assemble {
         println "Singularity is NOT enabled"
     } */
     '''
-    echo "bind path is ${SINGULARITY_BIND}"       
+    echo "Singularity bind path = ${SINGULARITY_BIND}"
     mkdir -p !{workingDir}
     get_organelle_from_reads.py \
         -1 !{reads[0]} \
