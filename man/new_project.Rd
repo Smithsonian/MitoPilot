@@ -45,11 +45,11 @@ be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
 \item{container}{The docker container to use for pipeline execution.}
 
 \item{custom_seeds_db}{(optional) full path to a custom GetOrganelle seeds
-database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general 
+database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general
 for information about custom databases.}
 
 \item{custom_labels_db}{(optional) full path to a custom GetOrganelle labels
-database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general 
+database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general
 for information about custom databases.}
 
 \item{config}{(optional) provide a path to an existing custom nextflow config
