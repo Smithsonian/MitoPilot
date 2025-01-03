@@ -16,7 +16,7 @@ process assemble {
 
     // Dynamically determine Singularity bind paths needed for custom get organelle databases
     // check if we're using Singularity
-    if (workflow.containerEngine == 'singularity') {
+ /*   if (workflow.containerEngine == 'singularity') {
         def bindPathsList = []
         println "Singularity is enabled."
         // get base paths for databases
@@ -30,7 +30,7 @@ process assemble {
         println test_db_path
 
         // check if the bind paths were actually changed
-        /* if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
+        if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
             if (seeds_db_path != "/ref_dbs/getOrganelle/seeds"){
                 bindPathsList << seeds_db_path
             }
@@ -45,10 +45,11 @@ process assemble {
             session.config.singularity.bindPaths = dynamicBindPaths 
         } else {
             println "Using default databases, no custom bind paths are needed"
-        } */
+        }
     } else {
         println "Singularity is NOT enabled"
     }
+*/
 
     input:
     tuple val(id), val(opts_id), path(reads), val(opts)
