@@ -1,6 +1,6 @@
 process assemble {
 
-    // debug true
+    debug true
 
     executor params.assemble.executor
     container params.assemble.container
@@ -25,7 +25,7 @@ process assemble {
         println seeds_db_path
         println labels_db_path
         // check if the bind paths were actually changed
-        if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
+        /* if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
             if (seeds_db_path != "/ref_dbs/getOrganelle/seeds"){
                 bindPathsList << seeds_db_path
             }
@@ -40,7 +40,7 @@ process assemble {
             session.config.singularity.bindPaths = dynamicBindPaths 
         } else {
             println "Using default databases, no custom bind paths are needed"
-        }
+        } */
     } else {
         println "Singularity is NOT enabled"
     }
