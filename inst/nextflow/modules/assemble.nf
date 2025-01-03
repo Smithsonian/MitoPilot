@@ -20,10 +20,15 @@ process assemble {
         def bindPathsList = []
         println "Singularity is enabled."
         // get base paths for databases
-        def seeds_db_path = java.nio.file.Paths.get({opts.seeds_db}).parent.toString()
-        def labels_db_path = java.nio.file.Paths.get({opts.labels_db}).parent.toString()
-        println seeds_db_path
-        println labels_db_path
+        // def seeds_db_path = java.nio.file.Paths.get({opts.seeds_db}).parent.toString()
+        // def labels_db_path = java.nio.file.Paths.get({opts.labels_db}).parent.toString()
+        //println seeds_db_path
+        //println labels_db_path
+
+        def test "/test/path/to/file.txt"
+        def test_db_path = java.nio.file.Paths.get({test}).parent.toString()
+        println test_db_path
+
         // check if the bind paths were actually changed
         /* if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
             if (seeds_db_path != "/ref_dbs/getOrganelle/seeds"){
