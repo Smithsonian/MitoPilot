@@ -26,27 +26,24 @@ process assemble {
     shell:
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
- // println "${opts}"
- // println "${opts.cpus}"
-    println "seed db is: ${opts.seeds_db}"
- /*   if (workflow.containerEngine == 'singularity') {
+    seeds = "${opts.seeds_db}"
+    labels = "${opts.labels_db}"
+    if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
-        def seeds = ${opts.seeds_db}
-        def labels = ${opts.labels_db}
-        def seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
-        def labels_path = java.nio.file.Paths.get(labels).parent.toString()
-        println seeds_path
-        println labels_path
-        if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
-            def bindPathsList = []
-            if (seeds_db_path != "/ref_dbs/getOrganelle/seeds"){
-                bindPathsList << seeds_db_path
+        seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
+        labels_path = java.nio.file.Paths.get(labels).parent.toString()
+        println "seed path = ${seeds_path}"
+        println "labels path = ${labels_path}"
+        if (seeds_path != "/ref_dbs/getOrganelle/seeds" || labels_path != "/ref_dbs/getOrganelle/seeds") {
+            bindPathsList = []
+            if (seeds_path != "/ref_dbs/getOrganelle/seeds"){
+                bindPathsList << seeds_path
             }
-            if (labels_db_path != "/ref_dbs/getOrganelle/seeds"){
-                bindPathsList << labels_db_path
+            if (labels_path != "/ref_dbs/getOrganelle/seeds"){
+                bindPathsList << labels_path
             }
             // Combine the paths into a comma-separated string
-            def dynamicBindPaths = bindPathsList.join(',')
+            dynamicBindPaths = bindPathsList.join(',')
             // Print the bind paths for debugging
             println "Dynamic Singularity bind paths set to: $dynamicBindPaths"
             // set bind path env variable
@@ -56,7 +53,7 @@ process assemble {
         }
     } else {
         println "Singularity is NOT enabled"
-    } */
+    }
     '''
     echo "Singularity bind path = ${SINGULARITY_BIND}"
     mkdir -p !{workingDir}
