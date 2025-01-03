@@ -145,7 +145,7 @@ new_db <- function(
       data.frame(
         pre_opts = "default",
         cpus = 4,
-        memory = 4,
+        memory = 16,
         fastp = "--trim_poly_g --correction --detect_adapter_for_pe --dont_eval_duplication"
       ),
       in_place = TRUE,
