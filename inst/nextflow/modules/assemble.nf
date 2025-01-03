@@ -25,8 +25,8 @@ process assemble {
 
     if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
-        def seeds = "${opts.seeds_db}"
-        def labels = "${opts.labels_db}"
+        def seeds = opts.seeds_db
+        def labels = opts.labels_db
         def seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
         def labels_path = java.nio.file.Paths.get(labels).parent.toString()
         println seeds_path
