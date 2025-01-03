@@ -1,5 +1,4 @@
 include {assemble} from './assemble.nf'
-include {getOrgBindPaths} from './getOrgBindPaths.nf'
 
 params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.seeds_db, opts.labels_db, opts.getOrganelle ' +
@@ -62,9 +61,6 @@ workflow ASSEMBLE {
                 )
             }
             .set { assemble_in }
-
-        // Set database bind paths for Singularity
-        getOrgBindPaths(assemble_in).set
 
         // Assemble
         assemble(assemble_in).set { assemble_out }
