@@ -12,6 +12,8 @@ new_project(
   min_depth = 2e+06,
   executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
   container = "drleopold/mitopilot",
+  custom_seeds_db = NULL,
+  custom_labels_db = NULL,
   config = NULL,
   Rproj = TRUE,
   force = FALSE,
@@ -41,6 +43,14 @@ with assembly (default: 2000000)}
 be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
 
 \item{container}{The docker container to use for pipeline execution.}
+
+\item{custom_seeds_db}{(optional) full path to a custom GetOrganelle seeds
+database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general 
+for information about custom databases.}
+
+\item{custom_labels_db}{(optional) full path to a custom GetOrganelle labels
+database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general 
+for information about custom databases.}
 
 \item{config}{(optional) provide a path to an existing custom nextflow config
 file. If not provided a config file template will be created based on the
