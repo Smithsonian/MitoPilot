@@ -27,9 +27,9 @@ process assemble {
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
  // println "${opts}"
-    println "${opts.cpus}"
- /* println "${opts.seeds_db}"
-    if (workflow.containerEngine == 'singularity') {
+ // println "${opts.cpus}"
+    println "${opts.seeds_db}"
+ /*   if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
         def seeds = ${opts.seeds_db}
         def labels = ${opts.labels_db}
