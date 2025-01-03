@@ -14,14 +14,25 @@ process assemble {
 
     tag "${id}"
 
+    input:
+    tuple val(id), val(opts_id), path(reads), val(opts)
+
+    output:
+    tuple val("${id}"), 
+        path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
+        path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
+        path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
+        val("${opts_id}"),                                                    // options id
+        path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
+
     // Dynamically determine Singularity bind paths needed for custom get organelle databases
     // check if we're using Singularity
     if (workflow.containerEngine == 'singularity') {
         def bindPathsList = []
         println "Singularity is enabled."
         // get base paths for databases
-        def seeds_db_path = java.nio.file.Paths.get(opts.seeds_db).parent.toString()
-        def labels_db_path = java.nio.file.Paths.get(opts.labels_db).parent.toString()
+        def seeds_db_path = java.nio.file.Paths.get(${opts.seeds_db}).parent.toString()
+        def labels_db_path = java.nio.file.Paths.get(${opts.labels_db}).parent.toString()
         // check if the bind paths were actually changed
         if (seeds_db_path != "/ref_dbs/getOrganelle/seeds" || labels_db_path != "/ref_dbs/getOrganelle/seeds") {
             if (seeds_db_path != "/ref_dbs/getOrganelle/seeds"){
@@ -42,26 +53,6 @@ process assemble {
     } else {
         println "Singularity is NOT enabled"
     }
-
-    
-
-    bindPathsList << '/tmp'  // Add a common path
-
-
-
-
-
-    input:
-    tuple val(id), val(opts_id), path(reads), val(opts)
-
-    output:
-    tuple val("${id}"), 
-        path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
-        path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
-        path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
-        val("${opts_id}"),                                                    // options id
-        path("${id}/assemble/${opts_id}/get_org.log.txt"),                     // getOrganelle log
-        path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt")                     // Nextflow working directory, for troubleshooting
 
     shell:
     workingDir = "${id}/assemble"
