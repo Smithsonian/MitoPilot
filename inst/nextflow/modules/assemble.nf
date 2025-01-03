@@ -12,10 +12,6 @@ process assemble {
 
     tag "${id}"
 
-    println "${opts}"
-    println "${opts.cpus}"
-    println "${opts.seeds_db}"
-
     input:
     tuple val(id), val(opts_id), path(reads), val(opts)
 
@@ -27,11 +23,12 @@ process assemble {
         val("${opts_id}"),                                                    // options id
         path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
 
-
-
     shell:
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
+    println "${opts}"
+    println "${opts.cpus}"
+    println "${opts.seeds_db}"
 /*     if (workflow.containerEngine == 'singularity') {
         // get base paths for databases
         def seeds = ${opts.seeds_db}
