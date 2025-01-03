@@ -27,7 +27,7 @@ process assemble {
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
 
-// old code for binding paths, doesn't work
+// old code for binding paths, doesn't work, may want to revisit later
 /*  
     seeds = "${opts.seeds_db}"
     labels = "${opts.labels_db}"

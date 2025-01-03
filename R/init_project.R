@@ -19,10 +19,10 @@
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
 #' @param custom_seeds_db (optional) full path to a custom GetOrganelle seeds
-#'   database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general 
+#'   database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general
 #'   for information about custom databases.
 #' @param custom_labels_db (optional) full path to a custom GetOrganelle labels
-#'   database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general 
+#'   database. See https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#general
 #'   for information about custom databases.
 #' @param config (optional) provide a path to an existing custom nextflow config
 #'   file. If not provided a config file template will be created based on the
@@ -70,16 +70,22 @@ new_project <- function(
   }
 
   # Copy custom databases into project directory, if needed
+  if (!file.exists(custom_seeds_db)) {
+    stop("Custom seed database does not exist")
+  }
+  if (!file.exists(custom_labels_db)) {
+    stop("Custom labels database does not exist")
+  }
   if(!is.null(custom_seeds_db) | !is.null(custom_labels_db)){
-    if (!dir.exists(paste0(path,"/ref_dbs"))) {
-      message("Creating ref database directory: ", paste0(path,"/ref_dbs"))
-      dir.create(paste0(path, "/ref_dbs/getOrganelle/seeds"), recursive = TRUE)
-      dir.create(paste0(path, "/ref_dbs/getOrganelle/labels"), recursive = TRUE)
+    if (!dir.exists(paste0(path,"/work/ref_dbs"))) {
+      message("Creating ref database directory: ", paste0(path, "/work/ref_dbs"))
+      dir.create(paste0(path, "/work/ref_dbs/getOrganelle/seeds"), recursive = TRUE)
+      dir.create(paste0(path, "/work/ref_dbs/getOrganelle/labels"), recursive = TRUE)
       if(!is.null(custom_seeds_db)){
-        file.copy(custom_seeds_db, paste0(path, "/ref_dbs/getOrganelle/seeds"))
+        file.copy(custom_seeds_db, paste0(path, "/work/ref_dbs/getOrganelle/seeds"))
       }
       if(!is.null(custom_labels_db)){
-        file.copy(custom_labels_db, paste0(path, "/ref_dbs/getOrganelle/labels"))
+        file.copy(custom_labels_db, paste0(path, "/work/ref_dbs/getOrganelle/labels"))
       }
     }
   }
@@ -112,8 +118,8 @@ new_project <- function(
       db_path = file.path(path, ".sqlite"),
       mapping_fn = mapping_out,
       mapping_id = mapping_id,
-      seeds_db = paste0(path, "/ref_dbs/getOrganelle/seeds/", basename(custom_seeds_db)),
-      labels_db = paste0(path, "/ref_dbs/getOrganelle/labels/", basename(custom_labels_db)),
+      seeds_db = paste0(path, "/work/ref_dbs/getOrganelle/seeds/", basename(custom_seeds_db)),
+      labels_db = paste0(path, "/work/ref_dbs/getOrganelle/labels/", basename(custom_labels_db)),
       ...
     )
   } else {
