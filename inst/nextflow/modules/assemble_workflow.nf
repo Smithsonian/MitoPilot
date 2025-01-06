@@ -40,6 +40,17 @@ workflow ASSEMBLE {
             }
             .set { assemble_opts }
 
+        channel.fromQuery(params.sqlRead, db: 'sqlite')
+            .map{ it ->
+                tuple(
+                    [                                                           //## getOrganelle dbs ##//
+                        seeds_db: file(it[4]),                                        // getOrganelle seeds
+                        labels_db: file(it[5]),                                       // getOrganelle labels
+                    ]
+                )
+            }
+            .set { getOrg_dbs }
+
         // Assemble Input Channel
         input
             // filter on min seq depth
