@@ -40,6 +40,13 @@ new_project <- function(
     force = FALSE,
     ...) {
 
+  # Create directory if it doesn't exist ----
+  if (!dir.exists(path)) {
+    message("Creating project directory: ", path)
+    dir.create(path, recursive = TRUE)
+  }
+  path <- normalizePath(path)
+
   # Read mapping file ----
   if (is.null(mapping_fn) || !file.exists(mapping_fn)) {
     stop("A mapping file is required to initialize a new project")
@@ -54,13 +61,6 @@ new_project <- function(
   if (is.null(executor) || executor %nin% c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA")) {
     stop("Invalid executor.")
   }
-
-  # Create directory if it doesn't exist ----
-  if (!dir.exists(path)) {
-    message("Creating project directory: ", path)
-    dir.create(path, recursive = TRUE)
-  }
-  path <- normalizePath(path)
 
   # Initialize RStudio Project ----
   # (optional & only if running form RStudio)

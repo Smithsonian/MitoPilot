@@ -31,10 +31,14 @@ new_test_project <- function(
     container = "drleopold/mitopilot",
     Rproj = TRUE,
     force = FALSE,
+    custom_seeds_db = NULL,
+    custom_labels_db = NULL,
     ...) {
   # TODO add check for curl available
 
+  # Create directory if it doesn't exist ----
   if (!dir.exists(path)) {
+    message("Creating project directory: ", path)
     dir.create(path, recursive = TRUE)
   }
   path <- normalizePath(path)
@@ -109,6 +113,8 @@ new_test_project <- function(
     min_depth = 500,
     executor = executor,
     Rproj = Rproj,
+    custom_seeds_db = custom_seeds_db,
+    custom_labels_db = custom_labels_db,
     ...
   )
 }
