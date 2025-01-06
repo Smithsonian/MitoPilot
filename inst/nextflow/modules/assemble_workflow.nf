@@ -32,8 +32,8 @@ workflow ASSEMBLE {
                     [                                                           //## assembly options ##//
                         cpus: it[2],                                            // cpus
                         memory: it[3],                                          // memory
-                        seeds_db: it[4],                                        // getOrganelle seeds
-                        labels_db: it[5],                                       // getOrganelle labels
+                        seeds_db: file(it[4]),                                        // getOrganelle seeds
+                        labels_db: file(it[5]),                                       // getOrganelle labels
                         getOrganelle: it[6]                                     // getOrganelle options
                     ]
                 )
