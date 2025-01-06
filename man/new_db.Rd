@@ -11,8 +11,10 @@ new_db(
   mapping_taxon = "Taxon",
   assemble_cpus = 6,
   assemble_memory = 16,
-  seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito.fasta",
-  labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito.fasta",
+  seeds_db =
+    "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito.fasta",
+  labels_db =
+    "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito.fasta",
   getOrganelle = paste("-F 'anonym'", "-R 10 -k '21,45,65,85,105,115'",
     "--larger-auto-ws", "--expected-max-size 20000", "--target-genome-size 16500"),
   annotate_cpus = 6,
@@ -41,9 +43,9 @@ identifier (eg, species name)}
 
 \item{assemble_memory}{default memory (GB) for assembly}
 
-\item{seeds_db}{Path to the getOrganelle seeds database}
+\item{seeds_db}{Path to the gotOrganelle seeds database, can be a URL}
 
-\item{labels_db}{Path to the getOrganelle labels database}
+\item{labels_db}{Path to the gotOrganelle labels database, can be a URL}
 
 \item{getOrganelle}{Default getOrganelle command line options}
 

@@ -7,8 +7,8 @@
 #'   identifier (eg, species name)
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
-#' @param seeds_db Path to the getOrganelle seeds database
-#' @param labels_db Path to the getOrganelle labels database
+#' @param seeds_db Path to the gotOrganelle seeds database, can be a URL
+#' @param labels_db Path to the gotOrganelle labels database, can be a URL
 #' @param getOrganelle Default getOrganelle command line options
 #' @param annotate_cpus Default # cpus for annotation
 #' @param annotate_memory Default memory (GB) for annotation
@@ -31,8 +31,8 @@ new_db <- function(
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 16,
-    seeds_db = "/ref_dbs/getOrganelle/seeds/fish_mito.fasta",
-    labels_db = "/ref_dbs/getOrganelle/labels/fish_mito.fasta",
+    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito.fasta",
+    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito.fasta",
     getOrganelle = paste(
       "-F 'anonym'",
       "-R 10 -k '21,45,65,85,105,115'",
