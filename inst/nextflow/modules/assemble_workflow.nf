@@ -32,24 +32,13 @@ workflow ASSEMBLE {
                     [                                                           //## assembly options ##//
                         cpus: it[2],                                            // cpus
                         memory: it[3],                                          // memory
-                        seeds_db: file(it[4]),                                        // getOrganelle seeds
-                        labels_db: file(it[5]),                                       // getOrganelle labels
+                        // seeds_db: path(it[4]),                                        // getOrganelle seeds
+                        // labels_db: path(it[5]),                                       // getOrganelle labels
                         getOrganelle: it[6]                                     // getOrganelle options
                     ]
                 )
             }
             .set { assemble_opts }
-
-        channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .map{ it ->
-                tuple(
-                    [                                                           //## getOrganelle dbs ##//
-                        seeds_db: file(it[4]),                                        // getOrganelle seeds
-                        labels_db: file(it[5]),                                       // getOrganelle labels
-                    ]
-                )
-            }
-            .set { getOrg_dbs }
 
         // Assemble Input Channel
         input
@@ -69,6 +58,10 @@ workflow ASSEMBLE {
                     it[1][1],                                                   // assembly options id
                     it[0][1],                                                   // trimmed reads in
                     it[1][2],                                                   // assembly options
+                    [
+                        it[1][3],  // getOrganelle seeds
+                        it[1][4]  // getOrganelle labels
+                    ]
                 )
             }
             .set { assemble_in }

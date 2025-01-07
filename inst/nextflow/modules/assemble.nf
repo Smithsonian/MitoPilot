@@ -13,7 +13,7 @@ process assemble {
     tag "${id}"
 
     input:
-    tuple val(id), val(opts_id), path(reads), val(opts)
+    tuple val(id), val(opts_id), path(reads), val(opts), path(dbs)
 
     output:
     tuple val("${id}"), 
@@ -67,8 +67,8 @@ process assemble {
         -1 !{reads[0]} \
         -2 !{reads[1]} \
         -o !{workingDir}/ --overwrite \
-        -s !{opts.seeds_db} \
-        --genes !{opts.labels_db} \
+        -s !{dbs[0]} \
+        --genes !{dbs[1]} \
         -t !{task.cpus} \
         !{opts.getOrganelle}
     mkdir -p !{outDir}
