@@ -188,8 +188,15 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         width = "100%"
       ) |> shinyjs::disabled(),
       textInput(
-        ns("seeds_db"), "getOrganelle Seeds:",
+        ns("seeds_db"),
+        label = "getOrganelle Seeds:",
         value = current$seeds_db %||% character(0),
+        width = "100%"
+      ) |> shinyjs::disabled(),
+      textInput(
+        ns("labels_db"),
+        label = "getOrganelle Labels:",
+        value = current$labels_db %||% character(0),
         width = "100%"
       ) |> shinyjs::disabled(),
       size = "m",
