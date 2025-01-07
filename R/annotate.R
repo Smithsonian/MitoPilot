@@ -19,8 +19,8 @@
 #' @export
 #'
 annotate <- function(
-    assembly_fn = "22030FL-06-02-140_assembly_1.fasta",
-    coverage_fn = "22030FL-06-02-140_assembly_1_coverageStats.csv",
+    assembly_fn = NULL,
+    coverage_fn = NULL,
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
