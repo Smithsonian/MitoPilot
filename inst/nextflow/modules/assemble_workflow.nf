@@ -32,9 +32,11 @@ workflow ASSEMBLE {
                     [                                                           //## assembly options ##//
                         cpus: it[2],                                            // cpus
                         memory: it[3],                                          // memory
-                        // seeds_db: path(it[4]),                                        // getOrganelle seeds
-                        // labels_db: path(it[5]),                                       // getOrganelle labels
                         getOrganelle: it[6]                                     // getOrganelle options
+                    ]
+                    [
+                        seeds_db: it[4],                                        // getOrganelle seeds_db
+                        labels_db: it[5]                                        // getOrganelle labels_db                       
                     ]
                 )
             }
@@ -58,10 +60,7 @@ workflow ASSEMBLE {
                     it[1][1],                                                   // assembly options id
                     it[0][1],                                                   // trimmed reads in
                     it[1][2],                                                   // assembly options
-                    [
-                        it[1][3],  // getOrganelle seeds
-                        it[1][4]  // getOrganelle labels
-                    ]
+                    it[1][3]                                                    // getOrganelle databases (seeds_db and labels_db)
                 )
             }
             .set { assemble_in }
