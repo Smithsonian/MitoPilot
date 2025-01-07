@@ -33,7 +33,7 @@ workflow ASSEMBLE {
                         cpus: it[2],                                            // cpus
                         memory: it[3],                                          // memory
                         getOrganelle: it[6]                                     // getOrganelle options
-                    ]
+                    ],
                     [
                         seeds_db: it[4],                                        // getOrganelle seeds_db
                         labels_db: it[5]                                        // getOrganelle labels_db                       
