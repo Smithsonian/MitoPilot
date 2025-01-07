@@ -19,8 +19,8 @@
 #' @export
 #'
 annotate <- function(
-    assembly_fn = NULL,
-    coverage_fn = NULL,
+    assembly_fn = "22030FL-06-02-140_assembly_1.fasta",
+    coverage_fn = "22030FL-06-02-140_assembly_1_coverageStats.csv",
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
@@ -114,22 +114,21 @@ annotate <- function(
 
   ## Fix D-loop annotations ----
   # Filter spurious OH annotations
-  if (sum(annotations$gene == "OH") > 1) {
-    oh_idx <- which(annotations$gene == "OH") |> rev()
-    for (idx in oh_idx) {
-      # Check if contained in other gene
-      containing <- annotations |>
-        dplyr::filter(!idx) |>
-        dplyr::filter(pos1 >= annotations$pos1[idx] & pos2 <= annotations$pos2[idx])
-      if (nrow(containing) > 0L) {
-        annotations <- annotations[-idx, ]
-        next
-      }
-      # remove if not best
-      if (stringr::str_detect(annotations$geneId[idx], "OH_0") | stringr::str_detect(annotations$geneId[idx], "OH$")) next
-      annotations <- annotations[-idx, ]
+  oh_idx <- which(annotations$gene == "OH") |> rev()
+  to_remove <- NULL
+  for (idx in oh_idx) {
+    # Check if overlapping other gene
+    containing <- annotations |>
+      dplyr::filter(!idx) |>
+      dplyr::filter(pos1 >= annotations$pos1[idx] | pos2 <= annotations$pos2[idx])
+    if (nrow(containing) > 0L) {
+      to_remove <- c(to_remove, idx)
     }
   }
+  if(length(to_remove) > 0) {
+    annotations <- annotations[-to_remove, ]
+  }
+
   # Extend OH annotations to (putative) full length ctrl region
   oh_idx <- which(annotations$gene == "OH")
   for (idx in oh_idx) {
