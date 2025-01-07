@@ -7,8 +7,8 @@
 #'   identifier (eg, species name)
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
-#' @param seeds_db Path to the gotOrganelle seeds database, can be a URL
-#' @param labels_db Path to the gotOrganelle labels database, can be a URL
+#' @param seeds_db Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db
+#' @param labels_db Path to the gotOrganelle labels database, can be a URL, cannot have same file name as seeds_db
 #' @param getOrganelle Default getOrganelle command line options
 #' @param annotate_cpus Default # cpus for annotation
 #' @param annotate_memory Default memory (GB) for annotation
