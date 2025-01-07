@@ -67,8 +67,8 @@ process assemble {
         -1 !{reads[0]} \
         -2 !{reads[1]} \
         -o !{workingDir}/ --overwrite \
-        -s !{dbs.seeds_db} \
-        --genes !{dbs.labels_db} \
+        -s !{dbs[0]} \
+        --genes !{dbs[1]} \
         -t !{task.cpus} \
         !{opts.getOrganelle}
     mkdir -p !{outDir}
