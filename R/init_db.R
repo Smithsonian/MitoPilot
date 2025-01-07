@@ -31,8 +31,8 @@ new_db <- function(
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 16,
-    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito.fasta",
-    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito.fasta",
+    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta",
+    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta",
     getOrganelle = paste(
       "-F 'anonym'",
       "-R 10 -k '21,45,65,85,105,115'",

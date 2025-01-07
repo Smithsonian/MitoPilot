@@ -475,6 +475,10 @@ assemble_server <- function(id) {
           inputId = "seeds_db",
           value = cur$seeds_db
         )
+        updateTextInput(
+          inputId = "labels_db",
+          value = cur$labels_db
+        )
       }
     })
     observeEvent(input$edit_assemble_opts, ignoreInit = T, {
@@ -485,6 +489,7 @@ assemble_server <- function(id) {
       # Need to modify nextflow to pass seeds database to worker or
       # the specific path must exist in the workers docker container
       shinyjs::toggleState("seeds_db", condition = FALSE)
+      shinyjs::toggleState("labels_db", condition = FALSE)
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
