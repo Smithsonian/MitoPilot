@@ -465,13 +465,9 @@ assemble_server <- function(id) {
           inputId = "getOrganelle",
           value = cur$getOrganelle
         )
-        updateTextAreaInput(
+        updateTextInput(
           inputId = "seeds_db",
           value = cur$seeds_db
-        )
-        updateTextAreaInput(
-          inputId = "labels_db",
-          value = cur$labels_db
         )
       }
     })
@@ -482,8 +478,7 @@ assemble_server <- function(id) {
       # TODO - allow for alt seed database
       # Need to modify nextflow to pass seeds database to worker or
       # the specific path must exist in the workers docker container
-      shinyjs::toggleState("seeds_db", condition = input$edit_assemble_opts)
-      shinyjs::toggleState("labels_db", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("seeds_db", condition = FALSE)
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
@@ -537,8 +532,8 @@ assemble_server <- function(id) {
               memory = req(input$assemble_opts_memory),
               getOrganelle = req(input$getOrganelle),
               seeds_db = req(input$seeds_db),
-              labels_db = req(input$labels_db)
-            ),
+              labels_db = rv$assemble_opts$labels_db[1]
+			),
             in_place = TRUE,
             copy = TRUE,
             by = "assemble_opts"
