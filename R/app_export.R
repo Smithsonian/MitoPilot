@@ -54,7 +54,7 @@ export_server <- function(id) {
         rowStyle = rt_highlight_row(),
         defaultColDef = colDef(align = "center", maxWidth = 140),
         columns = list(
-          ID = colDef(show = T, width = 120, sticky = "left"),
+          ID = colDef(show = T, minWidth = 120, sticky = "left"),
           topology = colDef(show = T, width = 100),
           structure = colDef(show = T, maxWidth = 600),
           export_group = colDef(name = "Group", sticky = "right")

@@ -52,6 +52,7 @@ annotate_server <- function(id) {
             noData = "No Completed / Locked Assemblies Found"
           ),
           defaultPageSize = 100,
+          resizable = TRUE,
           showPageSizeOptions = TRUE,
           onClick = "select",
           selection = "multiple",
@@ -96,14 +97,14 @@ annotate_server <- function(id) {
             ),
             ID = colDef(
               show = TRUE,
-              width = 120,
+              minWidth = 120,
               sticky = "left",
               html = TRUE,
               cell = rt_longtext()
             ),
             Taxon = colDef(
               show = TRUE,
-              width = 140,
+              minWidth = 140,
               sticky = "left",
               html = TRUE,
               cell = rt_longtext()
@@ -149,7 +150,7 @@ annotate_server <- function(id) {
               html = TRUE,
               align = "left",
               minWidth = 150,
-              maxWidth = 400,
+              #maxWidth = 400,
               cell = rt_longtext()
             ),
             view = colDef(
