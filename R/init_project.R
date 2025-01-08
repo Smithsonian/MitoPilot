@@ -47,6 +47,11 @@ new_project <- function(
   }
   path <- normalizePath(path)
 
+  # Normalize data path (if provided)----
+  if(length(data_path)==1){
+    data_path <- normalizePath(data_path)
+  }
+
   # Read mapping file ----
   if (is.null(mapping_fn) || !file.exists(mapping_fn)) {
     stop("A mapping file is required to initialize a new project")
