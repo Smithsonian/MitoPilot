@@ -12,9 +12,9 @@ License: file LICENSE
 URL: https://github.com/JonahVentures/MitoPilot,
     https://jonahventures.github.io/MitoPilot/
 BugReports: https://github.com/JonahVentures/MitoPilot/issues
-Depends: 
-    R (>= 4.0.0)
-Imports: 
+Depends:
+    R (>= 4.4.0)
+Imports:
     base64enc,
     BiocGenerics,
     Biostrings,
@@ -54,11 +54,11 @@ Imports:
     tidyr,
     utils,
     waiter,
-    zoo
-Suggests: 
-    knitr,
+    zoo,
     pwalign
-VignetteBuilder: 
+Suggests:
+    knitr
+VignetteBuilder:
     knitr
 biocViews:
 Encoding: UTF-8

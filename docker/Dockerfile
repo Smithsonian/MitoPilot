@@ -1,4 +1,4 @@
-FROM condaforge/mambaforge:24.7.1-0
+FROM condaforge/mambaforge:24.9.2-0
 
 RUN apt-get update && \
     apt-get install -y jq && \
@@ -16,7 +16,7 @@ RUN conda config --add channels defaults && \
     mamba install -c bioconda samtools=1.21 && \
     mamba install -c bioconda trnascan-se=2.0.12 -m -n trnascan-se && \
     mamba install -c bioconda mitos=2.1.9 -m -n mitos && \
-    mamba install -c conda-forge r-base=4.3.0 && \
+    mamba install -c conda-forge r-base=4.4.2 && \
     mamba install r-remotes
 
 RUN R -e "remotes::install_github('rstudio/renv')"

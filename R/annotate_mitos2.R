@@ -91,6 +91,9 @@ annotate_mitos2 <- function(
               length = 1 + abs(pos2 - pos1),
               .before = "direction"
             ) |>
+            dplyr::filter(
+              gene != "OH" | stringr::str_detect(geneId, "OH_0") | stringr::str_detect(geneId, "OH$")
+            ) |>
             dplyr::rowwise() |>
             dplyr::mutate(
               start_codon = dplyr::case_when(
@@ -133,6 +136,7 @@ annotate_mitos2 <- function(
       ###################
       return(annotations)
       ###################
+
     })
 }
 

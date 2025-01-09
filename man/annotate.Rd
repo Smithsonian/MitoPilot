@@ -5,8 +5,9 @@
 \title{Mitogenome Annotation Wrapper}
 \usage{
 annotate(
-  assembly_fn = NULL,
-  coverage_fn = NULL,
+  assembly_fn = "~/Downloads/22030FL-06-02-140/22030FL-06-02-140_assembly_1.fasta",
+  coverage_fn =
+    "~/Downloads/22030FL-06-02-140/22030FL-06-02-140_assembly_1_coverageStats.csv",
   cpus = 4,
   genetic_code = "2",
   ref_db = "Chordata",
