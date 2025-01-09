@@ -20,7 +20,9 @@ coverage <- function(
   assembly_len <- assembly@ranges@width
   seq_ids <- names(assembly)
   circular <- all(stringr::str_detect(seq_ids, "circular"))
-  ids <- stringr::str_split(seq_ids, "\\.", simplify = T)[, 1]
+  ids <- stringr::str_split(seq_ids, " ", simplify = T)[, 1]
+  names(assembly) <- ids
+  names(assembly_len) <- ids
   basename_prefix <- basename(assembly_fn) |> stringr::str_remove("\\.[^\\.]+$")
 
   # If the assembly is circular and only has one sequence, add a 500bp overlap for mapping
@@ -58,7 +60,8 @@ coverage <- function(
   coverage <- readr::read_delim(
     coverage_fn,
     col_names = FALSE,
-    guess_max = Inf, delim = "\t",
+    guess_max = Inf,
+    delim = "\t",
     col_select = 1:10,
     show_col_types = FALSE
   ) |>
@@ -76,6 +79,22 @@ coverage <- function(
       ErrorRate = (Depth - Correct) / Depth
     )
 
+  # Add missing coverage at start ----
+  for(id in unique(coverage$SeqId)){
+    if(coverage$Position[coverage$SeqId == id][1] != 1) {
+      end <- coverage$Position[coverage$SeqId == id][1] - 1
+      to_add <- data.frame(
+        SeqId = id,
+        Position = 1:end,
+        Call = as.character(Biostrings::subseq(assembly[id], 1, end)) |>
+          stringr::str_split("") |> unlist(),
+        Depth = 0,
+        Correct = 0
+      )
+      coverage <- dplyr::bind_rows(to_add, coverage)
+    }
+  }
+
   # Reform circular assembly ---
   if (circular && length(seq_ids) == 1) {
     to_move <- coverage$Position > assembly_len
@@ -90,8 +109,29 @@ coverage <- function(
       dplyr::mutate(
         ErrorRate = (Depth - Correct) / Depth
       )
-    readr::write_csv(coverage, file = coverage_fn, quote = "none", na = "")
   }
+
+  # Add missing coverage at end ----
+  for(id in unique(coverage$SeqId)){
+    if(max(coverage$Position[coverage$SeqId == id]) < assembly_len[[id]]) {
+      start <- max(coverage$Position[coverage$SeqId == id]) + 1
+      end <- assembly_len[[id]]
+      to_add <- data.frame(
+        SeqId = id,
+        Position = start:end,
+        Call = as.character(Biostrings::subseq(assembly[[id]], start, end)) |>
+          stringr::str_split("") |> unlist(),
+        Depth = 0,
+        Correct = 0,
+        ErrorRate = NA_real_
+      )
+      coverage <- dplyr::bind_rows(to_add, coverage)
+    }
+  }
+  coverage <- coverage |>
+    dplyr::arrange(SeqId, Position)
+
+  readr::write_csv(coverage, file = coverage_fn, quote = "none", na = "")
 
   # Calculate rolling window stats ----
   stats <- coverage |>

@@ -9,8 +9,8 @@
 #' @export
 #'
 validate_fish_mito <- function(
-    annotations_fn = "~/Downloads/tmp/SRR22396640_annotations_1.csv",
-    coverage_fn = "~/Downloads/tmp/SRR22396640_coverageStats_1.csv",
+    annotations_fn = NULL,
+    coverage_fn = NULL,
     params = list(),
     out_dir = NULL) {
   # Prepare environment ----

@@ -19,8 +19,8 @@
 #' @export
 #'
 annotate <- function(
-    assembly_fn = "~/Downloads/22030FL-06-02-140/22030FL-06-02-140_assembly_1.fasta",
-    coverage_fn = "~/Downloads/22030FL-06-02-140/22030FL-06-02-140_assembly_1_coverageStats.csv",
+    assembly_fn = NULL,
+    coverage_fn = NULL,
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
@@ -30,6 +30,7 @@ annotate <- function(
     trnaScan_opts = "-M vert",
     trnaScan_condaenv = "base",
     out_dir = NULL) {
+
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
   # Coverage trimming (optional)
