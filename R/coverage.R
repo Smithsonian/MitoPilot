@@ -10,10 +10,10 @@
 #' @export
 #'
 coverage <- function(
-    assembly_fn = NULL,
-    paired_reads_1 = NULL,
-    paired_reads_2 = NULL,
-    unpaired_reads = NULL,
+    assembly_fn = "22030FL-06-02-140_assembly_1.fasta",
+    paired_reads_1 = "extended_1_paired.fq",
+    paired_reads_2 = "extended_2_paired.fq",
+    unpaired_reads = "unpaired.fq",
     cpus = 4,
     outDir = NULL) {
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
@@ -28,7 +28,7 @@ coverage <- function(
   # If the assembly is circular and only has one sequence, add a 500bp overlap for mapping
   if (circular && length(seq_ids) == 1) {
     assembly <- Biostrings::xscat(assembly, Biostrings::subseq(assembly, start = 1, end = 500)) |>
-      setNames(seq_ids)
+      setNames(ids)
   }
   assembly_working <- assembly_fn |>
     stringr::str_remove("\\.[^\\.]+$") |>
