@@ -5,9 +5,9 @@
 \title{Annotation curation for fish mitogenomes}
 \usage{
 curate_fish_mito(
-  annotations_fn = "~/Downloads/tmp/SRR22396865_annotations_1.csv",
-  assembly_fn = "~/Downloads/tmp/SRR22396865_assembly_1.fasta",
-  coverage_fn = "~/Downloads/tmp/SRR22396865_coverageStats_1.csv",
+  annotations_fn = NULL,
+  assembly_fn = NULL,
+  coverage_fn = NULL,
   genetic_code = 2,
   out_dir = NULL,
   params = NULL
