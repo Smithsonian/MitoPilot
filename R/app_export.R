@@ -189,7 +189,7 @@ export_server <- function(id) {
         ),
         div(
           id = ns("output_path"),
-          h5("Output location:"),
+          h4("Data exported to:"),
           div(
             class = "code-block",
             style = "padding: 0.25em;white-space: normal;",
