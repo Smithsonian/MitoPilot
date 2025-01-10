@@ -30,7 +30,6 @@ export_server <- function(id) {
     # Refresh ----
     init("refresh_export")
     on("refresh_export", {
-      output$out_path_location <- renderText("")
       rv$data <- fetch_export_data()
       trigger("update_export_table")
     })
@@ -183,13 +182,14 @@ export_server <- function(id) {
           width = "100%"
         ),
         div(
-          id = ns("output"),
-          h2("Output location:"),
+          id = ns("output_path"),
+          h4("Output location:"),
           div(
+            class = "code-block",
             id = ns("out_path"),
             textOutput(ns("out_path_location")),
           )
-        ),
+        ) |> shinyjs::hidden(),
         shinyWidgets::prettyCheckbox(
           ns("include_alignments"),
           "Generate Group-level PCG alignment summary",
@@ -214,6 +214,7 @@ export_server <- function(id) {
         generateAAalignments = input$include_alignments,
         out_dir = session$userData$dir_out
       )
+      shinyjs::show("output_path")
       output$out_path_location <- renderText({
         paste0(session$userData$dir_out, "/", input$group_name)
       })
