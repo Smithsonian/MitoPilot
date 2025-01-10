@@ -182,8 +182,7 @@ export_server <- function(id) {
           width = "100%"
         ),
         textOutput(
-          "test",
-          width = "100%"
+          "test"
         ),
         shinyWidgets::prettyCheckbox(
           ns("include_alignments"),
