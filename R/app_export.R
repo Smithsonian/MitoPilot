@@ -192,7 +192,7 @@ export_server <- function(id) {
           h5("Output location:"),
           div(
             class = "code-block",
-            style = "padding: 0.25em;",
+            style = "padding: 0.25em;white-space: normal;",
             id = ns("out_path"),
             textOutput(ns("out_path_location")),
           )
