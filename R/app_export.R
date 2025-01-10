@@ -179,7 +179,11 @@ export_server <- function(id) {
           ns("fasta_header"),
           "Fasta Header Template (reference columns from your sample data using '{}'):",
           "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
-          width = "100%",
+          width = "100%"
+        ),
+        textOutput(
+          "test",
+          width = "100%"
         ),
         shinyWidgets::prettyCheckbox(
           ns("include_alignments"),
