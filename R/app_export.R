@@ -204,6 +204,7 @@ export_server <- function(id) {
 
     observeEvent(input$export_data, ignoreInit = T, {
       req(input$export_group)
+      req(input$group_name)
       shinyjs::removeClass("gears", "paused")
       shinyjs::disable("export_data")
       export_files(
@@ -212,7 +213,9 @@ export_server <- function(id) {
         generateAAalignments = input$include_alignments,
         out_dir = session$userData$dir_out
       )
-      output$out_path_location <- renderText(session$userData$dir_out)
+      output$out_path_location <- renderText({
+        paste0(session$userData$dir_out, "/", input$group_name)
+      })
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
     })
