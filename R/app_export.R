@@ -30,6 +30,7 @@ export_server <- function(id) {
     # Refresh ----
     init("refresh_export")
     on("refresh_export", {
+      output$out_path_location <- renderText("")
       rv$data <- fetch_export_data()
       trigger("update_export_table")
     })
@@ -183,7 +184,7 @@ export_server <- function(id) {
         ),
         div(
           id = ns("output"),
-          h5("Output location:"),
+          h2("Output location:"),
           div(
             id = ns("out_path"),
             textOutput(ns("out_path_location")),
