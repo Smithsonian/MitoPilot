@@ -181,8 +181,13 @@ export_server <- function(id) {
           "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
           width = "100%"
         ),
-        textOutput(
-          "test"
+        div(
+          id = ns("output"),
+          h5("Output location:"),
+          div(
+            id = ns("out_path"),
+            textOutput(ns("out_path_location")),
+          )
         ),
         shinyWidgets::prettyCheckbox(
           ns("include_alignments"),
@@ -207,6 +212,7 @@ export_server <- function(id) {
         generateAAalignments = input$include_alignments,
         out_dir = session$userData$dir_out
       )
+      output$out_path_location <- renderText(session$userData$dir_out)
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
     })
