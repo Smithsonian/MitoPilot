@@ -179,7 +179,7 @@ export_server <- function(id) {
           ns("fasta_header"),
           "Fasta Header Template (reference columns from your sample data using '{}'):",
           "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
-          width = "100%",
+          width = "100%"
         ),
         shinyWidgets::prettyCheckbox(
           ns("include_alignments"),
@@ -187,6 +187,16 @@ export_server <- function(id) {
           value = T,
           status = "primary"
         ),
+        div(
+          id = ns("output_path"),
+          h4("Data exported to:"),
+          div(
+            class = "code-block",
+            style = "padding: 0.25em;white-space: normal;",
+            id = ns("out_path"),
+            textOutput(ns("out_path_location")),
+          )
+        ) |> shinyjs::hidden(),
         footer = tagList(
           actionButton(ns("export_data"), "Export"),
           modalButton("Close")
@@ -196,6 +206,7 @@ export_server <- function(id) {
 
     observeEvent(input$export_data, ignoreInit = T, {
       req(input$export_group)
+      req(input$group_name)
       shinyjs::removeClass("gears", "paused")
       shinyjs::disable("export_data")
       export_files(
@@ -204,6 +215,10 @@ export_server <- function(id) {
         generateAAalignments = input$include_alignments,
         out_dir = session$userData$dir_out
       )
+      shinyjs::show("output_path")
+      output$out_path_location <- renderText({
+        paste0(session$userData$dir_out, "/export/", input$group_name)
+      })
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
     })
