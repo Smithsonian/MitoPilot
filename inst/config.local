@@ -17,7 +17,7 @@ process {
 sql {
   db {
     sqlite {
-      url = 'jdbc:sqlite:.sqlite'
+      url = 'jdbc:sqlite:.sqlite?journal_mode=WAL&busy_timeout=5000'
     }
   }
 }

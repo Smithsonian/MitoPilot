@@ -10,7 +10,7 @@ process {
   executor = 'slurm'
   container = '<<CONTAINER_ID>>'
   queue = 'standard'
-  cpus = { opts.cpus } // set number of CPUs based on value pulled from SQL database  
+  cpus = { opts.cpus } // set number of CPUs based on value pulled from SQL database
   memory = { opts.memory.GB } // set amount of memory based on value pulled from SQL database
 }
 
@@ -18,7 +18,7 @@ process {
 sql {
   db {
     sqlite {
-      url = 'jdbc:sqlite:.sqlite'
+      url = 'jdbc:sqlite:.sqlite?journal_mode=WAL&busy_timeout=5000'
     }
   }
 }

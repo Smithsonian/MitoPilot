@@ -31,7 +31,7 @@ aws {
 sql {
   db {
     sqlite {
-      url = 'jdbc:sqlite:sample.db'url = 'jdbc:sqlite:.sqlite'
+      url = 'jdbc:sqlite:.sqlite?journal_mode=WAL&busy_timeout=5000'
     }
   }
 }

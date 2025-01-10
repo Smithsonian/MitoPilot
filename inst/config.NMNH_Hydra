@@ -11,9 +11,9 @@ process {
   container = '<<CONTAINER_ID>>'
   penv = 'mthread'
   // check if "himem" is needed (requesting more than 8 Gb RAM per CPU)
-  clusterOptions = { 
-    if (((opts.memory * task.attempt) / opts.cpus) > 8) { 
-      "-l mres=${opts.memory * task.attempt}G,h_data=${(opts.memory * task.attempt) / opts.cpus}G,h_vmem=${(opts.memory * task.attempt) / opts.cpus}G,himem -S /bin/bash" 
+  clusterOptions = {
+    if (((opts.memory * task.attempt) / opts.cpus) > 8) {
+      "-l mres=${opts.memory * task.attempt}G,h_data=${(opts.memory * task.attempt) / opts.cpus}G,h_vmem=${(opts.memory * task.attempt) / opts.cpus}G,himem -S /bin/bash"
     } else {
       "-l mres=${opts.memory * task.attempt}G,h_data=${(opts.memory * task.attempt) / opts.cpus}G,h_vmem=${(opts.memory * task.attempt) / opts.cpus}G -S /bin/bash"
     }
@@ -25,7 +25,7 @@ process {
 sql {
   db {
     sqlite {
-      url = 'jdbc:sqlite:.sqlite'
+      url = 'jdbc:sqlite:.sqlite?journal_mode=WAL&busy_timeout=5000'
     }
   }
 }
