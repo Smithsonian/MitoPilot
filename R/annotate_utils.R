@@ -10,7 +10,7 @@
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  alignment <- Biostrings::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
+  alignment <- pwalign::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
 
   # Return query-centric percent identity
   if (type[1] == "pctId") {
@@ -114,17 +114,17 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
   end <- end[1]
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  aln <- Biostrings::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
+  aln <- pwalign::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
   if (end == "leading") {
     return({
-      nchar(stringr::str_extract(as.character(Biostrings::alignedSubject(aln)), "^-*")) -
-        nchar(stringr::str_extract(as.character(Biostrings::alignedPattern(aln)), "^-*"))
+      nchar(stringr::str_extract(as.character(pwalign::alignedSubject(aln)), "^-*")) -
+        nchar(stringr::str_extract(as.character(pwalign::alignedPattern(aln)), "^-*"))
     })
   }
   if (end == "trailing") {
     return({
-      nchar(stringr::str_extract(as.character(Biostrings::alignedSubject(aln)), "-*$")) -
-        nchar(stringr::str_extract(as.character(Biostrings::alignedPattern(aln)), "-*$"))
+      nchar(stringr::str_extract(as.character(pwalign::alignedSubject(aln)), "-*$")) -
+        nchar(stringr::str_extract(as.character(pwalign::alignedPattern(aln)), "-*$"))
     })
   }
 }

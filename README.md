@@ -38,7 +38,7 @@ raw input and performs the following steps:
     - Custom scripts to export data in a format suitable for submission
       to NCBI GenBank
 
-MitoPilot is currently optimized for fish mitogenome assembly, but has
+MitoPilot is currently optimized for Fish Mitogenome assembly, but has
 been developed with modularity and extensibility in mind to facilitate
 broader application in the future. In particular, the included reference
 databases for assembly and annotation, along with the default parameters
@@ -61,7 +61,7 @@ other advanced customization) are coming soon.
 # Installation
 
 To use MitoPilot, you will need [R
-(\>=4.0.0)](https://www.r-project.org/) and
+(\>=4.4.0)](https://www.r-project.org/) and
 [Nextflow](https://www.nextflow.io/docs/latest/install.html). In
 addition, depending or where Nextflow will be executing the pipline
 (e.g., locally or on a remote cluster), you may also need to install

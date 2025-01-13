@@ -39,7 +39,7 @@ MitoPilot is currently optimized for Fish Mitogenome assembly, but has been deve
 
 # Installation
 
-To use MitoPilot, you will need [R (>=4.0.0)](https://www.r-project.org/) and [Nextflow](https://www.nextflow.io/docs/latest/install.html). In addition, depending or where Nextflow will be executing the pipline (e.g., locally or on a remote cluster), you may also need to install [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html#quick-installation-steps).
+To use MitoPilot, you will need [R (>=4.4.0)](https://www.r-project.org/) and [Nextflow](https://www.nextflow.io/docs/latest/install.html). In addition, depending or where Nextflow will be executing the pipline (e.g., locally or on a remote cluster), you may also need to install [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html#quick-installation-steps).
 
 Once you have R and Nextflow installed, install `{MitoPilot}` in R from GitHub:
 
