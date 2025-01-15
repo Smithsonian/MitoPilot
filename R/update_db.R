@@ -54,7 +54,7 @@ update_db <- function(
     )
   # convert everything to characters
   mapping <- mapping %>%
-    mutate(across(everything(), as.character))
+    dplyr::mutate(across(everything(), as.character))
 
   # remove R1 and R2 columns from updated mapping
   if("R1" %in% colnames(mapping) | "R2" %in% colnames(mapping)){
@@ -67,7 +67,7 @@ update_db <- function(
   sample_table <- DBI::dbReadTable(con, "samples")
   # convert everything to characters
   sample_table <- sample_table %>%
-    mutate(across(everything(), as.character))
+    dplyr::mutate(across(everything(), as.character))
 
   # check to make sure there are no new samples in the update database
   new_samples <- mapping$ID[which(!(mapping$ID %in% sample_table$ID))]
