@@ -57,12 +57,13 @@ annotate_server <- function(id) {
           onClick = "select",
           selection = "multiple",
           searchable = TRUE,
+          filterable = TRUE,
           defaultSorted = list(time_stamp = "desc"),
           height = 650,
           wrap = FALSE,
           pageSizeOptions = c(25, 50, 100, 200, 500),
           rowStyle = rt_highlight_row(),
-          defaultColDef = colDef(align = "left", show = FALSE, maxWidth = 85),
+          defaultColDef = colDef(align = "left", show = FALSE),
           columns = list(
             `.selection` = colDef(show = T, sticky = "left", width = 28),
             annotate_lock = colDef(
@@ -70,6 +71,7 @@ annotate_server <- function(id) {
               sticky = "left",
               name = "",
               html = TRUE,
+              filterable = FALSE,
               width = 32,
               align = "center",
               cell = rt_dynamicIcon(
@@ -84,6 +86,7 @@ annotate_server <- function(id) {
               sticky = "left",
               name = "",
               html = TRUE,
+              filterable = FALSE,
               width = 30,
               align = "center",
               cell = rt_dynamicIcon(
@@ -126,6 +129,7 @@ annotate_server <- function(id) {
             length = colDef(
               show = TRUE,
               name = "Length",
+              filterable = FALSE,
               html = TRUE,
               cell = rt_longtext()
             ),
@@ -140,6 +144,7 @@ annotate_server <- function(id) {
             time_stamp = colDef(
               show = TRUE,
               name = "Last Updated",
+              filterable = FALSE,
               html = T,
               width = 150,
               cell = rt_ts_date()
@@ -156,6 +161,7 @@ annotate_server <- function(id) {
             view = colDef(
               show = TRUE,
               sticky = "right",
+              filterable = FALSE,
               name = "",
               html = TRUE,
               width = 80,
@@ -165,6 +171,7 @@ annotate_server <- function(id) {
             output = colDef(
               show = TRUE,
               sticky = "right",
+              filterable = FALSE,
               name = "",
               html = TRUE,
               width = 80,

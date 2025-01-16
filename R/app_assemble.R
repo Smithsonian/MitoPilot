@@ -42,6 +42,7 @@ assemble_server <- function(id) {
       isolate(req(rv$data)) |>
         reactable(
           resizable = TRUE,
+          filterable = TRUE,
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
@@ -63,6 +64,7 @@ assemble_server <- function(id) {
               html = TRUE,
               width = 32,
               align = "center",
+              filterable = FALSE,
               cell = rt_dynamicIcon(
                 c(
                   `0` = "fa fa-lock-open",
@@ -77,6 +79,7 @@ assemble_server <- function(id) {
               html = TRUE,
               width = 30,
               align = "center",
+              filterable = FALSE,
               cell = rt_dynamicIcon(
                 c(
                   `0` = "fa fa-hourglass",
@@ -110,11 +113,13 @@ assemble_server <- function(id) {
             trimmed_reads = colDef(
               show = T,
               name = "Reads",
+              filterable = FALSE,
               minWidth = 100
             ),
             mean_length = colDef(
               show = T,
               name = "Read Length",
+              filterable = FALSE,
               minWidth = 100
             ),
             assemble_opts = colDef(
@@ -133,6 +138,7 @@ assemble_server <- function(id) {
               show = TRUE,
               minWidth = 140,
               name = "Assembly Length",
+              filterable = FALSE,
               html = TRUE,
               cell = rt_longtext()
             ),
@@ -147,6 +153,7 @@ assemble_server <- function(id) {
             time_stamp = colDef(
               show = TRUE,
               name = "Last Updated",
+              filterable = FALSE,
               html = T,
               width = 150,
               cell = rt_ts_date()
@@ -162,6 +169,7 @@ assemble_server <- function(id) {
             view = colDef(
               show = TRUE,
               sticky = "right",
+              filterable = FALSE,
               name = "",
               html = TRUE,
               width = 80,
@@ -171,6 +179,7 @@ assemble_server <- function(id) {
             output = colDef(
               show = TRUE,
               sticky = "right",
+              filterable = FALSE,
               name = "",
               html = TRUE,
               width = 80,

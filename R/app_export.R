@@ -48,15 +48,16 @@ export_server <- function(id) {
         selection = "multiple",
         searchable = TRUE,
         resizable = TRUE,
+        filterable = TRUE,
         height = 680,
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),
-        defaultColDef = colDef(align = "center", maxWidth = 140),
+        defaultColDef = colDef(align = "left"),
         columns = list(
           ID = colDef(show = T, minWidth = 120, sticky = "left"),
           topology = colDef(show = T, width = 100),
-          structure = colDef(show = T, maxWidth = 600),
+          structure = colDef(show = T),
           export_group = colDef(name = "Group", sticky = "right")
         )
       )
