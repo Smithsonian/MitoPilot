@@ -149,7 +149,7 @@ annotate <- function(
   }
 
   annotations <- annotations |>
-    dplyr::select(-geneId)
+    dplyr::select(-dplyr::any_of(geneId))
 
   # Write outputs
   file.path(

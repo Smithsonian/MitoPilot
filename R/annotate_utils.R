@@ -14,15 +14,11 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
 
   # Return query-centric percent identity
   if (type[1] == "pctId") {
-    return(100 * Biostrings::nmatch(alignment) / nchar(query))
+    return(100 * pwalign::nmatch(alignment) / nchar(query))
   }
 
   if (type[1] == "similarity") {
-    if(getRversion() >= "4.4"){
-      data(list=subMx, package = "pwalign")
-    }else{
-      data(list=subMx, package = "Biostrings")
-    }
+    data(list=subMx, package = "pwalign")
     max_score <- sum(diag(BLOSUM80)[match(strsplit(query, NULL)[[1]], rownames(BLOSUM80))])
     res <- 100 * BiocGenerics::score(alignment) / max_score
     return(res)
@@ -52,7 +48,7 @@ get_top_hits <- function(
       "-db {ref_db}",
       "-best_hit_score_edge 0.01",
       "-max_hsps 1",
-      "-qcov_hsp_perc 80",
+      #"-qcov_hsp_perc 80",
       "-max_target_seqs 1000",
       "-outfmt '6 salltitles evalue'",
       "-query -",
@@ -64,7 +60,7 @@ get_top_hits <- function(
       "-db {ref_db}",
       "-best_hit_score_edge 0.01",
       "-max_hsps 1",
-      "-qcov_hsp_perc 80",
+      #"-qcov_hsp_perc 50",
       "-max_target_seqs 1000",
       "-outfmt '6 salltitles evalue'",
       "-query -",
