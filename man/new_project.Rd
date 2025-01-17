@@ -23,8 +23,10 @@ new_project(
 directory)}
 
 \item{mapping_fn}{Path to a mapping file. Should be a csv that minimally
-includes an `ID` column with a unique identifier for each sample and
-columns `fwd` and `rev` specifying the names of the raw paired read inputs.}
+includes an `ID` column with a unique identifier for each sample, a `Taxon`
+column containing taxonomic information for each sample, and columns
+`R1` and `R2` specifying the names of the raw paired read inputs. May include
+additional columns with other sample metadata.}
 
 \item{mapping_id}{The name of the column in the mapping file that contains
 the unique sample identifiers (default = "ID").}

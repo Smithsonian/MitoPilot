@@ -30,20 +30,20 @@ new_db(
 \arguments{
 \item{db_path}{Path to the new database file}
 
-\item{mapping_fn}{Path to the mapping file}
+\item{mapping_fn}{Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2"}
 
 \item{mapping_id}{Column name of the mapping file to use as the primary key}
 
-\item{mapping_taxon}{Column name of the mapping file contaning a Taxonomic
+\item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
 
 \item{assemble_cpus}{Default # cpus for assembly}
 
 \item{assemble_memory}{default memory (GB) for assembly}
 
-\item{seeds_db}{Path to the gotOrganelle seeds database}
+\item{seeds_db}{Path to the getOrganelle seeds database}
 
-\item{labels_db}{Path to the gotOrganelle labels database}
+\item{labels_db}{Path to the getOrganelle labels database}
 
 \item{getOrganelle}{Default getOrganelle command line options}
 
