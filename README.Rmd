@@ -103,6 +103,10 @@ For complete list of available parameters that can be set during project initial
 
 Although the MitoPilot GUI provides an interface to the database, during troubleshooting it is often helpful to directly explore the contents of the project's `.sqlite` database. This can be easily done in R using the `{dplyr}` extension, [{dbplyr}](https://dbplyr.tidyverse.org/), which is used extensively in the MitoPilot package, along with [{DBI}](https://dbi.r-dbi.org/), for database interactions. Alternatively, many interactive tools exist specifically for working with SQLite databases, such as [DB Browser for SQLite](https://sqlitebrowser.org/). 
 
+### Database Modification
+
+MitoPilot databases can be modified using the R helper functions `update_sample_metadata()`, `update_sample_seqdata()`, and `add_samples()`. You must close any existing connections (e.g. the MitoPilot GUI) prior to modifying the database. These functions will automatically create backups of the database in case you need to revert your changes. For more information, please see the [manual pages](https://jonahventures.github.io/MitoPilot/reference/index.html) for these functions.
+
 # Running The Pipeline
 
 Once a project is initialized, the pipeline status caa be viewed using the MitoPilot GUI. The GUI can be launched by running the `MitoPilot()` command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assembly, Annotate, Export), where each row represents a sample in the project. 

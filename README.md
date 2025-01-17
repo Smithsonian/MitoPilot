@@ -185,6 +185,17 @@ Alternatively, many interactive tools exist specifically for working
 with SQLite databases, such as [DB Browser for
 SQLite](https://sqlitebrowser.org/).
 
+### Database Modification
+
+MitoPilot databases can be modified using the R helper functions
+`update_sample_metadata()`, `update_sample_seqdata()`, and
+`add_samples()`. You must close any existing connections (e.g. the
+MitoPilot GUI) prior to modifying the database. These functions will
+automatically create backups of the database in case you need to revert
+your changes. For more information, please see the [manual
+pages](https://jonahventures.github.io/MitoPilot/reference/index.html)
+for these functions.
+
 # Running The Pipeline
 
 Once a project is initialized, the pipeline status caa be viewed using
