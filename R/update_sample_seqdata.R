@@ -10,7 +10,7 @@
 #'
 #' @export
 #'
-update_sample_sequence_data <- function(
+update_sample_seqdata <- function(
     path = ".",
     update_mapping_fn = NULL,
     mapping_id = "ID"
