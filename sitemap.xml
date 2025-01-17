@@ -8,6 +8,7 @@
 <url><loc>https://jonahventures.github.io/MitoPilot/authors.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/index.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/MitoPilot.html</loc></url>
+<url><loc>https://jonahventures.github.io/MitoPilot/reference/add_samples.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/annotate.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/annotate_mitos2.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/annotate_trnaScan.html</loc></url>
@@ -26,6 +27,8 @@
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/nextflow_cmd.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/params_fish_mito.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/run_app.html</loc></url>
+<url><loc>https://jonahventures.github.io/MitoPilot/reference/update_sample_metadata.html</loc></url>
+<url><loc>https://jonahventures.github.io/MitoPilot/reference/update_sample_seqdata.html</loc></url>
 <url><loc>https://jonahventures.github.io/MitoPilot/reference/validate_fish_mito.html</loc></url>
 </urlset>
 

@@ -65,8 +65,10 @@ directory)</p></dd>
 
 <dt id="arg-mapping-fn">mapping_fn<a class="anchor" aria-label="anchor" href="#arg-mapping-fn"></a></dt>
 <dd><p>Path to a mapping file. Should be a csv that minimally
-includes an `ID` column with a unique identifier for each sample and
-columns `fwd` and `rev` specifying the names of the raw paired read inputs.</p></dd>
+includes an `ID` column with a unique identifier for each sample, a `Taxon`
+column containing taxonomic information for each sample, and columns
+`R1` and `R2` specifying the names of the raw paired read inputs. May include
+additional columns with other sample metadata.</p></dd>
 
 
 <dt id="arg-mapping-id">mapping_id<a class="anchor" aria-label="anchor" href="#arg-mapping-id"></a></dt>
