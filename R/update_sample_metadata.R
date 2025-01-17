@@ -5,13 +5,13 @@
 #' Creates a backup of the existing database prior to updating.
 #'
 #' @param path Path to the project directory (default = current working directory)
-#' @param update_mapping_fn Path to the update mapping CSV file. Must contain "ID" column
+#' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID" and "Taxon"
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
 #'
 #' @export
 #'
-update_db <- function(
+update_sample_metadata <- function(
     path = ".",
     update_mapping_fn = NULL,
     mapping_id = "ID",
