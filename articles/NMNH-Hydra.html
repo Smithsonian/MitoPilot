@@ -80,27 +80,30 @@ Instructions are available <a href="https://confluence.si.edu/display/HPC/Hydra+
 <div class="section level3">
 <h3 id="first-time-setup">First time setup<a class="anchor" aria-label="anchor" href="#first-time-setup"></a>
 </h3>
-<p>Dan MacGuigan has submitted a request to the Hydra team for a
-system-wide Nextflow module. But for now, you will need to install
-Nextflow on Hydra. Also, for some reason, Nextflow does not work with
-the Java modules on Hydra, so you also need to install Java via
-SDKMAN.</p>
-<p>Login to Hydra and run the following.</p>
+<p>Dan MacGuigan has submitted a request to the Hydra team for
+installation of a Nextflow module. But for now, you will need to install
+your own copy of Nextflow on the cluster. Login to Hydra and run the
+following.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># Nextflow installation instructions</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co"># from https://www.nextflow.io/docs/latest/install.html</span></span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="bu">cd</span> ~</span>
-<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> https://get.sdkman.io <span class="kw">|</span> <span class="fu">bash</span> <span class="co"># install SDKMAN</span></span>
-<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="ex">sdk</span> install java 17.0.10-tem <span class="co"># install java</span></span>
-<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> https://get.nextflow.io <span class="kw">|</span> <span class="fu">bash</span> <span class="co"># install Nextflow</span></span>
-<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="fu">chmod</span> +x nextflow <span class="co"># make Nextflow executable</span></span></code></pre></div>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="ex">module</span> load tools/java/21.0.2</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> https://get.nextflow.io <span class="kw">|</span> <span class="fu">bash</span> <span class="co"># install Nextflow</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="fu">chmod</span> +x nextflow <span class="co"># make Nextflow executable</span></span></code></pre></div>
 <p>There will now be an executable <code>nextflow</code> file in your
-home directory. You should move it to a location that is in your PATH.
-For example:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">mkdir</span> ~/bin</span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">mv</span> ~/nextflow ~/bin/nextflow</span></code></pre></div>
-<p>This allows you to call <code>nextflow</code> from anywhere on the
-cluster.</p>
+home directory. You should move it to a location that is in your
+<code>PATH</code>. For example:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">mkdir</span> ~/bin <span class="co"># create bin directory, if needed</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">mv</span> ~/nextflow ~/bin/nextflow <span class="co"># move nextflow to bin directory</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="bu">echo</span> <span class="st">'export PATH="${HOME}/bin:${PATH}"'</span> <span class="op">&gt;&gt;</span> ~/.bashrc <span class="co"># add bin directory to PATH, in case it's not already there</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span></code></pre></div>
+<p>This should allow you to call <code>nextflow</code> from anywhere on
+the cluster.</p>
+<div class="alert alert-note">
+<p><strong>Note:</strong> You must load the Hydra Java module
+(<code>module load tools/java/21.0.2</code>) whenever you wish to use
+Nextflow.</p>
+</div>
 </div>
 <div class="section level3">
 <h3 id="launching-rstudio-server">Launching RStudio server<a class="anchor" aria-label="anchor" href="#launching-rstudio-server"></a>
@@ -163,7 +166,7 @@ time.</p>
 <p>Once the interactive session starts, you can launch RStudio
 server.</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="ex">conda</span> deactivate</span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="ex">module</span> load tools/R/RStudio/server</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="ex">module</span> load tools/R/RStudio/server tools/java/21.0.2</span>
 <span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="ex">start-rstudio-server</span></span></code></pre></div>
 <p>Follow the login instructions as presented above. Once you have an
 Rstudio server window open, run <code><a href="https://github.com/JonahVentures/MitoPilot" class="external-link">library(MitoPilot)</a></code> to load
