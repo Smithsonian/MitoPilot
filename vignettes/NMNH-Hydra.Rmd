@@ -27,29 +27,32 @@ You will need an account to access the Hyrda computing cluster. Instructions are
 
 ## First time setup
 
-Dan MacGuigan has submitted a request to the Hydra team for a system-wide Nextflow module. But for now, you will need to install Nextflow on Hydra. Also, for some reason, Nextflow does not work with the Java modules on Hydra, so you also need to install Java via SDKMAN.
-
-Login to Hydra and run the following.
+Dan MacGuigan has submitted a request to the Hydra team for installation of a Nextflow module. But for now, you will need to install your own copy of Nextflow on the cluster. Login to Hydra and run the following.
 
 ```{bash eval=F}
 # Nextflow installation instructions
 # from https://www.nextflow.io/docs/latest/install.html
 cd ~
-curl -s https://get.sdkman.io | bash # install SDKMAN
-source ~/.bashrc
-sdk install java 17.0.10-tem # install java
+module load tools/java/21.0.2
 curl -s https://get.nextflow.io | bash # install Nextflow
 chmod +x nextflow # make Nextflow executable
 ```
 
-There will now be an executable `nextflow` file in your home directory. You should move it to a location that is in your PATH. For example:
+There will now be an executable `nextflow` file in your home directory. You should move it to a location that is in your `PATH`. For example:
 
 ```{bash eval=F}
-mkdir ~/bin
-mv ~/nextflow ~/bin/nextflow
+mkdir ~/bin # create bin directory, if needed
+mv ~/nextflow ~/bin/nextflow # move nextflow to bin directory
+echo 'export PATH="${HOME}/bin:${PATH}"' >> ~/.bashrc # add bin directory to PATH, in case it's not already there
+source ~/.bashrc
 ```
  
-This allows you to call `nextflow` from anywhere on the cluster. 
+This should allow you to call `nextflow` from anywhere on the cluster.
+
+<div class="alert alert-note">
+  <strong>Note:</strong> You must load the Hydra Java module (`module load tools/java/21.0.2`) whenever you wish to use Nextflow.
+</div>
+
 
 ## Launching RStudio server
 
@@ -96,7 +99,7 @@ Once the interactive session starts, you can launch RStudio server.
 
 ```{bash eval=F}
 conda deactivate
-module load tools/R/RStudio/server
+module load tools/R/RStudio/server tools/java/21.0.2
 start-rstudio-server
 ```
 
