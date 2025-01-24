@@ -12,7 +12,7 @@
 .DS_Store
 .here
 docker/MitoPilot*
-.sqlite
+.sqlite*
 docs
 inst/doc
 /doc/
