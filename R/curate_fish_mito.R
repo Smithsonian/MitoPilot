@@ -449,6 +449,7 @@ curate_fish_mito <- function(
           cur$start_codon <- start_codon <- new_start_codon
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
+          break
         }
       }
     }
@@ -501,6 +502,7 @@ curate_fish_mito <- function(
           cur$stop_codon <- stop_codon <- alt_stops[[alt_idx]]
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
+          break
         }
       }
       if (direction == "-") {
@@ -551,6 +553,7 @@ curate_fish_mito <- function(
           cur$stop_codon <- stop_codon <- alt_stops[[alt_idx]]
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
+          break
         }
       }
     }
