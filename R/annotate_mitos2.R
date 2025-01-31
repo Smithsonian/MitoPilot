@@ -133,6 +133,9 @@ annotate_mitos2 <- function(
             )
         }()
 
+      annotations <- annotations |>
+        dplyr::select(-dplyr::any_of('geneId'))
+
       ###################
       return(annotations)
       ###################
