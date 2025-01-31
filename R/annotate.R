@@ -148,9 +148,6 @@ annotate <- function(
     annotations$gene[idx] <- "ctrl"
   }
 
-  annotations <- annotations |>
-    dplyr::select(-dplyr::any_of(geneId))
-
   # Write outputs
   file.path(
     out_dir,
