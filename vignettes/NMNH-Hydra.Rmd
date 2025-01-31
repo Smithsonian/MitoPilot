@@ -133,6 +133,8 @@ echo + `date` job $JOB_NAME started in $QUEUE with jobID=$JOB_ID on $HOSTNAME
 
 source ~/.bashrc
 
+module load tools/java/21.0.2 # required for Nextflow on Hydra
+
 # NEXTFLOW COMMAND, example below
 nextflow -log /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.logs/nextflow.log run /home/macguigand/R/x86_64-pc-linux-gnu-library/4.4/MitoPilot/nextflow -c /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.config -entry WF1
 
