@@ -2,10 +2,11 @@ pandoc: 3.1.11
 pkgdown: 2.1.1
 pkgdown_sha: ~
 articles:
+  FAQ: FAQ.html
   NMNH-Hydra: NMNH-Hydra.html
   NOAA-SEDNA: NOAA-SEDNA.html
   test-project: test-project.html
-last_built: 2025-01-21T20:40Z
+last_built: 2025-02-03T15:59Z
 urls:
   reference: https://jonahventures.github.io/MitoPilot/reference
   article: https://jonahventures.github.io/MitoPilot/articles
