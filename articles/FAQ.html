@@ -60,33 +60,34 @@
     
     
 <div class="section level2">
-<h2 id="some-samples-produced-an-error-with-exit-status-140-what-do-i-do">Some samples produced an error with “exit status (140)”, what do I
-do?<a class="anchor" aria-label="anchor" href="#some-samples-produced-an-error-with-exit-status-140-what-do-i-do"></a>
+<h2 id="what-do-i-do-for-an-error-with-exit-status-140">What do I do for an error with “exit status (140)”?<a class="anchor" aria-label="anchor" href="#what-do-i-do-for-an-error-with-exit-status-140"></a>
 </h2>
 <p>If your Nextflow log contains an error that looks something like
 this:</p>
 <pre><code>Caused by:
   Process `WF2:ANNOTATE:annotate (SAMPLE_ID)` terminated with an error exit status (140)</code></pre>
-<p>This usually indicates that the process ran out of memory (RAM). Try
-using the R Shiny GUI to increase the requested memory for the process
-that failed, then rerun the workflow.</p>
+<p>This usually indicates that the process ran out of memory (RAM).
+Sometimes this will happen for all samples, other times only certain
+difficult samples will need more RAM. Try using the R Shiny GUI to
+increase the requested memory for the process that failed, then rerun
+the workflow.</p>
 </div>
 <div class="section level2">
-<h2 id="how-do-i-make-mitopilot-skip-processing-of-certain-samples">How do I make MitoPilot skip processing of certain samples?<a class="anchor" aria-label="anchor" href="#how-do-i-make-mitopilot-skip-processing-of-certain-samples"></a>
+<h2 id="how-do-i-skip-processing-certain-samples">How do I skip processing certain samples?<a class="anchor" aria-label="anchor" href="#how-do-i-skip-processing-certain-samples"></a>
 </h2>
 <p>There are two ways to make MitoPilot skip a set of samples when
 running the Assembly or Annotate modules.</p>
-<p>If the samples successfully finished all steps of the module, you can
-lock them. To do this, select the samples and click the
-<code>LOCK</code> button. This will have the added effect of making
-those samples available for the next module.</p>
+<p>If the samples successfully finished all steps of the current module,
+you can lock them. To do this, select the samples and click the
+<code>LOCK</code> button. Locking will also make those samples available
+for the next module.</p>
 <p>Alternatively, instead of locking the samples, you can modify their
 state. To do this, select the samples, click on the <code>STATE</code>
 button, then choose <code>Pre-Assembly (wait)</code> or
 <code>Pre-Annotate (wait)</code>. This can be applied to any samples,
-regardless of whether they completed the current module. Setting the
-state to <code>wait</code> may be useful for samples that produce
-unexpected errors and interrupt the workflow.</p>
+regardless of whether they completed the current module.</p>
+<p>Setting the state to <code>wait</code> can help you skip samples that
+produce unexpected errors and interrupt the workflow.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
