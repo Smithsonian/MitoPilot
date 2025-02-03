@@ -25,6 +25,7 @@ articles:
 - title: "Usage"
   contents:
   - 'test-project'
+  - 'FAQ'
 - title: "Nextflow Executors"
   contents:
   - 'NMNH-Hydra'

@@ -1,0 +1,33 @@
+---
+title: "Frequently Asked Questions"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Frequently Asked Questions}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Some samples produced an error with "exit status (140)", what do I do?
+
+If your Nextflow log contains an error that looks something like this:
+
+```
+Caused by:
+  Process `WF2:ANNOTATE:annotate (SAMPLE_ID)` terminated with an error exit status (140)
+```
+
+This usually indicates that the process ran out of memory (RAM).
+Try using the R Shiny GUI to increase the requested memory for the process that failed, then rerun the workflow.
+
+## How do I make MitoPilot skip processing of certain samples?
+
+There are two ways to make MitoPilot skip a set of samples when running the Assembly or Annotate modules.
+
+If the samples successfully finished all steps of the module, you can lock them.
+To do this, select the samples and click the `LOCK` button. 
+This will have the added effect of making those samples available for the next module.
+
+Alternatively, instead of locking the samples, you can modify their state.
+To do this, select the samples, click on the `STATE` button, then choose `Pre-Assembly (wait)` or `Pre-Annotate (wait)`.
+This can be applied to any samples, regardless of whether they completed the current module.
+Setting the state to `wait` may be useful for samples that produce unexpected errors and interrupt the workflow.
