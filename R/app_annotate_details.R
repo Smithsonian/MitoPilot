@@ -309,31 +309,50 @@ annotations_details_server <- function(id, rv) {
 
       hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
 
-      rv$alignment$seqs <- hits |>
-        dplyr::pull(target, name = Taxon)
-
       focal <- rv$annotations$translation[selected()] |>
         setNames(paste(rv$annotations$gene[selected()], "(focal)"))
 
-      rv$alignment$aln <- c(focal, rv$alignment$seqs) |>
-        Biostrings::AAStringSet() |>
-        DECIPHER::AlignSeqs(verbose = FALSE)
+      if(nrow(hits)==0){
+        rv$alignment$seqs <- character(0)
+        rv$alignment$aln <- Biostrings::AAStringSet(focal)
 
-      rv$alignment$alignmentHeight <- 20 + (length(rv$alignment$seqs) * 20)
-      rv$alignment$id <- stringr::str_glue(
-        "<b>Max Similarity:</b> {ifelse(max(hits$similarity)<25,'-',paste0(round(max(hits$similarity),1),'%'))}"
-      )
-      rv$alignment$stop <- stringr::str_glue(
-        "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
-      )
-      rv$alignment$start <- stringr::str_glue(
-        "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
-      )
-      rv$alignment$internal_stop <- ifelse(
-        stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-        paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
-        ""
-      )
+        rv$alignment$alignmentHeight <- 40
+        rv$alignment$id <- stringr::str_glue(
+          "<b>Max Similarity:</b> n/a"
+        )
+        rv$alignment$stop <- stringr::str_glue(
+          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
+        )
+        rv$alignment$start <- stringr::str_glue(
+          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
+        )
+        rv$alignment$internal_stop <- ifelse(
+          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
+          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
+          ""
+        )
+      }else{
+        rv$alignment$seqs <- hits |>
+          dplyr::pull(target, name = Taxon)
+        rv$alignment$aln <- c(focal, rv$alignment$seqs) |>
+          Biostrings::AAStringSet() |>
+          DECIPHER::AlignSeqs(verbose = FALSE)
+        rv$alignment$alignmentHeight <- 20 + (length(rv$alignment$seqs) * 20)
+        rv$alignment$id <- stringr::str_glue(
+          "<b>Max Similarity:</b> {ifelse(max(hits$similarity)<25,'-',paste0(round(max(hits$similarity),1),'%'))}"
+        )
+        rv$alignment$stop <- stringr::str_glue(
+          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
+        )
+        rv$alignment$start <- stringr::str_glue(
+          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
+        )
+        rv$alignment$internal_stop <- ifelse(
+          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
+          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
+          ""
+        )
+      }
     })
     output$msa_header <- renderUI({
       div(

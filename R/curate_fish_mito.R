@@ -179,8 +179,9 @@ curate_fish_mito <- function(
       ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
         stringr::str_glue()
 
-      get_top_hits(ref_db, translation) |>
+      out <- get_top_hits(ref_db, translation) |>
         json_string()
+      out %||% '{}'
     })
 
   ## Curate against top hits ----

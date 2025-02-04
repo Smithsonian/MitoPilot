@@ -69,6 +69,21 @@ get_top_hits <- function(
       system2("blastp", args = _, input = query, stdout = TRUE)
   }
 
+  if(length(hits_refSeq) == 0) {
+    return({
+      data.frame(
+        acc = character(),
+        Taxon = character(),
+        eval = numeric(),
+        target = character(),
+        pctid = numeric(),
+        similarity = numeric(),
+        gap_leading = numeric(),
+        gap_trailing = numeric()
+      )
+    })
+  }
+
   hits_refSeq <- hits_refSeq |>
     purrr::map_dfr(~ {
       df <- data.frame(stringr::str_split(.x, "\\t", simplify = T))
@@ -95,6 +110,7 @@ get_top_hits <- function(
     ) |>
     dplyr::ungroup() |>
     dplyr::arrange(dplyr::desc(similarity))
+
 }
 
 #' Count end gaps in a pairwise alignment
