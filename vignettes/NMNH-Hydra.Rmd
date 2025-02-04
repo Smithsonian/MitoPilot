@@ -90,8 +90,10 @@ If the installation was successful, you're ready to start using MitoPilot!
 We recommend running MitoPilot within an interactive session on the cluster to avoid unnecessary computational burden on the login nodes. First, initialize an interactive session on Hydra.
 
 ```{bash eval=F}
-qrsh -l h_rt=24:00:00 
+qrsh -l h_rt=24:00:00 -pe mthread 2
 ```
+
+You'll need to include `-pe mthread 2` in order to have enough available RAM for building the MitoPilot Singularity image. 
 
 Note that interactive sessions can run for a maximum of 24 hours. Additionally, users are limited to one active interactive session at a time.
 
