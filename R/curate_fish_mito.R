@@ -608,7 +608,7 @@ curate_fish_mito <- function(
       annotations$length[idx] <- annotations$length[idx] - overlap
       annotations$notes[idx] <- semicolon_paste(
         annotations$notes[idx],
-        str_glue("stop codon trimmed by {overlap} bp")
+        stringr::str_glue("stop codon trimmed by {overlap} bp")
       )
       break
     }
