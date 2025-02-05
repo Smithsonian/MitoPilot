@@ -596,8 +596,8 @@ curate_fish_mito <- function(
       if (overlap_rules$stop) break
       codon_positions <- annotations$pos1[idx]:(annotations$pos1[idx] + nchar(annotations$stop_codon[idx]) - 1)
       overlaps <- annotations[1:(idx - 1), ] |>
-        filter(pos2 %in% codon_positions) |>
-        filter(direction == annotations$direction[idx])
+        dplyr::filter(pos2 %in% codon_positions) |>
+        dplyr::filter(direction == annotations$direction[idx])
       if (nrow(overlaps) != 1L) break
       overlap <- sum(overlaps$pos1:overlaps$pos2 %in% codon_positions)
       new_stop <- stringr::str_sub(annotations$stop_codon[idx], 1, nchar(annotations$stop_codon[idx]) - overlap)
