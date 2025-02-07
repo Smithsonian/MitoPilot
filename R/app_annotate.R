@@ -587,11 +587,7 @@ annotate_server <- function(id) {
       )
       req(file.exists(pth))
       if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
-        owd <- setwd(pth)
-        later::later(function() {
-          rstudioapi::executeCommand("goToWorkingDir")
-          setwd(owd)
-        })
+        rstudioapi::filesPaneNavigate(pth)
         req(F)
       } else {
         utils::browseURL(pth)
