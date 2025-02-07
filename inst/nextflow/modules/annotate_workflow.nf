@@ -41,6 +41,6 @@ workflow ANNOTATE {
     annotate(annotate_in).set { annotate_out }
 
     emit:
-           ch = annotate_out
+           ch = annotate_out[0]
            
 }

@@ -3,7 +3,7 @@ process preprocess {
     executor params.preprocess.executor
     container params.preprocess.container
 
-    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/${id}_preprocess.json", mode: 'copy'
+    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/*_preprocess.*", mode: 'copy'
 
     errorStrategy 'finish'
     // cpus {opts.cpus}
@@ -17,7 +17,8 @@ process preprocess {
     output:
     tuple val("${id}"), path("${id}/${id}_preprocess_*"), env(after)                          // output for processing
     tuple env(before), env(after), env(meanLen), val("${params.ts}"), val("${id}")            // output for DB
-    path("${id}/${id}_preprocess.json")                                                       // outout to publishDir
+    path("${id}/${id}_preprocess.json")      // outout to publishDir
+    path("${id}/NF_work_dir_preprocess.txt")
 
     shell:
     json_out = "${id}/${id}_preprocess.json"
@@ -29,6 +30,9 @@ process preprocess {
     before=$(jq '.summary.before_filtering.total_reads' !{json_out})
     after=$(jq '.summary.after_filtering.total_reads' !{json_out})
     meanLen=$(jq '.summary.after_filtering.read1_mean_length' !{json_out})
+    ### work dir info for troubleshooting ####
+    echo "Nextflow preprocess working directory:" > !{id}/NF_work_dir_preprocess.txt
+    echo "$PWD" >> !{id}/NF_work_dir_preprocess.txt
     '''
 
 }

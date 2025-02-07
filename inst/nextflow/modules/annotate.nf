@@ -3,7 +3,7 @@ process annotate {
     executor params.annotate.executor
     container params.annotate.container
     
-    // publishDir "$launchDir/${params.publishDir}", overwrite: true
+    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/NF_work_dir_annotate.txt", mode: 'copy'
 
     errorStrategy 'finish'
 
@@ -19,7 +19,8 @@ process annotate {
     tuple val(id), val(path),
         path("${id}/annotate/${id}_annotations_*.csv"),
         path("${id}/annotate/${id}_assembly_*.fasta"),
-        path("${id}/annotate/${id}_coverageStats_*.csv")
+        path("${id}/annotate/${id}_coverageStats_*.csv"),
+        path("${id}/annotate/NF_work_dir_annotate.txt")                 // Nextflow working directory, for troubleshooting
 
     shell:
     dir = "${id}/annotate/"
@@ -38,5 +39,8 @@ process annotate {
         trnaScan_condaenv = '!{params.trnaScan_condaenv}', \
         out_dir = '!{dir}'
     )"
+    ### work dir info for troubleshooting ####
+    echo "Nextflow annotate working directory:" > !{dir}/NF_work_dir_annotate.txt
+    echo "$PWD" >> !{dir}/NF_work_dir_annotate.txt
     '''
 }

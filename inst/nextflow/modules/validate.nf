@@ -17,7 +17,8 @@ process validate {
     output: 
     tuple val(id), val(path),
         path("${id}/annotate/${id}_annotations_*.tsv"),
-        path("${id}/annotate/${id}_summary_*.csv")
+        path("${id}/annotate/${id}_summary_*.csv"),
+        path("${id}/annotate/NF_work_dir_validate.txt")                 // Nextflow working directory, for troubleshooting
 
     shell:
     dir = "${id}/annotate"
@@ -30,5 +31,8 @@ process validate {
         params = '!{opts.params}', \
         out_dir = '!{dir}'
     )"
+    ### work dir info for troubleshooting ####
+    echo "Nextflow validate working directory:" > !{dir}/NF_work_dir_validate.txt
+    echo "$PWD" >> !{dir}/NF_work_dir_validate.txt
     '''
 }

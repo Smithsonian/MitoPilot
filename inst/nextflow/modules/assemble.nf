@@ -23,8 +23,8 @@ process assemble {
         path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
         path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
         val("${opts_id}"),                                                    // options id
-        path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
-
+        path("${id}/assemble/${opts_id}/get_org.log.txt"),                     // getOrganelle log
+        path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt")                     // Nextflow working directory, for troubleshooting
 
     shell:
     workingDir = "${id}/assemble"
@@ -44,6 +44,9 @@ process assemble {
     cp !{workingDir}/get_org.log.txt !{outDir}/get_org.log.txt
     echo "!{opts.getOrganelle}" > !{outDir}/opts.txt
     summary_get_organelle_output.py !{workingDir} -o !{outDir}/!{id}_summary.txt
+    ### work dir info for troubleshooting ####
+    echo "Nextflow assemble working directory:" > !{outDir}/NF_work_dir_assemble.txt
+    echo "$PWD" >> !{outDir}/NF_work_dir_assemble.txt
     ### ARCHIVE READS ###
     tar -czvf !{outDir}/!{id}_reads.tar.gz !{workingDir}/extended*.fq
     ### FORMAT ASSEMBLIES ###

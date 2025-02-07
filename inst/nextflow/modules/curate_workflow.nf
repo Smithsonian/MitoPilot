@@ -94,6 +94,6 @@ workflow CURATE {
             .sqlInsert(statement: params.sqlWriteAnnotate, db: 'sqlite')
 
     emit:
-           ch = curate_out
+           ch = curate_out[0]
 
 }

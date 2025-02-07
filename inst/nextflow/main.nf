@@ -28,8 +28,8 @@ workflow WF1 {
 workflow WF2 {
 
    ANNOTATE()
-   CURATE(ANNOTATE.out)
-   VALIDATE(CURATE.out)
+   CURATE(ANNOTATE.out[0])
+   VALIDATE(CURATE.out[0])
 
 }
 

@@ -18,7 +18,8 @@ process curate {
     tuple val(id), val(path),
         path("${id}/${id}_annotations_*.csv"),
         path("${id}/annotate/${id}_assembly_*.fasta"),
-        path("${id}/annotate/${id}_coverageStats_*.csv")
+        path("${id}/annotate/${id}_coverageStats_*.csv"),
+        path("${id}/annotate/NF_work_dir_curate.txt")                 // Nextflow working directory, for troubleshooting
 
     shell:
     dir = "${id}/annotate"
@@ -34,5 +35,8 @@ process curate {
         out_dir = '!{dir}'
     )"
     mv !{dir}/*_annotations_*.csv !{id}/
+    ### work dir info for troubleshooting ####
+    echo "Nextflow curate working directory:" > !{dir}/NF_work_dir_curate.txt
+    echo "$PWD" >> !{dir}/NF_work_dir_curate.txt
     '''
 }
