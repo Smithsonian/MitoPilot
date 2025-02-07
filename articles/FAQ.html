@@ -89,6 +89,23 @@ regardless of whether they completed the current module.</p>
 <p>Setting the state to <code>wait</code> can help you skip samples that
 produce unexpected errors and interrupt the workflow.</p>
 </div>
+<div class="section level2">
+<h2 id="how-do-i-find-more-detailed-output-such-as-run-scripts-or-log-files">How do I find more detailed output such as run scripts or log
+files?<a class="anchor" aria-label="anchor" href="#how-do-i-find-more-detailed-output-such-as-run-scripts-or-log-files"></a>
+</h2>
+<p>MitoPilot copies the most important output files to the
+<code>out</code> directory. However, all of the scripts, logs, and
+outfiles created by Nextflow are saved in the <code>work</code>
+directory.</p>
+<p>The <code>work</code> directory is automatically set up by Nextflow
+and can be difficult to navigate. To help with this, we provide
+<code>NF_work_dir_PROCESS-NAME.txt</code> files for each sample in the
+<code>out</code> directory. These files contain the path to the Nextflow
+working directory for a specific process and sample.</p>
+<p>Note that in the Nextflow working directories, many files are hidden,
+including scripts and log files. You can list hidden files on the
+command line with <code>ls -a</code>.</p>
+</div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
 </div>

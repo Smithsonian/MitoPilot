@@ -154,6 +154,14 @@ following. This might take a while.</p>
 MitoPilot!</p>
 </div>
 <div class="section level3">
+<h3 id="updating-mitopilot">Updating MitoPilot<a class="anchor" aria-label="anchor" href="#updating-mitopilot"></a>
+</h3>
+<p>If you need to update MitoPilot, simply run the BiocManager
+installation command again. If you would like to ensure that you’re
+using the latest MitoPilot version, run
+<code>remove.packages("MitoPilot")</code> prior to installation.</p>
+</div>
+<div class="section level3">
 <h3 id="launching-mitopilot">Launching MitoPilot<a class="anchor" aria-label="anchor" href="#launching-mitopilot"></a>
 </h3>
 <p>We recommend running MitoPilot within an interactive session on the
@@ -173,10 +181,6 @@ server.</p>
 <p>Follow the login instructions as presented above. Once you have an
 Rstudio server window open, run <code><a href="https://github.com/JonahVentures/MitoPilot" class="external-link">library(MitoPilot)</a></code> to load
 the package.</p>
-<p>If you need to update MitoPilot, simply run the BiocManager
-installation command again. If you would like to ensure that you’re
-using the latest MitoPilot version, run
-<code>remove.packages("MitoPilot")</code> prior to installation.</p>
 <p>Want to learn how to use MitoPilot? Check out the <a href="https://jonahventures.github.io/MitoPilot/articles/test-project.html">Test
 Project Tutorial</a>.</p>
 </div>
@@ -230,6 +234,15 @@ Then submit the job using <code>qsub MY_SCRIPT_NAME.sh</code>.</p>
 command and by checking on the log files. Once the job is done, you can
 relaunch the GUI to inspect the results. The same approach can be used
 for the annotate module.</p>
+</div>
+<div class="section level3">
+<h3 id="known-issues">Known Issues<a class="anchor" aria-label="anchor" href="#known-issues"></a>
+</h3>
+<p>If when launching RStudio server you receive the error message
+<code>[rserver] ERROR system error 98 (Address already in use);</code>,
+the TCP port is already in use by another user. Specify a different port
+in the range of 1025-65535 when starting the server. E.g.,
+<code>start-studio-server -port 8890</code>.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
