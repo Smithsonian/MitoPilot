@@ -125,8 +125,9 @@ export_files <- function(
     "##gff-version 3" |>
       cat(file = gff_fn, sep = "\n", append = TRUE)
     # add GFF region
-    circ = tolower((dat$topology == "circular"))
-    f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Is_circular=",circ,";Name=MT;mol_type=genomic DNA")
+    # circ = tolower((dat$topology == "circular"))
+    #f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Is_circular=",circ,";Name=MT;mol_type=genomic DNA") # Is_circular currently bugged in Geneious
+    f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Name=MT;mol_type=genomic DNA")
     paste(c(seq_name, "MitoPilot", "region", 1, seq@ranges@width, ".", "+", ".", f9), collapse = "\t") |>
       cat(file = gff_fn, sep = "\n", append = TRUE)
 
