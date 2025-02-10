@@ -34,7 +34,7 @@ This can be applied to any samples, regardless of whether they completed the cur
 
 Setting the state to `wait` can help you skip samples that produce unexpected errors and interrupt the workflow.
 
-## How do I find more detailed output such as run scripts or log files?
+## Where can I find complete scripts and logs for each process?
 
 MitoPilot copies the most important output files to the `out` directory. 
 However, all of the scripts, logs, and outfiles created by Nextflow are saved in the `work` directory. 
