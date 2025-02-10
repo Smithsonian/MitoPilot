@@ -345,7 +345,7 @@ Click `Export` to generate the final files. It may take a couple of minutes, but
 
 ## Exploring the Final Results
 
-Once the gears have stopped spinning, the export process should be done! Currently, the only way to find these files is to navigate to the appropriate directory. By default, that location is `YOUR_PROJECT_DIRECTORY/out/export/YOUR_GROUP_NAME`.  
+Once the gears have stopped spinning, the export process should be done! You should see a path to the final export location. By default, that location is `YOUR_PROJECT_DIRECTORY/out/export/YOUR_GROUP_NAME`.  
 
 MitoPilot will produce three output files. First, the `.html` file contains visualizations of each protein coding gene alignment in your export group. This may be useful to quickly identify samples with poor annotations that need additional manual curation.
 
@@ -359,11 +359,15 @@ Next are the two files you will need for submission to NCBI GenBank. The `.fasta
 
 ![](figures/test-project/40.png)
 
-Lastly is the `.tbl` file, a [standardized 5-column, tab-delimited feature table](https://www.ncbi.nlm.nih.gov/genbank/feature_table/) containing information about the annotated genes for each mitogenome.
+Additionally there is the `.tbl` file, a [standardized 5-column, tab-delimited feature table](https://www.ncbi.nlm.nih.gov/genbank/feature_table/) containing information about the annotated genes for each mitogenome.
 
 ![](figures/test-project/41.png)
 
 With a real dataset, you could use these two files for [submission to NCBI GenBank](https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/).
+
+Lastly, the export directory contains a sub-directory `GFFs` with annotations for each sample in [GFF3 format](https://gmod.org/wiki/GFF3). GFF files can be loaded by tools like [Geneious](https://www.geneious.com/) for additional manual inspection prior to submission.
+
+![](figures/test-project/42.png)
 
 ## Wrap-up
 
