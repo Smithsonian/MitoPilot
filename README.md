@@ -206,9 +206,8 @@ in a new browser window and is primarily comprised of an interactive
 table, with 3 modules (Assembly, Annotate, Export), where each row
 represents a sample in the project.
 
-Please note that we have tested the MitoPilot GUI on Chrome and Firefox.
-There are some known bugs when running the GUI on Safari, it may be best
-to avoid this browser for MitoPilot.
+Please note that we have tested the MitoPilot GUI on Chrome and Firefox
+web browsers. There are known bugs when running the GUI on Safari.
 
 ## Sample Status
 
