@@ -36,7 +36,9 @@ export_files <- function(
       "export",
       group
     )
+    group_gff_pth <- file.path(group_pth, "GFFs")
     dir.create(group_pth, recursive = T, showWarnings = F)
+    dir.create(group_gff_pth, recursive = T, showWarnings = F)
     unlink(group_fasta <- file.path(group_pth, paste0(group, ".fasta")))
     unlink(group_tbl <- file.path(group_pth, paste0(group, ".tbl")))
   }
@@ -79,6 +81,9 @@ export_files <- function(
     }
     names(seq) <- stringr::str_glue_data(dat, fasta_header)
 
+    # sequence name, to be used as first column in GFF
+    seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)
+
     # Trim un-annotated ends of linear assemblies
     if (dat$topology == "linear") {
       start <- min(annotations$pos1)
@@ -111,12 +116,31 @@ export_files <- function(
       cat(paste(">Feature", .x), file = tbl_fn, sep = "\n")
     }
 
+    # MAKE GFF
+    gff_fn <- file.path(export_path, paste0(.x, ".gff"))
+    if (file.exists(gff_fn)) {
+      file.remove(gff_fn)
+    }
+    # add GFF header
+    "##gff-version 3" |>
+      cat(file = gff_fn, sep = "\n", append = TRUE)
+    # add GFF region
+    # circ = tolower((dat$topology == "circular"))
+    #f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Is_circular=",circ,";Name=MT;mol_type=genomic DNA") # Is_circular currently bugged in Geneious
+    f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Name=MT;mol_type=genomic DNA")
+    paste(c(seq_name, "MitoPilot", "region", 1, seq@ranges@width, ".", "+", ".", f9), collapse = "\t") |>
+      cat(file = gff_fn, sep = "\n", append = TRUE)
+
     purrr::pwalk(annotations, function(...) {
       cur <- list(...)
       note <- NULL
       pos <- c(cur$pos1, cur$pos2) |> as.character()
       if (cur$direction == "-") {
         pos <- rev(pos)
+      }
+
+      if(cur$pos1 >= cur$pos2){
+        message(paste0("Warning: pos1 >= pos2 for ", dat$ID,": ", cur$gene, ", may be an annotation error"))
       }
 
       if (cur$type == "PCG") {
@@ -139,6 +163,7 @@ export_files <- function(
           note <- paste(c(note, "TAA stop codon is completed by the addition of 3' A residues to the mRNA"), collapse = "; ")
         }
 
+        # write to .tbl
         paste(c(pos, "gene"), collapse = "\t") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste0("\t\t\tgene\t", cur$gene) |>
@@ -157,10 +182,25 @@ export_files <- function(
           paste0("\t\t\tnote\t", note) |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
         }
+
+        # write to GFF
+        # gene feature
+        f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
+        paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # CDS feature
+        f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=2")
+        if (length(note) > 0){
+          f9 = paste0(f9, ";Note=", note)
+        }
+        paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
+          cat(file = gff_fn, sep = "\n", append = TRUE)
+
         return()
       }
 
       if (cur$type == "tRNA") {
+        # write to .tbl
         paste(c(pos, "gene"), collapse = "\t") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste0("\t\t\tgene\t", cur$gene) |>
@@ -173,10 +213,22 @@ export_files <- function(
           paste("\t\t\tnote\t", paste0("anticodon:", tolower(cur$anticodon))) |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
         }
+
+        # write to GFF
+        # tRNA feature
+        f9 = paste0("ID=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";Name=",cur$gene,";gbkey=tRNA;product=",cur$product)
+        paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # exon feature
+        f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";Parent=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=tRNA;product=",cur$product)
+        paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+          cat(file = gff_fn, sep = "\n", append = TRUE)
+
         return()
       }
 
       if (cur$type == "rRNA") {
+        # write to .tbl
         paste(c(pos, "gene"), collapse = "\t") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste0("\t\t\tgene\t", ifelse(cur$gene == "rrnS", "s-rRNA", "l-rRNA")) |>
@@ -185,14 +237,32 @@ export_files <- function(
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste("\t\t\tproduct\t", cur$product) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
+
+        # write to GFF
+        # rRNA feature
+        f9 = paste0("ID=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";Name=",cur$gene,";gbkey=rRNA;product=",cur$product)
+        paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # exon feature
+        f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";Parent=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=rRNA;product=",cur$product)
+        paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+          cat(file = gff_fn, sep = "\n", append = TRUE)
+
         return()
       }
 
       if (cur$type == "ctrl") {
+        # write to .tbl
         paste(c(pos, "D-loop"), collapse = "\t") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste0("\t\t\tnote\tcontrol region") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
+
+        # write to GFF
+        f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=D-loop;Note=control region")
+        paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+          cat(file = gff_fn, sep = "\n", append = TRUE)
+
         return()
       }
     })
@@ -203,8 +273,12 @@ export_files <- function(
         "cat {tbl_fn} >> {group_tbl}"
       ) |> system()
       stringr::str_glue(
+        "cp {gff_fn} {group_gff_pth}"
+      ) |> system()
+      stringr::str_glue(
         "cat {fasta_fn} >> {group_fasta}"
       ) |> system()
+
     }
   })
 
