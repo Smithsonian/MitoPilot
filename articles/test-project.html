@@ -518,8 +518,8 @@ still running.</p>
 <h3 id="exploring-the-final-results">Exploring the Final Results<a class="anchor" aria-label="anchor" href="#exploring-the-final-results"></a>
 </h3>
 <p>Once the gears have stopped spinning, the export process should be
-done! Currently, the only way to find these files is to navigate to the
-appropriate directory. By default, that location is
+done! You should see a path to the final export location. By default,
+that location is
 <code>YOUR_PROJECT_DIRECTORY/out/export/YOUR_GROUP_NAME</code>.</p>
 <p>MitoPilot will produce three output files. First, the
 <code>.html</code> file contains visualizations of each protein coding
@@ -536,12 +536,17 @@ sample, following the header template you specified when exporting the
 data. MitoPilot attempts to adjust the start position of every assembly
 to the start of the trnF gene.</p>
 <p><img src="figures%2Ftest-project%2F40.png"></p>
-<p>Lastly is the <code>.tbl</code> file, a <a href="https://www.ncbi.nlm.nih.gov/genbank/feature_table/" class="external-link">standardized
+<p>Additionally there is the <code>.tbl</code> file, a <a href="https://www.ncbi.nlm.nih.gov/genbank/feature_table/" class="external-link">standardized
 5-column, tab-delimited feature table</a> containing information about
 the annotated genes for each mitogenome.</p>
 <p><img src="figures%2Ftest-project%2F41.png"></p>
 <p>With a real dataset, you could use these two files for <a href="https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/" class="external-link">submission
 to NCBI GenBank</a>.</p>
+<p>Lastly, the export directory contains a sub-directory
+<code>GFFs</code> with annotations for each sample in <a href="https://gmod.org/wiki/GFF3" class="external-link">GFF3 format</a>. GFF files can be
+loaded by tools like <a href="https://www.geneious.com/" class="external-link">Geneious</a>
+for additional manual inspection prior to submission.</p>
+<p><img src="figures%2Ftest-project%2F42.png"></p>
 </div>
 <div class="section level3">
 <h3 id="wrap-up">Wrap-up<a class="anchor" aria-label="anchor" href="#wrap-up"></a>
