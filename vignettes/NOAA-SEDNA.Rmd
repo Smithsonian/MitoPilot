@@ -55,7 +55,9 @@ If install was successful, you can exit the R session using `quit()`.
 ## Updating MitoPilot
 
 If you need to update MitoPilot, simply run the BiocManager installation command again. 
-If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
+If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation. 
+
+After updating MitoPilot, we recommend restarting R (In the RStudio menu, `Session > Restart R`) and the reloading the package with `library(MitoPilot)`.
 
 ## Setting up RStudio server
 

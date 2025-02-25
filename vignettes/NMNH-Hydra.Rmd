@@ -90,6 +90,8 @@ If the installation was successful, you're ready to start using MitoPilot!
 If you need to update MitoPilot, simply run the BiocManager installation command again. 
 If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
 
+After updating MitoPilot, we recommend restarting R (In the RStudio menu, `Session > Restart R`) and the reloading the package with `library(MitoPilot)`.
+
 ## Launching MitoPilot
 
 We recommend running MitoPilot within an interactive session on the cluster to avoid unnecessary computational burden on the login nodes. First, initialize an interactive session on Hydra.
