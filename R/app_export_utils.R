@@ -12,7 +12,7 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID) |>
     dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
     dplyr::filter(annotate_lock == 1) |>
-    dplyr::select(ID, topology, structure) |>
+    dplyr::select(ID, topology, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings) |>
     dplyr::left_join(dplyr::tbl(db, "samples"), by = "ID") |>
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
