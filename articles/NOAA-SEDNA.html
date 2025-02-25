@@ -77,8 +77,7 @@ used mamba on SEDNA before, run the following.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">/opt/bioinformatics/mambaforge/bin/mamba</span> init</span></code></pre></div>
 <p>Let’s create the <code>MitoPilot_deps</code> mamba environment. This
 may take a while.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">mamba</span> create <span class="at">--name</span> MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib</span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="ex">conda-forge::r-base</span> <span class="at">-y</span></span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">mamba</span> create <span class="at">--name</span> MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib conda-forge::r-base <span class="at">-y</span></span></code></pre></div>
 <p>You can now call <code>nextflow</code> and <code>singularity</code>
 from anywhere on the cluster, as long as this
 <code>MitoPilot_deps</code> environment is activated.</p>
@@ -93,8 +92,8 @@ launch R.</p>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a></span>
 <span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co"># launch R</span></span>
 <span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="ex">R</span> </span></code></pre></div>
-<p>In the new R session, run the following to install MitoPilot. This
-will take a while.</p>
+<p>In the new R session, run the following to install MitoPilot. It will
+take a while to install all of the necessary dependencies.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
@@ -103,10 +102,14 @@ will take a while.</p>
 <span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"JonahVentures/MitoPilot"</span><span class="op">)</span></span></code></pre></div>
 <p>If install was successful, you can exit the R session using
 <code><a href="https://rdrr.io/r/base/quit.html" class="external-link">quit()</a></code>.</p>
-<p>If you ever need to update MitoPilot, simply follow these
-instructions again. If you would like to ensure that you’re using the
-latest MitoPilot version, run <code>remove.packages("MitoPilot")</code>
-prior to installation.</p>
+</div>
+<div class="section level3">
+<h3 id="updating-mitopilot">Updating MitoPilot<a class="anchor" aria-label="anchor" href="#updating-mitopilot"></a>
+</h3>
+<p>If you need to update MitoPilot, simply run the BiocManager
+installation command again. If you would like to ensure that you’re
+using the latest MitoPilot version, run
+<code>remove.packages("MitoPilot")</code> prior to installation.</p>
 </div>
 <div class="section level3">
 <h3 id="setting-up-rstudio-server">Setting up RStudio server<a class="anchor" aria-label="anchor" href="#setting-up-rstudio-server"></a>
@@ -148,43 +151,46 @@ sure you’re setting <code>Rstudio_version</code> correctly.</p>
 <span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="st">cd ~/rstudio</span></span>
 <span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="st">source ~/.bashrc</span></span>
 <span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a></span>
-<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="st"># Assign yourself a port</span></span>
-<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a><span class="st">PORT=$(shuf -i 8000-9000 -n 1)</span></span>
-<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a></span>
-<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="st">HOST=$( hostname )</span></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="st">mamba activate MitoPilot_deps</span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="st"># Assign yourself a port</span></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="st">PORT=$(shuf -i 8000-9000 -n 1)</span></span>
 <span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a></span>
-<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="st">GREEN='\033[0;32m' # green ANSI</span></span>
-<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a><span class="st">RED='\033[0;31m' # red ANSI</span></span>
-<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a><span class="st">NC='\033[0m' # no color ANSI</span></span>
-<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a></span>
-<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a><span class="st">echo ""</span></span>
-<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a><span class="st">echo -e "${GREEN}TO ACCESS RSTUDIO SERVER${NC}"</span></span>
-<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a><span class="st">echo "In a terminal on your local system, run the following command:"</span></span>
-<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a><span class="st">echo "ssh -N -L 8787:${HOST}:${PORT} ${USER}@sedna.nwfsc2.noaa.gov"</span></span>
-<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a><span class="st">echo ""</span></span>
-<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a><span class="st">echo "Enter your password when prompted"</span></span>
-<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a><span class="st">echo "If successful, nothing will happen"</span></span>
-<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a><span class="st">echo "Then open http://localhost:8787 on a local web browser"</span></span>
-<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a><span class="st">echo "" </span></span>
-<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a><span class="st">echo -e "${RED}NOTE:${NC} This window and your local terminal session"</span></span>
-<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a><span class="st">echo "must remain open in order to access the Rstudio server"</span></span>
-<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a><span class="st">echo ""</span></span>
-<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a></span>
-<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a></span>
-<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a><span class="st"># set Singularity temp dir, if needed</span></span>
-<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="st"># if not set, Singularity will write to /tmp on the compute nodes</span></span>
-<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a><span class="st">#mkdir -p "${HOME}/.singularity/temp"</span></span>
-<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="st">#export SINGULARITY_TMPDIR="${HOME}/.singularity/temp"</span></span>
-<span id="cb6-43"><a href="#cb6-43" tabindex="-1"></a></span>
-<span id="cb6-44"><a href="#cb6-44" tabindex="-1"></a><span class="st">singularity exec \</span></span>
-<span id="cb6-45"><a href="#cb6-45" tabindex="-1"></a><span class="st"> --bind run:/run,var-lib-rstudio-server:/var/lib/rstudio-server,database.conf:/etc/rstudio/database.conf,${HOME}/.conda/envs/MitoPilot_deps/bin,${HOME}/.conda/envs/MitoPilot_deps/lib \</span></span>
-<span id="cb6-46"><a href="#cb6-46" tabindex="-1"></a><span class="st"> --env APPEND_PATH="${HOME}/.conda/envs/MitoPilot_deps/bin:${HOME}/.conda/envs/MitoPilot_deps/lib" \</span></span>
-<span id="cb6-47"><a href="#cb6-47" tabindex="-1"></a><span class="st"> rstudio_${Rstudio_version}.sif \</span></span>
-<span id="cb6-48"><a href="#cb6-48" tabindex="-1"></a><span class="st"> rserver --www-address=0.0.0.0 --www-port=${PORT} --server-user=${USER}</span></span>
-<span id="cb6-49"><a href="#cb6-49" tabindex="-1"></a><span class="op">EOL</span></span>
-<span id="cb6-50"><a href="#cb6-50" tabindex="-1"></a></span>
-<span id="cb6-51"><a href="#cb6-51" tabindex="-1"></a><span class="co"># make script executable</span></span>
-<span id="cb6-52"><a href="#cb6-52" tabindex="-1"></a><span class="fu">chmod</span> 755 ~/bin/start-rstudio-server-MitoPilot</span></code></pre></div>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="st">HOST=$( hostname )</span></span>
+<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a><span class="st">GREEN='\033[0;32m' # green ANSI</span></span>
+<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a><span class="st">RED='\033[0;31m' # red ANSI</span></span>
+<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a><span class="st">NC='\033[0m' # no color ANSI</span></span>
+<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a></span>
+<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a><span class="st">echo ""</span></span>
+<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a><span class="st">echo -e "${GREEN}TO ACCESS RSTUDIO SERVER${NC}"</span></span>
+<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a><span class="st">echo "In a terminal on your local system, run the following command:"</span></span>
+<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a><span class="st">echo "ssh -N -L 8787:${HOST}:${PORT} ${USER}@sedna.nwfsc2.noaa.gov"</span></span>
+<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a><span class="st">echo ""</span></span>
+<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a><span class="st">echo "Enter your password when prompted"</span></span>
+<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a><span class="st">echo "If successful, nothing will happen"</span></span>
+<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a><span class="st">echo "Then open http://localhost:8787 on a local web browser"</span></span>
+<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a><span class="st">echo "" </span></span>
+<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a><span class="st">echo -e "${RED}NOTE:${NC} This window and your local terminal session"</span></span>
+<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a><span class="st">echo "must remain open in order to access the Rstudio server"</span></span>
+<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a><span class="st">echo ""</span></span>
+<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a></span>
+<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="st">mamba activate </span></span>
+<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a></span>
+<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="st"># set Singularity temp dir, if needed</span></span>
+<span id="cb6-43"><a href="#cb6-43" tabindex="-1"></a><span class="st"># if not set, Singularity will write to /tmp on the compute nodes</span></span>
+<span id="cb6-44"><a href="#cb6-44" tabindex="-1"></a><span class="st">#mkdir -p "${HOME}/.singularity/temp"</span></span>
+<span id="cb6-45"><a href="#cb6-45" tabindex="-1"></a><span class="st">#export SINGULARITY_TMPDIR="${HOME}/.singularity/temp"</span></span>
+<span id="cb6-46"><a href="#cb6-46" tabindex="-1"></a></span>
+<span id="cb6-47"><a href="#cb6-47" tabindex="-1"></a><span class="st">singularity exec \</span></span>
+<span id="cb6-48"><a href="#cb6-48" tabindex="-1"></a><span class="st"> --bind run:/run,var-lib-rstudio-server:/var/lib/rstudio-server,database.conf:/etc/rstudio/database.conf,${HOME}/.conda/envs/MitoPilot_deps/bin,${HOME}/.conda/envs/MitoPilot_deps/lib \</span></span>
+<span id="cb6-49"><a href="#cb6-49" tabindex="-1"></a><span class="st"> --env APPEND_PATH="${HOME}/.conda/envs/MitoPilot_deps/bin:${HOME}/.conda/envs/MitoPilot_deps/lib" \</span></span>
+<span id="cb6-50"><a href="#cb6-50" tabindex="-1"></a><span class="st"> rstudio_${Rstudio_version}.sif \</span></span>
+<span id="cb6-51"><a href="#cb6-51" tabindex="-1"></a><span class="st"> rserver --www-address=0.0.0.0 --www-port=${PORT} --server-user=${USER}</span></span>
+<span id="cb6-52"><a href="#cb6-52" tabindex="-1"></a><span class="op">EOL</span></span>
+<span id="cb6-53"><a href="#cb6-53" tabindex="-1"></a></span>
+<span id="cb6-54"><a href="#cb6-54" tabindex="-1"></a><span class="co"># make script executable</span></span>
+<span id="cb6-55"><a href="#cb6-55" tabindex="-1"></a><span class="fu">chmod</span> 755 ~/bin/start-rstudio-server-MitoPilot</span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="launching-rstudio-server">Launching RStudio server<a class="anchor" aria-label="anchor" href="#launching-rstudio-server"></a>
@@ -252,8 +258,8 @@ template below. You may wish to modify the job name
 <span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
 <span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a><span class="ex">mamba</span> activate MitoPilot_deps</span>
 <span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a></span>
-<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="co"># NEXTFLOW COMMAND, example below</span></span>
-<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps_test/lib/R/library/MitoPilot/nextflow <span class="at">-c</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.config <span class="at">-entry</span> WF1</span>
+<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="co"># MITOPILOT NEXTFLOW COMMAND, example below</span></span>
+<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps/lib/R/library/MitoPilot/nextflow <span class="at">-c</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.config <span class="at">-entry</span> WF1</span>
 <span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a></span>
 <span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a><span class="bu">echo</span> = <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$SLURM_JOB_NAME</span> done</span></code></pre></div>
 <p>Move the submission script into your MitoPilot run directory (in the
