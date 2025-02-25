@@ -24,8 +24,7 @@ Log in to the NOAA NMFS VPN, then log in to SEDNA. If you've never used mamba on
 Let's create the `MitoPilot_deps` mamba environment. This may take a while.
 
 ```{bash eval=F}
-mamba create --name MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib
-conda-forge::r-base -y
+mamba create --name MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib conda-forge::r-base -y
 ```
  
 You can now call `nextflow` and `singularity` from anywhere on the cluster, as long as this `MitoPilot_deps` environment is activated.
@@ -41,7 +40,7 @@ mamba activate MitoPilot_deps
 # launch R
 R 
 ```
-In the new R session, run the following to install MitoPilot. This will take a while.
+In the new R session, run the following to install MitoPilot. It will take a while to install all of the necessary dependencies.
 
 ```{R eval=F}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -53,7 +52,10 @@ BiocManager::install("JonahVentures/MitoPilot")
 
 If install was successful, you can exit the R session using `quit()`.
 
-If you ever need to update MitoPilot, simply follow these instructions again. If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
+## Updating MitoPilot
+
+If you need to update MitoPilot, simply run the BiocManager installation command again. 
+If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
 
 ## Setting up RStudio server
 
@@ -96,6 +98,8 @@ Rstudio_version="4.4.2"
 cd ~/rstudio
 source ~/.bashrc
 
+mamba activate MitoPilot_deps
+
 # Assign yourself a port
 PORT=$(shuf -i 8000-9000 -n 1)
 
@@ -118,6 +122,7 @@ echo -e "${RED}NOTE:${NC} This window and your local terminal session"
 echo "must remain open in order to access the Rstudio server"
 echo ""
 
+mamba activate 
 
 # set Singularity temp dir, if needed
 # if not set, Singularity will write to /tmp on the compute nodes
@@ -197,8 +202,8 @@ echo + `date` job $SLURM_JOB_NAME started in $SLURM_JOB_PARTITION with jobID=$SL
 source ~/.bashrc
 mamba activate MitoPilot_deps
 
-# NEXTFLOW COMMAND, example below
-nextflow -log /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps_test/lib/R/library/MitoPilot/nextflow -c /home/dmacguigan/MitoPilot/test/2025_1_2/.config -entry WF1
+# MITOPILOT NEXTFLOW COMMAND, example below
+nextflow -log /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps/lib/R/library/MitoPilot/nextflow -c /home/dmacguigan/MitoPilot/test/2025_1_2/.config -entry WF1
 
 echo = `date` job $SLURM_JOB_NAME done
 
