@@ -107,7 +107,7 @@
 <code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  path <span class="op">=</span> <span class="st">"path/to/project"</span>,</span>
 <span>  mapping_fn <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
-<span>  data_dir <span class="op">=</span> <span class="st">"path/to/raw_data"</span>,</span>
+<span>  data_path <span class="op">=</span> <span class="st">"path/to/raw_data"</span>,</span>
 <span>  executor <span class="op">=</span> <span class="st">"local"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <ul>
@@ -121,9 +121,9 @@
 <li>The mapping file should be in csv format and must contain the columns ID (a unique identifier for each sample), Taxon (eg, species or genus name), along with R1, and R2 (specifying the forward and revers file names for the raw Illumina paired end data). In addition to the required fields any other sample metadata can be included in the mapping file. These fields can also be used when exporting files for NCBI GenBank Submissions, so metadata that is important for submission (e.g., BioSample ID) can be included here.</li>
 </ul>
 </li>
-<li>Data Directory
+<li>Data Path
 <ul>
-<li>The data directory should contain the raw Illumina paired-end reads specified in the mapping file.</li>
+<li>Full path to the data directory, which should contain the raw Illumina paired-end reads specified in the mapping file.</li>
 </ul>
 </li>
 <li>Executor
@@ -132,6 +132,9 @@
 </ul>
 </li>
 </ul>
+<div class="alert alert-note">
+<p><strong>Note:</strong> If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify <code>Rproj = FALSE</code> when calling the <code><a href="reference/new_project.html">MitoPilot::new_project</a></code> function.</p>
+</div>
 <div class="section level3">
 <h3 id="nextflow-configuration-file">Nextflow Configuration File<a class="anchor" aria-label="anchor" href="#nextflow-configuration-file"></a>
 </h3>

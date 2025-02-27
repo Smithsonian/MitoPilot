@@ -44,10 +44,13 @@
 <span>  IDs <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fasta_header <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"{ID} [organism={Taxon}] [topology={topology}] [mgcode=2]"</span>,</span>
 <span>    <span class="st">"[location=mitochondrion] {Taxon} mitochondrion, complete genome"</span><span class="op">)</span>,</span>
+<span>  fasta_header_gene <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"{ID} [organism={Taxon}] [mgcode=2]"</span>,</span>
+<span>    <span class="st">"[location=mitochondrion] {Taxon}"</span><span class="op">)</span>,</span>
 <span>  out_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  start_codons <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ATG"</span>, <span class="st">"GTG"</span>, <span class="st">"ATA"</span>, <span class="st">"ATT"</span>, <span class="st">"ATC"</span><span class="op">)</span>,</span>
 <span>  stop_codons <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"TAA"</span>, <span class="st">"TAG"</span>, <span class="st">"AGA"</span>, <span class="st">"AGG"</span>, <span class="st">"TA"</span>, <span class="st">"T"</span><span class="op">)</span>,</span>
-<span>  generateAAalignments <span class="op">=</span> <span class="cn">T</span></span>
+<span>  generateAAalignments <span class="op">=</span> <span class="cn">T</span>,</span>
+<span>  gene_export <span class="op">=</span> <span class="cn">F</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -84,6 +87,11 @@ the export group will be exported</p></dd>
 <dt id="arg-generateaaalignments">generateAAalignments<a class="anchor" aria-label="anchor" href="#arg-generateaaalignments"></a></dt>
 <dd><p>Generate group-level amino acid alignments
 (default: TRUE)</p></dd>
+
+
+<dt id="arg-gene-export">gene_export<a class="anchor" aria-label="anchor" href="#arg-gene-export"></a></dt>
+<dd><p>Export FASTAs and feature tables for individual genes?
+(default: FALSE)</p></dd>
 
 </dl></div>
 
