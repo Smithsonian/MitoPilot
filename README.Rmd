@@ -13,6 +13,20 @@ knitr::opts_chunk$set(
 )
 ```
 
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+strong { font-weight: bold; }
+</style>
+
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml)
@@ -68,7 +82,7 @@ The MitoPilot workflow begins by initializing a new project with the `new_projec
 MitoPilot::new_project(
   path = "path/to/project",
   mapping_fn = "path/to/mapping_file.csv",
-  data_dir = "path/to/raw_data",
+  data_path = "path/to/raw_data",
   executor = "local"
 )
 ```
@@ -77,10 +91,14 @@ MitoPilot::new_project(
    - The path specifies where the new project directory will be created. If no path is provided, the project will be created in the current working directory. 
 + Mapping File
    - The mapping file should be in csv format and must contain the columns ID (a unique identifier for each sample), Taxon (eg, species or genus name), along with R1, and R2 (specifying the forward and revers file names for the raw Illumina paired end data). In addition to the required fields any other sample metadata can be included in the mapping file. These fields can also be used when exporting files for NCBI GenBank Submissions, so metadata that is important for submission (e.g., BioSample ID) can be included here. 
-+ Data Directory
-   - The data directory should contain the raw Illumina paired-end reads specified in the mapping file. 
++ Data Path
+   - Full path to the data directory, which should contain the raw Illumina paired-end reads specified in the mapping file. 
 + Executor
    - The executor specifies where the computational work will be performed by Nextflow. For example choosing `local` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.
+   
+<div class="alert alert-note">
+  <strong>Note:</strong> If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify `Rproj = FALSE` when calling the `MitoPilot::new_project` function.
+</div>
 
 ### Nextflow Configuration File
 

@@ -1,6 +1,20 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+strong { font-weight: bold; }
+</style>
+
 <!-- badges: start -->
 
 [![Lifecycle:
@@ -107,7 +121,7 @@ session.
 MitoPilot::new_project(
   path = "path/to/project",
   mapping_fn = "path/to/mapping_file.csv",
-  data_dir = "path/to/raw_data",
+  data_path = "path/to/raw_data",
   executor = "local"
 )
 ```
@@ -125,9 +139,9 @@ MitoPilot::new_project(
     the mapping file. These fields can also be used when exporting files
     for NCBI GenBank Submissions, so metadata that is important for
     submission (e.g., BioSample ID) can be included here.
-- Data Directory
-  - The data directory should contain the raw Illumina paired-end reads
-    specified in the mapping file.
+- Data Path
+  - Full path to the data directory, which should contain the raw
+    Illumina paired-end reads specified in the mapping file.
 - Executor
   - The executor specifies where the computational work will be
     performed by Nextflow. For example choosing `local` will run the
@@ -135,6 +149,14 @@ MitoPilot::new_project(
     pipeline on AWS Batch. Running `new_project()` will generate a
     executor-specific .config file in the project directory that must be
     edited to specify additional parameters for the pipeline to run.
+
+<div class="alert alert-note">
+
+<strong>Note:</strong> If running MitoPilot via RStudio Server on a
+computing cluster, you likely need to specify `Rproj = FALSE` when
+calling the `MitoPilot::new_project` function.
+
+</div>
 
 ### Nextflow Configuration File
 
