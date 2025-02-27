@@ -32,6 +32,9 @@ the export group will be exported}
 
 \item{generateAAalignments}{Generate group-level amino acid alignments
 (default: TRUE)}
+
+\item{gene_export}{Export FASTAs and feature tables for individual genes?
+(default: FALSE)}
 }
 \description{
 Generate export NCBI files

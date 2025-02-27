@@ -10,6 +10,8 @@
 #' @param stop_codons NCBI recognized stop codons
 #' @param generateAAalignments Generate group-level amino acid alignments
 #'   (default: TRUE)
+#' @param gene_export Export FASTAs and feature tables for individual genes?
+#'   (default: FALSE)
 #'
 #' @export
 #'
