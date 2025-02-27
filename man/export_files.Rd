@@ -9,10 +9,13 @@ export_files(
   IDs = NULL,
   fasta_header = paste("{ID} [organism={Taxon}] [topology={topology}] [mgcode=2]",
     "[location=mitochondrion] {Taxon} mitochondrion, complete genome"),
+  fasta_header_gene = paste("{ID} [organism={Taxon}] [mgcode=2]",
+    "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
   start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"),
   stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
-  generateAAalignments = T
+  generateAAalignments = T,
+  gene_export = F
 )
 }
 \arguments{
