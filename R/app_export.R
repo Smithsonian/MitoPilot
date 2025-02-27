@@ -188,6 +188,18 @@ export_server <- function(id) {
           value = T,
           status = "primary"
         ),
+        shinyWidgets::prettyCheckbox(
+          ns("export_genes"),
+          "Export individual genes",
+          value = F,
+          status = "primary"
+        ),
+        textAreaInput(
+          ns("fasta_header_gene"),
+          "Fasta Header Template for Gene Export (reference columns from your sample data using '{}', gene names will be automatically added):",
+          "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon}",
+          width = "100%"
+        ),
         div(
           id = ns("output_path"),
           h4("Data exported to:"),
@@ -213,8 +225,10 @@ export_server <- function(id) {
       export_files(
         group = input$export_group,
         fasta_header = input$fasta_header,
+        fasta_header_gene = input$fasta_header_gene,
         generateAAalignments = input$include_alignments,
-        out_dir = session$userData$dir_out
+        out_dir = session$userData$dir_out,
+        gene_export = input$export_genes
       )
       shinyjs::show("output_path")
       output$out_path_location <- renderText({
