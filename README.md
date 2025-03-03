@@ -136,9 +136,9 @@ MitoPilot::new_project(
     executor-specific .config file in the project directory that must be
     edited to specify additional parameters for the pipeline to run.
 
-> \[!NOTE\] If running MitoPilot via RStudio Server on a computing
-> cluster, you likely need to specify `Rproj = FALSE` when calling the
-> `MitoPilot::new_project` function.
+**NOTE**: If running MitoPilot via RStudio Server on a computing
+cluster, you likely need to specify `Rproj = FALSE` when calling the
+`MitoPilot::new_project` function.
 
 ### Nextflow Configuration File
 

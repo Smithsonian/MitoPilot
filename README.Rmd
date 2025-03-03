@@ -82,8 +82,7 @@ MitoPilot::new_project(
 + Executor
    - The executor specifies where the computational work will be performed by Nextflow. For example choosing `local` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.
 
-> [!NOTE]
-> If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify `Rproj = FALSE` when calling the `MitoPilot::new_project` function.
+**NOTE**: If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify `Rproj = FALSE` when calling the `MitoPilot::new_project` function.
 
 ### Nextflow Configuration File
 
