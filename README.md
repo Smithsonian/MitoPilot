@@ -1,20 +1,6 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-<style>
-.alert {
-  border-left: 5px solid;
-  padding: 10px;
-  margin: 10px 0;
-  border-radius: 5px;
-}
-.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
-.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
-.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
-.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
-strong { font-weight: bold; }
-</style>
-
 <!-- badges: start -->
 
 [![Lifecycle:
@@ -150,13 +136,9 @@ MitoPilot::new_project(
     executor-specific .config file in the project directory that must be
     edited to specify additional parameters for the pipeline to run.
 
-<div class="alert alert-note">
-
-<strong>Note:</strong> If running MitoPilot via RStudio Server on a
-computing cluster, you likely need to specify `Rproj = FALSE` when
-calling the `MitoPilot::new_project` function.
-
-</div>
+> \[!NOTE\] If running MitoPilot via RStudio Server on a computing
+> cluster, you likely need to specify `Rproj = FALSE` when calling the
+> `MitoPilot::new_project` function.
 
 ### Nextflow Configuration File
 

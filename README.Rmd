@@ -13,20 +13,6 @@ knitr::opts_chunk$set(
 )
 ```
 
-<style>
-.alert {
-  border-left: 5px solid;
-  padding: 10px;
-  margin: 10px 0;
-  border-radius: 5px;
-}
-.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
-.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
-.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
-.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
-strong { font-weight: bold; }
-</style>
-
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![R-CMD-check](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml)
@@ -95,10 +81,9 @@ MitoPilot::new_project(
    - Full path to the data directory, which should contain the raw Illumina paired-end reads specified in the mapping file. 
 + Executor
    - The executor specifies where the computational work will be performed by Nextflow. For example choosing `local` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.
-   
-<div class="alert alert-note">
-  <strong>Note:</strong> If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify `Rproj = FALSE` when calling the `MitoPilot::new_project` function.
-</div>
+
+> [!NOTE]
+> If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify `Rproj = FALSE` when calling the `MitoPilot::new_project` function.
 
 ### Nextflow Configuration File
 
