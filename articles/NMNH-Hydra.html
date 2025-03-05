@@ -171,11 +171,16 @@ menu, Session &gt; Restart R) and the reloading the package with
 cluster to avoid unnecessary computational burden on the login nodes.
 First, initialize an interactive session on Hydra.</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="ex">qrsh</span> <span class="at">-l</span> h_rt=24:00:00 <span class="at">-pe</span> mthread 2</span></code></pre></div>
-<p>You’ll need to include <code>-pe mthread 2</code> in order to have
-enough available RAM for building the MitoPilot Singularity image.</p>
-<p>Note that interactive sessions can run for a maximum of 24 hours.
-Additionally, users are limited to one active interactive session at a
-time.</p>
+<div class="alert alert-note">
+<p><strong>Note:</strong> You must include <code>-pe mthread 2</code> in
+order to have enough available RAM for building the MitoPilot
+Singularity image.</p>
+</div>
+<div class="alert alert-note">
+<p><strong>Note:</strong> Interactive sessions on Hydra can run for a
+maximum of 24 hours. Additionally, users are limited to one active
+interactive session at a time.</p>
+</div>
 <p>Once the interactive session starts, you can launch RStudio
 server.</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="ex">conda</span> deactivate</span>
@@ -211,23 +216,25 @@ and the log file name (<code>-o</code>).</p>
 <span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="co">#$ -cwd -j y</span></span>
 <span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co">#$ -q lTWFM.sq</span></span>
 <span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co">#$ -l wfmq</span></span>
-<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#$ -S /bin/sh</span></span>
-<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a></span>
-<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="bu">echo</span> + <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$JOB_NAME</span> started in <span class="va">$QUEUE</span> with jobID=<span class="va">$JOB_ID</span> on <span class="va">$HOSTNAME</span></span>
-<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a></span>
-<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
-<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a></span>
-<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="ex">module</span> load tools/java/21.0.2 <span class="co"># required for Nextflow on Hydra</span></span>
-<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a></span>
-<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="co"># NEXTFLOW COMMAND, example below</span></span>
-<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.logs/nextflow.log run /home/macguigand/R/x86_64-pc-linux-gnu-library/4.4/MitoPilot/nextflow <span class="at">-c</span> /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.config <span class="at">-entry</span> WF1</span>
-<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a></span>
-<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="bu">echo</span> = <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$JOB_NAME</span> done</span></code></pre></div>
-<div class="alert alert-warning">
-<p><strong>Warning:</strong> You must use the options
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#$ -pe mthread 2</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co">#$ -S /bin/sh</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="bu">echo</span> + <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$JOB_NAME</span> started in <span class="va">$QUEUE</span> with jobID=<span class="va">$JOB_ID</span> on <span class="va">$HOSTNAME</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="ex">module</span> load tools/java/21.0.2 <span class="co"># required for Nextflow on Hydra</span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="co"># NEXTFLOW COMMAND, example below</span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.logs/nextflow.log run /home/macguigand/R/x86_64-pc-linux-gnu-library/4.4/MitoPilot/nextflow <span class="at">-c</span> /pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/.config <span class="at">-entry</span> WF1</span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="bu">echo</span> = <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$JOB_NAME</span> done</span></code></pre></div>
+<div class="alert alert-note">
+<p><strong>Note:</strong> You must use the options
 <code>-q lTWFM.sq</code> and <code>-l wfmq</code>. This is a special
-Hydra queue for workflow managers like Nextflow. Nextflow will not work
-in other queues.</p>
+Hydra queue for workflow managers like Nextflow. You must also include
+<code>-pe mthread 2</code> in order to have enough available RAM for
+building the MitoPilot Singularity image.</p>
 </div>
 <p>Move the submission script into your MitoPilot run directory (in the
 above example,
