@@ -263,6 +263,7 @@ new_db <- function(
       missing INTEGER,
       extra INTEGER,
       warnings INTEGER,
+      reviewed TEXT,
       structure TEXT,
       length INTEGER,
       topology TEXT,
@@ -276,6 +277,7 @@ new_db <- function(
         ID = mapping$ID,
         annotate_opts = "default",
         curate_opts = "default",
+        reviewed = "no",
         annotate_switch = 1,
         annotate_lock = 0
       ),

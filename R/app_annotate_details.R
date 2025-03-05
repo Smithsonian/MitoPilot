@@ -38,6 +38,11 @@ annotations_details_server <- function(id, rv) {
       render_annotations_table(Sys.time())
     })
 
+    # Render "reviewed" status
+    output$modalText <- shiny::renderText({
+      stringr::str_glue("Reviewed: {rv$updating$reviewed}")
+    })
+
     # Render table ----
     render_annotations_table <- reactiveVal()
     output$table <- reactable::renderReactable({
@@ -629,6 +634,48 @@ annotations_details_server <- function(id, rv) {
         )
     }) # END LINEARIZE
 
+
+    # Mark as reviewed ----
+    observeEvent(input$reviewed, {
+      if (as.character(rv$updating$reviewed) != "yes") {
+        rv$updating$reviewed <- "yes"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "reviewed")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
+      }
+      output$modalText <- shiny::renderText({
+        stringr::str_glue("Reviewed: {rv$updating$reviewed}")
+      })
+    }) # END REVIEWED
+
+    # Mark as unreviewed ----
+    observeEvent(input$unreviewed, {
+      if (as.character(rv$updating$reviewed) != "no") {
+        rv$updating$reviewed <- "no"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "reviewed")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
+      }
+      output$modalText <- shiny::renderText({
+        stringr::str_glue("Reviewed: {rv$updating$reviewed}")
+      })
+    }) # END UNREVIEWED
+
+
     # Edit Annotation ----
     observeEvent(input$edit_mode, {
       shinyjs::show("edit_mode_ctrls")
@@ -1005,10 +1052,12 @@ annotations_details_server <- function(id, rv) {
 #' @noRd
 annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   ns <- session$ns
+
   modalDialog(
     title = stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}"),
     size = "l",
     easyClose = F,
+    textOutput(ns("modalText")),
     tags$details(
       open = TRUE,
       tags$summary("Annotation Table"),
@@ -1135,6 +1184,8 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
+      actionButton(ns("reviewed"), "Mark as reviewed"),
+      actionButton(ns("unreviewed"), "Mark as unreviewed"),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),

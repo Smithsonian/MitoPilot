@@ -190,8 +190,8 @@ workflow ASSEMBLE {
           .set { update_ids }
         channel.fromQuery('SELECT ID, annotate_opts, curate_opts FROM annotate;', db: 'sqlite')
             .join(update_ids)
-            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, annotate_switch, annotate_lock) VALUES (?, ?, ?, 1, 0)', db: 'sqlite')
-    
+            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, 1, 0, "no")', db: 'sqlite')
+
         emit:
            ch = assemble_out[0]
 

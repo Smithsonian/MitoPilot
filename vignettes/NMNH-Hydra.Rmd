@@ -100,9 +100,13 @@ We recommend running MitoPilot within an interactive session on the cluster to a
 qrsh -l h_rt=24:00:00 -pe mthread 2
 ```
 
-You'll need to include `-pe mthread 2` in order to have enough available RAM for building the MitoPilot Singularity image. 
+<div class="alert alert-note">
+  <strong>Note:</strong> You must include `-pe mthread 2` in order to have enough available RAM for building the MitoPilot Singularity image.
+</div>
 
-Note that interactive sessions can run for a maximum of 24 hours. Additionally, users are limited to one active interactive session at a time.
+<div class="alert alert-note">
+  <strong>Note:</strong> Interactive sessions on Hydra can run for a maximum of 24 hours. Additionally, users are limited to one active interactive session at a time.
+</div>
 
 Once the interactive session starts, you can launch RStudio server.
 
@@ -134,6 +138,7 @@ Rather than clicking the `Start Nextflow` button, copy the Nextflow command and 
 #$ -cwd -j y
 #$ -q lTWFM.sq
 #$ -l wfmq
+#$ -pe mthread 2
 #$ -S /bin/sh
 
 echo + `date` job $JOB_NAME started in $QUEUE with jobID=$JOB_ID on $HOSTNAME
@@ -149,8 +154,8 @@ echo = `date` job $JOB_NAME done
 
 ```
 
-<div class="alert alert-warning">
-  <strong>Warning:</strong> You must use the options `-q lTWFM.sq` and `-l wfmq`. This is a special Hydra queue for workflow managers like Nextflow. Nextflow will not work in other queues.
+<div class="alert alert-note">
+  <strong>Note:</strong> You must use the options `-q lTWFM.sq` and `-l wfmq`. This is a special Hydra queue for workflow managers like Nextflow. You must also include `-pe mthread 2` in order to have enough available RAM for building the MitoPilot Singularity image.
 </div>
 
 Move the submission script into your MitoPilot run directory (in the above example, `/pool/public/genomics/macguigand/MitoPilot/22030FL-06-02/run_02/`). Then submit the job using `qsub MY_SCRIPT_NAME.sh`.

@@ -35,6 +35,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       missing,
       extra,
       warnings,
+      reviewed,
       time_stamp,
       annotate_notes
     ) |>

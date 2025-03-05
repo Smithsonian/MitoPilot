@@ -33,6 +33,7 @@ annotate_server <- function(id) {
       updating = NULL
     )
 
+
     # Refresh ----
     init("refresh_annotate")
     on("refresh_annotate", {
@@ -41,6 +42,7 @@ annotate_server <- function(id) {
         "table",
         data = rv$data
       )
+      message(str(rv$data))
     })
 
     # Render table ----
@@ -133,7 +135,7 @@ annotate_server <- function(id) {
               html = TRUE,
               cell = rt_longtext()
             ),
-            topology = colDef(show = TRUE),
+            topology = colDef(show = TRUE, align = "center"),
             scaffolds = colDef(show = TRUE, align = "center"),
             PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
             tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
@@ -141,6 +143,13 @@ annotate_server <- function(id) {
             missing = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
             extra = colDef(show = TRUE, align = "center"),
             warnings = colDef(show = TRUE, align = "center"),
+            reviewed = colDef(
+              show = TRUE,
+              name = "reviewed?",
+              html = TRUE,
+              align = "center",
+              width = 100,
+            ),
             time_stamp = colDef(
               show = TRUE,
               name = "Last Updated",

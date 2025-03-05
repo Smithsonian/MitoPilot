@@ -25,15 +25,15 @@ workflow VALIDATE {
         input
 
     main:
-    
+
         channel.fromQuery(params.sqlRead, db: 'sqlite')
             .join(input, by: [0, 1])
             .map { it ->
                 def jsonParams = it[6].toString()
-                def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes) 
+                def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
 
                 tuple(
-                    it[0],                                          // ID   
+                    it[0],                                          // ID
                     it[1],                                          // path
                     it[7],                                          // Annotations
                     it[9],                                          // Coverage
@@ -55,13 +55,13 @@ workflow VALIDATE {
             def ID = it[0]
             def csvData = file(it[3]).splitCsv(header: true)
             def row = csvData[0]
-            tuple(            
+            tuple(
                 row.structure,
                 row.PCGCount,
                 row.tRNACount,
-                row.rRNACount, 
-                row.missing, 
-                row.extra, 
+                row.rRNACount,
+                row.missing,
+                row.extra,
                 row.warnings,
                 ID
             )
@@ -71,7 +71,7 @@ workflow VALIDATE {
     // Clear old annotations from db
     validate_out
         .map { it ->
-            tuple(            
+            tuple(
                 ID = it[0],
                 time_stamp = params.ts
             )
@@ -104,7 +104,7 @@ workflow VALIDATE {
                 ).flatten()
         }
         .sqlInsert( statement: params.sqlWriteAnnotations, db: 'sqlite')
-            
-            
+
+
 
 }
