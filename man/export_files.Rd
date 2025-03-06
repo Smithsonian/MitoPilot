@@ -19,12 +19,15 @@ export_files(
 )
 }
 \arguments{
-\item{group}{(optioanl) exportgroup names}
+\item{group}{(optional) export group names}
 
 \item{IDs}{One or more sample IDs to export. If not provided all samples in
 the export group will be exported}
 
-\item{fasta_header}{Template fot fasta headers. Uses glue syntax (i.e.
+\item{fasta_header}{Template for mitogenome fasta headers. Uses glue syntax (i.e.
+`{...}`) to insert values from the samples table}
+
+\item{fasta_header_gene}{Template for gene fasta headers. Uses glue syntax (i.e.
 `{...}`) to insert values from the samples table}
 
 \item{out_dir}{directory to save the exported files}

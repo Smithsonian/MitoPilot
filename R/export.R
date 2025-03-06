@@ -1,9 +1,11 @@
 #' Generate export NCBI files
 #'
-#' @param group (optioanl) exportgroup names
+#' @param group (optional) export group names
 #' @param IDs One or more sample IDs to export. If not provided all samples in
 #'   the export group will be exported
-#' @param fasta_header Template fot fasta headers. Uses glue syntax (i.e.
+#' @param fasta_header Template for mitogenome fasta headers. Uses glue syntax (i.e.
+#'   `{...}`) to insert values from the samples table
+#' @param fasta_header_gene Template for gene fasta headers. Uses glue syntax (i.e.
 #'   `{...}`) to insert values from the samples table
 #' @param out_dir directory to save the exported files
 #' @param start_codons NCBI recognized start codons
