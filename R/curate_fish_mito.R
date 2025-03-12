@@ -216,7 +216,11 @@ curate_fish_mito <- function(
             gaps_target <- gaps_target - 1
             next
           }
-          new_start_codon <- Biostrings::subseq(assembly[contig_key[contig]], pos1_new, pos1_new + 2) |>
+          new_start_codon <- Biostrings::subseq(
+            assembly[contig_key[contig]],
+            pos1_new,
+            pos1_new + 2
+          ) |>
             as.character()
           if (!new_start_codon %in% start_opts) {
             gaps_target <- gaps_target - 1
@@ -247,7 +251,11 @@ curate_fish_mito <- function(
             gaps_target <- gaps_target - 1
             next
           }
-          new_start_codon <- Biostrings::subseq(assembly[contig_key[contig]], pos2_new - 2, pos2_new) |>
+          new_start_codon <- Biostrings::subseq(
+            assembly[contig_key[contig]],
+            pos2_new - 2,
+            pos2_new
+          ) |>
             Biostrings::reverseComplement() |>
             as.character()
           if (!new_start_codon %in% start_opts) {
@@ -287,8 +295,8 @@ curate_fish_mito <- function(
           }
           new_stop_codon <- Biostrings::subseq(
             assembly[contig_key[contig]],
-            pos2_new + 1,
-            min(pos2_new + 3, assembly[contig_key[contig]]@ranges@width)
+            pos2_new - 2,
+            min(pos2_new, assembly[contig_key[contig]]@ranges@width)
           ) |>
             as.character()
           while (nchar(new_stop_codon) > 0 && !new_stop_codon %in% stop_opts) {
@@ -323,13 +331,20 @@ curate_fish_mito <- function(
       if (direction == "-") {
         while (gaps_target > 0) {
           pos1_new <- pos1 + nchar(stop_codon) - 3 - (3 * gaps_target)
-          if (pos1_new - 1 <= 1) {
+          if ((pos1_new + 2) < 1) {
             gaps_target <- gaps_target - 1
             next
           }
-          new_stop_codon <- Biostrings::subseq(assembly[contig_key[contig]], max(pos1_new - 3, 1), pos1_new - 1) |>
+          new_stop_codon <- Biostrings::subseq(
+            assembly[contig_key[contig]],
+            max(pos1_new, 1),
+            pos1_new + 2
+          ) |>
             Biostrings::reverseComplement() |>
             as.character()
+          if(nchar(new_stop_codon) < 3L) {
+            pos1_new <- pos1_new + (3 - nchar(new_stop_codon))
+          }
           while (nchar(new_stop_codon) > 0 && !new_stop_codon %in% stop_opts) {
             new_stop_codon <- stringr::str_remove(new_stop_codon, ".$")
             pos1_new <- pos1_new + 1
