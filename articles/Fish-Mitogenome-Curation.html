@@ -134,7 +134,7 @@ Developer Note: the curation parameters are stored in the project sqlite
 database as a base64 encoded text that must be parsed for reading /
 writing.</p>
 <div class="reactjson html-widget html-fill-item" id="htmlwidget-ac96cb3ee4656e2e9ec3" style="width:700px;height:432.632880098888px;"></div>
-<script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"data":{"ref_dbs":{"default":"/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas"},"hit_threshold":90,"max_overlap":0.25,"default_rules":{"rRNA":{"count":1,"max_len":null,"min_len":null,"overlap":{"start":0,"stop":false}},"PCG":{"count":1,"max_len":null,"min_len":null,"overlap":{"start":2,"stop":false},"stop_codons":["TAA","TAG","AGA","AGG","AG","TA","T"],"start_codons":["ATG","GTG","ATA","ATT","TTA","ATC"]},"tRNA":{"count":1,"max_len":null,"min_len":null}},"rules":{"ctrl":{"count":1,"type":"ctrl","min_len":350},"rrnL":{"type":"rRNA","max_len":1850},"rrnS":{"type":"rRNA","max_len":1000},"nad1":{"type":"PCG","start_codons":["ATG","GTG","ATA","ATT","TTA","ATC","TTG"]},"nad2":{"type":"PCG"},"cox1":{"type":"PCG","overlap":{"start":2,"stop":true}},"cox2":{"type":"PCG","start_codons":["ATG","GTG","ATA","ATT","TTA","ATC","TTG"]},"atp8":{"type":"PCG","overlap":{"start":2,"stop":true}},"atp6":{"type":"PCG","overlap":{"start":20,"stop":false},"start_codons":["ATG","GTG","ATA","ATT","TTA","ATC","CTG"]},"cox3":{"type":"PCG"},"nad3":{"type":"PCG"},"nad4l":{"type":"PCG","overlap":{"start":2,"stop":true}},"nad4":{"type":"PCG","overlap":{"start":20,"stop":false}},"nad5":{"type":"PCG","overlap":{"start":2,"stop":true}},"nad6":{"type":"PCG","overlap":{"start":2,"stop":true}},"cob":{"type":"PCG"},"trnA":{"type":"tRNA"},"trnC":{"type":"tRNA"},"trnD":{"type":"tRNA"},"trnE":{"type":"tRNA"},"trnF":{"type":"tRNA"},"trnG":{"type":"tRNA"},"trnH":{"type":"tRNA"},"trnI":{"type":"tRNA"},"trnK":{"type":"tRNA"},"trnL":{"type":"tRNA","count":2},"trnM":{"type":"tRNA"},"trnN":{"type":"tRNA"},"trnP":{"type":"tRNA"},"trnQ":{"type":"tRNA"},"trnR":{"type":"tRNA"},"trnS":{"type":"tRNA","count":2},"trnT":{"type":"tRNA"},"trnV":{"type":"tRNA"},"trnW":{"type":"tRNA"},"trnY":{"type":"tRNA"}}},"name":"Curation Parameters","theme":"monokai","iconStyle":"triangle","indentWidth":4,"collapsed":1,"collapseStringsAfterLength":false,"groupArraysAfterLength":100,"enableClipboard":false,"displayObjectSize":false,"displayDataTypes":false,"onEdit":false,"onAdd":false,"onDelete":false,"onSelect":false,"sortKeys":false},"evals":[],"jsHooks":[]}</script>
+<script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"data":{"ref_dbs":{"default":"/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas"},"hit_threshold":90,"max_overlap":0.25,"default_rules":{"rRNA":{"count":1,"max_len":null,"min_len":null,"overlap":{"start":0,"stop":false}},"PCG":{"count":1,"max_len":null,"min_len":null,"overlap":{"start":2,"stop":false},"stop_codons":["TAA","TAG","AGA","AGG","AG","TA","T"],"start_codons":["ATG","GTG","ATA","ATT","TTA","ATC"]},"tRNA":{"count":1,"max_len":null,"min_len":null}},"rules":{"ctrl":{"count":1,"type":"ctrl","min_len":350},"rrnL":{"type":"rRNA","max_len":1850},"rrnS":{"type":"rRNA","max_len":1000},"nad1":{"type":"PCG","start_codons":["ATG","GTG","ATA","ATT","TTA","ATC","TTG"]},"nad2":{"type":"PCG"},"cox1":{"type":"PCG","overlap":{"start":2,"stop":true}},"cox2":{"type":"PCG","start_codons":["ATG","GTG","ATA","ATT","TTA","ATC","TTG"]},"atp8":{"type":"PCG","overlap":{"start":2,"stop":true}},"atp6":{"type":"PCG","overlap":{"start":20,"stop":false},"start_codons":["ATG","GTG","ATA","ATT","TTA","ATC","CTG"]},"cox3":{"type":"PCG"},"nad3":{"type":"PCG"},"nad4l":{"type":"PCG","overlap":{"start":2,"stop":true}},"nad4":{"type":"PCG","overlap":{"start":20,"stop":false}},"nad5":{"type":"PCG","overlap":{"start":2,"stop":true}},"nad6":{"type":"PCG","overlap":{"start":2,"stop":true}},"cob":{"type":"PCG"},"trnA":{"type":"tRNA"},"trnC":{"type":"tRNA"},"trnD":{"type":"tRNA"},"trnE":{"type":"tRNA"},"trnF":{"type":"tRNA"},"trnG":{"type":"tRNA"},"trnH":{"type":"tRNA"},"trnI":{"type":"tRNA"},"trnK":{"type":"tRNA"},"trnL":{"type":"tRNA","count":2},"trnM":{"type":"tRNA"},"trnN":{"type":"tRNA"},"trnP":{"type":"tRNA"},"trnQ":{"type":"tRNA"},"trnR":{"type":"tRNA"},"trnS":{"type":"tRNA","count":2},"trnT":{"type":"tRNA"},"trnV":{"type":"tRNA"},"trnW":{"type":"tRNA"},"trnY":{"type":"tRNA"}}},"name":"Curation Parameters","theme":"monokai","iconStyle":"triangle","indentWidth":4,"collapsed":2,"collapseStringsAfterLength":false,"groupArraysAfterLength":100,"enableClipboard":false,"displayObjectSize":false,"displayDataTypes":false,"onEdit":false,"onAdd":false,"onDelete":false,"onSelect":false,"sortKeys":false},"evals":[],"jsHooks":[]}</script>
 </div>
 <div class="section level2">
 <h2 id="validation">Validation<a class="anchor" aria-label="anchor" href="#validation"></a>
@@ -147,58 +147,60 @@ add notations to assist with manual curation using the MitoPilot
 GUI.</p>
 <ul>
 <li>
-<em>possible duplicate</em>: The annotation occurs in the assembly
-more often than expected. All identical annotations will receive this
-flag and the user must determin which (if any) should be removed.</li>
+<strong>possible duplicate</strong>: The annotation occurs in the
+assembly more often than expected. All identical annotations will
+receive this flag and the user must determin which (if any) should be
+removed.</li>
 <li>
-<em>exceeds max overlap</em>: The annotation overlaps one or more
-neighboring annotations on the same strand by a percentage of its length
-greater than the value set by the max_operlap parameter of the curation
-params. This represents a global maximum overlap threshold.</li>
+<strong>exceeds max overlap</strong>: The annotation overlaps one or
+more neighboring annotations on the same strand by a percentage of its
+length greater than the value set by the max_operlap parameter of the
+curation params. This represents a global maximum overlap
+threshold.</li>
 <li>
-<em>exceeds max start overlap</em>: The start position of a PCG
-annotation overlaps one or more neighboring annotations on the same
+<strong>exceeds max start overlap</strong>: The start position of a
+PCG annotation overlaps one or more neighboring annotations on the same
 strand more than expected.</li>
 <li>
-<em>exceeds max stop overlap</em>: The stop position of a PCG
-annotation overlaps one or more neighboring annotations on the same
+<strong>exceeds max stop overlap</strong>: The stop position of a
+PCG annotation overlaps one or more neighboring annotations on the same
 strand more than expected.</li>
 <li>
-<em>exceeds max length</em>: The annotation length exceed the
-maximum expectation set in the curation params.</li>
+<strong>exceeds max length</strong>: The annotation length exceed
+the maximum expectation set in the curation params.</li>
 <li>
-<em>below min length</em>: The annotation length is below the mimum
-expectation set in the curation params.</li>
+<strong>below min length</strong>: The annotation length is below
+the mimum expectation set in the curation params.</li>
 <li>
-<em>low coverage region</em>: More than 5% of the assembly region
-defined by an annotation has less then 10x coverage.</li>
+<strong>low coverage region</strong>: More than 5% of the assembly
+region defined by an annotation has less then 10x coverage.</li>
 <li>
-<em>high error region</em>: More than 5% of the assembly region
-defined by an annotation has a raw read error rate greater than 5% (ie,
-more than 5% of raw reads than align to the base show disagreement on
-the base call).</li>
+<strong>high error region</strong>: More than 5% of the assembly
+region defined by an annotation has a raw read error rate greater than
+5% (ie, more than 5% of raw reads than align to the base show
+disagreement on the base call).</li>
 <li>
-<em>internal stop codon</em>: An internal stop codon was detected in
-a PCG annotation.</li>
+<strong>internal stop codon</strong>: An internal stop codon was
+detected in a PCG annotation.</li>
 <li>
-<em>non-standard stop codon</em>: A PCG stop codon other than those
-specified in the curation params was detected.</li>
+<strong>non-standard stop codon</strong>: A PCG stop codon other
+than those specified in the curation params was detected.</li>
 <li>
-<em>non-standard start codon</em>: A PCG start codon other than
-those specified in the curation params was detected.</li>
+<strong>non-standard start codon</strong>: A PCG start codon other
+than those specified in the curation params was detected.</li>
 <li>
-<em>low reference similarity</em>: The PCG curation reference
-database does not include any references with compositional similarity
-equal to ro greater than the hit_threshold set in the curation
-parameters (default = 90).</li>
+<strong>low reference similarity</strong>: The PCG curation
+reference database does not include any references with compositional
+similarity equal to ro greater than the hit_threshold set in the
+curation parameters (default = 90).</li>
 <li>
-<em>check reference start alignment</em>: The PCG start position
-does not align exactly with the majority of the top hits from the
-reference database.</li>
+<strong>check reference start alignment</strong>: The PCG start
+position does not align exactly with the majority of the top hits from
+the reference database.</li>
 <li>
-<em>check reference stop alignment</em>: The PCG stop position does
-not align exactly with the majority of the top hits from the reference
-database.</li>
+<strong>check reference stop alignment</strong>: The PCG stop
+position does not align exactly with the majority of the top hits from
+the reference database.</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
