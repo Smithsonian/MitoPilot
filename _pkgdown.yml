@@ -25,6 +25,7 @@ articles:
 - title: "Usage"
   contents:
   - 'test-project'
+  - 'Fish-Mitogenome-Curation'
 - title: "Nextflow Executors"
   contents:
   - 'NMNH-Hydra'
