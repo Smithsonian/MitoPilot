@@ -52,7 +52,7 @@ listviewer::reactjson(
   "Curation Parameters",
   theme = "monokai",
   iconStyle = "triangle",
-  collapsed = 1,
+  collapsed = 2,
   enableClipboard = FALSE,
   displayObjectSize = FALSE,
   displayDataTypes = FALSE,
@@ -69,17 +69,17 @@ listviewer::reactjson(
 
 Following the automated curation process, samples are processed through a validation script, `validate_fish_mito()` by default. This script looks for anomolies in the final annotations relative to the expectations specified in the curation parameters and add notations to assist with manual curation using the MitoPilot GUI.
 
-+ _possible duplicate_: The annotation occurs in the assembly more often than expected. All identical annotations will receive this flag and the user must determin which (if any) should be removed.
-+ _exceeds max overlap_: The annotation overlaps one or more neighboring annotations on the same strand by a percentage of its length greater than the value set by the max_operlap parameter of the curation params. This represents a global maximum overlap threshold.
-+ _exceeds max start overlap_: The start position of a PCG annotation overlaps one or more neighboring annotations on the same strand more than expected.
-+ _exceeds max stop overlap_: The stop position of a PCG annotation overlaps one or more neighboring annotations on the same strand more than expected.
-+ _exceeds max length_: The annotation length exceed the maximum expectation set in the curation params.
-+ _below min length_: The annotation length is below the mimum expectation set in the curation params.
-+ _low coverage region_: More than 5% of the assembly region defined by an annotation has less then 10x coverage.
-+ _high error region_: More than 5% of the assembly region defined by an annotation has a raw read error rate greater than 5% (ie, more than 5% of raw reads than align to the base show disagreement on the base call).
-+ _internal stop codon_: An internal stop codon was detected in a PCG annotation.
-+ _non-standard stop codon_: A PCG stop codon other than those specified in the curation params was detected.
-+ _non-standard start codon_:  A PCG start codon other than those specified in the curation params was detected.
-+ _low reference similarity_: The PCG curation reference database does not include any references with compositional similarity equal to ro greater than the hit_threshold set in the curation parameters (default = 90).
-+ _check reference start alignment_: The PCG start position does not align exactly with the majority of the top hits from the reference database.
-+ _check reference stop alignment_: The PCG stop position does not align exactly with the majority of the top hits from the reference database.
++ __possible duplicate__: The annotation occurs in the assembly more often than expected. All identical annotations will receive this flag and the user must determin which (if any) should be removed.
++ __exceeds max overlap__: The annotation overlaps one or more neighboring annotations on the same strand by a percentage of its length greater than the value set by the max_operlap parameter of the curation params. This represents a global maximum overlap threshold.
++ __exceeds max start overlap__: The start position of a PCG annotation overlaps one or more neighboring annotations on the same strand more than expected.
++ __exceeds max stop overlap__: The stop position of a PCG annotation overlaps one or more neighboring annotations on the same strand more than expected.
++ __exceeds max length__: The annotation length exceed the maximum expectation set in the curation params.
++ __below min length__: The annotation length is below the mimum expectation set in the curation params.
++ __low coverage region__: More than 5% of the assembly region defined by an annotation has less then 10x coverage.
++ __high error region__: More than 5% of the assembly region defined by an annotation has a raw read error rate greater than 5% (ie, more than 5% of raw reads than align to the base show disagreement on the base call).
++ __internal stop codon__: An internal stop codon was detected in a PCG annotation.
++ __non-standard stop codon__: A PCG stop codon other than those specified in the curation params was detected.
++ __non-standard start codon__:  A PCG start codon other than those specified in the curation params was detected.
++ __low reference similarity__: The PCG curation reference database does not include any references with compositional similarity equal to ro greater than the hit_threshold set in the curation parameters (default = 90).
++ __check reference start alignment__: The PCG start position does not align exactly with the majority of the top hits from the reference database.
++ __check reference stop alignment__: The PCG stop position does not align exactly with the majority of the top hits from the reference database.
