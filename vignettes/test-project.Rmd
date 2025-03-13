@@ -21,16 +21,13 @@ vignette: >
 strong { font-weight: bold; }
 </style>
 
-
-# `{MitoPilot}` - Test Project Tutorial
-
 ## Installation
 
 Before running MitoPilot with your own samples, we recommend trying out the included test project, consisting of Illumina data for 13 fish species. The following tutorial provides a step-by-step walthrough.
 
 First, make sure you have [R
 (\>=4.0.0)](https://www.r-project.org/) and
-[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html) and [NOAA SEDNA](https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html) computing clusters.  
+[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html) and [NOAA SEDNA](https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html) computing clusters.
 
 Next you'll need to install the `{MitoPilot}` R package from GitHub. Within RStudio, run the following.
 
@@ -56,8 +53,8 @@ ex = "NMNH_Hydra"
 
 # initialize the test project
 MitoPilot::new_test_project(
-    path = wd, 
-    executor = ex, 
+    path = wd,
+    executor = ex,
     container = "drleopold/mitopilot",
     full_size = FALSE,
     Rproj = FALSE
@@ -71,7 +68,7 @@ MitoPilot::new_test_project(
 If the test project was successfully initialized, you should see the following.
 
 ```
-SRR22396794 - Psychrolutes paradoxus  
+SRR22396794 - Psychrolutes paradoxus
 SRR22396940 - Psenes pellucidus
 SRR22396740 - Hoplostethus occidentalis
 SRR21844202 - Fundulus majalis
@@ -116,11 +113,11 @@ Here you can see the default options for pre-processing your raw FASTQ files. We
 
 ![](figures/test-project/3.png)
 
-We can save these new parameter options by clicking on the `Parameter set name` box, typing a new name, and clicking  `Add YOUR NEW NAME...` in the dropdown. Finally, click `Update` in the bottom right to save your selection. 
+We can save these new parameter options by clicking on the `Parameter set name` box, typing a new name, and clicking  `Add YOUR NEW NAME...` in the dropdown. Finally, click `Update` in the bottom right to save your selection.
 
 ![](figures/test-project/4.png)
 
-Once you've saved a new parameter set, you can easily access it again using the dropdown menu. In the screenshot below, you can see a couple of other parameter sets that I created. 
+Once you've saved a new parameter set, you can easily access it again using the dropdown menu. In the screenshot below, you can see a couple of other parameter sets that I created.
 
 ![](figures/test-project/5.png)
 
@@ -172,25 +169,25 @@ The test dataset should take a few minutes to finish. When it's done, your `Prog
 
 ![](figures/test-project/12.png)
 
-You can now click `Close` to go back to the samples table. 
+You can now click `Close` to go back to the samples table.
 
 ## Inspecting Assembly Results
 
-The sample table should now be updated with a bunch of new information. 
+The sample table should now be updated with a bunch of new information.
 
 ![](figures/test-project/13.png)
 
 If you want to locate the results files for a sample, scroll all the way to the right and click `output`. This will open the appropriate folder in your RStudio session.
 
-You can also view the results within the MitoPilot GUI. For example, select SRR21843972 (_Stomias affinis_), then click `details`. This will open a new window with the mitogenome sequence. 
+You can also view the results within the MitoPilot GUI. For example, select SRR21843972 (_Stomias affinis_), then click `details`. This will open a new window with the mitogenome sequence.
 
 ![](figures/test-project/14.png)
 
-Select the sequence and click the `Fasta` button in the bottom right. This will copy the FASTA formatted mitogenome to your clipboard. This could be useful for a quick BLAST search. 
+Select the sequence and click the `Fasta` button in the bottom right. This will copy the FASTA formatted mitogenome to your clipboard. This could be useful for a quick BLAST search.
 
 ![](figures/test-project/15.png)
 
-You can also click the `view` button, which will open a summary figure in a new tab, including mean read depth, sequence error rate, and GC content. 
+You can also click the `view` button, which will open a summary figure in a new tab, including mean read depth, sequence error rate, and GC content.
 
 ![](figures/test-project/16.png)
 
@@ -205,15 +202,15 @@ In this test dataset, there are two problematic samples which returned failed st
 One failed sample is SRR22396758 (_Upeneus parvus_). We purposefully truncated this sample's FASTQ file to 200 reads. With so few reads, this sample failed to meet the `min_depth` threshold and returned a message "Insufficient sequencing depth" in the `Notes` column. When analyzing your own data, you can specify the `min_depth` threshold with the `new_project` function.
 
 The other failed sample is SRR21844202
-(_Fundulus majalis_). This sample had plenty of data and was able to assemble a mitogenome. However, the message in the `Notes` columns says "Unable to resolve single assembly from reads." 
+(_Fundulus majalis_). This sample had plenty of data and was able to assemble a mitogenome. However, the message in the `Notes` columns says "Unable to resolve single assembly from reads."
 
 [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) produced two alternate assembly paths for this sample. This is usually due to complicated assembly graphs near a repeat region. Please refer to [the GetOrganlle paper](https://doi.org/10.1186/s13059-020-02154-5) for more information about multiple assembly paths.
 
-Let's take a peek at SRR21844202. Select the sample, scroll all the way to the right, and click on `details`. 
+Let's take a peek at SRR21844202. Select the sample, scroll all the way to the right, and click on `details`.
 
 ![](figures/test-project/18.png)
 
-We can see two assemblies listed here. Clicking on `view` will show us the coverage, error, and GC content graphs for each assembly.  
+We can see two assemblies listed here. Clicking on `view` will show us the coverage, error, and GC content graphs for each assembly.
 
 Path #1
 
@@ -223,7 +220,7 @@ Path #2
 
 ![](figures/test-project/20.png)
 
-The two assembly paths are very similar, differing only slightly around 13,000 bp. 
+The two assembly paths are very similar, differing only slightly around 13,000 bp.
 
 We can chose to move forward with just one assembly path and ignore the other.
 
@@ -248,7 +245,7 @@ Click close and return to the samples table. You will see that the `# Paths` col
 </div>
 
 ## Running the Annotate Module
-We can now move on to the Annotate pipeline module. This module consists of an annotation step using [Mitos2](https://gitlab.com/Bernt/MITOS) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE), a taxon-specific curation step to refine the annotation models, and a validation step to flag possible issues or known errors that would be rejected by NCBI GenBank.  
+We can now move on to the Annotate pipeline module. This module consists of an annotation step using [Mitos2](https://gitlab.com/Bernt/MITOS) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE), a taxon-specific curation step to refine the annotation models, and a validation step to flag possible issues or known errors that would be rejected by NCBI GenBank.
 
 First, we need to lock all of the successful samples in the Assemble module. Select all of the samples except SRR22396758 (_Upeneus parvus_) and click the `LOCK` button. Then use the dropdown menu in the top left to navigate to the Annotate module.
 
@@ -262,7 +259,7 @@ You can also edit the curation options. Currently, we only have one set of curat
 
 ![](figures/test-project/27.png)
 
-To run the Annotate module, select all samples, click `UPDATE`, then click `Start Nextflow`. This will take a few minutes. As long as the gears in the top right are spinning, the pipeline is still running. 
+To run the Annotate module, select all samples, click `UPDATE`, then click `Start Nextflow`. This will take a few minutes. As long as the gears in the top right are spinning, the pipeline is still running.
 
 ![](figures/test-project/28.png)
 
@@ -271,13 +268,13 @@ Once all steps are complete, you'll see a summary message printed at the bottom 
 ![](figures/test-project/29.png)
 
 ## Exploring Annotation Results
-There are a LOT of results to explore from the Annotate module. The sample table reports some basic stats about the number of protein-coding genes (PCGs), tRNAs, and rRNAs. The `missing` column reports the number of mitochondrial genes that were not annotated (based on the provided curation model). The `extra` column notes the number of potentially duplicated genes. 
+There are a LOT of results to explore from the Annotate module. The sample table reports some basic stats about the number of protein-coding genes (PCGs), tRNAs, and rRNAs. The `missing` column reports the number of mitochondrial genes that were not annotated (based on the provided curation model). The `extra` column notes the number of potentially duplicated genes.
 
 Lastly, the `warnings` column indicates how many warning flags were raised during the validation step. Samples with many warnings will require more manual curation to ensure that they are not rejected during submission to NCBI GenBank.
 
 ![](figures/test-project/30.png)
 
-The annotation results for each sample can be examined more closely by clicking the `details` button. First, let's examine the details for a good sample, SRR19434536 (_Rhinecanthus rectangulus_). 
+The annotation results for each sample can be examined more closely by clicking the `details` button. First, let's examine the details for a good sample, SRR19434536 (_Rhinecanthus rectangulus_).
 
 ![](figures/test-project/31.png)
 
@@ -296,7 +293,7 @@ For protein coding genes, you can click the `Alignment` button to show the prote
 By default, MitoPilot uses RefSeq as the BLAST database. If you would like to use your own custom BLAST database, you can check the `Local blast` box. MitoPilot will return a message with the instructions: run `options('MitoPilot.local.db' = '/path/to/local/blastp/db')` within your RStudio session. You will need to restart the MitoPilot GUI for this change to take effect.
 
 ## Editing Annotation Results
-MitoPilot offers some basic functions to manually edit your annotation results. Let's open the alignment for the SRR19434536 (_Rhinecanthus rectangulus_) "cox1" gene. Clicking the `EDIT` button brings up a few options to change the start and stop position annotation. 
+MitoPilot offers some basic functions to manually edit your annotation results. Let's open the alignment for the SRR19434536 (_Rhinecanthus rectangulus_) "cox1" gene. Clicking the `EDIT` button brings up a few options to change the start and stop position annotation.
 
 Try clicking the `+` button next to `START`. It will take a few seconds, since MitoPilot has to redo the alignments. But you should see that the "cox1 (focal)" sequence start position has shifted.
 
@@ -313,7 +310,7 @@ Let's move to the final step of the pipeline: the Export module. This module all
 
 First, we need to lock the successful samples in the Annotate module. Select all of the samples and click the `LOCK` button. Then use the dropdown menu in the top left to navigate to the Export module.
 
-Next, let's create a group of samples. Sort the samples table by clicking on the `Taxon` column, then select the first five samples and click the `GROUP` button. 
+Next, let's create a group of samples. Sort the samples table by clicking on the `Taxon` column, then select the first five samples and click the `GROUP` button.
 
 A new window will appear showing some summary information for the selected samples. Type a name for the group, then click `Create`. You can then click `Close` to return to the sample table.
 
@@ -323,7 +320,7 @@ A new window will appear showing some summary information for the selected sampl
 
 ![](figures/test-project/35.png)
 
-The sample table should now show assignment to our newly created group. 
+The sample table should now show assignment to our newly created group.
 
 <div class="alert alert-note">
   <strong>Note:</strong> Each sample can only belong to one group. MitoPilot will produce a warning message if you attempt to re-assign a sample to a new group.
@@ -345,7 +342,7 @@ Click `Export` to generate the final files. It may take a couple of minutes, but
 
 ## Exploring the Final Results
 
-Once the gears have stopped spinning, the export process should be done! You should see a path to the final export location. By default, that location is `YOUR_PROJECT_DIRECTORY/out/export/YOUR_GROUP_NAME`.  
+Once the gears have stopped spinning, the export process should be done! You should see a path to the final export location. By default, that location is `YOUR_PROJECT_DIRECTORY/out/export/YOUR_GROUP_NAME`.
 
 MitoPilot will produce three output files. First, the `.html` file contains visualizations of each protein coding gene alignment in your export group. This may be useful to quickly identify samples with poor annotations that need additional manual curation.
 
