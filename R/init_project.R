@@ -18,6 +18,8 @@
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
 #'   directory (default = TRUE). This option has no effect if not running
 #'   interactively in RStudio.
+#' @param custom_seeds_db Full path to custom seeds database for GetOrganelle
+#' @param custom_labels_db Full path to custom labels database for GetOrganelle
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
 #' @param config (optional) provide a path to an existing custom nextflow config

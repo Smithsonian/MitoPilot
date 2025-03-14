@@ -44,6 +44,10 @@ be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
 
 \item{container}{The docker container to use for pipeline execution.}
 
+\item{custom_seeds_db}{Full path to custom seeds database for GetOrganelle}
+
+\item{custom_labels_db}{Full path to custom labels database for GetOrganelle}
+
 \item{config}{(optional) provide a path to an existing custom nextflow config
 file. If not provided a config file template will be created based on the
 specified executor.}
