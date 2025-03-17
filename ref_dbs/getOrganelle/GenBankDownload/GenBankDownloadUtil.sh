@@ -22,11 +22,13 @@
 # script will download records from GenBank
 # filter to include only true singleton mitochondrial sequences
 # and create two FASTA files:
-#    singlelocus.dedup.fasta -- sequences containing one or fewer genes
-#                               product name + record ID as a sequence header
+#    singlegene.dedup.fasta -- sequences containing one or fewer genes
+#                              product name + record ID as a sequence header
 #    multigene.dedup.fasta -- sequences containing multiple genes
 #                             often whole mitogenomes
 #                             record ID as sequence header
+#    nogene.dedup.fasta -- sequences containing no genes
+#                          record ID as sequence header
 # 
 # example usage:
 # bash GenBankDownloadUtil.sh '"my query"[QueryType]'
@@ -55,15 +57,20 @@ echo ""
 echo "Removing non-mitochondrial records,"
 echo "removing duplicate records with exact sequence matches,"
 echo "and extracting sequences into two FASTA files:"
-echo "  singlelocus.dedup.fasta -- sequences containing one or fewer genes"
+echo "  singlegene.dedup.fasta -- sequences containing one or fewer genes"
 echo "  multigene.dedup.fasta -- sequences containing multiple genes, often whole mitogenomes"
+echo "  nogene.dedup.fasta -- sequences containing no genes"
+echo ""
 
 python parseGB.py genbank.gb
+rm test.fasta
 
-N_SING=$( grep -c ">" singlelocus.dedup.fasta )
+N_SING=$( grep -c ">" singlegene.dedup.fasta )
 N_MULT=$( grep -c ">" multigene.dedup.fasta )
+N_NO=$( grep -c ">" nogene.dedup.fasta )
 
 echo ""
 echo "After filtering, retained:"
-echo "${N_SING} single-locus sequences - singlelocus.dedup.fasta"
+echo "${N_NO} no-gene sequences - nogene.dedup.fasta"
+echo "${N_SING} single-gene sequences - singlegene.dedup.fasta"
 echo "${N_MULT} multi-gene sequences - multigene.dedup.fasta"

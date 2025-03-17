@@ -1,5 +1,5 @@
 ---
-title: "Creating Custom Databases"
+title: "Building Custom Databases"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{FAQ}
@@ -49,6 +49,7 @@ There are many different ways to build the GetOrganelle databases. We have provi
 This script will perform a GenBank query for all mitochondrial records matching your search criteria, download those sequences, and sort them into GetOrganlle "seed" and "label" databases. 
 
 Before proceeding, you will need the following dependencies:
+
 - [Entrez Direct tools](https://www.ncbi.nlm.nih.gov/books/NBK179288/) (tested with v22.8)
 - [python](https://www.python.org/downloads/) (tested with v3.12.2)
 - [biopython](https://biopython.org/) (tested with v1.84)
