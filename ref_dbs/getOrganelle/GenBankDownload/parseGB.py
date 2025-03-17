@@ -1,9 +1,10 @@
 # Converts a GenBank file to a FASTA file, extracting sequences
 # with the organelle "mitochondrion"
 # 
-# Also splits GenBank records into two categories:
-# singlelocus.fasta -- sequences containing one or fewer genes
+# Also splits GenBank records into three categories:
+# singlegene.fasta -- sequences containing one or fewer genes
 # multigene.fasta -- sequences containing multiple genes, often whole mitogenomes
+# nogene.fasta -- sequences containing no annotated genes
 # 
 # Lastly, removes duplicate sequences and writes unique sequences 
 # to a new "dedup" fasta file.
@@ -20,6 +21,7 @@ def genbank_to_mitochondrial_fasta(genbank_file):
 	genbank_file (str): Path to the input GenBank file.
 	"""
 	multigene_seqs = [] 
+	nogene_seqs = []
 	singlelocus_seqs = []
 	
 	with open(genbank_file, "r") as gb_file:
@@ -31,19 +33,29 @@ def genbank_to_mitochondrial_fasta(genbank_file):
 					if feature.type == "source" and "organelle" in feature.qualifiers:
 						if feature.qualifiers["organelle"][0].lower() == "mitochondrion":
 							try:
+								record
 								with open("test.fasta", "w") as fa_file:
 									SeqIO.write(record, fa_file, "fasta")
 							except:
-								print("WARNING - skipping " + record.name + ", contains an invalid seqence")
+								print("WARNING - skipping " + record.name + ", contains an invalid sequence")
 								continue
 							# Extract all gene features in the mitochondrial sequence
 							gene_count = 0
+							CDS_count = 0
 							# check if record has more than one gene feature
 							for feature in record.features:
 								if feature.type == "gene":
 									gene_count += 1
+								elif feature.type == "rRNA":
+									gene_count += 1
+								elif feature.type == "tRNA":
+									gene_count += 1
+								elif feature.type == "CDS":
+									CDS_count += 1
 							if gene_count > 1:
 								multigene_seqs.append(record)
+							elif gene_count == 0 and CDS_count == 0:
+								nogene_seqs.append(record)						
 							else:
 								product_name = get_product_name(record)
 								if product_name:
@@ -54,12 +66,18 @@ def genbank_to_mitochondrial_fasta(genbank_file):
 									record.description = ""  # Clear the description to only keep the name
 								singlelocus_seqs.append(record)
 
+	print("")
+	print("Consider manually reviewing GenBank records flagged as invalid sequences,")
+	print("they may contain useful information")
 
 	# Write the mitochondrial sequences to FASTA files
 	with open("multigene.fasta", "w") as fa_file:
 		SeqIO.write(multigene_seqs, fa_file, "fasta")
 	
-	with open("singlelocus.fasta", "w") as fa_file:
+	with open("nogene.fasta", "w") as fa_file:
+		SeqIO.write(nogene_seqs, fa_file, "fasta")
+
+	with open("singlegene.fasta", "w") as fa_file:
 		SeqIO.write(singlelocus_seqs, fa_file, "fasta")
 
 def get_product_name(record):
@@ -92,5 +110,6 @@ def remove_duplicate_sequences(fasta_file, output_file):
 
 # Example usage
 genbank_to_mitochondrial_fasta(sys.argv[1])
-remove_duplicate_sequences("singlelocus.fasta", "singlelocus.dedup.fasta")
+remove_duplicate_sequences("singlegene.fasta", "singlegene.dedup.fasta")
 remove_duplicate_sequences("multigene.fasta", "multigene.dedup.fasta")
+remove_duplicate_sequences("nogene.fasta", "nogene.dedup.fasta")

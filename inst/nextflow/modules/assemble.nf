@@ -15,10 +15,10 @@ process assemble {
     tag "${id}"
 
     input:
-    tuple val(id), val(opts_id), path(reads), val(opts)
+    tuple val(id), val(opts_id), path(reads), val(opts), path(dbs)
 
     output:
-    tuple val("${id}"), 
+    tuple val("${id}"),
         path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
         path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
         path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
@@ -29,14 +29,49 @@ process assemble {
     shell:
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
+
+// old code for binding paths, doesn't work, may want to revisit later
+/*
+    seeds = "${opts.seeds_db}"
+    labels = "${opts.labels_db}"
+    // check if Singularity is being used
+    // if so, may need to set special bind paths for custom GetOrganelle databases
+    if (workflow.containerEngine == 'singularity') {
+        // get base paths for databases
+        seeds_path = java.nio.file.Paths.get(seeds).parent.toString()
+        labels_path = java.nio.file.Paths.get(labels).parent.toString()
+        // println "seed path = ${seeds_path}"
+        // println "labels path = ${labels_path}"
+        // check if using the default databases, only update bind paths if needed
+        if (seeds_path != "/ref_dbs/getOrganelle/seeds" || labels_path != "/ref_dbs/getOrganelle/seeds") {
+            bindPathsList = []
+            if (seeds_path != "/ref_dbs/getOrganelle/seeds"){
+                bindPathsList << seeds_path
+            }
+            if (labels_path != "/ref_dbs/getOrganelle/seeds"){
+                bindPathsList << labels_path
+            }
+            // Combine the paths into a comma-separated string
+            dynamicBindPaths = bindPathsList.join(',')
+            // Print the bind paths for debugging
+            println "Singularity bind paths set to: $dynamicBindPaths"
+            // set bind paths
+            containerOptions "--bind $dynamicBindPaths"
+        } else {
+            println "Using default databases, no custom bind paths are needed"
+        }
+    } else {
+        println "Singularity is NOT enabled"
+    }
+*/
     '''
     mkdir -p !{workingDir}
     get_organelle_from_reads.py \
         -1 !{reads[0]} \
         -2 !{reads[1]} \
         -o !{workingDir}/ --overwrite \
-        -s !{opts.seeds_db} \
-        --genes !{opts.labels_db} \
+        -s !{dbs[0]} \
+        --genes !{dbs[1]} \
         -t !{task.cpus} \
         !{opts.getOrganelle}
     mkdir -p !{outDir}

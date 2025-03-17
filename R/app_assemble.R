@@ -42,7 +42,6 @@ assemble_server <- function(id) {
       isolate(req(rv$data)) |>
         reactable(
           resizable = TRUE,
-          filterable = TRUE,
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
@@ -113,13 +112,11 @@ assemble_server <- function(id) {
             trimmed_reads = colDef(
               show = T,
               name = "Reads",
-              filterable = FALSE,
               minWidth = 100
             ),
             mean_length = colDef(
               show = T,
               name = "Read Length",
-              filterable = FALSE,
               minWidth = 100
             ),
             assemble_opts = colDef(
@@ -474,9 +471,13 @@ assemble_server <- function(id) {
           inputId = "getOrganelle",
           value = cur$getOrganelle
         )
-        updateTextInput(
+        updateTextAreaInput(
           inputId = "seeds_db",
           value = cur$seeds_db
+        )
+        updateTextAreaInput(
+          inputId = "labels_db",
+          value = cur$labels_db
         )
       }
     })
@@ -487,7 +488,8 @@ assemble_server <- function(id) {
       # TODO - allow for alt seed database
       # Need to modify nextflow to pass seeds database to worker or
       # the specific path must exist in the workers docker container
-      shinyjs::toggleState("seeds_db", condition = FALSE)
+      shinyjs::toggleState("seeds_db", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("labels_db", condition = input$edit_assemble_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
@@ -541,8 +543,8 @@ assemble_server <- function(id) {
               memory = req(input$assemble_opts_memory),
               getOrganelle = req(input$getOrganelle),
               seeds_db = req(input$seeds_db),
-              labels_db = rv$assemble_opts$labels_db[1]
-			),
+              labels_db = req(input$labels_db)
+            ),
             in_place = TRUE,
             copy = TRUE,
             by = "assemble_opts"

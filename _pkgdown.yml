@@ -25,6 +25,7 @@ articles:
 - title: "Usage"
   contents:
   - 'test-project'
+  - 'custom_dbs'
   - 'Fish-Mitogenome-Curation'
 - title: "Nextflow Executors"
   contents:

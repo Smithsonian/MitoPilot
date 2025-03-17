@@ -18,6 +18,8 @@
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
 #'   directory (default = TRUE). This option has no effect if not running
 #'   interactively in RStudio.
+#' @param custom_seeds_db Full path to custom seeds database for GetOrganelle
+#' @param custom_labels_db Full path to custom labels database for GetOrganelle
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
 #' @param config (optional) provide a path to an existing custom nextflow config
@@ -37,6 +39,8 @@ new_project <- function(
     min_depth = 2000000,
     executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
     container = "drleopold/mitopilot",
+    custom_seeds_db = NULL,
+    custom_labels_db = NULL,
     config = NULL,
     Rproj = TRUE,
     force = FALSE,
@@ -69,6 +73,14 @@ new_project <- function(
     stop("Invalid executor.")
   }
 
+  # Create directory if it doesn't exist ----
+  if (!dir.exists(path)) {
+    message("Creating project directory: ", path)
+    dir.create(path, recursive = TRUE)
+  }
+
+  path <- normalizePath(path)
+
   # Initialize RStudio Project ----
   # (optional & only if running form RStudio)
   if (Rproj && !isFALSE(Sys.getenv("RSTUDIO", FALSE))) {
@@ -90,12 +102,16 @@ new_project <- function(
     message("Overwriting existing database")
     file.remove(db)
   }
+
   new_db(
     db_path = file.path(path, ".sqlite"),
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
+    seeds_db = custom_seeds_db,
+    labels_db = custom_labels_db,
     ...
   )
+
 
   # Config file ----
   config <- config %||% app_sys(paste0("config.", executor))
