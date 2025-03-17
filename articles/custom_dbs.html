@@ -102,11 +102,10 @@ genomes</li>
 sequences</li>
 </ul>
 <p>There are many different ways to build the GetOrganelle databases. We
-have provided a <a href="/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh">script</a>
-to assist with this process.</p>
+have provided the following script to assist with this process.</p>
 <div class="section level3">
 <h3 id="genbankdownloadutil-sh">
-<a href="/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh">GenBankDownloadUtil.sh</a><a class="anchor" aria-label="anchor" href="#genbankdownloadutil-sh"></a>
+<a href="https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh" class="external-link">GenBankDownloadUtil.sh</a><a class="anchor" aria-label="anchor" href="#genbankdownloadutil-sh"></a>
 </h3>
 <p>This script will perform a GenBank query for all mitochondrial
 records matching your search criteria, download those sequences, and
@@ -126,11 +125,10 @@ v1.84)</li>
 <p>If you are working on the NMNH Hyrdra cluster, python and biopython
 are available as a moudle. Simply run
 <code>module load bio/biopython/1.83</code>.</p>
-<p>Download the <code>GenBankDownloadUtil.sh</code> script to the
-directory where you want to create the reference databases. The script
-is available <a href="/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh">here</a>
-in the MitoPilot GitHub repository. You will also need to download a
-helper python script <a href="/ref_dbs/getOrganelle/GenBankDownload/parseGB.py">here</a>.</p>
+<p>Download the <a href="https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh" class="external-link">GenBankDownloadUtil.sh</a>
+script to the directory where you want to create the reference
+databases. You will also need to download <a href="https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//parseGB.py" class="external-link">parseGB.py</a>
+to the same directory.</p>
 <p>To run the script, you will need to construct an <a href="https://www.ncbi.nlm.nih.gov/nuccore/advanced" class="external-link">advanced GenBank
 query</a>. For example, if you want to download all starfish
 mitochondrial sequences, you could use
@@ -234,23 +232,22 @@ seqkit grep -v -f names.txt file.fasta &gt; file_subset.fasta</code></pre>
 <div class="alert alert-note">
 <p><strong>Note:</strong> <code>GenBankDownloadUtil.sh</code> will
 rename any sequence with no GenBank “product” (protein, tRNA, or rRNA)
-as “no_product ACCESSION_NUMBER”. You may wish to remove these
-sequences, as they might represent poorly annotated genes.</p>
+as “no_product ACCESSION”. You may wish to remove these sequences, as
+they often represent poorly annotated genes.</p>
 </div>
 </div>
 <div class="section level3">
-<h3 id="adding-your-own-sequences-to-a-custom-getorganelle-database">Adding your own sequences to a custom GetOrganelle database<a class="anchor" aria-label="anchor" href="#adding-your-own-sequences-to-a-custom-getorganelle-database"></a>
+<h3 id="adding-your-own-sequences-to-a-custom-database">Adding your own sequences to a custom database<a class="anchor" aria-label="anchor" href="#adding-your-own-sequences-to-a-custom-database"></a>
 </h3>
-<p>If you have mitogenome assemblies that are not published to GenBank,
-you may wish to consider using them in your custom GetOrganelle seed
-database. It’s as simple as combining multiple FASTA files into one.
-GetOrganelle does not require any specific format for the sequence names
-in the seed database.</p>
+<p>To use unpublished mitogenomes in your custom GetOrganelle seed
+database, you will need to combine multiple FASTA files. GetOrganelle
+does not require any specific format for the sequence names in the seed
+database.</p>
 <p>You can easily combine FASTA files with the Linux <code>cat</code>
 command:</p>
-<pre><code>cat multigene.dedup.fasta my_mitogenomes.fasta &gt; final_seed_db.fasta</code></pre>
-<p>You could add your own unpublished individual gene sequences to a
-custom GetOrganelle label database in a similar manner.</p>
+<pre><code>cat multigene.dedup.fasta my_mitogenomes.fasta more_mitogenomes.fasta &gt; final_seed_db.fasta</code></pre>
+<p>You could add unpublished individual gene sequences to a custom
+GetOrganelle label database in a similar manner.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
