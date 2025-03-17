@@ -136,16 +136,17 @@ cat my_file.fasta | awk '$0 ~ ">" {if (NR > 1) {print c;} c=0;printf substr($0,2
 
 ***Extract specific sequences from a FASTA file with [seqkit](https://bioinf.shenwei.me/seqkit/):***
 ```
-# Extract sequences with names fully or partially matching list in names.txt, one name pattern per line
+# Extract sequences based on names.txt
+# names.txt should contain full sequences headers, one per line
 module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
-seqkit grep -f names.txt file.fasta > file_subset.fasta
+seqkit grep -f -n names.txt file.fasta > file_subset.fasta
 ```
 
 ***Remove sequences from a FASTA file with [seqkit](https://bioinf.shenwei.me/seqkit/):***
 ```
 # Remove sequences with names fully or partially matching list in names.txt, one name pattern per line
 module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
-seqkit grep -v -f names.txt file.fasta > file_subset.fasta
+seqkit grep -n -v -f names.txt file.fasta > file_subset.fasta
 ```
 
 <div class="alert alert-note">

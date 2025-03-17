@@ -4,7 +4,9 @@ process assemble {
 
     executor params.assemble.executor
     container params.assemble.container
- 
+
+    publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy'
+
     errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'finish' }
     maxRetries { params.assemble.maxRetries }
     // cpus { opts.cpus }
@@ -16,19 +18,20 @@ process assemble {
     tuple val(id), val(opts_id), path(reads), val(opts), path(dbs)
 
     output:
-    tuple val("${id}"), 
+    tuple val("${id}"),
         path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
         path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
         path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
         val("${opts_id}"),                                                    // options id
-        path("${id}/assemble/${opts_id}/get_org.log.txt")                     // getOrganelle log
+        path("${id}/assemble/${opts_id}/get_org.log.txt"),                     // getOrganelle log
+        path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt")                     // Nextflow working directory, for troubleshooting
 
     shell:
     workingDir = "${id}/assemble"
     outDir = "${workingDir}/${opts_id}"
 
 // old code for binding paths, doesn't work, may want to revisit later
-/*  
+/*
     seeds = "${opts.seeds_db}"
     labels = "${opts.labels_db}"
     // check if Singularity is being used
