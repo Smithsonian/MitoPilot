@@ -71,6 +71,17 @@ new_db <- function(
     stop("IDs must be no more than 18 characters")
   }
 
+  # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
+  # using default fish databases
+  if(is.null(seeds_db) & is.null(labels_db)){
+    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
+    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
+  } else if(is.null(seeds_db)) {
+    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
+  } else if(is.null(labels_db)) {
+    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
+  }
+
   # Load default curation parameters
   if (is.null(curate_params)) {
     curate_params <- do.call(paste0("params_", curate_target), list())

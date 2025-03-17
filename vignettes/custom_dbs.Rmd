@@ -22,27 +22,31 @@ strong { font-weight: bold; }
 </style>
 
 
-## Why use a custom database?
+## Why use a custom reference database?
 
-Need to for non-fish organisms. Want to curate these databases to contain only organisms that are relatively closely related to your study species.
+Currently, MitoPilot only comes packaged with reference databases for fishes.
+If you are working on any other taxonomic group, you will need to compile databases of mitochondrial sequences for your clade.
 
-## What parts of the MitoPilot pipeline need custom databases
+## What parts of the MitoPilot pipeline use reference databases?
 
-- GetOrganelle
-- Mitos2
-- BLAST
+- GetOrganelle (Assemble module)
+- Mitos2 (Assemble module)
+- BLAST (Assemble and Export modules)
 
-## How to construct a custom database for GetOrganlle
+## Build custom databases for GetOrganelle
 
-Before proceeding, we recommend you read the [GetOrganelle paper](https://doi.org/10.1186/s13059-020-02154-5) and read their [documentation](https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#how-to-assemble-a-target-organelle-genome-using-my-own-reference) regarding custom databases.
+Before proceeding, we recommend you read the [GetOrganelle paper](https://doi.org/10.1186/s13059-020-02154-5) and their [documentation](https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#how-to-assemble-a-target-organelle-genome-using-my-own-reference) regarding custom databases.
 
-For GetOrganelle, we need two databases. First, we need a "seed" database, which is a FASTA file containing complete (or partial) mitochondrial genomes. Second, we need a "label" database, which contains individual mitochondrial gene sequences.
+GetOrganelle requires two databases, both in FASTA format:
 
-There are many different ways to build the GetOrganelle databases. We have provided a [script](/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh) to assist with this process, described below.
+- A "seed" database containing complete (or partial) mitochondrial genomes
+- A "label" database containing individual mitochondrial gene sequences
 
-### GenBankDownloadUtil.sh 
+There are many different ways to build the GetOrganelle databases. We have provided a [script](/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh) to assist with this process.
 
-This script will perform an advanced GenBank search for all mitochondrial records matching user-provided criteria, download those sequences, and sort them into GetOrganlle "seed" and "label" databases. 
+### [GenBankDownloadUtil.sh](/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh) 
+
+This script will perform a GenBank query for all mitochondrial records matching your search criteria, download those sequences, and sort them into GetOrganlle "seed" and "label" databases. 
 
 Before proceeding, you will need the following dependencies:
 - [Entrez Direct tools](https://www.ncbi.nlm.nih.gov/books/NBK179288/) (tested with v22.8)
@@ -53,9 +57,9 @@ If you are working on the NMNH Hyrdra cluster, python and biopython are availabl
 
 Download the `GenBankDownloadUtil.sh` script to the directory where you want to create the reference databases. The script is available [here](/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh) in the MitoPilot GitHub repository. You will also need to download a helper python script [here](/ref_dbs/getOrganelle/GenBankDownload/parseGB.py).
 
-To run the script, you will need to construct an [advanced GenBank query](https://www.ncbi.nlm.nih.gov/nuccore/advanced). For example, if you want to download all starfish mitochondrial sequences, you could use `"Asteroidea"[Organism]`. The script can take multiple search terms. For example: `"Percidae"[Organism] AND "PRJNA720393"[BioProject]`.
+To run the script, you will need to construct an [advanced GenBank query](https://www.ncbi.nlm.nih.gov/nuccore/advanced). For example, if you want to download all starfish mitochondrial sequences, you could use `"Asteroidea"[Organism]`. The script can take multiple search terms. For example, use `"Percidae"[Organism] AND "PRJNA720393"[BioProject]` to download all percid mitogenomes from a specific BioProject.
 
-Once you have your search terms ready, run the script as follows. Make sure your full search query is in single quotes.
+Run the script as follows, providing your custom search terms. Make sure your full query is in single quotes, each search term is in double quotes, and the query type in in square brackets.
 
 `bash GenBankDownloadUtil.sh '"my query"[QueryType]'`
 
@@ -87,43 +91,76 @@ module load bio/biopython/1.83 # need python and biopython too
 bash GenBankDownloadUtil.sh '"Asteroidea"[Organism]'
 ```
 
-The script will print a summary of its findings.
+The script will produce several files:
 
-```
-After filtering, retained:
-XXX single-locus sequences - singlelocus.dedup.fasta
-XXX multi-gene sequences - multigene.dedup.fasta
-```
+- `genbank.gb` - GenBank file containing all of the matching records
+- `multigene.fasta` - FASTA file of sequences that contained multiple gene records, indicating they are either a partial or complete mitogenome
+- `multigene.dedup.fasta` - same as `multigene.fasta`, but with duplicate sequences removed
+- `nogene.fasta` - FASTA file of mitochondrial sequences with no annotated genes
+- `nogene.dedup.fasta` - same as `nogene.fasta`, but with duplicate sequences removed
+- `singlegene.fasta` - FASTA file of mitochondrial gene sequences
+- `singlegene.dedup.fasta` - same as `singlelocus.fasta`, but with duplicate sequences removed
 
-And it will produce a number of new files.
-- genbank.gb - GenBank file containing all of the matching records
-- multigene.fasta - FASTA file of sequences that contained multiple gene records, indicating they are either a partial or complete mitogenome
-- multigene.dedup.fasta - same as multigene.fasta, but with duplicate sequences removed
-- singlelocus.fasta - FASTA file of mitochondrial gene sequences
-- singlelocus.dedup.fasta - same as singlelocus.fasta, but with duplicate sequences removed
+For GetOrganelle:
 
-We recommend using the "dedup" files for constructing your reference databases.
+- seed database = `multigene.dedup.fasta` (plus maybe some sequences from `nogene.dedup.fasta`)
+- label database = `singlegene.dedup.fasta`
 
-You may wish to inspect the results before proceeding. Here are a few helpful one-liners.
+The `nogene.fasta` file contains un-annotated mitochondrial sequences or mitochondrial sequences froms a non-gene region, such as the D-loop.
+Consider manually inspecting these sequences. You may wish to include some of them in your custom GetOrganelle seed database.
+
+### Inspecting custom databases
+
+Here are a few helpful one-liners to inspect the results generated by `GenBankDownloadUtil.sh`
  
-Count the number of sequences in a FASTA file:
-`grep -c ">" singlelocus.dedup.fasta`
-
-Generate list of FASTA headers (this may be a lot):
-`grep ">" singlelocus.dedup.fasta`
-
-Generate list of unique gene names:
-`grep ">" singlelocus.dedup.fasta | cut -f1 -d" " | sort | uniq`
-
-Remove sequences from a FASTA file with [seqkit](https://bioinf.shenwei.me/seqkit/):
+***Count the number of sequences in a FASTA file:***
 ```
-# Delete sequences with names fully or partially matching list in names.txt, one name pattern per line
+grep -c ">" singlelocus.dedup.fasta
+```
+
+***Generate list of FASTA headers:***
+```
+grep ">" singlelocus.dedup.fasta
+```
+
+***Generate list of unique gene names:***
+```
+grep ">" singlelocus.dedup.fasta | cut -f1 -d" " | sort | uniq
+```
+
+***Calculate sequence lengths:***
+```
+cat my_file.fasta | awk '$0 ~ ">" {if (NR > 1) {print c;} c=0;printf substr($0,2,100) "\t"; } $0 !~ ">" {c+=length($0);} END { print c; }'
+```
+
+***Extract specific sequences from a FASTA file with [seqkit](https://bioinf.shenwei.me/seqkit/):***
+```
+# Extract sequences with names fully or partially matching list in names.txt, one name pattern per line
+module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
+seqkit grep -f names.txt file.fasta > file_subset.fasta
+```
+
+***Remove sequences from a FASTA file with [seqkit](https://bioinf.shenwei.me/seqkit/):***
+```
+# Remove sequences with names fully or partially matching list in names.txt, one name pattern per line
 module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
 seqkit grep -v -f names.txt file.fasta > file_subset.fasta
 ```
 
 <div class="alert alert-note">
-  <strong>Note:</strong> `GenBankDownloadUtil.sh` will rename any sequence with no GenBank "product" (protein, RNA, etc) as "no_product ACCESSION_NUMBER". You may wish to remove these sequences, as they might represent poorly annotated genes.  
+  <strong>Note:</strong> `GenBankDownloadUtil.sh` will rename any sequence with no GenBank "product" (protein, tRNA, or rRNA) as "no_product ACCESSION_NUMBER". You may wish to remove these sequences, as they might represent poorly annotated genes.  
 </div>
 
+
+### Adding your own sequences to a custom GetOrganelle database
+
+If you have mitogenome assemblies that are not published to GenBank, you may wish to consider using them in your custom GetOrganelle seed database. It's as simple as combining multiple FASTA files into one. GetOrganelle does not require any specific format for the sequence names in the seed database.
+
+You can easily combine FASTA files with the Linux `cat` command:
+
+```
+cat multigene.dedup.fasta my_mitogenomes.fasta > final_seed_db.fasta
+```
+
+You could add your own unpublished individual gene sequences to a custom GetOrganelle label database in a similar manner.
 
