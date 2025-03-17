@@ -42,9 +42,9 @@ GetOrganelle requires two databases, both in FASTA format:
 - A "seed" database containing complete (or partial) mitochondrial genomes
 - A "label" database containing individual mitochondrial gene sequences
 
-There are many different ways to build the GetOrganelle databases. We have provided a [script](/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh) to assist with this process.
+There are many different ways to build the GetOrganelle databases. We have provided the following script to assist with this process.
 
-### [GenBankDownloadUtil.sh](/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh) 
+### [GenBankDownloadUtil.sh](https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh) 
 
 This script will perform a GenBank query for all mitochondrial records matching your search criteria, download those sequences, and sort them into GetOrganlle "seed" and "label" databases. 
 
@@ -56,7 +56,7 @@ Before proceeding, you will need the following dependencies:
 
 If you are working on the NMNH Hyrdra cluster, python and biopython are available as a moudle. Simply run `module load bio/biopython/1.83`.
 
-Download the `GenBankDownloadUtil.sh` script to the directory where you want to create the reference databases. The script is available [here](/ref_dbs/getOrganelle/GenBankDownload/GenBankDownloadUtil.sh) in the MitoPilot GitHub repository. You will also need to download a helper python script [here](/ref_dbs/getOrganelle/GenBankDownload/parseGB.py).
+Download the [GenBankDownloadUtil.sh](https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh) script to the directory where you want to create the reference databases. You will also need to download [parseGB.py](https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//parseGB.py) to the same directory.
 
 To run the script, you will need to construct an [advanced GenBank query](https://www.ncbi.nlm.nih.gov/nuccore/advanced). For example, if you want to download all starfish mitochondrial sequences, you could use `"Asteroidea"[Organism]`. The script can take multiple search terms. For example, use `"Percidae"[Organism] AND "PRJNA720393"[BioProject]` to download all percid mitogenomes from a specific BioProject.
 
@@ -151,19 +151,19 @@ seqkit grep -v -f names.txt file.fasta > file_subset.fasta
 ```
 
 <div class="alert alert-note">
-  <strong>Note:</strong> `GenBankDownloadUtil.sh` will rename any sequence with no GenBank "product" (protein, tRNA, or rRNA) as "no_product ACCESSION_NUMBER". You may wish to remove these sequences, as they might represent poorly annotated genes.  
+  <strong>Note:</strong> `GenBankDownloadUtil.sh` will rename any sequence with no GenBank "product" (protein, tRNA, or rRNA) as "no_product ACCESSION". You may wish to remove these sequences, as they often represent poorly annotated genes.  
 </div>
 
 
-### Adding your own sequences to a custom GetOrganelle database
+### Adding your own sequences to a custom database
 
-If you have mitogenome assemblies that are not published to GenBank, you may wish to consider using them in your custom GetOrganelle seed database. It's as simple as combining multiple FASTA files into one. GetOrganelle does not require any specific format for the sequence names in the seed database.
+To use unpublished mitogenomes in your custom GetOrganelle seed database, you will need to combine multiple FASTA files. GetOrganelle does not require any specific format for the sequence names in the seed database.
 
 You can easily combine FASTA files with the Linux `cat` command:
 
 ```
-cat multigene.dedup.fasta my_mitogenomes.fasta > final_seed_db.fasta
+cat multigene.dedup.fasta my_mitogenomes.fasta more_mitogenomes.fasta > final_seed_db.fasta
 ```
 
-You could add your own unpublished individual gene sequences to a custom GetOrganelle label database in a similar manner.
+You could add unpublished individual gene sequences to a custom GetOrganelle label database in a similar manner.
 
