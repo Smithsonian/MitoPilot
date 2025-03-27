@@ -42,6 +42,7 @@ assemble_server <- function(id) {
       isolate(req(rv$data)) |>
         reactable(
           resizable = TRUE,
+          filterable = FALSE,
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
@@ -112,11 +113,13 @@ assemble_server <- function(id) {
             trimmed_reads = colDef(
               show = T,
               name = "Reads",
+              filterable = FALSE,
               minWidth = 100
             ),
             mean_length = colDef(
               show = T,
               name = "Read Length",
+              filterable = FALSE,
               minWidth = 100
             ),
             assemble_opts = colDef(

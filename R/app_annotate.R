@@ -73,6 +73,7 @@ annotate_server <- function(id) {
               sticky = "left",
               name = "",
               html = TRUE,
+              filterable = FALSE,
               width = 32,
               align = "center",
               cell = rt_dynamicIcon(
@@ -87,6 +88,7 @@ annotate_server <- function(id) {
               sticky = "left",
               name = "",
               html = TRUE,
+              filterable = FALSE,
               width = 30,
               align = "center",
               cell = rt_dynamicIcon(
