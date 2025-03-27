@@ -42,7 +42,7 @@ assemble_server <- function(id) {
       isolate(req(rv$data)) |>
         reactable(
           resizable = TRUE,
-          filterable = FALSE,
+          filterable = TRUE,
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
