@@ -117,6 +117,24 @@ export the database again.</p>
 the necessary information from the <code>.sqlite</code> database located
 in your project directory.</p>
 </div>
+<div class="section level2">
+<h2 id="how-do-i-restore-annotatations-after-manual-editing">How do I restore annotatations after manual editing?<a class="anchor" aria-label="anchor" href="#how-do-i-restore-annotatations-after-manual-editing"></a>
+</h2>
+<p>The easiest way to restore the original annotations is by rerunning
+the sample with the Nextflow <code>-resume</code> flag. This will
+quickly generate clean, unedited annotations from previously completed
+results in the <code>work</code> directory. This approach could be used
+to fix any mistakes made during manual edits.</p>
+<p>Note that rerunning a sample will erase all manual edits and
+notes.</p>
+<p>To rerun specific samples:</p>
+<ul>
+<li>change the state of the target samples to “Ready to Annotate”</li>
+<li>lock all other samples</li>
+<li>make sure your Nextflow command contains the <code>-resume</code>
+flag</li>
+</ul>
+</div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
 </div>
