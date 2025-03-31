@@ -192,7 +192,7 @@ curate_fish_mito <- function(
     }
     list2env(cur, envir = environment())
 
-    # Stop if ho hits above threshold
+    # Stop if no hits above threshold
     refHits <- json_parse(refHits[[1]], TRUE)
     if (nrow(refHits) == 0L || !any(refHits$similarity >= hit_threshold)) {
       return(cur)

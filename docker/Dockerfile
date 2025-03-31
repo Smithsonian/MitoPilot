@@ -6,7 +6,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Conda packages
-RUN conda config --add channels defaults && \
+RUN conda config --set channel_priority true && \ 
+    conda config --add channels defaults && \
     conda config --add channels conda-forge && \
     conda config --add channels bioconda && \
     mamba install -c bioconda fastp=0.23.4 && \
@@ -15,7 +16,7 @@ RUN conda config --add channels defaults && \
     mamba install -c bioconda bowtie2=2.5.4 && \
     mamba install -c bioconda samtools=1.21 && \
     mamba install -c bioconda trnascan-se=2.0.12 -m -n trnascan-se && \
-    mamba install -c bioconda mitos=2.1.9 -m -n mitos && \
+    mamba install -vvv -c bioconda mitos=2.1.9 -m -n mitos && \
     mamba install -c conda-forge r-base=4.4.2 && \
     mamba install r-remotes
 
