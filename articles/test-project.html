@@ -36,7 +36,7 @@
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json">
 </form></li>
-<li class="nav-item"><a class="external-link nav-link" href="https://github.com/JonahVentures/MitoPilot/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Smithsonian/MitoPilot/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -53,7 +53,7 @@
       <h1>Test Project Tutorial</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/JonahVentures/MitoPilot/blob/main/vignettes/test-project.Rmd" class="external-link"><code>vignettes/test-project.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Smithsonian/MitoPilot/blob/main/vignettes/test-project.Rmd" class="external-link"><code>vignettes/test-project.Rmd</code></a></small>
       <div class="d-none name"><code>test-project.Rmd</code></div>
     </div>
 
@@ -84,16 +84,16 @@ installed. This tutorial also assumes that you are using <a href="https://posit.
 interface with R. If you’re working on a computing cluster, we recommend
 checking out <a href="https://posit.co/products/open-source/rstudio-server/" class="external-link">RStudio
 Server</a>. We have provided detailed instructions for using RStuio
-Server on the <a href="https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html">Smithsonian
-Hydra</a> and <a href="https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html">NOAA
+Server on the <a href="https://Smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html" class="external-link">Smithsonian
+Hydra</a> and <a href="https://Smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html" class="external-link">NOAA
 SEDNA</a> computing clusters.</p>
-<p>Next you’ll need to install the <a href="https://github.com/JonahVentures/MitoPilot" class="external-link">MitoPilot</a> R package
+<p>Next you’ll need to install the <a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a> R package
 from GitHub. Within RStudio, run the following.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
-<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"JonahVentures/MitoPilot"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"Smithsonian/MitoPilot"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="project-initialization">Project Initialization<a class="anchor" aria-label="anchor" href="#project-initialization"></a>
@@ -103,7 +103,7 @@ use the function <code><a href="../reference/new_project.html">MitoPilot::new_pr
 test data, we’ll use <code><a href="../reference/new_test_project.html">MitoPilot::new_test_project</a></code>.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># load the package</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/JonahVentures/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># specify the directory where your test project will be created</span></span>
 <span><span class="va">wd</span> <span class="op">=</span> <span class="st">"/pool/public/genomics/macguigand/MitoPilot/testing/2024_12_13"</span></span>
@@ -224,8 +224,8 @@ submission script for a computing cluster. This allows you to run the
 analyses in the background, and is preferable for datasets with a large
 number of samples that may take several hours to process.</p>
 <p>We have provided instructions for running MitoPilot Nextflow commands
-as batch jobs on the <a href="https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html#running-large-mitopilot-jobs">Smithsonian
-Hydra</a> and <a href="https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html#running-large-mitopilot-jobs">NOAA
+as batch jobs on the <a href="https://Smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html#running-large-mitopilot-jobs" class="external-link">Smithsonian
+Hydra</a> and <a href="https://Smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html#running-large-mitopilot-jobs" class="external-link">NOAA
 SEDNA</a> computing clusters.</p>
 <p>Lastly, for small datasets, you can press the
 <code>Start Nextflow</code> button to run the pipeline from within the
