@@ -31,8 +31,8 @@ new_db <- function(
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 16,
-    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta",
-    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta",
+    seeds_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta",
+    labels_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta",
     getOrganelle = paste(
       "-F 'anonym'",
       "-R 10 -k '21,45,65,85,105,115'",
@@ -74,12 +74,12 @@ new_db <- function(
   # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
   # using default fish databases
   if(is.null(seeds_db) & is.null(labels_db)){
-    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
-    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
+    seeds_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
+    labels_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
   } else if(is.null(seeds_db)) {
-    seeds_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
+    seeds_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
   } else if(is.null(labels_db)) {
-    labels_db = "https://raw.githubusercontent.com/JonahVentures/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
+    labels_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
   }
 
   # Load default curation parameters

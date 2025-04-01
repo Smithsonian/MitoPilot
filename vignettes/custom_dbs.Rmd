@@ -44,7 +44,7 @@ GetOrganelle requires two databases, both in FASTA format:
 
 There are many different ways to build the GetOrganelle databases. We have provided the following script to assist with this process.
 
-### [GenBankDownloadUtil.sh](https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh) 
+### [GenBankDownloadUtil.sh](https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh) 
 
 This script will perform a GenBank query for all mitochondrial records matching your search criteria, download those sequences, and sort them into GetOrganlle "seed" and "label" databases. 
 
@@ -56,7 +56,7 @@ Before proceeding, you will need the following dependencies:
 
 If you are working on the NMNH Hydra cluster, python and biopython are available as a module. Simply run `module load bio/biopython/1.83`.
 
-Download the [GenBankDownloadUtil.sh](https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh) script to the directory where you want to create the custom databases. You will also need to download [parseGB.py](https://github.com/JonahVentures/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//parseGB.py) to the same directory.
+Download the [GenBankDownloadUtil.sh](https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh) script to the directory where you want to create the custom databases. You will also need to download [parseGB.py](https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//parseGB.py) to the same directory.
 
 To run the script, you will need to construct an [advanced GenBank query](https://www.ncbi.nlm.nih.gov/nuccore/advanced). 
 

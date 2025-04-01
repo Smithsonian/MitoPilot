@@ -47,7 +47,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
   install.packages("remotes")
 }
-BiocManager::install("JonahVentures/MitoPilot")
+BiocManager::install("Smithsonian/MitoPilot")
 ```
 
 If install was successful, you can exit the R session using `quit()`.
@@ -176,7 +176,7 @@ must remain open in order to access the Rstudio server
 
 Once you have opened the RStudio server session, run `library(MitoPilot)` to load the package. You should see a message about Nextflow if successful.
 
-Want to learn how to use MitoPilot? Check out the [Test Project Tutorial](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
+Want to learn how to use MitoPilot? Check out the [Test Project Tutorial](https://Smithsonian.github.io/MitoPilot/articles/test-project.html).
 
 ## Running Large MitoPilot Jobs
 SEDNA does not currently support running Nextflow within the R Shiny GUI. For a small number of samples, you could run Nextflow in an interactive session. However, this requires you to maintain an open connection to the cluster. For large datasets, there may be issues restarting if the connection breaks while Nextflow is running. 

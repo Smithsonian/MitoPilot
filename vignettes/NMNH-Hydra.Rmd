@@ -80,7 +80,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
   install.packages("remotes")
 }
-BiocManager::install("JonahVentures/MitoPilot")
+BiocManager::install("Smithsonian/MitoPilot")
 ```
 
 If the installation was successful, you're ready to start using MitoPilot!
@@ -118,7 +118,7 @@ start-rstudio-server
 
 Follow the login instructions as presented above. Once you have an Rstudio server window open, run `library(MitoPilot)` to load the package.
 
-Want to learn how to use MitoPilot? Check out the [Test Project Tutorial](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
+Want to learn how to use MitoPilot? Check out the [Test Project Tutorial](https://Smithsonian.github.io/MitoPilot/articles/test-project.html).
 
 ## Running Large MitoPilot Jobs
 If you have a large number of samples to process (more than a few dozen), we recommend running the assemble and annotate MitoPilot modules as batch jobs. 

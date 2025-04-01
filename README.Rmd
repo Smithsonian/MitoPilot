@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![R-CMD-check](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml)
+[![R-CMD-check](https://github.com/smithsonian/MitoPilot/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Smithsonian/MitoPilot/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 # Overview
@@ -47,7 +47,7 @@ Once you have R and Nextflow installed, install `{MitoPilot}` in R from GitHub:
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
 }
-BiocManager::install("JonahVentures/MitoPilot")
+BiocManager::install("Smithsonian/MitoPilot")
 ```
 
 Alternatively, you can clone this repository and install the package locally from the project folder:
@@ -58,7 +58,7 @@ devtools::install()
 
 # Usage
 
-MitoPilot includes a set of pre-filtered test data and a function for setting up an example project, `new_test_project()`. It is highly recommended that you use the test project to ensure successful installation and familiarize yourself with the pipeline before running on your own data. A complete tutorial on running the test project is available in the package vignette, [here](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
+MitoPilot includes a set of pre-filtered test data and a function for setting up an example project, `new_test_project()`. It is highly recommended that you use the test project to ensure successful installation and familiarize yourself with the pipeline before running on your own data. A complete tutorial on running the test project is available in the package vignette, [here](https://smithsonian.github.io/MitoPilot/articles/test-project.html).
 
 ## Initializing A Project
 
@@ -107,7 +107,7 @@ Although the MitoPilot GUI provides an interface to the database, during trouble
 
 ### Database Modification
 
-MitoPilot databases can be modified using the R helper functions `update_sample_metadata()`, `update_sample_seqdata()`, and `add_samples()`. You must close any existing connections (e.g. the MitoPilot GUI) prior to modifying the database. These functions will automatically create backups of the database in case you need to revert your changes. For more information, please see the [manual pages](https://jonahventures.github.io/MitoPilot/reference/index.html) for these functions.
+MitoPilot databases can be modified using the R helper functions `update_sample_metadata()`, `update_sample_seqdata()`, and `add_samples()`. You must close any existing connections (e.g. the MitoPilot GUI) prior to modifying the database. These functions will automatically create backups of the database in case you need to revert your changes. For more information, please see the [manual pages](https://smithsonian.github.io/MitoPilot/reference/index.html) for these functions.
 
 # Running The Pipeline
 

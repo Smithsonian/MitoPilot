@@ -27,7 +27,7 @@ Before running MitoPilot with your own samples, we recommend trying out the incl
 
 First, make sure you have [R
 (\>=4.0.0)](https://www.r-project.org/) and
-[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html) and [NOAA SEDNA](https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html) computing clusters.
+[Nextflow](https://www.nextflow.io/docs/latest/install.html) installed. This tutorial also assumes that you are using [RStudio](https://posit.co/download/rstudio-desktop/) to interface with R. If you're working on a computing cluster, we recommend checking out [RStudio Server](https://posit.co/products/open-source/rstudio-server/). We have provided detailed instructions for using RStuio Server on the [Smithsonian Hydra](https://Smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html) and [NOAA SEDNA](https://Smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html) computing clusters.
 
 Next you'll need to install the `{MitoPilot}` R package from GitHub. Within RStudio, run the following.
 
@@ -35,7 +35,7 @@ Next you'll need to install the `{MitoPilot}` R package from GitHub. Within RStu
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
     install.packages("BiocManager")
 }
-BiocManager::install("JonahVentures/MitoPilot")
+BiocManager::install("Smithsonian/MitoPilot")
 ```
 ## Project Initialization
 
@@ -141,7 +141,7 @@ You have three options for running the pipeline. First, you could copy the Nextf
 
 Alternatively, you can embed the Nextflow command within a batch job submission script for a computing cluster. This allows you to run the analyses in the background, and is preferable for datasets with a large number of samples that may take several hours to process.
 
-We have provided instructions for running MitoPilot Nextflow commands as batch jobs on the [Smithsonian Hydra](https://jonahventures.github.io/MitoPilot/articles/NMNH-Hydra.html#running-large-mitopilot-jobs) and [NOAA SEDNA](https://jonahventures.github.io/MitoPilot/articles/NOAA-SEDNA.html#running-large-mitopilot-jobs) computing clusters.
+We have provided instructions for running MitoPilot Nextflow commands as batch jobs on the [Smithsonian Hydra](https://Smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html#running-large-mitopilot-jobs) and [NOAA SEDNA](https://Smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html#running-large-mitopilot-jobs) computing clusters.
 
 Lastly, for small datasets, you can press the `Start Nextflow` button to run the pipeline from within the GUI. This requires you to keep the GUI open while the pipeline is running.
 

@@ -5,7 +5,7 @@
 
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![R-CMD-check](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JonahVentures/MitoPilot/actions/workflows/R-CMD-check.yaml)
+[![R-CMD-check](https://github.com/smithsonian/MitoPilot/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Smithsonian/MitoPilot/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 # Overview
@@ -49,7 +49,7 @@ can be easily updated. However, the custom logic in the annotation
 curation and validation scripts would likely need to be updated for
 optimal performance with other taxonomic groups. Because all of the
 dependencies and reference data is contained on the underlying Docker
-Image (currently hosted at `drleopold/MitoPilot`), customization or
+Image (currently hosted at `macguigand/MitoPilot`), customization or
 extension will involve updating the Docker image appropriately and
 specifying the new image in the Nextflow configuration file (see below).
 The Dockerfile and default reference database file are included in this
@@ -76,7 +76,7 @@ GitHub:
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
 }
-BiocManager::install("JonahVentures/MitoPilot")
+BiocManager::install("Smithsonian/MitoPilot")
 ```
 
 Alternatively, you can clone this repository and install the package
@@ -94,7 +94,7 @@ recommended that you use the test project to ensure successful
 installation and familiarize yourself with the pipeline before running
 on your own data. A complete tutorial on running the test project is
 available in the package vignette,
-[here](https://jonahventures.github.io/MitoPilot/articles/test-project.html).
+[here](https://smithsonian.github.io/MitoPilot/articles/test-project.html).
 
 ## Initializing A Project
 
@@ -198,8 +198,8 @@ MitoPilot databases can be modified using the R helper functions
 MitoPilot GUI) prior to modifying the database. These functions will
 automatically create backups of the database in case you need to revert
 your changes. For more information, please see the [manual
-pages](https://jonahventures.github.io/MitoPilot/reference/index.html)
-for these functions.
+pages](https://smithsonian.github.io/MitoPilot/reference/index.html) for
+these functions.
 
 # Running The Pipeline
 
