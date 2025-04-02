@@ -28,7 +28,7 @@ new_test_project <- function(
     n = Inf,
     full_size = FALSE,
     executor = "local",
-    container = "drleopold/mitopilot",
+    container = "macguigand/mitopilot",
     Rproj = TRUE,
     force = FALSE,
     ...) {
