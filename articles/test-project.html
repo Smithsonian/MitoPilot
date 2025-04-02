@@ -76,15 +76,16 @@ strong { font-weight: bold; }
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <p>Before running MitoPilot with your own samples, we recommend trying
-out the included test project, consisting of Illumina data for 13 fish
-species. The following tutorial provides a step-by-step walthrough.</p>
+out the included test project consisting of Illumina data for 13 fish
+species. The following tutorial provides a step-by-step walkthrough.</p>
 <p>First, make sure you have <a href="https://www.r-project.org/" class="external-link">R
 (&gt;=4.0.0)</a> and <a href="https://www.nextflow.io/docs/latest/install.html" class="external-link">Nextflow</a>
 installed. This tutorial also assumes that you are using <a href="https://posit.co/download/rstudio-desktop/" class="external-link">RStudio</a> to
 interface with R. If you’re working on a computing cluster, we recommend
 checking out <a href="https://posit.co/products/open-source/rstudio-server/" class="external-link">RStudio
-Server</a>. We have provided detailed instructions for using RStuio
-Server on the <a href="https://Smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html" class="external-link">Smithsonian
+Server</a>.</p>
+<p>We have provided detailed installation and usage instructions for the
+<a href="https://Smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html" class="external-link">Smithsonian
 Hydra</a> and <a href="https://Smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html" class="external-link">NOAA
 SEDNA</a> computing clusters.</p>
 <p>Next you’ll need to install the <a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a> R package
@@ -92,6 +93,9 @@ from GitHub. Within RStudio, run the following.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"remotes"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"Smithsonian/MitoPilot"</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -106,7 +110,8 @@ test data, we’ll use <code><a href="../reference/new_test_project.html">MitoPi
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># specify the directory where your test project will be created</span></span>
-<span><span class="va">wd</span> <span class="op">=</span> <span class="st">"/pool/public/genomics/macguigand/MitoPilot/testing/2024_12_13"</span></span>
+<span><span class="co"># if the directory does not exist, MitoPilot will create it</span></span>
+<span><span class="va">wd</span> <span class="op">=</span> <span class="st">"/pool/public/genomics/macguigand/MitoPilot/testing/2025_04_01"</span></span>
 <span></span>
 <span><span class="co"># specify an execution environment, "local", "NMNH_Hydra", or "NOAA_SEDNA"</span></span>
 <span><span class="va">ex</span> <span class="op">=</span> <span class="st">"NMNH_Hydra"</span></span>
@@ -115,7 +120,7 @@ test data, we’ll use <code><a href="../reference/new_test_project.html">MitoPi
 <span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="../reference/new_test_project.html">new_test_project</a></span><span class="op">(</span></span>
 <span>    path <span class="op">=</span> <span class="va">wd</span>,</span>
 <span>    executor <span class="op">=</span> <span class="va">ex</span>,</span>
-<span>    container <span class="op">=</span> <span class="st">"drleopold/mitopilot"</span>,</span>
+<span>    container <span class="op">=</span> <span class="st">"macguigand/mitopilot"</span>,</span>
 <span>    full_size <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>    Rproj <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -123,12 +128,13 @@ test data, we’ll use <code><a href="../reference/new_test_project.html">MitoPi
 <p><strong>Note:</strong>If you are using an execution environment that
 is not currently supported, you could use
 <code>config = config.MyEnv</code> to pass a custom Nextflow config to
-the <code>new_test_project</code> function. <strong>THIS FEATURE IS
-CURRENTLY UNDER DEVELOPMENT.</strong></p>
+the <code><a href="../reference/new_test_project.html">MitoPilot::new_test_project</a></code> function. <strong>THIS
+FEATURE IS CURRENTLY UNDER DEVELOPMENT.</strong></p>
 </div>
 <p>If the test project was successfully initialized, you should see the
 following.</p>
-<pre><code>SRR22396794 - Psychrolutes paradoxus
+<pre><code>Creating project directory: /pool/public/genomics/macguigand/MitoPilot/testing/2025_04_01
+SRR22396794 - Psychrolutes paradoxus
 SRR22396940 - Psenes pellucidus
 SRR22396740 - Hoplostethus occidentalis
 SRR21844202 - Fundulus majalis
@@ -156,16 +162,25 @@ examine our test project and start the MitoPilot analysis pipeline.</p>
 <p>Nice! We can see some basic information about our samples. When
 initializing your own project, this is pulled from the mapping CSV
 file.</p>
-<p>You can sort the samples by any column, simply click on the header.
-You can also filter samples using the search box in the top right.</p>
-<p>To the left of the sample ID column are two icons. The first shows
-whether the sample is locked or unlocked. If a sample is unlocked, it
-will be included when running the current pipeline module. A locked
+<p>The dropdown menu at the top left switches between the different
+MitoPilot modules: Assemble, Annotate, and Export. If necessary, the
+circular arrow button in the top left will refresh the sample table.</p>
+<p><img src="figures%2Ftest-project%2F2.jpeg"></p>
+<p>Clicking on a column name will sort the table by that column.</p>
+<p><img src="figures%2Ftest-project%2F3.png"></p>
+<p>You can filter samples using the search box in the top right. Most
+columns can also be filtered using the text boxes at the top of the
+table.</p>
+<p><img src="figures%2Ftest-project%2F4.png"></p>
+<p>To the left of the sample ID column are two icons. The first icon
+shows whether the sample is locked or unlocked. If a sample is unlocked,
+it will be included when running the current pipeline module. A locked
 sample cannot be edited for the current module, but will be made
 available for the next pipeline module. You can toggle the lock by
 selecting the sample (check mark), then pressing <code>LOCK</code> at
 the top of the window. Multiple samples can be locked or unlocked
 simultaneously.</p>
+<p><img src="figures%2Ftest-project%2F5.jpeg"></p>
 <p>The other icon shows the state of the sample. These states vary
 depending on the analysis module and will be automatically updated when
 running the pipeline. However, you can also manually change the state of
@@ -173,66 +188,72 @@ a sample using the <code>STATE</code> button. For example, in the
 Assemble module you could prevent samples from running through the
 pipeline by manually setting their states to
 <code>Hold / Waiting</code>.</p>
+<p><img src="figures%2Ftest-project%2F6.jpeg"></p>
 </div>
 <div class="section level2">
 <h2 id="modifying-pipeline-parameters">Modifying Pipeline Parameters<a class="anchor" aria-label="anchor" href="#modifying-pipeline-parameters"></a>
 </h2>
 <p>Within the GUI, we can modify options for each step of the current
-pipeline module. Select all samples by clicking the empty checkbox at
-the top left of the table. Then click on one of the <code>default</code>
-links in the <code>Preprocess Opts</code> column.</p>
-<p><img src="figures%2Ftest-project%2F2.png"></p>
+pipeline module. Click on one of the <code>default</code> links in the
+<code>Preprocess Opts</code> column.</p>
+<p><img src="figures%2Ftest-project%2F7.png"></p>
 <p>Here you can see the default options for pre-processing your raw
 FASTQ files. We can modify these by clicking the <code>edit</code>
-checkbox. Let’s change the CPUs to 4 and the Memory to 16 GB. You could
-also change the options passed to <a href="https://github.com/OpenGene/fastp" class="external-link">fastp</a>, but let’s keep those
-at the defaults for now.</p>
-<p><img src="figures%2Ftest-project%2F3.png"></p>
+checkbox. Let’s change the memory to 20 GB. You could also change the
+options passed to <a href="https://github.com/OpenGene/fastp" class="external-link">fastp</a>,
+but we’ll keep those at the defaults for now.</p>
+<p><img src="figures%2Ftest-project%2F8.png"></p>
 <p>We can save these new parameter options by clicking on the
 <code>Parameter set name</code> box, typing a new name, and clicking
 <code>Add YOUR NEW NAME...</code> in the dropdown. Finally, click
 <code>Update</code> in the bottom right to save your selection.</p>
-<p><img src="figures%2Ftest-project%2F4.png"></p>
+<p><img src="figures%2Ftest-project%2F9.png"></p>
 <p>Once you’ve saved a new parameter set, you can easily access it again
-using the dropdown menu. In the screenshot below, you can see a couple
-of other parameter sets that I created.</p>
-<p><img src="figures%2Ftest-project%2F5.png"></p>
+using the dropdown menu.</p>
+<p><img src="figures%2Ftest-project%2F10.png"></p>
 <p>After clicking <code>Update</code>, your table should now show
 <code>test</code> for all samples in the <code>Preprocess Opts</code>
 column.</p>
-<p><img src="figures%2Ftest-project%2F6.png"></p>
+<p><img src="figures%2Ftest-project%2F11.png"></p>
 <p>You can set different parameters for different samples by simply
 selecting the set you want to change and repeating the above process.
 But for this test dataset, let’s keep everything consistent.</p>
 <p>Let’s also change the <code>Assembly Opts</code>. Repeat the process
-above, selecting all samples and creating a new <code>himem</code>
-setting like so.</p>
-<p><img src="figures%2Ftest-project%2F7.png"></p>
+above, and creating a new <code>himem</code> setting with 6 CPUs and 36
+GB of memory.</p>
+<p><img src="figures%2Ftest-project%2F12.png"></p>
+<p>In the <code>Assembly Opts</code> window, you can also modify the
+parameters for GetOrganalle, including the seeds and labels databases.
+The default fish reference databases are downloaded from the MitoPilot
+GitHub repository. You could use <a href="https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html">custom
+databases</a> by providing the full path to the appropriate FASTA files
+on your local computer or cluster. For this test project, we’ll leave
+all of the GetOrganalle settings at the default values.</p>
 </div>
 <div class="section level2">
 <h2 id="running-the-assemble-module">Running the Assemble Module<a class="anchor" aria-label="anchor" href="#running-the-assemble-module"></a>
 </h2>
 <p>Let’s get started with the pipeline! Select all samples, then click
-the <code>UPDATE</code> button. A new window should appear.</p>
-<p><img src="figures%2Ftest-project%2F8.png"></p>
+the <code>UPDATE</code> button. A new window should appear with a
+Nextflow command.</p>
+<p><img src="figures%2Ftest-project%2F13.png"></p>
 <p>You have three options for running the pipeline. First, you could
 copy the Nextflow command and run it in a terminal window. This requires
 you to maintain an open connection while Nextflow is running, which may
 cause issues for large, complex datasets.</p>
-<p>Alternatively, you can embed the Nextflow command within a batch job
-submission script for a computing cluster. This allows you to run the
-analyses in the background, and is preferable for datasets with a large
-number of samples that may take several hours to process.</p>
+<p>Alternatively, you could embed the Nextflow command within a batch
+job submission script for a computing cluster. This allows you to run
+the analyses in the background, which is preferable for datasets with a
+large number of samples that may take several hours to process.</p>
 <p>We have provided instructions for running MitoPilot Nextflow commands
 as batch jobs on the <a href="https://Smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html#running-large-mitopilot-jobs" class="external-link">Smithsonian
 Hydra</a> and <a href="https://Smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html#running-large-mitopilot-jobs" class="external-link">NOAA
 SEDNA</a> computing clusters.</p>
-<p>Lastly, for small datasets, you can press the
-<code>Start Nextflow</code> button to run the pipeline from within the
-GUI. This requires you to keep the GUI open while the pipeline is
-running.</p>
-<div class="alert alert-note">
-<p><strong>Note:</strong>Currently, the <code>Start Nextflow</code>
+<p>The final option is the <code>Start Nextflow</code> button, which
+will run the analysis pipeline within the GUI. This requires you to keep
+the GUI open while the pipeline is running.</p>
+<div class="alert alert-warning">
+<p><strong>Warning:</strong>Currently, the <code>Start Nextflow</code>
 button is not compatible with the NOAA SEDNA computing cluster. Please
 use the command line or batch job method, making sure to run
 <code>mamba activate MitoPilot_deps</code> prior to calling
@@ -240,54 +261,59 @@ Nextflow.</p>
 </div>
 <p>Since our test dataset is small, let’s run Nextflow within the GUI.
 Click <code>Start Nextflow</code> to launch the pipeline.</p>
-<p><img src="figures%2Ftest-project%2F9.png"></p>
+<p><img src="figures%2Ftest-project%2F14.png"></p>
 <p>And we’re off! You should see Nextflow output being printed the to
 <code>Progress</code> window. This window will continually update as the
-pipeline progresses. If you’re unsure whether the pipeline is still
-running, check to see if the gears in the top right are spinning.</p>
-<p>This pipeline module has 3 steps: preprocessing (filtering) the raw
-FASTQ files with <a href="https://github.com/OpenGene/fastp" class="external-link">fastp</a>,
-assembling the mitogenomes using <a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a>, and
+pipeline progresses. As long as the gears in the top right are spinning,
+the pipeline is still running.</p>
+<p>The Assemble pipeline module has 3 steps: preprocessing (filtering)
+the raw FASTQ files with <a href="https://github.com/OpenGene/fastp" class="external-link">fastp</a>, assembling the
+mitogenomes using <a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a>, and
 calculating coverage maps for the assemblies using <a href="https://github.com/BenLangmead/bowtie2" class="external-link">bowtie2</a>.</p>
 <p>If you’re working on a computing cluster, Nextflow distributes the
 analyses across multiple batch jobs. This can allow you to run hundreds
 of samples simultaneously. You can use your cluster’s job scheduler to
 check on the status of MitoPilot jobs. Some samples may finish faster
 than others.</p>
-<p><img src="figures%2Ftest-project%2F10.png"></p>
-<p>Additionally, you may notice that some samples fail at certain steps.
-Often this is due to a memory error, so MitoPilot will retry failed
-samples with more RAM. The Nextflow log tracks the number of failed
-samples and retries.</p>
-<p><img src="figures%2Ftest-project%2F11.png"></p>
+<p><img src="figures%2Ftest-project%2F15.png"></p>
+<p>You may notice that some samples fail at certain steps (though this
+is unlikely for the test dataset). Often this is due to a memory error,
+so MitoPilot will retry failed samples with more RAM. The Nextflow log
+tracks the number of failed samples and retries.</p>
+<p><img src="figures%2Ftest-project%2F16.png"></p>
 <p>The test dataset should take a few minutes to finish. When it’s done,
 your <code>Progress</code> window should look something like this.</p>
-<p><img src="figures%2Ftest-project%2F12.png"></p>
-<p>You can now click <code>Close</code> to go back to the samples
-table.</p>
+<p><img src="figures%2Ftest-project%2F17.png"></p>
+<p>If you scroll to the bottom of the progress window, you can find some
+runtime statistics.</p>
+<p><img src="figures%2Ftest-project%2F18.png"></p>
+<p>Click <code>Close</code> to return to the samples table.</p>
 </div>
 <div class="section level2">
 <h2 id="inspecting-assembly-results">Inspecting Assembly Results<a class="anchor" aria-label="anchor" href="#inspecting-assembly-results"></a>
 </h2>
-<p>The sample table should now be updated with a bunch of new
-information.</p>
-<p><img src="figures%2Ftest-project%2F13.png"></p>
+<p>The sample table should now be updated with new information about the
+mitogenome assemblies.</p>
+<p><img src="figures%2Ftest-project%2F19.png"></p>
 <p>If you want to locate the results files for a sample, scroll all the
 way to the right and click <code>output</code>. This will open the
-appropriate folder in your RStudio session.</p>
+appropriate folder in the <code>Files</code> pane of your RStudio
+session.</p>
+<p><img src="figures%2Ftest-project%2F19b.png"></p>
 <p>You can also view the results within the MitoPilot GUI. For example,
 select SRR21843972 (<em>Stomias affinis</em>), then click
 <code>details</code>. This will open a new window with the mitogenome
 sequence.</p>
-<p><img src="figures%2Ftest-project%2F14.png"></p>
+<p><img src="figures%2Ftest-project%2F20.png"></p>
 <p>Select the sequence and click the <code>Fasta</code> button in the
 bottom right. This will copy the FASTA formatted mitogenome to your
-clipboard. This could be useful for a quick BLAST search.</p>
-<p><img src="figures%2Ftest-project%2F15.png"></p>
+clipboard, which you can paste into your favorite text editor. This
+could be useful for a quick BLAST search.</p>
+<p><img src="figures%2Ftest-project%2F21.png"></p>
 <p>You can also click the <code>view</code> button, which will open a
 summary figure in a new tab, including mean read depth, sequence error
 rate, and GC content.</p>
-<p><img src="figures%2Ftest-project%2F16.png"></p>
+<p><img src="figures%2Ftest-project%2F22.png"></p>
 <p>Notice that in this figure, read depth drops off dramatically at both
 ends of the sequence. SRR21843972 was unable to assemble a circular
 mitogenome due to poor read coverage in this region. To assemble a
@@ -302,58 +328,59 @@ more sequence data.</p>
 returned failed states. You can see which samples failed by looking for
 the exclamation mark state icon. Selecting a sample with that icon and
 clicking on the <code>STATE</code> button will confirm.</p>
-<p><img src="figures%2Ftest-project%2F17.png"></p>
+<p><img src="figures%2Ftest-project%2F23.png"></p>
 <p>One failed sample is SRR22396758 (<em>Upeneus parvus</em>). We
-purposefully truncated this sample’s FASTQ file to 200 reads. With so
-few reads, this sample failed to meet the <code>min_depth</code>
-threshold and returned a message “Insufficient sequencing depth” in the
-<code>Notes</code> column. When analyzing your own data, you can specify
-the <code>min_depth</code> threshold with the <code>new_project</code>
-function.</p>
+purposefully truncated the data for this sample to contain only 200
+reads.</p>
+<p>With so few reads, this sample failed to meet the
+<code>min_depth</code> threshold and returned a message “Insufficient
+sequencing depth” in the <code>Notes</code> column. When analyzing your
+own data, you can specify the <code>min_depth</code> threshold with the
+<code>new_project</code> function.</p>
 <p>The other failed sample is SRR21844202 (<em>Fundulus majalis</em>).
-This sample had plenty of data and was able to assemble a mitogenome.
-However, the message in the <code>Notes</code> columns says “Unable to
-resolve single assembly from reads.”</p>
+This sample had plenty of data and we were able to assemble a
+mitogenome. However, the message in the <code>Notes</code> columns says
+“Unable to resolve single assembly from reads.”</p>
 <p><a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a>
 produced two alternate assembly paths for this sample. This is usually
 due to complicated assembly graphs near a repeat region. Please refer to
 <a href="https://doi.org/10.1186/s13059-020-02154-5" class="external-link">the GetOrganlle
 paper</a> for more information about multiple assembly paths.</p>
-<p>Let’s take a peek at SRR21844202. Select the sample, scroll all the
-way to the right, and click on <code>details</code>.</p>
-<p><img src="figures%2Ftest-project%2F18.png"></p>
+<p>Let’s take a peek at SRR21844202 (<em>Fundulus majalis</em>). Select
+the sample, scroll all the way to the right, and click on
+<code>details</code>.</p>
+<p><img src="figures%2Ftest-project%2F24.png"></p>
 <p>We can see two assemblies listed here. Clicking on <code>view</code>
 will show us the coverage, error, and GC content graphs for each
 assembly.</p>
 <p>Path #1</p>
-<p><img src="figures%2Ftest-project%2F19.png"></p>
+<p><img src="figures%2Ftest-project%2F25.png"></p>
 <p>Path #2</p>
-<p><img src="figures%2Ftest-project%2F20.png"></p>
-<p>The two assembly paths are very similar, differing only slightly
-around 13,000 bp.</p>
-<p>We can chose to move forward with just one assembly path and ignore
-the other.</p>
-<p><img src="figures%2Ftest-project%2F21.png"></p>
+<p><img src="figures%2Ftest-project%2F26.png"></p>
+<p>The two assembly paths differ slightly around 13,000 bp.</p>
+<p>We can chose to move forward with just one assembly path by clicking
+the “ignore” button for one of the assembly paths.</p>
 <p>Alternatively, we can use the consensus sequence. Select both paths
 and click the <code>Align</code> button in the bottom right. The
 sequence alignment will pop up, showing us that the two paths have
 99.9897% sequence similarity.</p>
 <p>If we scroll through the alignment, we can see a few base pair
-differences. For example:</p>
-<p><img src="figures%2Ftest-project%2F22.png"></p>
+differences.</p>
+<p><img src="figures%2Ftest-project%2F27.png"></p>
 <p>Selecting <code>Trim Consensus</code> will remove any conflicting
-regions of the assembly paths and produce a shorter consensus sequence
-of both alignments. Doing so will automatically ignore the original two
-assembly paths.</p>
-<p><img src="figures%2Ftest-project%2F23.png"></p>
+regions of the aligned assembly paths and produce a shorter consensus
+sequence of both alignments. Doing so will automatically ignore the
+original two assembly paths.</p>
+<p><img src="figures%2Ftest-project%2F28.png"></p>
 <p>Click close and return to the samples table. You will see that the
 <code># Paths</code> column for SRR21844202 is highlighted and there is
 a note indicating that the assembly was edited. This sample has also
 been automatically changed to a locked state.</p>
-<p><img src="figures%2Ftest-project%2F24.png"></p>
-<div class="alert alert-note">
-<p><strong>Note:</strong> Carefully consider your options for
-problematic samples with multiple assembly paths. There is no
+<p><img src="figures%2Ftest-project%2F29.png"></p>
+<div class="alert alert-warning">
+<p><strong>Warning:</strong> Carefully consider your options for samples
+with multiple assembly paths. You may wish to align each assembly
+against a reference or compare depth of sequencing coverage. There is no
 one-size-fits-all solution.</p>
 </div>
 </div>
@@ -369,25 +396,24 @@ rejected by NCBI GenBank.</p>
 module. Select all of the samples except SRR22396758 (<em>Upeneus
 parvus</em>) and click the <code>LOCK</code> button. Then use the
 dropdown menu in the top left to navigate to the Annotate module.</p>
-<p><img src="figures%2Ftest-project%2F25.png"></p>
+<p><img src="figures%2Ftest-project%2F30.png"></p>
 <p>Like before, let’s edit the <code>Annotate Opts</code> and increase
 the memory allocation to 60 GB. In this window, you could also edit the
 Mitos2 and tRNAscan-SE options. In the future, we will allow users to
 specify custom reference databases for annotation.</p>
-<p><img src="figures%2Ftest-project%2F26.png"></p>
+<p><img src="figures%2Ftest-project%2F31.png"></p>
 <p>You can also edit the curation options. Currently, we only have one
 set of curation parameters: <code>fish_mito</code>. This will be updated
 in the near future.</p>
-<p><img src="figures%2Ftest-project%2F27.png"></p>
+<p><img src="figures%2Ftest-project%2F32.png"></p>
 <p>To run the Annotate module, select all samples, click
 <code>UPDATE</code>, then click <code>Start Nextflow</code>. This will
 take a few minutes. As long as the gears in the top right are spinning,
 the pipeline is still running.</p>
-<p><img src="figures%2Ftest-project%2F28.png"></p>
-<p>Once all steps are complete, you’ll see a summary message printed at
-the bottom of the <code>Progress</code> window. Click <code>Close</code>
-to return to the sample table.</p>
-<p><img src="figures%2Ftest-project%2F29.png"></p>
+<p><img src="figures%2Ftest-project%2F33.png"></p>
+<p>Once all steps are complete, the gears will stop spinning and you’ll
+see a summary message printed at the bottom of the <code>Progress</code>
+window. Click <code>Close</code> to return to the sample table.</p>
 </div>
 <div class="section level2">
 <h2 id="exploring-annotation-results">Exploring Annotation Results<a class="anchor" aria-label="anchor" href="#exploring-annotation-results"></a>
@@ -395,20 +421,21 @@ to return to the sample table.</p>
 <p>There are a LOT of results to explore from the Annotate module. The
 sample table reports some basic stats about the number of protein-coding
 genes (PCGs), tRNAs, and rRNAs. The <code>missing</code> column reports
-the number of mitochondrial genes that were not annotated (based on the
-provided curation model). The <code>extra</code> column notes the number
-of potentially duplicated genes.</p>
+which mitochondrial genes were not annotated (based on the provided
+curation model). The <code>extra</code> column notes the number of
+potentially duplicated genes.</p>
 <p>Lastly, the <code>warnings</code> column indicates how many warning
 flags were raised during the validation step. Samples with many warnings
 will require more manual curation to ensure that they are not rejected
-during submission to NCBI GenBank.</p>
-<p><img src="figures%2Ftest-project%2F30.png"></p>
+during submission to NCBI GenBank. Warning messages are explained in
+further detail <a href="https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.html">here</a>.</p>
+<p><img src="figures%2Ftest-project%2F34.png"></p>
 <p>The annotation results for each sample can be examined more closely
 by clicking the <code>details</code> button. First, let’s examine the
 details for a good sample, SRR19434536 (<em>Rhinecanthus
 rectangulus</em>).</p>
-<p><img src="figures%2Ftest-project%2F31.png"></p>
-<p>This sample had the expected number of genes and no warnings.
+<p><img src="figures%2Ftest-project%2F35.png"></p>
+<p>This sample has the expected number of genes and has no warnings.
 However, the <code>notes</code> column shows that MitoPilot still made
 some tweaks to the annotation during the curation step. For example, the
 start position of rRNA rrnL was moved 22 bp upstream and the stop codon
@@ -416,16 +443,20 @@ for NAD2 was trimmed by 2 bp.</p>
 <p>Nucleotide sequences (and amino acid sequence for PCGs) can be copied
 to the clipboard using the <code>nt</code> (and <code>aa</code>) buttons
 on the far right. This could be helpful if you’d like to manually BLAST
-some results.</p>
+some genes.</p>
 <p>Clicking on the <code>Coverage Map</code> button will show a plot of
-sequence depth, zooming to the position of the highlighted gene</p>
-<p><img src="figures%2Ftest-project%2F32.png"></p>
+sequence depth, zooming to the position of the highlighted gene.</p>
+<p><img src="figures%2Ftest-project%2F36.png"></p>
+<div class="alert alert-note">
+<p><strong>Note:</strong> The <code>Coverage Map</code> feature does not
+work consistenly on the NMNH Hydra cluster. We are working on a fix.</p>
+</div>
 <p>For protein coding genes, you can click the <code>Alignment</code>
 button to show the protein alignment of your annotated gene against a
 reference database. Currently, this shows only the top hits (filtered in
 blast using <code>-best_hit_score_edge 0.01</code>) from the curation
 process, which may be one or more sequences.</p>
-<p><img src="figures%2Ftest-project%2F33.png"></p>
+<p><img src="figures%2Ftest-project%2F37.png"></p>
 <p>By default, MitoPilot uses RefSeq as the BLAST database. If you would
 like to use your own custom BLAST database, you can check the
 <code>Local blast</code> box. MitoPilot will return a message with the
@@ -446,16 +477,22 @@ stop position annotation.</p>
 will take a few seconds, since MitoPilot has to redo the alignments. But
 you should see that the “cox1 (focal)” sequence start position has
 shifted.</p>
-<p><img src="figures%2Ftest-project%2F34.png"></p>
-<p>This clearly looks like a worse alignment. Click <code>RESET</code>
-to undo your changes.</p>
+<p><img src="figures%2Ftest-project%2F38.png"></p>
+<p>This is clearly a worse alignment. Click <code>RESET</code> to undo
+your changes.</p>
 <p>You can also delete annotations by selecting them and clicking
-<code>Delete</code>. Be careful doing this, as there’s no easy way to
-add the annotation back without running the sample through the Annotate
-module again.</p>
+<code>Delete</code> at the bottom of the details window. Delete with
+caution; there’s no easy way to add the annotation back without <a href="https://smithsonian.github.io/MitoPilot/articles/FAQ.html#how-do-i-restore-annotatations-after-manual-editing">running
+the sample through the Annotate module again</a>.</p>
+<p>The <code>Linearize</code> button will convert a circular assembly to
+a linear assembly. This may be useful if the D-loop region was poorly
+assmebled or annotated.</p>
+<p>You can use <code>Mark as reviewed/unreviewed</code> to change the
+state of the <code>Reviewed</code> column, which may be helpful for
+tracking the progress of your manual edits.</p>
 <p>Please note that annotation editing is a bit temperamental and you
-may encounter bugs. Additional details about annotation editing will be
-made available soon.</p>
+may encounter bugs. Please report any problems on the <a href="https://github.com/Smithsonian/MitoPilot/issues" class="external-link">MitoPilot GitHub
+issues page</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="running-the-export-module">Running the Export Module<a class="anchor" aria-label="anchor" href="#running-the-export-module"></a>
@@ -471,78 +508,94 @@ module.</p>
 clicking on the <code>Taxon</code> column, then select the first five
 samples and click the <code>GROUP</code> button.</p>
 <p>A new window will appear showing some summary information for the
-selected samples. Type a name for the group, then click
-<code>Create</code>. You can then click <code>Close</code> to return to
-the sample table.</p>
+selected samples. Type a name for the group, click <code>Add..</code>,
+then click <code>Create</code>. You can then click <code>Close</code> to
+return to the sample table.</p>
+<p><img src="figures%2Ftest-project%2F39.png"></p>
+<p>The sample table now shows the group assignment in the
+<code>Group</code> column.</p>
+<p><img src="figures%2Ftest-project%2F40.png"></p>
 <div class="alert alert-note">
 <p><strong>Note:</strong> You can assign new samples to an existing
 group. Simply select the samples you wish to add, click
 <code>GROUP</code>, then choose the existing group from the dropdown
 menu.</p>
 </div>
-<p><img src="figures%2Ftest-project%2F35.png"></p>
-<p>The sample table should now show assignment to our newly created
-group.</p>
 <div class="alert alert-note">
 <p><strong>Note:</strong> Each sample can only belong to one group.
 MitoPilot will produce a warning message if you attempt to re-assign a
 sample to a new group.</p>
 </div>
-<p><img src="figures%2Ftest-project%2F36.png"></p>
 <p>We can proceed to exporting the data for this group. Click
 <code>EXPORT DATA</code>, which will open a new window. Only samples
 that have been added to a group can be exported in this manner.</p>
-<p><img src="figures%2Ftest-project%2F37.png"></p>
+<p><img src="figures%2Ftest-project%2F41.png"></p>
 <p>If you have multiple groups, you can select the appropriate one from
 the dropdown menu.</p>
 <p>MitoPilot allows you to create a custom FASTA header for your
-samples, pulling from extra columns in the CSV file you supplied for the
-<code>mapping_fn</code> argument of the <code>new_project</code>
-function. This conveniently allows you to include metadata needed for
-your NCBI GenBank submission. For this test project, we can leave the
+samples, pulling data from columns the CSV file you supplied for the
+<code>mapping_fn</code> argument of the
+<code><a href="../reference/new_project.html">MitoPilot::new_project</a></code> function. This conveniently allows
+you to include metadata needed for your NCBI GenBank submission. To
+reference a column, use curly brackets. For example
+<code>organism={Taxon}</code> will autofill values in the “Taxon” column
+into the FASTA header.</p>
+<p>For this test project, we can leave the
 <code>Fasta Header Template</code> at the default value.</p>
-<p>There is also a toggle for
-<code>Generate Group-level PCG alignment summary</code>, which will run
+<p>The <code>Generate Group-level PCG alignment summary</code> will run
 alignments of all the protein coding genes in your group. For large
 groups, this can take a while. But it’s useful for a final quality
 control check.</p>
+<p>Let’s toggle the <code>Export individual genes</code> button. This
+will generate additional FASTA files and GenBank feature tables for each
+protein coding gene. This can be helpful if you want to use individual
+genes for phylogenetic analyses or submit them to GenBank. These gene
+FASTA files have their own custom header template that you can
+modify.</p>
 <p>Click <code>Export</code> to generate the final files. It may take a
 couple of minutes, but as long as the gears are spinning, MitoPilot is
 still running.</p>
+<p>Once complete, MitoPilot will print the location of the exported
+files. By default, that location is
+<code>YOUR_PROJECT_DIRECTORY/out/export/YOUR_GROUP_NAME</code>.</p>
+<p><img src="figures%2Ftest-project%2F42.png"></p>
 </div>
 <div class="section level2">
 <h2 id="exploring-the-final-results">Exploring the Final Results<a class="anchor" aria-label="anchor" href="#exploring-the-final-results"></a>
 </h2>
-<p>Once the gears have stopped spinning, the export process should be
-done! You should see a path to the final export location. By default,
-that location is
-<code>YOUR_PROJECT_DIRECTORY/out/export/YOUR_GROUP_NAME</code>.</p>
 <p>MitoPilot will produce three output files. First, the
 <code>.html</code> file contains visualizations of each protein coding
 gene alignment in your export group. This may be useful to quickly
 identify samples with poor annotations that need additional manual
 curation.</p>
-<p><img src="figures%2Ftest-project%2F38.png"></p>
+<p><img src="figures%2Ftest-project%2F43.png"></p>
 <p>For example, the ATP8 annotation for “SRR22396640” clearly stands out
 when compared with the other samples in this export group.</p>
-<p><img src="figures%2Ftest-project%2F39.png"></p>
+<p><img src="figures%2Ftest-project%2F44.png"></p>
 <p>Next are the two files you will need for submission to NCBI GenBank.
 The <code>.fasta</code> file contains the mitogenome assemblies for each
 sample, following the header template you specified when exporting the
 data. MitoPilot attempts to adjust the start position of every assembly
 to the start of the trnF gene.</p>
-<p><img src="figures%2Ftest-project%2F40.png"></p>
+<p><img src="figures%2Ftest-project%2F45.png"></p>
 <p>Additionally there is the <code>.tbl</code> file, a <a href="https://www.ncbi.nlm.nih.gov/genbank/feature_table/" class="external-link">standardized
 5-column, tab-delimited feature table</a> containing information about
 the annotated genes for each mitogenome.</p>
-<p><img src="figures%2Ftest-project%2F41.png"></p>
+<p><img src="figures%2Ftest-project%2F46.png"></p>
 <p>With a real dataset, you could use these two files for <a href="https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/" class="external-link">submission
 to NCBI GenBank</a>.</p>
-<p>Lastly, the export directory contains a sub-directory
-<code>GFFs</code> with annotations for each sample in <a href="https://gmod.org/wiki/GFF3" class="external-link">GFF3 format</a>. GFF files can be
+<p>The export directory also contains a sub-directory <code>GFFs</code>
+with annotations for each sample in <a href="https://gmod.org/wiki/GFF3" class="external-link">GFF3 format</a>. GFF files can be
 loaded by tools like <a href="https://www.geneious.com/" class="external-link">Geneious</a>
 for additional manual inspection prior to submission.</p>
-<p><img src="figures%2Ftest-project%2F42.png"></p>
+<p><img src="figures%2Ftest-project%2F47.png"></p>
+<p>Lastly, if you selected the <code>Export individual genes</code>
+option, there will be another directory <code>genes</code> containing
+sub-directories for every protein coding gene. In these you will find
+FASTA files and feature tables for the corresponding gene. There will
+also be a concatenated FASTA file and feature table containing all
+protein coding genes, named <code>GROUP_PCGs.fasta/tbl</code>.</p>
+<p><img src="figures%2Ftest-project%2F48.png"></p>
 </div>
 <div class="section level2">
 <h2 id="wrap-up">Wrap-up<a class="anchor" aria-label="anchor" href="#wrap-up"></a>
