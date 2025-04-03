@@ -18,10 +18,14 @@ annotate_mitos2 <- function(
     ref_db = "Chordata",
     ref_dir = "/home/harpua/Jonah/MitoPilot/ref_dbs/Mitos2",
     mitos_opts = "--best --intron 0 --oril 0 --trna 0",
-    out = "mitos_out",
+    out = NULL,
     condaenv = "mitos") {
   genetic_code <- as.character(genetic_code)
   out <- out %||% tempdir()
+
+  # debugging
+  out <- "MITOS2_temp"
+  dir.create(out)
 
   fasta <- tempfile(fileext = ".fa")
   names(assembly) <- stringr::str_extract(names(assembly), "^\\S+")
@@ -51,6 +55,7 @@ annotate_mitos2 <- function(
   }
 
   message("starting MITOS2")
+  message(paste("MITOS2 out dir:", out))
 
   do.call(process, process_args)
 
