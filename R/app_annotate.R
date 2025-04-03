@@ -469,9 +469,14 @@ annotate_server <- function(id) {
           inputId = "curate_opts_memory",
           value = cur$memory
         )
-        updateTextInput(
+        updateSelectizeInput(
           inputId = "target",
-          value = cur$target
+          selected = cur$target,
+          choices = c("fish_mito", "starfish_mito"),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
         )
         rv$params <- cur$params |> jsonlite::fromJSON()
       }
@@ -495,7 +500,7 @@ annotate_server <- function(id) {
     observeEvent(input$edit_curate_opts, ignoreInit = T, {
       shinyjs::toggleState("curate_opts_cpus", condition = input$edit_curate_opts)
       shinyjs::toggleState("curate_opts_memory", condition = input$edit_curate_opts)
-      shinyjs::toggleState("target", condition = FALSE) # TODO: allow changes to target or params
+      shinyjs::toggleState("target", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_curate_opts && input$curate_opts %in% rv$data$curate_opts) {
         rv$updating_indirect <- rv$data |>
@@ -526,6 +531,26 @@ annotate_server <- function(id) {
       } else {
         rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       }
+    })
+    observeEvent(input$target, {
+      rv$params <- do.call(paste0("params_", input$target), list()) |> 
+        jsonlite::toJSON()
+      output$params <- listviewer::renderReactjson({
+        listviewer::reactjson(
+          req(rv$params),
+          "Validataion Parameters",
+          theme = "monokai",
+          iconStyle = "triangle",
+          collapsed = 2,
+          enableClipboard = FALSE,
+          displayObjectSize = FALSE,
+          displayDataTypes = FALSE,
+          onEdit = FALSE,
+          onAdd = FALSE,
+          onDelete = FALSE,
+          onSelect = FALSE
+        )
+      })
     })
     # Confirm editing opts that apply beyond selection
     observeEvent(input$editing_curate_opts_indirect, ignoreInit = T, {

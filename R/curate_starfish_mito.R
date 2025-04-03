@@ -1,4 +1,4 @@
-#' Annotation curation for fish mitogenomes
+#' Annotation curation for starfish mitogenomes
 #'
 #' @param annotations_fn Path to the annotations file (csv)
 #' @param assembly_fn Path to the assembly file (fasta)
@@ -10,7 +10,7 @@
 #'
 #' @export
 #'
-curate_fish_mito <- function(
+curate_starfish_mito <- function(
     annotations_fn = NULL,
     assembly_fn = NULL,
     coverage_fn = NULL,

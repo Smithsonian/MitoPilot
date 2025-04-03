@@ -273,12 +273,20 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           ) |> shinyjs::disabled()
         )
       ),
-      textInput(
-        ns("target"),
-        label = "Target:",
-        value = current$target %||% character(0),
-        width = "100%"
-      ) |> shinyjs::disabled(),
+      div(
+        style = "flex: 1",
+        selectizeInput(
+          ns("target"),
+          label = "Target:",
+          choices = c("fish_mito", "starfish_mito"),
+          selected = current$target %||% character(0),
+          width = "100%",
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ) |> shinyjs::disabled()
+      ),
       listviewer::reactjsonOutput(ns("params")),
       size = "m",
       footer = tagList(

@@ -1,10 +1,10 @@
-#' Default curation and validation parameters for Fish Mitochondria
+#' Default curation and validation parameters for Starfish Mitochondria
 #'
 #' @param alt (optional) named list of default values to modify
 #'
 #' @export
 #'
-params_fish_mito <- function(alt = list()) {
+params_starfish_mito <- function(alt = list()) {
   params <- list(
     ref_dbs = list(
       default = "/ref_dbs/Mitos2/Metazoa/featureProt/{gene}.fas"
@@ -24,7 +24,7 @@ params_fish_mito <- function(alt = list()) {
         min_len = NA,
         overlap = list(start = 2, stop = F),
         stop_codons = c("TAA", "TAG", "TA", "T"),
-        start_codons = c("ATG")
+        start_codons = c("ATG", "GTG")
       ),
       tRNA = list(
         count = 1,
@@ -47,7 +47,7 @@ params_fish_mito <- function(alt = list()) {
         max_len = 1000
       ),
       nad1 = list(
-        type = "PCG",
+        type = "PCG"
         #start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "TTG")
       ),
       nad2 = list(
@@ -58,7 +58,7 @@ params_fish_mito <- function(alt = list()) {
         overlap = list(start = 2, stop = T)
       ),
       cox2 = list(
-        type = "PCG",
+        type = "PCG"
         #start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "TTG")
       ),
       atp8 = list(
@@ -67,7 +67,7 @@ params_fish_mito <- function(alt = list()) {
       ),
       atp6 = list(
         type = "PCG",
-        overlap = list(start = 20, stop = F),
+        overlap = list(start = 20, stop = F)
         #start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC", "CTG")
       ),
       cox3 = list(
