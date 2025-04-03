@@ -333,7 +333,8 @@ annotate_server <- function(id) {
         updateSelectizeInput(
           inputId = "mitos_ref_db",
           selected = cur$ref_db,
-          choices = unique(rv$annotate_opts$ref_db),
+          #choices = unique(rv$annotate_opts$ref_db),
+          choices = c("Metazoa", "Chordata"),
           options = list(
             create = TRUE,
             maxItems = 1
@@ -350,7 +351,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_ref_dir", condition = FALSE) # TODO: custom / alt ref db for mitos
-      shinyjs::toggleState("mitos_ref_db", condition = FALSE)
+      shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% rv$data$annotate_opts) {

@@ -13,6 +13,8 @@
 #'   a AWS s3 bucket even if not using AWS for pipeline execution..
 #' @param min_depth Minimum sequencing depth after pre-processing to proceed
 #'   with assembly (default: 2000000)
+#' @param genetic_code Translation table for your organisms. See NCBI website
+#'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param executor The executor to use for running the nextflow pipeline. Must
 #'   be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
@@ -37,6 +39,7 @@ new_project <- function(
     mapping_id = "ID",
     data_path = NULL,
     min_depth = 2000000,
+    genetic_code = 2,
     executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
     container = "macguigand/mitopilot",
     custom_seeds_db = NULL,
@@ -123,6 +126,7 @@ new_project <- function(
     stringr::str_replace("<<CONTAINER_ID>>", container %||% "<<CONTAINER_ID>>") |>
     stringr::str_replace("<<RAW_DIR>>", data_path %||% "<<RAW_DIR>>") |>
     stringr::str_replace("<<MIN_DEPTH>>", format(min_depth %||% "<<MIN_DEPTH>>", scientific = F)) |>
+    stringr::str_replace("<<GENETIC_CODE>>", format(genetic_code %||% "<<GENETIC_CODE>>", scientific = F)) |>
     writeLines(file.path(path, ".config"))
 
   message("Project initialized successfully.")

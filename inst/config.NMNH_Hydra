@@ -36,7 +36,7 @@ params {
     publishDir = 'out'                      // Directory to publish pipeline outputs
     minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
     minAssemblyLength = 500                 // min contig size to retain for annotation
-    genetic_code = 2
+    genetic_code = <<GENETIC_CODE>>
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
     preprocess {

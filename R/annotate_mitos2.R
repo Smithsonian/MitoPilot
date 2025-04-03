@@ -18,7 +18,7 @@ annotate_mitos2 <- function(
     ref_db = "Chordata",
     ref_dir = "/home/harpua/Jonah/MitoPilot/ref_dbs/Mitos2",
     mitos_opts = "--best --intron 0 --oril 0 --trna 0",
-    out = NULL,
+    out = "mitos_out",
     condaenv = "mitos") {
   genetic_code <- as.character(genetic_code)
   out <- out %||% tempdir()
@@ -50,7 +50,11 @@ annotate_mitos2 <- function(
     process <- "system2"
   }
 
+  message("starting MITOS2")
+
   do.call(process, process_args)
+
+  echo("finished MITOS2")
 
   # Format Mitos Output ----
   annotations_mitos <- list.files(out, recursive = T, full.names = T, pattern = "result.fas") |>
@@ -72,6 +76,8 @@ annotate_mitos2 <- function(
             dplyr::mutate(
               type = dplyr::case_when(
                 stringr::str_detect(gene, "^rrn[L|S]") ~ "rRNA",
+                stringr::str_detect(gene, "^Intron") ~ "intron",
+                stringr::str_detect(gene, "^OL") ~ "OL",
                 stringr::str_detect(gene, "^OH") ~ "ctrl",
                 .default = "PCG"
               ),
@@ -82,7 +88,7 @@ annotate_mitos2 <- function(
                 stringr::str_detect(gene, "rrnL") ~ "16S ribosomal RNA",
                 stringr::str_detect(gene, "rrnS") ~ "12S ribosomal RNA",
                 stringr::str_detect(gene, "OH") ~ "d-loop",
-                type == "PCG" ~ CDS_key[gene],
+                type == "PCG" ~ çƒ[gene],
                 .default = NA_character_
               ),
               .after = "gene"
@@ -144,18 +150,41 @@ annotate_mitos2 <- function(
 }
 
 # PCG key ----
+# CDS_key <- c(
+#   nad1 = "NADH dehydrogenase subunit 1",
+#   nad2 = "NADH dehydrogenase subunit 2",
+#   cox1 = "cytochrome c oxidase subunit 1",
+#   cox2 = "cytochrome c oxidase subunit 2",
+#   atp8 = "ATP synthase F0 subunit 8",
+#   atp6 = "ATP synthase F0 subunit 6",
+#   cox3 = "cytochrome c oxidase subunit 3",
+#   nad3 = "NADH dehydrogenase subunit 3",
+#   nad4l = "NADH dehydrogenase subunit 4L",
+#   nad4 = "NADH dehydrogenase subunit 4",
+#   nad5 = "NADH dehydrogenase subunit 5",
+#   nad6 = "NADH dehydrogenase subunit 6",
+#   cob = "cytochrome b"
+# )
+
+# PCG key for full metazoan dataset ----
 CDS_key <- c(
   nad1 = "NADH dehydrogenase subunit 1",
   nad2 = "NADH dehydrogenase subunit 2",
   cox1 = "cytochrome c oxidase subunit 1",
   cox2 = "cytochrome c oxidase subunit 2",
+  cox3 = "cytochrome c oxidase subunit 3",
   atp8 = "ATP synthase F0 subunit 8",
   atp6 = "ATP synthase F0 subunit 6",
+  atp9 = "ATP synthase F0 subunit 9",
   cox3 = "cytochrome c oxidase subunit 3",
   nad3 = "NADH dehydrogenase subunit 3",
   nad4l = "NADH dehydrogenase subunit 4L",
   nad4 = "NADH dehydrogenase subunit 4",
   nad5 = "NADH dehydrogenase subunit 5",
   nad6 = "NADH dehydrogenase subunit 6",
-  cob = "cytochrome b"
+  cob = "cytochrome b",
+  dpo = "DNA-polymerase",
+  lagli = "homing endonuclease",
+  msh1 = "MutS mismatch DNA repair protein",
+  mttb = "trimethylamine methyltransferase"
 )
