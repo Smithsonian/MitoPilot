@@ -19,7 +19,7 @@ new_db(
     "--larger-auto-ws", "--expected-max-size 20000", "--target-genome-size 16500"),
   annotate_cpus = 6,
   annotate_memory = 16,
-  annotate_ref_db = "Chordata",
+  annotate_ref_db = "Metazoa",
   annotate_ref_dir = "/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0 --trna 0",
   trnaScan_opts = "-M vert",
