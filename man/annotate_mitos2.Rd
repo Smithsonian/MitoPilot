@@ -11,7 +11,7 @@ annotate_mitos2(
   ref_db = "Chordata",
   ref_dir = "/home/harpua/Jonah/MitoPilot/ref_dbs/Mitos2",
   mitos_opts = "--best --intron 0 --oril 0 --trna 0",
-  out = NULL,
+  out = "mitos_out",
   condaenv = "mitos"
 )
 }
