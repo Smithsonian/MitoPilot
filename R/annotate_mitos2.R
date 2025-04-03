@@ -26,8 +26,14 @@ annotate_mitos2 <- function(
   # debugging
   out <- "MITOS2_temp"
   dir.create(out)
+  ###
 
   fasta <- tempfile(fileext = ".fa")
+
+  # debugging
+  fasta <- "temp_asmb.fa"
+  ###
+
   names(assembly) <- stringr::str_extract(names(assembly), "^\\S+")
   Biostrings::writeXStringSet(assembly, fasta)
 
