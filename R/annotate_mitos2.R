@@ -54,7 +54,7 @@ annotate_mitos2 <- function(
 
   do.call(process, process_args)
 
-  echo("finished MITOS2")
+  message("finished MITOS2")
 
   # Format Mitos Output ----
   annotations_mitos <- list.files(out, recursive = T, full.names = T, pattern = "result.fas") |>
