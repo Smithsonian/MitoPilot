@@ -185,7 +185,8 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           selectizeInput(
             ns("mitos_ref_db"),
             label = "ref_db",
-            choices = unique(rv$annotate_opts$ref_db),
+            #choices = unique(rv$annotate_opts$ref_db),
+            choices = c("Metazoa", "Chordata"),
             selected = current$annotate_opts %||% character(0),
             width = "100%",
             options = list(

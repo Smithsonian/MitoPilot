@@ -28,7 +28,7 @@ params {
     publishDir = 'out'
     minDepth = <<MIN_DEPTH>>
     minAssemblyLength = 500
-    genetic_code = 2
+    genetic_code = <<GENETIC_CODE>>
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
     preprocess {

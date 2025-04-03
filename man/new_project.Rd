@@ -10,6 +10,7 @@ new_project(
   mapping_id = "ID",
   data_path = NULL,
   min_depth = 2e+06,
+  genetic_code = 2,
   executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
   container = "macguigand/mitopilot",
   custom_seeds_db = NULL,
@@ -38,6 +39,9 @@ a AWS s3 bucket even if not using AWS for pipeline execution..}
 
 \item{min_depth}{Minimum sequencing depth after pre-processing to proceed
 with assembly (default: 2000000)}
+
+\item{genetic_code}{Translation table for your organisms. See NCBI website
+for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{executor}{The executor to use for running the nextflow pipeline. Must
 be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
