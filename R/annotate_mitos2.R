@@ -99,7 +99,7 @@ annotate_mitos2 <- function(
                 stringr::str_detect(gene, "rrnL") ~ "16S ribosomal RNA",
                 stringr::str_detect(gene, "rrnS") ~ "12S ribosomal RNA",
                 stringr::str_detect(gene, "OH") ~ "d-loop",
-                type == "PCG" ~ çƒ[gene],
+                type == "PCG" ~ CDS_key[gene],
                 .default = NA_character_
               ),
               .after = "gene"
