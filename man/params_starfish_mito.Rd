@@ -2,7 +2,7 @@
 % Please edit documentation in R/params_starfish_mito.R
 \name{params_starfish_mito}
 \alias{params_starfish_mito}
-\title{Default curation and validation parameters for Fish Mitochondria}
+\title{Default curation and validation parameters for Starfish Mitochondria}
 \usage{
 params_starfish_mito(alt = list())
 }
@@ -10,5 +10,5 @@ params_starfish_mito(alt = list())
 \item{alt}{(optional) named list of default values to modify}
 }
 \description{
-Default curation and validation parameters for Fish Mitochondria
+Default curation and validation parameters for Starfish Mitochondria
 }

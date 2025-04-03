@@ -2,7 +2,7 @@
 % Please edit documentation in R/curate_starfish_mito.R
 \name{curate_starfish_mito}
 \alias{curate_starfish_mito}
-\title{Annotation curation for fish mitogenomes}
+\title{Annotation curation for starfish mitogenomes}
 \usage{
 curate_starfish_mito(
   annotations_fn = NULL,
@@ -28,5 +28,5 @@ curate_starfish_mito(
 base64 encoded json string.}
 }
 \description{
-Annotation curation for fish mitogenomes
+Annotation curation for starfish mitogenomes
 }
