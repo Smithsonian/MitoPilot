@@ -566,7 +566,8 @@ annotate_server <- function(id) {
     observeEvent(input$update_curate_opts, ignoreInit = T, {
       ## Add to params table if new or editing ----
       if (input$edit_curate_opts) {
-        params <- jsonlite::toJSON(req(rv$params), auto_unbox = TRUE)
+        params <- do.call(paste0("params_", input$target), list()) |> 
+          jsonlite::toJSON(auto_unbox = TRUE)
         dplyr::tbl(session$userData$con, "curate_opts") |>
           dplyr::rows_upsert(
             data.frame(
