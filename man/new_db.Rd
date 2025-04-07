@@ -9,6 +9,7 @@ new_db(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  genetic_code = 2,
   assemble_cpus = 6,
   assemble_memory = 16,
   seeds_db =
@@ -38,6 +39,9 @@ new_db(
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{genetic_code}{Translation table for your organisms. See NCBI website
+for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{assemble_cpus}{Default # cpus for assembly}
 

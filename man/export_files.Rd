@@ -7,9 +7,11 @@
 export_files(
   group = NULL,
   IDs = NULL,
-  fasta_header = paste("{ID} [organism={Taxon}] [topology={topology}] [mgcode=2]",
+  genetic_code = "2",
+  fasta_header =
+    paste("{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
     "[location=mitochondrion] {Taxon} mitochondrion, complete genome"),
-  fasta_header_gene = paste("{ID} [organism={Taxon}] [mgcode=2]",
+  fasta_header_gene = paste("{ID} [organism={Taxon}] [mgcode={genetic_code}]",
     "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
   start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"),
@@ -23,6 +25,8 @@ export_files(
 
 \item{IDs}{One or more sample IDs to export. If not provided all samples in
 the export group will be exported}
+
+\item{genetic_code}{Genetic code to use for annotation (default: 2).}
 
 \item{fasta_header}{Template for mitogenome fasta headers. Uses glue syntax (i.e.
 `{...}`) to insert values from the samples table}

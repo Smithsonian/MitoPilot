@@ -14,6 +14,7 @@
 #' @param trnaScan_opts Additional command line options for tRNAscan-SE.
 #' @param trnaScan_condaenv Conda environment to run tRNAscan-SE (default:
 #'   "base").
+#' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
 #' @param out_dir Output directory.
 #'
 #' @export
@@ -29,6 +30,7 @@ annotate <- function(
     mitos_condaenv = "mitos",
     trnaScan_opts = "-M vert",
     trnaScan_condaenv = "base",
+    start_gene = "trnF",
     out_dir = NULL) {
 
   assembly <- Biostrings::readDNAStringSet(assembly_fn)

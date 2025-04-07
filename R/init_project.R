@@ -108,6 +108,7 @@ new_project <- function(
 
   new_db(
     db_path = file.path(path, ".sqlite"),
+    genetic_code = genetic_code,
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
     seeds_db = custom_seeds_db,

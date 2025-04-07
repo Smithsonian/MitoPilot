@@ -179,7 +179,7 @@ export_server <- function(id) {
         textAreaInput(
           ns("fasta_header"),
           "Fasta Header Template (reference columns from your sample data using '{}'):",
-          "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
+          "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
           width = "100%"
         ),
         shinyWidgets::prettyCheckbox(
@@ -197,7 +197,7 @@ export_server <- function(id) {
         textAreaInput(
           ns("fasta_header_gene"),
           "Fasta Header Template for Gene Export (reference columns from your sample data using '{}', gene names will be automatically added):",
-          "{ID} [organism={Taxon}] [topology={topology}] [mgcode=2] [location=mitochondrion] {Taxon}",
+          "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] [location=mitochondrion] {Taxon}",
           width = "100%"
         ),
         div(
@@ -224,6 +224,7 @@ export_server <- function(id) {
       shinyjs::disable("export_data")
       export_files(
         group = input$export_group,
+        genetic_code = rv$data$genetic_code,
         fasta_header = input$fasta_header,
         fasta_header_gene = input$fasta_header_gene,
         generateAAalignments = input$include_alignments,

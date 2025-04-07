@@ -14,6 +14,12 @@ rotate_asmb <- function(
   # assembly length
   seq_length <- Biostrings::width(assembly)
 
+  # check if gene exists in annotation
+  # if not return unaltered assembly and annotation
+  if(gene %nin% annotations){
+    return(list(assembly, annotations))
+  }
+
   # Find start position for rotation
   start <- dplyr::filter(annotations, gene %in% start_gene) |>
     dplyr::select(pos1, pos2, direction) |>

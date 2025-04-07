@@ -5,6 +5,8 @@
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
+#' @param genetic_code Translation table for your organisms. See NCBI website
+#'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
 #' @param seeds_db Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db
@@ -28,6 +30,7 @@ new_db <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    genetic_code = 2,
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 16,
@@ -96,6 +99,7 @@ new_db <- function(
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
+      genetic_code = genetic_code,
       export_group = NA_character_
     )
   glue::glue_sql(
