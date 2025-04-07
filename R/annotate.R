@@ -24,7 +24,7 @@ annotate <- function(
     cpus = 4,
     genetic_code = "2",
     ref_db = "Chordata",
-    ref_dir = "/home/harpua/Jonah/MitoPilot/ref_dbs/Mitos2",
+    ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
     mitos_opts = "--intron 0 --oril 0 --trna 0",
     mitos_condaenv = "mitos",
     trnaScan_opts = "-M vert",
@@ -73,6 +73,40 @@ annotate <- function(
   assembly <- trnaScan_out$assembly
   annotations_trnaScan <- trnaScan_out$annotations
 
+  # Mitos2 annotation ----
+  annotations_mitos <- annotate_mitos2(
+    assembly = assembly,
+    topology = ifelse(all(stringr::str_detect(names(assembly), "circular")), "circular", "linear"),
+    genetic_code = genetic_code,
+    ref_db = ref_db,
+    ref_dir = ref_dir,
+    mitos_opts = mitos_opts,
+    condaenv = mitos_condaenv
+  )
+
+  # Combine annotations ----
+  annotations <- dplyr::bind_rows(
+    annotations_trnaScan,
+    annotations_mitos
+  ) |>
+    dplyr::arrange(contig, pos1)
+
+
+  # Rotate assembly and annotation if circular
+  if(stringr::str_detect(names(assembly), "circular")){
+    rotate_results <- rotate_asmb(
+      assembly = assembly,
+      annotations = annotations,
+      start_gene = "rrnL" # TODO: make this dynamically assigned
+    )
+
+    assembly <- rotate_results[[1]]
+    annotations <- rotate_results[[2]]
+
+    # reorder annotations
+    annotations <- dplyr::arrange(annotations, contig, pos1)
+  }
+
   # Update coverage if rotated ----
   rotate <- assembly@metadata[["rotate_to"]]
   if (!is.null(rotate) && rotate > 0) {
@@ -94,24 +128,6 @@ annotate <- function(
         Call = as.character(assembly) |> stringr::str_split("") |> unlist()
       )
   }
-
-  # Mitos2 annotation ----
-  annotations_mitos <- annotate_mitos2(
-    assembly = assembly,
-    topology = ifelse(all(stringr::str_detect(names(assembly), "circular")), "circular", "linear"),
-    genetic_code = genetic_code,
-    ref_db = ref_db,
-    ref_dir = ref_dir,
-    mitos_opts = mitos_opts,
-    condaenv = mitos_condaenv
-  )
-
-  # Combine annotations ----
-  annotations <- dplyr::bind_rows(
-    annotations_trnaScan,
-    annotations_mitos
-  ) |>
-    dplyr::arrange(contig, pos1)
 
   ## Fix D-loop annotations ----
   # Filter spurious OH annotations
