@@ -168,7 +168,7 @@ validate_starfish_mito <- function(
     refHits <- json_parse(refHits[[1]], TRUE)
 
     ## Internal Stop codons ----
-    if (!is.na(gene_annotations$translation) && stringr::str_detect(gene_annotations$translation, "\\*")) {
+    if (!is.na(translation) && stringr::str_detect(translation, "\\*")) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "internal stop codon")
     }
 
