@@ -12,6 +12,17 @@ annotations_details_server <- function(id, rv) {
       req(rv$updating$topology != "fragmented") # TODO! modify to handle fragmented assemblies
       rv$align_refSeq <- TRUE
 
+      # Set the initial text of the review button based on the state of reviewed column
+      observe({
+        if (is.null(rv$updating$reviewed)) {
+          updateActionButton(session, "reviewed", label = "Mark as reviewed")
+        } else if (as.character(rv$updating$reviewed) == "no") {
+          updateActionButton(session, "reviewed", label = "Mark as reviewed")
+        } else {
+          updateActionButton(session, "reviewed", label = "Mark as unreviewed")
+        }
+      })
+
       ## Load annotations ----
       rv$annotations <- dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
@@ -634,10 +645,10 @@ annotations_details_server <- function(id, rv) {
         )
     }) # END LINEARIZE
 
-
     # Mark as reviewed ----
     observeEvent(input$reviewed, {
-      if (as.character(rv$updating$reviewed) != "yes") {
+      if (as.character(rv$updating$reviewed) == "no") {
+        updateActionButton(session, "reviewed", label = "Mark as unreviewed")
         rv$updating$reviewed <- "yes"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -649,15 +660,8 @@ annotations_details_server <- function(id, rv) {
           )
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
-      }
-      output$modalText <- shiny::renderText({
-        stringr::str_glue("Reviewed: {rv$updating$reviewed}")
-      })
-    }) # END REVIEWED
-
-    # Mark as unreviewed ----
-    observeEvent(input$unreviewed, {
-      if (as.character(rv$updating$reviewed) != "no") {
+      } else {
+        updateActionButton(session, "reviewed", label = "Mark as reviewed")
         rv$updating$reviewed <- "no"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -673,7 +677,7 @@ annotations_details_server <- function(id, rv) {
       output$modalText <- shiny::renderText({
         stringr::str_glue("Reviewed: {rv$updating$reviewed}")
       })
-    }) # END UNREVIEWED
+    }) # END REVIEWED
 
 
     # Edit Annotation ----
@@ -1184,8 +1188,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
-      actionButton(ns("reviewed"), "Mark as reviewed"),
-      actionButton(ns("unreviewed"), "Mark as unreviewed"),
+      actionButton(ns("reviewed"), "temp") ,
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),

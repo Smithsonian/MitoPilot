@@ -145,7 +145,7 @@ annotate_server <- function(id) {
             warnings = colDef(show = TRUE, align = "center"),
             reviewed = colDef(
               show = TRUE,
-              name = "reviewed?",
+              name = "Reviewed",
               html = TRUE,
               align = "center",
               width = 100,
@@ -533,7 +533,7 @@ annotate_server <- function(id) {
       }
     })
     observeEvent(input$target, {
-      rv$params <- do.call(paste0("params_", input$target), list()) |> 
+      rv$params <- do.call(paste0("params_", input$target), list()) |>
         jsonlite::toJSON(auto_unbox = TRUE)
       output$params <- listviewer::renderReactjson({
         listviewer::reactjson(
@@ -566,7 +566,7 @@ annotate_server <- function(id) {
     observeEvent(input$update_curate_opts, ignoreInit = T, {
       ## Add to params table if new or editing ----
       if (input$edit_curate_opts) {
-        params <- do.call(paste0("params_", input$target), list()) |> 
+        params <- do.call(paste0("params_", input$target), list()) |>
           jsonlite::toJSON(auto_unbox = TRUE)
         dplyr::tbl(session$userData$con, "curate_opts") |>
           dplyr::rows_upsert(
