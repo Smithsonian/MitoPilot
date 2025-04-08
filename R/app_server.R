@@ -38,8 +38,19 @@ app_server <- function(input, output, session) {
   # View mode ----
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
-    shinyjs::toggle("ctrls", condition = input$mode != "Export")
-    shinyjs::toggle("export_ctrls", condition = input$mode == "Export")
+    if(input$mode == "Export"){
+      shinyjs::toggle("export_ctrls", condition = TRUE)
+      shinyjs::toggle("asmb_ctrls", condition = FALSE)
+      shinyjs::toggle("annot_ctrls", condition = FALSE)
+    }else if(input$mode == "Assemble"){
+      shinyjs::toggle("export_ctrls", condition = FALSE)
+      shinyjs::toggle("asmb_ctrls", condition = TRUE)
+      shinyjs::toggle("annot_ctrls", condition = FALSE)
+    }else{
+      shinyjs::toggle("export_ctrls", condition = FALSE)
+      shinyjs::toggle("asmb_ctrls", condition = FALSE)
+      shinyjs::toggle("annot_ctrls", condition = TRUE)
+    }
   })
 
   # Reload Data
@@ -47,12 +58,12 @@ app_server <- function(input, output, session) {
     trigger(paste0("refresh_", tolower(session$userData$mode)))
   })
   # State
-  init("state")
+  #init("state")
   observeEvent(input$state, {
     trigger("state")
   })
   # Lock
-  init("lock")
+  #init("lock")
   observeEvent(input$lock, {
     trigger("lock")
   })
@@ -60,6 +71,14 @@ app_server <- function(input, output, session) {
   init("run_modal")
   observeEvent(input$run_modal, {
     trigger("run_modal")
+  })
+  # ID_verified
+  observeEvent(input$id_verified, {
+    trigger("id_verified")
+  })
+  # mark problematic 
+  observeEvent(input$problematic, {
+    trigger("problematic")
   })
   # Export
   observeEvent(input$group, {

@@ -23,6 +23,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       annotate_switch,
       ID,
       Taxon,
+      ID_verified,
       annotate_opts,
       curate_opts,
       length,
@@ -36,6 +37,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       extra,
       warnings,
       reviewed,
+      problematic,
       time_stamp,
       annotate_notes
     ) |>
@@ -111,6 +113,8 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
   current <- list()
   if (length(unique(rv$updating$annotate_opts)) == 1) {
     current <- rv$annotate_opts[rv$annotate_opts$annotate_opts == rv$updating$annotate_opts[1], ]
+    cur_params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]] |>
+      jsonlite::fromJSON()
   }
 
   showModal(
@@ -202,6 +206,54 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         value = current$trnaScan_opts %||% character(0),
         width = "100%"
       ) |> shinyjs::disabled(),
+      div(
+        selectizeInput(
+          ns("start_gene"),
+          label = "starting gene for circular assemblies",
+          choices = c(
+            "rrnL",
+            "rrnS",
+            "nad1",
+            "nad2",
+            "cox1",
+            "cox2",
+            "atp8",
+            "atp6",
+            "cox3",
+            "nad3",
+            "nad4l",
+            "nad4",
+            "nad5",
+            "nad6",
+            "cob",
+            "trnA",
+            "trnC",
+            "trnD",
+            "trnE",
+            "trnF",
+            "trnG",
+            "trnH",
+            "trnI",
+            "trnK",
+            "trnL",
+            "trnM",
+            "trnN",
+            "trnP",
+            "trnQ",
+            "trnR",
+            "trnS",
+            "trnT",
+            "trnV",
+            "trnW",
+            "trnY"
+          ), # TODO: get choices from list of genes in curate params rules, tricky
+          selected = current$start_gene %||% character(0),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ) |> shinyjs::disabled()
+      ),
       size = "m",
       footer = tagList(
         actionButton(ns("update_annotate_opts"), "Update"),

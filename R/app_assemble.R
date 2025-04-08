@@ -215,6 +215,7 @@ assemble_server <- function(id) {
     selected <- reactive(reactable::getReactableState("table", "selected"))
 
     # Set State ----
+    init("state")
     on("state", {
       req(session$userData$mode == "Assemble")
       req(selected())
@@ -265,6 +266,7 @@ assemble_server <- function(id) {
     })
 
     # Toggle lock ----
+    init("lock")
     on("lock", {
       req(session$userData$mode == "Assemble")
       req(selected())

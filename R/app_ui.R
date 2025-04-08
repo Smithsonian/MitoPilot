@@ -26,7 +26,7 @@ app_ui <- function(request) {
             size = "sm"
           ),
           div(
-            id = "ctrls",
+            id = "asmb_ctrls",
             style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
             shinyWidgets::actionBttn(
               "state",
@@ -37,6 +37,41 @@ app_ui <- function(request) {
             shinyWidgets::actionBttn(
               "lock",
               label = "Lock",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "run_modal",
+              label = "Update",
+              style = "material-flat",
+              size = "sm"
+            )
+          ),
+          div(
+            id = "annot_ctrls",
+            #id = "ctrls",
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
+            shinyWidgets::actionBttn(
+              "state",
+              label = "State",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "lock",
+              label = "Lock",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "id_verified",
+              label = "ID Verified",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "problematic",
+              label = "Mark Problematic",
               style = "material-flat",
               size = "sm"
             ),

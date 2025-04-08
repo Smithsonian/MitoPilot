@@ -265,6 +265,7 @@ new_db <- function(
     con,
     "CREATE TABLE annotate (
       ID TEXT NOT NULL,
+      ID_verified TEXT,
       path TEXT,
       scaffolds INTEGER,
       annotate_opts TEXT,
@@ -279,6 +280,7 @@ new_db <- function(
       extra INTEGER,
       warnings INTEGER,
       reviewed TEXT,
+      problematic TEXT,
       structure TEXT,
       length INTEGER,
       topology TEXT,
@@ -293,6 +295,7 @@ new_db <- function(
         annotate_opts = "default",
         curate_opts = "default",
         reviewed = "no",
+        ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0
       ),
@@ -312,6 +315,7 @@ new_db <- function(
       ref_dir TEXT,
       mitos_opts TEXT,
       trnaScan_opts TEXT,
+      start_gene TEXT,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -324,7 +328,8 @@ new_db <- function(
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
         mitos_opts = "--intron 0 --oril 0 --trna 0",
-        trnaScan_opts = "-M vert"
+        trnaScan_opts = "-M vert",
+        start_gene = "trnF"
       ),
       in_place = TRUE,
       copy = TRUE,

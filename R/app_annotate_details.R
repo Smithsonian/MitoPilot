@@ -12,14 +12,29 @@ annotations_details_server <- function(id, rv) {
       req(rv$updating$topology != "fragmented") # TODO! modify to handle fragmented assemblies
       rv$align_refSeq <- TRUE
 
-      # Set the initial text of the review button based on the state of reviewed column
+      # Set the initial text of buttons
       observe({
-        if (is.null(rv$updating$reviewed)) {
-          updateActionButton(session, "reviewed", label = "Mark as reviewed")
-        } else if (as.character(rv$updating$reviewed) == "no") {
-          updateActionButton(session, "reviewed", label = "Mark as reviewed")
+        # ID_verified button
+        if (is.na(rv$updating$ID_verified)) {
+          updateActionButton(session, "ID_verified", label = "Mark ID verified")
+        } else if(rv$updating$ID_verified == "no"){
+          updateActionButton(session, "ID_verified", label = "Mark ID verified")
         } else {
-          updateActionButton(session, "reviewed", label = "Mark as unreviewed")
+          updateActionButton(session, "ID_verified", label = "Mark ID unverified")
+        }
+        # reviewed button
+        if (is.na(rv$updating$reviewed)) {
+          updateActionButton(session, "reviewed", label = "Mark reviewed")
+        } else if (as.character(rv$updating$reviewed) == "no") {
+          updateActionButton(session, "reviewed", label = "Mark reviewed")
+        } else {
+          updateActionButton(session, "reviewed", label = "Mark unreviewed")
+        }
+        # problematic button
+        if (is.na(rv$updating$problematic)) {
+          updateActionButton(session, "problematic", label = "Mark problematic")
+        } else {
+          updateActionButton(session, "problematic", label = "Mark not problematic")
         }
       })
 
@@ -49,9 +64,19 @@ annotations_details_server <- function(id, rv) {
       render_annotations_table(Sys.time())
     })
 
+    # Render "id verified" status
+    output$idText <- shiny::renderText({
+      stringr::str_glue("ID verified: {rv$updating$ID_verified}")
+    })
+
     # Render "reviewed" status
-    output$modalText <- shiny::renderText({
-      stringr::str_glue("Reviewed: {rv$updating$reviewed}")
+    output$reviewedText <- shiny::renderText({
+      stringr::str_glue("Sample reviewed: {rv$updating$reviewed}")
+    })
+
+    # Render "problematic" status
+    output$problematicText <- shiny::renderText({
+      stringr::str_glue("Sample problematic: {rv$updating$problematic}")
     })
 
     # Render table ----
@@ -645,10 +670,44 @@ annotations_details_server <- function(id, rv) {
         )
     }) # END LINEARIZE
 
+    # Mark ID verified ----
+    observeEvent(input$ID_verified, {
+      if (as.character(rv$updating$ID_verified) == "no") {
+        updateActionButton(session, "ID_verified", label = "Mark ID unverified")
+        rv$updating$ID_verified <- "yes"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "ID_verified")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+      } else {
+        updateActionButton(session, "ID_verified", label = "Mark ID verified")
+        rv$updating$ID_verified <- "no"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "ID_verified")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+      }
+      output$idText <- shiny::renderText({
+        stringr::str_glue("ID verified: {rv$updating$ID_verified}")
+      })
+    }) # END ID VERIFIED
+
     # Mark as reviewed ----
     observeEvent(input$reviewed, {
       if (as.character(rv$updating$reviewed) == "no") {
-        updateActionButton(session, "reviewed", label = "Mark as unreviewed")
+        updateActionButton(session, "reviewed", label = "Mark unreviewed")
         rv$updating$reviewed <- "yes"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -661,7 +720,7 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       } else {
-        updateActionButton(session, "reviewed", label = "Mark as reviewed")
+        updateActionButton(session, "reviewed", label = "Mark reviewed")
         rv$updating$reviewed <- "no"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -674,10 +733,45 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       }
-      output$modalText <- shiny::renderText({
+      output$reviewedText <- shiny::renderText({
         stringr::str_glue("Reviewed: {rv$updating$reviewed}")
       })
     }) # END REVIEWED
+
+    # Mark as problematic ----
+    observeEvent(input$problematic, {
+      if (is.na(rv$updating$problematic)) {
+        updateActionButton(session, "problematic", label = "Mark not problematic")
+        rv$updating$problematic <- "yes"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "problematic")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+      } else {
+        updateActionButton(session, "problematic", label = "Mark problematic")
+        rv$updating$problematic <- NA_character_
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "problematic")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+      }
+      output$problematicText <- shiny::renderText({
+        stringr::str_glue("Sample problematic: {rv$updating$problematic}")
+      })
+    }) # END PROBLEMATIC
+
 
 
     # Edit Annotation ----
@@ -1061,7 +1155,9 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     title = stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}"),
     size = "l",
     easyClose = F,
-    textOutput(ns("modalText")),
+    textOutput(ns("idText")),
+    textOutput(ns("reviewedText")),
+    textOutput(ns("problematicText")),
     tags$details(
       open = TRUE,
       tags$summary("Annotation Table"),
