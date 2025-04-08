@@ -47,5 +47,5 @@ annotate(
 \item{out_dir}{Output directory.}
 }
 \description{
-Uses Mito2 and tRNAscan-SE to annotate a mitogenome assembly.
+Uses Mitos2 and tRNAscan-SE to annotate a mitogenome assembly.
 }
