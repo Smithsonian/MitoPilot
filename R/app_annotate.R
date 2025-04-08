@@ -305,8 +305,8 @@ annotate_server <- function(id) {
     })
 
     # Toggle ID_verified
-    init("id_verified")
-    on("id_verified", {
+    init("id_verified_top")
+    on("id_verified_top", {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- rv$data |>
@@ -331,12 +331,11 @@ annotate_server <- function(id) {
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
-      trigger("refresh_export")
     })
 
     # Toggle problematic
-    init("problematic")
-    on("problematic", {
+    init("problematic_top")
+    on("problematic_top", {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- rv$data |>
@@ -359,7 +358,6 @@ annotate_server <- function(id) {
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
-      trigger("refresh_export")
     })
 
     # Set Annotate Options ----

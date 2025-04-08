@@ -64,13 +64,13 @@ app_ui <- function(request) {
               size = "sm"
             ),
             shinyWidgets::actionBttn(
-              "id_verified",
+              "id_verified_top",
               label = "ID Verified",
               style = "material-flat",
               size = "sm"
             ),
             shinyWidgets::actionBttn(
-              "problematic",
+              "problematic_top",
               label = "Mark Problematic",
               style = "material-flat",
               size = "sm"

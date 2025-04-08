@@ -1,6 +1,6 @@
 #' Mitogenome Annotation Wrapper
 #'
-#' Uses Mito2 and tRNAscan-SE to annotate a mitogenome assembly.
+#' Uses Mitos2 and tRNAscan-SE to annotate a mitogenome assembly.
 #'
 #' @param assembly_fn Path to the mitogenome assembly FASTA file.
 #' @param coverage_fn Path to the mitogenome assembly coverage stats CSV file.

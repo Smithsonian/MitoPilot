@@ -15,23 +15,27 @@ annotations_details_server <- function(id, rv) {
       # Set the initial text of buttons
       observe({
         # ID_verified button
-        if (is.na(rv$updating$ID_verified)) {
+        if (is.na(rv$data$ID_verified)) {
           updateActionButton(session, "ID_verified", label = "Mark ID verified")
-        } else if(rv$updating$ID_verified == "no"){
+        } else if(rv$data$ID_verified == "no"){
           updateActionButton(session, "ID_verified", label = "Mark ID verified")
         } else {
           updateActionButton(session, "ID_verified", label = "Mark ID unverified")
         }
+      })
+      observe({
         # reviewed button
-        if (is.na(rv$updating$reviewed)) {
+        if (is.na(rv$data$reviewed)) {
           updateActionButton(session, "reviewed", label = "Mark reviewed")
-        } else if (as.character(rv$updating$reviewed) == "no") {
+        } else if (as.character(rv$data$reviewed) == "no") {
           updateActionButton(session, "reviewed", label = "Mark reviewed")
         } else {
           updateActionButton(session, "reviewed", label = "Mark unreviewed")
         }
+      })
+      observe({
         # problematic button
-        if (is.na(rv$updating$problematic)) {
+        if (is.na(rv$data$problematic)) {
           updateActionButton(session, "problematic", label = "Mark problematic")
         } else {
           updateActionButton(session, "problematic", label = "Mark not problematic")
@@ -338,6 +342,10 @@ annotations_details_server <- function(id, rv) {
     # MSA ----
     init("align_now")
     observeEvent(input$align, ignoreInit = T, {
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "top_5_blast",
+        value = FALSE
+      )
       shinyWidgets::updatePrettyCheckbox(
         inputId = "local_blast",
         value = FALSE
@@ -734,7 +742,7 @@ annotations_details_server <- function(id, rv) {
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       }
       output$reviewedText <- shiny::renderText({
-        stringr::str_glue("Reviewed: {rv$updating$reviewed}")
+        stringr::str_glue("Sample reviewed: {rv$updating$reviewed}")
       })
     }) # END REVIEWED
 
@@ -771,8 +779,6 @@ annotations_details_server <- function(id, rv) {
         stringr::str_glue("Sample problematic: {rv$updating$problematic}")
       })
     }) # END PROBLEMATIC
-
-
 
     # Edit Annotation ----
     observeEvent(input$edit_mode, {
@@ -1082,6 +1088,11 @@ annotations_details_server <- function(id, rv) {
       rv$editing <- NULL
     })
 
+    # Top 5 BLAST hits  ----
+    observeEvent(input$top_5_blast, ignoreInit = T, {
+
+    })
+
     # Local Blast ----
     observeEvent(input$local_blast, ignoreInit = T, {
       req(input$local_blast)
@@ -1251,20 +1262,30 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           ) |> shinyjs::hidden(),
           div(
             style = "display: flex; flex: 1; justify-content: right; gap: 0; align-items: center; padding-right: 2em;",
-            shinyWidgets::prettyCheckbox(
-              ns("local_blast"),
-              label = "Local blast",
-              status = "primary",
-              inline = TRUE
-            ),
-            tags$i(
-              id = ns("refresh_blast"),
-              class = "fas fa-sync grow",
-              style = "margin-bottom: 15px; margin-left: -15px;",
-              onclick = stringr::str_glue(
-                "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
+            div(
+              shinyWidgets::prettyCheckbox(
+                ns("top_5_blast"),
+                label = "Top 5 blast hits",
+                status = "primary",
+                inline = TRUE
               )
-            ) |> shinyjs::hidden()
+            ),
+            div(
+              shinyWidgets::prettyCheckbox(
+                ns("local_blast"),
+                label = "Local blast",
+                status = "primary",
+                inline = TRUE
+              ),
+              tags$i(
+                id = ns("refresh_blast"),
+                class = "fas fa-sync grow",
+                style = "margin-bottom: 15px; margin-left: -15px;",
+                onclick = stringr::str_glue(
+                  "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
+                )
+              ) |> shinyjs::hidden()
+            )
           )
         ),
         div(
@@ -1284,7 +1305,9 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
-      actionButton(ns("reviewed"), "temp") ,
+      actionButton(ns("ID_verified"), "temp"),
+      actionButton(ns("reviewed"), "temp"),
+      actionButton(ns("problematic"), "temp"),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),

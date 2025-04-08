@@ -73,12 +73,12 @@ app_server <- function(input, output, session) {
     trigger("run_modal")
   })
   # ID_verified
-  observeEvent(input$id_verified, {
-    trigger("id_verified")
+  observeEvent(input$id_verified_top, {
+    trigger("id_verified_top")
   })
   # mark problematic 
-  observeEvent(input$problematic, {
-    trigger("problematic")
+  observeEvent(input$problematic_top, {
+    trigger("problematic_top")
   })
   # Export
   observeEvent(input$group, {
