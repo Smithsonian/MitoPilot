@@ -16,7 +16,7 @@ rotate_asmb <- function(
 
   # check if gene exists in annotation
   # if not return unaltered assembly and annotation
-  if(gene %nin% annotations){
+  if(start_gene %nin% annotations$gene){
     return(list(assembly, annotations))
   }
 
