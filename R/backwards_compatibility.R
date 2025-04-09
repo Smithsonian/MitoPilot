@@ -18,6 +18,11 @@ backwards_compatibility <- function(
   annotate_table <- DBI::dbReadTable(con, "annotate") # read in annotations table
   annotate_opts_table <- DBI::dbReadTable(con, "annotate_opts") # read in annotations table
 
+  if("start_gene" %in% names(annotate_opts_table) && "problematic" %in% names(annotate_table) && "ID_verified" %in% names(annotate_table) && "reviewed" %in% names(annotate_table)) {
+    message("nothing to update")
+    return(invisible(NULL))
+  }
+
   # if reviewed column doesn't exist, add it
   if(!("reviewed" %in% names(annotate_table))){
     message("added 'reviewed' column to annotate table")
@@ -97,11 +102,7 @@ backwards_compatibility <- function(
         annotate_opts_table,
         in_place = TRUE,
         copy = TRUE,
-        by = "ID"
+        by = "annotate_opts"
       )
-  }
-
-  if("start_gene" %in% names(annotate_opts_table) && "problematic" %in% names(annotate_table) && "ID_verified" %in% names(annotate_table) && "reviewed" %in% names(annotate_table)) {
-      message("nothing to update")
   }
 }
