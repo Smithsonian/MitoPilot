@@ -45,8 +45,9 @@
 <span>  mapping_id <span class="op">=</span> <span class="st">"ID"</span>,</span>
 <span>  data_path <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  min_depth <span class="op">=</span> <span class="fl">2e+06</span>,</span>
+<span>  genetic_code <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  executor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"local"</span>, <span class="st">"awsbatch"</span>, <span class="st">"NMNH_Hydra"</span>, <span class="st">"NOAA_SEDNA"</span><span class="op">)</span>,</span>
-<span>  container <span class="op">=</span> <span class="st">"drleopold/mitopilot"</span>,</span>
+<span>  container <span class="op">=</span> <span class="st">"macguigand/mitopilot"</span>,</span>
 <span>  custom_seeds_db <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  custom_labels_db <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  config <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -86,6 +87,11 @@ a AWS s3 bucket even if not using AWS for pipeline execution..</p></dd>
 <dt id="arg-min-depth">min_depth<a class="anchor" aria-label="anchor" href="#arg-min-depth"></a></dt>
 <dd><p>Minimum sequencing depth after pre-processing to proceed
 with assembly (default: 2000000)</p></dd>
+
+
+<dt id="arg-genetic-code">genetic_code<a class="anchor" aria-label="anchor" href="#arg-genetic-code"></a></dt>
+<dd><p>Translation table for your organisms. See NCBI website
+for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi</p></dd>
 
 
 <dt id="arg-executor">executor<a class="anchor" aria-label="anchor" href="#arg-executor"></a></dt>

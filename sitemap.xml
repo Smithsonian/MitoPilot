@@ -20,6 +20,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/coverage.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/coverage_trim.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/curate_fish_mito.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/curate_starfish_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_db_to_csv.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_files.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/get_assembly.html</loc></url>
@@ -31,9 +32,12 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_test_project.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/nextflow_cmd.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_fish_mito.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/params_starfish_mito.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_app.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_seqdata.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/validate_fish_mito.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/validate_starfish_mito.html</loc></url>
 </urlset>
 
