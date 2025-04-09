@@ -5,6 +5,7 @@
 #' @param coverage_fn Path to the coverage file (csv)
 #' @param genetic_code Genetic code to use (default = 2)
 #' @param out_dir Path to the output directory
+#' @param max_target_seqs Maximum number of target sequences to retain from BLAST
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
 #'
@@ -16,6 +17,7 @@ curate_fish_mito <- function(
     coverage_fn = NULL,
     genetic_code = 2,
     out_dir = NULL,
+    max_target_seqs = 1000,
     params = NULL) {
   # Prepare environment ----
 
@@ -179,7 +181,7 @@ curate_fish_mito <- function(
       ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
         stringr::str_glue()
 
-      out <- get_top_hits(ref_db, translation) |>
+      out <- get_top_hits(ref_db, translation, max_target_seqs) |>
         json_string()
       out %||% '{}'
     })

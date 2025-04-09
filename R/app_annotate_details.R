@@ -12,36 +12,6 @@ annotations_details_server <- function(id, rv) {
       req(rv$updating$topology != "fragmented") # TODO! modify to handle fragmented assemblies
       rv$align_refSeq <- TRUE
 
-      # Set the initial text of buttons
-      observe({
-        # ID_verified button
-        if (is.na(rv$data$ID_verified)) {
-          updateActionButton(session, "ID_verified", label = "Mark ID verified")
-        } else if(rv$data$ID_verified == "no"){
-          updateActionButton(session, "ID_verified", label = "Mark ID verified")
-        } else {
-          updateActionButton(session, "ID_verified", label = "Mark ID unverified")
-        }
-      })
-      observe({
-        # reviewed button
-        if (is.na(rv$data$reviewed)) {
-          updateActionButton(session, "reviewed", label = "Mark reviewed")
-        } else if (as.character(rv$data$reviewed) == "no") {
-          updateActionButton(session, "reviewed", label = "Mark reviewed")
-        } else {
-          updateActionButton(session, "reviewed", label = "Mark unreviewed")
-        }
-      })
-      observe({
-        # problematic button
-        if (is.na(rv$data$problematic)) {
-          updateActionButton(session, "problematic", label = "Mark problematic")
-        } else {
-          updateActionButton(session, "problematic", label = "Mark not problematic")
-        }
-      })
-
       ## Load annotations ----
       rv$annotations <- dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
@@ -680,8 +650,21 @@ annotations_details_server <- function(id, rv) {
 
     # Mark ID verified ----
     observeEvent(input$ID_verified, {
-      if (as.character(rv$updating$ID_verified) == "no") {
-        updateActionButton(session, "ID_verified", label = "Mark ID unverified")
+      if(is.na(rv$updating$ID_verified)) {
+        updateActionButton(session, "ID_verified")
+        rv$updating$ID_verified <- "yes"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "ID_verified")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+      } else if(as.character(rv$updating$ID_verified) == "no"){
+        updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "yes"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -694,7 +677,7 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
       } else {
-        updateActionButton(session, "ID_verified", label = "Mark ID verified")
+        updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "no"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -715,7 +698,7 @@ annotations_details_server <- function(id, rv) {
     # Mark as reviewed ----
     observeEvent(input$reviewed, {
       if (as.character(rv$updating$reviewed) == "no") {
-        updateActionButton(session, "reviewed", label = "Mark unreviewed")
+        updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "yes"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -728,7 +711,7 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       } else {
-        updateActionButton(session, "reviewed", label = "Mark reviewed")
+        updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "no"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -749,7 +732,7 @@ annotations_details_server <- function(id, rv) {
     # Mark as problematic ----
     observeEvent(input$problematic, {
       if (is.na(rv$updating$problematic)) {
-        updateActionButton(session, "problematic", label = "Mark not problematic")
+        updateActionButton(session, "problematic")
         rv$updating$problematic <- "yes"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -762,7 +745,7 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
       } else {
-        updateActionButton(session, "problematic", label = "Mark problematic")
+        updateActionButton(session, "problematic")
         rv$updating$problematic <- NA_character_
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -1305,9 +1288,9 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
-      actionButton(ns("ID_verified"), "temp"),
-      actionButton(ns("reviewed"), "temp"),
-      actionButton(ns("problematic"), "temp"),
+      actionButton(ns("ID_verified"), "Toggle ID verified"),
+      actionButton(ns("reviewed"), "Toggle reviewed"),
+      actionButton(ns("problematic"), "Toggle problematic"),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),

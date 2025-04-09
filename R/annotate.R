@@ -99,7 +99,7 @@ annotate <- function(
     rotate_results <- rotate_asmb(
       assembly = assembly,
       annotations = annotations,
-      start_gene = "rrnL" # TODO: make this dynamically assigned
+      start_gene = start_gene
     )
 
     assembly <- rotate_results[[1]]

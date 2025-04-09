@@ -2,7 +2,7 @@ process annotate {
 
     executor params.annotate.executor
     container params.annotate.container
-    
+
     publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/NF_work_dir_annotate.txt", mode: 'copy'
 
     errorStrategy 'finish'
@@ -15,7 +15,7 @@ process annotate {
     input:
         tuple val(id), val(path), path(assembly), path(coverage), val(opts)
 
-    output: 
+    output:
     tuple val(id), val(path),
         path("${id}/annotate/${id}_annotations_*.csv"),
         path("${id}/annotate/${id}_assembly_*.fasta"),
@@ -37,6 +37,7 @@ process annotate {
         mitos_condaenv = '!{params.mitos_condaenv}', \
         trnaScan_opts = '!{opts.trnaScan}', \
         trnaScan_condaenv = '!{params.trnaScan_condaenv}', \
+        start_gene = '!{opts.start_gene}', \
         out_dir = '!{dir}'
     )"
     ### work dir info for troubleshooting ####

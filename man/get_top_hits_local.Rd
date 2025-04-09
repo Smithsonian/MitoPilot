@@ -4,12 +4,14 @@
 \alias{get_top_hits_local}
 \title{Get top BLASTP hits}
 \usage{
-get_top_hits_local(ref_db = NULL, query = NULL)
+get_top_hits_local(ref_db = NULL, query = NULL, max_target_seqs = 1000)
 }
 \arguments{
 \item{ref_db}{reference database}
 
 \item{query}{query sequeencs}
+
+\item{max_target_seqs}{Maximum number of target sequences to retain from BLAST}
 }
 \description{
 If blastp is not available on the path loaded in system(), set

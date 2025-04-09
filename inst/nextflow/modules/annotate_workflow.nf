@@ -1,7 +1,7 @@
 include {annotate} from './annotate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, ' +
-                        'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, trnaScan_opts ' +
+                        'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.trnaScan_opts, d.start_gene ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -13,16 +13,16 @@ workflow ANNOTATE {
     channel.fromQuery(params.sqlRead, db: 'sqlite')
         .map{ it ->
             tuple(
-                it[0],                                          // ID   
+                it[0],                                          // ID
                 it[1],                                          // path
                 file(                                           // Assembly
-                    params.publishDir + '/' + 
-                    it[0] + '/assemble/' + it[2] + '/' + 
+                    params.publishDir + '/' +
+                    it[0] + '/assemble/' + it[2] + '/' +
                     it[0] + '_assembly_' + it[1] + '.fasta'
                 ),
                 file(                                           // Coverage
-                    params.publishDir + '/' + 
-                    it[0] + '/assemble/' + it[2] + '/' + 
+                    params.publishDir + '/' +
+                    it[0] + '/assemble/' + it[2] + '/' +
                     it[0] + '_assembly_' + it[1] + '_coverageStats.csv'
                 ),
                 [
@@ -31,9 +31,10 @@ workflow ANNOTATE {
                     ref_db: it[5],                                     // mitos_ref_db
                     ref_dir: it[6],                                    // mitos_ref_dir
                     mitos: it[7],                                      // mitos_opts
-                    trnaScan: it[8]                                    // trnaScan_opts
+                    trnaScan: it[8],                                    // trnaScan_opts
+                    start_gene: it[9]                                  // starting gene for rotation
                 ]
-                
+
             )
         }
         .set { annotate_in }
@@ -42,5 +43,5 @@ workflow ANNOTATE {
 
     emit:
            ch = annotate_out[0]
-           
+
 }

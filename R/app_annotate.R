@@ -420,8 +420,7 @@ annotate_server <- function(id) {
           value = cur$trnaScan_opts
         )
         updateSelectizeInput(
-          ns("start_gene"),
-          label = "starting gene for circular assemblies",
+          inputId = "start_gene",
           choices = c(
             "rrnL",
             "rrnS",
@@ -474,6 +473,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("mitos_ref_dir", condition = FALSE) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% rv$data$annotate_opts) {
         rv$updating_indirect <- rv$data |>

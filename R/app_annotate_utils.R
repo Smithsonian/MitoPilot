@@ -62,18 +62,20 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #'
 #' @param ref_db reference database
 #' @param query query sequeencs
+#' @param max_target_seqs Maximum number of target sequences to retain from BLAST
 #'
 #' @export
 #'
 get_top_hits_local <- function(
     ref_db = NULL,
-    query = NULL) {
+    query = NULL,
+    max_target_seqs = 1000) {
   stringr::str_glue(
     "-db {ref_db}",
     "-best_hit_score_edge 0.01",
     "-max_hsps 1",
     "-qcov_hsp_perc 80",
-    "-max_target_seqs 1000",
+    "-max_target_seqs {max_target_seqs}",
     "-outfmt '6 salltitles evalue sseq'",
     "-query -",
     .sep = " "
@@ -248,6 +250,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             "trnY"
           ), # TODO: get choices from list of genes in curate params rules, tricky
           selected = current$start_gene %||% character(0),
+          width = "100%",
           options = list(
             create = TRUE,
             maxItems = 1
