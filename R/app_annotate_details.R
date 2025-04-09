@@ -313,10 +313,6 @@ annotations_details_server <- function(id, rv) {
     init("align_now")
     observeEvent(input$align, ignoreInit = T, {
       shinyWidgets::updatePrettyCheckbox(
-        inputId = "top_5_blast",
-        value = FALSE
-      )
-      shinyWidgets::updatePrettyCheckbox(
         inputId = "local_blast",
         value = FALSE
       )
@@ -1070,12 +1066,6 @@ annotations_details_server <- function(id, rv) {
       shinyjs::show("edit_mode")
       rv$editing <- NULL
     })
-
-    # Top 5 BLAST hits  ----
-    observeEvent(input$top_5_blast, ignoreInit = T, {
-
-    })
-
     # Local Blast ----
     observeEvent(input$local_blast, ignoreInit = T, {
       req(input$local_blast)
@@ -1253,14 +1243,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           ) |> shinyjs::hidden(),
           div(
             style = "display: flex; flex: 1; justify-content: right; gap: 0; align-items: center; padding-right: 2em;",
-            div(
-              shinyWidgets::prettyCheckbox(
-                ns("top_5_blast"),
-                label = "Top 5 blast hits",
-                status = "primary",
-                inline = TRUE
-              )
-            ),
             div(
               shinyWidgets::prettyCheckbox(
                 ns("local_blast"),

@@ -331,7 +331,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           style = "flex: 1",
           numericInput(
             ns("max_blast_hits"),
-            label = "Maximum retained BLAST:",
+            label = "Maximum retained BLAST hits:",
             value = current$max_blast_hits %||% character(0),
             min = 1,
             max = 1000,
