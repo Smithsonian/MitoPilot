@@ -10,7 +10,7 @@ curate_fish_mito(
   coverage_fn = NULL,
   genetic_code = 2,
   out_dir = NULL,
-  max_target_seqs = 1000,
+  max_blast_hits = 100,
   params = NULL
 )
 }
@@ -25,7 +25,7 @@ curate_fish_mito(
 
 \item{out_dir}{Path to the output directory}
 
-\item{max_target_seqs}{Maximum number of target sequences to retain from BLAST}
+\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
 
 \item{params}{Nested list of curation parameters. Can also provided as a
 base64 encoded json string.}

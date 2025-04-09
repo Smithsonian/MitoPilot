@@ -27,6 +27,7 @@ new_db(
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
+  max_blast_hits = 100,
   curate_params = NULL
 )
 }
@@ -70,6 +71,8 @@ for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 \item{curate_memory}{Default memory (GB) for curation}
 
 \item{curate_target}{Default target database for curation}
+
+\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
 
 \item{curate_params}{Default curation parameters}
 }
