@@ -31,14 +31,13 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
 #' @param ref_db reference database
 #' @param query query sequeencs
 #' @param condaenv Conda environment to use for running blastp
-#' @param max_target_seqs Maximum number of target sequences to retain from BLAST
 #'
 #' @noRd
 #'
 get_top_hits <- function(
     ref_db,
     query,
-    max_target_seqs,
+    max_blast_hits = 100,
     condaenv = "base") {
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
 
@@ -51,7 +50,7 @@ get_top_hits <- function(
       "-best_hit_score_edge 0.01",
       "-max_hsps 1",
       #"-qcov_hsp_perc 80",
-      "-max_target_seqs {max_target_seqs}",
+      "-max_target_seqs 1000",
       "-outfmt '6 salltitles evalue'",
       "-query -",
       .sep = " "
@@ -63,7 +62,7 @@ get_top_hits <- function(
       "-best_hit_score_edge 0.01",
       "-max_hsps 1",
       #"-qcov_hsp_perc 50",
-      "-max_target_seqs {max_target_seqs}",
+      "-max_target_seqs 1000",
       "-outfmt '6 salltitles evalue'",
       "-query -",
       .sep = " "
@@ -111,7 +110,9 @@ get_top_hits <- function(
       .after = "eval"
     ) |>
     dplyr::ungroup() |>
-    dplyr::arrange(dplyr::desc(similarity))
+    dplyr::arrange(dplyr::desc(similarity)) |>
+    dplyr::slice_head(max_blast_hits)
+
 
 }
 

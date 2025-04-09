@@ -591,6 +591,10 @@ annotate_server <- function(id) {
           inputId = "curate_opts_memory",
           value = cur$memory
         )
+        updateNumericInput(
+          inputId = "max_blast_hits",
+          value = cur$max_blast_hits
+        )
         updateSelectizeInput(
           inputId = "target",
           selected = cur$target,
@@ -622,6 +626,7 @@ annotate_server <- function(id) {
     observeEvent(input$edit_curate_opts, ignoreInit = T, {
       shinyjs::toggleState("curate_opts_cpus", condition = input$edit_curate_opts)
       shinyjs::toggleState("curate_opts_memory", condition = input$edit_curate_opts)
+      shinyjs::toggleState("max_blast_hits", condition = input$edit_curate_opts)
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection

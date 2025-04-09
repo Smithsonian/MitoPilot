@@ -1110,6 +1110,13 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$local_blast, ignoreInit = T, {
       req(!input$local_blast)
       req(!is.null(rv$local_hits))
+      max_blast_hits <- dplyr::left_join(
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::select(ID, curate_opts) |>
+          dplyr::filter(ID == !!rv$updating$ID),
+        dplyr::tbl(session$userData$con, "curate_opts"),
+        by = "curate_opts") |>
+        dplyr::pull(max_blast_hits)
       # Check for edit mode
       if (length(rv$editing) > 0) {
         shinyWidgets::sendSweetAlert(
@@ -1129,7 +1136,8 @@ annotations_details_server <- function(id, rv) {
       rv$alignment <- NULL
       rv$local_hits <- get_top_hits_local(
         req(rv$local_db),
-        rv$annotations$translation[selected()]
+        rv$annotations$translation[selected()],
+        max_blast_hits
       )
       trigger("align_now")
     })

@@ -5,6 +5,7 @@
 #' @param coverage_fn Path to the coverage file (csv)
 #' @param genetic_code Genetic code to use (default = 2)
 #' @param out_dir Path to the output directory
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
 #'
@@ -14,8 +15,9 @@ curate_starfish_mito <- function(
     annotations_fn = NULL,
     assembly_fn = NULL,
     coverage_fn = NULL,
-    genetic_code = 9,
+    genetic_code = 2,
     out_dir = NULL,
+    max_blast_hits = 100,
     params = NULL) {
   # Prepare environment ----
 
@@ -179,7 +181,8 @@ curate_starfish_mito <- function(
       ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
         stringr::str_glue()
 
-      out <- get_top_hits(ref_db, translation) |>
+      out <- get_top_hits(ref_db, translation,
+                          max_blast_hits) |>
         json_string()
       out %||% '{}'
     })
@@ -239,7 +242,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation
+            translation,
+            max_blast_hits
           )
           break
         }
@@ -276,7 +280,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation
+            translation,
+            max_blast_hits
           )
           break
         }
@@ -323,7 +328,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation
+            translation,
+            max_blast_hits
           )
           break
         }
@@ -370,7 +376,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation
+            translation,
+            max_blast_hits
           )
           break
         }
@@ -405,7 +412,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits_new <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation_new
+            translation_new,
+            max_blast_hits
           )
           if (refHits_new$gap_leading[1] != 0 && (sum(refHits_new$gap_leading < 0L) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1
@@ -450,7 +458,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits_new <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation_new
+            translation_new,
+            max_blast_hits
           )
           if (refHits_new$gap_leading[1] != 0 && (sum(refHits_new$gap_leading < 0L) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1
@@ -503,7 +512,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits_new <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation_new
+            translation_new,
+            max_blast_hits
           )
           if (refHits_new$gap_trailing[1] != 0 && (sum(refHits_new$gap_trailing < 0L) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1
@@ -554,7 +564,8 @@ curate_starfish_mito <- function(
             as.character()
           refHits_new <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
-            translation_new
+            translation_new,
+            max_blast_hits
           )
           if (refHits_new$gap_trailing[1] != 0 && (sum(refHits_new$gap_trailing < 0L) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1

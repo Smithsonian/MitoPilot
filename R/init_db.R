@@ -21,6 +21,7 @@
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param curate_params Default curation parameters
 #'
 #' @export
@@ -54,6 +55,7 @@ new_db <- function(
     curate_cpus = 4,
     curate_memory = 8,
     curate_target = "fish_mito",
+    max_blast_hits = 100,
     curate_params = NULL) {
   # Read mapping file
   if (is.null(mapping_fn)) {
@@ -344,6 +346,7 @@ new_db <- function(
       cpus INTEGER,
       memory INTEGER,
       target TEXT,
+      max_blast_hits INTEGER,
       params JSON,
       PRIMARY KEY (curate_opts)
     );"
@@ -355,6 +358,7 @@ new_db <- function(
         cpus = curate_cpus,
         memory = curate_memory,
         target = curate_target,
+        max_blast_hits = 100,
         params = jsonlite::toJSON(curate_params)
       ),
       in_place = TRUE,

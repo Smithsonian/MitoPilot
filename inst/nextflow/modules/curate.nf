@@ -2,7 +2,7 @@ process curate {
 
     executor params.curate.executor
     container params.curate.container
-    
+
     publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/*", mode: 'copy'
 
     errorStrategy 'finish'
@@ -14,7 +14,7 @@ process curate {
     input:
         tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts)
 
-    output: 
+    output:
     tuple val(id), val(path),
         path("${id}/${id}_annotations_*.csv"),
         path("${id}/annotate/${id}_assembly_*.fasta"),
@@ -32,8 +32,9 @@ process curate {
         coverage_fn = '!{coverage}', \
         genetic_code = !{params.genetic_code}, \
         params = '!{opts.params}', \
-        out_dir = '!{dir}'
-    )"
+        out_dir = '!{dir}', \
+        max_blast_hits = '!{opts.max_blast_hits}'
+        )"
     mv !{dir}/*_annotations_*.csv !{id}/
     ### work dir info for troubleshooting ####
     echo "Nextflow curate working directory:" > !{dir}/NF_work_dir_curate.txt

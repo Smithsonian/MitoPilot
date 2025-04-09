@@ -62,20 +62,19 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #'
 #' @param ref_db reference database
 #' @param query query sequeencs
-#' @param max_target_seqs Maximum number of target sequences to retain from BLAST
 #'
 #' @export
 #'
 get_top_hits_local <- function(
     ref_db = NULL,
     query = NULL,
-    max_target_seqs = 1000) {
+    max_blast_hits = 100) {
   stringr::str_glue(
     "-db {ref_db}",
     "-best_hit_score_edge 0.01",
     "-max_hsps 1",
     "-qcov_hsp_perc 80",
-    "-max_target_seqs {max_target_seqs}",
+    "-max_target_seqs 1000",
     "-outfmt '6 salltitles evalue sseq'",
     "-query -",
     .sep = " "
@@ -100,7 +99,8 @@ get_top_hits_local <- function(
       .after = "eval"
     ) |>
     dplyr::ungroup() |>
-    dplyr::arrange(dplyr::desc(similarity))
+    dplyr::arrange(dplyr::desc(similarity)) |>
+    dplyr::slice_head(max_blast_hits)
 }
 
 #' Update the annotation options
@@ -325,6 +325,17 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             ns("curate_opts_memory"), "Memory (GB):",
             width = "100%",
             value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("max_blast_hits"),
+            label = "Maximum retained BLAST:",
+            value = current$max_blast_hits %||% character(0),
+            min = 1,
+            max = 1000,
+            width = "100%"
           ) |> shinyjs::disabled()
         )
       ),
