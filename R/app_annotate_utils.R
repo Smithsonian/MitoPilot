@@ -193,7 +193,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             label = "ref_db",
             #choices = unique(rv$annotate_opts$ref_db),
             choices = c("Metazoa", "Chordata"),
-            selected = current$annotate_opts %||% character(0),
+            selected = current$ref_db %||% character(0),
             width = "100%",
             options = list(
               create = TRUE,
@@ -331,7 +331,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           style = "flex: 1",
           numericInput(
             ns("max_blast_hits"),
-            label = "Maximum retained BLAST hits:",
+            label = "Max BLAST hits:",
             value = current$max_blast_hits %||% character(0),
             min = 1,
             max = 1000,
