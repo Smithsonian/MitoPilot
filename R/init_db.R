@@ -5,6 +5,8 @@
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
+#' @param genetic_code Translation table for your organisms. See NCBI website
+#'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
 #' @param seeds_db Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db
@@ -19,6 +21,7 @@
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param curate_params Default curation parameters
 #'
 #' @export
@@ -28,9 +31,10 @@ new_db <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    genetic_code = 2,
     # Default assembly options
     assemble_cpus = 6,
-    assemble_memory = 16,
+    assemble_memory = 24,
     seeds_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta",
     labels_db = "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta",
     getOrganelle = paste(
@@ -42,7 +46,7 @@ new_db <- function(
     ),
     # Default annotation options
     annotate_cpus = 6,
-    annotate_memory = 16,
+    annotate_memory = 36,
     annotate_ref_db = "Chordata",
     annotate_ref_dir = "/ref_dbs/Mitos2",
     mitos_opts = "--intron 0 --oril 0 --trna 0",
@@ -51,6 +55,7 @@ new_db <- function(
     curate_cpus = 4,
     curate_memory = 8,
     curate_target = "fish_mito",
+    max_blast_hits = 100,
     curate_params = NULL) {
   # Read mapping file
   if (is.null(mapping_fn)) {
@@ -96,6 +101,7 @@ new_db <- function(
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
+      genetic_code = genetic_code,
       export_group = NA_character_
     )
   glue::glue_sql(
@@ -261,6 +267,7 @@ new_db <- function(
     con,
     "CREATE TABLE annotate (
       ID TEXT NOT NULL,
+      ID_verified TEXT,
       path TEXT,
       scaffolds INTEGER,
       annotate_opts TEXT,
@@ -275,6 +282,7 @@ new_db <- function(
       extra INTEGER,
       warnings INTEGER,
       reviewed TEXT,
+      problematic TEXT,
       structure TEXT,
       length INTEGER,
       topology TEXT,
@@ -289,6 +297,7 @@ new_db <- function(
         annotate_opts = "default",
         curate_opts = "default",
         reviewed = "no",
+        ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0
       ),
@@ -308,6 +317,7 @@ new_db <- function(
       ref_dir TEXT,
       mitos_opts TEXT,
       trnaScan_opts TEXT,
+      start_gene TEXT,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -320,7 +330,8 @@ new_db <- function(
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
         mitos_opts = "--intron 0 --oril 0 --trna 0",
-        trnaScan_opts = "-M vert"
+        trnaScan_opts = "-M vert",
+        start_gene = "trnF"
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -335,6 +346,7 @@ new_db <- function(
       cpus INTEGER,
       memory INTEGER,
       target TEXT,
+      max_blast_hits INTEGER,
       params JSON,
       PRIMARY KEY (curate_opts)
     );"
@@ -346,6 +358,7 @@ new_db <- function(
         cpus = curate_cpus,
         memory = curate_memory,
         target = curate_target,
+        max_blast_hits = 100,
         params = jsonlite::toJSON(curate_params)
       ),
       in_place = TRUE,

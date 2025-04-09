@@ -9,7 +9,7 @@ new_test_project(
   n = Inf,
   full_size = FALSE,
   executor = "local",
-  container = "drleopold/mitopilot",
+  container = "macguigand/mitopilot",
   Rproj = TRUE,
   force = FALSE,
   ...

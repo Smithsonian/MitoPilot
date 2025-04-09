@@ -38,9 +38,19 @@ annotations_details_server <- function(id, rv) {
       render_annotations_table(Sys.time())
     })
 
+    # Render "id verified" status
+    output$idText <- shiny::renderText({
+      stringr::str_glue("ID verified: {rv$updating$ID_verified}")
+    })
+
     # Render "reviewed" status
-    output$modalText <- shiny::renderText({
-      stringr::str_glue("Reviewed: {rv$updating$reviewed}")
+    output$reviewedText <- shiny::renderText({
+      stringr::str_glue("Sample reviewed: {rv$updating$reviewed}")
+    })
+
+    # Render "problematic" status
+    output$problematicText <- shiny::renderText({
+      stringr::str_glue("Sample problematic: {rv$updating$problematic}")
     })
 
     # Render table ----
@@ -634,10 +644,57 @@ annotations_details_server <- function(id, rv) {
         )
     }) # END LINEARIZE
 
+    # Mark ID verified ----
+    observeEvent(input$ID_verified, {
+      if(is.na(rv$updating$ID_verified)) {
+        updateActionButton(session, "ID_verified")
+        rv$updating$ID_verified <- "yes"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "ID_verified")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+      } else if(as.character(rv$updating$ID_verified) == "no"){
+        updateActionButton(session, "ID_verified")
+        rv$updating$ID_verified <- "yes"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "ID_verified")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+      } else {
+        updateActionButton(session, "ID_verified")
+        rv$updating$ID_verified <- "no"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "ID_verified")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+      }
+      output$idText <- shiny::renderText({
+        stringr::str_glue("ID verified: {rv$updating$ID_verified}")
+      })
+    }) # END ID VERIFIED
 
     # Mark as reviewed ----
     observeEvent(input$reviewed, {
-      if (as.character(rv$updating$reviewed) != "yes") {
+      if (as.character(rv$updating$reviewed) == "no") {
+        updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "yes"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -649,15 +706,8 @@ annotations_details_server <- function(id, rv) {
           )
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
-      }
-      output$modalText <- shiny::renderText({
-        stringr::str_glue("Reviewed: {rv$updating$reviewed}")
-      })
-    }) # END REVIEWED
-
-    # Mark as unreviewed ----
-    observeEvent(input$unreviewed, {
-      if (as.character(rv$updating$reviewed) != "no") {
+      } else {
+        updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "no"
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::rows_update(
@@ -670,11 +720,44 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       }
-      output$modalText <- shiny::renderText({
-        stringr::str_glue("Reviewed: {rv$updating$reviewed}")
+      output$reviewedText <- shiny::renderText({
+        stringr::str_glue("Sample reviewed: {rv$updating$reviewed}")
       })
-    }) # END UNREVIEWED
+    }) # END REVIEWED
 
+    # Mark as problematic ----
+    observeEvent(input$problematic, {
+      if (is.na(rv$updating$problematic)) {
+        updateActionButton(session, "problematic")
+        rv$updating$problematic <- "yes"
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "problematic")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+      } else {
+        updateActionButton(session, "problematic")
+        rv$updating$problematic <- NA_character_
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::rows_update(
+            rv$updating[, c("ID", "problematic")],
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          )
+        rv$data <- rv$data |>
+          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+      }
+      output$problematicText <- shiny::renderText({
+        stringr::str_glue("Sample problematic: {rv$updating$problematic}")
+      })
+    }) # END PROBLEMATIC
 
     # Edit Annotation ----
     observeEvent(input$edit_mode, {
@@ -983,7 +1066,6 @@ annotations_details_server <- function(id, rv) {
       shinyjs::show("edit_mode")
       rv$editing <- NULL
     })
-
     # Local Blast ----
     observeEvent(input$local_blast, ignoreInit = T, {
       req(input$local_blast)
@@ -1018,6 +1100,13 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$local_blast, ignoreInit = T, {
       req(!input$local_blast)
       req(!is.null(rv$local_hits))
+      max_blast_hits <- dplyr::left_join(
+        dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::select(ID, curate_opts) |>
+          dplyr::filter(ID == !!rv$updating$ID),
+        dplyr::tbl(session$userData$con, "curate_opts"),
+        by = "curate_opts") |>
+        dplyr::pull(max_blast_hits)
       # Check for edit mode
       if (length(rv$editing) > 0) {
         shinyWidgets::sendSweetAlert(
@@ -1037,7 +1126,8 @@ annotations_details_server <- function(id, rv) {
       rv$alignment <- NULL
       rv$local_hits <- get_top_hits_local(
         req(rv$local_db),
-        rv$annotations$translation[selected()]
+        rv$annotations$translation[selected()],
+        max_blast_hits
       )
       trigger("align_now")
     })
@@ -1057,7 +1147,9 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     title = stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}"),
     size = "l",
     easyClose = F,
-    textOutput(ns("modalText")),
+    textOutput(ns("idText")),
+    textOutput(ns("reviewedText")),
+    textOutput(ns("problematicText")),
     tags$details(
       open = TRUE,
       tags$summary("Annotation Table"),
@@ -1151,20 +1243,22 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           ) |> shinyjs::hidden(),
           div(
             style = "display: flex; flex: 1; justify-content: right; gap: 0; align-items: center; padding-right: 2em;",
-            shinyWidgets::prettyCheckbox(
-              ns("local_blast"),
-              label = "Local blast",
-              status = "primary",
-              inline = TRUE
-            ),
-            tags$i(
-              id = ns("refresh_blast"),
-              class = "fas fa-sync grow",
-              style = "margin-bottom: 15px; margin-left: -15px;",
-              onclick = stringr::str_glue(
-                "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
-              )
-            ) |> shinyjs::hidden()
+            div(
+              shinyWidgets::prettyCheckbox(
+                ns("local_blast"),
+                label = "Local blast",
+                status = "primary",
+                inline = TRUE
+              ),
+              tags$i(
+                id = ns("refresh_blast"),
+                class = "fas fa-sync grow",
+                style = "margin-bottom: 15px; margin-left: -15px;",
+                onclick = stringr::str_glue(
+                  "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
+                )
+              ) |> shinyjs::hidden()
+            )
           )
         ),
         div(
@@ -1184,8 +1278,9 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
-      actionButton(ns("reviewed"), "Mark as reviewed"),
-      actionButton(ns("unreviewed"), "Mark as unreviewed"),
+      actionButton(ns("ID_verified"), "Toggle ID verified"),
+      actionButton(ns("reviewed"), "Toggle reviewed"),
+      actionButton(ns("problematic"), "Toggle problematic"),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),

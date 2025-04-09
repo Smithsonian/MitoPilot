@@ -114,6 +114,13 @@ annotate_server <- function(id) {
               html = TRUE,
               cell = rt_longtext()
             ),
+            ID_verified = colDef(
+              show = TRUE,
+              name = "ID_verified",
+              html = TRUE,
+              align = "center",
+              width = 100,
+            ),
             annotate_opts = colDef(
               show = TRUE,
               name = "Annotate Opts.",
@@ -145,7 +152,14 @@ annotate_server <- function(id) {
             warnings = colDef(show = TRUE, align = "center"),
             reviewed = colDef(
               show = TRUE,
-              name = "reviewed?",
+              name = "Reviewed",
+              html = TRUE,
+              align = "center",
+              width = 100,
+            ),
+            problematic = colDef(
+              show = TRUE,
+              name = "Problematic",
               html = TRUE,
               align = "center",
               width = 100,
@@ -216,6 +230,7 @@ annotate_server <- function(id) {
     selected <- reactive(reactable::getReactableState("table", "selected"))
 
     # Set State ----
+    init("state")
     on("state", {
       req(session$userData$mode == "Annotate")
       req(selected())
@@ -266,6 +281,7 @@ annotate_server <- function(id) {
     })
 
     # Toggle lock ----
+    init("lock")
     on("lock", {
       req(session$userData$mode == "Annotate")
       req(selected())
@@ -286,6 +302,62 @@ annotate_server <- function(id) {
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
       trigger("refresh_export")
+    })
+
+    # Toggle ID_verified
+    init("id_verified_top")
+    on("id_verified_top", {
+      req(session$userData$mode == "Annotate")
+      req(selected())
+      rv$updating <- rv$data |>
+        dplyr::select(ID, ID_verified) |>
+        dplyr::slice(selected())
+      ID_current <- sort(unique(rv$updating$ID_verified))[1]
+      if(is.na(ID_current)){
+        rv$updating$ID_verified <- "yes"
+      } else if(ID_current == "yes"){
+        rv$updating$ID_verified <- "no"
+      } else if(ID_current == "no"){
+        rv$updating$ID_verified <- "yes"
+      }
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(rv$updating, by = "ID")
+      trigger("update_annotate_table")
+    })
+
+    # Toggle problematic
+    init("problematic_top")
+    on("problematic_top", {
+      req(session$userData$mode == "Annotate")
+      req(selected())
+      rv$updating <- rv$data |>
+        dplyr::select(ID, problematic) |>
+        dplyr::slice(selected())
+      ID_current <- sort(unique(rv$updating$problematic))[1]
+      if(is.na(ID_current)){
+        rv$updating$problematic <- "yes"
+      } else {
+        rv$updating$problematic <- NA_character_
+      }
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(rv$updating, by = "ID")
+      trigger("update_annotate_table")
     })
 
     # Set Annotate Options ----
@@ -309,6 +381,9 @@ annotate_server <- function(id) {
       )
       if (exists) {
         cur <- rv$annotate_opts[rv$annotate_opts$annotate_opts == input$annotate_opts, ]
+        cur_params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]] |>
+          jsonlite::fromJSON()
+
         updateNumericInput(
           inputId = "annotate_opts_cpus",
           value = cur$cpus
@@ -333,7 +408,8 @@ annotate_server <- function(id) {
         updateSelectizeInput(
           inputId = "mitos_ref_db",
           selected = cur$ref_db,
-          choices = unique(rv$annotate_opts$ref_db),
+          #choices = unique(rv$annotate_opts$ref_db),
+          choices = c("Metazoa", "Chordata"),
           options = list(
             create = TRUE,
             maxItems = 1
@@ -343,6 +419,51 @@ annotate_server <- function(id) {
           inputId = "trnaScan_opts",
           value = cur$trnaScan_opts
         )
+        updateSelectizeInput(
+          inputId = "start_gene",
+          choices = c(
+            "rrnL",
+            "rrnS",
+            "nad1",
+            "nad2",
+            "cox1",
+            "cox2",
+            "atp8",
+            "atp6",
+            "cox3",
+            "nad3",
+            "nad4l",
+            "nad4",
+            "nad5",
+            "nad6",
+            "cob",
+            "trnA",
+            "trnC",
+            "trnD",
+            "trnE",
+            "trnF",
+            "trnG",
+            "trnH",
+            "trnI",
+            "trnK",
+            "trnL",
+            "trnM",
+            "trnN",
+            "trnP",
+            "trnQ",
+            "trnR",
+            "trnS",
+            "trnT",
+            "trnV",
+            "trnW",
+            "trnY"
+          ), # TODO: get choices from list of genes in curate params rules, tricky
+          selected = cur$start_gene %||% character(0),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        )
       }
     })
     observeEvent(input$edit_annotate_opts, ignoreInit = T, {
@@ -350,8 +471,9 @@ annotate_server <- function(id) {
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_ref_dir", condition = FALSE) # TODO: custom / alt ref db for mitos
-      shinyjs::toggleState("mitos_ref_db", condition = FALSE)
+      shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% rv$data$annotate_opts) {
         rv$updating_indirect <- rv$data |>
@@ -406,7 +528,8 @@ annotate_server <- function(id) {
               mitos_opts = req(input$mitos_opts),
               ref_dir = req(input$mitos_ref_dir),
               ref_db = req(input$mitos_ref_db),
-              trnaScan_opts = req(input$trnaScan_opts)
+              trnaScan_opts = req(input$trnaScan_opts),
+              start_gene = req(input$start_gene)
             ),
             in_place = TRUE,
             copy = TRUE,
@@ -468,9 +591,18 @@ annotate_server <- function(id) {
           inputId = "curate_opts_memory",
           value = cur$memory
         )
-        updateTextInput(
+        updateNumericInput(
+          inputId = "max_blast_hits",
+          value = cur$max_blast_hits
+        )
+        updateSelectizeInput(
           inputId = "target",
-          value = cur$target
+          selected = cur$target,
+          choices = c("fish_mito", "starfish_mito"),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
         )
         rv$params <- cur$params |> jsonlite::fromJSON()
       }
@@ -494,7 +626,9 @@ annotate_server <- function(id) {
     observeEvent(input$edit_curate_opts, ignoreInit = T, {
       shinyjs::toggleState("curate_opts_cpus", condition = input$edit_curate_opts)
       shinyjs::toggleState("curate_opts_memory", condition = input$edit_curate_opts)
-      shinyjs::toggleState("target", condition = FALSE) # TODO: allow changes to target or params
+      shinyjs::toggleState("max_blast_hits", condition = input$edit_curate_opts)
+      shinyjs::toggleState("target", condition = input$edit_curate_opts)
+      shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_curate_opts && input$curate_opts %in% rv$data$curate_opts) {
         rv$updating_indirect <- rv$data |>
@@ -526,6 +660,26 @@ annotate_server <- function(id) {
         rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       }
     })
+    observeEvent(input$target, {
+      rv$params <- do.call(paste0("params_", input$target), list()) |>
+        jsonlite::toJSON(auto_unbox = TRUE)
+      output$params <- listviewer::renderReactjson({
+        listviewer::reactjson(
+          req(rv$params),
+          "Validataion Parameters",
+          theme = "monokai",
+          iconStyle = "triangle",
+          collapsed = 2,
+          enableClipboard = FALSE,
+          displayObjectSize = FALSE,
+          displayDataTypes = FALSE,
+          onEdit = FALSE,
+          onAdd = FALSE,
+          onDelete = FALSE,
+          onSelect = FALSE
+        )
+      })
+    })
     # Confirm editing opts that apply beyond selection
     observeEvent(input$editing_curate_opts_indirect, ignoreInit = T, {
       if (!input$editing_curate_opts_indirect) {
@@ -540,13 +694,15 @@ annotate_server <- function(id) {
     observeEvent(input$update_curate_opts, ignoreInit = T, {
       ## Add to params table if new or editing ----
       if (input$edit_curate_opts) {
-        params <- jsonlite::toJSON(req(rv$params), auto_unbox = TRUE)
+        params <- do.call(paste0("params_", input$target), list()) |>
+          jsonlite::toJSON(auto_unbox = TRUE)
         dplyr::tbl(session$userData$con, "curate_opts") |>
           dplyr::rows_upsert(
             data.frame(
               curate_opts = req(input$curate_opts),
               cpus = req(input$curate_opts_cpus),
               memory = req(input$curate_opts_memory),
+              max_blast_hits = req(input$max_blast_hits),
               target = req(input$target)
             ),
             in_place = TRUE,
@@ -585,8 +741,6 @@ annotate_server <- function(id) {
       removeModal()
       trigger("update_annotate_table")
     })
-
-
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {
       pth <- file.path(

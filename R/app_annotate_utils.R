@@ -23,6 +23,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       annotate_switch,
       ID,
       Taxon,
+      ID_verified,
       annotate_opts,
       curate_opts,
       length,
@@ -36,6 +37,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       extra,
       warnings,
       reviewed,
+      problematic,
       time_stamp,
       annotate_notes
     ) |>
@@ -65,7 +67,8 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #'
 get_top_hits_local <- function(
     ref_db = NULL,
-    query = NULL) {
+    query = NULL,
+    max_blast_hits = 100) {
   stringr::str_glue(
     "-db {ref_db}",
     "-best_hit_score_edge 0.01",
@@ -96,7 +99,8 @@ get_top_hits_local <- function(
       .after = "eval"
     ) |>
     dplyr::ungroup() |>
-    dplyr::arrange(dplyr::desc(similarity))
+    dplyr::arrange(dplyr::desc(similarity)) |>
+    dplyr::slice_head(n = as.numeric(max_blast_hits))
 }
 
 #' Update the annotation options
@@ -111,6 +115,8 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
   current <- list()
   if (length(unique(rv$updating$annotate_opts)) == 1) {
     current <- rv$annotate_opts[rv$annotate_opts$annotate_opts == rv$updating$annotate_opts[1], ]
+    cur_params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]] |>
+      jsonlite::fromJSON()
   }
 
   showModal(
@@ -185,8 +191,9 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           selectizeInput(
             ns("mitos_ref_db"),
             label = "ref_db",
-            choices = unique(rv$annotate_opts$ref_db),
-            selected = current$annotate_opts %||% character(0),
+            #choices = unique(rv$annotate_opts$ref_db),
+            choices = c("Metazoa", "Chordata"),
+            selected = current$ref_db %||% character(0),
             width = "100%",
             options = list(
               create = TRUE,
@@ -201,6 +208,55 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         value = current$trnaScan_opts %||% character(0),
         width = "100%"
       ) |> shinyjs::disabled(),
+      div(
+        selectizeInput(
+          ns("start_gene"),
+          label = "starting gene for circular assemblies",
+          choices = c(
+            "rrnL",
+            "rrnS",
+            "nad1",
+            "nad2",
+            "cox1",
+            "cox2",
+            "atp8",
+            "atp6",
+            "cox3",
+            "nad3",
+            "nad4l",
+            "nad4",
+            "nad5",
+            "nad6",
+            "cob",
+            "trnA",
+            "trnC",
+            "trnD",
+            "trnE",
+            "trnF",
+            "trnG",
+            "trnH",
+            "trnI",
+            "trnK",
+            "trnL",
+            "trnM",
+            "trnN",
+            "trnP",
+            "trnQ",
+            "trnR",
+            "trnS",
+            "trnT",
+            "trnV",
+            "trnW",
+            "trnY"
+          ), # TODO: get choices from list of genes in curate params rules, tricky
+          selected = current$start_gene %||% character(0),
+          width = "100%",
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ) |> shinyjs::disabled()
+      ),
       size = "m",
       footer = tagList(
         actionButton(ns("update_annotate_opts"), "Update"),
@@ -270,14 +326,33 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             width = "100%",
             value = current$memory %||% numeric(0)
           ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("max_blast_hits"),
+            label = "Max BLAST hits:",
+            value = current$max_blast_hits %||% character(0),
+            min = 1,
+            max = 1000,
+            width = "100%"
+          ) |> shinyjs::disabled()
         )
       ),
-      textInput(
-        ns("target"),
-        label = "Target:",
-        value = current$target %||% character(0),
-        width = "100%"
-      ) |> shinyjs::disabled(),
+      div(
+        style = "flex: 1",
+        selectizeInput(
+          ns("target"),
+          label = "Target:",
+          choices = c("fish_mito", "starfish_mito"),
+          selected = current$target %||% character(0),
+          width = "100%",
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ) |> shinyjs::disabled()
+      ),
       listviewer::reactjsonOutput(ns("params")),
       size = "m",
       footer = tagList(

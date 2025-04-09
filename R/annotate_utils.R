@@ -37,6 +37,7 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
 get_top_hits <- function(
     ref_db,
     query,
+    max_blast_hits = 100,
     condaenv = "base") {
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
 
@@ -109,7 +110,9 @@ get_top_hits <- function(
       .after = "eval"
     ) |>
     dplyr::ungroup() |>
-    dplyr::arrange(dplyr::desc(similarity))
+    dplyr::arrange(dplyr::desc(similarity)) |>
+    dplyr::slice_head(n = as.numeric(max_blast_hits))
+
 
 }
 

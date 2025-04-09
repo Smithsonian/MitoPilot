@@ -30,5 +30,5 @@ RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never")'
 RUN rm /pkg.tar.gz
 
 # Default Reference DBs
-COPY ref_dbs/getOrganelle /ref_dbs/getOrganelle
+#COPY ref_dbs/getOrganelle /ref_dbs/getOrganelle
 COPY ref_dbs/Mitos2 /ref_dbs/Mitos2

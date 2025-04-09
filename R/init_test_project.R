@@ -28,7 +28,7 @@ new_test_project <- function(
     n = Inf,
     full_size = FALSE,
     executor = "local",
-    container = "drleopold/mitopilot",
+    container = "macguigand/mitopilot",
     Rproj = TRUE,
     force = FALSE,
     ...) {
@@ -108,6 +108,7 @@ new_test_project <- function(
     mapping_fn = file.path(path, "mapping.csv"),
     mapping_id = "ID",
     data_path = file.path(path, "data", ""),
+    genetic_code = 2,
     min_depth = 500,
     executor = executor,
     Rproj = Rproj,

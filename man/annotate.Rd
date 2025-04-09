@@ -10,11 +10,12 @@ annotate(
   cpus = 4,
   genetic_code = "2",
   ref_db = "Chordata",
-  ref_dir = "/home/harpua/Jonah/MitoPilot/ref_dbs/Mitos2",
+  ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0 --trna 0",
   mitos_condaenv = "mitos",
   trnaScan_opts = "-M vert",
   trnaScan_condaenv = "base",
+  start_gene = "trnF",
   out_dir = NULL
 )
 }
@@ -41,8 +42,10 @@ annotate(
 \item{trnaScan_condaenv}{Conda environment to run tRNAscan-SE (default:
 "base").}
 
+\item{start_gene}{name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")}
+
 \item{out_dir}{Output directory.}
 }
 \description{
-Uses Mito2 and tRNAscan-SE to annotate a mitogenome assembly.
+Uses Mitos2 and tRNAscan-SE to annotate a mitogenome assembly.
 }

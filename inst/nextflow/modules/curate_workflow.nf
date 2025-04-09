@@ -2,7 +2,7 @@ import java.util.Base64
 include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, c.curate_opts, ' +
-                    'd.cpus, d.memory, d.target, d.params ' +
+                    'd.cpus, d.memory, d.target, d.params, d.max_blast_hits ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -19,24 +19,25 @@ workflow CURATE {
         input
 
     main:
-    
+
         channel.fromQuery(params.sqlRead, db: 'sqlite')
             .join(input, by: [0, 1])
             .map { it ->
                 def jsonParams = it[6].toString()
-                def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes) 
+                def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
 
                 tuple(
-                    it[0],                                          // ID   
+                    it[0],                                          // ID
                     it[1],                                          // path
-                    it[7],                                          // Annotations
-                    it[8],                                          // Assembly
-                    it[9],                                          // Coverage
+                    it[8],                                          // Annotations
+                    it[9],                                          // Assembly
+                    it[10],                                          // Coverage
                     [
                         cpus:  it[3],                                      // cpus
                         memory: it[4],                                     // memory
                         target: it[5],                                     // target
-                        params: encodedParams                              // params
+                        params: encodedParams,                              // params
+                        max_blast_hits: it[7]                             // maximum retained blast hits
                     ]
                 )
             }
@@ -49,7 +50,7 @@ workflow CURATE {
             .flatten()
             .filter{ it =~ /(.*_coverageStats_.*.csv)$/ }
             .splitCsv(header: true, sep: ',')
-            .map { it -> 
+            .map { it ->
                 tuple(
                     it.SeqId,
                     it.Call,
@@ -59,12 +60,12 @@ workflow CURATE {
                 )
             }
             .groupTuple()
-            .map { it -> 
+            .map { it ->
                 def sequence = it[1].join('')
                 tuple(
                     sequence,                           // Assembly sequence
                     sequence.size(),                    // sequence length
-                    it[2].join(' '),                    // mean depth  
+                    it[2].join(' '),                    // mean depth
                     it[3].join(' '),                    // gc
                     it[4].join(' '),                    // error rate
                     params.ts,                          // timestamp

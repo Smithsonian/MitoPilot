@@ -16,7 +16,11 @@ annotate_trnaScan <- function(
     cpus = 4,
     out = NULL,
     condaenv = "base") {
+
   out <- out %||% tempfile()
+
+  # debugging
+  out <- "tRNAscan-SE_out"
 
   fasta <- tempfile(fileext = ".fa")
   Biostrings::writeXStringSet(assembly, fasta)
@@ -37,50 +41,51 @@ annotate_trnaScan <- function(
 
   do.call(process, process_args)
 
-  if (rotate && length(assembly) == 1L) {
-    seq_length <- Biostrings::width(assembly)
-
-    # Find start position for rotation
-    start <- read.delim(
-      out,
-      skip = 3,
-      header = F,
-      col.names = c(
-        "seq", "idx", "begin", "end",
-        "type", "anticodon", "intron_beign",
-        "intron_end", "score", "notes"
-      )
-    ) |>
-      dplyr::filter(type %in% c("Phe", "Val")) |>
-      dplyr::arrange(type, desc(score)) |>
-      dplyr::select(begin, end) |>
-      dplyr::slice(1)
-
-    # Rotate sequence (heavy strand)
-    if (nrow(start) == 1 && start$begin < start$end && start$begin > 1) {
-      assembly <- Biostrings::xscat(
-        Biostrings::subseq(assembly, start$begin, seq_length),
-        Biostrings::subseq(assembly, 1, start$begin - 1)
-      ) |>
-        setNames(names(assembly))
-      assembly@metadata["rotate_to"] <- start$begin
-    }
-
-    # Rotate sequence (light strand)
-    if (nrow(start) == 1 && start$begin > start$end && start$begin < seq_length) {
-      assembly <- Biostrings::xscat(
-        Biostrings::subseq(assembly, start$begin + 1, seq_length),
-        Biostrings::subseq(assembly, 1, start$begin)
-      ) |>
-        setNames(names(assembly)) |>
-        Biostrings::reverseComplement()
-      assembly@metadata["rotate_to"] <- -start$begin
-    }
-
-    unlink(out)
-    Biostrings::writeXStringSet(assembly, fasta)
-    do.call(process, process_args)
-  }
+  # ROTATION NOW EXECUTED AFTER TRNASCAN AND MITOS ARE COMPLETE
+  # if (rotate && length(assembly) == 1L) {
+  #   seq_length <- Biostrings::width(assembly)
+  #
+  #   # Find start position for rotation
+  #   start <- read.delim(
+  #     out,
+  #     skip = 3,
+  #     header = F,
+  #     col.names = c(
+  #       "seq", "idx", "begin", "end",
+  #       "type", "anticodon", "intron_beign",
+  #       "intron_end", "score", "notes"
+  #     )
+  #   ) |>
+  #     dplyr::filter(type %in% c("Phe", "Val")) |>
+  #     dplyr::arrange(type, desc(score)) |>
+  #     dplyr::select(begin, end) |>
+  #     dplyr::slice(1)
+  #
+  #   # Rotate sequence (heavy strand)
+  #   if (nrow(start) == 1 && start$begin < start$end && start$begin > 1) {
+  #     assembly <- Biostrings::xscat(
+  #       Biostrings::subseq(assembly, start$begin, seq_length),
+  #       Biostrings::subseq(assembly, 1, start$begin - 1)
+  #     ) |>
+  #       setNames(names(assembly))
+  #     assembly@metadata["rotate_to"] <- start$begin
+  #   }
+  #
+  #   # Rotate sequence (light strand)
+  #   if (nrow(start) == 1 && start$begin > start$end && start$begin < seq_length) {
+  #     assembly <- Biostrings::xscat(
+  #       Biostrings::subseq(assembly, start$begin + 1, seq_length),
+  #       Biostrings::subseq(assembly, 1, start$begin)
+  #     ) |>
+  #       setNames(names(assembly)) |>
+  #       Biostrings::reverseComplement()
+  #     assembly@metadata["rotate_to"] <- -start$begin
+  #   }
+  #
+  #   unlink(out)
+  #   Biostrings::writeXStringSet(assembly, fasta)
+  #   do.call(process, process_args)
+  # }
 
   # Format output
   annotations <- read.delim(

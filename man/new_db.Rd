@@ -9,8 +9,9 @@ new_db(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  genetic_code = 2,
   assemble_cpus = 6,
-  assemble_memory = 16,
+  assemble_memory = 24,
   seeds_db =
     "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta",
   labels_db =
@@ -18,7 +19,7 @@ new_db(
   getOrganelle = paste("-F 'anonym'", "-R 10 -k '21,45,65,85,105,115'",
     "--larger-auto-ws", "--expected-max-size 20000", "--target-genome-size 16500"),
   annotate_cpus = 6,
-  annotate_memory = 16,
+  annotate_memory = 36,
   annotate_ref_db = "Chordata",
   annotate_ref_dir = "/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0 --trna 0",
@@ -26,6 +27,7 @@ new_db(
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
+  max_blast_hits = 100,
   curate_params = NULL
 )
 }
@@ -38,6 +40,9 @@ new_db(
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{genetic_code}{Translation table for your organisms. See NCBI website
+for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{assemble_cpus}{Default # cpus for assembly}
 
@@ -66,6 +71,8 @@ identifier (eg, species name)}
 \item{curate_memory}{Default memory (GB) for curation}
 
 \item{curate_target}{Default target database for curation}
+
+\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
 
 \item{curate_params}{Default curation parameters}
 }
