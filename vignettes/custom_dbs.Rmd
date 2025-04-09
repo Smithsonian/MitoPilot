@@ -2,7 +2,7 @@
 title: "Building Custom Databases"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{FAQ}
+  %\VignetteIndexEntry{custom_dbs}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

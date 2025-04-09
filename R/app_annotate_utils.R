@@ -61,7 +61,8 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #' options("MitoPilot.blastp" = "/path/to/blastp/executable")
 #'
 #' @param ref_db reference database
-#' @param query query sequeencs
+#' @param query query sequences
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #'
 #' @export
 #'

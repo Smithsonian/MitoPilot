@@ -9,7 +9,9 @@ get_top_hits_local(ref_db = NULL, query = NULL, max_blast_hits = 100)
 \arguments{
 \item{ref_db}{reference database}
 
-\item{query}{query sequeencs}
+\item{query}{query sequences}
+
+\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
 }
 \description{
 If blastp is not available on the path loaded in system(), set
