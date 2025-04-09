@@ -702,6 +702,7 @@ annotate_server <- function(id) {
               curate_opts = req(input$curate_opts),
               cpus = req(input$curate_opts_cpus),
               memory = req(input$curate_opts_memory),
+              max_blast_hits = req(input$max_blast_hits),
               target = req(input$target)
             ),
             in_place = TRUE,

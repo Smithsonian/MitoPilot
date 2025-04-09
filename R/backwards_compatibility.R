@@ -16,9 +16,14 @@ backwards_compatibility <- function(
   on.exit(DBI::dbDisconnect(con))
 
   annotate_table <- DBI::dbReadTable(con, "annotate") # read in annotations table
-  annotate_opts_table <- DBI::dbReadTable(con, "annotate_opts") # read in annotations table
+  annotate_opts_table <- DBI::dbReadTable(con, "annotate_opts") # read in annotations opts table
+  curate_opts_table <- DBI::dbReadTable(con, "curate_opts") # read in curate opts table
 
-  if("start_gene" %in% names(annotate_opts_table) && "problematic" %in% names(annotate_table) && "ID_verified" %in% names(annotate_table) && "reviewed" %in% names(annotate_table)) {
+  if("start_gene" %in% names(annotate_opts_table) &&
+     "max_blast_hits" %in% names(curate_opts_table) &&
+     "problematic" %in% names(annotate_table) &&
+     "ID_verified" %in% names(annotate_table) &&
+     "reviewed" %in% names(annotate_table)) {
     message("nothing to update")
     return(invisible(NULL))
   }
@@ -31,7 +36,7 @@ backwards_compatibility <- function(
 
     glue::glue_sql(
       "ALTER TABLE annotate
-       ADD COLUMN reviewed",
+       ADD COLUMN reviewed TEXT",
       col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
@@ -52,7 +57,7 @@ backwards_compatibility <- function(
 
     glue::glue_sql(
       "ALTER TABLE annotate
-       ADD COLUMN ID_verified",
+       ADD COLUMN ID_verified TEXT",
       col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
@@ -72,7 +77,7 @@ backwards_compatibility <- function(
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE annotate
-       ADD COLUMN problematic",
+       ADD COLUMN problematic TEXT",
       col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
@@ -92,7 +97,7 @@ backwards_compatibility <- function(
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE annotate_opts
-       ADD COLUMN start_gene",
+       ADD COLUMN start_gene TEXT",
       col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
@@ -103,6 +108,27 @@ backwards_compatibility <- function(
         in_place = TRUE,
         copy = TRUE,
         by = "annotate_opts"
+      )
+  }
+
+  # if max_blast_hits column doesn't exist, add it
+  if(!("max_blast_hits" %in% names(curate_opts_table))){
+    message("added 'max_blast_hits' column to annotate_opts table")
+    curate_opts_table$max_blast_hits <- rep(100, nrow(curate_opts_table)) # add ID_verified column
+    # add new columns to database
+    glue::glue_sql(
+      "ALTER TABLE curate_opts
+       ADD COLUMN max_blast_hits INTEGER",
+       col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "curate_opts") |> # update SQL database
+      dplyr::rows_upsert(
+        curate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "curate_opts"
       )
   }
 }

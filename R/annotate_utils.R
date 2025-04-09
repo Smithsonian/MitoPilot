@@ -111,7 +111,7 @@ get_top_hits <- function(
     ) |>
     dplyr::ungroup() |>
     dplyr::arrange(dplyr::desc(similarity)) |>
-    dplyr::slice_head(max_blast_hits)
+    dplyr::slice_head(n = max_blast_hits)
 
 
 }
