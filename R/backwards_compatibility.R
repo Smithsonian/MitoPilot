@@ -2,7 +2,8 @@
 #'
 #' Update old project database for backwards compatibility.
 #' Adds "reviewed", "ID_verified", "problematic" columns to the annotate table
-#' and "start_gene" column to the annotate_opts table.
+#' "start_gene" column to the annotate_opts table,
+#' and "max_blast_hits" to the curate_opts table.
 #'
 #' @param path Path to the project directory (default = current working directory)
 #'
