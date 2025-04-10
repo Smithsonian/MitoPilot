@@ -74,3 +74,12 @@ To rerun specific samples:
 - change the state of the target samples to "Ready to Annotate"
 - lock all other samples
 - make sure your Nextflow command contains the `-resume` flag
+
+## Why is editing the start/stop codon position for a gene so slow?
+
+Every time you make a manual edit to the start or stop codon position, MitoPilot has to re-do the sequence alignment.
+This may take a long time if you have many reference sequences that are a close match to your target gene.
+
+To speed up the process of manual editing, we have included the `Align fewer refs` checkbox. 
+Clicking this checkbox limits your alignments to a maximum of five reference sequences (automatically selecting the top BLAST hits).
+Note that this will re-run the alignment algorithm, so your alignment results may change.
