@@ -37,8 +37,8 @@
 <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
     <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
+    <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
   </ul>
 </li>
       </ul>
@@ -157,6 +157,20 @@ notes.</p>
 <li>make sure your Nextflow command contains the <code>-resume</code>
 flag</li>
 </ul>
+</div>
+<div class="section level2">
+<h2 id="why-is-editing-the-startstop-codon-position-for-a-gene-so-slow">Why is editing the start/stop codon position for a gene so
+slow?<a class="anchor" aria-label="anchor" href="#why-is-editing-the-startstop-codon-position-for-a-gene-so-slow"></a>
+</h2>
+<p>Every time you make a manual edit to the start or stop codon
+position, MitoPilot has to re-do the sequence alignment. This may take a
+long time if you have many reference sequences that are a close match to
+your target gene.</p>
+<p>To speed up the process of manual editing, we have included the
+<code>Align fewer refs</code> checkbox. Clicking this checkbox limits
+your alignments to a maximum of five reference sequences (automatically
+selecting the top BLAST hits). Note that this will re-run the alignment
+algorithm, so your alignment results may change.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
