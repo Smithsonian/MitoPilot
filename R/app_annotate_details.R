@@ -6,6 +6,9 @@ annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # variable to track how many reference samples to align
+    n_hits <- Inf
+
     # Prepare modal data ----
     init("annotations_modal")
     on("annotations_modal", {
@@ -319,10 +322,14 @@ annotations_details_server <- function(id, rv) {
       trigger("align_now")
     })
     on("align_now", {
+      # check if user wants to use fewer reference samples in alignment
+      if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
+
       req(rv$annotations$type[selected()] == "PCG")
       rv$alignment <- NULL
 
-      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE) |>
+        dplyr::slice_head(n = n_hits)
 
       focal <- rv$annotations$translation[selected()] |>
         setNames(paste(rv$annotations$gene[selected()], "(focal)"))
@@ -786,6 +793,12 @@ annotations_details_server <- function(id, rv) {
         con = session$userData$con
       )
     })
+
+    ## Re align if user wants to show fewer reference samples ----
+    observeEvent(input$reduce_align, {
+      trigger("align_now")
+    })
+
     ## Edit start-add ----
     observeEvent(input$`start-add`, {
       rv$editing$stop_aln <- FALSE
@@ -1003,6 +1016,8 @@ annotations_details_server <- function(id, rv) {
     ## RE-align after edit ----
     init("re_align")
     on("re_align", {
+      # check if user wants to use fewer reference samples in alignment
+      if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
       ### Calculate new stats ----
       focal <- rv$annotations$translation[selected()]
       hits <-
@@ -1017,7 +1032,8 @@ annotations_details_server <- function(id, rv) {
           .after = "eval",
           .by = dplyr::everything()
         ) |>
-        dplyr::arrange(dplyr::desc(similarity))
+        dplyr::arrange(dplyr::desc(similarity)) |>
+        dplyr::slice_head(n = n_hits)
       rv$annotations$refHits[selected()] <- json_string(hits)
       rv$alignment <- NULL
       trigger("align_now")
@@ -1243,6 +1259,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           ) |> shinyjs::hidden(),
           div(
             style = "display: flex; flex: 1; justify-content: right; gap: 0; align-items: center; padding-right: 2em;",
+            div(
+              shinyWidgets::prettyCheckbox(
+                ns("reduce_align"),
+                label = "Align fewer refs",
+                status = "primary",
+                inline = TRUE
+              )
+            ),
             div(
               shinyWidgets::prettyCheckbox(
                 ns("local_blast"),

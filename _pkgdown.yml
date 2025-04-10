@@ -41,8 +41,9 @@ articles:
 - title: "Usage"
   navbar: ~
   contents:
-  - 'custom_dbs'
   - 'Fish-Mitogenome-Curation'
+  - 'custom_dbs'
+
 
 
 
