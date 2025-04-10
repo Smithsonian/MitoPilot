@@ -1,17 +1,21 @@
 url: https://smithsonian.github.io/MitoPilot/
+
 template:
   bootstrap: 5
   bootswatch: lux
   bslib:
     pkgdown-nav-height: 100px
+
 authors:
   sidebar:
     roles: [aut, ctb]
+
 home:
   sidebar:
     structure:
     - authors
     - dev
+
 navbar:
   structure:
     left:
@@ -21,16 +25,25 @@ navbar:
     right:
     - search
     - github
+
 articles:
-- title: "Usage"
+- title: "Help"
+  navbar: ~
   contents:
-  - 'test-project'
-  - 'custom_dbs'
-  - 'Fish-Mitogenome-Curation'
+  - 'FAQ'
+
 - title: "Nextflow Executors"
+  navbar: ~
   contents:
   - 'NMNH-Hydra'
   - 'NOAA-SEDNA'
-- title: "Help"
+
+- title: "Usage"
+  navbar: ~
   contents:
-  - 'FAQ'
+  - 'custom_dbs'
+  - 'Fish-Mitogenome-Curation'
+
+
+
+

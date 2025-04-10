@@ -35,9 +35,9 @@ If you are working on any other taxonomic group, you will need to compile databa
 
 ## Build custom databases for GetOrganelle
 
-Before proceeding, we recommend you read the [GetOrganelle paper](https://doi.org/10.1186/s13059-020-02154-5) and their [documentation](https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#how-to-assemble-a-target-organelle-genome-using-my-own-reference) regarding custom databases.
+Before proceeding, consider reviewing the GetOrganelle [paper](https://doi.org/10.1186/s13059-020-02154-5) and [documentation](https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#how-to-assemble-a-target-organelle-genome-using-my-own-reference) to better understand the required database architecture.
 
-GetOrganelle requires two databases, both in FASTA format:
+GetOrganelle uses two databases, both in FASTA format:
 
 - A "seed" database containing complete (or partial) mitochondrial genomes
 - A "label" database containing individual mitochondrial gene sequences

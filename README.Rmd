@@ -20,7 +20,9 @@ knitr::opts_chunk$set(
 
 # Overview
 
-MitoPilot is a package for the assembly and annotation of mitochondrial genomes from genome skimming data. The core application consists of a [Nextflow](https://www.nextflow.io/docs/latest/index.html) pipeline that is wrapped in an R package, which includes an R-Shiny graphical interface to monitor and interact with processing parameters and outputs. Currently the pipeline expects paired-end Illumina reads as the raw input and performs the following steps:
+Please see the [documentation site](https://smithsonian.github.io/MitoPilot/) for more details.
+
+MitoPilot is a package for the assembly and annotation of mitochondrial genomess from genome skimming data. The core application consists of a [Nextflow](https://www.nextflow.io/docs/latest/index.html) pipeline that is wrapped in an R package, which includes an R-Shiny graphical interface to monitor and interact with processing parameters and outputs. Currently the pipeline expects paired-end Illumina reads as the raw input and performs the following steps:
 
 1. Mitogenome assembly
    - [fastp](https://github.com/OpenGene/fastp) for quality control and adapter trimming

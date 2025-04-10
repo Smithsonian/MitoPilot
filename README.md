@@ -10,8 +10,11 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 
 # Overview
 
+Please see the [documentation
+site](https://smithsonian.github.io/MitoPilot/) for more details.
+
 MitoPilot is a package for the assembly and annotation of mitochondrial
-genomes from genome skimming data. The core application consists of a
+genomess from genome skimming data. The core application consists of a
 [Nextflow](https://www.nextflow.io/docs/latest/index.html) pipeline that
 is wrapped in an R package, which includes an R-Shiny graphical
 interface to monitor and interact with processing parameters and

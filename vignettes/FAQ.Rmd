@@ -7,7 +7,9 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-## How do I fix an error with "exit status (140)"?
+## How do I fix the error message:
+
+### "exit status (140)"?
 
 If your Nextflow log contains an error that looks something like this:
 
@@ -19,6 +21,13 @@ Caused by:
 This usually indicates that the process ran out of memory (RAM).
 Sometimes this will happen for all samples, other times only certain difficult samples will need more RAM.
 Try using the R Shiny GUI to increase the requested memory for the process that failed, then rerun the workflow.
+
+### "exit status (127)"?
+
+This indicates that MitoPilot was unable to find a file, directory, or executable. 
+Double check that the paths you specified when creating your project are correct. 
+Also make sure you're using the correct execution environment. 
+This error is commonly caused by using the "local" executor when running MitoPilot on a computing cluster.
 
 ## How do I skip processing certain samples?
 

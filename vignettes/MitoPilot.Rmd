@@ -23,7 +23,7 @@ strong { font-weight: bold; }
 
 ## Installation
 
-Before running MitoPilot with your own samples, we recommend trying out the included test project consisting of Illumina data for 13 fish species. The following tutorial provides a step-by-step walkthrough.
+We recommend running the included test project (Illumina data for 13 fish species) before trying out MitoPilot with your own samples. The following tutorial provides a step-by-step walkthrough.
 
 First, make sure you have [R
 (\>=4.0.0)](https://www.r-project.org/) and

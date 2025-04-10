@@ -1,5 +1,5 @@
 ---
-title: "NOAA SEDNA"
+title: "NOAA SEDNA Setup"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{NOAA SEDNA}

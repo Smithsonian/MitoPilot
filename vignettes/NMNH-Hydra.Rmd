@@ -1,5 +1,5 @@
 ---
-title: "NMNH Hydra"
+title: "NMNH Hydra Setup"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{NMNH Hydra}
