@@ -29,8 +29,18 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
+<li class="nav-item"><a class="nav-link" href="../articles/MitoPilot.html">Get started</a></li>
 <li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
-<li class="active nav-item"><a class="nav-link" href="../articles/index.html">Articles</a></li>
+<li class="active nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
+  </ul>
+</li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -60,8 +70,11 @@
     
     
 <div class="section level2">
-<h2 id="how-do-i-fix-an-error-with-exit-status-140">How do I fix an error with “exit status (140)”?<a class="anchor" aria-label="anchor" href="#how-do-i-fix-an-error-with-exit-status-140"></a>
+<h2 id="how-do-i-fix-the-error-message">How do I fix the error message:<a class="anchor" aria-label="anchor" href="#how-do-i-fix-the-error-message"></a>
 </h2>
+<div class="section level3">
+<h3 id="exit-status-140">“exit status (140)”?<a class="anchor" aria-label="anchor" href="#exit-status-140"></a>
+</h3>
 <p>If your Nextflow log contains an error that looks something like
 this:</p>
 <pre><code>Caused by:
@@ -71,6 +84,16 @@ Sometimes this will happen for all samples, other times only certain
 difficult samples will need more RAM. Try using the R Shiny GUI to
 increase the requested memory for the process that failed, then rerun
 the workflow.</p>
+</div>
+<div class="section level3">
+<h3 id="exit-status-127">“exit status (127)”?<a class="anchor" aria-label="anchor" href="#exit-status-127"></a>
+</h3>
+<p>This indicates that MitoPilot was unable to find a file, directory,
+or executable. Double check that the paths you specified when creating
+your project are correct. Also make sure you’re using the correct
+execution environment. This error is commonly caused by using the
+“local” executor when running MitoPilot on a computing cluster.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="how-do-i-skip-processing-certain-samples">How do I skip processing certain samples?<a class="anchor" aria-label="anchor" href="#how-do-i-skip-processing-certain-samples"></a>

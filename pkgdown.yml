@@ -5,10 +5,10 @@ articles:
   custom_dbs: custom_dbs.html
   FAQ: FAQ.html
   Fish-Mitogenome-Curation: Fish-Mitogenome-Curation.html
+  MitoPilot: MitoPilot.html
   NMNH-Hydra: NMNH-Hydra.html
   NOAA-SEDNA: NOAA-SEDNA.html
-  test-project: test-project.html
-last_built: 2025-04-09T18:37Z
+last_built: 2025-04-10T14:03Z
 urls:
   reference: https://smithsonian.github.io/MitoPilot/reference
   article: https://smithsonian.github.io/MitoPilot/articles
