@@ -3,7 +3,6 @@
 #' @param group (optional) export group names
 #' @param IDs One or more sample IDs to export. If not provided all samples in
 #'   the export group will be exported
-#' @param genetic_code Genetic code to use for annotation (default: 2).
 #' @param fasta_header Template for mitogenome fasta headers. Uses glue syntax (i.e.
 #'   `{...}`) to insert values from the samples table
 #' @param fasta_header_gene Template for gene fasta headers. Uses glue syntax (i.e.
@@ -21,7 +20,6 @@
 export_files <- function(
     group = NULL,
     IDs = NULL,
-    genetic_code = "2",
     fasta_header = paste(
       "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
       "[location=mitochondrion] {Taxon} mitochondrion, complete genome"
@@ -206,7 +204,7 @@ export_files <- function(
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste("\t\t\tproduct\t", cur$product) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\ttransl_table\t", genetic_code) |>
+        paste("\t\t\ttransl_table\t", dat$genetic_code) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         if (!cur$start_codon %in% start_codons) {
           paste("\t\t\tcodon_start\t", 1) |>
@@ -231,7 +229,7 @@ export_files <- function(
         }
 
         # CDS feature
-        f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",genetic_code)
+        f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
         if (length(note) > 0){
           f9 = paste0(f9, ";Note=", note)
         }
@@ -288,7 +286,7 @@ export_files <- function(
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           paste("\t\t\tproduct\t", cur$product) |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste("\t\t\ttransl_table\t", genetic_code) |>
+          paste("\t\t\ttransl_table\t", dat$genetic_code) |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           if (!cur$start_codon %in% start_codons) {
             paste("\t\t\tcodon_start\t", 1) |>
