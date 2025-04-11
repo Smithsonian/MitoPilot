@@ -31,8 +31,8 @@ export_files <- function(
       "[location=mitochondrion] {Taxon}"
     ),
     out_dir = NULL,
-    start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"),
-    stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
+    start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"), # TODO: dynamic assignment based on curation rules
+    stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"), # TODO: dynamic assignment based on curation rules
     generateAAalignments = T,
     gene_export = F) {
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(dirname(out_dir), ".sqlite"))
@@ -82,13 +82,16 @@ export_files <- function(
     )
     dir.create(export_path, showWarnings = F)
 
+    # debugging help
+    message(ID)
+
     annotations <- dplyr::tbl(con, "annotations") |>
       dplyr::filter(ID == !!.x) |>
       dplyr::arrange(path, pos1) |>
       dplyr::filter(pos1 > 0) |>
       dplyr::collect()
 
-    # check for duplcicate gene names in annotations and rename
+    # check for duplicate gene names in annotations and rename
     annotations$gene_uniq <- make.unique(annotations$gene)
 
     dat <- dplyr::tbl(con, "samples") |>
