@@ -224,7 +224,6 @@ export_server <- function(id) {
       shinyjs::disable("export_data")
       export_files(
         group = input$export_group,
-        genetic_code = rv$data$genetic_code,
         fasta_header = input$fasta_header,
         fasta_header_gene = input$fasta_header_gene,
         generateAAalignments = input$include_alignments,

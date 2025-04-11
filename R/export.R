@@ -3,7 +3,6 @@
 #' @param group (optional) export group names
 #' @param IDs One or more sample IDs to export. If not provided all samples in
 #'   the export group will be exported
-#' @param genetic_code Genetic code to use for annotation (default: 2).
 #' @param fasta_header Template for mitogenome fasta headers. Uses glue syntax (i.e.
 #'   `{...}`) to insert values from the samples table
 #' @param fasta_header_gene Template for gene fasta headers. Uses glue syntax (i.e.
@@ -21,7 +20,6 @@
 export_files <- function(
     group = NULL,
     IDs = NULL,
-    genetic_code = "2",
     fasta_header = paste(
       "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
       "[location=mitochondrion] {Taxon} mitochondrion, complete genome"
@@ -31,8 +29,8 @@ export_files <- function(
       "[location=mitochondrion] {Taxon}"
     ),
     out_dir = NULL,
-    start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"),
-    stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
+    start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"), # TODO: dynamic assignment based on curation rules
+    stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"), # TODO: dynamic assignment based on curation rules
     generateAAalignments = T,
     gene_export = F) {
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(dirname(out_dir), ".sqlite"))
@@ -82,13 +80,16 @@ export_files <- function(
     )
     dir.create(export_path, showWarnings = F)
 
+    # debugging help
+    message(paste0(.x, ":"))
+
     annotations <- dplyr::tbl(con, "annotations") |>
       dplyr::filter(ID == !!.x) |>
       dplyr::arrange(path, pos1) |>
       dplyr::filter(pos1 > 0) |>
       dplyr::collect()
 
-    # check for duplcicate gene names in annotations and rename
+    # check for duplicate gene names in annotations and rename
     annotations$gene_uniq <- make.unique(annotations$gene)
 
     dat <- dplyr::tbl(con, "samples") |>
@@ -157,8 +158,9 @@ export_files <- function(
     # add GFF region
     # circ = tolower((dat$topology == "circular"))
     #f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Is_circular=",circ,";Name=MT;mol_type=genomic DNA") # Is_circular currently bugged in Geneious
-    f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Name=MT;mol_type=genomic DNA")
-    paste(c(seq_name, "MitoPilot", "region", 1, seq@ranges@width, ".", "+", ".", f9), collapse = "\t") |>
+    asmb_len = seq@ranges@width
+    f9 = paste0("ID=",seq_name,":1..",asmb_len,";Name=MT;mol_type=genomic DNA")
+    paste(c(seq_name, "MitoPilot", "region", 1, asmb_len, ".", "+", ".", f9), collapse = "\t") |>
       cat(file = gff_fn, sep = "\n", append = TRUE)
 
     purrr::pwalk(annotations, function(...) {
@@ -202,7 +204,7 @@ export_files <- function(
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste("\t\t\tproduct\t", cur$product) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\ttransl_table\t", genetic_code) |>
+        paste("\t\t\ttransl_table\t", dat$genetic_code) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         if (!cur$start_codon %in% start_codons) {
           paste("\t\t\tcodon_start\t", 1) |>
@@ -216,15 +218,30 @@ export_files <- function(
         # write to GFF
         # gene feature
         f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
-        paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
+
         # CDS feature
-        f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",genetic_code)
+        f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
         if (length(note) > 0){
           f9 = paste0(f9, ";Note=", note)
         }
-        paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
-          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
 
         if(gene_export){
           # EXTRACT GENE FROM ASSEMBLY
@@ -269,7 +286,7 @@ export_files <- function(
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           paste("\t\t\tproduct\t", cur$product) |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste("\t\t\ttransl_table\t", genetic_code) |>
+          paste("\t\t\ttransl_table\t", dat$genetic_code) |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           if (!cur$start_codon %in% start_codons) {
             paste("\t\t\tcodon_start\t", 1) |>
@@ -327,12 +344,27 @@ export_files <- function(
         # write to GFF
         # tRNA feature
         f9 = paste0("ID=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";Name=",cur$gene,";gbkey=tRNA;product=",cur$product)
-        paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
+
         # exon feature
         f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";Parent=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=tRNA;product=",cur$product)
-        paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
 
         return()
       }
@@ -351,12 +383,26 @@ export_files <- function(
         # write to GFF
         # rRNA feature
         f9 = paste0("ID=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";Name=",cur$gene,";gbkey=rRNA;product=",cur$product)
-        paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
         # exon feature
         f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";Parent=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=rRNA;product=",cur$product)
-        paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
 
         return()
       }
@@ -370,8 +416,19 @@ export_files <- function(
 
         # write to GFF
         f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=D-loop;Note=control region")
-        paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-          cat(file = gff_fn, sep = "\n", append = TRUE)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        # with special check for D_loop problem of pos1 and pos2 mixup
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else if(dat$topology == "circular" && cur$pos1 > cur$pos2){ # annotation does not wrap but pos1 and pos2 need to be flipped
+          paste(c(seq_name, "MitoPilot", "D_loop", cur$pos2, cur$pos1, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
 
         return()
       }
