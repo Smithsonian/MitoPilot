@@ -8,8 +8,6 @@
 #' @param fasta_header_gene Template for gene fasta headers. Uses glue syntax (i.e.
 #'   `{...}`) to insert values from the samples table
 #' @param out_dir directory to save the exported files
-#' @param start_codons NCBI recognized start codons
-#' @param stop_codons NCBI recognized stop codons
 #' @param generateAAalignments Generate group-level amino acid alignments
 #'   (default: TRUE)
 #' @param gene_export Export FASTAs and feature tables for individual genes?
@@ -29,8 +27,6 @@ export_files <- function(
       "[location=mitochondrion] {Taxon}"
     ),
     out_dir = NULL,
-    start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"), # TODO: dynamic assignment based on curation rules
-    stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"), # TODO: dynamic assignment based on curation rules
     generateAAalignments = T,
     gene_export = F) {
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(dirname(out_dir), ".sqlite"))
@@ -88,6 +84,15 @@ export_files <- function(
       dplyr::arrange(path, pos1) |>
       dplyr::filter(pos1 > 0) |>
       dplyr::collect()
+
+    curation_opts <-  dplyr::tbl(con, "annotate") |>
+      dplyr::filter(ID == !!.x) |>
+      dplyr::pull("curate_opts")
+
+    curate_rules <- dplyr::tbl(con, "curate_opts") |>
+      dplyr::filter(curate_opts == !!curation_opts) |>
+      dplyr::pull("params") |>
+      jsonlite::fromJSON()
 
     # check for duplicate gene names in annotations and rename
     annotations$gene_uniq <- make.unique(annotations$gene)
@@ -176,6 +181,19 @@ export_files <- function(
       }
 
       if (cur$type == "PCG") {
+        # get start and stop codons from the ruleset
+        cur_rules <- curate_rules$rules[[cur$gene]]
+        if("stop_codons" %in% names(cur_rules)){
+          stop_codons <- cur_rules$stop_codons
+        } else {
+          stop_codons <- curate_rules$default_rules$PCG$stop_codons
+        }
+        if("start_codons" %in% names(cur_rules)){
+          start_codons <- cur_rules$start_codons
+        } else {
+          start_codons <- curate_rules$default_rules$PCG$start_codons
+        }
+
         if (stringr::str_detect(cur$translation, "\\*")) {
           message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
         }

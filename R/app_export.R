@@ -23,6 +23,8 @@ export_server <- function(id) {
 
     # Prepare data ----
     rv <- reactiveValues(
+      #curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
+      #  dplyr::collect(),
       data = fetch_export_data(),
       updating = NULL
     )
@@ -56,6 +58,10 @@ export_server <- function(id) {
         defaultColDef = colDef(align = "left"),
         columns = list(
           ID = colDef(show = T, minWidth = 120, sticky = "left"),
+          curate_opts = colDef(
+            show = TRUE,
+            name = "Curate Opts.",
+            width = 110),
           topology = colDef(show = T, width = 100),
           structure = colDef(show = T),
           export_group = colDef(name = "Group", sticky = "right")

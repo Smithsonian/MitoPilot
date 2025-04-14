@@ -13,8 +13,6 @@ export_files(
   fasta_header_gene = paste("{ID} [organism={Taxon}] [mgcode={genetic_code}]",
     "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
-  start_codons = c("ATG", "GTG", "ATA", "ATT", "ATC"),
-  stop_codons = c("TAA", "TAG", "AGA", "AGG", "TA", "T"),
   generateAAalignments = T,
   gene_export = F
 )
@@ -32,10 +30,6 @@ the export group will be exported}
 `{...}`) to insert values from the samples table}
 
 \item{out_dir}{directory to save the exported files}
-
-\item{start_codons}{NCBI recognized start codons}
-
-\item{stop_codons}{NCBI recognized stop codons}
 
 \item{generateAAalignments}{Generate group-level amino acid alignments
 (default: TRUE)}
