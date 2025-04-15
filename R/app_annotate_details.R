@@ -6,9 +6,6 @@ annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # variable to track how many reference samples to align
-    n_hits <- Inf
-
     # Prepare modal data ----
     init("annotations_modal")
     on("annotations_modal", {
@@ -1024,17 +1021,18 @@ annotations_details_server <- function(id, rv) {
         {
           rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
         } |>
+        dplyr::slice_head(n = n_hits) |>
         dplyr::mutate(
-          pctid = compare_aa(focal, target, "pctId"),
           similarity = compare_aa(focal, target, "similarity"),
+          pctid = compare_aa(focal, target, "pctId"),
           gap_leading = count_end_gaps(focal, target, "leading"),
           gap_trailing = count_end_gaps(focal, target, "trailing"),
           .after = "eval",
           .by = dplyr::everything()
         ) |>
-        dplyr::arrange(dplyr::desc(similarity)) |>
-        dplyr::slice_head(n = n_hits)
-      rv$annotations$refHits[selected()] <- json_string(hits)
+        dplyr::arrange(dplyr::desc(similarity))
+
+      temp_hits <- json_string(hits)
       rv$alignment <- NULL
       trigger("align_now")
     })
@@ -1059,6 +1057,23 @@ annotations_details_server <- function(id, rv) {
 
     # Save edits ----
     observeEvent(input$save_edits, {
+      ### Calculate new stats for all reference seqs ----
+      focal <- rv$annotations$translation[selected()]
+      hits <-
+        {
+          rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
+        } |>
+        dplyr::mutate(
+          similarity = compare_aa(focal, target, "similarity"),
+          pctid = compare_aa(focal, target, "pctId"),
+          gap_leading = count_end_gaps(focal, target, "leading"),
+          gap_trailing = count_end_gaps(focal, target, "trailing"),
+          .after = "eval",
+          .by = dplyr::everything()
+        ) |>
+        dplyr::arrange(dplyr::desc(similarity))
+      rv$annotations$refHits[selected()] <- json_string(hits)
+
       dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::rows_delete(
           dplyr::distinct(rv$annotations[, c("ID")]),
