@@ -44,12 +44,12 @@ echo "Downloading nucleotide records from NCBI GenBank using the following query
 echo "${QUERY}"
 echo ""
 
-N_REC=$( esearch -db nucleotide -query "${QUERY}" | grep "Count" | cut -f2 -d">" | cut -f1 -d"<" )
+N_REC=$( esearch -db nucleotide -query "${QUERY}" | efilter -location "mitochondrion" -molecule "genomic" | grep "Count" | cut -f2 -d">" | cut -f1 -d"<" )
 
 echo "Found ${N_REC} records matching this query, downloading now"
 echo "This may take a few minutes..."
 
-esearch -db nucleotide -query "${QUERY}" | efetch -format gb > genbank.gb
+esearch -db nucleotide -query "${QUERY}" | efilter -location "mitochondrion" -molecule "genomic" | efetch -format gb > genbank.gb
 
 echo ""
 echo "Matching records downloaded to genbank.gb"
