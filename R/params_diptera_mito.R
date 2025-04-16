@@ -4,7 +4,7 @@
 #'
 #' @export
 #'
-params_starfish_mito <- function(alt = list()) {
+params_diptera_mito <- function(alt = list()) {
   params <- list(
     ref_dbs = list(
       default = "/ref_dbs/Mitos2/Metazoa/featureProt/{gene}.fas"
@@ -24,7 +24,7 @@ params_starfish_mito <- function(alt = list()) {
         min_len = NA,
         overlap = list(start = 2, stop = F),
         stop_codons = c("TAA", "TAG", "TA", "T"),
-        start_codons = c("ATG", "GTG")
+        start_codons = c("TTG", "ATT", "ATC", "ATA", "ATG", "GTG")
       ),
       tRNA = list(
         count = 1,

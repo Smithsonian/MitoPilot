@@ -11,11 +11,11 @@
 #'
 #' @export
 #'
-curate_starfish_mito <- function(
+curate_diptera_mito <- function(
     annotations_fn = NULL,
     assembly_fn = NULL,
     coverage_fn = NULL,
-    genetic_code = 9,
+    genetic_code = 5,
     out_dir = NULL,
     max_blast_hits = 100,
     params = NULL) {
