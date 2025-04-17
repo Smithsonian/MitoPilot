@@ -24,7 +24,7 @@ backwards_compatibility <- function(
   if("start_gene" %in% names(annotate_opts_table) &&
      "max_blast_hits" %in% names(curate_opts_table) &&
      "problematic" %in% names(annotate_table) &&
-     "genetic_code" %in% names() &&
+     "genetic_code" %in% names(samples_table) &&
      "ID_verified" %in% names(annotate_table) &&
      "reviewed" %in% names(annotate_table)) {
     message("nothing to update")
