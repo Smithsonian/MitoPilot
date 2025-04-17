@@ -1,4 +1,4 @@
-#' Default curation and validation parameters for Starfish Mitochondria
+#' Default curation and validation parameters for dipteran Mitochondria
 #'
 #' @param alt (optional) named list of default values to modify
 #'

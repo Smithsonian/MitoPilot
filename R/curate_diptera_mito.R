@@ -1,4 +1,4 @@
-#' Annotation curation for starfish mitogenomes
+#' Annotation curation for dipteran mitogenomes
 #'
 #' @param annotations_fn Path to the annotations file (csv)
 #' @param assembly_fn Path to the assembly file (fasta)

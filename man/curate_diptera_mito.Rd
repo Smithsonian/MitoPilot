@@ -2,7 +2,7 @@
 % Please edit documentation in R/curate_diptera_mito.R
 \name{curate_diptera_mito}
 \alias{curate_diptera_mito}
-\title{Annotation curation for starfish mitogenomes}
+\title{Annotation curation for dipteran mitogenomes}
 \usage{
 curate_diptera_mito(
   annotations_fn = NULL,
@@ -31,5 +31,5 @@ curate_diptera_mito(
 base64 encoded json string.}
 }
 \description{
-Annotation curation for starfish mitogenomes
+Annotation curation for dipteran mitogenomes
 }

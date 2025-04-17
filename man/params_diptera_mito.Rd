@@ -2,7 +2,7 @@
 % Please edit documentation in R/params_diptera_mito.R
 \name{params_diptera_mito}
 \alias{params_diptera_mito}
-\title{Default curation and validation parameters for Starfish Mitochondria}
+\title{Default curation and validation parameters for dipteran Mitochondria}
 \usage{
 params_diptera_mito(alt = list())
 }
@@ -10,5 +10,5 @@ params_diptera_mito(alt = list())
 \item{alt}{(optional) named list of default values to modify}
 }
 \description{
-Default curation and validation parameters for Starfish Mitochondria
+Default curation and validation parameters for dipteran Mitochondria
 }
