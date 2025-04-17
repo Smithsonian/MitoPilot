@@ -1,7 +1,7 @@
 #' Update old project database for backwards compatibility
 #'
 #' Update old project database for backwards compatibility.
-#' Adds "reviewed", "ID_verified", and "problematic" columns to the annotate table,
+#' Adds "reviewed", "ID_verified", "genetic_code", and "problematic" columns to the annotate table,
 #' "start_gene" column to the annotate_opts table,
 #' and "max_blast_hits" to the curate_opts table.
 #'
@@ -16,6 +16,7 @@ backwards_compatibility <- function(
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite")) # open connection
   on.exit(DBI::dbDisconnect(con))
 
+  samples_table <- DBI::dbReadTable(con, "samples") # read in annotations table
   annotate_table <- DBI::dbReadTable(con, "annotate") # read in annotations table
   annotate_opts_table <- DBI::dbReadTable(con, "annotate_opts") # read in annotations opts table
   curate_opts_table <- DBI::dbReadTable(con, "curate_opts") # read in curate opts table
@@ -23,10 +24,32 @@ backwards_compatibility <- function(
   if("start_gene" %in% names(annotate_opts_table) &&
      "max_blast_hits" %in% names(curate_opts_table) &&
      "problematic" %in% names(annotate_table) &&
+     "genetic_code" %in% names() &&
      "ID_verified" %in% names(annotate_table) &&
      "reviewed" %in% names(annotate_table)) {
     message("nothing to update")
     return(invisible(NULL))
+  }
+
+  # if genetic_code column doesn't exist, add it
+  if(!("genetic_code" %in% names(samples_table))){
+    message("added 'genetic_code' column to samples table")
+    samples_table$genetic_code <- rep("2", nrow(samples_table)) # add genetic_code column
+    # add new columns to database
+    glue::glue_sql(
+      "ALTER TABLE samples
+       ADD COLUMN genetic_code TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "samples") |> # update SQL database
+      dplyr::rows_upsert(
+        samples_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
   }
 
   # if reviewed column doesn't exist, add it
@@ -34,7 +57,6 @@ backwards_compatibility <- function(
     message("added 'reviewed' column to annotate table")
     annotate_table$reviewed <- rep("no", nrow(annotate_table)) # add reviewed column
     # add new columns to database
-
     glue::glue_sql(
       "ALTER TABLE annotate
        ADD COLUMN reviewed TEXT",
@@ -55,7 +77,6 @@ backwards_compatibility <- function(
     message("added 'ID_verified' column to annotate table")
     annotate_table$ID_verified <- rep("no", nrow(annotate_table)) # add ID_verified column
     # add new columns to database
-
     glue::glue_sql(
       "ALTER TABLE annotate
        ADD COLUMN ID_verified TEXT",

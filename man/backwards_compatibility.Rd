@@ -11,7 +11,7 @@ backwards_compatibility(path = ".")
 }
 \description{
 Update old project database for backwards compatibility.
-Adds "reviewed", "ID_verified", and "problematic" columns to the annotate table,
+Adds "reviewed", "ID_verified", "genetic_code", and "problematic" columns to the annotate table,
 "start_gene" column to the annotate_opts table,
 and "max_blast_hits" to the curate_opts table.
 }
