@@ -598,7 +598,6 @@ annotate_server <- function(id) {
         updateSelectizeInput(
           inputId = "target",
           selected = cur$target,
-          choices = c("fish_mito", "starfish_mito", "diptera_mito"),
           options = list(
             create = TRUE,
             maxItems = 1
