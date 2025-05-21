@@ -13,7 +13,7 @@ process annotate {
     tag "${id}"
 
     input:
-        tuple val(id), val(path), path(assembly), path(coverage), val(opts)
+        tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full)
 
     output:
     tuple val(id), val(path),
@@ -32,7 +32,7 @@ process annotate {
         cpus = !{task.cpus}, \
         genetic_code = '!{params.genetic_code}', \
         ref_db = '!{opts.ref_db}', \
-        ref_dir = '!{opts.ref_dir}', \
+        ref_dir = ".", \
         mitos_opts = '!{opts.mitos}', \
         mitos_condaenv = '!{params.mitos_condaenv}', \
         trnaScan_opts = '!{opts.trnaScan}', \
