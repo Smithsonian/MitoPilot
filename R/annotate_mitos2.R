@@ -44,7 +44,7 @@ annotate_mitos2 <- function(
       "--outdir {out}",
       "--code {genetic_code}",
       "--refseqver {ref_db}",
-      "--refdir {ref_dir}",
+      "--refdir .",
       "{ifelse(topology != 'circular', '--linear', '')}",
       "{mitos_opts}",
       "--noplots",
