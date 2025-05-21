@@ -34,10 +34,7 @@ workflow ANNOTATE {
                     trnaScan: it[8],                                    // trnaScan_opts
                     start_gene: it[9]                                  // starting gene for rotation
                 ],
-                path(
-                    it[6] + "/" + it[5]                                   // MITOS ref dir + clade
-                )
-
+                file(it[6] + "/" + it[5])                                   // MITOS ref dir + clade
             )
         }
         .set { annotate_in }
