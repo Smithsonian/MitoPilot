@@ -8,6 +8,7 @@
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
+#' @param ref_dir Path to reference directory for curation
 #'
 #' @export
 #'
@@ -18,7 +19,8 @@ curate_fish_mito <- function(
     genetic_code = 2,
     out_dir = NULL,
     max_blast_hits = 100,
-    params = NULL) {
+    params = NULL,
+    ref_dir = NULL) {
   # Prepare environment ----
 
   ## load annotations ----
@@ -71,6 +73,11 @@ curate_fish_mito <- function(
     )
   }
   list2env(params, envir = environment())
+
+  # set up ref_dbs list
+  ref_dbs <- list(
+    default = paste0(ref_dir, "/featureProt/{gene}.fas")
+  )
 
   ## Prepare rules ----
   rules <- rules |>

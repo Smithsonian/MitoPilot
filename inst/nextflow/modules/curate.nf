@@ -12,7 +12,7 @@ process curate {
     tag "${id}"
 
     input:
-        tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts)
+        tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_clade)
 
     output:
     tuple val(id), val(path),
@@ -33,7 +33,8 @@ process curate {
         genetic_code = !{params.genetic_code}, \
         params = '!{opts.params}', \
         out_dir = '!{dir}', \
-        max_blast_hits = '!{opts.max_blast_hits}'
+        max_blast_hits = '!{opts.max_blast_hits}', \
+        ref_dir = './!{ref_clade}'
         )"
     mv !{dir}/*_annotations_*.csv !{id}/
     ### work dir info for troubleshooting ####
