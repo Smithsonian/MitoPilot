@@ -390,6 +390,38 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         #   )
         # ),
         div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            selectizeInput(
+              ns("curate_ref_dir"),
+              label = "ref_dir",
+              choices = unique(rv$curate_opts$ref_dir),
+              selected = current$curate_opts %||% character(0),
+              width = "100%",
+              options = list(
+                create = TRUE,
+                maxItems = 1
+              )
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            selectizeInput(
+              ns("curate_ref_db"),
+              label = "ref_db",
+              #choices = unique(rv$annotate_opts$ref_db),
+              choices = c("Metazoa", "Chordata"),
+              selected = current$ref_db %||% character(0),
+              width = "100%",
+              options = list(
+                create = TRUE,
+                maxItems = 1
+              )
+            ) |> shinyjs::disabled()
+          )
+        ),
+        div(
           style = "flex: 1",
           selectizeInput(
             ns("target"),
