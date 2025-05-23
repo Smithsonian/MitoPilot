@@ -6,9 +6,9 @@
 #'
 params_fish_mito <- function(alt = list()) {
   params <- list(
-    ref_dbs = list(
-      default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas"
-    ),
+    #ref_dbs = list(
+    #  default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas"
+    #),
     hit_threshold = 90,
     max_overlap = 0.25,
     default_rules = list(

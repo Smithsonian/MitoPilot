@@ -679,6 +679,8 @@ annotate_server <- function(id) {
       shinyjs::toggleState("curate_opts_cpus", condition = input$edit_curate_opts)
       shinyjs::toggleState("curate_opts_memory", condition = input$edit_curate_opts)
       shinyjs::toggleState("max_blast_hits", condition = input$edit_curate_opts)
+      shinyjs::toggleState("curate_ref_dir", condition = input$edit_curate_opts)
+      shinyjs::toggleState("curate_ref_db", condition = input$edit_curate_opts)
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
@@ -755,6 +757,8 @@ annotate_server <- function(id) {
               cpus = req(input$curate_opts_cpus),
               memory = req(input$curate_opts_memory),
               max_blast_hits = req(input$max_blast_hits),
+              ref_dir = req(input$curate_ref_dir),
+              ref_db = req(input$curate_ref_db),
               target = req(input$target)
             ),
             in_place = TRUE,

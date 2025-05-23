@@ -3,6 +3,7 @@ include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, c.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits ' +
+                    'd.ref_db, d.ref_dir ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -29,16 +30,18 @@ workflow CURATE {
                 tuple(
                     it[0],                                          // ID
                     it[1],                                          // path
-                    it[8],                                          // Annotations
-                    it[9],                                          // Assembly
-                    it[10],                                          // Coverage
+                    it[10],                                          // Annotations
+                    it[11],                                          // Assembly
+                    it[12],                                          // Coverage
                     [
                         cpus:  it[3],                                      // cpus
                         memory: it[4],                                     // memory
                         target: it[5],                                     // target
                         params: encodedParams,                              // params
                         max_blast_hits: it[7]                             // maximum retained blast hits
-                    ]
+                    ],
+                    file(it[8] + "/" + it[9]),                              // curation ref dir + clade
+                    val(it[9])                                              // ref clade
                 )
             }
             .set { curate_in }
