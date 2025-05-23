@@ -368,6 +368,8 @@ new_db <- function(
       memory INTEGER,
       target TEXT,
       max_blast_hits INTEGER,
+      ref_db TEXT,
+      ref_dir TEXT,
       params JSON,
       PRIMARY KEY (curate_opts)
     );"
@@ -380,6 +382,8 @@ new_db <- function(
         memory = curate_memory,
         target = curate_target,
         max_blast_hits = 100,
+        ref_db = annotate_ref_db,
+        ref_dir = annotate_ref_dir,
         params = jsonlite::toJSON(curate_params)
       ),
       in_place = TRUE,
