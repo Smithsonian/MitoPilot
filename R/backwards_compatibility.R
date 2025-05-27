@@ -43,6 +43,8 @@ backwards_compatibility <- function(
      containerVer &&
     "start_gene" %in% names(annotate_opts_table) &&
      "max_blast_hits" %in% names(curate_opts_table) &&
+     "ref_db" %in% names(curate_opts_table) &&
+     "ref_dir" %in% names(curate_opts_table) &&
      "assembler" %in% names(assemble_opts_table) &&
      "mitofinder_db" %in% names(assemble_opts_table) &&
      "mitofinder" %in% names(assemble_opts_table) &&
@@ -186,6 +188,48 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE curate_opts
        ADD COLUMN max_blast_hits INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "curate_opts") |> # update SQL database
+      dplyr::rows_upsert(
+        curate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "curate_opts"
+      )
+  }
+
+  # if ref_dir column doesn't exist, add it
+  if(!("ref_dir" %in% names(curate_opts_table))){
+    message("added 'ref_dir' column to annotate_opts table")
+    curate_opts_table$ref_dir <- rep("/ref_dbs/Mitos2", nrow(curate_opts_table))
+    # add new columns to database
+    glue::glue_sql(
+      "ALTER TABLE curate_opts
+       ADD COLUMN ref_dir TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "curate_opts") |> # update SQL database
+      dplyr::rows_upsert(
+        curate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "curate_opts"
+      )
+  }
+
+  # if ref_db column doesn't exist, add it
+  if(!("ref_db" %in% names(curate_opts_table))){
+    message("added 'ref_db' column to annotate_opts table")
+    curate_opts_table$ref_db <- rep("Chordata", nrow(curate_opts_table))
+    # add new columns to database
+    glue::glue_sql(
+      "ALTER TABLE curate_opts
+       ADD COLUMN ref_db TEXT",
       col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
