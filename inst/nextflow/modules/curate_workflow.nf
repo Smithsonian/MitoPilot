@@ -24,6 +24,14 @@ workflow CURATE {
         channel.fromQuery(params.sqlRead, db: 'sqlite')
             .join(input, by: [0, 1])
             .map { it ->
+
+                // Check if refDir is a GitHub link
+                if (it[8].contains('githubusercontent')) {
+                    if (!it[9].endsWith('.tar.gz')) {
+                        it[9] = it[9] + '.tar.gz'
+                    }
+                }
+
                 def jsonParams = it[6].toString()
                 def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
 
@@ -41,7 +49,9 @@ workflow CURATE {
                         max_blast_hits: it[7]                             // maximum retained blast hits
                     ],
                     file(it[8] + "/" + it[9]),                              // curation ref dir + clade
-                    it[9]                                                 // ref clade
+                    it[9],                                                   // ref clade
+                    it[9].replaceFirst(/\.tar\.gz$/, '')                // ref_db without ".tar.gz"
+
                 )
             }
             .set { curate_in }
