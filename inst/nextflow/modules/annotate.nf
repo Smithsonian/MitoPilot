@@ -1,5 +1,7 @@
 process annotate {
 
+    stageInMode 'copy'
+
     executor params.annotate.executor
     container params.annotate.container
 
@@ -13,7 +15,7 @@ process annotate {
     tag "${id}"
 
     input:
-        tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full)
+        tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_db_clean)
 
     output:
     tuple val(id), val(path),
@@ -26,13 +28,24 @@ process annotate {
     dir = "${id}/annotate/"
     '''
     mkdir -p !{dir}
+
+    # Check if ref database is gzip-compressed file
+    MIME_TYPE=$(file --mime-type -b "!{opts.ref_db}")
+    if [[ "$MIME_TYPE" == "application/gzip" ]]; then
+        echo "Decompressing !{opts.ref_db}..."
+        tar -xzf "!{opts.ref_db}"
+        echo "Decompression complete."
+    else
+        echo "Input ref_db not .tar.gz"
+    fi
+
     Rscript -e "MitoPilot::annotate( \
         assembly_fn = '!{assembly}', \
         coverage_fn = '!{coverage}', \
         cpus = !{task.cpus}, \
         genetic_code = '!{params.genetic_code}', \
-        ref_db = '!{opts.ref_db}', \
-        ref_dir = ".", \
+        ref_db = '!{ref_db_clean}', \
+        ref_dir = '.', \
         mitos_opts = '!{opts.mitos}', \
         mitos_condaenv = '!{params.mitos_condaenv}', \
         trnaScan_opts = '!{opts.trnaScan}', \

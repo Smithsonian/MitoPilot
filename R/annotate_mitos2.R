@@ -4,7 +4,6 @@
 #' @param topology "circular" or "linear"
 #' @param genetic_code NCBI genetic code number (default: 2)
 #' @param ref_db Mitos2 reference database (default: "Chordata")
-#' @param ref_dir Path to Mitos2 reference database
 #' @param mitos_opts Additional command line options for MITOS2
 #' @param out output directory
 #' @param condaenv Conda environment to run MITOS2 (default: "mitos")
@@ -16,7 +15,6 @@ annotate_mitos2 <- function(
     topology = "circular",
     genetic_code = "2",
     ref_db = "Chordata",
-    ref_dir = "/home/harpua/Jonah/MitoPilot/ref_dbs/Mitos2",
     mitos_opts = "--best --intron 0 --oril 0",
     out = NULL,
     condaenv = "mitos") {
