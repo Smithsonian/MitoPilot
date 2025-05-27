@@ -2,8 +2,8 @@ import java.util.Base64
 include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, c.curate_opts, ' +
-                    'd.cpus, d.memory, d.target, d.params, d.max_blast_hits ' +
-                    'd.ref_db, d.ref_dir ' +
+                    'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
+                    'd.ref_dir, d.ref_db ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -41,7 +41,7 @@ workflow CURATE {
                         max_blast_hits: it[7]                             // maximum retained blast hits
                     ],
                     file(it[8] + "/" + it[9]),                              // curation ref dir + clade
-                    val(it[9])                                              // ref clade
+                    it[9]                                                 // ref clade
                 )
             }
             .set { curate_in }
