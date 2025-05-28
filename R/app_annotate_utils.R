@@ -190,7 +190,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               ns("mitos_ref_dir"),
               label = "ref_dir",
               choices = unique(rv$annotate_opts$ref_dir),
-              selected = current$annotate_opts %||% character(0),
+              selected = current$ref_dir %||% character(0),
               width = "100%",
               options = list(
                 create = TRUE,
@@ -398,7 +398,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
               ns("curate_ref_dir"),
               label = "ref_dir",
               choices = unique(rv$curate_opts$ref_dir),
-              selected = current$curate_opts %||% character(0),
+              selected = current$ref_dir %||% character(0),
               width = "100%",
               options = list(
                 create = TRUE,
