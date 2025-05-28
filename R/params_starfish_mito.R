@@ -73,12 +73,12 @@ params_starfish_mito <- function(alt = list()) {
       ),
       nad3 = list(
         type = "PCG",
-        start_codon = c("ATG", "GTG", "ATT", "TTG") # "TTG" and "ATT" present in some RefSeq nad3 starfish
+        start_codons = c("ATG", "GTG", "ATT", "TTG") # "TTG" and "ATT" present in some RefSeq nad3 starfish
       ),
       nad4l = list(
         type = "PCG",
         overlap = list(start = 2, stop = T),
-        start_codon = c("ATG", "GTG", "ATT", "ATC", "GTT") # "ATT", "ATC", "GTT" present in some RefSeq nad4l starfish
+        start_codons = c("ATG", "GTG", "ATT", "ATC", "GTT") # "ATT", "ATC", "GTT" present in some RefSeq nad4l starfish
       ),
       nad4 = list(
         type = "PCG",
