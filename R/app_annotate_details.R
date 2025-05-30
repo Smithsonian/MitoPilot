@@ -246,7 +246,8 @@ annotations_details_server <- function(id, rv) {
         gggenes::geom_gene_arrow(
           arrow_body_height = ggplot2::unit(6, "mm"),
           arrowhead_height = ggplot2::unit(6, "mm"),
-          arrowhead_width = ggplot2::unit(1, "mm")
+          arrowhead_width = ggplot2::unit(1, "mm"),
+          alpha = 0.5
         ) +
         gggenes::geom_gene_label(
           align = "left",
