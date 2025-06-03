@@ -195,6 +195,8 @@ curate_starfish_mito <- function(
     }
     list2env(cur, envir = environment())
 
+    message(gene)
+
     # Stop if no hits above threshold
     refHits <- json_parse(refHits[[1]], TRUE)
     if (nrow(refHits) == 0L || !any(refHits$similarity >= hit_threshold)) {
@@ -207,6 +209,8 @@ curate_starfish_mito <- function(
       {
         \(x) x[order(nchar(x), decreasing = T)]
       }()
+
+    message("start truncation check")
 
     ## Fix TRUNCATION ----
     ### START ----
@@ -287,6 +291,9 @@ curate_starfish_mito <- function(
         }
       }
     }
+
+    message("stop truncation check")
+
 
     ### STOP ----
     if (refHits$gap_trailing[1] != 0 && (sum(refHits$gap_trailing > 0L) / nrow(refHits)) > 0.5) {

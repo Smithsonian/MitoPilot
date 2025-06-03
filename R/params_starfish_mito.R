@@ -9,7 +9,7 @@ params_starfish_mito <- function(alt = list()) {
     ref_dbs = list(
       default = "/ref_dbs/Mitos2/Metazoa/featureProt/{gene}.fas"
     ),
-    hit_threshold = 80,
+    hit_threshold = 60,
     max_overlap = 0.25,
     default_rules = list(
       rRNA = list(
