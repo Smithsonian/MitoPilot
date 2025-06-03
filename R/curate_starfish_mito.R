@@ -194,9 +194,6 @@ curate_starfish_mito <- function(
       return(cur)
     }
     list2env(cur, envir = environment())
-
-    message(gene)
-
     # Stop if no hits above threshold
     refHits <- json_parse(refHits[[1]], TRUE)
     if (nrow(refHits) == 0L || !any(refHits$similarity >= hit_threshold)) {
@@ -214,8 +211,6 @@ curate_starfish_mito <- function(
     ## Fix TRUNCATION ----
     ### START ----
     if (refHits$gap_leading[1] != 0 && (sum(refHits$gap_leading > 0L) / nrow(refHits)) > 0.5) {
-      message("start truncation check")
-
       gaps_target <- max(refHits$gap_leading)
       if (direction == "+") {
         while (gaps_target > 0) {
@@ -297,10 +292,8 @@ curate_starfish_mito <- function(
 
     ### STOP ----
     if (refHits$gap_trailing[1] != 0 && (sum(refHits$gap_trailing > 0L) / nrow(refHits)) > 0.5) {
-      message("stop truncation check")
       gaps_target <- max(refHits$gap_trailing)
       if (direction == "+") {
-        message("+")
         while (gaps_target > 0) {
           pos2_new <- pos2 - nchar(stop_codon) + 3 + (3 * gaps_target)
           if ((pos2_new + 1) > assembly[contig_key[contig]]@ranges@width) {
@@ -350,7 +343,6 @@ curate_starfish_mito <- function(
         }
       }
       if (direction == "-") {
-        message("-")
         while (gaps_target > 0) {
           pos1_new <- pos1 + nchar(stop_codon) - 3 - (3 * gaps_target)
           if ((pos1_new + 2) < 1) {
