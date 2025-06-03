@@ -194,7 +194,6 @@ curate_starfish_mito <- function(
       return(cur)
     }
     list2env(cur, envir = environment())
-
     # Stop if no hits above threshold
     refHits <- json_parse(refHits[[1]], TRUE)
     if (nrow(refHits) == 0L || !any(refHits$similarity >= hit_threshold)) {
@@ -207,6 +206,7 @@ curate_starfish_mito <- function(
       {
         \(x) x[order(nchar(x), decreasing = T)]
       }()
+
 
     ## Fix TRUNCATION ----
     ### START ----
@@ -288,6 +288,8 @@ curate_starfish_mito <- function(
       }
     }
 
+
+
     ### STOP ----
     if (refHits$gap_trailing[1] != 0 && (sum(refHits$gap_trailing > 0L) / nrow(refHits)) > 0.5) {
       gaps_target <- max(refHits$gap_trailing)
@@ -312,6 +314,18 @@ curate_starfish_mito <- function(
             gaps_target <- gaps_target - 1
             next
           }
+          # reject if new translation has internal stop codon
+          translation <- Biostrings::subseq(
+            assembly[contig_key[contig]],
+            pos1,
+            pos2_new - nchar(new_stop_codon)
+          ) |>
+            Biostrings::translate(genetic.code = genetic_code) |>
+            as.character()
+          if (grepl("\\*", translation)) {
+            gaps_target <- gaps_target - 1
+            next
+          }
           cur$notes <- notes <- semicolon_paste(
             notes,
             stringr::str_glue("extending end {abs(pos2_new - pos2)} bp")
@@ -319,13 +333,7 @@ curate_starfish_mito <- function(
           cur$pos2 <- pos2 <- pos2_new
           cur$length <- length <- abs(pos2 - pos1) + 1
           cur$stop_codon <- stop_codon <- new_stop_codon
-          cur$translation <- translation <- Biostrings::subseq(
-            assembly[contig_key[contig]],
-            pos1,
-            pos2 - nchar(stop_codon)
-          ) |>
-            Biostrings::translate(genetic.code = genetic_code) |>
-            as.character()
+          cur$translation <- translation
           refHits <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
             translation,
@@ -359,6 +367,19 @@ curate_starfish_mito <- function(
             gaps_target <- gaps_target - 1
             next
           }
+          # reject if new translation has internal stop codon
+          translation <- Biostrings::subseq(
+            assembly[contig_key[contig]],
+            pos1_new + nchar(new_stop_codon),
+            pos2
+          ) |>
+            Biostrings::reverseComplement() |>
+            Biostrings::translate(genetic.code = genetic_code) |>
+            as.character()
+          if (grepl("\\*", translation)) {
+            gaps_target <- gaps_target - 1
+            next
+          }
           cur$notes <- notes <- semicolon_paste(
             notes,
             stringr::str_glue("extending end {abs(pos1_new - pos1)} bp")
@@ -366,14 +387,7 @@ curate_starfish_mito <- function(
           cur$pos1 <- pos1 <- pos1_new
           cur$length <- length <- abs(pos2 - pos1) + 1
           cur$stop_codon <- stop_codon <- new_stop_codon
-          cur$translation <- translation <- Biostrings::subseq(
-            assembly[contig_key[contig]],
-            pos1 + nchar(stop_codon),
-            pos2
-          ) |>
-            Biostrings::reverseComplement() |>
-            Biostrings::translate(genetic.code = genetic_code) |>
-            as.character()
+          cur$translation <- translation
           refHits <- get_top_hits(
             stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
             translation,

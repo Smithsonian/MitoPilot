@@ -931,6 +931,8 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- unname(codon)
       trigger("re_align")
     })
+
+
     ## Edit stop-add ----
     observeEvent(input$`stop-add`, {
       rv$editing$stop_aln <- TRUE
@@ -938,7 +940,10 @@ annotations_details_server <- function(id, rv) {
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
+        message(paste("pos2 before =", pos1))
         pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
+        message(rv$annotations$stop_codon[selected()])
+        message(paste("pos2 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos2 <- pos2 + 3
           req(pos2 <= rv$editing$assembly@ranges@width)
@@ -964,7 +969,10 @@ annotations_details_server <- function(id, rv) {
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
+        message(paste("pos1 before =", pos1))
         pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
+        message(rv$annotations$stop_codon[selected()])
+        message(paste("pos1 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos1 <- pos1 - 3
           req(pos1 >= 1)
@@ -978,14 +986,16 @@ annotations_details_server <- function(id, rv) {
           if (isTRUE(input$single_codon) && length(codon) > 0) break
           if (isTRUE(input$single_codon) && length(codon) == 0) {
             codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
+              Biostrings::subseq(pos1, pos1 + 2) |>
+              Biostrings::reverseComplement() |>
               as.character()
             break
           }
           codon <- codon %||% "INIT"
         }
+        pos1 <- pos1 + (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$editing$backup$stop_codon), pos2) |>
+          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
           Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
           as.character()
@@ -996,6 +1006,8 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$stop_codon[selected()] <- unname(codon)
       trigger("re_align")
     })
+
+
     ## Edit stop-minus ----
     observeEvent(input$`stop-minus`, {
       rv$editing$stop_aln <- TRUE
@@ -1003,7 +1015,10 @@ annotations_details_server <- function(id, rv) {
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
+        message(paste("pos2 before =", pos1))
         pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
+        message(rv$annotations$stop_codon[selected()])
+        message(paste("pos2 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos2 <- pos2 - 3
           req(pos2 > pos1)
@@ -1013,7 +1028,9 @@ annotations_details_server <- function(id, rv) {
             stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
             na.omit() |>
             purrr::pluck(1)
-          if (isTRUE(input$single_codon) && length(codon) > 0) break
+          if (isTRUE(input$single_codon) && length(codon) > 0){
+            break
+          }
           if (isTRUE(input$single_codon) && length(codon) == 0) {
             codon <- rv$editing$assembly |>
               Biostrings::subseq(pos2 - 2, pos2) |>
@@ -1024,32 +1041,41 @@ annotations_details_server <- function(id, rv) {
         }
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
+          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
+          Biostrings::reverseComplement() |>
           Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 + (3 - nchar(rv$annotations$stop_codon[selected()]))
+        message(paste("pos1 before =", pos1))
+        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
+        message(rv$annotations$stop_codon[selected()])
+        message(paste("pos1 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos1 <- pos1 + 3
-          req(pos1 < pos2)
+          req(pos1 >= 1)
           codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos2 - 2, pos2) |>
+            Biostrings::subseq(pos1, pos1 + 2) |>
+            Biostrings::reverseComplement() |>
             as.character() |>
             stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
             na.omit() |>
             purrr::pluck(1)
-          if (isTRUE(input$single_codon) && length(codon) > 0) break
+          if (isTRUE(input$single_codon) && length(codon) > 0){
+            break
+          }
           if (isTRUE(input$single_codon) && length(codon) == 0) {
             codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
+              Biostrings::subseq(pos1, pos1 + 2) |>
+              Biostrings::reverseComplement() |>
               as.character()
             break
           }
           codon <- codon %||% "INIT"
         }
+        pos1 <- pos1 + (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$editing$backup$stop_codon), pos2) |>
+          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
           Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
           as.character()
