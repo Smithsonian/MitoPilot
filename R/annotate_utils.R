@@ -131,12 +131,14 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
   #aln <- pwalign::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
-  seqs <- Biostrings::AAStringSet(list(s1, s2)) # trying MSA algorithm, maybe does better than pwalign
+  # MSA algorithm seems to do better than pwalign
+  seqs <- Biostrings::AAStringSet(list(s1, s2))
   aln <- DECIPHER::AlignSeqs(seqs, verbose = FALSE)
   if (end == "leading") {
     return({
       nchar(stringr::str_extract(as.character(aln[1]), "^-*")) -
         nchar(stringr::str_extract(as.character(aln[2]), "^-*"))
+      # old code for pwalign::pairwiseAlignment() results
       #nchar(stringr::str_extract(as.character(pwalign::alignedSubject(aln)), "^-*")) -
       #  nchar(stringr::str_extract(as.character(pwalign::alignedPattern(aln)), "^-*"))
     })
@@ -145,6 +147,7 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
     return({
       nchar(stringr::str_extract(as.character(aln[1]), "-*$")) -
         nchar(stringr::str_extract(as.character(aln[2]), "-*$"))
+      # old code for pwalign::pairwiseAlignment() results
       #nchar(stringr::str_extract(as.character(pwalign::alignedSubject(aln)), "-*$")) -
       #  nchar(stringr::str_extract(as.character(pwalign::alignedPattern(aln)), "-*$"))
     })
