@@ -395,7 +395,6 @@ curate_starfish_mito <- function(
         break
       }
     }
-  }
 
     ## Fix OVER-EXTENSION ----
     ### START ----
