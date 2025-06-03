@@ -1,6 +1,6 @@
 Package: MitoPilot
 Title: Mitogenome assembly, annotation, and curation
-Version: 1.2.3
+Version: 1.2.4
 Authors@R: c(
     person("Devin", "Leopold", , "devin.leopold@gmail.com", role = c("aut", "cre")),
     person("Dan", "MacGuigan", , "daniel.macguigan@noaa.gov", role = "aut")
