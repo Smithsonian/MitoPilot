@@ -1,5 +1,5 @@
 pandoc: 3.1.11
-pkgdown: 2.1.2
+pkgdown: 2.1.3
 pkgdown_sha: ~
 articles:
   custom_dbs: custom_dbs.html
@@ -8,7 +8,7 @@ articles:
   MitoPilot: MitoPilot.html
   NMNH-Hydra: NMNH-Hydra.html
   NOAA-SEDNA: NOAA-SEDNA.html
-last_built: 2025-05-21T15:48Z
+last_built: 2025-06-03T21:10Z
 urls:
   reference: https://smithsonian.github.io/MitoPilot/reference
   article: https://smithsonian.github.io/MitoPilot/articles
