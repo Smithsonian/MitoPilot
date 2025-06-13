@@ -170,7 +170,7 @@ Running these modules within the R Shiny GUI requires you to maintain an open co
 
 First, initialize your new project and modify any desired parameters using the GUI. Once ready, click `UPDATE`. A new window should appear.
 
-![](figures/test-project/8.png)
+![](figures/test-project/13.png)
 
 Rather than clicking the `Start Nextflow` button, copy the Nextflow command and create a submission script. We have provided a template below. You may wish to modify the job name (`-N`) and the log file name (`-o`).
 
