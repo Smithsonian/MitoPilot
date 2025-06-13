@@ -24,7 +24,7 @@ nextflow_cmd <- function(
     cmd <- c(
       "-log", "{file.path(path, '.logs', 'nextflow.log')}",
       "run", "{source}",
-      "-ansi-log", "false",
+      #"-ansi-log", "false",
       "-c", "{file.path(path, '.config')}",
       "-entry", "{ifelse(workflow == 'assemble', 'WF1_userAsmb', 'WF2')}",
       "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
@@ -35,7 +35,7 @@ nextflow_cmd <- function(
     cmd <- c(
       "-log", "{file.path(path, '.logs', 'nextflow.log')}",
       "run", "{source}",
-      "-ansi-log", "false",
+      #"-ansi-log", "false",
       "-c", "{file.path(path, '.config')}",
       "-entry", "{ifelse(workflow == 'assemble', 'WF1', 'WF2')}",
       "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
