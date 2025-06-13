@@ -142,11 +142,12 @@ pipeline_server <- function(id) {
       # Start the new system process
       p <- processx::process$new(
         "nextflow",
-        args = c(nf_cmd(), "-ansi-log"),
+        #args = c(nf_cmd(), "-ansi-log"),
+        args = c(nf_cmd()),
         stdout = "|",
         stderr = "|",
         env = c("current",
-          NXF_ANSI_SUMMARY = TRUE,
+          #NXF_ANSI_SUMMARY = TRUE,
           SGE = "/cm/shared/apps/uge/8.8.1/age",
           SGE_ARCH = "lx-amd64",
           SGE_CELL = "age",
