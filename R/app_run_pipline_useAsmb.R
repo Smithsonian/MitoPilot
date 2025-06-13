@@ -147,7 +147,7 @@ pipeline_server_userAsmb <- function(id) {
         stdout = "|",
         stderr = "|",
         env = c("current",
-          #NXF_ANSI_SUMMARY = TRUE,
+          NXF_ANSI_SUMMARY = TRUE,
           SGE = "/cm/shared/apps/uge/8.8.1/age",
           SGE_ARCH = "lx-amd64",
           SGE_CELL = "age",
