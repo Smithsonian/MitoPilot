@@ -21,6 +21,9 @@ vignette: >
 strong { font-weight: bold; }
 </style>
 
+
+If you are a Smithsonian NMNH user, please see the [2025 workshop website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/) for the most up-to-date instructions. The workshop documentation may also be helpful for other users.
+
 ## Installation
 
 We recommend running the included test project (Illumina data for 13 fish species) before trying out MitoPilot with your own samples. The following tutorial provides a step-by-step walkthrough.
