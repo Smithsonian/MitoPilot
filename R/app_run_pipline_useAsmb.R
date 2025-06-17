@@ -165,6 +165,7 @@ pipeline_server_userAsmb <- function(id) {
     prog_footer <- reactiveVal()
     progress_update <- function(process_out, prog_header, prog_executor, prog_process, prog_footer) {
       remaining <- rep(T, length(process_out))
+      process_out <- cli::ansi_strip(process_out) # clean up ansi encoded output
       executor_lines <- stringr::str_detect(process_out, "^executor")
       keys <- stringr::str_match(
         process_out,
