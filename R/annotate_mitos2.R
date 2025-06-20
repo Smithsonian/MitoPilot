@@ -141,29 +141,103 @@ annotate_mitos2 <- function(
             ) |>
             dplyr::rowwise() |>
             dplyr::mutate(
-              start_codon = dplyr::case_when(
-                type != "PCG" ~ NA_character_,
-                direction == "+" ~ Biostrings::subseq(assembly[contig], pos1, pos1 + 2) |> as.character(),
-                direction == "-" ~ Biostrings::subseq(assembly[contig], pos2 - 2, pos2) |>
-                  Biostrings::reverseComplement() |> as.character()
-              ),
-              stop_codon = dplyr::case_when(
-                type != "PCG" ~ NA_character_,
-                direction == "+" ~ {
-                  len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
-                  Biostrings::subseq(assembly[contig], pos2 - len + 1, pos2) |>
-                    as.character()
-                },
-                direction == "-" ~ {
-                  len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
-                  Biostrings::subseq(assembly[contig], pos1, pos1 + len - 1) |>
-                    Biostrings::reverseComplement() |>
-                    as.character()
-                }
-              ),
               # below code is ugly but it works
               # dplyr::case_when() does not work because it evaluates all statements
               # regardless of whether they are true or false
+              start_codon = ifelse(
+                type == "PCG" & direction == "+" & pos1 < pos2,
+                suppressWarnings({
+                  Biostrings::subseq(assembly[contig], pos1, pos2) |>
+                    as.character() |>
+                    substr(start = 1, stop = 3)
+                }),
+                ifelse(
+                  type == "PCG" & direction == "+" & pos1 > pos2,
+                  suppressWarnings({
+                    # this can happen if a PCG annotation wraps around the end of a circular assembly
+                    # concatenate gene chunks
+                    Biostrings::xscat(
+                      Biostrings::subseq(assembly[contig], pos1, contig_len),
+                      Biostrings::subseq(assembly[contig], 1, pos2)
+                    ) |>
+                      as.character() |>
+                      substr(start = 1, stop = 3)
+                  }),
+                  ifelse(
+                    type == "PCG" & direction == "-" & pos1 < pos2,
+                    suppressWarnings({
+                      Biostrings::subseq(assembly[contig], pos1, pos2) |>
+                        Biostrings::reverseComplement() |>
+                        as.character() |>
+                        substr(start = 1, stop = 3)
+                    }),
+                    ifelse(
+                      type == "PCG" & direction == "-" & pos1 > pos2,
+                      suppressWarnings({
+                        #  this can happen if a PCG annotation wraps around the end of a circular assembly
+                        # concatenate gene chunks
+                        Biostrings::xscat(
+                          Biostrings::subseq(assembly[contig], pos1, contig_len),
+                          Biostrings::subseq(assembly[contig], 1, pos2)
+                        ) |>
+                          Biostrings::reverseComplement() |>
+                          as.character()  |>
+                          substr(start = 1, stop = 3)
+                      }),
+                      NA_character_
+                    )
+                  )
+                )
+              ),
+              stop_codon = ifelse(
+                type == "PCG" & direction == "+" & pos1 < pos2,
+                suppressWarnings({
+                  len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
+                  Biostrings::subseq(assembly[contig], pos1, pos2) |>
+                    as.character() |>
+                    substr(start = length - len + 1, stop = length)
+                }),
+                ifelse(
+                  type == "PCG" & direction == "+" & pos1 > pos2,
+                  suppressWarnings({
+                    # this can happen if a PCG annotation wraps around the end of a circular assembly
+                    # concatenate gene chunks
+                    len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
+                    Biostrings::xscat(
+                      Biostrings::subseq(assembly[contig], pos1, contig_len),
+                      Biostrings::subseq(assembly[contig], 1, pos2)
+                    ) |>
+                      as.character() |>
+                      substr(start = length - len + 1, stop = length)
+                  }),
+                  ifelse(
+                    type == "PCG" & direction == "-" & pos1 < pos2,
+                    suppressWarnings({
+                      len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
+                      Biostrings::subseq(assembly[contig], pos1, pos2) |>
+                        Biostrings::reverseComplement() |>
+                        as.character() |>
+                        substr(start = length - len + 1, stop = length)
+                    }),
+                    ifelse(
+                      type == "PCG" & direction == "-" & pos1 > pos2,
+                      suppressWarnings({
+                        len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
+                        #  this can happen if a PCG annotation wraps around the end of a circular assembly
+                        # concatenate gene chunks
+                        Biostrings::xscat(
+                          Biostrings::subseq(assembly[contig], pos1, contig_len),
+                          Biostrings::subseq(assembly[contig], 1, pos2)
+                        ) |>
+                          Biostrings::reverseComplement() |>
+                          as.character()  |>
+                          substr(start = length - len + 1, stop = length)
+                      }),
+                      NA_character_
+                    )
+                  )
+                )
+              ),
               translation = ifelse(
                 type == "PCG" & direction == "+" & pos1 < pos2,
                 suppressWarnings({
