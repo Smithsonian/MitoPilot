@@ -11,7 +11,8 @@ annotate_ui <- function(id) {
   ns <- NS(id)
   tagList(
     tagList(
-      reactable::reactableOutput(ns("table"))
+      uiOutput(ns("warnings_select")),
+      reactable::reactableOutput(ns("table")),
     )
   )
 }
@@ -33,21 +34,78 @@ annotate_server <- function(id) {
       updating = NULL
     )
 
-
     # Refresh ----
     init("refresh_annotate")
     on("refresh_annotate", {
       rv$data <- fetch_annotate_data()
       updateReactable(
         "table",
-        data = rv$data
+        data = filtered_data()
+      )
+    })
+
+    # Render dynamic footer with checkboxes
+    output$warnings_select <- renderUI({
+      req(rv$data)
+
+      # Extract and flatten warnings_details column contains values delimited by semicolon
+      warn_vals <- rv$data$warnings_details |>
+        na.omit() |>
+        strsplit(split = ";\\s*") |>
+        unlist() |>
+        unique() |>
+        sort()
+
+      # # Generate checkboxGroupInput
+      # checkboxGroupInput(
+      #   ns("warning_filters"),
+      #   label = "Warnings column includes:",
+      #   choices = warn_vals,
+      #   selected = warn_vals,  # default to all selected
+      #   inline = TRUE
+      # )
+
+      # Use pickerInput to create a dropdown with checkboxes
+      shinyWidgets::pickerInput(
+        inputId = ns("warning_filters"),
+        label = "Warnings column includes:",
+        choices = warn_vals,
+        selected = warn_vals,  # default to all selected
+        multiple = TRUE,  # enable multi-select
+        options = list(
+          `actions-box` = TRUE,  # Display checkboxes in dropdown
+          `selected-text-format` = "count > 3"  # Show the number of selected items when more than 3 are selected
+        ),
+        inline = TRUE  # Optional: puts it on the same line
+      )
+    })
+
+    # Reactive filtered data
+    filtered_data <- reactive({
+      req(rv$data)
+      selected <- input$warning_filters
+
+      # If no warning types selected, return warnings = 0 for all
+      if (is.null(selected) || length(selected) == 0) {
+        return(rv$data |> dplyr::mutate(warnings = 0))
+      }
+
+      rv$data |> dplyr::mutate(
+        warnings = purrr::map_int(warnings_details, function(wd) {
+          if (is.na(wd) || length(selected) == 0) return(0)
+          wd_list <- strsplit(as.character(wd), ";")[[1]] |>
+            trimws()
+          sum(wd_list %in% selected)
+        })
       )
     })
 
     # Render table ----
     output$table <- renderReactable({
-      isolate(req(rv$data)) |>
+      #isolate(req(rv$data)) |>
+      #req(filtered_data()) |>
         reactable(
+          data = isolate(filtered_data()),
           compact = TRUE,
           language = reactable::reactableLang(
             noData = "No Completed / Locked Assemblies Found"
@@ -204,12 +262,23 @@ annotate_server <- function(id) {
         )
     })
 
+    # watch for changes and update table
+    observe({
+      reactable::updateReactable(
+        "table",
+        data = filtered_data(),
+        page = reactable::getReactableState("table", "page"),
+        selected = reactable::getReactableState("table", "selected")
+      )
+    })
+
     # update table ----
     init("update_annotate_table")
     on("update_annotate_table", {
       reactable::updateReactable(
         "table",
-        data = rv$data |>
+        #data = rv$data |>
+        data = filtered_data() |>
           dplyr::mutate(
             output = dplyr::case_when(
               annotate_switch > 1 ~ "output",
@@ -234,7 +303,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       req(all(rv$data$annotate_lock[req(selected())] == 0))
-      rv$updating <- rv$data |>
+      rv$updating <- rv$data() |>
         dplyr::select(ID, annotate_switch) |>
         dplyr::slice(selected())
       current <- character(0)

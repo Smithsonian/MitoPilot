@@ -16,8 +16,19 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
 
+  annotations <- dplyr::tbl(db, "annotations") |>
+    dplyr::select(ID, warnings) |>
+    dplyr::collect() |>
+    dplyr::group_by(ID) |>
+    dplyr::summarise(
+      warnings_details = warnings[warnings != ""] |>
+        paste(collapse = "; ")
+    )
+
   dplyr::left_join(assemble, annotate, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
+    dplyr::collect() |>
+    dplyr::left_join(annotations, by = "ID") |>
     dplyr::select(
       annotate_lock,
       annotate_switch,
@@ -39,9 +50,9 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       reviewed,
       problematic,
       time_stamp,
-      annotate_notes
+      annotate_notes,
+      warnings_details
     ) |>
-    dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(
       output = dplyr::case_when(

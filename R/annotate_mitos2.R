@@ -113,7 +113,17 @@ annotate_mitos2 <- function(
             ) |>
             dplyr::mutate(
               anticodon = dplyr::case_when(
-                type == "tRNA" ~ toupper(stringr::str_extract(stringr::str_extract(names(x), "\\S+$"), '(?<=\\()[^\\^\\)]+')), # get anticodon
+                type == "tRNA" ~ stringr::str_replace(
+                  toupper(
+                    stringr::str_extract(
+                      stringr::str_extract(names(x), "\\S+$"),
+                      "(?<=\\()[^\\^\\)]+"
+                    )
+                  ),
+                  "^---$", "NNN"  # replace "---" with "NNN", to make mitos results compatible with tRNAscan results
+                                  # this is caused by failure to detect the anticodon region
+                                  # e.g. https://github.com/UCSC-LoweLab/tRNAscan-SE/issues/33
+                ),
                 .default = NA_character_
               ),
               .after = "direction"
