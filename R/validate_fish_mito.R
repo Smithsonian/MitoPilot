@@ -63,7 +63,7 @@ validate_fish_mito <- function(
 
   # Validate counts ----
   missing <- NA_character_
-  extra <- 0
+  extra <- NA_character_
   for (gene in names(rules)) {
     gene_rules <- rules[[gene]]
     gene_annotations <- annotations |>
@@ -77,7 +77,7 @@ validate_fish_mito <- function(
 
     ## Duplication ----
     if (nrow(gene_annotations) > max(gene_rules$count)) {
-      extra <- extra + nrow(gene_annotations) - max(gene_rules$count)
+      extra <- semicolon_paste(extra, gene)
       annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "possible duplicate")
       total_warnings = total_warnings + 1
     }
@@ -215,6 +215,13 @@ validate_fish_mito <- function(
       total_warnings = total_warnings + 1
     }
   }
+
+  # de-duplicate the "extra" field
+  extra <- extra |>
+    strsplit(";") |>
+    unlist() |>
+    unique() |>
+    paste(collapse = ";")
 
   # Final Summary ----
   summary <- data.frame(
