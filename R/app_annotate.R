@@ -11,7 +11,8 @@ annotate_ui <- function(id) {
   ns <- NS(id)
   tagList(
     tagList(
-      reactable::reactableOutput(ns("table"))
+      uiOutput(ns("warnings_select")),
+      reactable::reactableOutput(ns("table")),
     )
   )
 }
@@ -33,21 +34,72 @@ annotate_server <- function(id) {
       updating = NULL
     )
 
-
     # Refresh ----
     init("refresh_annotate")
     on("refresh_annotate", {
       rv$data <- fetch_annotate_data()
       updateReactable(
         "table",
-        data = rv$data
+        data = filtered_data()
+      )
+    })
+
+    # Render dynamic footer with checkboxes
+    output$warnings_select <- renderUI({
+      req(rv$data)
+
+      # Extract and flatten warnings_details column contains values delimited by semicolon
+      warn_vals <- rv$data$warnings_details |>
+        na.omit() |>
+        strsplit(split = ";\\s*") |>
+        unlist() |>
+        unique() |>
+        sort()
+
+      # # Generate checkboxGroupInput
+      # checkboxGroupInput(
+      #   ns("warning_filters"),
+      #   label = "Warnings column includes:",
+      #   choices = warn_vals,
+      #   selected = warn_vals,  # default to all selected
+      #   inline = TRUE
+      # )
+
+      # Use pickerInput to create a dropdown with checkboxes
+      shinyWidgets::pickerInput(
+        inputId = ns("warning_filters"),
+        label = "Warnings column includes:",
+        choices = warn_vals,
+        selected = isolate(input$warning_filters) %||% warn_vals,  # default to all selected
+        multiple = TRUE,  # enable multi-select
+        options = list(
+          `actions-box` = TRUE,  # Display checkboxes in dropdown
+          `selected-text-format` = "count > 0"  # Show the number of selected items when more than 0 are selected
+        ),
+        inline = TRUE  # Optional: puts it on the same line
+      )
+    })
+
+    # Reactive filtered data
+    filtered_data <- reactive({
+      req(rv$data)
+      selected <- input$warning_filters
+      rv$data |> dplyr::mutate(
+        warnings = purrr::map_int(warnings_details, function(wd) {
+          #if (is.na(wd) || length(selected) == 0) return(0)
+          wd_list <- strsplit(as.character(wd), ";")[[1]] |>
+            trimws()
+          sum(wd_list %in% selected)
+        })
       )
     })
 
     # Render table ----
     output$table <- renderReactable({
-      isolate(req(rv$data)) |>
+      #isolate(req(rv$data)) |>
+      # req(filtered_data())
         reactable(
+          data = isolate(filtered_data()),
           compact = TRUE,
           language = reactable::reactableLang(
             noData = "No Completed / Locked Assemblies Found"
@@ -60,7 +112,7 @@ annotate_server <- function(id) {
           searchable = TRUE,
           filterable = TRUE,
           defaultSorted = list(time_stamp = "desc"),
-          height = 650,
+          #height = 650,
           wrap = FALSE,
           pageSizeOptions = c(25, 50, 100, 200, 500),
           rowStyle = rt_highlight_row(),
@@ -147,7 +199,7 @@ annotate_server <- function(id) {
             tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
             rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),
             missing = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
-            extra = colDef(show = TRUE, align = "center"),
+            extra = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
             warnings = colDef(show = TRUE, align = "center"),
             reviewed = colDef(
               show = TRUE,
@@ -204,12 +256,23 @@ annotate_server <- function(id) {
         )
     })
 
+    # watch for changes to warnings filter and update table
+    observeEvent(input$warning_filters, {
+      reactable::updateReactable(
+        "table",
+        data = filtered_data(),
+        page = reactable::getReactableState("table", "page"),
+        selected = reactable::getReactableState("table", "selected")
+      )
+    }, ignoreNULL = FALSE)
+
     # update table ----
     init("update_annotate_table")
     on("update_annotate_table", {
       reactable::updateReactable(
         "table",
-        data = rv$data |>
+        #data = rv$data |>
+        data = filtered_data() |>
           dplyr::mutate(
             output = dplyr::case_when(
               annotate_switch > 1 ~ "output",
@@ -233,8 +296,8 @@ annotate_server <- function(id) {
     on("state", {
       req(session$userData$mode == "Annotate")
       req(selected())
-      req(all(rv$data$annotate_lock[req(selected())] == 0))
-      rv$updating <- rv$data |>
+      req(all(filtered_data()$annotate_lock[req(selected())] == 0))
+      rv$updating <- filtered_data() |>
         dplyr::select(ID, annotate_switch) |>
         dplyr::slice(selected())
       current <- character(0)
@@ -270,7 +333,7 @@ annotate_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      rv$data <- rv$data |>
+      rv$data <- filtered_data() |>
         dplyr::rows_update(
           rv$updating,
           by = "ID"
@@ -284,7 +347,7 @@ annotate_server <- function(id) {
     on("lock", {
       req(session$userData$mode == "Annotate")
       req(selected())
-      rv$updating <- rv$data |>
+      rv$updating <- filtered_data() |>
         dplyr::select(ID, annotate_lock) |>
         dplyr::slice(selected())
       lock_current <- as.numeric(names(which.max(table(rv$updating$annotate_lock))))
@@ -297,7 +360,7 @@ annotate_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      rv$data <- rv$data |>
+      rv$data <- filtered_data() |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
       trigger("refresh_export")
@@ -308,7 +371,7 @@ annotate_server <- function(id) {
     on("id_verified_top", {
       req(session$userData$mode == "Annotate")
       req(selected())
-      rv$updating <- rv$data |>
+      rv$updating <- filtered_data() |>
         dplyr::select(ID, ID_verified) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$ID_verified))[1]
@@ -327,7 +390,7 @@ annotate_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      rv$data <- rv$data |>
+      rv$data <- filtered_data() |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
     })
@@ -337,7 +400,7 @@ annotate_server <- function(id) {
     on("problematic_top", {
       req(session$userData$mode == "Annotate")
       req(selected())
-      rv$updating <- rv$data |>
+      rv$updating <- filtered_data() |>
         dplyr::select(ID, problematic) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$problematic))[1]
@@ -354,7 +417,7 @@ annotate_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      rv$data <- rv$data |>
+      rv$data <- filtered_data() |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
     })
@@ -367,8 +430,8 @@ annotate_server <- function(id) {
       } else {
         selected <- c(row, selected()) |> unique()
       }
-      req(all(rv$data$annotate_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
+      req(all(filtered_data()$annotate_lock[selected] == 0))
+      rv$updating <- filtered_data() |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       annotate_opts_modal(rv)
     })
@@ -474,8 +537,8 @@ annotate_server <- function(id) {
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
-      if (input$edit_annotate_opts && input$annotate_opts %in% rv$data$annotate_opts) {
-        rv$updating_indirect <- rv$data |>
+      if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
+        rv$updating_indirect <- filtered_data() |>
           dplyr::filter(annotate_opts == input$annotate_opts) |>
           dplyr::anti_join(rv$updating, by = "ID")
         # Prevent editing opts that apply to locked samples
@@ -551,7 +614,7 @@ annotate_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      rv$data <- rv$data |>
+      rv$data <- filtered_data() |>
         dplyr::rows_update(
           update,
           by = "ID"
@@ -569,8 +632,8 @@ annotate_server <- function(id) {
       } else {
         selected <- c(row, selected()) |> unique()
       }
-      req(all(rv$data$annotate_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
+      req(all(filtered_data()$annotate_lock[selected] == 0))
+      rv$updating <- filtered_data() |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       curate_opts_modal(rv)
     })
@@ -628,8 +691,8 @@ annotate_server <- function(id) {
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
-      if (input$edit_curate_opts && input$curate_opts %in% rv$data$curate_opts) {
-        rv$updating_indirect <- rv$data |>
+      if (input$edit_curate_opts && input$curate_opts %in% filtered_data()$curate_opts) {
+        rv$updating_indirect <- filtered_data() |>
           dplyr::filter(curate_opts == input$curate_opts) |>
           dplyr::anti_join(rv$updating, by = "ID")
         # Prevent editing opts that apply to locked samples
@@ -730,7 +793,7 @@ annotate_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      rv$data <- rv$data |>
+      rv$data <- filtered_data() |>
         dplyr::rows_update(
           update,
           by = "ID"
@@ -743,7 +806,7 @@ annotate_server <- function(id) {
     observeEvent(input$output, ignoreInit = T, {
       pth <- file.path(
         session$userData$dir_out,
-        rv$data$ID[as.numeric(input$output)],
+        filtered_data()$ID[as.numeric(input$output)],
         "annotate"
       )
       req(file.exists(pth))
@@ -757,7 +820,7 @@ annotate_server <- function(id) {
 
     # Open annotation details ----
     observeEvent(input$details, {
-      rv$updating <- rv$data |> dplyr::slice(as.numeric(input$details))
+      rv$updating <- filtered_data() |> dplyr::slice(as.numeric(input$details))
       trigger("annotations_modal")
     })
     annotations_details_server(ns("annotations"), rv)

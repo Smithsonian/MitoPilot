@@ -51,7 +51,7 @@ export_server <- function(id) {
         searchable = TRUE,
         resizable = TRUE,
         filterable = TRUE,
-        height = 680,
+        #height = 680,
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),

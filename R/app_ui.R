@@ -43,6 +43,7 @@ app_ui <- function(request) {
             shinyWidgets::actionBttn(
               "run_modal",
               label = "Update",
+              icon = icon("circle-play"),
               style = "material-flat",
               size = "sm"
             )
@@ -78,6 +79,7 @@ app_ui <- function(request) {
             shinyWidgets::actionBttn(
               "run_modal",
               label = "Update",
+              icon = icon("circle-play"),
               style = "material-flat",
               size = "sm"
             )

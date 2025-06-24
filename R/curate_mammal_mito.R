@@ -482,7 +482,7 @@ curate_mammal_mito <- function(
           )
           cur$pos2 <- pos2 <- pos2_new
           cur$length <- length <- abs(pos2 - pos1) + 1
-          cur$start_codon <- start_codon <- new_start_codon
+          cur$start_codon <- start_codon <- names(alt_starts)[alt_idx]
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
           break
