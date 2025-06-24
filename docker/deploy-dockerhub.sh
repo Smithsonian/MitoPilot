@@ -1,8 +1,8 @@
 #!/bin/bash
 
 repo='mitopilot'
-#tag="${1:-latest}"
-tag="devel-warnings"
+tag="${1:-latest}"
+#tag="devel-warnings"
 
 if [ -z "$tag" ]
 then
