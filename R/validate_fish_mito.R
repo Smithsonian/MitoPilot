@@ -217,11 +217,13 @@ validate_fish_mito <- function(
   }
 
   # de-duplicate the "extra" field
-  extra <- extra |>
-    strsplit(";") |>
-    unlist() |>
-    unique() |>
-    paste(collapse = ";")
+  if(!is.na(extra)){
+    extra <- extra |>
+      strsplit(";") |>
+      unlist() |>
+      unique() |>
+      paste(collapse = ";")
+  }
 
   # Final Summary ----
   summary <- data.frame(

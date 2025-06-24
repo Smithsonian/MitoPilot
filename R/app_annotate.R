@@ -262,8 +262,8 @@ annotate_server <- function(id) {
         )
     })
 
-    # watch for changes and update table
-    observe({
+    # watch for changes to warnings filter and update table
+    observeEvent(input$warning_filters, {
       reactable::updateReactable(
         "table",
         data = filtered_data(),
@@ -303,7 +303,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       req(all(rv$data$annotate_lock[req(selected())] == 0))
-      rv$updating <- rv$data() |>
+      rv$updating <- rv$data |>
         dplyr::select(ID, annotate_switch) |>
         dplyr::slice(selected())
       current <- character(0)
