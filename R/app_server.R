@@ -39,14 +39,17 @@ app_server <- function(input, output, session) {
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
     if(input$mode == "Export"){
+      message("export selected")
       shinyjs::toggle("export_ctrls", condition = TRUE)
       shinyjs::toggle("asmb_ctrls", condition = FALSE)
       shinyjs::toggle("annot_ctrls", condition = FALSE)
     }else if(input$mode == "Assemble"){
+      message("assemble selected")
       shinyjs::toggle("export_ctrls", condition = FALSE)
       shinyjs::toggle("asmb_ctrls", condition = TRUE)
       shinyjs::toggle("annot_ctrls", condition = FALSE)
     }else{
+      message("annotate selected")
       shinyjs::toggle("export_ctrls", condition = FALSE)
       shinyjs::toggle("asmb_ctrls", condition = FALSE)
       shinyjs::toggle("annot_ctrls", condition = TRUE)
@@ -76,7 +79,7 @@ app_server <- function(input, output, session) {
   observeEvent(input$id_verified_top, {
     trigger("id_verified_top")
   })
-  # mark problematic 
+  # mark problematic
   observeEvent(input$problematic_top, {
     trigger("problematic_top")
   })
