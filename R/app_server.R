@@ -37,6 +37,10 @@ app_server <- function(input, output, session) {
 
   # View mode ----
   observeEvent(input$mode, {
+    # handle the stricter input validation in Shiny > 1.11.0
+    if (is.null(input$mode) || length(input$mode) == 0) {
+      updatePickerInput(session, "mode", selected = "Assemble")
+    }
     session$userData$mode <- input$mode
     if(input$mode == "Export"){
       message("export selected")
@@ -54,7 +58,7 @@ app_server <- function(input, output, session) {
       shinyjs::toggle("asmb_ctrls", condition = FALSE)
       shinyjs::toggle("annot_ctrls", condition = TRUE)
     }
-  })
+  }, ignoreInit = FALSE, ignoreNULL = FALSE)
 
   # Reload Data
   observeEvent(input$refresh, {
