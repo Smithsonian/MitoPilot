@@ -37,7 +37,7 @@ app_server <- function(input, output, session) {
 
   # View mode ----
   observeEvent(input$mode, {
-    # handle the stricter input validation in Shiny > 1.11.0
+    # handle the stricter input validation in Shiny >= 1.11.0
     if (is.null(input$mode) || length(input$mode) == 0) {
       updatePickerInput(session, "mode", selected = "Assemble")
     }

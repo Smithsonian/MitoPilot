@@ -12,12 +12,6 @@ app_ui <- function(request) {
         style = "display: flex; flex-direction: column;",
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-          # selectInput(
-          #   inputId = "mode",
-          #   label = "",
-          #   choices = c("Assemble", "Annotate", "Export"),
-          #   selected = "Assemble"
-          # ),
           shinyWidgets::pickerInput(
             inputId = "mode",
             width = 150,
@@ -149,6 +143,21 @@ add_external_resources <- function() {
     ),
     waiter::useWaiter(),
     rclipboard::rclipboardSetup(),
-    shinyjs::useShinyjs()
+    shinyjs::useShinyjs(),
+    # fix for shiny >= 1.11.0
+    tags$script(HTML("
+    $(document).on('changed.bs.select', '#mode', function(e) {
+      var selectedValue = $(this).selectpicker('val');
+
+      // Ensure we always send a valid string value
+      if (selectedValue === null || selectedValue === undefined || selectedValue === '') {
+        $(this).selectpicker('val', 'Assemble');
+        selectedValue = 'Assemble';
+      }
+
+      // Manually trigger Shiny input update with clean value
+      Shiny.setInputValue('mode', selectedValue, {priority: 'event'});
+    });
+  "))
   )
 }
