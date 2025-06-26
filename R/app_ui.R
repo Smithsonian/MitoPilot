@@ -16,7 +16,8 @@ app_ui <- function(request) {
             inputId = "mode",
             width = 150,
             label = "",
-            choices = c("Assemble", "Annotate", "Export")
+            choices = c("Assemble", "Annotate", "Export"),
+            selected = "Assemble"
           ),
           shinyWidgets::actionBttn(
             "refresh",
