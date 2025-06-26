@@ -12,19 +12,19 @@ app_ui <- function(request) {
         style = "display: flex; flex-direction: column;",
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-          selectInput(
-            inputId = "mode",
-            label = "",
-            choices = c("Assemble", "Annotate", "Export"),
-            selected = "Assemble"
-          ),
-          # shinyWidgets::pickerInput(
+          # selectInput(
           #   inputId = "mode",
-          #   width = 150,
           #   label = "",
           #   choices = c("Assemble", "Annotate", "Export"),
           #   selected = "Assemble"
           # ),
+          shinyWidgets::pickerInput(
+            inputId = "mode",
+            width = 150,
+            label = "",
+            choices = c("Assemble", "Annotate", "Export"),
+            selected = "Assemble"
+          ),
           shinyWidgets::actionBttn(
             "refresh",
             label = NULL,
