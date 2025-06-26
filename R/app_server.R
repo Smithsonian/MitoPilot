@@ -58,7 +58,7 @@ app_server <- function(input, output, session) {
       shinyjs::toggle("asmb_ctrls", condition = FALSE)
       shinyjs::toggle("annot_ctrls", condition = TRUE)
     }
-  }, ignoreInit = FALSE, ignoreNULL = FALSE)
+  }, ignoreInit = TRUE, ignoreNULL = FALSE)
 
   # Reload Data
   observeEvent(input$refresh, {
