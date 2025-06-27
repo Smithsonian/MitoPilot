@@ -50,7 +50,8 @@ Currently, MitoPilot has curation/validation rulesets for the following groups o
 - fishes
 - starfish (testing in progress)
 - dipterans (testing in progress)
-- mammals (testing in progress)
+- mammals (untested)
+- copepods (untested)
 
 The custom logic in the annotation curation and validation scripts needs to be tweaked for optimal performance with other taxonomic groups. Because all of the curation rulesets are contained in the underlying Docker image (currently hosted at [macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)), customization or extension will involve updating the Docker image appropriately and specifying the new image in the Nextflow configuration file (see below). 
 
