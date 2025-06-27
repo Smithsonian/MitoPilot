@@ -47,7 +47,7 @@ Imports:
     RSQLite,
     rstudioapi,
     scales,
-    shiny (<=1.10.0),
+    shiny (<= 1.10.0),
     shinyjs,
     shinyWidgets,
     stringr,
