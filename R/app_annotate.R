@@ -56,15 +56,6 @@ annotate_server <- function(id) {
         unique() |>
         sort()
 
-      # # Generate checkboxGroupInput
-      # checkboxGroupInput(
-      #   ns("warning_filters"),
-      #   label = "Warnings column includes:",
-      #   choices = warn_vals,
-      #   selected = warn_vals,  # default to all selected
-      #   inline = TRUE
-      # )
-
       # Use pickerInput to create a dropdown with checkboxes
       shinyWidgets::pickerInput(
         inputId = ns("warning_filters"),

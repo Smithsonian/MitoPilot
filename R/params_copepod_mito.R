@@ -54,7 +54,7 @@ params_copepod_mito <- function(alt = list()) {
       ),
       cox1 = list(
         type = "PCG",
-        overlap = list(start = 2, stop = T),
+        overlap = list(start = 2, stop = T)
       ),
       cox2 = list(
         type = "PCG",
