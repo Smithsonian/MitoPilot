@@ -46,7 +46,6 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       rRNACount,
       missing,
       extra,
-      duplicates,
       warnings,
       reviewed,
       problematic,
