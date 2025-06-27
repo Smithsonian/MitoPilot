@@ -25,7 +25,8 @@ new_db(
   annotate_cpus = 6,
   annotate_memory = 36,
   annotate_ref_db = "Chordata",
-  annotate_ref_dir = "/ref_dbs/Mitos2",
+  annotate_ref_dir =
+    "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/devel-DJM/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0",
   trnaScan_opts = "-M vert",
   curate_cpus = 4,
