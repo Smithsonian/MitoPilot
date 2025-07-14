@@ -848,7 +848,8 @@ annotations_details_server <- function(id, rv) {
     })
 
     ## Edit start-add ----
-    observeEvent(input$`start-add`, {
+    init("start-add-simple")
+    on("start-add-simple", {
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
@@ -887,10 +888,39 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- codon
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
+    })
+    observeEvent(input$`start-add-10`, {
+      message("moving start position +10...")
+      for(i in 1:10){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-add-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-add-5`, {
+      message("moving start position +5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-add-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-add`, {
+      trigger("start-add-simple")
       trigger("re_align")
     })
+
     ## Edit start-minus ----
-    observeEvent(input$`start-minus`, {
+    init("start-minus-simple")
+    on("start-minus-simple", {
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
@@ -910,7 +940,7 @@ annotations_details_server <- function(id, rv) {
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        while (codon %nin% rv$start_opts) {
+        while (codon %nin% rv$editing$params$start_codons) {
           pos2 <- pos2 - 3
           req(pos2 > pos1)
           codon <- rv$editing$assembly |>
@@ -929,12 +959,39 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
+    })
+    observeEvent(input$`start-minus-10`, {
+      message("moving start position -10...")
+      for(i in 1:10){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-minus-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-minus-5`, {
+      message("moving start position -5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-minus-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-minus`, {
+      trigger("start-minus-simple")
       trigger("re_align")
     })
 
-
     ## Edit stop-add ----
-    observeEvent(input$`stop-add`, {
+    init("stop-add-simple")
+    on("stop-add-simple" , {
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
@@ -998,11 +1055,39 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$stop_codon[selected()] <- unname(codon)
+    })
+    observeEvent(input$`stop-add-10`, {
+      message("moving stop position +10...")
+      for(i in 1:10){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-add-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-add-5`, {
+      message("moving start position +5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-add-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-add`, {
+      trigger("stop-add-simple")
       trigger("re_align")
     })
 
     ## Edit stop-minus ----
-    observeEvent(input$`stop-minus`, {
+    init("stop-minus-simple")
+    on("stop-minus-simple", {
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
@@ -1070,6 +1155,34 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$stop_codon[selected()] <- unname(codon)
+    })
+
+    observeEvent(input$`stop-minus-10`, {
+      for(i in 1:10){
+        message("moving start position -10...")
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-minus-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-minus-5`, {
+      message("moving start position -5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-minus-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-minus`, {
+      trigger("stop-minus-simple")
       trigger("re_align")
     })
 
