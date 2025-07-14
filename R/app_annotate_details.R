@@ -1000,7 +1000,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$stop_codon[selected()] <- unname(codon)
       trigger("re_align")
     })
-    
+
     ## Edit stop-minus ----
     observeEvent(input$`stop-minus`, {
       rv$editing$stop_aln <- TRUE
@@ -1031,15 +1031,12 @@ annotations_details_server <- function(id, rv) {
         }
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
+          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
           Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        message(paste("pos1 before =", pos1))
         pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        message(rv$annotations$stop_codon[selected()])
-        message(paste("pos1 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos1 <- pos1 + 3
           req(pos1 >= 1)
