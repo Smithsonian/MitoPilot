@@ -75,6 +75,7 @@ groups of organisms:
 - dipterans (testing in progress)
 - mammals (untested)
 - copepods (untested)
+- octocorals (untested)
 
 The custom logic in the annotation curation and validation scripts needs
 to be tweaked for optimal performance with other taxonomic groups.
