@@ -81,7 +81,7 @@ new_db <- function(
 
   # Validate ID col
   if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- mapping[[mapping_id]][!duplicated(mapping[[mapping_id]])]
+    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
     message("problematic IDs:")
     message(paste(bad_IDs, collapse=", "))
     stop("Duplicate IDs found in mapping file")
@@ -94,15 +94,15 @@ new_db <- function(
 
   # Validate ID length
   if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][!nchar(mapping[[mapping_id]]) > 18]
+    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
     message("problematic IDs:")
     message(paste(bad_IDs, collapse=", "))
     stop("IDs must be no more than 18 characters")
   }
 
   # Validate IDs contain only alphanumeric characters
-  if (any(grepl("^[a-zA-Z0-9_-:]+$", mapping[[mapping_id]]))) {
-    bad_IDs <- mapping[[mapping_id]][!grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])]
+  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
+    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
     message("problematic IDs:")
     message(paste(bad_IDs, collapse=", "))
     stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
