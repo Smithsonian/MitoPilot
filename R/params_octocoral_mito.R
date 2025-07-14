@@ -4,7 +4,7 @@
 #'
 #' @export
 #'
-params_octocorals_mito <- function(alt = list()) {
+params_octocoral_mito <- function(alt = list()) {
   params <- list(
     ref_dbs = list(
       default = "/ref_dbs/Mitos2/Metazoa/featureProt/{gene}.fas"
