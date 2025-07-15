@@ -59,11 +59,6 @@ new_db_userAsmb <- function(
     stop("Duplicate IDs found in mapping file")
   }
 
-  # Validate assembler choice
-  if (assembler %nin% c("GetOrganelle", "MitoFinder")) {
-    stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder]")
-  }
-
   # Validate ID length
   if (any(nchar(mapping[[mapping_id]]) > 18)) {
     bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
@@ -275,6 +270,7 @@ new_db_userAsmb <- function(
         annotate_opts = "default",
         curate_opts = "default",
         reviewed = "no",
+        problematic = "no",
         ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0

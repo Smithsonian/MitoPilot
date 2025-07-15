@@ -335,6 +335,7 @@ new_db <- function(
         annotate_opts = "default",
         curate_opts = "default",
         reviewed = "no",
+        problematic = "no",
         ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0
