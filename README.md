@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# dplyr <a href="https://dplyr.tidyverse.org"><img src="vignettes/figures/MitoPilot_logo_final_white.png" align="right" height="138" /></a>
+# dplyr <a href="https://smithsonian.github.io/MitoPilot/"><img src="vignettes/figures/MitoPilot_logo_final_white.png" align="right" height="138" /></a>
 
 <!-- badges: start -->
 
@@ -11,9 +11,6 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 <!-- badges: end -->
 
 # Overview
-
-Please see the [documentation
-site](https://smithsonian.github.io/MitoPilot/) for more details.
 
 MitoPilot is a package for the assembly and annotation of mitochondrial
 genomess from genome skimming data. The core application consists of a
