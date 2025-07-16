@@ -1,6 +1,8 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
+# dplyr <a href="https://dplyr.tidyverse.org"><img src="vignettes/figures/MitoPilot_logo_final_white.png" align="right" height="138" /></a>
+
 <!-- badges: start -->
 
 [![Lifecycle:
