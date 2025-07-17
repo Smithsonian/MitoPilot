@@ -236,7 +236,7 @@ pipeline_server <- function(id) {
         if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
           shinyWidgets::sendSweetAlert(
             title = "Success!",
-            text = paste(submit_output, "\nYou can monitor your job on the cluster with the `qstat` command.", collapse = " "),
+            text = paste0(submit_output, ". You can monitor your job on Hydra with the `qstat` command."),
             type = "success"
           )
           removeModal()
