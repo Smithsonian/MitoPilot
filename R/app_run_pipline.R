@@ -107,7 +107,6 @@ pipeline_server <- function(id) {
       is_hydra_cluster <- FALSE
 
       # Use a try block to gracefully handle errors if the command fails
-      # (e.g., on a non-Linux system or if /etc/motd is not readable).
       motd_output <- try(system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE), silent = TRUE)
 
       if (!inherits(motd_output, "try-error") && any(grepl("hydra", motd_output, ignore.case = TRUE))) {
@@ -183,8 +182,78 @@ pipeline_server <- function(id) {
 
     # create Hydra job script and submit
     observeEvent(input$submit_job, {
-      #start_nf_process()
-      message("IN DEVELOPMENT")
+      showNotification("Preparing job script for submission...", type = "message", duration = 3)
+
+      tryCatch({
+        work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
+        full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
+
+        # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
+        timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+        workflow_label <- tolower(session$userData$mode)
+
+        # 2. Combine them for a unique base filename.
+        base_filename <- paste(workflow_label, timestamp, sep = "_")
+
+        # 3. Define the job name, log file path, and script path using the base filename.
+        job_name <- base_filename
+        log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
+        script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
+
+        script_content <- c(
+          "#!/bin/sh",
+          paste0("#$ -N ", job_name),        # Use the new dynamic job name
+          paste0("#$ -o ", log_file_path),  # Use the new dynamic log file path
+          "#$ -cwd -j y",
+          "#$ -q lTWFM.sq",
+          "#$ -l wfmq",
+          "#$ -pe mthread 2",
+          "#$ -S /bin/sh",
+          "",
+          'echo "---"',
+          'echo "+ `date` job $JOB_NAME started in $QUEUE with jobID=$JOB_ID on $HOSTNAME"',
+          'echo "---"',
+          "",
+          "source ~/.bashrc",
+          "module load tools/java/21.0.2",
+          "",
+          full_nf_cmd,
+          "",
+          'echo "---"',
+          'echo "= `date` job $JOB_NAME done"',
+          'echo "---"'
+        )
+
+        # Write the script to the unique, timestamped file path.
+        writeLines(script_content, script_path)
+
+        # Submit the job using the new script name.
+        submit_output <- system2(
+          "qsub",
+          args = basename(script_path),
+          stdout = TRUE,
+          stderr = TRUE,
+          wd = work_dir
+        )
+
+        if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
+          showNotification(
+            paste("✅ Job submitted successfully:", paste(submit_output, collapse = " ")),
+            type = "message",
+            duration = 15
+          )
+          removeModal()
+        } else {
+          stop(paste(submit_output, collapse = "\n"))
+        }
+
+      }, error = function(e) {
+        showNotification(
+          paste("❌ Failed to submit job:", e$message),
+          type = "error",
+          duration = NULL
+        )
+      })
     })
 
     # Monitor progress ----
