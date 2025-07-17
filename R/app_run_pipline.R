@@ -232,8 +232,7 @@ pipeline_server <- function(id) {
           "qsub",
           args = basename(script_path),
           stdout = TRUE,
-          stderr = TRUE,
-          wd = work_dir
+          stderr = TRUE
         )
 
         if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
