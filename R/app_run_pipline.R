@@ -182,6 +182,12 @@ pipeline_server <- function(id) {
 
     # create Hydra job script and submit
     observeEvent(input$submit_job, {
+      shinyWidgets::sendSweetAlert(
+        title = "Preparing job script for submission...",
+        type = "info",
+        btn_labels = NA,
+        timer = 3000
+      )
       showNotification("Preparing job script for submission...", type = "message", duration = 3)
 
       tryCatch({
@@ -236,10 +242,10 @@ pipeline_server <- function(id) {
         )
 
         if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
-          showNotification(
-            paste("✅ Job submitted successfully:", paste(submit_output, collapse = " ")),
-            type = "message",
-            duration = 15
+          shinyWidgets::sendSweetAlert(
+            title = "Job submitted successfully:",
+            text = paste(submit_output, collapse = " "),
+            type = "success"
           )
           removeModal()
         } else {
@@ -247,10 +253,10 @@ pipeline_server <- function(id) {
         }
 
       }, error = function(e) {
-        showNotification(
-          paste("❌ Failed to submit job:", e$message),
-          type = "error",
-          duration = NULL
+        shinyWidgets::sendSweetAlert(
+          title = "Failed to submit job:",
+          text = e$message,
+          type = "error"
         )
       })
     })
