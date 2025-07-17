@@ -503,7 +503,7 @@ annotations_details_server <- function(id, rv) {
       note <- stringr::str_glue(
         "DELETED: from {rv$annotations$pos1[selected()]}-{rv$annotations$pos2[selected()]}"
       )
-      update$warnings <- paste(note, rv$annotations$warnings[selected()], sep = "; ")
+      update$notes <- paste(note, rv$annotations$notes[selected()], sep = "; ")
       update$edited <- 1
       rv$annotations <- rv$annotations |>
         dplyr::slice(-selected()) |>
@@ -848,7 +848,8 @@ annotations_details_server <- function(id, rv) {
     })
 
     ## Edit start-add ----
-    observeEvent(input$`start-add`, {
+    init("start-add-simple")
+    on("start-add-simple", {
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
@@ -887,10 +888,39 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- codon
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
+    })
+    observeEvent(input$`start-add-10`, {
+      message("moving start position +10...")
+      for(i in 1:10){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-add-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-add-5`, {
+      message("moving start position +5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-add-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-add`, {
+      trigger("start-add-simple")
       trigger("re_align")
     })
+
     ## Edit start-minus ----
-    observeEvent(input$`start-minus`, {
+    init("start-minus-simple")
+    on("start-minus-simple", {
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
@@ -910,7 +940,7 @@ annotations_details_server <- function(id, rv) {
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        while (codon %nin% rv$start_opts) {
+        while (codon %nin% rv$editing$params$start_codons) {
           pos2 <- pos2 - 3
           req(pos2 > pos1)
           codon <- rv$editing$assembly |>
@@ -929,21 +959,45 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
+    })
+    observeEvent(input$`start-minus-10`, {
+      message("moving start position -10...")
+      for(i in 1:10){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-minus-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-minus-5`, {
+      message("moving start position -5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("start-minus-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`start-minus`, {
+      trigger("start-minus-simple")
       trigger("re_align")
     })
 
-
     ## Edit stop-add ----
-    observeEvent(input$`stop-add`, {
+    init("stop-add-simple")
+    on("stop-add-simple" , {
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
-        message(paste("pos2 before =", pos1))
         pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        message(rv$annotations$stop_codon[selected()])
-        message(paste("pos2 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos2 <- pos2 + 3
           req(pos2 <= rv$editing$assembly@ranges@width)
@@ -969,10 +1023,7 @@ annotations_details_server <- function(id, rv) {
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        message(paste("pos1 before =", pos1))
         pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        message(rv$annotations$stop_codon[selected()])
-        message(paste("pos1 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos1 <- pos1 - 3
           req(pos1 >= 1)
@@ -1004,24 +1055,48 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$stop_codon[selected()] <- unname(codon)
+    })
+    observeEvent(input$`stop-add-10`, {
+      message("moving stop position +10...")
+      for(i in 1:10){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-add-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-add-5`, {
+      message("moving start position +5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-add-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-add`, {
+      trigger("stop-add-simple")
       trigger("re_align")
     })
 
-
     ## Edit stop-minus ----
-    observeEvent(input$`stop-minus`, {
+    init("stop-minus-simple")
+    on("stop-minus-simple", {
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
-        message(paste("pos2 before =", pos1))
         pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        message(rv$annotations$stop_codon[selected()])
-        message(paste("pos2 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos2 <- pos2 - 3
-          req(pos2 > pos1)
+          req(pos2 <= rv$editing$assembly@ranges@width)
           codon <- rv$editing$assembly |>
             Biostrings::subseq(pos2 - 2, pos2) |>
             as.character() |>
@@ -1041,16 +1116,12 @@ annotations_details_server <- function(id, rv) {
         }
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
-          Biostrings::reverseComplement() |>
+          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
           Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        message(paste("pos1 before =", pos1))
         pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        message(rv$annotations$stop_codon[selected()])
-        message(paste("pos1 after =", pos1))
         while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
           pos1 <- pos1 + 3
           req(pos1 >= 1)
@@ -1084,6 +1155,34 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$stop_codon[selected()] <- unname(codon)
+    })
+
+    observeEvent(input$`stop-minus-10`, {
+      for(i in 1:10){
+        message("moving start position -10...")
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-minus-simple")
+        })
+      }
+      shinyjs::delay(110, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-minus-5`, {
+      message("moving start position -5...")
+      for(i in 1:5){
+        shinyjs::delay(i * 10, {  # Delay each trigger
+          trigger("stop-minus-simple")
+        })
+      }
+      shinyjs::delay(60, {  # After all triggers
+        trigger("re_align")
+        message("DONE")
+      })
+    })
+    observeEvent(input$`stop-minus`, {
+      trigger("stop-minus-simple")
       trigger("re_align")
     })
 
@@ -1315,28 +1414,104 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               style = "display: flex; flex-flow: row nowrap; align-items: center;",
               tags$button(
                 class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-10')}', 'minus-10', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-10"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-5')}', 'minus-5', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-5"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$i(class = "fas fa-minus fa-xs")
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-1"
+                )
               ),
               div(style = "margin: 00.5em;", "START"),
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
-                tags$i(class = "fas fa-plus fa-xs")
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "+1"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add-5')}', 'plus-5', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "+5"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add-10')}', 'plus-10', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "+10"
+                )
               )
             ),
             div(
               style = "display: flex; flex-flow: row nowrap; align-items: center;",
               tags$button(
                 class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus-10')}', 'minus-10', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-10"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus-5')}', 'minus-5', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-5"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$i(class = "fas fa-minus fa-xs")
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-1"
+                )
               ),
               div(style = "margin: 00.5em;", "STOP"),
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add')}', 'plus', {{priority: 'event'}})"),
-                tags$i(class = "fas fa-plus fa-xs")
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "+1"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add-5')}', 'plus-5', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "+5"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add-10')}', 'plus-10', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "+10"
+                )
               )
             ),
             div(
@@ -1348,33 +1523,33 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                 inline = TRUE
               )
             )
-          ) |> shinyjs::hidden(),
+          ) |> shinyjs::hidden()
+        ),
+        div(
+          id = ns("edit_mode_ctrls_extra"),
+          style = "display: flex; flex: 1; justify-content: left; gap: 0; align-items: center",
           div(
-            style = "display: flex; flex: 1; justify-content: right; gap: 0; align-items: center; padding-right: 2em;",
-            div(
-              shinyWidgets::prettyCheckbox(
-                ns("reduce_align"),
-                label = "Align fewer refs",
-                status = "primary",
-                inline = TRUE
-              )
-            ),
-            div(
-              shinyWidgets::prettyCheckbox(
-                ns("local_blast"),
-                label = "Local blast",
-                status = "primary",
-                inline = TRUE
-              ),
-              tags$i(
-                id = ns("refresh_blast"),
-                class = "fas fa-sync grow",
-                style = "margin-bottom: 15px; margin-left: -15px;",
-                onclick = stringr::str_glue(
-                  "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
-                )
-              ) |> shinyjs::hidden()
+            shinyWidgets::prettyCheckbox(
+              ns("reduce_align"),
+              label = "Align fewer refs",
+              status = "primary",
+              inline = TRUE
             )
+          ),
+          div(
+            shinyWidgets::prettyCheckbox(
+              ns("local_blast"),
+              label = "Local blast",
+              status = "primary",
+              inline = TRUE
+            ),
+            tags$i(
+              id = ns("refresh_blast"),
+              class = "fas fa-sync grow",
+              onclick = stringr::str_glue(
+                "Shiny.setInputValue('{ns('run_blast')}', 'go', {{priority: 'event'}})"
+              )
+            ) |> shinyjs::hidden()
           )
         ),
         div(

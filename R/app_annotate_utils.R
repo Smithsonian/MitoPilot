@@ -203,7 +203,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               ns("mitos_ref_db"),
               label = "ref_db",
               #choices = unique(rv$annotate_opts$ref_db),
-              choices = c("Metazoa", "Chordata"),
+              choices = c("Metazoa_RefSeq89", "Chordata"),
               selected = current$ref_db %||% character(0),
               width = "100%",
               options = list(
@@ -379,7 +379,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
               ns("curate_ref_db"),
               label = "ref_db",
               #choices = unique(rv$annotate_opts$ref_db),
-              choices = c("Metazoa", "Chordata"),
+              choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Chordata"),
               selected = current$ref_db %||% character(0),
               width = "100%",
               options = list(
@@ -394,7 +394,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           selectizeInput(
             ns("target"),
             label = "Target:",
-            choices = c("fish_mito", "mammal_mito", "starfish_mito", "diptera_mito"),
+            choices = c("fish_mito", "mammal_mito", "starfish_mito", "diptera_mito", "copepod_mito", "octocoral_mito"),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(

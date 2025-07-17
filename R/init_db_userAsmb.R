@@ -1,7 +1,7 @@
 #' Initialize a new project database
 #'
 #' @param db_path Path to the new database file
-#' @param mapping_fn Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2"
+#' @param mapping_fn Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", "R2", "Assembly", and "Topology"
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
@@ -48,10 +48,33 @@ new_db_userAsmb <- function(
   }
   mapping <- utils::read.csv(mapping_fn)
 
+  # convert ID column to characters
+  mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
+
   # Validate ID col
   if (any(duplicated(mapping[[mapping_id]]))) {
+    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse=", "))
     stop("Duplicate IDs found in mapping file")
   }
+
+  # Validate ID length
+  if (any(nchar(mapping[[mapping_id]]) > 18)) {
+    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse=", "))
+    stop("IDs must be no more than 18 characters")
+  }
+
+  # Validate IDs contain only alphanumeric characters
+  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
+    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse=", "))
+    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
+  }
+
 
   # check for assembly and topology columns
   if ("Assembly" %nin% colnames(mapping)) {
@@ -59,11 +82,6 @@ new_db_userAsmb <- function(
   }
   if ("Topology" %nin% colnames(mapping)) {
     stop("Mapping file missing Topology column")
-  }
-
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    stop("IDs must be no more than 18 characters")
   }
 
   # Load default curation parameters
@@ -252,6 +270,7 @@ new_db_userAsmb <- function(
         annotate_opts = "default",
         curate_opts = "default",
         reviewed = "no",
+        problematic = "no",
         ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0

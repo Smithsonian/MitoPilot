@@ -26,7 +26,7 @@ new_db_userAsmb(
 \arguments{
 \item{db_path}{Path to the new database file}
 
-\item{mapping_fn}{Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2"}
+\item{mapping_fn}{Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", "R2", "Assembly", and "Topology"}
 
 \item{mapping_id}{Column name of the mapping file to use as the primary key}
 
