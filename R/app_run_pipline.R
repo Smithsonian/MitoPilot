@@ -182,14 +182,6 @@ pipeline_server <- function(id) {
 
     # create Hydra job script and submit
     observeEvent(input$submit_job, {
-      shinyWidgets::sendSweetAlert(
-        title = "Preparing job script for submission...",
-        type = "info",
-        btn_labels = NA,
-        timer = 3000
-      )
-      showNotification("Preparing job script for submission...", type = "message", duration = 3)
-
       tryCatch({
         work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
         full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
@@ -243,8 +235,8 @@ pipeline_server <- function(id) {
 
         if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
           shinyWidgets::sendSweetAlert(
-            title = "Job submitted successfully:",
-            text = paste(submit_output, collapse = " "),
+            title = "Success!",
+            text = paste(submit_output, "\nYou can monitor your job on the cluster with the `qstat` command.", collapse = " "),
             type = "success"
           )
           removeModal()
