@@ -104,20 +104,17 @@ pipeline_server <- function(id) {
 
     # This renderUI block is updated to show both buttons when appropriate.
     output$start_button_ui <- renderUI({
-      work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
-      config_path <- file.path(work_dir, "nextflow.config")
-      is_hydra_executor <- FALSE
+      is_hydra_cluster <- FALSE
 
-      if (file.exists(config_path)) {
-        try({
-          config_lines <- readLines(config_path)
-          if (any(grepl("^\\s*executor\\s*=\\s*['\"]NMNH_Hydra['\"]", config_lines))) {
-            is_hydra_executor <- TRUE
-          }
-        }, silent = TRUE)
+      # Use a try block to gracefully handle errors if the command fails
+      # (e.g., on a non-Linux system or if /etc/motd is not readable).
+      motd_output <- try(system2("cat", "/etc/motd", stdout = TRUE, stderr = FALSE), silent = TRUE)
+
+      if (!inherits(motd_output, "try-error") && any(grepl("Hydra", motd_output, ignore.case = TRUE))) {
+        is_hydra_cluster <- TRUE
       }
 
-      if (is_hydra_executor) {
+      if (is_hydra_cluster) {
         # If hydra is found, render a list containing both buttons
         tagList(
           actionButton(ns("start"), "Start Nextflow"),
