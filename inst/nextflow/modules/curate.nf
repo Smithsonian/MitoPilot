@@ -31,7 +31,7 @@ process curate {
 
     # Check if ref database is gzip-compressed file
     MIME_TYPE=$(file --mime-type -b "!{ref_clade}")
-    if [[ "$MIME_TYPE" == "application/gzip" ]]; then
+    if [[ "$MIME_TYPE" == "application/gzip" || "$MIME_TYPE" == "application/x-gzip" ]]; then
         echo "Decompressing !{ref_clade}..."
         tar -xzf "!{ref_clade}"
         echo "Decompression complete."
