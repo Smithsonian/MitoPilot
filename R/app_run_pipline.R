@@ -108,9 +108,9 @@ pipeline_server <- function(id) {
 
       # Use a try block to gracefully handle errors if the command fails
       # (e.g., on a non-Linux system or if /etc/motd is not readable).
-      motd_output <- try(system2("cat", "/etc/motd", stdout = TRUE, stderr = FALSE), silent = TRUE)
+      motd_output <- try(system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE), silent = TRUE)
 
-      if (!inherits(motd_output, "try-error") && any(grepl("Hydra", motd_output, ignore.case = TRUE))) {
+      if (!inherits(motd_output, "try-error") && any(grepl("hydra", motd_output, ignore.case = TRUE))) {
         is_hydra_cluster <- TRUE
       }
 
@@ -181,11 +181,10 @@ pipeline_server <- function(id) {
       start_nf_process()
     })
 
-    # The new "Submit as Job" button also calls the shared function.
-    # You can replace `start_nf_process()` with your custom job submission
-    # logic here if needed.
+    # create Hydra job script and submit
     observeEvent(input$submit_job, {
-      start_nf_process()
+      #start_nf_process()
+      message("IN DEVELOPMENT")
     })
 
     # Monitor progress ----
