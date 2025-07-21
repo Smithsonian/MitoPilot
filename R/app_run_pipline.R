@@ -89,7 +89,7 @@ pipeline_server <- function(id) {
           )
         ) |> shinyjs::hidden(),
         footer = tagList(
-          uiOutput(ns("start_button_ui")), # This placeholder remains the same
+          uiOutput(ns("start_button_ui")),
           actionButton(
             ns("stop"),
             "Stop / Interrupt"
@@ -102,7 +102,6 @@ pipeline_server <- function(id) {
       ) |> showModal()
     })
 
-    # This renderUI block is updated to show both buttons when appropriate.
     output$start_button_ui <- renderUI({
       is_hydra_cluster <- FALSE
 
@@ -116,12 +115,12 @@ pipeline_server <- function(id) {
       if (is_hydra_cluster) {
         # If hydra is found, render a list containing both buttons
         tagList(
-          actionButton(ns("start"), "Start Nextflow"),
-          actionButton(ns("submit_job"), "Submit as Job", class = "btn-success")
+          actionButton(ns("start"), "Run from App", class = "btn-success"),
+          actionButton(ns("submit_job"), "Submit as Job", class = "btn-secondary")
         )
       } else {
         # Otherwise, render only the default start button
-        actionButton(ns("start"), "Start Nextflow")
+        actionButton(ns("start"), "Run from App", class = "btn-success")
       }
     })
 

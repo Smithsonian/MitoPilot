@@ -89,10 +89,7 @@ pipeline_server_userAsmb <- function(id) {
           )
         ) |> shinyjs::hidden(),
         footer = tagList(
-          actionButton(
-            ns("start"),
-            "Start Nextflow"
-          ),
+          uiOutput(ns("start_button_ui")),
           actionButton(
             ns("stop"),
             "Stop / Interrupt"
@@ -104,6 +101,29 @@ pipeline_server_userAsmb <- function(id) {
         )
       ) |> showModal()
     })
+
+    output$start_button_ui <- renderUI({
+      is_hydra_cluster <- FALSE
+
+      # Use a try block to gracefully handle errors if the command fails
+      motd_output <- try(system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE), silent = TRUE)
+
+      if (!inherits(motd_output, "try-error") && any(grepl("hydra", motd_output, ignore.case = TRUE))) {
+        is_hydra_cluster <- TRUE
+      }
+
+      if (is_hydra_cluster) {
+        # If hydra is found, render a list containing both buttons
+        tagList(
+          actionButton(ns("start"), "Run from App", class = "btn-success"),
+          actionButton(ns("submit_job"), "Submit as Job", class = "btn-secondary")
+        )
+      } else {
+        # Otherwise, render only the default start button
+        actionButton(ns("start"), "Run from App", class = "btn-success")
+      }
+    })
+
 
     # Render nextflow command
     output$nf_code_block <- shiny::renderText({
@@ -123,39 +143,114 @@ pipeline_server_userAsmb <- function(id) {
       })
     })
 
-    # Start ----
-    observeEvent(input$start, {
+    # The logic for starting the process is moved into its own function.
+    start_nf_process <- function() {
       prog_header(NULL)
       prog_executor(NULL)
       prog_process(list())
       prog_footer(NULL)
-      shinyjs::hide("start")
+      shinyjs::hide("start_button_ui") # Hide the container with the start buttons
       shinyjs::show("stop")
       shinyjs::removeClass("gears", "paused")
       shinyjs::show("progress_div")
 
-      # Kill any existing process
       if (!is.null(process()) && process()$is_alive()) {
         process()$kill()
       }
 
-      # Start the new system process
       p <- processx::process$new(
         "nextflow",
         args = c(nf_cmd(), "-ansi-log"),
-        #args = c(nf_cmd()),
         stdout = "|",
         stderr = "|",
         env = c("current",
-          NXF_ANSI_SUMMARY = TRUE,
-          SGE = "/cm/shared/apps/uge/8.8.1/age",
-          SGE_ARCH = "lx-amd64",
-          SGE_CELL = "age",
-          SGE_ROOT = "/cm/shared/apps/uge/8.8.1"
+                NXF_ANSI_SUMMARY = TRUE,
+                SGE = "/cm/shared/apps/uge/8.8.1/age",
+                SGE_ARCH = "lx-amd64",
+                SGE_CELL = "age",
+                SGE_ROOT = "/cm/shared/apps/uge/8.8.1"
         ),
         wd = dirname(getOption("MitoPilot.db") %||% ".")
       )
       process(p)
+    }
+
+    # The "Start Nextflow" button calls the shared function.
+    observeEvent(input$start, {
+      start_nf_process()
+    })
+
+    # create Hydra job script and submit
+    observeEvent(input$submit_job, {
+      tryCatch({
+        work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
+        full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
+
+        # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
+        timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+        workflow_label <- tolower(session$userData$mode)
+
+        # 2. Combine them for a unique base filename.
+        base_filename <- paste(workflow_label, timestamp, sep = "_")
+
+        # 3. Define the job name, log file path, and script path using the base filename.
+        job_name <- base_filename
+        log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
+        script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
+
+        script_content <- c(
+          "#!/bin/sh",
+          paste0("#$ -N ", job_name),        # Use the new dynamic job name
+          paste0("#$ -o ", log_file_path),  # Use the new dynamic log file path
+          "#$ -cwd -j y",
+          "#$ -q lTWFM.sq",
+          "#$ -l wfmq",
+          "#$ -pe mthread 2",
+          "#$ -S /bin/sh",
+          "",
+          'echo "---"',
+          'echo "+ `date` job $JOB_NAME started in $QUEUE with jobID=$JOB_ID on $HOSTNAME"',
+          'echo "---"',
+          "",
+          "source ~/.bashrc",
+          "module load tools/java/21.0.2",
+          "",
+          full_nf_cmd,
+          "",
+          'echo "---"',
+          'echo "= `date` job $JOB_NAME done"',
+          'echo "---"'
+        )
+
+        # Write the script to the unique, timestamped file path.
+        writeLines(script_content, script_path)
+
+        # Submit the job using the new script name.
+        submit_output <- system2(
+          "qsub",
+          args = basename(script_path),
+          stdout = TRUE,
+          stderr = TRUE
+        )
+
+        if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
+          shinyWidgets::sendSweetAlert(
+            title = "Success!",
+            text = paste0(submit_output, ". You can monitor your job on Hydra with the `qstat` command."),
+            type = "success"
+          )
+          removeModal()
+        } else {
+          stop(paste(submit_output, collapse = "\n"))
+        }
+
+      }, error = function(e) {
+        shinyWidgets::sendSweetAlert(
+          title = "Failed to submit job:",
+          text = e$message,
+          type = "error"
+        )
+      })
     })
 
     # Monitor progress ----
