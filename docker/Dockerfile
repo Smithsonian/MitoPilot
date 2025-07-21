@@ -48,5 +48,6 @@ ENV PATH="/opt/MitoFinder:${PATH}"
 RUN ln -s /usr/lib/x86_64-linux-gnu/libidn2.so.0 /usr/lib/x86_64-linux-gnu/libidn.so.11
 
 # Default Reference DBs
+# not needed for >= v1.3.0, since dbs are downloaded directly from GitHub
 #COPY ref_dbs/getOrganelle /ref_dbs/getOrganelle
-COPY ref_dbs/Mitos2 /ref_dbs/Mitos2
+#COPY ref_dbs/Mitos2 /ref_dbs/Mitos2
