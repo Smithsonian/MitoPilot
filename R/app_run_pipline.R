@@ -89,7 +89,10 @@ pipeline_server <- function(id) {
           )
         ) |> shinyjs::hidden(),
         footer = tagList(
-          uiOutput(ns("start_button_ui")),
+          tags$div(
+            style = "margin-bottom: 10px;",
+            uiOutput(ns("start_button_ui"))
+          ),
           actionButton(
             ns("stop"),
             "Stop / Interrupt"
