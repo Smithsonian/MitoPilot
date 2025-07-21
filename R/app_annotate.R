@@ -462,7 +462,7 @@ annotate_server <- function(id) {
           inputId = "mitos_ref_db",
           selected = cur$ref_db,
           #choices = unique(rv$annotate_opts$ref_db),
-          choices = c("Metazoa", "Chordata"),
+          choices = c("Metazoa_RefSeq89", "Chordata"),
           options = list(
             create = TRUE,
             maxItems = 1
@@ -523,7 +523,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
+      #shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)

@@ -184,7 +184,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
-            style = "flex: 1",
+            style = "flex: 1; min-width: 0;",
             selectizeInput(
               ns("mitos_ref_dir"),
               label = "ref_dir",
@@ -358,13 +358,13 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em",
           div(
-            style = "flex: 1",
+            style = "flex: 1; min-width: 0;",
             selectizeInput(
               ns("curate_ref_dir"),
               label = "ref_dir",
-              choices = unique(rv$curate_opts$ref_dir),
+              choices =  unique(rv$curate_opts$ref_dir),
               selected = current$ref_dir %||% character(0),
               width = "100%",
               options = list(
