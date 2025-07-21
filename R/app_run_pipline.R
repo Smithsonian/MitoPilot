@@ -115,8 +115,8 @@ pipeline_server <- function(id) {
       if (is_hydra_cluster) {
         # If hydra is found, render a list containing both buttons
         tagList(
-          actionButton(ns("start"), "Run from App", class = "btn-success"),
-          actionButton(ns("submit_job"), "Submit as Job", class = "btn-secondary")
+          actionButton(ns("start"), "Run from App"),
+          actionButton(ns("submit_job"), "Submit as Job", class = "btn-success")
         )
       } else {
         # Otherwise, render only the default start button
