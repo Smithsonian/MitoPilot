@@ -12,6 +12,14 @@ workflow ANNOTATE {
 
     channel.fromQuery(params.sqlRead, db: 'sqlite')
         .map{ it ->
+
+            // Check if refDir is a GitHub link
+            if (it[6].contains('githubusercontent')) {
+                if (!it[5].endsWith('.tar.gz')) {
+                    it[5] = it[5] + '.tar.gz'
+                }
+            }
+
             tuple(
                 it[0],                                          // ID
                 it[1],                                          // path
@@ -33,8 +41,9 @@ workflow ANNOTATE {
                     mitos: it[7],                                      // mitos_opts
                     trnaScan: it[8],                                    // trnaScan_opts
                     start_gene: it[9]                                  // starting gene for rotation
-                ]
-
+                ],
+                file(it[6] + "/" + it[5]),                              // curation ref dir + clade
+                it[5].replaceFirst(/\.tar\.gz$/, '')                // ref_db without ".tar.gz"
             )
         }
         .set { annotate_in }

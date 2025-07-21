@@ -2,7 +2,8 @@ import java.util.Base64
 include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, c.curate_opts, ' +
-                    'd.cpus, d.memory, d.target, d.params, d.max_blast_hits ' +
+                    'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
+                    'd.ref_dir, d.ref_db ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -23,22 +24,34 @@ workflow CURATE {
         channel.fromQuery(params.sqlRead, db: 'sqlite')
             .join(input, by: [0, 1])
             .map { it ->
+
+                // Check if refDir is a GitHub link
+                if (it[8].contains('githubusercontent')) {
+                    if (!it[9].endsWith('.tar.gz')) {
+                        it[9] = it[9] + '.tar.gz'
+                    }
+                }
+
                 def jsonParams = it[6].toString()
                 def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
 
                 tuple(
                     it[0],                                          // ID
                     it[1],                                          // path
-                    it[8],                                          // Annotations
-                    it[9],                                          // Assembly
-                    it[10],                                          // Coverage
+                    it[10],                                          // Annotations
+                    it[11],                                          // Assembly
+                    it[12],                                          // Coverage
                     [
                         cpus:  it[3],                                      // cpus
                         memory: it[4],                                     // memory
                         target: it[5],                                     // target
                         params: encodedParams,                              // params
                         max_blast_hits: it[7]                             // maximum retained blast hits
-                    ]
+                    ],
+                    file(it[8] + "/" + it[9]),                              // curation ref dir + clade
+                    it[9],                                                   // ref clade
+                    it[9].replaceFirst(/\.tar\.gz$/, '')                // ref_db without ".tar.gz"
+
                 )
             }
             .set { curate_in }

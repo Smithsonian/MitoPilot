@@ -301,7 +301,7 @@ annotate_server <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Annotate (wait)" = 0, "Ready to Annotate" = 1, "Successful Aannotation" = 2),
+            choices = c("Pre-Annotate (wait)" = 0, "Ready to Annotate" = 1, "Successful Annotation" = 2),
             selected = current,
             shape = "square",
             status = "primary"
@@ -462,7 +462,7 @@ annotate_server <- function(id) {
           inputId = "mitos_ref_db",
           selected = cur$ref_db,
           #choices = unique(rv$annotate_opts$ref_db),
-          choices = c("Metazoa", "Chordata"),
+          choices = c("Metazoa_RefSeq89", "Chordata"),
           options = list(
             create = TRUE,
             maxItems = 1
@@ -523,7 +523,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitos_ref_dir", condition = FALSE) # TODO: custom / alt ref db for mitos
+      #shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
@@ -679,6 +679,8 @@ annotate_server <- function(id) {
       shinyjs::toggleState("curate_opts_cpus", condition = input$edit_curate_opts)
       shinyjs::toggleState("curate_opts_memory", condition = input$edit_curate_opts)
       shinyjs::toggleState("max_blast_hits", condition = input$edit_curate_opts)
+      shinyjs::toggleState("curate_ref_dir", condition = input$edit_curate_opts)
+      shinyjs::toggleState("curate_ref_db", condition = input$edit_curate_opts)
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
@@ -755,6 +757,8 @@ annotate_server <- function(id) {
               cpus = req(input$curate_opts_cpus),
               memory = req(input$curate_opts_memory),
               max_blast_hits = req(input$max_blast_hits),
+              ref_dir = req(input$curate_ref_dir),
+              ref_db = req(input$curate_ref_db),
               target = req(input$target)
             ),
             in_place = TRUE,

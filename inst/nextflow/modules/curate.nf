@@ -1,5 +1,7 @@
 process curate {
 
+    stageInMode 'copy'
+
     executor params.curate.executor
     container params.curate.container
 
@@ -12,7 +14,7 @@ process curate {
     tag "${id}"
 
     input:
-        tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts)
+        tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean)
 
     output:
     tuple val(id), val(path),
@@ -26,6 +28,17 @@ process curate {
     '''
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
+
+    # Check if ref database is gzip-compressed file
+    MIME_TYPE=$(file --mime-type -b "!{ref_clade}")
+    if [[ "$MIME_TYPE" == "application/gzip" || "$MIME_TYPE" == "application/x-gzip" ]]; then
+        echo "Decompressing !{ref_clade}..."
+        tar -xzf "!{ref_clade}"
+        echo "Decompression complete."
+    else
+        echo "Input ref_db not .tar.gz"
+    fi
+
     Rscript -e "MitoPilot::curate_!{opts.target}( \
         annotations_fn = '!{annotations}', \
         assembly_fn = '!{assembly}', \
@@ -33,7 +46,8 @@ process curate {
         genetic_code = !{params.genetic_code}, \
         params = '!{opts.params}', \
         out_dir = '!{dir}', \
-        max_blast_hits = '!{opts.max_blast_hits}'
+        max_blast_hits = '!{opts.max_blast_hits}', \
+        ref_dir = '!{ref_db_clean}' \
         )"
     mv !{dir}/*_annotations_*.csv !{id}/
     ### work dir info for troubleshooting ####

@@ -81,7 +81,6 @@ annotate <- function(
     topology = ifelse(all(stringr::str_detect(names(assembly), "circular")), "circular", "linear"),
     genetic_code = genetic_code,
     ref_db = ref_db,
-    ref_dir = ref_dir,
     mitos_opts = mitos_opts,
     condaenv = mitos_condaenv
   )
