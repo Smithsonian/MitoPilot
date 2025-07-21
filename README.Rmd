@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# MitoPilot <a href="https://smithsonian.github.io/MitoPilot/"><img src="vignettes/figures/MitoPilot_logo_final_white.png" align="right" height="138" /></a>
+# MitoPilot <a href="https://smithsonian.github.io/MitoPilot/"><img src="MitoPilot_logo_final_white.png" align="right" height="138" /></a>
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
@@ -21,8 +21,6 @@ knitr::opts_chunk$set(
 <!-- badges: end -->
 
 # Overview
-
-Please see the [documentation site](https://smithsonian.github.io/MitoPilot/) for more details.
 
 MitoPilot is a package for the assembly and annotation of mitochondrial genomess from genome skimming data. The core application consists of a [Nextflow](https://www.nextflow.io/docs/latest/index.html) pipeline that is wrapped in an R package, which includes an R-Shiny graphical interface to monitor and interact with processing parameters and outputs. Currently the pipeline expects paired-end Illumina reads as the raw input and performs the following steps:
 

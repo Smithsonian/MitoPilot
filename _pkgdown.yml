@@ -11,12 +11,16 @@ authors:
     roles: [aut, ctb]
 
 home:
+  title: MitoPilot
+  description: Mitogenome assembly, annotation, and curation
   sidebar:
     structure:
     - authors
     - dev
 
 navbar:
+  title: MitoPilot  # This will use the logo if present
+  type: default
   structure:
     left:
     - intro
