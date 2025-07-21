@@ -301,7 +301,7 @@ annotate_server <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Annotate (wait)" = 0, "Ready to Annotate" = 1, "Successful Aannotation" = 2),
+            choices = c("Pre-Annotate (wait)" = 0, "Ready to Annotate" = 1, "Successful Annotation" = 2),
             selected = current,
             shape = "square",
             status = "primary"
