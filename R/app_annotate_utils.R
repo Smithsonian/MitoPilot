@@ -358,9 +358,9 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em",
+          style = "display: flex; align-items: center; gap: 2em",
           div(
-            style = "flex: 1; min-width: 0;",
+            style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
             selectizeInput(
               ns("curate_ref_dir"),
               label = "ref_dir",
@@ -370,7 +370,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
               options = list(
                 create = TRUE,
                 maxItems = 1
-              )
+              ),
             ) |> shinyjs::disabled()
           ),
           div(
