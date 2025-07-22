@@ -15,7 +15,10 @@ Adds "reviewed", "ID_verified", "genetic_code", and "problematic" columns to the
 "start_gene" column to the annotate_opts table. Adds
 "assembler", "mitofinder_db", and "mitofinder" columns to the assemble_opts table.
 Adds "max_blast_hits" to the curate_opts table.
-Also adds "asmbDir = 'NA'" to the .config params block
+Adds "asmbDir = 'NA'" to the .config params block
 and updates the container to the current MitoPilot version
 in the .config file.
+Updates the "ref_dir" and "ref_db" fields in the annotate_opts table
+adds these fields to the curate_opts table, 
+and updates the curation rules in the curate_opts table.
 }

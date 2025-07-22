@@ -5,9 +5,12 @@
 #' "start_gene" column to the annotate_opts table. Adds
 #' "assembler", "mitofinder_db", and "mitofinder" columns to the assemble_opts table.
 #' Adds "max_blast_hits" to the curate_opts table.
-#' Also adds "asmbDir = 'NA'" to the .config params block
+#' Adds "asmbDir = 'NA'" to the .config params block
 #' and updates the container to the current MitoPilot version
 #' in the .config file.
+#' Updates the "ref_dir" and "ref_db" fields in the annotate_opts table
+#' adds these fields to the curate_opts table, 
+#' and updates the curation rules in the curate_opts table.
 #'
 #
 #' @param path Path to the project directory (default = current working directory)
@@ -39,23 +42,85 @@ backwards_compatibility <- function(
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
   containerVer <- any(grep(new_container, conf))
 
-  if(asmbDir &&
-     containerVer &&
-    "start_gene" %in% names(annotate_opts_table) &&
-     "max_blast_hits" %in% names(curate_opts_table) &&
-     "ref_db" %in% names(curate_opts_table) &&
-     "ref_dir" %in% names(curate_opts_table) &&
-     "assembler" %in% names(assemble_opts_table) &&
-     "mitofinder_db" %in% names(assemble_opts_table) &&
-     "mitofinder" %in% names(assemble_opts_table) &&
-     "problematic" %in% names(annotate_table) &&
-     "genetic_code" %in% names(samples_table) &&
-     "ID_verified" %in% names(annotate_table) &&
-     "reviewed" %in% names(annotate_table)) {
+  # check if annotate_opts or curate_params contains the ref_dir path
+  old_ref_str = ("/ref_dbs/Mitos2" %in% annotate_opts_table || any(grep("/ref_dbs/Mitos2", curate_opts_table$params)))
+
+  if (asmbDir &&
+      containerVer &&
+      !old_ref_str &&
+      "start_gene" %in% names(annotate_opts_table) &&
+      "max_blast_hits" %in% names(curate_opts_table) &&
+      "ref_db" %in% names(curate_opts_table) &&
+      "ref_dir" %in% names(curate_opts_table) &&
+      "assembler" %in% names(assemble_opts_table) &&
+      "mitofinder_db" %in% names(assemble_opts_table) &&
+      "mitofinder" %in% names(assemble_opts_table) &&
+      "problematic" %in% names(annotate_table) &&
+      "genetic_code" %in% names(samples_table) &&
+      "ID_verified" %in% names(annotate_table) &&
+      "reviewed" %in% names(annotate_table))
+  {
     message("nothing to update")
     return(invisible(NULL))
   }
 
+  # update annotation and curation reference databases
+  if(old_ref_str){
+    message("updated the annotate_opts table with new ref_dir and ref_db values")
+    # update annotate ref_dir path
+    annotate_opts_table$ref_dir <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
+                                       nrow(annotate_opts_table))
+    # update annotate ref_db name
+    if("Metazoa" %in% annotate_opts_table){
+      annotate_opts_table[which(annotate_opts_table$ref_db == "Metazoa"),]$ref_db <- "Metazoa_RefSeq89"
+    }
+    # update the annotate_opts table
+    dplyr::tbl(con, "annotate_opts") |> # update SQL database
+      dplyr::rows_update(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts",
+        unmatched = "ignore"
+      )
+
+    # make new fields in the curate_opts database
+    message("added 'ref_dir' column to curate_opts table")
+    curate_opts_table$ref_dir <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
+                                     nrow(curate_opts_table))
+
+    message("added 'ref_db' column to curate_opts table")
+    curate_opts_table$ref_db <- rep("temp",
+                                     nrow(curate_opts_table))
+
+    for(i in 1:nrow(curate_opts_table)){
+      if(any(grep("Metazoa", curate_opts_table[i,]$params))){
+        curate_opts_table[i,]$ref_db <- "Metazoa_RefSeq89"
+        curate_opts_table[i,]$params <- stringr::str_remove(curate_opts_table[i,]$params,
+                                                            stringr::fixed("\"ref_dbs\":{\"default\":[\"/ref_dbs/Mitos2/Metazoa/featureProt/{gene}.fas\"]},"))
+      } else {
+        curate_opts_table[i,]$ref_db <- "Chordata"
+        curate_opts_table[i,]$params <- stringr::str_remove(curate_opts_table[i,]$params,
+                                                            stringr::fixed("\"ref_dbs\":{\"default\":[\"/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas\"]},"))
+      }
+    }
+
+    sql_add_ref_dir <- "ALTER TABLE curate_opts ADD COLUMN ref_dir TEXT;"
+    sql_add_ref_db <- "ALTER TABLE curate_opts ADD COLUMN ref_db TEXT;"
+
+    DBI::dbExecute(con, sql_add_ref_dir)
+    DBI::dbExecute(con, sql_add_ref_db)
+
+    dplyr::tbl(con, "curate_opts") |> # update SQL database
+      dplyr::rows_upsert(
+        curate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "curate_opts"
+      )
+  }
+
+  # update the Docker/Singularity container version to match the current package version
   if(!(containerVer)){
     conf <- readLines(file.path(path, ".config"))
     # update the container version in the .config

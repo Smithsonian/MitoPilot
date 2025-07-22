@@ -18,7 +18,7 @@ genomess from genome skimming data. The core application consists of a
 is wrapped in an R package, which includes an R-Shiny graphical
 interface to monitor and interact with processing parameters and
 outputs. Currently the pipeline expects paired-end Illumina reads as the
-raw input and performs the following steps:
+raw input and performs the following steps.
 
 1.  Mitogenome assembly
     - [fastp](https://github.com/OpenGene/fastp) for quality control and
@@ -41,6 +41,12 @@ raw input and performs the following steps:
 3.  Data export
     - Custom scripts to export data in a format suitable for submission
       to NCBI GenBank
+
+Optionally, MitoPilot can proceed straight to annotation and curation if
+the user supplies mitogenome assemblies with the
+`new_project_userAsmb()` function.
+
+![](vignettes/figures/workflow_overview.png)
 
 # Taxonomic Scope
 
@@ -150,9 +156,10 @@ before starting a MitoPilot project with your own data.
 ## Initializing A Project
 
 The MitoPilot workflow begins by initializing a new project with the
-`new_project()` function. If running from within RStudio (recommended) a
-new R-project will also be initialized and opened in a new RStudio
-session.
+`new_project()` function (or `new_project_userAsmb()` if you have
+already assembled mitogenomes). If running from within RStudio
+(recommended) a new R-project will also be initialized and opened in a
+new RStudio session.
 
 ``` r
 MitoPilot::new_project(

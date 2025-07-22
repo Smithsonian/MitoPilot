@@ -184,7 +184,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
-            style = "flex: 1; min-width: 0;",
+            style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
             selectizeInput(
               ns("mitos_ref_dir"),
               label = "ref_dir",
