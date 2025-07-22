@@ -69,7 +69,7 @@
 <div class="section level1">
 <h1 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h1>
-<p>MitoPilot is a package for the assembly and annotation of mitochondrial genomess from genome skimming data. The core application consists of a <a href="https://www.nextflow.io/docs/latest/index.html" class="external-link">Nextflow</a> pipeline that is wrapped in an R package, which includes an R-Shiny graphical interface to monitor and interact with processing parameters and outputs. Currently the pipeline expects paired-end Illumina reads as the raw input and performs the following steps:</p>
+<p>MitoPilot is a package for the assembly and annotation of mitochondrial genomess from genome skimming data. The core application consists of a <a href="https://www.nextflow.io/docs/latest/index.html" class="external-link">Nextflow</a> pipeline that is wrapped in an R package, which includes an R-Shiny graphical interface to monitor and interact with processing parameters and outputs. Currently the pipeline expects paired-end Illumina reads as the raw input and performs the following steps.</p>
 <ol style="list-style-type: decimal">
 <li>Mitogenome assembly
 <ul>
@@ -98,6 +98,8 @@
 </ul>
 </li>
 </ol>
+<p>Optionally, MitoPilot can proceed straight to annotation and curation if the user supplies mitogenome assemblies with the <code><a href="reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> function.</p>
+<p><img src="articles/figures/workflow_overview.png"></p>
 </div>
 <div class="section level1">
 <h1 id="taxonomic-scope">Taxonomic Scope<a class="anchor" aria-label="anchor" href="#taxonomic-scope"></a>
@@ -146,7 +148,7 @@
 <div class="section level2">
 <h2 id="initializing-a-project">Initializing A Project<a class="anchor" aria-label="anchor" href="#initializing-a-project"></a>
 </h2>
-<p>The MitoPilot workflow begins by initializing a new project with the <code><a href="reference/new_project.html">new_project()</a></code> function. If running from within RStudio (recommended) a new R-project will also be initialized and opened in a new RStudio session.</p>
+<p>The MitoPilot workflow begins by initializing a new project with the <code><a href="reference/new_project.html">new_project()</a></code> function (or <code><a href="reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> if you have already assembled mitogenomes). If running from within RStudio (recommended) a new R-project will also be initialized and opened in a new RStudio session.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  path <span class="op">=</span> <span class="st">"path/to/project"</span>,</span>
