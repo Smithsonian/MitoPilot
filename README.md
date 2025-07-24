@@ -10,6 +10,9 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 [![R-CMD-check](https://github.com/smithsonian/MitoPilot/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Smithsonian/MitoPilot/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
+Please see the [documentation
+website](https://smithsonian.github.io/MitoPilot/) for more details.
+
 # Overview
 
 MitoPilot is a package for the assembly and annotation of mitochondrial
@@ -46,7 +49,7 @@ Optionally, MitoPilot can proceed straight to annotation and curation if
 the user supplies mitogenome assemblies with the
 `new_project_userAsmb()` function.
 
-![](vignettes/figures/workflow_overview.png)
+![](man/figures/workflow_overview.png)
 
 # Taxonomic Scope
 
