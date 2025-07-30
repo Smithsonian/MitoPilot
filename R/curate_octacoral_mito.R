@@ -8,7 +8,8 @@
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
-#'
+#' @param ref_dir Path to reference directory for curation
+#' 
 #' @export
 #'
 curate_octocoral_mito <- function(
@@ -18,7 +19,8 @@ curate_octocoral_mito <- function(
     genetic_code = 4,
     out_dir = NULL,
     max_blast_hits = 100,
-    params = NULL) {
+    params = NULL,
+    ref_dir = NULL) {
   # Prepare environment ----
 
   ## load annotations ----
