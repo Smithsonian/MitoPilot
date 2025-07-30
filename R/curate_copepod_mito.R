@@ -74,6 +74,11 @@ curate_copepod_mito <- function(
   }
   list2env(params, envir = environment())
 
+  # set up ref_dbs list
+  ref_dbs <- list(
+    default = paste0(ref_dir, "/featureProt/{gene}.fas")
+  )
+
   ## Prepare rules ----
   rules <- rules |>
     purrr::map(~ modifyList(default_rules[[.x$type]] %||% list(), .x))
