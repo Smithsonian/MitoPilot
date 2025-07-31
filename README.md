@@ -84,6 +84,7 @@ groups of organisms:
 - octocorals (testing in progress)
 - copepods (testing in progress)
 - mammals (untested)
+- lepidosaurs (untested)
 
 The custom logic in the annotation curation and validation scripts needs
 to be tweaked for optimal performance with other taxonomic groups.
