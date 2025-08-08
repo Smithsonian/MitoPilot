@@ -34,12 +34,36 @@ add_samples <- function(
 
   # Validate ID col
   if (any(duplicated(mapping[[mapping_id]]))) {
+    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse=", "))
     stop("Duplicate IDs found in mapping file")
   }
 
   # Validate ID length
   if (any(nchar(mapping[[mapping_id]]) > 18)) {
+    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse=", "))
     stop("IDs must be no more than 18 characters")
+  }
+
+  # Validate IDs contain only alphanumeric characters
+  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
+    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse=", "))
+    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
+  }
+
+  if ("Topology" %in% colnames(mapping)) {
+    # Confirm topology field contains only lowercase "linear" or "circular"
+    if (any(mapping$Topology %nin% c("circular", "linear"))) {
+      bad_IDs <- mapping[[mapping_id]][mapping$Topology %nin% c("circular", "linear")]
+      message("problematic samples:")
+      message(paste(bad_IDs, collapse=", "))
+      stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
+    }
   }
 
   # get genetic_code from .config
@@ -48,7 +72,7 @@ add_samples <- function(
   if (length(index) != 1) {
     stop("Could not find genetic_code in Nextflow .config, you may need to update your project with `backwards_compatibility()`")
   }
-  genetic_code <- stringr::str_trim(stringr::str_split(test, "=")[[1]][2])
+  genetic_code <- stringr::str_trim(stringr::str_split(conf[index], "=")[[1]][2])
 
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))

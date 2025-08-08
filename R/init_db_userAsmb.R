@@ -75,13 +75,20 @@ new_db_userAsmb <- function(
     stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
   }
 
-
   # check for assembly and topology columns
   if ("Assembly" %nin% colnames(mapping)) {
     stop("Mapping file missing Assembly column")
   }
   if ("Topology" %nin% colnames(mapping)) {
     stop("Mapping file missing Topology column")
+  }
+
+  # Confirm topology field contains only lowercase "linear" or "circular"
+  if (any(mapping$Topology %nin% c("circular", "linear"))) {
+    bad_IDs <- mapping[[mapping_id]][mapping$Topology %nin% c("circular", "linear")]
+    message("problematic samples:")
+    message(paste(bad_IDs, collapse=", "))
+    stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
   }
 
   # Load default curation parameters
