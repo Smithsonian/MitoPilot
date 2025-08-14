@@ -656,6 +656,24 @@ annotate_server <- function(id) {
             maxItems = 1
           )
         )
+        updateSelectizeInput(
+          inputId = "curate_ref_dir",
+          selected = cur$ref_dir,
+          choices = unique(rv$curate_opts$ref_dir),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        )
+        updateSelectizeInput(
+          inputId = "curate_ref_db",
+          selected = cur$ref_db,
+          choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        )
         rv$params <- cur$params |> jsonlite::fromJSON()
       }
     })
