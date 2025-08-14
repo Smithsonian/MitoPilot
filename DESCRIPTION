@@ -56,7 +56,8 @@ Imports:
     waiter,
     zoo,
     pwalign,
-    cli
+    cli,
+    RCurl
 Suggests:
     knitr
 VignetteBuilder:

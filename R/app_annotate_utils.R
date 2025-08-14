@@ -379,7 +379,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
               ns("curate_ref_db"),
               label = "ref_db",
               #choices = unique(rv$annotate_opts$ref_db),
-              choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Chordata"),
+              choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
               selected = current$ref_db %||% character(0),
               width = "100%",
               options = list(
