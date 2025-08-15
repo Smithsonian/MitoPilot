@@ -52,22 +52,22 @@ gen_custom_curation_db <- function(path = ".",
     if (file.access(path_to_makeblastdb, mode = 1) == 0) {
       message(paste(
         "`makeblastdb` is installed and located at:",
-        makeblastdb_path
+        path_to_makeblastdb
       ))
     } else {
       stop("File found at '", path_to_makeblastdb, "', but it is not executable.")
     }
   } else {
-    makeblastdb_path <- Sys.which("makeblastdb")
+    path_to_makeblastdb <- Sys.which("makeblastdb")
     # Check if the returned path is an empty string.
-    if (makeblastdb_path == "") {
+    if (path_to_makeblastdb == "") {
       stop(
         "`makeblastdb` was not found, please ensure NCBI BLAST+ is installed correctly and that its 'bin' directory has been added to your PATH environment variable."
       )
     } else {
       message(paste(
         "`makeblastdb` is installed and located at:",
-        makeblastdb_path
+        path_to_makeblastdb
       ))
     }
   }
