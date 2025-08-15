@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -84,17 +84,21 @@ strong { font-weight: bold; }
 <div class="section level2">
 <h2 id="why-use-a-custom-reference-database">Why use a custom reference database?<a class="anchor" aria-label="anchor" href="#why-use-a-custom-reference-database"></a>
 </h2>
-<p>Currently, MitoPilot only comes packaged with reference databases for
-fishes. If you are working on any other taxonomic group, you will need
-to compile databases of mitochondrial sequences for your clade.</p>
+<p>Currently, MitoPilot comes packaged with assembly reference databases
+for fishes. If you are working on any other taxonomic group, you will
+need to compile databases of mitochondrial sequences for your clade. It
+may also be helpfpul to create a custom database for curation of the
+protein-coding gene predictions if your taxa are poorly represented in
+NCBI RefSeq.</p>
 </div>
 <div class="section level2">
 <h2 id="what-parts-of-the-mitopilot-pipeline-use-reference-databases">What parts of the MitoPilot pipeline use reference databases?<a class="anchor" aria-label="anchor" href="#what-parts-of-the-mitopilot-pipeline-use-reference-databases"></a>
 </h2>
 <ul>
 <li>GetOrganelle or MitoFinder (Assemble module)</li>
-<li>Mitos2 (Assemble module)</li>
-<li>BLAST (Assemble and Export modules)</li>
+<li>Mitos2 (Annotate module)</li>
+<li>Automatic and manual curation of protein-coding genes (Annotate
+module)</li>
 </ul>
 </div>
 <div class="section level2">
@@ -266,9 +270,9 @@ GetOrganelle label database in a similar manner.</p>
 <p>The <a href="https://github.com/RemiAllio/MitoFinder?tab=readme-ov-file#how-to-get-reference-mitochondrial-genomes-from-ncbi" class="external-link">MitoFinder
 documentation</a> has instructions on how to build a reference
 database.</p>
-<p>Simply put, all you need is a GenBank formatted file
-(<code>.gb</code>) containing annotated mitogenomes. This file can be
-downloaded from a GenBank query in a web browser.</p>
+<p>The MitoFinder reference database is simple: a GenBank formatted file
+(<code>.gb</code>) containing one or more annotated mitogenomes. This
+file can be downloaded from a GenBank query in a web browser.</p>
 <p>You can provide the path to your MitoFinder database with the
 <code>mitofinder_db</code> argument of
 <code><a href="../reference/new_project.html">MitoPilot::new_project</a></code> function when initializing a
@@ -278,6 +282,27 @@ assembly options section of the MitoPilot GUI.</p>
 MitoFinder reference database is only used to “label” putative
 mitochondrial contigs. Thus, the species in your reference database can
 be fairly distant relatives of your samples.</p>
+</div>
+<div class="section level2">
+<h2 id="build-custom-databases-for-protein-coding-gene-curation">Build custom databases for protein-coding gene curation<a class="anchor" aria-label="anchor" href="#build-custom-databases-for-protein-coding-gene-curation"></a>
+</h2>
+<p>By default, MitoPilot uses gene sequences from NCBI RefSeq to
+finetune start and stop codon positions for your annotations. The
+curation database is specified by the <code>ref_dir</code> and
+<code>ref_db</code> sections of the Cutation Opt. panel in the Shiny
+app.</p>
+<p>We have provided a helper function
+<code><a href="../reference/custom_curation_db.html">MitoPilot::custom_curation_db</a></code>, which will allow you to
+supplement the RefSeq databases with your own gene sequences. Using a
+custom database can greatly improve automatic curation if your focal
+clade is poorly represented in RefSeq.</p>
+<p>Sequences can come from non-RefSeq mitogenomes on GenBank or from
+your own prior annotations. Make sure to carefully consider what you are
+adding to the custom database. You should only use high-confidence
+sequences, as poor quality reference data will result in poorly curated
+gene models.</p>
+<p>Please see the <code><a href="../reference/custom_curation_db.html">MitoPilot::custom_curation_db</a></code>
+documentation for further instructions.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

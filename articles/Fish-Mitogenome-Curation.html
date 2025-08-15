@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,9 +81,9 @@ Annotation Module, annotations are first generated using a combination
 of <a href="https://gitlab.com/Bernt/MITOS" class="external-link">MITOS2</a> (for rRNA and PCG
 annotation) and <a href="https://github.com/UCSC-LoweLab/tRNAscan-SE" class="external-link">tRNAscan-SE</a> (for
 tRNA annotation). Following the initial annotation, samples are
-proceessed through an automated curations process where modifications
-are made in attempt to bring the annotations closer to a state that will
-be considered acceptable for publication by NCBI GenBank. This automated
+processed through an automated curations process where modifications are
+made in attempt to bring the annotations closer to a state that will be
+considered acceptable for publication by NCBI GenBank. This automated
 curation process is based on 2 important inputs to the pipeline, a
 high-quality reference database of protein coding genes, and a set of
 user configurable parameters.</p>
@@ -100,14 +100,14 @@ default value of ref_db,
 specifies the location on the MitoPilot docker image where the database
 is located, where <code>{gene}</code> is translated to individual gene
 names during processing. This default database location can be
-overridden by gene-specific paths added as named entires to the ref_db
+overridden by gene-specific paths added as named entries to the ref_db
 parameter,
 e.g. <code>ref_db = list(default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas", atp8 = "/ref_dbs/curation/atp8.fas")</code>.
 However, it is important to note that these paths are relative to the
-execution environment and must be accessable from that environment.
-Building a custom docker image from the base MitoPilot image,
-includeding any additional reference databases within its file system,
-is one way to achieve this.</p>
+execution environment and must be accessible from that environment.
+Building a custom docker image from the base MitoPilot image, including
+any additional reference databases within its file system, is one way to
+achieve this.</p>
 </div>
 <div class="section level2">
 <h2 id="curation-parameters">Curation Parameters<a class="anchor" aria-label="anchor" href="#curation-parameters"></a>
