@@ -239,9 +239,8 @@ pipeline_server_userAsmb <- function(id) {
         if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
           shinyWidgets::sendSweetAlert(
             title = "Success!",
-            text = paste0(submit_output, ". You can monitor your job on Hydra with the `qstat` command. Job output will be logged to ",
-                          paste0(base_filename, ".log"),
-                          " in your project directory"),
+            text = paste0(submit_output, ". You can monitor your job on Hydra with the `qstat` command or see `",
+                          paste0(base_filename, ".log"), "` in your project directory"),
             type = "success"
           )
           removeModal()
