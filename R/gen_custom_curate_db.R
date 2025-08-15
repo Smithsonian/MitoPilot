@@ -193,7 +193,7 @@ gen_custom_curation_db <- function(path = ".",
     Biostrings::writeXStringSet(all_seqs, file.path(orig_db_dir, "featureProt", paste0(gene, ".fas")))
     # make BLAST database
     system2(
-      path_to_makeblastdb,
+      path_to_makeblastdbs,
       args = paste0("-dbtype prot -in ", paste0(gene, ".fas")),
       stdout = NULL,
       stderr = NULL
@@ -210,5 +210,5 @@ gen_custom_curation_db <- function(path = ".",
   message("FINISHED creating custom curation database")
   message("In the curation options, specify the following directory as the \'ref_dif\':")
   message(file.path(path, "custom_curation_dbs", cur_dir))
-  message(paste0("and select \'", orig_db_dir_base, "\' as the \'ref_db\'."))
+  message(paste0("and select \'", orig_db_dir_base, "_custom\' as the \'ref_db\'."))
 }
