@@ -8,6 +8,7 @@ gen_custom_curation_db(
   path = ".",
   genes_to_add = NULL,
   gene_fasta_dir = NULL,
+  path_to_makeblastdb = NULL,
   base_db = "Metazoa"
 )
 }
@@ -18,7 +19,9 @@ gen_custom_curation_db(
 
 \item{gene_fasta_dir}{Full path to directory containing your gene FASTA files, one file per sequence}
 
-\item{base_db}{Which base NCBI RefSeq database to use, "Metazoa" or "Chordata"?}
+\item{path_to_makeblastdb}{Full path to makeblastdb, only necessary if not already in your PATH}
+
+\item{base_db}{Which base NCBI RefSeq database to use, "Metazoa" or "Chordata"? Default = "Metazoa"}
 }
 \description{
 Generate a custom curation database from user-supplied table of translated mitochondrial gene sequences.

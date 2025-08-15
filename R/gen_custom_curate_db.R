@@ -29,7 +29,8 @@
 #' @param path Path to the project directory (default = current working directory)
 #' @param genes_to_add Full path to CSV file containing three columns: SeqID = unique name to be used for sequence, Gene = name of gene, FASTA = name of fasta file containing the sequence
 #' @param gene_fasta_dir Full path to directory containing your gene FASTA files, one file per sequence
-#' @param base_db Which base NCBI RefSeq database to use, "Metazoa" or "Chordata"?
+#' @param path_to_makeblastdb Full path to makeblastdb, only necessary if not already in your PATH
+#' @param base_db Which base NCBI RefSeq database to use, "Metazoa" or "Chordata"? Default = "Metazoa"
 #'
 #' @export
 #'
@@ -37,24 +38,40 @@
 gen_custom_curation_db <- function(path = ".",
                                    genes_to_add = NULL,
                                    gene_fasta_dir = NULL,
+                                   path_to_makeblastdb = NULL,
                                    base_db = "Metazoa") {
   # read in user data
   setwd(path)
   data <- read.csv(genes_to_add, header = TRUE)
 
   # check that makeblastdb is installed and in the PATH
-  makeblastdb_path <- Sys.which("makeblastdb")
-  # Check if the returned path is an empty string.
-  if (makeblastdb_path == "") {
-    stop(
-      "`makeblastdb` was not found, please ensure NCBI BLAST+ is installed correctly and that its 'bin' directory has been added to your PATH environment variable."
-    )
+  if(is.null(path_to_makeblastdb)){
+    if (!file.exists(path_to_makeblastdb)) {
+      stop("No file found at the specified path: '", path_to_makeblastdb, "'")
+    }
+    if (file.access(path_to_makeblastdb, mode = 1) == 0) {
+      message(paste(
+        "`makeblastdb` is installed and located at:",
+        makeblastdb_path
+      ))
+    } else {
+      stop("File found at '", path_to_makeblastdb, "', but it is not executable.")
+    }
   } else {
-    message(paste(
-      "`makeblastdb` is installed and located at:",
-      makeblastdb_path
-    ))
+    makeblastdb_path <- Sys.which("makeblastdb")
+    # Check if the returned path is an empty string.
+    if (makeblastdb_path == "") {
+      stop(
+        "`makeblastdb` was not found, please ensure NCBI BLAST+ is installed correctly and that its 'bin' directory has been added to your PATH environment variable."
+      )
+    } else {
+      message(paste(
+        "`makeblastdb` is installed and located at:",
+        makeblastdb_path
+      ))
+    }
   }
+
 
   # make sure user CSV contains the required columns
   if (any(colnames(data) %nin% c("SeqID", "Gene", "FASTA"))) {
