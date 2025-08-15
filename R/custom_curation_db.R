@@ -4,7 +4,10 @@
 #' Requires a CSV file containing three columns: "SeqID" = unique name to be used for sequence,
 #' "Gene" = name of gene,
 #' and "FASTA" = name of fasta file containing the protein sequence.
-#' Combines your sequences with Metazoa or Chordata NCBI RefSeq data .
+#' Combines your sequences with Metazoa or Chordata NCBI RefSeq data.
+#' Make sure to carefully consider what you are adding to the custom database.
+#' You should only use high-confidence sequences.
+#' Poor quality reference data will result in poorly curated gene models.
 #'
 #'  Values in "Gene" column of your CSV must only include the following gene abbreviations: \cr
 #'     nad1 = "NADH dehydrogenase subunit 1", \cr
