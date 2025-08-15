@@ -37,18 +37,20 @@
 #'
 
 custom_curation_db <- function(path = ".",
-                                   genes_to_add = NULL,
-                                   gene_fasta_dir = NULL,
-                                   path_to_makeblastdb = NULL,
-                                   base_db = "Metazoa") {
+                               genes_to_add = NULL,
+                               gene_fasta_dir = NULL,
+                               path_to_makeblastdb = NULL,
+                               base_db = "Metazoa") {
   # read in user data
   setwd(path)
   data <- read.csv(genes_to_add, header = TRUE)
 
   # check that makeblastdb is installed and in the PATH
-  if(!is.null(path_to_makeblastdb)){
+  if (!is.null(path_to_makeblastdb)) {
     if (!file.exists(path_to_makeblastdb)) {
-      stop("No file found at the specified path: '", path_to_makeblastdb, "'")
+      stop("No file found at the specified path: '",
+           path_to_makeblastdb,
+           "'")
     }
     if (file.access(path_to_makeblastdb, mode = 1) == 0) {
       message(paste(
@@ -56,7 +58,9 @@ custom_curation_db <- function(path = ".",
         path_to_makeblastdb
       ))
     } else {
-      stop("File found at '", path_to_makeblastdb, "', but it is not executable.")
+      stop("File found at '",
+           path_to_makeblastdb,
+           "', but it is not executable.")
     }
   } else {
     path_to_makeblastdb <- Sys.which("makeblastdb")
@@ -175,7 +179,7 @@ custom_curation_db <- function(path = ".",
     # read in FASTA
     message(paste0("processing ", gene))
     all_seqs <- Biostrings::readAAStringSet(file.path(orig_db_dir, "featureProt", paste0(gene, ".fas")))
-    data_sub <- data[data$Gene == gene,]
+    data_sub <- data[data$Gene == gene, ]
     for (i in 1:nrow(data_sub)) {
       if (data_sub$Gene[i] == gene) {
         fasta_file_path <- file.path(gene_fasta_dir, data_sub$FASTA[i])
@@ -191,13 +195,15 @@ custom_curation_db <- function(path = ".",
           new_seq <- Biostrings::readAAStringSet(fasta_file_path)
         }, error = function(e) {
           message(paste0("Failed to read the FASTA file: ", fasta_file_path))
-          stop("Make sure this file is properly formatted and contains amino acid (protein) sequence data")
+          stop(
+            "Make sure this file is properly formatted and contains amino acid (protein) sequence data"
+          )
         })
         # make sure FASTA file contains only one sequence
-        if(length(new_seq) > 1){
+        if (length(new_seq) > 1) {
           message(paste0("Problem with ", fasta_file_path))
           stop("Each FASTA file must contain only one sequence")
-        } else if(length(new_seq) < 1){
+        } else if (length(new_seq) < 1) {
           message(paste0("Problem with ", fasta_file_path))
           stop("FASTA file contains no sequences")
         }
@@ -229,5 +235,9 @@ custom_curation_db <- function(path = ".",
   message("FINISHED creating custom curation database")
   message("In the curation options, specify the following directory as the \'ref_dif\':")
   message(file.path(path, "custom_curation_dbs", cur_dir))
-  message(paste0("and select \'", orig_db_dir_base, "_custom\' as the \'ref_db\'."))
+  message(paste0(
+    "and select \'",
+    orig_db_dir_base,
+    "_custom\' as the \'ref_db\'."
+  ))
 }
