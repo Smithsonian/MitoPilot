@@ -193,7 +193,7 @@ gen_custom_curation_db <- function(path = ".",
     Biostrings::writeXStringSet(all_seqs, file.path(orig_db_dir, "featureProt", paste0(gene, ".fas")))
     # make BLAST database
     system2(
-      "makeblastdb",
+      path_to_makeblastdb,
       args = paste0("-dbtype prot -in ", paste0(gene, ".fas")),
       stdout = NULL,
       stderr = NULL
