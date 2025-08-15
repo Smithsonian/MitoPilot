@@ -45,7 +45,7 @@ gen_custom_curation_db <- function(path = ".",
   data <- read.csv(genes_to_add, header = TRUE)
 
   # check that makeblastdb is installed and in the PATH
-  if(is.null(path_to_makeblastdb)){
+  if(!is.null(path_to_makeblastdb)){
     if (!file.exists(path_to_makeblastdb)) {
       stop("No file found at the specified path: '", path_to_makeblastdb, "'")
     }
