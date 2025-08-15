@@ -1,9 +1,10 @@
-#' Create a custom curation database
+#' Generate a custom curation database
 #'
-#' Generate a custom curation database from user-supplied table of translated mitochondrial gene sequences.
+#' Generate a custom curation database from user-supplied table of translated (amino acid) mitochondrial gene sequences.
 #' Requires a CSV file containing three columns: "SeqID" = unique name to be used for sequence,
 #' "Gene" = name of gene,
-#' and "FASTA" = name of fasta file containing the sequence.
+#' and "FASTA" = name of fasta file containing the protein sequence.
+#' Combines your sequences with Metazoa or Chordata NCBI RefSeq data .
 #'
 #'  Values in "Gene" column of your CSV must only include the following gene abbreviations: \cr
 #'     nad1 = "NADH dehydrogenase subunit 1", \cr
@@ -35,7 +36,7 @@
 #' @export
 #'
 
-gen_custom_curation_db <- function(path = ".",
+custom_curation_db <- function(path = ".",
                                    genes_to_add = NULL,
                                    gene_fasta_dir = NULL,
                                    path_to_makeblastdb = NULL,
@@ -174,9 +175,10 @@ gen_custom_curation_db <- function(path = ".",
     # read in FASTA
     message(paste0("processing ", gene))
     all_seqs <- Biostrings::readAAStringSet(file.path(orig_db_dir, "featureProt", paste0(gene, ".fas")))
-    for (i in 1:nrow(data)) {
-      if (data$Gene[i] == gene) {
-        fasta_file_path <- file.path(gene_fasta_dir, data$FASTA[i])
+    data_sub <- data[data$Gene == gene,]
+    for (i in 1:nrow(data_sub)) {
+      if (data_sub$Gene[i] == gene) {
+        fasta_file_path <- file.path(gene_fasta_dir, data_sub$FASTA[i])
         # Check if the file exists before trying to read it
         if (!file.exists(fasta_file_path)) {
           stop(paste(
@@ -185,7 +187,24 @@ gen_custom_curation_db <- function(path = ".",
           ))
         }
         new_seq <- Biostrings::readAAStringSet(fasta_file_path)
-        names(new_seq)[1] <- data$SeqID[i]
+        tryCatch({
+          new_seq <- Biostrings::readAAStringSet(fasta_file_path)
+        }, error = function(e) {
+          message(paste0("Failed to read the FASTA file: ", fasta_file_path))
+          stop("Make sure this file is properly formatted and contains amino acid (protein) sequence data")
+        })
+        # make sure FASTA file contains only one sequence
+        if(length(new_seq) > 1){
+          message(paste0("Problem with ", fasta_file_path))
+          stop("Each FASTA file must contain only one sequence")
+        } else if(length(new_seq) < 1){
+          message(paste0("Problem with ", fasta_file_path))
+          stop("FASTA file contains no sequences")
+        }
+
+        # rename sequence with SeqID
+        names(new_seq)[1] <- data_sub$SeqID[i]
+        # combine with database
         all_seqs <- c(all_seqs, new_seq)
       }
     }
@@ -193,7 +212,7 @@ gen_custom_curation_db <- function(path = ".",
     Biostrings::writeXStringSet(all_seqs, file.path(orig_db_dir, "featureProt", paste0(gene, ".fas")))
     # make BLAST database
     system2(
-      path_to_makeblastdbs,
+      path_to_makeblastdb,
       args = paste0("-dbtype prot -in ", paste0(gene, ".fas")),
       stdout = NULL,
       stderr = NULL
