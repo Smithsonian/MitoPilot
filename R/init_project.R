@@ -11,8 +11,8 @@
 #'   the unique sample identifiers (default = "ID").
 #' @param data_path Path to the directory where the raw data is located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution..
-#' @param min_depth Minimum sequencing depth after pre-processing to proceed
-#'   with assembly (default: 2000000)
+#' @param min_depth Minimum number of paired sequences after pre-processing to proceed
+#'   with assembly (default: 2000000 reads)
 #' @param genetic_code Translation table for your organisms. See NCBI website
 #'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param executor The executor to use for running the nextflow pipeline. Must

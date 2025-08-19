@@ -396,6 +396,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             label = "Target:",
             choices = c("fish_mito",
                         "lepidosaur_mito",
+                        "turtle_mito",
                         "mammal_mito",
                         "starfish_mito",
                         "diptera_mito",
