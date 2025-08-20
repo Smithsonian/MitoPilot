@@ -4,7 +4,7 @@
 #'
 #' @export
 #'
-params_turtles_mito <- function(alt = list()) {
+params_turtle_mito <- function(alt = list()) {
   params <- list(
     hit_threshold = 80,
     max_overlap = 0.25,
@@ -66,7 +66,7 @@ params_turtles_mito <- function(alt = list()) {
       ),
       cox3 = list(
         type = "PCG",
-        overlap = list(start = 3, stop = F),
+        overlap = list(start = 3, stop = F)
       ),
       nad3 = list(
         type = "PCG"
