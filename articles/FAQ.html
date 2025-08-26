@@ -93,6 +93,28 @@ your project are correct. Also make sure you’re using the correct
 execution environment. This error is commonly caused by using the
 “local” executor when running MitoPilot on a computing cluster.</p>
 </div>
+<div class="section level3">
+<h3 id="database-disk-image-is-malformed">“database disk image is malformed”<a class="anchor" aria-label="anchor" href="#database-disk-image-is-malformed"></a>
+</h3>
+<p>You may encounter an error message in your R Studio console that
+looks something like this:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Listening on http<span class="sc">:</span><span class="er">//</span><span class="dv">127</span>.<span class="dv">0</span>.<span class="fl">0.1</span><span class="sc">:</span><span class="dv">4329</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>Warning<span class="sc">:</span> Couldn<span class="st">'t set synchronous mode: database disk image is malformed</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="st">Use `synchronous` = NULL to turn off this warning.</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="st">Database attached: /pool/public/genomics/macguigand/MitoPilot/testing/turtle_test/run_01/.sqlite</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="st">Warning: Error in db_query_fields.DBIConnection: Can'</span>t query fields.</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>ℹ Using SQL<span class="sc">:</span> SELECT <span class="sc">*</span> FROM <span class="st">`</span><span class="at">pre_opts</span><span class="st">`</span> AS <span class="st">`</span><span class="at">q02</span><span class="st">`</span> <span class="fu">WHERE</span> (<span class="dv">0</span> <span class="ot">=</span> <span class="dv">1</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>Caused by error<span class="sc">:</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="sc">!</span> database disk image is malformed</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>...</span></code></pre></div>
+<p>This indicates that your <code>.sqlite</code> database is corrupted.
+The exact cause of this error can be difficult to determine.
+Fortunately, you may be able to recover your database by running the
+following commands in your project directory.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">mv</span> .sqlite .sqlite_corrupted </span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="ex">sqlite3</span> .sqlite_corrupted <span class="st">".recover"</span> <span class="kw">|</span> <span class="ex">sqlite3</span> .sqlite</span></code></pre></div>
+<p>Then try relaunching the MitoPilot app.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="can-i-use-my-own-mitogenome-assemblies-with-mitopilot">Can I use my own mitogenome assemblies with MitoPilot?<a class="anchor" aria-label="anchor" href="#can-i-use-my-own-mitogenome-assemblies-with-mitopilot"></a>
