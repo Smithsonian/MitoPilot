@@ -33,7 +33,7 @@ This error is commonly caused by using the "local" executor when running MitoPil
 
 You may encounter an error message in your R Studio console that looks something like this: 
 
-```{R}
+```{R eval=FALSE}
 Listening on http://127.0.0.1:4329
 Warning: Couldn't set synchronous mode: database disk image is malformed
 Use `synchronous` = NULL to turn off this warning.
@@ -42,44 +42,12 @@ Warning: Error in db_query_fields.DBIConnection: Can't query fields.
 ℹ Using SQL: SELECT * FROM `pre_opts` AS `q02` WHERE (0 = 1)
 Caused by error:
 ! database disk image is malformed
-  82: <Anonymous>
-  81: signalCondition
-  80: signal_abort
-  79: rlang::abort
-  78: cli_abort
-  77: h
-  76: .handleSimpleError
-  75: result_create
-  71: .local
-  70: dbSendQuery
-  68: .local
-  67: dbGetQuery
-  63: db_get_query
-  62: db_query_fields.DBIConnection
-  60: dbplyr_fallback
-  59: dbplyr_query_fields
-  56: tbl_sql
-  55: tbl.src_dbi
-  53: tbl.DBIConnection
-  48: module
-  43: callModule
-  42: moduleServer
-  41: assemble_server
-  40: server
-   3: runApp
-   2: print.shiny.appobj
-   1: <Anonymous>
-Error in db_query_fields.DBIConnection(con, ...) : 
-  Can't query fields.
-ℹ Using SQL: SELECT * FROM `pre_opts` AS `q02` WHERE (0 = 1)
-Caused by error:
-! database disk image is malformed
-Session ended. Closing DB connection.
+...
 ```
 
 This indicates that your `.sqlite` database is corrupted. The exact cause of this error can be difficult to determine. Fortunately, you may be able to recover your database by running the following commands in your project directory.
 
-```{bash}
+```{bash eval=FALSE}
 mv .sqlite .sqlite_corrupted 
 sqlite3 .sqlite_corrupted ".recover" | sqlite3 .sqlite
 ```
