@@ -61,13 +61,13 @@ annotate_server <- function(id) {
         inputId = ns("warning_filters"),
         label = "Warnings column includes:",
         choices = warn_vals,
-        selected = isolate(input$warning_filters) %||% warn_vals,  # default to all selected
-        multiple = TRUE,  # enable multi-select
+        selected = isolate(input$warning_filters) %||% warn_vals, # default to all selected
+        multiple = TRUE, # enable multi-select
         options = list(
-          `actions-box` = TRUE,  # Display checkboxes in dropdown
-          `selected-text-format` = "count > 0"  # Show the number of selected items when more than 0 are selected
+          `actions-box` = TRUE, # Display checkboxes in dropdown
+          `selected-text-format` = "count > 0" # Show the number of selected items when more than 0 are selected
         ),
-        inline = TRUE  # Optional: puts it on the same line
+        inline = TRUE # Optional: puts it on the same line
       )
     })
 
@@ -77,7 +77,7 @@ annotate_server <- function(id) {
       selected <- input$warning_filters
       rv$data |> dplyr::mutate(
         warnings = purrr::map_int(warnings_details, function(wd) {
-          #if (is.na(wd) || length(selected) == 0) return(0)
+          # if (is.na(wd) || length(selected) == 0) return(0)
           wd_list <- strsplit(as.character(wd), ";")[[1]] |>
             trimws()
           sum(wd_list %in% selected)
@@ -87,182 +87,185 @@ annotate_server <- function(id) {
 
     # Render table ----
     output$table <- renderReactable({
-      #isolate(req(rv$data)) |>
+      # isolate(req(rv$data)) |>
       # req(filtered_data())
-        reactable(
-          data = isolate(filtered_data()),
-          compact = TRUE,
-          language = reactable::reactableLang(
-            noData = "No Completed / Locked Assemblies Found"
-          ),
-          defaultPageSize = 100,
-          resizable = TRUE,
-          showPageSizeOptions = TRUE,
-          onClick = "select",
-          selection = "multiple",
-          searchable = TRUE,
-          filterable = TRUE,
-          defaultSorted = list(time_stamp = "desc"),
-          #height = 650,
-          wrap = FALSE,
-          pageSizeOptions = c(25, 50, 100, 200, 500),
-          rowStyle = rt_highlight_row(),
-          defaultColDef = colDef(align = "left", show = FALSE),
-          columns = list(
-            `.selection` = colDef(show = T, sticky = "left", width = 28),
-            annotate_lock = colDef(
-              show = TRUE,
-              sticky = "left",
-              name = "",
-              html = TRUE,
-              filterable = FALSE,
-              width = 32,
-              align = "center",
-              cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-lock-open",
-                  `1` = "fa fa-lock"
-                )
+      reactable(
+        data = isolate(filtered_data()),
+        compact = TRUE,
+        language = reactable::reactableLang(
+          noData = "No Completed / Locked Assemblies Found"
+        ),
+        defaultPageSize = 100,
+        resizable = TRUE,
+        showPageSizeOptions = TRUE,
+        onClick = "select",
+        selection = "multiple",
+        searchable = TRUE,
+        filterable = TRUE,
+        defaultSorted = list(time_stamp = "desc"),
+        height = 650,
+        wrap = FALSE,
+        pageSizeOptions = c(25, 50, 100, 200, 500),
+        rowStyle = rt_highlight_row(),
+        defaultColDef = colDef(align = "left", show = FALSE),
+        columns = list(
+          `.selection` = colDef(show = T, sticky = "left", width = 28),
+          annotate_lock = colDef(
+            show = TRUE,
+            sticky = "left",
+            name = "",
+            html = TRUE,
+            filterable = FALSE,
+            width = 32,
+            align = "center",
+            cell = rt_dynamicIcon(
+              c(
+                `0` = "fa fa-lock-open",
+                `1` = "fa fa-lock"
               )
-            ),
-            annotate_switch = colDef(
-              show = TRUE,
-              sticky = "left",
-              name = "",
-              html = TRUE,
-              filterable = FALSE,
-              width = 30,
-              align = "center",
-              cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-hourglass",
-                  `1` = "fa fa-person-running",
-                  `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation"
-                )
-              )
-            ),
-            ID = colDef(
-              show = TRUE,
-              minWidth = 120,
-              sticky = "left",
-              html = TRUE,
-              cell = rt_longtext()
-            ),
-            Taxon = colDef(
-              show = TRUE,
-              minWidth = 140,
-              sticky = "left",
-              html = TRUE,
-              cell = rt_longtext()
-            ),
-            ID_verified = colDef(
-              show = TRUE,
-              name = "ID_verified",
-              html = TRUE,
-              align = "center",
-              width = 100,
-            ),
-            annotate_opts = colDef(
-              show = TRUE,
-              name = "Annotate Opts.",
-              html = TRUE,
-              width = 130,
-              cell = rt_link(ns("set_annotate_opts"))
-            ),
-            curate_opts = colDef(
-              show = TRUE,
-              name = "Curate Opts.",
-              html = TRUE,
-              width = 110,
-              cell = rt_link(ns("set_curate_opts"))
-            ),
-            length = colDef(
-              show = TRUE,
-              name = "Length",
-              filterable = FALSE,
-              html = TRUE,
-              cell = rt_longtext()
-            ),
-            topology = colDef(show = TRUE, align = "center"),
-            scaffolds = colDef(show = TRUE, align = "center"),
-            PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
-            tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
-            rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),
-            missing = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
-            extra = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
-            warnings = colDef(show = TRUE, align = "center"),
-            reviewed = colDef(
-              show = TRUE,
-              name = "Reviewed",
-              html = TRUE,
-              align = "center",
-              width = 100,
-            ),
-            problematic = colDef(
-              show = TRUE,
-              name = "Problematic",
-              html = TRUE,
-              align = "center",
-              width = 100,
-            ),
-            time_stamp = colDef(
-              show = TRUE,
-              name = "Last Updated",
-              filterable = FALSE,
-              html = T,
-              width = 150,
-              cell = rt_ts_date()
-            ),
-            annotate_notes = colDef(
-              show = TRUE,
-              name = "Notes",
-              html = TRUE,
-              align = "left",
-              minWidth = 150,
-              #maxWidth = 400,
-              cell = rt_longtext()
-            ),
-            view = colDef(
-              show = TRUE,
-              sticky = "right",
-              filterable = FALSE,
-              name = "",
-              html = TRUE,
-              width = 80,
-              align = "center",
-              cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
-            ),
-            output = colDef(
-              show = TRUE,
-              sticky = "right",
-              filterable = FALSE,
-              name = "",
-              html = TRUE,
-              width = 80,
-              align = "center",
-              cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
             )
+          ),
+          annotate_switch = colDef(
+            show = TRUE,
+            sticky = "left",
+            name = "",
+            html = TRUE,
+            filterable = FALSE,
+            width = 30,
+            align = "center",
+            cell = rt_dynamicIcon(
+              c(
+                `0` = "fa fa-hourglass",
+                `1` = "fa fa-person-running",
+                `2` = "fa fa-circle-check",
+                `3` = "fa fa-triangle-exclamation"
+              )
+            )
+          ),
+          ID = colDef(
+            show = TRUE,
+            minWidth = 120,
+            sticky = "left",
+            html = TRUE,
+            cell = rt_longtext()
+          ),
+          Taxon = colDef(
+            show = TRUE,
+            minWidth = 140,
+            sticky = "left",
+            html = TRUE,
+            cell = rt_longtext()
+          ),
+          ID_verified = colDef(
+            show = TRUE,
+            name = "ID_verified",
+            html = TRUE,
+            align = "center",
+            width = 100,
+          ),
+          annotate_opts = colDef(
+            show = TRUE,
+            name = "Annotate Opts.",
+            html = TRUE,
+            width = 130,
+            cell = rt_link(ns("set_annotate_opts"))
+          ),
+          curate_opts = colDef(
+            show = TRUE,
+            name = "Curate Opts.",
+            html = TRUE,
+            width = 110,
+            cell = rt_link(ns("set_curate_opts"))
+          ),
+          length = colDef(
+            show = TRUE,
+            name = "Length",
+            filterable = FALSE,
+            html = TRUE,
+            cell = rt_longtext()
+          ),
+          topology = colDef(show = TRUE, align = "center"),
+          scaffolds = colDef(show = TRUE, align = "center"),
+          PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
+          tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
+          rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),
+          missing = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
+          extra = colDef(show = TRUE, align = "center", html = TRUE, cell = rt_longtext()),
+          warnings = colDef(show = TRUE, align = "center"),
+          reviewed = colDef(
+            show = TRUE,
+            name = "Reviewed",
+            html = TRUE,
+            align = "center",
+            width = 100,
+          ),
+          problematic = colDef(
+            show = TRUE,
+            name = "Problematic",
+            html = TRUE,
+            align = "center",
+            width = 100,
+          ),
+          time_stamp = colDef(
+            show = TRUE,
+            name = "Last Updated",
+            filterable = FALSE,
+            html = T,
+            width = 150,
+            cell = rt_ts_date()
+          ),
+          annotate_notes = colDef(
+            show = TRUE,
+            name = "Notes",
+            html = TRUE,
+            align = "left",
+            minWidth = 150,
+            # maxWidth = 400,
+            cell = rt_longtext()
+          ),
+          view = colDef(
+            show = TRUE,
+            sticky = "right",
+            filterable = FALSE,
+            name = "",
+            html = TRUE,
+            width = 80,
+            align = "center",
+            cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
+          ),
+          output = colDef(
+            show = TRUE,
+            sticky = "right",
+            filterable = FALSE,
+            name = "",
+            html = TRUE,
+            width = 80,
+            align = "center",
+            cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
           )
         )
+      )
     })
 
     # watch for changes to warnings filter and update table
-    observeEvent(input$warning_filters, {
-      reactable::updateReactable(
-        "table",
-        data = filtered_data(),
-        page = reactable::getReactableState("table", "page"),
-        selected = reactable::getReactableState("table", "selected")
-      )
-    }, ignoreNULL = FALSE)
+    observeEvent(input$warning_filters,
+      {
+        reactable::updateReactable(
+          "table",
+          data = filtered_data(),
+          page = reactable::getReactableState("table", "page"),
+          selected = reactable::getReactableState("table", "selected")
+        )
+      },
+      ignoreNULL = FALSE
+    )
 
     # update table ----
     init("update_annotate_table")
     on("update_annotate_table", {
       reactable::updateReactable(
         "table",
-        #data = rv$data |>
+        # data = rv$data |>
         data = filtered_data() |>
           dplyr::mutate(
             output = dplyr::case_when(
@@ -366,11 +369,11 @@ annotate_server <- function(id) {
         dplyr::select(ID, ID_verified) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$ID_verified))[1]
-      if(is.na(ID_current)){
+      if (is.na(ID_current)) {
         rv$updating$ID_verified <- "yes"
-      } else if(ID_current == "yes"){
+      } else if (ID_current == "yes") {
         rv$updating$ID_verified <- "no"
-      } else if(ID_current == "no"){
+      } else if (ID_current == "no") {
         rv$updating$ID_verified <- "yes"
       }
       dplyr::tbl(session$userData$con, "annotate") |>
@@ -395,7 +398,7 @@ annotate_server <- function(id) {
         dplyr::select(ID, problematic) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$problematic))[1]
-      if(is.na(ID_current)){
+      if (is.na(ID_current)) {
         rv$updating$problematic <- "yes"
       } else {
         rv$updating$problematic <- NA_character_
@@ -461,7 +464,7 @@ annotate_server <- function(id) {
         updateSelectizeInput(
           inputId = "mitos_ref_db",
           selected = cur$ref_db,
-          #choices = unique(rv$annotate_opts$ref_db),
+          # choices = unique(rv$annotate_opts$ref_db),
           choices = c("Metazoa_RefSeq89", "Chordata"),
           options = list(
             create = TRUE,
@@ -523,7 +526,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
-      #shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
+      # shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)

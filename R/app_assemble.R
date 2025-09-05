@@ -50,7 +50,7 @@ assemble_server <- function(id) {
           selection = "multiple",
           searchable = TRUE,
           defaultSorted = list(time_stamp = "desc"),
-          #height = 650,
+          height = 700,
           wrap = FALSE,
           pageSizeOptions = c(25, 50, 100, 200, 500),
           rowStyle = rt_highlight_row(),
@@ -500,13 +500,13 @@ assemble_server <- function(id) {
           inputId = "assembler",
           selected = cur$assembler
         )
-        if(cur$assembler == "GetOrganelle"){
+        if (cur$assembler == "GetOrganelle") {
           shinyjs::hide(id = "mitofinder")
           shinyjs::hide(id = "mf_db")
           shinyjs::show(id = "getOrganelle")
           shinyjs::show(id = "seeds_db")
           shinyjs::show(id = "labels_db")
-        } else if(cur$assembler == "MitoFinder"){
+        } else if (cur$assembler == "MitoFinder") {
           shinyjs::show(id = "mitofinder")
           shinyjs::show(id = "mf_db")
           shinyjs::hide(id = "getOrganelle")
@@ -567,13 +567,13 @@ assemble_server <- function(id) {
     })
     # toggle parameters depending on selected assembler
     observeEvent(input$assembler, {
-      if(input$assembler == "GetOrganelle"){
+      if (input$assembler == "GetOrganelle") {
         shinyjs::hide(id = "mitofinder")
         shinyjs::hide(id = "mf_db")
         shinyjs::show(id = "getOrganelle")
         shinyjs::show(id = "seeds_db")
         shinyjs::show(id = "labels_db")
-      } else if(input$assembler == "MitoFinder"){
+      } else if (input$assembler == "MitoFinder") {
         shinyjs::show(id = "mitofinder")
         shinyjs::show(id = "mf_db")
         shinyjs::hide(id = "getOrganelle")
