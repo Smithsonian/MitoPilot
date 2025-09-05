@@ -172,7 +172,7 @@ We have provided instructions for running MitoPilot Nextflow commands as batch j
 The final option is the `Start Nextflow` button, which will run the analysis pipeline within the GUI. This requires you to keep the GUI open while the pipeline is running.
 
 <div class="alert alert-warning">
-  <strong>Warning:</strong>Currently, the `Start Nextflow` button is not compatible with the NOAA SEDNA computing cluster. Please use the command line or batch job method, making sure to run `mamba activate MitoPilot_deps` prior to calling Nextflow.</strong>
+  <strong>Warning:</strong> Currently, the `Start Nextflow` button is not compatible with the NOAA SEDNA computing cluster. Please use the command line or batch job method, making sure to run `mamba activate MitoPilot_deps` prior to calling Nextflow.
 </div>
 
 Since our test dataset is small, let's run Nextflow within the GUI. Click `Start Nextflow` to launch the pipeline.
