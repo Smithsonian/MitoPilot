@@ -3,11 +3,9 @@ process preprocess {
     executor params.preprocess.executor
     container params.preprocess.container
 
-    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/*_preprocess.*", mode: 'copy'
+    publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/*_preprocess.*", mode: 'copy'
 
-    errorStrategy 'finish'
-    // cpus {opts.cpus}
-    // memory {opts.memory.GB}
+    errorStrategy 'ignore'
 
     tag "${id}"
 
@@ -15,10 +13,13 @@ process preprocess {
     tuple val(id), path(R1), path(R2), val(opts)
 
     output:
-    tuple val("${id}"), path("${id}/${id}_preprocess_*"), env(after)                          // output for processing
-    tuple env(before), env(after), env(meanLen), val("${params.ts}"), val("${id}")            // output for DB
-    path("${id}/${id}_preprocess.json")      // outout to publishDir
-    path("${id}/NF_work_dir_preprocess.txt")
+    tuple val("${id}"), path("${id}/${id}_preprocess_*"), env(after)
+    // output for processing
+    tuple env(before), env(after), env(meanLen), val("${params.ts}"), val("${id}")
+    // output for DB
+    path "${id}/${id}_preprocess.json"
+    // outout to publishDir
+    path "${id}/NF_work_dir_preprocess.txt"
 
     shell:
     json_out = "${id}/${id}_preprocess.json"
@@ -34,7 +35,4 @@ process preprocess {
     echo "Nextflow preprocess working directory:" > !{id}/NF_work_dir_preprocess.txt
     echo "$PWD" >> !{id}/NF_work_dir_preprocess.txt
     '''
-
 }
-
-

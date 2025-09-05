@@ -60,3 +60,8 @@ params {
         executor = process.executor
     }
 }
+
+// pipeline will exit with a non-zero exit code if any failed tasks are ignored using the ignore error strategy
+workflow {
+  failOnIgnore = true
+}

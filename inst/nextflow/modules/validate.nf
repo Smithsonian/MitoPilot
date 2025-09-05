@@ -1,24 +1,19 @@
 process validate {
-    
+
     executor params.curate.executor
     container params.curate.container
-    
-    publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy'
 
-    errorStrategy 'finish'
-    // cpus { opts.cpus }
-    // memory { opts.memory.GB }
+    publishDir "${launchDir}/${params.publishDir}", overwrite: true, mode: 'copy'
+
+    errorStrategy 'ignore'
 
     tag "${id}"
 
     input:
-        tuple val(id), val(path), path(annotations), path(coverage), val(opts)
+    tuple val(id), val(path), path(annotations), path(coverage), val(opts)
 
-    output: 
-    tuple val(id), val(path),
-        path("${id}/annotate/${id}_annotations_*.tsv"),
-        path("${id}/annotate/${id}_summary_*.csv"),
-        path("${id}/annotate/NF_work_dir_validate.txt")                 // Nextflow working directory, for troubleshooting
+    output:
+    tuple val(id), val(path), path("${id}/annotate/${id}_annotations_*.tsv"), path("${id}/annotate/${id}_summary_*.csv"), path("${id}/annotate/NF_work_dir_validate.txt")
 
     shell:
     dir = "${id}/annotate"
