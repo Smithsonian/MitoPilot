@@ -9,7 +9,7 @@
 #' and updates the container to the current MitoPilot version
 #' in the .config file.
 #' Updates the "ref_dir" and "ref_db" fields in the annotate_opts table
-#' adds these fields to the curate_opts table, 
+#' adds these fields to the curate_opts table,
 #' and updates the curation rules in the curate_opts table.
 #'
 #
@@ -38,6 +38,14 @@ backwards_compatibility <- function(
   })
   asmbDir <- any(grep("asmbDir = ", conf))
 
+  # check if .config file contains "failOnIgnore = true"
+  conf <- tryCatch({
+    readLines(file.path(path, ".config"))
+  }, error = function(e) {
+    stop("Error reading .config file: ", e$message)
+  })
+  failOnIgnore <- any(grep("failOnIgnore = true", conf))
+
   # check if .config file contains latest container version
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
   containerVer <- any(grep(new_container, conf))
@@ -46,6 +54,7 @@ backwards_compatibility <- function(
   old_ref_str = ("/ref_dbs/Mitos2" %in% annotate_opts_table || any(grep("/ref_dbs/Mitos2", curate_opts_table$params)))
 
   if (asmbDir &&
+      failOnIgnore &&
       containerVer &&
       !old_ref_str &&
       "start_gene" %in% names(annotate_opts_table) &&
@@ -140,6 +149,18 @@ backwards_compatibility <- function(
     message("added \"asmbDir = 'NA'\" to nextflow .config file")
     rawDir_line <- grep("rawDir", conf) # find line containing "rawDir"
     conf <- append(conf, "    asmbDir = 'NA'", after = rawDir_line) # add new line to conf after "rawDir" line
+    writeLines(conf, file.path(path, ".config"))
+  }
+
+  # if .config does not contain "failOnIgnore = true" param, add it
+  if(!(failOnIgnore)){
+    conf <- readLines(file.path(path, ".config"))
+    message("added \"failOnIgnore = true\" to nextflow .config file")
+    lines <- c("// pipeline will exit with a non-zero exit code if any failed tasks are ignored using the ignore error strategy",
+               "workflow {",
+               "  failOnIgnore = true",
+               "}")
+    conf <- append(conf, lines)
     writeLines(conf, file.path(path, ".config"))
   }
 
