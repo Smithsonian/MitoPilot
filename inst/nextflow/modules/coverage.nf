@@ -5,6 +5,7 @@ process coverage {
     publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy'
 
     errorStrategy 'ignore'
+    
     cpus {params.coverage.cpus}
     memory = params.coverage.memory ?: null
     clusterOptions = params.coverage.clusterOptions ?: null
