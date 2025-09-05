@@ -5,9 +5,9 @@ process assemble {
     executor params.assemble.executor
     container params.assemble.container
 
-    publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy'
+    publishDir "${launchDir}/${params.publishDir}", overwrite: true, mode: 'copy'
 
-    errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'finish' }
+    errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'ignore' }
     maxRetries { params.assemble.maxRetries }
 
     tag "${id}"
@@ -16,14 +16,7 @@ process assemble {
     tuple val(id), val(opts_id), path(reads), val(opts), path(dbs), path(mf_db), val(genetic_code)
 
     output:
-    tuple val("${id}"),
-        path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"),             // Assemblies Output
-        path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"),                 // Trimmed Reads Out
-        path("${id}/assemble/${opts_id}/${id}_summary.txt"),                  // getOrganelle summary
-        val("${opts_id}"),                                                    // options id
-        path("${id}/assemble/${opts_id}/assembler.log.txt"),                     // getOrganelle log
-        path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt"),                     // Nextflow working directory, for troubleshooting
-        val("${opts.assembler}")                                                         // assembler
+    tuple val("${id}"), path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"), path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"), path("${id}/assemble/${opts_id}/${id}_summary.txt"), val("${opts_id}"), path("${id}/assemble/${opts_id}/assembler.log.txt"), path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt"), val("${opts.assembler}")
 
     shell:
     workingDir = "${id}/assemble"

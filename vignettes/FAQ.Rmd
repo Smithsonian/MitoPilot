@@ -54,7 +54,7 @@ sqlite3 .sqlite_corrupted ".recover" | sqlite3 .sqlite
 
 Then try relaunching the MitoPilot app.
 
-## Can I use my own mitogenome assemblies with MitoPilot?
+## Can I annotate my own mitogenome assemblies with MitoPilot?
 
 Yes! See the ["Initializing a Project with User Assemblies"](https://smithsonian.github.io/MitoPilot/#initializing-a-project-with-user-assemblies) section of the main page.
 
@@ -112,3 +112,23 @@ This may take a long time if you have many reference sequences that are a close 
 To speed up the process of manual editing, we have included the `Align fewer refs` checkbox. 
 Clicking this checkbox limits your alignments to a maximum of five reference sequences (automatically selecting the top BLAST hits).
 Note that this will re-run the alignment algorithm, so your alignment results may change.
+
+## Why is my MitoPilot project folder so large?
+
+If you are working with many samples or lots of sequence data, your MitoPilot project folder could balloon to multiple TB. This is because MitoPilot doesn't clean up intermediate files in the `work` directory, just in case you need them later.
+
+The safest option to save disk space is deleting sub-directories in `work` that contain failed processes. The following bash one-liner can help identify directories to remove.
+
+```{bash eval=FALSE}
+# list subdirectories in `work` that contain failed analyses
+for f in work/*/*/.exitcode; do [ "$(cat "$f")" != "0" ] && echo "${f%/.exitcode}"; done
+# then manually delete these directories
+```
+
+If you are completely done with your project, consider running [`nextflow clean`](https://www.nextflow.io/docs/latest/reference/cli.html#clean). This command will delete all temporary folders and files in `work`. USE WITH CAUTION. 
+
+<div class="alert alert-warning">
+  <strong>Warning:</strong> Be careful when deleting files and directories in `work`. Nextflow's caching and resuming system relies on these intermediate files. We recommend not cleaning up the `work` directory until you are finished with a project.
+</div>
+
+

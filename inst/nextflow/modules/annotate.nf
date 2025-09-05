@@ -5,24 +5,17 @@ process annotate {
     executor params.annotate.executor
     container params.annotate.container
 
-    publishDir "$launchDir/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/NF_work_dir_annotate.txt", mode: 'copy'
+    publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/NF_work_dir_annotate.txt", mode: 'copy'
 
-    errorStrategy 'finish'
-
-    // cpus { opts.cpus }
-    // memory { opts.memory.GB }
+    errorStrategy 'ignore'
 
     tag "${id}"
 
     input:
-        tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_db_clean)
+    tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_db_clean)
 
     output:
-    tuple val(id), val(path),
-        path("${id}/annotate/${id}_annotations_*.csv"),
-        path("${id}/annotate/${id}_assembly_*.fasta"),
-        path("${id}/annotate/${id}_coverageStats_*.csv"),
-        path("${id}/annotate/NF_work_dir_annotate.txt")                 // Nextflow working directory, for troubleshooting
+    tuple val(id), val(path), path("${id}/annotate/${id}_annotations_*.csv"), path("${id}/annotate/${id}_assembly_*.fasta"), path("${id}/annotate/${id}_coverageStats_*.csv"), path("${id}/annotate/NF_work_dir_annotate.txt")
 
     shell:
     dir = "${id}/annotate/"

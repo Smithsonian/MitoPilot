@@ -23,7 +23,7 @@ export_server <- function(id) {
 
     # Prepare data ----
     rv <- reactiveValues(
-      #curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
+      # curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
       #  dplyr::collect(),
       data = fetch_export_data(),
       updating = NULL
@@ -51,7 +51,7 @@ export_server <- function(id) {
         searchable = TRUE,
         resizable = TRUE,
         filterable = TRUE,
-        #height = 680,
+        height = 700,
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),
@@ -61,7 +61,8 @@ export_server <- function(id) {
           curate_opts = colDef(
             show = TRUE,
             name = "Curate Opts.",
-            width = 110),
+            width = 110
+          ),
           topology = colDef(show = T, width = 100),
           structure = colDef(show = T),
           export_group = colDef(name = "Group", sticky = "right")

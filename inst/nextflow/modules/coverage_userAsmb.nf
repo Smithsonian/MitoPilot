@@ -4,7 +4,7 @@ process coverage_userAsmb {
 
     publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy'
 
-    errorStrategy 'finish'
+    errorStrategy 'ignore'
     cpus {params.coverage.cpus}
     memory = params.coverage.memory ?: null
     clusterOptions = params.coverage.clusterOptions ?: null
