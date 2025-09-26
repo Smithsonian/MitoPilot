@@ -21,7 +21,8 @@ params_hexacoral_mito <- function(alt = list()) {
         min_len = NA,
         overlap = list(start = 2, stop = F),
         stop_codons = c("TAA", "TAG", "TA", "T"),
-        start_codons = c("TTA", "TTG", "CTG", "ATT", "ATC", "ATA", "ATG", "GTG")
+        start_codons = c("TTA", "TTG", "CTG", "ATT", "ATC", "ATA", "ATG", "GTG"),
+        intron = FALSE
       ),
       tRNA = list(
         count = 1,
@@ -50,7 +51,8 @@ params_hexacoral_mito <- function(alt = list()) {
       ),
       cox1 = list(
         type = "PCG",
-        overlap = list(start = 2, stop = T)
+        overlap = list(start = 2, stop = T),
+        intron = TRUE
       ),
       cox2 = list(
         type = "PCG"
@@ -79,7 +81,8 @@ params_hexacoral_mito <- function(alt = list()) {
       ),
       nad5 = list(
         type = "PCG",
-        overlap = list(start = 2, stop = T)
+        overlap = list(start = 2, stop = T),
+        intron = TRUE
       ),
       nad6 = list(
         type = "PCG",

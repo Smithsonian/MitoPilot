@@ -59,7 +59,7 @@ validate_hexacoral_mito <- function(
     purrr::map(~ modifyList(default_rules[[.x$type]] %||% list(), .x))
 
   # counter for warnings
-  total_warnings = 0
+  total_warnings <- 0
 
   # Validate counts ----
   missing <- NA_character_
@@ -77,9 +77,29 @@ validate_hexacoral_mito <- function(
 
     ## Duplication ----
     if (nrow(gene_annotations) > max(gene_rules$count)) {
-      extra <- semicolon_paste(extra, gene)
-      annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "possible duplicate")
-      total_warnings = total_warnings + 1
+      if (!(gene_rules$intron)) { # do not issue duplicate warnings for genes that may have introns
+        extra <- semicolon_paste(extra, gene)
+        annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "possible duplicate")
+        total_warnings <- total_warnings + 1
+      }
+    }
+
+    ## Intron check ----
+    if (gene_rules$intron) {
+      target_idx <- which(annotations$gene == gene)
+      # check to make sure all CDS regions are in the same orientation
+      if (all(gene_annotations$direction == "+")) {
+        for (i in 1:nrow(gene_annotations)) {
+          annotations$notes[target_idx[i]] <- semicolon_paste(annotations$notes[target_idx[i]], stringr::str_glue(paste0("EXON ", i)))
+        }
+      } else if (all(gene_annotations$direction == "-")) {
+        for (i in 1:nrow(gene_annotations)) {
+          annotations$notes[target_idx[nrow(gene_annotations) - i + 1]] <- semicolon_paste(annotations$notes[target_idx[nrow(gene_annotations) - i + 1]], stringr::str_glue(paste0("EXON ", i)))
+        }
+      } else {
+        annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "exons on opposite strands")
+        total_warnings <- total_warnings + 1
+      }
     }
   }
 
@@ -99,7 +119,7 @@ validate_hexacoral_mito <- function(
     # Max Overlap
     if (nrow(overlapping) > 0L && any(overlapping$overlap / length > max_overlap)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max overlap")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     } else if (nrow(overlapping) > 0L && !is.null(gene_rules$overlap)) {
       # Gene specific START overlap rules
       while (direction == "+") {
@@ -109,7 +129,7 @@ validate_hexacoral_mito <- function(
         if (nrow(start_ol) == 0L) break
         if (max(start_ol$overlap) > gene_rules$overlap$start) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max start overlap")
-          total_warnings = total_warnings + 1
+          total_warnings <- total_warnings + 1
         }
         break
       }
@@ -120,7 +140,7 @@ validate_hexacoral_mito <- function(
         if (nrow(start_ol) == 0L) break
         if (max(start_ol$overlap) > gene_rules$overlap$start) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max start overlap")
-          total_warnings = total_warnings + 1
+          total_warnings <- total_warnings + 1
         }
         break
       }
@@ -132,7 +152,7 @@ validate_hexacoral_mito <- function(
         if (nrow(stop_ol) == 0L) break
         if (max(stop_ol$overlap) > 1 && !gene_rules$overlap$stop) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max stop overlap")
-          total_warnings = total_warnings + 1
+          total_warnings <- total_warnings + 1
         }
         break
       }
@@ -143,7 +163,7 @@ validate_hexacoral_mito <- function(
         if (nrow(stop_ol) == 0L) break
         if (max(stop_ol$overlap) > 1 && !gene_rules$overlap$stop) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max stop overlap")
-          total_warnings = total_warnings + 1
+          total_warnings <- total_warnings + 1
         }
         break
       }
@@ -152,11 +172,11 @@ validate_hexacoral_mito <- function(
     ## Length limits ----
     if (!is.na(gene_rules$max_len %||% NA) && length > gene_rules$max_len) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max length")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
     if (!is.na(gene_rules$min_len %||% NA) && length < gene_rules$min_len) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "below min length")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
 
     ## Coverage and Error Rate----
@@ -168,11 +188,11 @@ validate_hexacoral_mito <- function(
         dplyr::filter(Position %in% pos1:pos2)
       if (sum(gene_coverage$MeanDepth <= 10) / nrow(gene_coverage) > 0.05) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low coverage region")
-        total_warnings = total_warnings + 1
+        total_warnings <- total_warnings + 1
       }
       if (sum(gene_coverage$ErrorRate >= 0.05) / nrow(gene_coverage) > 0.05) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "high error region")
-        total_warnings = total_warnings + 1
+        total_warnings <- total_warnings + 1
       }
     }
 
@@ -183,41 +203,41 @@ validate_hexacoral_mito <- function(
     ## Internal Stop codons ----
     if (!is.na(translation) && stringr::str_detect(translation, "\\*")) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "internal stop codon")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
 
     ## Improper Stop ----
     if (!is.na(stop_codon) && stop_codon %nin% gene_rules$stop_codons) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "non-standard stop codon")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
 
     ## Improper Start ----
     if (!is.na(start_codon) && start_codon %nin% gene_rules$start_codons) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "non-standard start codon")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
 
     ## Ref Similarity ----
     if (!any(refHits$similarity >= hit_threshold)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low reference similarity")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
 
 
     ## Ref alignments ----
     if (!any(refHits$gap_leading == 0L)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "check reference start alignment")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
     if (!any(refHits$gap_trailing == 0L)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "check reference stop alignment")
-      total_warnings = total_warnings + 1
+      total_warnings <- total_warnings + 1
     }
   }
 
   # de-duplicate the "extra" field
-  if(!is.na(extra)){
+  if (!is.na(extra)) {
     extra <- extra |>
       strsplit(";") |>
       unlist() |>
@@ -237,7 +257,7 @@ validate_hexacoral_mito <- function(
     missing = missing,
     extra = extra,
     warnings = total_warnings
-    #warnings = sum(!is.na(annotations$warnings))
+    # warnings = sum(!is.na(annotations$warnings))
   )
 
   # Outputs ----

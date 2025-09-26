@@ -21,7 +21,8 @@ params_starfish_mito <- function(alt = list()) {
         min_len = NA,
         overlap = list(start = 2, stop = F),
         stop_codons = c("TAA", "TAG", "TA", "T"),
-        start_codons = c("ATG", "GTG")
+        start_codons = c("ATG", "GTG"),
+        intron = FALSE
       ),
       tRNA = list(
         count = 1,

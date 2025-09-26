@@ -29,6 +29,8 @@ export_files <- function(
     out_dir = NULL,
     generateAAalignments = T,
     gene_export = F) {
+
+
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(dirname(out_dir), ".sqlite"))
   on.exit(DBI::dbDisconnect(con))
 
@@ -69,11 +71,13 @@ export_files <- function(
   }
 
   purrr::walk(IDs, ~ {
+
     export_path <- file.path(
       out_dir,
       .x,
       "export"
     )
+
     dir.create(export_path, showWarnings = F)
 
     # debugging help
@@ -108,7 +112,7 @@ export_files <- function(
       ) |>
       dplyr::collect()
 
-    seq <- get_assembly(
+    seq <- MitoPilot::get_assembly(
       ID = .x,
       path = dat$path,
       con = con
@@ -195,151 +199,385 @@ export_files <- function(
           start_codons <- curate_rules$default_rules$PCG$start_codons
         }
 
-        if (stringr::str_detect(cur$translation, "\\*")) {
-          message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
-        }
-        if (cur$stop_codon %nin% stop_codons) {
-          message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
-        }
-        if (cur$start_codon %nin% start_codons) {
-          message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
-          if (cur$direction == "+") {
-            pos[1] <- paste0("<", pos[1])
+        if ("intron" %in% names(cur_rules)){
+          intron <- cur_rules$intron
+        } else {
+          if("intron" %in% curate_rules$default_rules$PCG){
+            intron <- curate_rules$default_rules$PCG$intron
           } else {
-            pos[2] <- paste0(pos[2], ">")
+            intron <- FALSE
           }
-          note <- "start codon not determined"
-        }
-        if (nchar(cur$stop_codon) < 3) {
-          note <- paste(c(note, "TAA stop codon is completed by the addition of 3' A residues to the mRNA"), collapse = "; ")
         }
 
-        # write to .tbl
-        paste(c(pos, "gene"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste0("\t\t\tgene\t", cur$gene) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste(c(pos, "CDS"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\tproduct\t", cur$product) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        if (!cur$start_codon %in% start_codons) {
-          paste("\t\t\tcodon_start\t", 1) |>
+        if (intron & length(which(annotations$gene == cur$gene)) > 1) {  # logic to merge exons if intron is present
+          exons <- annotations[which(annotations$gene == cur$gene), ]
+          # skip if not the first exon
+          if (cur$pos1 != exons[1,]$pos1) return()
+          exon_seqs <- rep(NA, nrow(exons))
+          if (all(exons$direction == "+")) {
+            # extract exons
+            for (i in 1:nrow(exons)) {
+              exon_seqs[i] <- Biostrings::subseq(seq, start = exons[i, ]$pos1, end = exons[i, ]$pos2)
+            }
+            # merge exons
+            merged_sequence <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = ""))
+            # translate
+            cur$translation <- Biostrings::translate(merged_sequence,
+                                                     genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))) |>
+              as.character()
+            cur$translation <- sub("\\*$", "", cur$translation) # remove terminal stop codon
+            # set new start and stop codons
+            cur$start_codon <- exons[1,]$start_codon
+            cur$stop_codon <- exons[nrow(exons),]$stop_codon
+            # set new start and stop pos for gene
+            pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character()
+            cur$pos1 <- exons[1,]$pos1
+            cur$pos2 <- exons[nrow(exons),]$pos2
+            # set new CDS length
+            cur$length <- sum(exons$length)
+          } else if (all(exons$direction == "-")) {
+            # extract exons
+            for (i in 1:nrow(exons)) {
+              exon_seqs[i] <- Biostrings::subseq(seq, start = exons[i, ]$pos1, end = exons[i, ]$pos2)
+            }
+            # merge exons and reverse complement
+            merged_sequence <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = "")) |>
+              Biostrings::reverseComplement()
+            # translate
+            cur$translation <- Biostrings::translate(merged_sequence,
+                                                     genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))) |>
+              as.character()
+            cur$translation <- sub("\\*$", "", cur$translation) # remove terminal stop codon
+            # set new start and stop codons
+            cur$start_codon <- exons[nrow(exons),]$start_codon
+            cur$stop_codon <- exons[1]$stop_codon
+            # set new start and stop pos for gene
+            pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character() |> rev()
+            cur$pos1 <- exons[nrow(exons),]$pos2
+            cur$pos2 <- exons[1,]$pos1
+            # set new CDS length
+            cur$length <- sum(exons$length)
+          } else {
+            message(crayon::red(
+              paste0("Warning: exons on opposite strands for gene ", cur$gene)
+              # NEED LOGIC TO DEAL WITH THIS
+            ))
+          }
+
+          if (stringr::str_detect(cur$translation, "\\*")) {
+            message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
+          }
+          if (cur$stop_codon %nin% stop_codons) {
+            message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
+          }
+          if (cur$start_codon %nin% start_codons) {
+            message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
+            if (cur$direction == "+") {
+              pos[1] <- paste0("<", pos[1])
+            } else {
+              pos[2] <- paste0(pos[2], ">")
+            }
+            note <- "start codon not determined"
+          }
+          if (nchar(cur$stop_codon) < 3) {
+            note <- paste(c(note, "TAA stop codon is completed by the addition of 3' A residues to the mRNA"), collapse = "; ")
+          }
+
+          # write to .tbl
+          paste(c(pos, "gene"), collapse = "\t") |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
-        }
-        if (length(note) > 0) {
-          paste0("\t\t\tnote\t", note) |>
+          paste0("\t\t\tgene\t", cur$gene) |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
-        }
-
-        # write to GFF
-        # gene feature
-        f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
-        # logic to deal with annotations that wrap around the end of a circular assembly
-        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
-          pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
-        } else {
-          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
-        }
-
-        # CDS feature
-        f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
-        if (length(note) > 0){
-          f9 = paste0(f9, ";Note=", note)
-        }
-        # logic to deal with annotations that wrap around the end of a circular assembly
-        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
-          pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
-        } else {
-          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
-        }
-
-        if(gene_export){
-          # EXTRACT GENE FROM ASSEMBLY
-          # make directory for gene if it doesn't exist
-          group_geneName_pth <- file.path(group_pth, "genes", cur$gene)
-          dir.create(group_geneName_pth, recursive = T, showWarnings = F)
-
-          # get gene region from assembly
-          gene = Biostrings::subseq(seq, start = cur$pos1, end = cur$pos2)
-
-          # update FASTA header with gene name
-          head_split <- strsplit(fasta_header_gene, "\\s+")
-          head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene_uniq)
-          head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
-          head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
-          names(gene) <- stringr::str_glue_data(dat, head)
-
-          # reverse complement if needed
-          if (cur$direction == "-") {
-           gene = Biostrings::reverseComplement(gene)
+          # write CDS lines for each exon
+          if (all(exons$direction == "+")) {
+            for (i in 1:nrow(exons)){
+              paste(c(exons[i,]$pos1, exons[i,]$pos2, "CDS"), collapse = "\t") |>
+                cat(file = tbl_fn, sep = "\n", append = TRUE)
+            }
+          } else if (all(exons$direction == "-")) {
+            for (i in nrow(exons):1){
+              paste(c(exons[i,]$pos2, exons[i,]$pos1, "CDS"), collapse = "\t") |>
+                cat(file = tbl_fn, sep = "\n", append = TRUE)
+            }
           }
-
-          # write FASTA
-          gene_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".fasta"))
-          Biostrings::writeXStringSet(gene, filepath = gene_fn)
-
-          # fix the start and stop position
-          pos1_new = 1
-          pos2_new = abs(cur$pos2 - cur$pos1)
-
-          # write gene feature table
-          gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".tbl"))
-          if (file.exists(gene_tbl_fn)) {
-            file.remove(gene_tbl_fn)
-          }
-          cat(paste0(">Feature ", .x, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
-          paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste0("\t\t\tgene\t", cur$gene_uniq) |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste(c(pos1_new, pos2_new, "CDS"), collapse = "\t") |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           paste("\t\t\tproduct\t", cur$product) |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
           paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
           if (!cur$start_codon %in% start_codons) {
             paste("\t\t\tcodon_start\t", 1) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
           if (length(note) > 0) {
             paste0("\t\t\tnote\t", note) |>
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
+          }
+
+          # write to GFF
+          # gene feature
+          f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
+          # logic to deal with annotations that wrap around the end of a circular assembly
+          if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+            pos2_fix <- asmb_len + cur$pos2
+            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+              cat(file = gff_fn, sep = "\n", append = TRUE)
+          } else {
+            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+              cat(file = gff_fn, sep = "\n", append = TRUE)
+          }
+
+          # write CDS feature for each exon
+          if (all(exons$direction == "+")) {
+            for (i in 1:nrow(exons)){
+              f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
+              if (length(note) > 0){
+                f9 = paste0(f9, ";Note=", note)
+              }
+              # logic to deal with annotations that wrap around the end of a circular assembly
+              if(dat$topology == "circular" && exons[i,]$pos1 > exons[i,]$pos2 && exons[i,]$length != (exons[i,]$pos1 - exons[i,]$pos2 + 1)){ # annotation wraps
+                pos2_fix <- asmb_len + exons[i,]$pos2
+                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
+                  cat(file = gff_fn, sep = "\n", append = TRUE)
+              } else {
+                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos1, exons[i,]$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
+                  cat(file = gff_fn, sep = "\n", append = TRUE)
+              }
+            }
+          } else if (all(exons$direction == "-")) {
+            for (i in nrow(exons):1){
+              f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
+              if (length(note) > 0){
+                f9 = paste0(f9, ";Note=", note)
+              }
+              # logic to deal with annotations that wrap around the end of a circular assembly
+              if(dat$topology == "circular" && exons[i,]$pos2 > exons[i,]$pos1 && exons[i,]$length != (exons[i,]$pos2 - exons[i,]$pos1 + 1)){ # annotation wraps
+                pos1_fix <- asmb_len + exons[i,]$pos2
+                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos2, pos1_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
+                  cat(file = gff_fn, sep = "\n", append = TRUE)
+              } else {
+                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos2, exons[i,]$pos1, ".", cur$direction, "0", f9), collapse = "\t") |>
+                  cat(file = gff_fn, sep = "\n", append = TRUE)
+              }
+            }
+          }
+
+          if(gene_export){
+            # EXTRACT GENE FROM ASSEMBLY
+            # make directory for gene if it doesn't exist
+            group_geneName_pth <- file.path(group_pth, "genes", cur$gene)
+            dir.create(group_geneName_pth, recursive = T, showWarnings = F)
+
+            # get gene region from assembly
+            gene = merged_sequence
+
+            # update FASTA header with gene name
+            head_split <- strsplit(fasta_header_gene, "\\s+")
+            head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene)
+            head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
+            head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
+            names(gene) <- stringr::str_glue_data(dat, head)
+
+            # write FASTA
+            gene_fn <- file.path(export_path, paste0(.x, "_", cur$gene, ".fasta"))
+            Biostrings::writeXStringSet(gene, filepath = gene_fn)
+
+            # fix the start and stop position
+            pos1_new = 1
+            pos2_new = length(gene[[1]])
+
+            # write gene feature table
+            gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene, ".tbl"))
+            if (file.exists(gene_tbl_fn)) {
+              file.remove(gene_tbl_fn)
+            }
+            cat(paste0(">Feature ", .x, "_", cur$gene), file = gene_tbl_fn, sep = "\n")
+            paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste0("\t\t\tgene\t", cur$gene) |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste(c(pos1_new, pos2_new, "CDS"), collapse = "\t") |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste("\t\t\tproduct\t", cur$product) |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste("\t\t\ttransl_table\t", dat$genetic_code) |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            if (!cur$start_codon %in% start_codons) {
+              paste("\t\t\tcodon_start\t", 1) |>
+                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            }
+            if (length(note) > 0) {
+              paste0("\t\t\tnote\t", note) |>
+                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            }
+
+            # concatenate sequences and tables by gene
+            if (length(group) == 1) {
+              group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
+              stringr::str_glue(
+                "cat {gene_tbl_fn} >> {group_gene_tbl}"
+              ) |> system()
+              group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
+              stringr::str_glue(
+                "cat {gene_fn} >> {group_gene_fasta}"
+              ) |> system()
+            }
+
+            # concatenate all sequences and tables
+            if (length(group) == 1) {
+              stringr::str_glue(
+                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
+              ) |> system()
+              stringr::str_glue(
+                "cat {gene_fn} >> {group_allgene_fasta}"
+              ) |> system()
+            }
           }
 
-          # concatenate sequences and tables by gene
-          if (length(group) == 1) {
-            group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_gene_tbl}"
-            ) |> system()
-            group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_gene_fasta}"
-            ) |> system()
+        } else { # normal processing, no introns
+          if (stringr::str_detect(cur$translation, "\\*")) {
+            message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
+          }
+          if (cur$stop_codon %nin% stop_codons) {
+            message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
+          }
+          if (cur$start_codon %nin% start_codons) {
+            message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
+            if (cur$direction == "+") {
+              pos[1] <- paste0("<", pos[1])
+            } else {
+              pos[2] <- paste0(pos[2], ">")
+            }
+            note <- "start codon not determined"
+          }
+          if (nchar(cur$stop_codon) < 3) {
+            note <- paste(c(note, "TAA stop codon is completed by the addition of 3' A residues to the mRNA"), collapse = "; ")
           }
 
-          # concatenate all sequences and tables
-          if (length(group) == 1) {
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-            ) |> system()
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_allgene_fasta}"
-            ) |> system()
+          # write to .tbl
+          paste(c(pos, "gene"), collapse = "\t") |>
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          paste0("\t\t\tgene\t", cur$gene) |>
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          paste(c(pos, "CDS"), collapse = "\t") |>
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          paste("\t\t\tproduct\t", cur$product) |>
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          paste("\t\t\ttransl_table\t", dat$genetic_code) |>
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          if (!cur$start_codon %in% start_codons) {
+            paste("\t\t\tcodon_start\t", 1) |>
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
+          }
+          if (length(note) > 0) {
+            paste0("\t\t\tnote\t", note) |>
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
 
+          # write to GFF
+          # gene feature
+          f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
+          # logic to deal with annotations that wrap around the end of a circular assembly
+          if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+            pos2_fix <- asmb_len + cur$pos2
+            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+              cat(file = gff_fn, sep = "\n", append = TRUE)
+          } else {
+            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+              cat(file = gff_fn, sep = "\n", append = TRUE)
+          }
+
+          # CDS feature
+          f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
+          if (length(note) > 0){
+            f9 = paste0(f9, ";Note=", note)
+          }
+          # logic to deal with annotations that wrap around the end of a circular assembly
+          if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+            pos2_fix <- asmb_len + cur$pos2
+            paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
+              cat(file = gff_fn, sep = "\n", append = TRUE)
+          } else {
+            paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
+              cat(file = gff_fn, sep = "\n", append = TRUE)
+          }
+
+          if(gene_export){
+            # EXTRACT GENE FROM ASSEMBLY
+            # make directory for gene if it doesn't exist
+            group_geneName_pth <- file.path(group_pth, "genes", cur$gene)
+            dir.create(group_geneName_pth, recursive = T, showWarnings = F)
+
+            # get gene region from assembly
+            gene = Biostrings::subseq(seq, start = cur$pos1, end = cur$pos2)
+
+            # update FASTA header with gene name
+            head_split <- strsplit(fasta_header_gene, "\\s+")
+            head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene_uniq)
+            head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
+            head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
+            names(gene) <- stringr::str_glue_data(dat, head)
+
+            # reverse complement if needed
+            if (cur$direction == "-") {
+              gene = Biostrings::reverseComplement(gene)
+            }
+
+            # write FASTA
+            gene_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".fasta"))
+            Biostrings::writeXStringSet(gene, filepath = gene_fn)
+
+            # fix the start and stop position
+            pos1_new = 1
+            pos2_new = length(gene[[1]])
+
+            # write gene feature table
+            gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".tbl"))
+            if (file.exists(gene_tbl_fn)) {
+              file.remove(gene_tbl_fn)
+            }
+            cat(paste0(">Feature ", .x, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
+            paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste0("\t\t\tgene\t", cur$gene_uniq) |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste(c(pos1_new, pos2_new, "CDS"), collapse = "\t") |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste("\t\t\tproduct\t", cur$product) |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            paste("\t\t\ttransl_table\t", dat$genetic_code) |>
+              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            if (!cur$start_codon %in% start_codons) {
+              paste("\t\t\tcodon_start\t", 1) |>
+                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            }
+            if (length(note) > 0) {
+              paste0("\t\t\tnote\t", note) |>
+                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            }
+
+            # concatenate sequences and tables by gene
+            if (length(group) == 1) {
+              group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
+              stringr::str_glue(
+                "cat {gene_tbl_fn} >> {group_gene_tbl}"
+              ) |> system()
+              group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
+              stringr::str_glue(
+                "cat {gene_fn} >> {group_gene_fasta}"
+              ) |> system()
+            }
+
+            # concatenate all sequences and tables
+            if (length(group) == 1) {
+              stringr::str_glue(
+                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
+              ) |> system()
+              stringr::str_glue(
+                "cat {gene_fn} >> {group_allgene_fasta}"
+              ) |> system()
+            }
+          }
         }
-
         return()
       }
 
@@ -523,7 +761,6 @@ export_files <- function(
       }
     })
 
-
     if (length(group) == 1) {
       stringr::str_glue(
         "cat {tbl_fn} >> {group_tbl}"
@@ -545,6 +782,7 @@ export_files <- function(
     )
   }
 }
+
 
 #' Generate HTML report woth PCG alignments
 #'
