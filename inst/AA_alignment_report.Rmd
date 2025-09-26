@@ -19,9 +19,12 @@ params:
 knitr::opts_chunk$set(echo = TRUE, dev = "CairoPNG")
 ```
 
-```{r, echo=F, message=T, warning=F}
+```{r, echo=F, message=F, warning=F}
 library(dplyr)
 library(msaR)
+```
+
+```{r, echo=F, message=T, warning=F}
 
 con <- DBI::dbConnect(RSQLite::SQLite(), dbname = params$db_path)
 
@@ -46,6 +49,8 @@ rows_to_remove <- integer(0)
 
 for (ID in IDs) {
   
+  ID <- IDs[1]
+  
   # Get curation rules for the current ID
   curation_opts <- dplyr::tbl(con, "annotate") |>
     dplyr::filter(ID == !!ID) |>
@@ -53,7 +58,7 @@ for (ID in IDs) {
   
   curate_rules <- dplyr::tbl(con, "curate_opts") |>
     dplyr::filter(curate_opts == !!curation_opts) |>
-    dplyr::pull("params") |>
+    dplyr::pull("params") 
     jsonlite::fromJSON()
   
   # Get sample data
@@ -105,7 +110,7 @@ for (ID in IDs) {
       exons <- annotations[exons_idx, ]
       exon_seqs <- character(nrow(exons))
       
-      message(paste("Merged", length(exon_seqs), "exons for sample", ID, ", gene", cur$gene))
+      message(paste("Merged ", length(exon_seqs), " exons for gene ", cur$gene, " (", ID, ")", sep=""))
 
       if (all(exons$direction == "+")) {
         for (i in 1:nrow(exons)) {
