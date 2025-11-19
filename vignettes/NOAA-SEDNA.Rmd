@@ -67,7 +67,7 @@ We also recommend clearing your Singularity cache with `singularity cache clean`
 
 ## Setting up RStudio server
 
-Next we need to set up RStudio server. The version of Rstudio server must match the R version in your `MitoPilot_deps` mamba environment. You should be able to see the R version by running `mamba activate MitoPilot_deps;mamba list`.
+Next we need to set up RStudio server. The version of RStudio server must match the R version in your `MitoPilot_deps` mamba environment. You should be able to see the R version by running `mamba activate MitoPilot_deps;mamba list`.
 
 In a SEDNA terminal, run the following. It may take a few minutes to download and set up the Singularity image file.
 
@@ -76,12 +76,12 @@ In a SEDNA terminal, run the following. It may take a few minutes to download an
 mkdir -p ~/rstudio
 cd ~/rstudio
 
-# activate cluster's singularity environment
-mamba activate singularity-3.8.6
+# activate MitoPilot mamba environment
+mamba activate MitoPilot_deps
 
 # Pull R studio from singularity
 # change version number if needed
-singularity pull docker://rocker/rstudio:4.5.1
+singularity pull docker://rocker/rstudio:4.5.2
 
 # additional setup
 mkdir -p run var-lib-rstudio-server
@@ -97,11 +97,11 @@ mkdir ~/bin
 # create helper script
 cat > ~/bin/start-rstudio-server-MitoPilot <<'EOL'
 #!/bin/bash
-# script to start Rstudio server 
+# script to start RStudio server 
 # and print instructions on how to connect
 
-# modify to match your Rstudio server version
-Rstudio_version="4.5.1"
+# modify to match your RStudio server version
+Rstudio_version="4.5.2"
 
 cd ~/rstudio
 source ~/.bashrc
@@ -192,7 +192,7 @@ First, initialize your new project and modify any desired parameters using the G
 
 ![](figures/test-project/13.png)
 
-Rather than clicking the `Start Nextflow` button, copy the Nextflow command and create a submission script. We have provided a template below. You may wish to modify the job name (`--job-name`) and the output file names (`--output` and `--error`).
+Rather than clicking the `Run from App` button, copy the Nextflow command and create a submission script. We have provided a template below. You may wish to modify the job name (`--job-name`) and the output file names (`--output` and `--error`).
 
 ```{bash eval=F}
 #!/bin/bash
