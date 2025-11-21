@@ -81,8 +81,9 @@ groups of organisms:
 - fishes
 - starfish
 - octocorals
+- hexacorals
 - dipterans
-- turtles (testing in progress)
+- turtles
 - copepods (testing in progress)
 - mammals (untested)
 - lepidosaurs (untested)
