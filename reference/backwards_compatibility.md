@@ -1,0 +1,24 @@
+# Update old project database for backwards compatibility
+
+Update old project database for backwards compatibility. Adds
+"reviewed", "ID_verified", "genetic_code", and "problematic" columns to
+the annotate table, "start_gene" column to the annotate_opts table. Adds
+"assembler", "mitofinder_db", and "mitofinder" columns to the
+assemble_opts table. Adds "max_blast_hits" to the curate_opts table.
+Adds "asmbDir = 'NA'" to the .config params block and updates the
+container to the current MitoPilot version in the .config file. Updates
+the "ref_dir" and "ref_db" fields in the annotate_opts table adds these
+fields to the curate_opts table, and updates the curation rules in the
+curate_opts table.
+
+## Usage
+
+``` r
+backwards_compatibility(path = ".")
+```
+
+## Arguments
+
+- path:
+
+  Path to the project directory (default = current working directory)

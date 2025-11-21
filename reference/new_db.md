@@ -1,0 +1,148 @@
+# Initialize a new project database
+
+Initialize a new project database
+
+## Usage
+
+``` r
+new_db(
+  db_path = "./.sqlite",
+  mapping_fn = NULL,
+  mapping_id = "ID",
+  mapping_taxon = "Taxon",
+  genetic_code = 2,
+  assemble_cpus = 6,
+  assemble_memory = 24,
+  assembler = "GetOrganelle",
+  seeds_db =
+    "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta",
+  labels_db =
+    "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta",
+  getOrganelle = paste("-F 'anonym'", "-R 10 -k '21,45,65,85,105,115'",
+    "--larger-auto-ws", "--expected-max-size 20000", "--target-genome-size 16500"),
+  mitofinder_db =
+    "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
+  mitofinder = paste("--megahit"),
+  annotate_cpus = 6,
+  annotate_memory = 36,
+  annotate_ref_db = "Chordata",
+  annotate_ref_dir =
+    "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
+  mitos_opts = "--intron 0 --oril 0",
+  trnaScan_opts = "-M vert",
+  curate_cpus = 4,
+  curate_memory = 8,
+  curate_target = "fish_mito",
+  max_blast_hits = 100,
+  curate_params = NULL
+)
+```
+
+## Arguments
+
+- db_path:
+
+  Path to the new database file
+
+- mapping_fn:
+
+  Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1",
+  and "R2"
+
+- mapping_id:
+
+  Column name of the mapping file to use as the primary key
+
+- mapping_taxon:
+
+  Column name of the mapping file containing a Taxonomic identifier (eg,
+  species name)
+
+- genetic_code:
+
+  Translation table for your organisms. See NCBI website for more info
+  https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+
+- assemble_cpus:
+
+  Default \# cpus for assembly
+
+- assemble_memory:
+
+  default memory (GB) for assembly
+
+- assembler:
+
+  Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"
+
+- seeds_db:
+
+  Path to the gotOrganelle seeds database, can be a URL, cannot have
+  same file name as labels_db. Default is a fish database built from
+  RefSeq.
+  https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta
+
+- labels_db:
+
+  Path to the gotOrganelle labels database, can be a URL, cannot have
+  same file name as seeds_db. Default is a fish database built from
+  RefSeq.
+  https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_labels.fasta
+
+- getOrganelle:
+
+  Default getOrganelle command line options
+
+- mitofinder_db:
+
+  Path to MitoFinder reference db, must be GenBank format (.gb), can be
+  a URL. Default is the Danio rerio mitogenome
+  (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)
+
+- mitofinder:
+
+  Default MitoFinder command line options
+
+- annotate_cpus:
+
+  Default \# cpus for annotation
+
+- annotate_memory:
+
+  Default memory (GB) for annotation
+
+- annotate_ref_db:
+
+  Default Mitos2 reference database
+
+- annotate_ref_dir:
+
+  Default Mitos2 reference database directory
+
+- mitos_opts:
+
+  Default MITOS2 command line options
+
+- trnaScan_opts:
+
+  Default tRNAscan-SE command line options
+
+- curate_cpus:
+
+  Default \# cpus for curation
+
+- curate_memory:
+
+  Default memory (GB) for curation
+
+- curate_target:
+
+  Default target database for curation
+
+- max_blast_hits:
+
+  Maximum number of top BLAST hits to retain (default = 100)
+
+- curate_params:
+
+  Default curation parameters

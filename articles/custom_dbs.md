@@ -1,0 +1,227 @@
+# Building Custom Databases
+
+## Why use a custom reference database?
+
+Currently, MitoPilot comes packaged with assembly reference databases
+for fishes. If you are working on any other taxonomic group, you will
+need to compile databases of mitochondrial sequences for your clade. It
+may also be helpful to create a custom database for curation of the
+protein-coding gene predictions if your taxa are poorly represented in
+NCBI RefSeq.
+
+## What parts of the MitoPilot pipeline use reference databases?
+
+- GetOrganelle or MitoFinder (Assemble module)
+- Mitos2 (Annotate module)
+- Automatic and manual curation of protein-coding genes (Annotate
+  module)
+
+## Build custom databases for GetOrganelle
+
+Before proceeding, consider reviewing the GetOrganelle
+[paper](https://doi.org/10.1186/s13059-020-02154-5) and
+[documentation](https://github.com/Kinggerm/GetOrganelle/wiki/FAQ#how-to-assemble-a-target-organelle-genome-using-my-own-reference)
+to better understand the required database architecture.
+
+GetOrganelle uses two databases, both in FASTA format:
+
+- A “seed” database containing complete (or partial) mitochondrial
+  genomes
+- A “label” database containing individual mitochondrial gene sequences
+
+There are many different ways to build the GetOrganelle databases. We
+have provided the following script to assist with this process.
+
+### [GenBankDownloadUtil.sh](https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh)
+
+This script will perform a GenBank query for all mitochondrial records
+matching your search criteria, download those sequences, and sort them
+into GetOrganlle “seed” and “label” databases.
+
+Before proceeding, you will need the following dependencies:
+
+- [Entrez Direct tools](https://www.ncbi.nlm.nih.gov/books/NBK179288/)
+  (tested with v22.8)
+- [python](https://www.python.org/downloads/) (tested with v3.12.2)
+- [biopython](https://biopython.org/) (tested with v1.84)
+
+If you are working on the NMNH Hydra cluster, python and biopython are
+available as a module. Simply run `module load bio/biopython/1.83`.
+
+Download the
+[GenBankDownloadUtil.sh](https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh)
+script to the directory where you want to create the custom databases.
+You will also need to download
+[parseGB.py](https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//parseGB.py)
+to the same directory.
+
+To run the script, you will need to construct an [advanced GenBank
+query](https://www.ncbi.nlm.nih.gov/nuccore/advanced).
+
+For example, if you want to download all starfish mitochondrial
+sequences, you could use `'"Asteroidea"[Organism]'`.
+
+The script can take multiple search terms. For example, use
+`'"Percidae"[Organism] AND "PRJNA720393"[BioProject]'` to download all
+percid mitochondrial sequences from a specific BioProject.
+
+Run the script as follows, providing your custom search terms. Make sure
+your full query is in single quotes, each search term is in double
+quotes, and the query type in in square brackets.
+
+`bash GenBankDownloadUtil.sh '"my query"[QueryType]'`
+
+This may take a while depending on how many GenBank records match your
+search terms. If working on a computing cluster, we recommend running
+this script as a batch job. Below is an example submission script for
+the NMNH Hydra cluster.
+
+**Note:** The submission script below assumes that you have the Entrez
+Direct tools in your PATH (i.e. these tools can be run from any
+directory).
+
+    # /bin/sh
+    # ----------------Parameters---------------------- #
+    #$ -S /bin/sh
+    #$ -pe mthread 8
+    #$ -q sThM.q
+    #$ -l mres=640G,h_data=80G,h_vmem=80G,himem
+    #$ -cwd
+    #$ -j y
+    #$ -N customGetOrgDBs
+    #$ -o customGetOrgDBs.log
+
+    # script to generate custom seed and label DBs for starfish
+
+    # load python and biopython module
+    module load bio/biopython/1.83 # need python and biopython too
+
+    # run the script
+    bash GenBankDownloadUtil.sh '"Asteroidea"[Organism]'
+
+The script will produce several files:
+
+- `genbank.gb` - GenBank file containing all of the matching records
+- `multigene.fasta` - FASTA file of sequences that contained multiple
+  gene records, indicating they are either a partial or complete
+  mitogenome
+- `multigene.dedup.fasta` - same as `multigene.fasta`, but with
+  duplicate sequences removed
+- `nogene.fasta` - FASTA file of mitochondrial sequences with no
+  annotated genes
+- `nogene.dedup.fasta` - same as `nogene.fasta`, but with duplicate
+  sequences removed
+- `singlegene.fasta` - FASTA file of mitochondrial gene sequences
+- `singlegene.dedup.fasta` - same as `singlelocus.fasta`, but with
+  duplicate sequences removed
+
+For GetOrganelle:
+
+- seed database = `multigene.dedup.fasta` (plus maybe some sequences
+  from `nogene.dedup.fasta`)
+- label database = `singlegene.dedup.fasta`
+
+The `nogene.fasta` file contains un-annotated mitochondrial sequences or
+mitochondrial sequences from a non-gene region, such as the D-loop.
+Consider manually inspecting these sequences. You may wish to include
+some of them in your custom GetOrganelle seed database.
+
+### Inspecting custom databases
+
+Here are a few helpful one-liners to inspect and manipulate FASTA files.
+
+***Count the number of sequences in a FASTA file:***
+
+    grep -c ">" singlelocus.dedup.fasta
+
+***Generate list of FASTA headers:***
+
+    grep ">" singlelocus.dedup.fasta
+
+***Generate list of unique gene names:***
+
+    grep ">" singlelocus.dedup.fasta | cut -f1 -d" " | sort | uniq
+
+***Calculate sequence lengths:***
+
+    cat my_file.fasta | awk '$0 ~ ">" {if (NR > 1) {print c;} c=0;printf substr($0,2,100) "\t"; } $0 !~ ">" {c+=length($0);} END { print c; }'
+
+***Extract specific sequences from a FASTA file with
+[seqkit](https://bioinf.shenwei.me/seqkit/):***
+
+    # Extract sequences based on names.txt
+    # names.txt should contain full sequences headers, one per line, but no ">" at start
+    module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
+    seqkit grep -f -n names.txt file.fasta > file_subset.fasta
+
+***Remove sequences from a FASTA file with
+[seqkit](https://bioinf.shenwei.me/seqkit/):***
+
+    # Remove sequences based on name patterns listed in names.txt
+    # one pattern per line
+    module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
+    seqkit grep -v -f names.txt file.fasta > file_subset.fasta
+
+**Note:** `GenBankDownloadUtil.sh` will rename any sequence with no
+GenBank “product” (protein, tRNA, or rRNA) as “no_product ACCESSION”.
+You may wish to remove these sequences, as they often represent poorly
+annotated genes.
+
+### Adding your own sequences to a custom database
+
+To use unpublished mitogenomes in your custom GetOrganelle seed
+database, you will need to combine multiple FASTA files. GetOrganelle
+does not require any specific format for the sequence names in the seed
+database.
+
+You can easily combine FASTA files with the Linux `cat` command:
+
+    cat multigene.dedup.fasta my_mitogenomes.fasta more_mitogenomes.fasta > final_seed_db.fasta
+
+You could also add unpublished individual gene sequences to a custom
+GetOrganelle label database in a similar manner.
+
+## Build custom databases for MitoFinder
+
+The [MitoFinder
+documentation](https://github.com/RemiAllio/MitoFinder?tab=readme-ov-file#how-to-get-reference-mitochondrial-genomes-from-ncbi)
+has instructions on how to build a reference database.
+
+The MitoFinder reference database is simple: a GenBank formatted file
+(`.gb`) containing one or more annotated mitogenomes. This file can be
+downloaded from a GenBank query in a web browser.
+
+You can provide the path to your MitoFinder database with the
+`mitofinder_db` argument of
+[`MitoPilot::new_project`](https://smithsonian.github.io/MitoPilot/reference/new_project.md)
+function when initializing a project. Alternatively, you can specify the
+MitoFinder database in the assembly options section of the MitoPilot
+GUI.
+
+Assembly of contigs with MitoFinder is completely de novo. The
+MitoFinder reference database is only used to “label” putative
+mitochondrial contigs. Thus, the species in your reference database can
+be fairly distant relatives of your samples.
+
+## Build custom databases for protein-coding gene curation
+
+By default, MitoPilot uses gene sequences from NCBI RefSeq to finetune
+start and stop codon positions for your annotations. The curation
+database is specified by the `ref_dir` and `ref_db` sections of the
+Curation Opt. panel in the Shiny app.
+
+We have provided a helper function
+[`MitoPilot::custom_curation_db`](https://smithsonian.github.io/MitoPilot/reference/custom_curation_db.md),
+which will allow you to supplement the RefSeq databases with your own
+gene sequences. Using a custom database can greatly improve automatic
+curation if your focal clade is poorly represented in RefSeq.
+
+Sequences can come from non-RefSeq mitogenomes on GenBank or from your
+own prior annotations. Make sure to carefully consider what you are
+adding to the custom database. You should only use high-confidence
+sequences, as poor quality reference data will result in poorly curated
+gene models.
+
+Please see the
+[`MitoPilot::custom_curation_db`](https://smithsonian.github.io/MitoPilot/reference/custom_curation_db.md)
+documentation for further instructions.

@@ -1,0 +1,20 @@
+# Articles
+
+### Help
+
+- [Frequently Asked
+  Questions](https://smithsonian.github.io/MitoPilot/articles/FAQ.md):
+
+### Nextflow Executors
+
+- [NMNH Hydra
+  Setup](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.md):
+- [NOAA SEDNA
+  Setup](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.md):
+
+### Usage
+
+- [Fish Mitogenome
+  Curation](https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.md):
+- [Building Custom
+  Databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md):

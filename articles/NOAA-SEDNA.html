@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,6 +87,11 @@ used mamba on SEDNA before, run the following.</p>
 <p>Let’s create the <code>MitoPilot_deps</code> mamba environment. This
 may take a while.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">mamba</span> create <span class="at">--name</span> MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib conda-forge::r-base <span class="at">-y</span></span></code></pre></div>
+<div class="alert alert-note">
+<p><strong>Note:</strong> Please ensure your mamba environment is named
+<code>MitoPilot_deps</code>, case sensitive. Otherwise, RStudio server
+may not be able to access the required dependencies.</p>
+</div>
 <p>You can now call <code>nextflow</code> and <code>singularity</code>
 from anywhere on the cluster, as long as this
 <code>MitoPilot_deps</code> environment is activated.</p>
@@ -129,7 +134,7 @@ MitoPilot Singularity image.</p>
 <div class="section level3">
 <h3 id="setting-up-rstudio-server">Setting up RStudio server<a class="anchor" aria-label="anchor" href="#setting-up-rstudio-server"></a>
 </h3>
-<p>Next we need to set up RStudio server. The version of Rstudio server
+<p>Next we need to set up RStudio server. The version of RStudio server
 must match the R version in your <code>MitoPilot_deps</code> mamba
 environment. You should be able to see the R version by running
 <code>mamba activate MitoPilot_deps;mamba list</code>.</p>
@@ -139,12 +144,12 @@ download and set up the Singularity image file.</p>
 <span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> ~/rstudio</span>
 <span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="bu">cd</span> ~/rstudio</span>
 <span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co"># activate cluster's singularity environment</span></span>
-<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="ex">mamba</span> activate singularity-3.8.6</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co"># activate MitoPilot mamba environment</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="ex">mamba</span> activate MitoPilot_deps</span>
 <span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a></span>
 <span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co"># Pull R studio from singularity</span></span>
 <span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co"># change version number if needed</span></span>
-<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="ex">singularity</span> pull docker://rocker/rstudio:4.4.2</span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="ex">singularity</span> pull docker://rocker/rstudio:4.5.2</span>
 <span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a></span>
 <span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co"># additional setup</span></span>
 <span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> run var-lib-rstudio-server</span>
@@ -157,11 +162,11 @@ sure you’re setting <code>Rstudio_version</code> correctly.</p>
 <span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="co"># create helper script</span></span>
 <span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="fu">cat</span> <span class="op">&gt;</span> ~/bin/start-rstudio-server-MitoPilot <span class="op">&lt;&lt;'EOL'</span></span>
 <span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="st">#!/bin/bash</span></span>
-<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="st"># script to start Rstudio server </span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="st"># script to start RStudio server </span></span>
 <span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="st"># and print instructions on how to connect</span></span>
 <span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a></span>
-<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="st"># modify to match your Rstudio server version</span></span>
-<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="st">Rstudio_version="4.4.2"</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="st"># modify to match your RStudio server version</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="st">Rstudio_version="4.5.2"</span></span>
 <span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a></span>
 <span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="st">cd ~/rstudio</span></span>
 <span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="st">source ~/.bashrc</span></span>
@@ -190,22 +195,20 @@ sure you’re setting <code>Rstudio_version</code> correctly.</p>
 <span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a><span class="st">echo "must remain open in order to access the Rstudio server"</span></span>
 <span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a><span class="st">echo ""</span></span>
 <span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a></span>
-<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="st">mamba activate </span></span>
-<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a></span>
-<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="st"># set Singularity temp dir, if needed</span></span>
-<span id="cb6-43"><a href="#cb6-43" tabindex="-1"></a><span class="st"># if not set, Singularity will write to /tmp on the compute nodes</span></span>
-<span id="cb6-44"><a href="#cb6-44" tabindex="-1"></a><span class="st">#mkdir -p "${HOME}/.singularity/temp"</span></span>
-<span id="cb6-45"><a href="#cb6-45" tabindex="-1"></a><span class="st">#export SINGULARITY_TMPDIR="${HOME}/.singularity/temp"</span></span>
-<span id="cb6-46"><a href="#cb6-46" tabindex="-1"></a></span>
-<span id="cb6-47"><a href="#cb6-47" tabindex="-1"></a><span class="st">singularity exec \</span></span>
-<span id="cb6-48"><a href="#cb6-48" tabindex="-1"></a><span class="st"> --bind run:/run,var-lib-rstudio-server:/var/lib/rstudio-server,database.conf:/etc/rstudio/database.conf,${HOME}/.conda/envs/MitoPilot_deps/bin,${HOME}/.conda/envs/MitoPilot_deps/lib \</span></span>
-<span id="cb6-49"><a href="#cb6-49" tabindex="-1"></a><span class="st"> --env APPEND_PATH="${HOME}/.conda/envs/MitoPilot_deps/bin:${HOME}/.conda/envs/MitoPilot_deps/lib" \</span></span>
-<span id="cb6-50"><a href="#cb6-50" tabindex="-1"></a><span class="st"> rstudio_${Rstudio_version}.sif \</span></span>
-<span id="cb6-51"><a href="#cb6-51" tabindex="-1"></a><span class="st"> rserver --www-address=0.0.0.0 --www-port=${PORT} --server-user=${USER}</span></span>
-<span id="cb6-52"><a href="#cb6-52" tabindex="-1"></a><span class="op">EOL</span></span>
-<span id="cb6-53"><a href="#cb6-53" tabindex="-1"></a></span>
-<span id="cb6-54"><a href="#cb6-54" tabindex="-1"></a><span class="co"># make script executable</span></span>
-<span id="cb6-55"><a href="#cb6-55" tabindex="-1"></a><span class="fu">chmod</span> 755 ~/bin/start-rstudio-server-MitoPilot</span></code></pre></div>
+<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="st"># set Singularity temp dir, if needed</span></span>
+<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a><span class="st"># if not set, Singularity will write to /tmp on the compute nodes</span></span>
+<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="st">#mkdir -p "${HOME}/.singularity/temp"</span></span>
+<span id="cb6-43"><a href="#cb6-43" tabindex="-1"></a><span class="st">#export SINGULARITY_TMPDIR="${HOME}/.singularity/temp"</span></span>
+<span id="cb6-44"><a href="#cb6-44" tabindex="-1"></a></span>
+<span id="cb6-45"><a href="#cb6-45" tabindex="-1"></a><span class="st">singularity exec \</span></span>
+<span id="cb6-46"><a href="#cb6-46" tabindex="-1"></a><span class="st"> --bind run:/run,var-lib-rstudio-server:/var/lib/rstudio-server,database.conf:/etc/rstudio/database.conf,${HOME}/.conda/envs/MitoPilot_deps/bin,${HOME}/.conda/envs/MitoPilot_deps/lib \</span></span>
+<span id="cb6-47"><a href="#cb6-47" tabindex="-1"></a><span class="st"> --env APPEND_PATH="${HOME}/.conda/envs/MitoPilot_deps/bin:${HOME}/.conda/envs/MitoPilot_deps/lib" \</span></span>
+<span id="cb6-48"><a href="#cb6-48" tabindex="-1"></a><span class="st"> rstudio_${Rstudio_version}.sif \</span></span>
+<span id="cb6-49"><a href="#cb6-49" tabindex="-1"></a><span class="st"> rserver --www-address=0.0.0.0 --www-port=${PORT} --server-user=${USER}</span></span>
+<span id="cb6-50"><a href="#cb6-50" tabindex="-1"></a><span class="op">EOL</span></span>
+<span id="cb6-51"><a href="#cb6-51" tabindex="-1"></a></span>
+<span id="cb6-52"><a href="#cb6-52" tabindex="-1"></a><span class="co"># make script executable</span></span>
+<span id="cb6-53"><a href="#cb6-53" tabindex="-1"></a><span class="fu">chmod</span> 755 ~/bin/start-rstudio-server-MitoPilot</span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="launching-rstudio-server">Launching RStudio server<a class="anchor" aria-label="anchor" href="#launching-rstudio-server"></a>
@@ -253,8 +256,8 @@ MitoPilot modules as batch jobs.</p>
 <p>First, initialize your new project and modify any desired parameters
 using the GUI. Once ready, click <code>UPDATE</code>. A new window
 should appear.</p>
-<p><img src="figures/test-project/8.png"></p>
-<p>Rather than clicking the <code>Start Nextflow</code> button, copy the
+<p><img src="figures/test-project/13.png"></p>
+<p>Rather than clicking the <code>Run from App</code> button, copy the
 Nextflow command and create a submission script. We have provided a
 template below. You may wish to modify the job name
 (<code>--job-name</code>) and the output file names
@@ -277,9 +280,10 @@ template below. You may wish to modify the job name
 <span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps/lib/R/library/MitoPilot/nextflow <span class="at">-c</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.config <span class="at">-entry</span> WF1</span>
 <span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a></span>
 <span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a><span class="bu">echo</span> = <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$SLURM_JOB_NAME</span> done</span></code></pre></div>
-<p>Move the submission script into your MitoPilot run directory (in the
-above example, <code>/home/dmacguigan/MitoPilot/test/2025_1_2/</code>).
-Then submit the job using <code>sbatch MY_SCRIPT_NAME.sh</code>.</p>
+<p>Move the submission script into your MitoPilot project directory (in
+the above example,
+<code>/home/dmacguigan/MitoPilot/test/2025_1_2/</code>). Then submit the
+job using <code>sbatch MY_SCRIPT_NAME.sh</code>.</p>
 <p>You can monitor the progress of this job using the
 <code>squeue</code> command and by checking on the log files. Once the
 job is done, you can relaunch the GUI to inspect the results. The same
@@ -297,7 +301,7 @@ approach can be used for the annotate module.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer>
