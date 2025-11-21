@@ -291,13 +291,23 @@ export_files <- function(
           # write CDS lines for each exon
           if (all(exons$direction == "+")) {
             for (i in 1:nrow(exons)){
-              paste(c(exons[i,]$pos1, exons[i,]$pos2, "CDS"), collapse = "\t") |>
-                cat(file = tbl_fn, sep = "\n", append = TRUE)
+              if (i == 1){
+                paste(c(exons[i,]$pos1, exons[i,]$pos2, "CDS"), collapse = "\t") |>
+                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+              } else {
+                paste(c(exons[i,]$pos1, exons[i,]$pos2), collapse = "\t") |>
+                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+              }
             }
           } else if (all(exons$direction == "-")) {
             for (i in nrow(exons):1){
-              paste(c(exons[i,]$pos2, exons[i,]$pos1, "CDS"), collapse = "\t") |>
-                cat(file = tbl_fn, sep = "\n", append = TRUE)
+              if (i == 1){
+                paste(c(exons[i,]$pos2, exons[i,]$pos1, "CDS"), collapse = "\t") |>
+                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+              } else {
+                paste(c(exons[i,]$pos2, exons[i,]$pos1), collapse = "\t") |>
+                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+              }
             }
           }
           paste("\t\t\tproduct\t", cur$product) |>

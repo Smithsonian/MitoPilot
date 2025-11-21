@@ -34,8 +34,8 @@ annotations <- dplyr::tbl(con, "samples") |>
   dplyr::filter(export_group == !!group) |>
   dplyr::select(ID) |>
   dplyr::left_join(dplyr::tbl(con, "annotations") |>
-              dplyr::filter(pos1 > 0 & type == "PCG"),
-            by = "ID") |>
+                     dplyr::filter(pos1 > 0 & type == "PCG"),
+                   by = "ID") |>
   dplyr::collect()
 
 # logic to merge exons if present
@@ -49,7 +49,8 @@ rows_to_remove <- integer(0)
 
 for (ID in IDs) {
   
-  ID <- IDs[1]
+  #### TEMP
+  #ID <- IDs[1]
   
   # Get curation rules for the current ID
   curation_opts <- dplyr::tbl(con, "annotate") |>
@@ -58,7 +59,7 @@ for (ID in IDs) {
   
   curate_rules <- dplyr::tbl(con, "curate_opts") |>
     dplyr::filter(curate_opts == !!curation_opts) |>
-    dplyr::pull("params") 
+    dplyr::pull("params") |>
     jsonlite::fromJSON()
   
   # Get sample data
@@ -111,7 +112,7 @@ for (ID in IDs) {
       exon_seqs <- character(nrow(exons))
       
       message(paste("Merged ", length(exon_seqs), " exons for gene ", cur$gene, " (", ID, ")", sep=""))
-
+      
       if (all(exons$direction == "+")) {
         for (i in 1:nrow(exons)) {
           exon_seqs[i] <- as.character(Biostrings::subseq(seq, start = exons$pos1[i], end = exons$pos2[i]))
@@ -137,10 +138,13 @@ for (ID in IDs) {
       ) |> as.character()
       translation <- sub("\\*$", "", translation) # remove terminal stop codon
       
-      # 1. Update the translation for the FIRST exon in the main data frame
+      # update the translation for the FIRST exon in the main data frame
       annotations[exons_idx[1], "translation"] <- translation
       
-      # 2. Add the indices of the OTHER exons to our list for later removal
+      # add an asterisk to the sample name
+      annotations[exons_idx[1], "ID"] <- paste0("*", annotations[exons_idx[1], "ID"]) 
+      
+      # add the indices of the OTHER exons to our list for later removal
       rows_to_remove <- c(rows_to_remove, exons_idx[-1])
     }
   }
@@ -153,6 +157,8 @@ if (length(rows_to_remove) > 0) {
 ```
 
 # PCG Alignments
+
+\* merged exons
 
 *****
 
