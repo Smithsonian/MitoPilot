@@ -21,7 +21,8 @@ params_lepidosaur_mito <- function(alt = list()) {
         min_len = NA,
         overlap = list(start = 2, stop = F),
         stop_codons = c("TAA", "TAG", "AGA", "AGG", "AG", "TA", "T"),
-        start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC")
+        start_codons = c("ATG", "GTG", "ATA", "ATT", "TTA", "ATC"),
+        intron = FALSE
       ),
       tRNA = list(
         count = 1,

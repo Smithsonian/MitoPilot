@@ -1,10 +1,10 @@
-#' Default curation and validation parameters for Starfish Mitochondria
+#' Default curation and validation parameters for hexacorals Mitochondria
 #'
 #' @param alt (optional) named list of default values to modify
 #'
 #' @export
 #'
-params_starfish_mito <- function(alt = list()) {
+params_hexacoral_mito <- function(alt = list()) {
   params <- list(
     hit_threshold = 60,
     max_overlap = 0.25,
@@ -21,7 +21,7 @@ params_starfish_mito <- function(alt = list()) {
         min_len = NA,
         overlap = list(start = 2, stop = F),
         stop_codons = c("TAA", "TAG", "TA", "T"),
-        start_codons = c("ATG", "GTG"),
+        start_codons = c("TTA", "TTG", "CTG", "ATT", "ATC", "ATA", "ATG", "GTG"),
         intron = FALSE
       ),
       tRNA = list(
@@ -33,8 +33,7 @@ params_starfish_mito <- function(alt = list()) {
     rules = list(
       ctrl = list(
         count = 1,
-        type = "ctrl",
-        min_len = 350
+        type = "ctrl"
       ),
       rrnL = list(
         type = "rRNA",
@@ -45,15 +44,15 @@ params_starfish_mito <- function(alt = list()) {
         max_len = 1000
       ),
       nad1 = list(
-        type = "PCG",
-        start_codons = c("ATG", "GTG", "TTG") # "TTG" present in some RefSeq nad1 starfish
+        type = "PCG"
       ),
       nad2 = list(
         type = "PCG"
       ),
       cox1 = list(
         type = "PCG",
-        overlap = list(start = 2, stop = T)
+        overlap = list(start = 2, stop = T),
+        intron = TRUE
       ),
       cox2 = list(
         type = "PCG"
@@ -70,13 +69,11 @@ params_starfish_mito <- function(alt = list()) {
         type = "PCG"
       ),
       nad3 = list(
-        type = "PCG",
-        start_codons = c("ATG", "GTG", "ATT", "TTG") # "TTG" and "ATT" present in some RefSeq nad3 starfish
+        type = "PCG"
       ),
       nad4l = list(
         type = "PCG",
-        overlap = list(start = 2, stop = T),
-        start_codons = c("ATG", "GTG", "ATT", "ATC", "GTT") # "ATT", "ATC", "GTT" present in some RefSeq nad4l starfish
+        overlap = list(start = 2, stop = T)
       ),
       nad4 = list(
         type = "PCG",
@@ -84,7 +81,8 @@ params_starfish_mito <- function(alt = list()) {
       ),
       nad5 = list(
         type = "PCG",
-        overlap = list(start = 2, stop = T)
+        overlap = list(start = 2, stop = T),
+        intron = TRUE
       ),
       nad6 = list(
         type = "PCG",
@@ -93,32 +91,8 @@ params_starfish_mito <- function(alt = list()) {
       cob = list(
         type = "PCG"
       ),
-      trnA = list(type = "tRNA"),
-      trnC = list(type = "tRNA"),
-      trnD = list(type = "tRNA"),
-      trnE = list(type = "tRNA"),
-      trnF = list(type = "tRNA"),
-      trnG = list(type = "tRNA"),
-      trnH = list(type = "tRNA"),
-      trnI = list(type = "tRNA"),
-      trnK = list(type = "tRNA"),
-      trnL = list(
-        type = "tRNA",
-        count = 2
-      ),
       trnM = list(type = "tRNA"),
-      trnN = list(type = "tRNA"),
-      trnP = list(type = "tRNA"),
-      trnQ = list(type = "tRNA"),
-      trnR = list(type = "tRNA"),
-      trnS = list(
-        type = "tRNA",
-        count = 2
-      ),
-      trnT = list(type = "tRNA"),
-      trnV = list(type = "tRNA"),
-      trnW = list(type = "tRNA"),
-      trnY = list(type = "tRNA")
+      trnW = list(type = "tRNA")
     )
   )
   params <- modify_list_recursive(params, alt)

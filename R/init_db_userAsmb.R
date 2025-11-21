@@ -55,7 +55,7 @@ new_db_userAsmb <- function(
   if (any(duplicated(mapping[[mapping_id]]))) {
     bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
     message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
+    message(paste(bad_IDs, collapse = ", "))
     stop("Duplicate IDs found in mapping file")
   }
 
@@ -63,7 +63,7 @@ new_db_userAsmb <- function(
   if (any(nchar(mapping[[mapping_id]]) > 18)) {
     bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
     message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
+    message(paste(bad_IDs, collapse = ", "))
     stop("IDs must be no more than 18 characters")
   }
 
@@ -71,7 +71,7 @@ new_db_userAsmb <- function(
   if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
     bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
     message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
+    message(paste(bad_IDs, collapse = ", "))
     stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
   }
 
@@ -87,7 +87,7 @@ new_db_userAsmb <- function(
   if (any(mapping$Topology %nin% c("circular", "linear"))) {
     bad_IDs <- mapping[[mapping_id]][mapping$Topology %nin% c("circular", "linear")]
     message("problematic samples:")
-    message(paste(bad_IDs, collapse=", "))
+    message(paste(bad_IDs, collapse = ", "))
     stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
   }
 
@@ -310,8 +310,8 @@ new_db_userAsmb <- function(
         memory = annotate_memory,
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
-        mitos_opts = "--intron 0 --oril 0",
-        trnaScan_opts = "-M vert",
+        mitos_opts = mitos_opts,
+        trnaScan_opts = trnaScan_opts,
         start_gene = "trnF"
       ),
       in_place = TRUE,

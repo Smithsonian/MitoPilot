@@ -19,6 +19,6 @@ Adds "asmbDir = 'NA'" to the .config params block
 and updates the container to the current MitoPilot version
 in the .config file.
 Updates the "ref_dir" and "ref_db" fields in the annotate_opts table
-adds these fields to the curate_opts table, 
+adds these fields to the curate_opts table,
 and updates the curation rules in the curate_opts table.
 }

@@ -48,7 +48,6 @@ new_project <- function(
     Rproj = TRUE,
     force = FALSE,
     ...) {
-
   # Create directory if it doesn't exist ----
   if (!dir.exists(path)) {
     message("Creating project directory: ", path)
@@ -57,7 +56,7 @@ new_project <- function(
   path <- normalizePath(path)
 
   # Normalize data path (if provided)----
-  if(length(data_path)==1){
+  if (length(data_path) == 1) {
     data_path <- normalizePath(data_path)
   }
 

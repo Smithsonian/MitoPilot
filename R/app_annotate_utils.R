@@ -401,7 +401,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                         "starfish_mito",
                         "diptera_mito",
                         "copepod_mito",
-                        "octocoral_mito"),
+                        "octocoral_mito",
+                        "hexacoral_mito"),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(

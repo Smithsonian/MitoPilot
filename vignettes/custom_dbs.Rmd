@@ -26,7 +26,7 @@ strong { font-weight: bold; }
 
 Currently, MitoPilot comes packaged with assembly reference databases for fishes.
 If you are working on any other taxonomic group, you will need to compile databases of mitochondrial sequences for your clade.
-It may also be helpfpul to create a custom database for curation of the protein-coding gene predictions if your taxa are poorly represented in NCBI RefSeq.
+It may also be helpful to create a custom database for curation of the protein-coding gene predictions if your taxa are poorly represented in NCBI RefSeq.
 
 ## What parts of the MitoPilot pipeline use reference databases?
 
@@ -184,7 +184,7 @@ Assembly of contigs with MitoFinder is completely de novo. The MitoFinder refere
 
 ## Build custom databases for protein-coding gene curation
 
-By default, MitoPilot uses gene sequences from NCBI RefSeq to finetune start and stop codon positions for your annotations. The curation database is specified by the `ref_dir` and `ref_db` sections of the Cutation Opt. panel in the Shiny app. 
+By default, MitoPilot uses gene sequences from NCBI RefSeq to finetune start and stop codon positions for your annotations. The curation database is specified by the `ref_dir` and `ref_db` sections of the Curation Opt. panel in the Shiny app. 
 
 We have provided a helper function `MitoPilot::custom_curation_db`, which will allow you to supplement the RefSeq databases with your own gene sequences. Using a custom database can greatly improve automatic curation if your focal clade is poorly represented in RefSeq. 
 
