@@ -63,8 +63,8 @@ export_server <- function(id) {
             name = "Curate Opts.",
             width = 110
           ),
-          topology = colDef(show = T, width = 100),
-          structure = colDef(show = T),
+          topology = colDef(show = T, name = "Topology", width = 100),
+          structure = colDef(show = T, name = "Structure"),
           export_group = colDef(name = "Group", sticky = "right")
         )
       )
