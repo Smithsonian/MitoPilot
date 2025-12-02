@@ -201,16 +201,18 @@ Once you have opened the RStudio server session, run
 [`library(MitoPilot)`](https://github.com/Smithsonian/MitoPilot) to load
 the package. You should see a message about Nextflow if successful.
 
-Want to learn how to use MitoPilot? Check out the [Test Project
-Tutorial](https://Smithsonian.github.io/MitoPilot/articles/test-project.html).
+Want to learn how to use MitoPilot? Check out the [MitoPilot workshop
+website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/qmd/example_project/01_init.html).
 
-### Running Large MitoPilot Jobs
+### Running MitoPilot Jobs
 
 SEDNA does not currently support running Nextflow within the R Shiny
-GUI. For a small number of samples, you could run Nextflow in an
-interactive session. However, this requires you to maintain an open
-connection to the cluster. For large datasets, there may be issues
-restarting if the connection breaks while Nextflow is running.
+GUI.
+
+For a small number of samples, you could run Nextflow in an interactive
+session. However, this requires you to maintain an open connection to
+the cluster. For large datasets, there may be issues if the connection
+breaks while Nextflow is running.
 
 Therefore, if you have a large number of samples to process (more than a
 few dozen), we recommend running the assemble and annotate MitoPilot

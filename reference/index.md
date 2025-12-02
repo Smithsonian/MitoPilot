@@ -90,6 +90,8 @@
   : Rotate circular mitogenome to start at given gene
 - [`run_app()`](https://smithsonian.github.io/MitoPilot/reference/run_app.md)
   : Run the Shiny Application
+- [`tbl_to_gff3()`](https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.md)
+  : Convert a GenBank 5-column feature table to GFF3 format.
 - [`update_sample_metadata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.md)
   : Update project database metadata.
 - [`update_sample_seqdata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_seqdata.md)

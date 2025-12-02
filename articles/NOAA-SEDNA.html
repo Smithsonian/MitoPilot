@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -239,17 +239,18 @@ must remain open in order to access the Rstudio server</code></pre>
 <p>Once you have opened the RStudio server session, run
 <code><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">library(MitoPilot)</a></code> to load the package. You should see a
 message about Nextflow if successful.</p>
-<p>Want to learn how to use MitoPilot? Check out the <a href="https://Smithsonian.github.io/MitoPilot/articles/test-project.html" class="external-link">Test
-Project Tutorial</a>.</p>
+<p>Want to learn how to use MitoPilot? Check out the <a href="https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/qmd/example_project/01_init.html" class="external-link">MitoPilot
+workshop website</a>.</p>
 </div>
 <div class="section level3">
-<h3 id="running-large-mitopilot-jobs">Running Large MitoPilot Jobs<a class="anchor" aria-label="anchor" href="#running-large-mitopilot-jobs"></a>
+<h3 id="running-mitopilot-jobs">Running MitoPilot Jobs<a class="anchor" aria-label="anchor" href="#running-mitopilot-jobs"></a>
 </h3>
 <p>SEDNA does not currently support running Nextflow within the R Shiny
-GUI. For a small number of samples, you could run Nextflow in an
+GUI.</p>
+<p>For a small number of samples, you could run Nextflow in an
 interactive session. However, this requires you to maintain an open
-connection to the cluster. For large datasets, there may be issues
-restarting if the connection breaks while Nextflow is running.</p>
+connection to the cluster. For large datasets, there may be issues if
+the connection breaks while Nextflow is running.</p>
 <p>Therefore, if you have a large number of samples to process (more
 than a few dozen), we recommend running the assemble and annotate
 MitoPilot modules as batch jobs.</p>
