@@ -752,7 +752,7 @@ export_files <- function(
           cat(file = tbl_fn, sep = "\n", append = TRUE)
 
         # write to GFF
-        f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=D-loop;Note=control region")
+        f9 = paste0("ID=ctrl-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=D-loop;Note=control region")
         # logic to deal with annotations that wrap around the end of a circular assembly
         # with special check for D_loop problem of pos1 and pos2 mixup
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
