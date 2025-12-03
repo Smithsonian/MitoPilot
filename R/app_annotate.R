@@ -103,7 +103,7 @@ annotate_server <- function(id) {
         searchable = TRUE,
         filterable = TRUE,
         defaultSorted = list(time_stamp = "desc"),
-        height = 650,
+        height = 500,
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),

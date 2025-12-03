@@ -66,6 +66,14 @@ validate_hexacoral_mito <- function(
   extra <- NA_character_
   for (gene in names(rules)) {
     gene_rules <- rules[[gene]]
+
+    # check if gene can have introns
+    has_intron <- !(
+      is.null(gene_rules$intron) ||
+        length(gene_rules$intron) == 0 ||
+        is.na(gene_rules$intron[1])
+    ) && as.logical(gene_rules$intron[1])
+
     gene_annotations <- annotations |>
       dplyr::filter(gene == {{ gene }})
 
@@ -77,7 +85,7 @@ validate_hexacoral_mito <- function(
 
     ## Duplication ----
     if (nrow(gene_annotations) > max(gene_rules$count)) {
-      if (!(gene_rules$intron)) { # do not issue duplicate warnings for genes that may have introns
+      if (!(has_intron)) { # do not issue duplicate warnings for genes that may have introns
         extra <- semicolon_paste(extra, gene)
         annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "possible duplicate")
         total_warnings <- total_warnings + 1
@@ -85,7 +93,7 @@ validate_hexacoral_mito <- function(
     }
 
     ## Intron check ----
-    if (gene_rules$intron) {
+    if (has_intron) {
       target_idx <- which(annotations$gene == gene)
       # check to make sure all CDS regions are in the same orientation
       if (all(gene_annotations$direction == "+")) {
