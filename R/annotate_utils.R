@@ -10,7 +10,8 @@
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  alignment <- pwalign::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
+  data(list=subMx, package = "pwalign")
+  alignment <- pwalign::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = BLOSUM80)
 
   # Return query-centric percent identity
   if (type[1] == "pctId") {

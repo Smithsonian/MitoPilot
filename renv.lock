@@ -1247,7 +1247,7 @@
     },
     "pwalign": {
       "Package": "pwalign",
-      "Version": "1.3.0",
+      "Version": "1.2.0",
       "Source": "Bioconductor",
       "Repository": "Bioconductor 3.20",
       "Requirements": [
