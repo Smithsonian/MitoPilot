@@ -37,6 +37,18 @@ annotate_mitos2 <- function(
 
   process_args <- list(
     cmd = "runmitos.py",
+    args = "--version"
+  )
+  if (!is.null(condaenv)) {
+    process <- reticulate::conda_run2
+    process_args$envname <- condaenv
+    process_args$echo <- FALSE
+  } else {
+    process <- "system2"
+  }
+
+  process_args <- list(
+    cmd = "runmitos.py",
     args = stringr::str_glue(
       "--input {fasta}",
       "--outdir {out}",
