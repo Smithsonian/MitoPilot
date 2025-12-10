@@ -1,7 +1,8 @@
 #!/bin/bash
 
 repo='mitopilot'
-tag="${1:-latest}"
+tag="${1}"
+#tag="${1:-latest}"
 #tag="devel"
 
 if [ -z "$tag" ]
@@ -26,7 +27,7 @@ Rscript -e 'devtools::document()'
 Rscript -e 'devtools::build(path="docker", vignettes = FALSE)'
 
 # Build image
-docker build -f docker/Dockerfile --progress=plain -t ${repo}:${tag} .
+docker build --no-cache -f docker/Dockerfile --progress=plain -t ${repo}:${tag} .
 if [ $? -ne 0 ]; then
   echo "Failed to build the Docker image"
   exit 1
