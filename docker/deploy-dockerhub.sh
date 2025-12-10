@@ -2,7 +2,6 @@
 
 repo='mitopilot'
 tag="${1}"
-#tag="${1:-latest}"
 #tag="devel"
 
 if [ -z "$tag" ]
