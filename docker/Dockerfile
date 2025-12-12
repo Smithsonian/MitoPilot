@@ -10,7 +10,6 @@ RUN apt-get update && \
     apt-get install -y parallel && \
     apt-get install -y default-jre && \
     apt-get install -y python2.7 && \
-    apt-get install -y libxml2-dev && \
     rm -rf /var/lib/apt/lists/*
 
 RUN conda config --set channel_priority true && \ 
