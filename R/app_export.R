@@ -151,6 +151,14 @@ export_server <- function(id) {
     # Make Group ----
     observeEvent(input$make_group, {
       rv$updating$export_group <- req(input$group_name)
+      if(any(!(grepl("^[a-zA-Z0-9_-]+$", input$group_name)))){
+        shinyWidgets::sendSweetAlert(
+          title = "Invalid group name",
+          text = "Group names must contain only alphanumeric characters, dashes, or underscores",
+          type = "error"
+        )
+        return()
+      }
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating[, c("ID", "export_group")], by = "ID")
       dplyr::tbl(session$userData$con, "samples") |>

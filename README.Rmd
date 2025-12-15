@@ -60,8 +60,10 @@ Currently, MitoPilot has curation/validation rulesets for the following groups o
 - dipterans
 - turtles
 - copepods (testing in progress)
+- ctenophores (testing in progress)
 - mammals (untested)
 - lepidosaurs (untested)
+- birds (untested)
 
 The custom logic in the annotation curation and validation scripts needs to be tweaked for optimal performance with other taxonomic groups. All of the curation rulesets are contained in the underlying Docker image (currently hosted at [macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)). Adding rulesets for new taxa will involve updating the Docker image appropriately and specifying the new image in the Nextflow configuration file. 
 

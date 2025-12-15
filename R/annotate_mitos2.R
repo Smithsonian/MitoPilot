@@ -36,7 +36,19 @@ annotate_mitos2 <- function(
   Biostrings::writeXStringSet(assembly, fasta)
 
   process_args <- list(
-    cmd = "runmitos.py",
+    cmd = "runmitos",
+    args = "--version"
+  )
+  if (!is.null(condaenv)) {
+    process <- reticulate::conda_run2
+    process_args$envname <- condaenv
+    process_args$echo <- FALSE
+  } else {
+    process <- "system2"
+  }
+
+  process_args <- list(
+    cmd = "runmitos",
     args = stringr::str_glue(
       "--input {fasta}",
       "--outdir {out}",

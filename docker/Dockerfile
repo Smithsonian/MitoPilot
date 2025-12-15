@@ -12,20 +12,24 @@ RUN apt-get update && \
     apt-get install -y python2.7 && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Conda packages
 RUN conda config --set channel_priority true && \ 
     conda config --add channels defaults && \
     conda config --add channels conda-forge && \
-    conda config --add channels bioconda && \
-    mamba install -c bioconda fastp=0.23.4 && \
+    conda config --add channels bioconda 
+
+RUN mamba install -y -c conda-forge libtiff libxml2 libxml2-devel r-base=4.5.2 r-reticulate r-remotes
+
+# Install Conda packages
+RUN mamba install -c bioconda fastp=0.23.4 && \
+    mamba install -c bioconda spades=4.1.0 && \
     mamba install -c bioconda getorganelle=1.7.7.1 && \
     mamba install -c bioconda bam-readcount=1.0.1 -m -n bam-readcount && \
     mamba install -c bioconda bowtie2=2.5.4 && \
     mamba install -c bioconda samtools=1.21 && \
     mamba install -c bioconda trnascan-se=2.0.12 -m -n trnascan-se && \
-    mamba install -c bioconda mitos=2.1.9 -m -n mitos && \
-    mamba install -c conda-forge r-base=4.4.2 && \
-    mamba install r-remotes
+    mamba install -c bioconda mitos=2.1.10 -m -n mitos
+#    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
+#    mamba install r-remotes
 
 RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock

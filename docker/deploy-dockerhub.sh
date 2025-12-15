@@ -1,7 +1,7 @@
 #!/bin/bash
 
 repo='mitopilot'
-tag="${1:-latest}"
+tag="${1}"
 #tag="devel"
 
 if [ -z "$tag" ]
