@@ -394,7 +394,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           selectizeInput(
             ns("target"),
             label = "Target:",
-            choices = c("fish_mito",
+            choices = sort(c("fish_mito",
                         "lepidosaur_mito",
                         "turtle_mito",
                         "mammal_mito",
@@ -404,7 +404,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                         "octocoral_mito",
                         "hexacoral_mito",
                         "ctenophore_mito",
-                        "bird_mito"),
+                        "bird_mito"
+                      )),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(
