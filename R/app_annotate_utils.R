@@ -403,7 +403,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                         "copepod_mito",
                         "octocoral_mito",
                         "hexacoral_mito",
-                        "ctenophore_mito"),
+                        "ctenophore_mito",
+                        "bird_mito"),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(
