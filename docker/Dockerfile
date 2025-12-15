@@ -17,8 +17,7 @@ RUN conda config --set channel_priority true && \
     conda config --add channels conda-forge && \
     conda config --add channels bioconda 
 
-# Install core C libraries first, ensuring they resolve
-RUN mamba install -y -c conda-forge libtiff
+RUN mamba install -y -c conda-forge libtiff libxml2 libxml2-devel r-base=4.5.2 r-reticulate r-remotes
 
 # Install Conda packages
 RUN mamba install -c bioconda fastp=0.23.4 && \
@@ -28,9 +27,9 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
     mamba install -c bioconda bowtie2=2.5.4 && \
     mamba install -c bioconda samtools=1.21 && \
     mamba install -c bioconda trnascan-se=2.0.12 -m -n trnascan-se && \
-    mamba install -c bioconda mitos=2.1.10 -m -n mitos && \
-    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
-    mamba install r-remotes
+    mamba install -c bioconda mitos=2.1.10 -m -n mitos
+#    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
+#    mamba install r-remotes
 
 RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock
