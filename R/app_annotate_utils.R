@@ -78,9 +78,10 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #' @export
 #'
 get_top_hits_local <- function(
-    ref_db = NULL,
-    query = NULL,
-    max_blast_hits = 100) {
+  ref_db = NULL,
+  query = NULL,
+  max_blast_hits = 100
+) {
   stringr::str_glue(
     "-db {ref_db}",
     "-best_hit_score_edge 0.01",
@@ -202,7 +203,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             selectizeInput(
               ns("mitos_ref_db"),
               label = "ref_db",
-              #choices = unique(rv$annotate_opts$ref_db),
+              # choices = unique(rv$annotate_opts$ref_db),
               choices = c("Metazoa_RefSeq89", "Chordata"),
               selected = current$ref_db %||% character(0),
               width = "100%",
@@ -364,7 +365,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             selectizeInput(
               ns("curate_ref_dir"),
               label = "ref_dir",
-              choices =  unique(rv$curate_opts$ref_dir),
+              choices = unique(rv$curate_opts$ref_dir),
               selected = current$ref_dir %||% character(0),
               width = "100%",
               options = list(
@@ -378,7 +379,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             selectizeInput(
               ns("curate_ref_db"),
               label = "ref_db",
-              #choices = unique(rv$annotate_opts$ref_db),
+              # choices = unique(rv$annotate_opts$ref_db),
               choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
               selected = current$ref_db %||% character(0),
               width = "100%",
