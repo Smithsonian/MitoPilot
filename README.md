@@ -85,6 +85,7 @@ groups of organisms:
 - turtles
 - copepods (testing in progress)
 - ctenophores (testing in progress)
+- annelids (testing in progress)
 - mammals (untested)
 - lepidosaurs (untested)
 - birds (untested)
