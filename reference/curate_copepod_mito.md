@@ -33,7 +33,7 @@ curate_copepod_mito(
 
 - genetic_code:
 
-  Genetic code to use (default = 2)
+  Genetic code to use (default = 5)
 
 - out_dir:
 

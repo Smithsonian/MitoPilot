@@ -33,7 +33,7 @@ curate_starfish_mito(
 
 - genetic_code:
 
-  Genetic code to use (default = 2)
+  Genetic code to use (default = 9)
 
 - out_dir:
 

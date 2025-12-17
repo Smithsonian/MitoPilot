@@ -33,7 +33,7 @@ curate_octocoral_mito(
 
 - genetic_code:
 
-  Genetic code to use (default = 2)
+  Genetic code to use (default = 4)
 
 - out_dir:
 

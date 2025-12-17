@@ -75,8 +75,11 @@ groups of organisms:
 - dipterans
 - turtles
 - copepods (testing in progress)
+- ctenophores (testing in progress)
+- annelids (testing in progress)
 - mammals (untested)
 - lepidosaurs (untested)
+- birds (untested)
 
 The custom logic in the annotation curation and validation scripts needs
 to be tweaked for optimal performance with other taxonomic groups. All

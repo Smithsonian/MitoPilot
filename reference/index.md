@@ -20,8 +20,14 @@
   : Map reads to assembly
 - [`coverage_trim()`](https://smithsonian.github.io/MitoPilot/reference/coverage_trim.md)
   : Use coverage info to trim linear assemblies
+- [`curate_annelid_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_annelid_mito.md)
+  : Annotation curation for annelid mitogenomes
+- [`curate_bird_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_bird_mito.md)
+  : Annotation curation for bird mitogenomes
 - [`curate_copepod_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_copepod_mito.md)
   : Annotation curation for copepod mitogenomes
+- [`curate_ctenophore_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_ctenophore_mito.md)
+  : Annotation curation for ctenophore mitogenomes
 - [`curate_diptera_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_diptera_mito.md)
   : Annotation curation for dipteran mitogenomes
 - [`curate_fish_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_fish_mito.md)
@@ -65,8 +71,15 @@
   : Initialize a test project
 - [`nextflow_cmd()`](https://smithsonian.github.io/MitoPilot/reference/nextflow_cmd.md)
   : Generate Nextflow command to run pipline
+- [`params_annelid_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_annelid_mito.md)
+  : Default curation and validation parameters for annelid Mitochondria
+- [`params_bird_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_bird_mito.md)
+  : Default curation and validation parameters for bird Mitochondria
 - [`params_copepod_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_copepod_mito.md)
   : Default curation and validation parameters for copepod Mitochondria
+- [`params_ctenophore_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_ctenophore_mito.md)
+  : Default curation and validation parameters for ctenophore
+  Mitochondria
 - [`params_diptera_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_diptera_mito.md)
   : Default curation and validation parameters for dipteran Mitochondria
 - [`params_fish_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_fish_mito.md)
@@ -96,7 +109,13 @@
   : Update project database metadata.
 - [`update_sample_seqdata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_seqdata.md)
   : Update sequence files for existing project
+- [`validate_annelid_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_annelid_mito.md)
+  : Title
+- [`validate_bird_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_bird_mito.md)
+  : Title
 - [`validate_copepod_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_copepod_mito.md)
+  : Title
+- [`validate_ctenophore_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_ctenophore_mito.md)
   : Title
 - [`validate_diptera_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_diptera_mito.md)
   : Title
