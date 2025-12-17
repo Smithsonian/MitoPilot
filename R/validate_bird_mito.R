@@ -88,14 +88,19 @@ validate_bird_mito <- function(
     list2env(annotations[i, ], envir = environment())
     gene_rules <- rules[[gene]]
 
-    ## Overlaps ----
-    overlapping <- annotations[-i, ] |>
-      dplyr::filter(contig == {{ contig }} & direction == {{ direction }}) |>
-      dplyr::rowwise() |>
-      dplyr::mutate(
-        overlap = length(intersect(seq(pos1, pos2), seq({{ pos1 }}, {{ pos2 }})))
-      ) |>
-      dplyr::filter(overlap > 0L)
+    ## Overlaps ---
+    # logic to handle case when there are no other annotations on the same strand
+    if(nrow(dplyr::filter(annotations[-i, ], contig == {{ contig }} & direction == {{ direction }})) > 0L){
+      overlapping <- annotations[-i, ] |>
+        dplyr::filter(contig == {{ contig }} & direction == {{ direction }}) |>
+        dplyr::rowwise() |>
+        dplyr::mutate(
+          overlap = length(intersect(seq(pos1, pos2), seq({{ pos1 }}, {{ pos2 }})))
+        ) |>
+        dplyr::filter(overlap > 0L)
+    } else {
+      overlapping <- dplyr::filter(annotations[-i, ], contig == {{ contig }} & direction == {{ direction }})
+    }
     # Max Overlap
     if (nrow(overlapping) > 0L && any(overlapping$overlap / length > max_overlap)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max overlap")

@@ -8,7 +8,7 @@
 #'
 #' @export
 #'
-validate_fish_mito <- function(
+validate_annelid_mito <- function(
     annotations_fn = NULL,
     coverage_fn = NULL,
     params = list(),

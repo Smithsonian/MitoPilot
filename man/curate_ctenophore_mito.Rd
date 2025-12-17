@@ -22,7 +22,7 @@ curate_ctenophore_mito(
 
 \item{coverage_fn}{Path to the coverage file (csv)}
 
-\item{genetic_code}{Genetic code to use (default = 2)}
+\item{genetic_code}{Genetic code to use (default = 4)}
 
 \item{out_dir}{Path to the output directory}
 

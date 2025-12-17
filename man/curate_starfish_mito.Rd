@@ -22,7 +22,7 @@ curate_starfish_mito(
 
 \item{coverage_fn}{Path to the coverage file (csv)}
 
-\item{genetic_code}{Genetic code to use (default = 2)}
+\item{genetic_code}{Genetic code to use (default = 9)}
 
 \item{out_dir}{Path to the output directory}
 
