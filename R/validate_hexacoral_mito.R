@@ -119,7 +119,8 @@ validate_hexacoral_mito <- function(
     ## Overlaps ----
     # logic to handle case when there are no other annotations on the same strand
     if(nrow(dplyr::filter(annotations[-i, ], contig == {{ contig }} & direction == {{ direction }})) > 0L){
-      dplyr::filter(contig == {{ contig }} & direction == {{ direction }}) |>
+      overlapping <- annotations[-i, ] |>
+        dplyr::filter(contig == {{ contig }} & direction == {{ direction }}) |>
         dplyr::rowwise() |>
         dplyr::mutate(
           overlap = length(intersect(seq(pos1, pos2), seq({{ pos1 }}, {{ pos2 }})))
