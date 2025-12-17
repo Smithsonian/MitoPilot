@@ -3,7 +3,7 @@
 #' @param annotations_fn Path to the annotations file (csv)
 #' @param assembly_fn Path to the assembly file (fasta)
 #' @param coverage_fn Path to the coverage file (csv)
-#' @param genetic_code Genetic code to use (default = 2)
+#' @param genetic_code Genetic code to use (default = 5)
 #' @param out_dir Path to the output directory
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param params Nested list of curation parameters. Can also provided as a

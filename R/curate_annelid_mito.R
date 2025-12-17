@@ -1,4 +1,4 @@
-#' Annotation curation for copepod mitogenomes
+#' Annotation curation for annelid mitogenomes
 #'
 #' @param annotations_fn Path to the annotations file (csv)
 #' @param assembly_fn Path to the assembly file (fasta)
@@ -12,7 +12,7 @@
 #'
 #' @export
 #'
-curate_copepod_mito <- function(
+curate_annelid_mito <- function(
     annotations_fn = NULL,
     assembly_fn = NULL,
     coverage_fn = NULL,
@@ -20,7 +20,7 @@ curate_copepod_mito <- function(
     out_dir = NULL,
     max_blast_hits = 100,
     params = NULL,
-    ref_dir = NULL)  {
+    ref_dir = NULL) {
   # Prepare environment ----
 
   ## load annotations ----
@@ -92,7 +92,7 @@ curate_copepod_mito <- function(
   )
 
   # rRNA ----
-  ## enforce + strand ----
+  # enforce + strand ----
   rRNA_rev <- annotations |>
     dplyr::filter(type == "rRNA") |>
     dplyr::filter(all(direction == "-"), .by = "contig") |>
@@ -188,7 +188,8 @@ curate_copepod_mito <- function(
       ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
         stringr::str_glue()
 
-      out <- get_top_hits(ref_db, translation, max_blast_hits) |>
+      out <- get_top_hits(ref_db, translation,
+                          max_blast_hits) |>
         json_string()
       out %||% '{}'
     })
