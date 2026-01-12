@@ -10,12 +10,7 @@ process {
   executor = 'local'
   container = '<<CONTAINER_ID>>'
   cpus = { opts.cpus }
-  memory = { opts.memory.GB * task.attempt }
-  // opts not used for coverage process
-  withName:coverage {
-    cpus = { params.coverage.cpus }
-    memory = { params.coverage.memory.GB }
-  }
+  memory = { (opts?.memory?.GB ?: 1) * task.attempt }
 }
 
 // SQL database configuration (https://github.com/nextflow-io/nf-sqldb)
