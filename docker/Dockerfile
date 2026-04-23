@@ -49,6 +49,11 @@ RUN cd /opt/MitoFinder;./install.sh;cd ~
 RUN chmod -R 777 /opt/MitoFinder
 ENV PATH="/opt/MitoFinder:${PATH}"
 
+# Install ARWEN (mitochondrial tRNA prediction)
+COPY docker/arwen/arwen1.2.3.c /opt/arwen/arwen.c
+RUN gcc -O2 -ffast-math -o /opt/arwen/arwen /opt/arwen/arwen.c -lm
+ENV PATH="/opt/arwen:${PATH}"
+
 RUN ln -s /usr/lib/x86_64-linux-gnu/libidn2.so.0 /usr/lib/x86_64-linux-gnu/libidn.so.11
 
 # Default Reference DBs
