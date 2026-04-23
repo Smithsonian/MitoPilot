@@ -15,6 +15,7 @@ annotate(
   mitos_condaenv = "mitos",
   trnaScan_opts = "-M vert",
   trnaScan_condaenv = "base",
+  arwen_opts = "-m",
   start_gene = "trnF",
   out_dir = NULL
 )
@@ -41,6 +42,8 @@ annotate(
 
 \item{trnaScan_condaenv}{Conda environment to run tRNAscan-SE (default:
 "base").}
+
+\item{arwen_opts}{Additional command line options for ARWEN (default: "-m").}
 
 \item{start_gene}{name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")}
 

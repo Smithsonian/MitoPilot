@@ -17,6 +17,7 @@ new_db_userAsmb(
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0",
   trnaScan_opts = "-M vert",
+  arwen_opts = "-m",
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
@@ -48,6 +49,8 @@ for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 \item{mitos_opts}{Default MITOS2 command line options}
 
 \item{trnaScan_opts}{Default tRNAscan-SE command line options}
+
+\item{arwen_opts}{Default ARWEN command line options}
 
 \item{curate_cpus}{Default # cpus for curation}
 
