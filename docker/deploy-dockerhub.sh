@@ -1,8 +1,8 @@
 #!/bin/bash
 
 repo='mitopilot'
-tag="${1}"
-#tag="devel"
+#tag="${1}"
+tag="devel"
 
 if [ -z "$tag" ]
 then

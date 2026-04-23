@@ -43,6 +43,7 @@ process annotate {
         mitos_condaenv = '!{params.mitos_condaenv}', \
         trnaScan_opts = '!{opts.trnaScan}', \
         trnaScan_condaenv = '!{params.trnaScan_condaenv}', \
+        arwen_opts = '!{opts.arwen}', \
         start_gene = '!{opts.start_gene}', \
         out_dir = '!{dir}'
     )"

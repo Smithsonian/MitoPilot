@@ -14,6 +14,7 @@
 #' @param trnaScan_opts Additional command line options for tRNAscan-SE.
 #' @param trnaScan_condaenv Conda environment to run tRNAscan-SE (default:
 #'   "base").
+#' @param arwen_opts Additional command line options for ARWEN (default: "-m").
 #' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
 #' @param out_dir Output directory.
 #'
@@ -30,6 +31,7 @@ annotate <- function(
     mitos_condaenv = "mitos",
     trnaScan_opts = "-M vert",
     trnaScan_condaenv = "base",
+    arwen_opts = "-m",
     start_gene = "trnF",
     out_dir = NULL) {
 
@@ -75,6 +77,15 @@ annotate <- function(
   assembly <- trnaScan_out$assembly
   annotations_trnaScan <- trnaScan_out$annotations
 
+  # ARWEN tRNA annotation ----
+  annotations_arwen <- annotate_arwen(
+    assembly = assembly,
+    arwen_opts = arwen_opts,
+    genetic_code = genetic_code
+  )
+  # Drop ARWEN predictions already found by tRNAscan (tRNAscan takes priority)
+  annotations_arwen <- annotations_arwen[!(annotations_arwen$tRNA_ID %in% annotations_trnaScan$tRNA_ID), ]
+
   # Mitos2 annotation ----
   annotations_mitos <- annotate_mitos2(
     assembly = assembly,
@@ -86,10 +97,12 @@ annotate <- function(
   )
 
   # Combine annotations ----
-  # If there are overlapping tRNA annotations, only keep the annotation from trnascan
-  annotations_mitos <- annotations_mitos[!(annotations_mitos$tRNA_ID %in% annotations_trnaScan$tRNA_ID),]
+  # Priority: tRNAscan > ARWEN > MITOS2
+  tRNA_IDs_found <- c(annotations_trnaScan$tRNA_ID, annotations_arwen$tRNA_ID)
+  annotations_mitos <- annotations_mitos[!(annotations_mitos$tRNA_ID %in% tRNA_IDs_found), ]
   annotations <- dplyr::bind_rows(
     annotations_trnaScan,
+    annotations_arwen,
     annotations_mitos
   ) |> dplyr::select(-dplyr::any_of('tRNA_ID')) |> # remove temporary tRNA_ID column
     dplyr::mutate(dplyr::across('gene', stringr::str_replace, 'trnS1|tnrS2', 'trnS')) |> # Rename trnS1 and trnS2 to trnS
