@@ -6,17 +6,20 @@
 \usage{
 annotate_arwen(
   assembly = NULL,
-  arwen_opts = "-m",
+  arwen_opts = "-mtx",
   genetic_code = "2",
+  circular = TRUE,
   out = NULL
 )
 }
 \arguments{
 \item{assembly}{DNAStringSet assembly to annotate}
 
-\item{arwen_opts}{command line options for ARWEN (default = "-m")}
+\item{arwen_opts}{command line options for ARWEN (default = "-mtx")}
 
 \item{genetic_code}{NCBI translation table number passed to ARWEN via -gc<N> (default = "2")}
+
+\item{circular}{logical; TRUE for circular topology (-c), FALSE for linear (-l)}
 
 \item{out}{output file path}
 }

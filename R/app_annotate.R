@@ -475,6 +475,14 @@ annotate_server <- function(id) {
           inputId = "trnaScan_opts",
           value = cur$trnaScan_opts
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_arwen",
+          value = isTRUE(as.logical(cur$use_arwen))
+        )
+        updateTextInput(
+          inputId = "arwen_opts",
+          value = cur$arwen_opts
+        )
         updateSelectizeInput(
           inputId = "start_gene",
           choices = c(
@@ -529,6 +537,8 @@ annotate_server <- function(id) {
       # shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_arwen", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -572,7 +582,7 @@ annotate_server <- function(id) {
       }
     })
     ## Save Changes ----
-    observeEvent(input$update_annotate_opts, ignoreInit = T, {
+    observeEvent(input$update_annotate_opts, {
       ## Add to params table if new or editing ----
       if (input$edit_annotate_opts) {
         dplyr::tbl(session$userData$con, "annotate_opts") |>
@@ -585,6 +595,8 @@ annotate_server <- function(id) {
               ref_dir = req(input$mitos_ref_dir),
               ref_db = req(input$mitos_ref_db),
               trnaScan_opts = req(input$trnaScan_opts),
+              arwen_opts = req(input$arwen_opts),
+              use_arwen = as.integer(isTRUE(input$use_arwen)),
               start_gene = req(input$start_gene)
             ),
             in_place = TRUE,
@@ -766,7 +778,7 @@ annotate_server <- function(id) {
       }
     })
     ## Save Changes ----
-    observeEvent(input$update_curate_opts, ignoreInit = T, {
+    observeEvent(input$update_curate_opts, {
       ## Add to params table if new or editing ----
       if (input$edit_curate_opts) {
         params <- do.call(paste0("params_", input$target), list()) |>

@@ -1,7 +1,7 @@
 include {annotate} from './annotate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, ' +
-                        'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.trnaScan_opts, d.start_gene, d.arwen_opts ' +
+                        'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -41,7 +41,8 @@ workflow ANNOTATE {
                     mitos: it[7],                                      // mitos_opts
                     trnaScan: it[8],                                    // trnaScan_opts
                     start_gene: it[9],                                 // starting gene for rotation
-                    arwen: it[10]                                      // arwen_opts
+                    arwen: it[10],                                     // arwen_opts
+                    use_arwen: it[11]                                  // use_arwen toggle
                 ],
                 file(it[6] + "/" + it[5]),                              // curation ref dir + clade
                 it[5].replaceFirst(/\.tar\.gz$/, '')                // ref_db without ".tar.gz"

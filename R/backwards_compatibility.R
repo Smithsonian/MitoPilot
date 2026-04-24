@@ -58,6 +58,7 @@ backwards_compatibility <- function(
       containerVer &&
       !old_ref_str &&
       "arwen_opts" %in% names(annotate_opts_table) &&
+      "use_arwen" %in% names(annotate_opts_table) &&
       "start_gene" %in% names(annotate_opts_table) &&
       "max_blast_hits" %in% names(curate_opts_table) &&
       "ref_db" %in% names(curate_opts_table) &&
@@ -246,10 +247,30 @@ backwards_compatibility <- function(
         by = "ID"
       )
   }
+  # if use_arwen column doesn't exist, add it (default off)
+  if(!("use_arwen" %in% names(annotate_opts_table))){
+    message("added 'use_arwen' column to annotate_opts table")
+    annotate_opts_table$use_arwen <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_arwen INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
   # if arwen_opts column doesn't exist, add it
   if(!("arwen_opts" %in% names(annotate_opts_table))){
     message("added 'arwen_opts' column to annotate_opts table")
-    annotate_opts_table$arwen_opts <- rep("-m", nrow(annotate_opts_table))
+    annotate_opts_table$arwen_opts <- rep("-mtx", nrow(annotate_opts_table))
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN arwen_opts TEXT",

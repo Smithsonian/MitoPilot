@@ -17,7 +17,7 @@ new_db_userAsmb(
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0",
   trnaScan_opts = "-M vert",
-  arwen_opts = "-m",
+  arwen_opts = "-mtx",
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",

@@ -44,6 +44,7 @@ process annotate {
         trnaScan_opts = '!{opts.trnaScan}', \
         trnaScan_condaenv = '!{params.trnaScan_condaenv}', \
         arwen_opts = '!{opts.arwen}', \
+        use_arwen = !{opts.use_arwen == 1 ? "TRUE" : "FALSE"}, \
         start_gene = '!{opts.start_gene}', \
         out_dir = '!{dir}'
     )"

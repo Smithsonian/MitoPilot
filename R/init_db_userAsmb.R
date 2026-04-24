@@ -34,7 +34,7 @@ new_db_userAsmb <- function(
     annotate_ref_dir = "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
     mitos_opts = "--intron 0 --oril 0",
     trnaScan_opts = "-M vert",
-    arwen_opts = "-m",
+    arwen_opts = "-mtx",
     # Default curation options
     curate_cpus = 4,
     curate_memory = 8,
@@ -301,6 +301,7 @@ new_db_userAsmb <- function(
       mitos_opts TEXT,
       trnaScan_opts TEXT,
       arwen_opts TEXT,
+      use_arwen INTEGER,
       start_gene TEXT,
       PRIMARY KEY (annotate_opts)
     );"
@@ -316,6 +317,7 @@ new_db_userAsmb <- function(
         mitos_opts = mitos_opts,
         trnaScan_opts = trnaScan_opts,
         arwen_opts = arwen_opts,
+        use_arwen = 0L,
         start_gene = "trnF"
       ),
       in_place = TRUE,
