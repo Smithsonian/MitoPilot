@@ -30,7 +30,7 @@ annotate <- function(
     ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
     mitos_opts = "--intron 0 --oril 0",
     mitos_condaenv = "mitos",
-    trnaScan_opts = "-M vert",
+    trnaScan_opts = "-M vert -X 20",
     trnaScan_condaenv = "base",
     arwen_opts = "-mtx",
     use_arwen = FALSE,

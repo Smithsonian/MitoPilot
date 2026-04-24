@@ -28,7 +28,7 @@ new_db(
   annotate_ref_dir =
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0",
-  trnaScan_opts = "-M vert",
+  trnaScan_opts = "-M vert -X 20",
   arwen_opts = "-mtx",
   curate_cpus = 4,
   curate_memory = 8,
