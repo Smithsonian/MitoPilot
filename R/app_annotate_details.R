@@ -118,6 +118,9 @@ annotations_details_server <- function(id, rv) {
       isolate({
         req(rv$annotations)
         shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
+        is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
+        shinyjs::toggle("annotation_action_btns", condition = length(sel) > 0 && !is_deleted)
+        shinyjs::toggle("annotation_restore_btn", condition = is_deleted)
         if (identical(sel, rv$editing$idx)) {
           return(sel)
         }
@@ -503,7 +506,8 @@ annotations_details_server <- function(id, rv) {
       note <- stringr::str_glue(
         "DELETED: from {rv$annotations$pos1[selected()]}-{rv$annotations$pos2[selected()]}"
       )
-      update$notes <- paste(note, rv$annotations$notes[selected()], sep = "; ")
+      update$notes <- paste(note, rv$annotations$notes[selected()] %|NA|% "", sep = "; ") |>
+        stringr::str_remove("; $")
       update$edited <- 1
       rv$annotations <- rv$annotations |>
         dplyr::slice(-selected()) |>
@@ -1806,6 +1810,362 @@ annotations_details_server <- function(id, rv) {
       )
       trigger("align_now")
     })
+
+    # Merge Annotations ----
+    observeEvent(input$merge, {
+      if (length(selected()) == 0) {
+        shinyWidgets::sendSweetAlert(title = "No annotation selected")
+        req(F)
+      }
+      if (rv$annotations$type[selected()] != "PCG") {
+        shinyWidgets::sendSweetAlert(
+          title = "Merge only available for PCGs",
+          text = "Select a protein-coding gene annotation to merge."
+        )
+        req(F)
+      }
+      sel_gene <- rv$annotations$gene[selected()]
+      dup_idx <- which(
+        rv$annotations$gene == sel_gene &
+        rv$annotations$type == "PCG" &
+        !stringr::str_detect(rv$annotations$gene, "_DELETED_")
+      )
+      if (length(dup_idx) < 2) {
+        shinyWidgets::sendSweetAlert(
+          title = "Nothing to merge",
+          text = stringr::str_glue("Only one non-deleted {sel_gene} annotation exists.")
+        )
+        req(F)
+      }
+      dup_anns <- rv$annotations[dup_idx, ]
+      choices <- setNames(
+        as.list(as.character(dup_idx)),
+        paste0(dup_anns$gene, ": ", dup_anns$pos1, "-", dup_anns$pos2, " (", dup_anns$direction, ")")
+      )
+      output$merge_choices <- renderUI({
+        checkboxGroupInput(
+          ns("merge_selected_rows"),
+          label = NULL,
+          choices = choices,
+          selected = as.character(dup_idx)
+        )
+      })
+      shinyjs::show("merge_select_div")
+    })
+
+    observeEvent(input$cancel_merge, {
+      shinyjs::hide("merge_select_div")
+    })
+
+    observeEvent(input$confirm_merge, {
+      rows_to_merge <- as.integer(req(input$merge_selected_rows))
+      if (length(rows_to_merge) < 2) {
+        shinyWidgets::sendSweetAlert(title = "Select at least 2 annotations to merge")
+        req(F)
+      }
+      merge_anns <- rv$annotations[rows_to_merge, ]
+      if (length(unique(merge_anns$path)) > 1 ||
+          length(unique(merge_anns$scaffold)) > 1 ||
+          length(unique(merge_anns$direction)) > 1) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot merge",
+          text = "All selected annotations must be on the same path, scaffold, and strand direction."
+        )
+        req(F)
+      }
+      new_pos1 <- min(merge_anns$pos1)
+      new_pos2 <- max(merge_anns$pos2)
+      direction <- merge_anns$direction[1]
+      sel_gene <- merge_anns$gene[1]
+      assembly <- get_assembly(
+        ID = merge_anns$ID[1],
+        path = merge_anns$path[1],
+        scaffold = merge_anns$scaffold[1],
+        con = session$userData$con
+      )
+      base_idx <- if (selected() %in% rows_to_merge) selected() else rows_to_merge[1]
+      merged <- rv$annotations[base_idx, ]
+      merged$pos1 <- new_pos1
+      merged$pos2 <- new_pos2
+      merged$length <- abs(new_pos2 - new_pos1) + 1
+      merged$edited <- 1L
+      merged$time_stamp <- as.numeric(Sys.time())
+      if (direction == "+") {
+        merged$start_codon <- assembly |>
+          Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+          as.character()
+        merged$stop_codon <- assembly |>
+          Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+          as.character()
+        merged$translation <- assembly |>
+          Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
+          Biostrings::translate(
+            genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+          ) |>
+          as.character()
+      } else {
+        merged$start_codon <- assembly |>
+          Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+          Biostrings::reverseComplement() |>
+          as.character()
+        merged$stop_codon <- assembly |>
+          Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+          Biostrings::reverseComplement() |>
+          as.character()
+        merged$translation <- assembly |>
+          Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
+          Biostrings::reverseComplement() |>
+          Biostrings::translate(
+            genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+          ) |>
+          as.character()
+      }
+      base_orig_pos1 <- rv$annotations$pos1[base_idx]
+      base_orig_pos2 <- rv$annotations$pos2[base_idx]
+      note <- stringr::str_glue(
+        "MERGED: {length(rows_to_merge)} {sel_gene} annotations into {new_pos1}-{new_pos2} (from {base_orig_pos1}-{base_orig_pos2})"
+      )
+      merged$notes <- paste(note, merged$notes %|NA|% "", sep = "; ") |>
+        stringr::str_remove("; $")
+      to_delete_idx <- setdiff(rows_to_merge, base_idx)
+      ts <- as.numeric(Sys.time())
+      deleted_rows <- purrr::imap(to_delete_idx, function(i, j) {
+        orig_pos1 <- rv$annotations$pos1[i]
+        orig_pos2 <- rv$annotations$pos2[i]
+        rv$annotations[i, ] |>
+          dplyr::mutate(
+            notes = paste(
+              stringr::str_glue("DELETED: from {orig_pos1}-{orig_pos2}"),
+              notes %|NA|% "",
+              sep = "; "
+            ) |> stringr::str_remove("; $"),
+            pos1 = 0L,
+            pos2 = 0L,
+            length = 0L,
+            time_stamp = ts + j,
+            gene = paste0(gene, "_DELETED_", ts + j),
+            edited = 1L
+          )
+      }) |>
+        dplyr::bind_rows()
+      rv$annotations <- rv$annotations[-rows_to_merge, ] |>
+        dplyr::bind_rows(merged) |>
+        dplyr::bind_rows(deleted_rows) |>
+        dplyr::arrange(pos1)
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_delete(
+          rv$updating[, c("ID")],
+          by = "ID",
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_insert(
+          rv$annotations |> dplyr::select(-faa, -fas),
+          by = "ID",
+          conflict = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      shinyjs::hide("merge_select_div")
+      reactable::updateReactable(
+        "table",
+        data = rv$annotations
+      )
+    })
+
+    # Restore Annotation ----
+    restore_do_save <- function() {
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_delete(
+          rv$updating[, c("ID")],
+          by = "ID",
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_insert(
+          rv$annotations |> dplyr::select(-faa, -fas),
+          by = "ID",
+          conflict = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      reactable::updateReactable("table", data = rv$annotations)
+    }
+
+    observeEvent(input$restore, {
+      req(length(selected()) > 0)
+      sel_row <- rv$annotations[selected(), ]
+      req(stringr::str_detect(sel_row$gene, "_DELETED_"))
+      orig_range <- stringr::str_match(sel_row$notes, "DELETED: from (\\d+)-(\\d+)")
+      if (is.na(orig_range[1])) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot restore",
+          text = "Could not determine original position from annotation notes."
+        )
+        req(F)
+      }
+      orig_gene <- stringr::str_remove(sel_row$gene, "_DELETED_.*$")
+      merged_idx <- which(
+        rv$annotations$gene == orig_gene &
+        stringr::str_detect(dplyr::coalesce(rv$annotations$notes, ""), "^MERGED:")
+      )
+      if (length(merged_idx) > 0) {
+        shinyWidgets::confirmSweetAlert(
+          inputId = ns("confirm_restore_merged"),
+          title = stringr::str_glue("Un-merge {orig_gene}?"),
+          text = stringr::str_glue(
+            "This annotation was deleted during a merge. Restoring will undo the entire merge: all deleted {orig_gene} annotations will be restored and the merged annotation will be reverted to its original bounds."
+          ),
+          btn_colors = c("#0056b3", "#0056b3")
+        )
+      } else {
+        orig_pos1 <- as.integer(orig_range[2])
+        orig_pos2 <- as.integer(orig_range[3])
+        conflict <- rv$annotations |>
+          dplyr::filter(
+            gene == orig_gene,
+            pos1 == orig_pos1,
+            !stringr::str_detect(gene, "_DELETED_")
+          )
+        if (nrow(conflict) > 0) {
+          shinyWidgets::sendSweetAlert(
+            title = "Cannot restore",
+            text = stringr::str_glue(
+              "An active annotation for {orig_gene} at {orig_pos1}-{orig_pos2} already exists."
+            )
+          )
+          req(F)
+        }
+        restored <- sel_row |>
+          dplyr::mutate(
+            gene = orig_gene,
+            pos1 = orig_pos1,
+            pos2 = orig_pos2,
+            length = abs(orig_pos2 - orig_pos1) + 1,
+            notes = stringr::str_remove(notes, "^DELETED: from \\d+-\\d+(; )?"),
+            edited = 1L,
+            time_stamp = as.numeric(Sys.time())
+          )
+        rv$annotations <- rv$annotations[-selected(), ] |>
+          dplyr::bind_rows(restored) |>
+          dplyr::arrange(pos1)
+        restore_do_save()
+      }
+    })
+
+    observeEvent(input$confirm_restore_merged, {
+      req(input$confirm_restore_merged)
+      req(length(selected()) > 0)
+      sel_row <- rv$annotations[selected(), ]
+      orig_gene <- stringr::str_remove(sel_row$gene, "_DELETED_.*$")
+      merged_idx <- which(
+        rv$annotations$gene == orig_gene &
+        stringr::str_detect(dplyr::coalesce(rv$annotations$notes, ""), "^MERGED:")
+      )
+      req(length(merged_idx) > 0)
+      merged_row <- rv$annotations[merged_idx[1], ]
+      merged_orig_range <- stringr::str_match(
+        merged_row$notes, "\\(from (\\d+)-(\\d+)\\)"
+      )
+      if (is.na(merged_orig_range[1])) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot un-merge",
+          text = "Original bounds of the merged annotation could not be determined."
+        )
+        req(F)
+      }
+      merged_orig_pos1 <- as.integer(merged_orig_range[2])
+      merged_orig_pos2 <- as.integer(merged_orig_range[3])
+      assembly <- get_assembly(
+        ID = merged_row$ID,
+        path = merged_row$path,
+        scaffold = merged_row$scaffold,
+        con = session$userData$con
+      )
+      direction <- merged_row$direction
+      reverted <- merged_row |>
+        dplyr::mutate(
+          pos1 = merged_orig_pos1,
+          pos2 = merged_orig_pos2,
+          length = abs(merged_orig_pos2 - merged_orig_pos1) + 1,
+          notes = stringr::str_remove(notes, "^MERGED:[^;]*(; )?"),
+          edited = 1L,
+          time_stamp = as.numeric(Sys.time())
+        )
+      if (merged_row$type == "PCG") {
+        if (direction == "+") {
+          reverted$start_codon <- assembly |>
+            Biostrings::subseq(merged_orig_pos1, merged_orig_pos1 + 2) |>
+            as.character()
+          reverted$stop_codon <- assembly |>
+            Biostrings::subseq(merged_orig_pos2 - 2, merged_orig_pos2) |>
+            as.character()
+          reverted$translation <- assembly |>
+            Biostrings::subseq(
+              merged_orig_pos1,
+              merged_orig_pos2 - nchar(reverted$stop_codon)
+            ) |>
+            Biostrings::translate(
+              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+            ) |>
+            as.character()
+        } else {
+          reverted$start_codon <- assembly |>
+            Biostrings::subseq(merged_orig_pos2 - 2, merged_orig_pos2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          reverted$stop_codon <- assembly |>
+            Biostrings::subseq(merged_orig_pos1, merged_orig_pos1 + 2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          reverted$translation <- assembly |>
+            Biostrings::subseq(
+              merged_orig_pos1 + nchar(reverted$stop_codon),
+              merged_orig_pos2
+            ) |>
+            Biostrings::reverseComplement() |>
+            Biostrings::translate(
+              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+            ) |>
+            as.character()
+        }
+      }
+      all_deleted_idx <- which(
+        stringr::str_detect(
+          rv$annotations$gene,
+          paste0("^", orig_gene, "_DELETED_")
+        )
+      )
+      restored_rows <- purrr::map(all_deleted_idx, function(i) {
+        row <- rv$annotations[i, ]
+        del_range <- stringr::str_match(row$notes, "DELETED: from (\\d+)-(\\d+)")
+        if (is.na(del_range[1])) return(NULL)
+        p1 <- as.integer(del_range[2])
+        p2 <- as.integer(del_range[3])
+        row |>
+          dplyr::mutate(
+            gene = orig_gene,
+            pos1 = p1,
+            pos2 = p2,
+            length = abs(p2 - p1) + 1,
+            notes = stringr::str_remove(notes, "^DELETED: from \\d+-\\d+(; )?"),
+            edited = 1L,
+            time_stamp = as.numeric(Sys.time())
+          )
+      }) |>
+        purrr::compact() |>
+        dplyr::bind_rows()
+      remove_idx <- c(merged_idx, all_deleted_idx)
+      rv$annotations <- rv$annotations[-remove_idx, ] |>
+        dplyr::bind_rows(reverted) |>
+        dplyr::bind_rows(restored_rows) |>
+        dplyr::arrange(pos1)
+      restore_do_save()
+    })
   })
 }
 
@@ -1829,6 +2189,46 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       open = TRUE,
       tags$summary("Annotation Table"),
       reactableOutput(ns("table"), width = "100%")
+    ),
+    shinyjs::hidden(
+      div(
+        id = ns("annotation_action_btns"),
+        style = "display: flex; gap: 8px; margin: 6px 0;",
+        actionButton(ns("merge"), "Merge PCGs"),
+        actionButton(ns("delete"), "Delete")
+      )
+    ),
+    shinyjs::hidden(
+      div(
+        id = ns("annotation_restore_btn"),
+        style = "display: flex; gap: 8px; margin: 6px 0;",
+        actionButton(ns("restore"), "Restore")
+      )
+    ),
+    shinyjs::hidden(
+      div(
+        id = ns("merge_select_div"),
+        style = "border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin: 6px 0;",
+        tags$b("Select annotations to merge:"),
+        uiOutput(ns("merge_choices")),
+        div(
+          style = "display: flex; gap: 8px; margin-top: 8px;",
+          shinyWidgets::actionBttn(
+            ns("confirm_merge"),
+            label = "Confirm Merge",
+            style = "material-flat",
+            size = "xs",
+            icon = icon("object-group")
+          ),
+          shinyWidgets::actionBttn(
+            ns("cancel_merge"),
+            label = "Cancel",
+            style = "material-flat",
+            size = "xs",
+            icon = icon("times")
+          )
+        )
+      )
     ),
     hr(),
     tags$details(
@@ -2041,7 +2441,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       actionButton(ns("reviewed"), "Toggle reviewed"),
       actionButton(ns("problematic"), "Toggle problematic"),
       actionButton(ns("linearize"), "Linearize"),
-      actionButton(ns("delete"), "Delete"),
       actionButton(ns("lock"), "Lock&Close"),
       actionButton(ns("close"), "Close")
     )
