@@ -154,6 +154,21 @@ validate_octocoral_mito <- function(
       }
     }
 
+    ## tRNA within PCG or rRNA ----
+    if (type == "tRNA") {
+      containing <- annotations[-i, ] |>
+        dplyr::filter(
+          contig == {{ contig }} &
+          type %in% c("PCG", "rRNA") &
+          pos1 <= {{ pos1 }} &
+          pos2 >= {{ pos2 }}
+        )
+      if (nrow(containing) > 0L) {
+        annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "tRNA within PCG or rRNA")
+        total_warnings = total_warnings + 1
+      }
+    }
+
     ## Length limits ----
     if (!is.na(gene_rules$max_len %||% NA) && length > gene_rules$max_len) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max length")

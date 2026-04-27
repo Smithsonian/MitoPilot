@@ -220,6 +220,18 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = current$trnaScan_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("use_arwen"),
+          label = "Also use ARWEN for tRNA prediction",
+          value = isTRUE(as.logical(current$use_arwen)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        textInput(
+          ns("arwen_opts"),
+          label = "ARWEN options:",
+          value = current$arwen_opts %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled(),
         div(
           selectizeInput(
             ns("start_gene"),

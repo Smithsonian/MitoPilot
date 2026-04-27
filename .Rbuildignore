@@ -19,3 +19,5 @@ $run_dev.*
 ^Meta$
 .sqlite
 ^LICENSE\.md$
+^\.positai$
+^\.claude$

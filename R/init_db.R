@@ -20,6 +20,7 @@
 #' @param annotate_ref_dir Default Mitos2 reference database directory
 #' @param mitos_opts Default MITOS2 command line options
 #' @param trnaScan_opts Default tRNAscan-SE command line options
+#' @param arwen_opts Default ARWEN command line options
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
@@ -60,7 +61,8 @@ new_db <- function(
     annotate_ref_db = "Chordata",
     annotate_ref_dir = "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
     mitos_opts = "--intron 0 --oril 0",
-    trnaScan_opts = "-M vert",
+    trnaScan_opts = "-M vert -X 20",
+    arwen_opts = "-mtx",
     # Default curation options
     curate_cpus = 4,
     curate_memory = 8,
@@ -356,6 +358,8 @@ new_db <- function(
       ref_dir TEXT,
       mitos_opts TEXT,
       trnaScan_opts TEXT,
+      arwen_opts TEXT,
+      use_arwen INTEGER,
       start_gene TEXT,
       PRIMARY KEY (annotate_opts)
     );"
@@ -370,6 +374,8 @@ new_db <- function(
         ref_dir = annotate_ref_dir,
         mitos_opts = mitos_opts,
         trnaScan_opts = trnaScan_opts,
+        arwen_opts = arwen_opts,
+        use_arwen = 0L,
         start_gene = "trnF"
       ),
       in_place = TRUE,

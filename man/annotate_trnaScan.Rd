@@ -7,7 +7,7 @@
 annotate_trnaScan(
   assembly = NULL,
   rotate = TRUE,
-  trnaScan_opts = "-M vert",
+  trnaScan_opts = "-M vert -X 20",
   cpus = 4,
   out = NULL,
   condaenv = "base"
