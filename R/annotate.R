@@ -14,6 +14,8 @@
 #' @param trnaScan_opts Additional command line options for tRNAscan-SE.
 #' @param trnaScan_condaenv Conda environment to run tRNAscan-SE (default:
 #'   "base").
+#' @param arwen_opts Additional command line options for ARWEN (default: "-mtx").
+#' @param use_arwen logical; whether to run ARWEN tRNA prediction (default: FALSE).
 #' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
 #' @param out_dir Output directory.
 #'
@@ -28,8 +30,10 @@ annotate <- function(
     ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
     mitos_opts = "--intron 0 --oril 0",
     mitos_condaenv = "mitos",
-    trnaScan_opts = "-M vert",
+    trnaScan_opts = "-M vert -X 20",
     trnaScan_condaenv = "base",
+    arwen_opts = "-mtx",
+    use_arwen = FALSE,
     start_gene = "trnF",
     out_dir = NULL) {
 
@@ -75,6 +79,77 @@ annotate <- function(
   assembly <- trnaScan_out$assembly
   annotations_trnaScan <- trnaScan_out$annotations
 
+  # ARWEN tRNA annotation ----
+  annotations_arwen <- if (use_arwen) {
+    annotate_arwen(
+      assembly = assembly,
+      arwen_opts = arwen_opts,
+      genetic_code = genetic_code,
+      circular = all(stringr::str_detect(names(assembly), "circular"))
+    )
+  } else {
+    data.frame(
+      contig = character(), type = character(), gene = character(),
+      product = character(), pos1 = integer(), pos2 = integer(),
+      length = integer(), direction = character(),
+      tRNA_ID = character(), anticodon = character()
+    )
+  }
+  # Contig lengths for circular overlap detection (pos1 > pos2 = wrap-around)
+  contig_lens <- setNames(
+    Biostrings::width(assembly),
+    stringr::str_extract(names(assembly), "\\S+")
+  )
+  # Returns a logical vector: does [p1,p2] overlap each of q1_vec/q2_vec?
+  circ_overlap <- function(p1, p2, q1_vec, q2_vec) {
+    if (p1 <= p2) p1 <= q2_vec & q1_vec <= p2
+    else          q2_vec >= p1  | q1_vec <= p2
+  }
+  # Length of a possibly wrap-around interval given assembly length L
+  circ_len <- function(p1, p2, L) {
+    if (p1 <= p2) p2 - p1 + 1L else L - p1 + p2 + 1L
+  }
+  # Overlap length between [p1,p2] (may wrap) and one normal interval [q1,q2]
+  circ_overlap_len <- function(p1, p2, q1, q2, L) {
+    if (p1 <= p2) {
+      max(0L, min(p2, q2) - max(p1, q1) + 1L)
+    } else {
+      max(0L, q2 - max(p1, q1) + 1L) +   # [p1, L] ∩ [q1, q2]
+        max(0L, min(p2, q2) - q1 + 1L)    # [1, p2] ∩ [q1, q2]
+    }
+  }
+
+  # Drop ARWEN predictions that overlap a tRNAscan prediction of the same gene
+  # (position overlap is more robust than anticodon string matching)
+  annotations_arwen <- annotations_arwen |>
+    dplyr::filter(!purrr::pmap_lgl(
+      list(gene, contig, pos1, pos2),
+      \(g, ctg, p1, p2) any(
+        annotations_trnaScan$gene == g &
+        annotations_trnaScan$contig == ctg &
+        circ_overlap(p1, p2, annotations_trnaScan$pos1, annotations_trnaScan$pos2)
+      )
+    ))
+
+  # Drop ARWEN predictions where total overlap with any tRNAscan predictions
+  # exceeds 10% of the ARWEN prediction length
+  annotations_arwen <- annotations_arwen |>
+    dplyr::filter(!purrr::pmap_lgl(
+      list(contig, pos1, pos2),
+      \(ctg, p1, p2) {
+        L <- contig_lens[ctg]
+        arwen_len <- circ_len(p1, p2, L)
+        hits <- annotations_trnaScan[
+          annotations_trnaScan$contig == ctg &
+          circ_overlap(p1, p2, annotations_trnaScan$pos1, annotations_trnaScan$pos2), ]
+        if (nrow(hits) == 0L) return(FALSE)
+        total_overlap <- sum(purrr::map2_int(
+          hits$pos1, hits$pos2, \(q1, q2) circ_overlap_len(p1, p2, q1, q2, L)
+        ))
+        total_overlap / arwen_len > 0.10
+      }
+    ))
+
   # Mitos2 annotation ----
   annotations_mitos <- annotate_mitos2(
     assembly = assembly,
@@ -86,14 +161,43 @@ annotate <- function(
   )
 
   # Combine annotations ----
-  # If there are overlapping tRNA annotations, only keep the annotation from trnascan
-  annotations_mitos <- annotations_mitos[!(annotations_mitos$tRNA_ID %in% annotations_trnaScan$tRNA_ID),]
+  # Priority: tRNAscan > ARWEN > MITOS2
+  # Normalize trnL/trnS variants before deduplication so gene names match across tools
+  normalize_trna_gene <- function(gene) {
+    gene |>
+      stringr::str_replace("trnL1|trnL2", "trnL") |>
+      stringr::str_replace("trnS1|trnS2", "trnS")
+  }
+  combined_trna <- dplyr::bind_rows(annotations_trnaScan, annotations_arwen) |>
+    dplyr::mutate(gene = normalize_trna_gene(gene))
+  annotations_mitos <- annotations_mitos |>
+    dplyr::mutate(gene = normalize_trna_gene(gene)) |>
+    dplyr::filter(
+      type != "tRNA" |
+      !purrr::pmap_lgl(
+        list(contig, pos1, pos2),
+        \(ctg, p1, p2) {
+          L <- contig_lens[ctg]
+          mitos_len <- circ_len(p1, p2, L)
+          hits <- combined_trna[
+            combined_trna$contig == ctg &
+            circ_overlap(p1, p2, combined_trna$pos1, combined_trna$pos2), ]
+          if (nrow(hits) == 0L) return(FALSE)
+          total_overlap <- sum(purrr::map2_int(
+            hits$pos1, hits$pos2, \(q1, q2) circ_overlap_len(p1, p2, q1, q2, L)
+          ))
+          total_overlap / mitos_len > 0.10
+        }
+      )
+    )
   annotations <- dplyr::bind_rows(
     annotations_trnaScan,
+    annotations_arwen,
     annotations_mitos
   ) |> dplyr::select(-dplyr::any_of('tRNA_ID')) |> # remove temporary tRNA_ID column
     dplyr::mutate(dplyr::across('gene', stringr::str_replace, 'trnS1|tnrS2', 'trnS')) |> # Rename trnS1 and trnS2 to trnS
     dplyr::mutate(dplyr::across('gene', stringr::str_replace, 'trnL1|trnL2', 'trnL')) |> # Rename trnL1 and trnL2 to trnL
+    dplyr::filter(type != "tRNA" | is.na(anticodon) | anticodon != "NNN") |>
     dplyr::arrange(contig, pos1)
 
 

@@ -28,7 +28,8 @@ new_db(
   annotate_ref_dir =
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0",
-  trnaScan_opts = "-M vert",
+  trnaScan_opts = "-M vert -X 20",
+  arwen_opts = "-mtx",
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
@@ -79,6 +80,8 @@ Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithso
 \item{mitos_opts}{Default MITOS2 command line options}
 
 \item{trnaScan_opts}{Default tRNAscan-SE command line options}
+
+\item{arwen_opts}{Default ARWEN command line options}
 
 \item{curate_cpus}{Default # cpus for curation}
 
