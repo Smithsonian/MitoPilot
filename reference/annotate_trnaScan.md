@@ -8,7 +8,7 @@ Use tRNAscan-SE to annotate tRNAs in a mitochondrial genome assembly
 annotate_trnaScan(
   assembly = NULL,
   rotate = TRUE,
-  trnaScan_opts = "-M vert",
+  trnaScan_opts = "-M vert -X 20",
   cpus = 4,
   out = NULL,
   condaenv = "base"
@@ -27,7 +27,7 @@ annotate_trnaScan(
 
 - trnaScan_opts:
 
-  command line options for tRNAscan-SE (defatult = \`-M vert\`)
+  command line options for tRNAscan-SE (defatult = \`-M vert -X 20\`)
 
 - cpus:
 

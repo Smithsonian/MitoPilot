@@ -26,6 +26,8 @@ raw input and performs the following steps.
       annotation
     - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for
       tRNA annotation
+    - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
+      annotation (optional)
     - Custom scripts for gene boundary refinement and annotation file
       formatting
     - Validation to flag possible issues or known errors that would be
@@ -407,6 +409,8 @@ submission script for a computing cluster.
   : Add samples to project database
 - [`annotate()`](https://smithsonian.github.io/MitoPilot/reference/annotate.md)
   : Mitogenome Annotation Wrapper
+- [`annotate_arwen()`](https://smithsonian.github.io/MitoPilot/reference/annotate_arwen.md)
+  : Use ARWEN to annotate tRNAs in a mitochondrial genome assembly
 - [`annotate_mitos2()`](https://smithsonian.github.io/MitoPilot/reference/annotate_mitos2.md)
   : Annotate mitochondrial genomes using MITOS2
 - [`annotate_trnaScan()`](https://smithsonian.github.io/MitoPilot/reference/annotate_trnaScan.md)

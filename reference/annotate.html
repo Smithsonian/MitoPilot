@@ -55,8 +55,10 @@
 <span>  ref_dir <span class="op">=</span> <span class="st">"/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2"</span>,</span>
 <span>  mitos_opts <span class="op">=</span> <span class="st">"--intron 0 --oril 0"</span>,</span>
 <span>  mitos_condaenv <span class="op">=</span> <span class="st">"mitos"</span>,</span>
-<span>  trnaScan_opts <span class="op">=</span> <span class="st">"-M vert"</span>,</span>
+<span>  trnaScan_opts <span class="op">=</span> <span class="st">"-M vert -X 20"</span>,</span>
 <span>  trnaScan_condaenv <span class="op">=</span> <span class="st">"base"</span>,</span>
+<span>  arwen_opts <span class="op">=</span> <span class="st">"-mtx"</span>,</span>
+<span>  use_arwen <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  start_gene <span class="op">=</span> <span class="st">"trnF"</span>,</span>
 <span>  out_dir <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -106,6 +108,14 @@
 <dt id="arg-trnascan-condaenv">trnaScan_condaenv<a class="anchor" aria-label="anchor" href="#arg-trnascan-condaenv"></a></dt>
 <dd><p>Conda environment to run tRNAscan-SE (default:
 "base").</p></dd>
+
+
+<dt id="arg-arwen-opts">arwen_opts<a class="anchor" aria-label="anchor" href="#arg-arwen-opts"></a></dt>
+<dd><p>Additional command line options for ARWEN (default: "-mtx").</p></dd>
+
+
+<dt id="arg-use-arwen">use_arwen<a class="anchor" aria-label="anchor" href="#arg-use-arwen"></a></dt>
+<dd><p>logical; whether to run ARWEN tRNA prediction (default: FALSE).</p></dd>
 
 
 <dt id="arg-start-gene">start_gene<a class="anchor" aria-label="anchor" href="#arg-start-gene"></a></dt>

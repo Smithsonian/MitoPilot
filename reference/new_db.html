@@ -70,7 +70,8 @@
 <span>  annotate_ref_dir <span class="op">=</span></span>
 <span>    <span class="st">"https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2"</span>,</span>
 <span>  mitos_opts <span class="op">=</span> <span class="st">"--intron 0 --oril 0"</span>,</span>
-<span>  trnaScan_opts <span class="op">=</span> <span class="st">"-M vert"</span>,</span>
+<span>  trnaScan_opts <span class="op">=</span> <span class="st">"-M vert -X 20"</span>,</span>
+<span>  arwen_opts <span class="op">=</span> <span class="st">"-mtx"</span>,</span>
 <span>  curate_cpus <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  curate_memory <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  curate_target <span class="op">=</span> <span class="st">"fish_mito"</span>,</span>
@@ -162,6 +163,10 @@ Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithso
 
 <dt id="arg-trnascan-opts">trnaScan_opts<a class="anchor" aria-label="anchor" href="#arg-trnascan-opts"></a></dt>
 <dd><p>Default tRNAscan-SE command line options</p></dd>
+
+
+<dt id="arg-arwen-opts">arwen_opts<a class="anchor" aria-label="anchor" href="#arg-arwen-opts"></a></dt>
+<dd><p>Default ARWEN command line options</p></dd>
 
 
 <dt id="arg-curate-cpus">curate_cpus<a class="anchor" aria-label="anchor" href="#arg-curate-cpus"></a></dt>

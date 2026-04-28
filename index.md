@@ -26,6 +26,8 @@ raw input and performs the following steps.
       annotation
     - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for
       tRNA annotation
+    - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
+      annotation (optional)
     - Custom scripts for gene boundary refinement and annotation file
       formatting
     - Validation to flag possible issues or known errors that would be

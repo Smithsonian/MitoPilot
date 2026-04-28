@@ -14,8 +14,10 @@ annotate(
   ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
   mitos_opts = "--intron 0 --oril 0",
   mitos_condaenv = "mitos",
-  trnaScan_opts = "-M vert",
+  trnaScan_opts = "-M vert -X 20",
   trnaScan_condaenv = "base",
+  arwen_opts = "-mtx",
+  use_arwen = FALSE,
   start_gene = "trnF",
   out_dir = NULL
 )
@@ -62,6 +64,14 @@ annotate(
 - trnaScan_condaenv:
 
   Conda environment to run tRNAscan-SE (default: "base").
+
+- arwen_opts:
+
+  Additional command line options for ARWEN (default: "-mtx").
+
+- use_arwen:
+
+  logical; whether to run ARWEN tRNA prediction (default: FALSE).
 
 - start_gene:
 

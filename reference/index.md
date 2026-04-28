@@ -8,6 +8,8 @@
   : Add samples to project database
 - [`annotate()`](https://smithsonian.github.io/MitoPilot/reference/annotate.md)
   : Mitogenome Annotation Wrapper
+- [`annotate_arwen()`](https://smithsonian.github.io/MitoPilot/reference/annotate_arwen.md)
+  : Use ARWEN to annotate tRNAs in a mitochondrial genome assembly
 - [`annotate_mitos2()`](https://smithsonian.github.io/MitoPilot/reference/annotate_mitos2.md)
   : Annotate mitochondrial genomes using MITOS2
 - [`annotate_trnaScan()`](https://smithsonian.github.io/MitoPilot/reference/annotate_trnaScan.md)
