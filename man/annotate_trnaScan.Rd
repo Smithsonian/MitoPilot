@@ -18,7 +18,7 @@ annotate_trnaScan(
 
 \item{rotate}{should the assembly be rotated? default = TRUE}
 
-\item{trnaScan_opts}{command line options for tRNAscan-SE (defatult = `-M vert`)}
+\item{trnaScan_opts}{command line options for tRNAscan-SE (defatult = `-M vert -X 20`)}
 
 \item{cpus}{number of cpus to use (default = 4)}
 

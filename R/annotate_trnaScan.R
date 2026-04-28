@@ -2,7 +2,7 @@
 #'
 #' @param assembly text string of the assembly to annotate
 #' @param rotate should the assembly be rotated? default = TRUE
-#' @param trnaScan_opts command line options for tRNAscan-SE (defatult = `-M vert`)
+#' @param trnaScan_opts command line options for tRNAscan-SE (defatult = `-M vert -X 20`)
 #' @param cpus number of cpus to use (default = 4)
 #' @param out output file name
 #' @param condaenv conda environment to use (default = "base")
@@ -10,13 +10,13 @@
 #' @export
 #'
 annotate_trnaScan <- function(
-    assembly = NULL,
-    rotate = TRUE,
-    trnaScan_opts = "-M vert -X 20",
-    cpus = 4,
-    out = NULL,
-    condaenv = "base") {
-
+  assembly = NULL,
+  rotate = TRUE,
+  trnaScan_opts = "-M vert -X 20",
+  cpus = 4,
+  out = NULL,
+  condaenv = "base"
+) {
   out <- out %||% tempfile()
 
   # debugging

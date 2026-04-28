@@ -33,6 +33,7 @@ MitoPilot is a package for the assembly and annotation of mitochondrial genomess
 2. Mitogenome annotation 
    - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA annotation
    - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for tRNA annotation
+   - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA annotation (optional)
    - Custom scripts for gene boundary refinement and annotation file formatting
    - Validation to flag possible issues or known errors that would be rejected by NCBI GenBank
    - Manual curation of annotations using the integrated Shiny App.

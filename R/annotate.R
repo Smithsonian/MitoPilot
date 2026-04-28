@@ -14,29 +14,29 @@
 #' @param trnaScan_opts Additional command line options for tRNAscan-SE.
 #' @param trnaScan_condaenv Conda environment to run tRNAscan-SE (default:
 #'   "base").
-#' @param arwen_opts Additional command line options for ARWEN (default: "-mtx").
 #' @param use_arwen logical; whether to run ARWEN tRNA prediction (default: FALSE).
+#' @param arwen_opts Additional command line options for ARWEN (default: "-mtx").
 #' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
 #' @param out_dir Output directory.
 #'
 #' @export
 #'
 annotate <- function(
-    assembly_fn = NULL,
-    coverage_fn = NULL,
-    cpus = 4,
-    genetic_code = "2",
-    ref_db = "Chordata",
-    ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
-    mitos_opts = "--intron 0 --oril 0",
-    mitos_condaenv = "mitos",
-    trnaScan_opts = "-M vert -X 20",
-    trnaScan_condaenv = "base",
-    arwen_opts = "-mtx",
-    use_arwen = FALSE,
-    start_gene = "trnF",
-    out_dir = NULL) {
-
+  assembly_fn = NULL,
+  coverage_fn = NULL,
+  cpus = 4,
+  genetic_code = "2",
+  ref_db = "Chordata",
+  ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
+  mitos_opts = "--intron 0 --oril 0",
+  mitos_condaenv = "mitos",
+  trnaScan_opts = "-M vert -X 20",
+  trnaScan_condaenv = "base",
+  arwen_opts = "-mtx",
+  use_arwen = FALSE,
+  start_gene = "trnF",
+  out_dir = NULL
+) {
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
   # Coverage trimming (optional)
@@ -102,8 +102,11 @@ annotate <- function(
   )
   # Returns a logical vector: does [p1,p2] overlap each of q1_vec/q2_vec?
   circ_overlap <- function(p1, p2, q1_vec, q2_vec) {
-    if (p1 <= p2) p1 <= q2_vec & q1_vec <= p2
-    else          q2_vec >= p1  | q1_vec <= p2
+    if (p1 <= p2) {
+      p1 <= q2_vec & q1_vec <= p2
+    } else {
+      q2_vec >= p1 | q1_vec <= p2
+    }
   }
   # Length of a possibly wrap-around interval given assembly length L
   circ_len <- function(p1, p2, L) {
@@ -114,8 +117,8 @@ annotate <- function(
     if (p1 <= p2) {
       max(0L, min(p2, q2) - max(p1, q1) + 1L)
     } else {
-      max(0L, q2 - max(p1, q1) + 1L) +   # [p1, L] ∩ [q1, q2]
-        max(0L, min(p2, q2) - q1 + 1L)    # [1, p2] ∩ [q1, q2]
+      max(0L, q2 - max(p1, q1) + 1L) + # [p1, L] ∩ [q1, q2]
+        max(0L, min(p2, q2) - q1 + 1L) # [1, p2] ∩ [q1, q2]
     }
   }
 
@@ -126,8 +129,8 @@ annotate <- function(
       list(gene, contig, pos1, pos2),
       \(g, ctg, p1, p2) any(
         annotations_trnaScan$gene == g &
-        annotations_trnaScan$contig == ctg &
-        circ_overlap(p1, p2, annotations_trnaScan$pos1, annotations_trnaScan$pos2)
+          annotations_trnaScan$contig == ctg &
+          circ_overlap(p1, p2, annotations_trnaScan$pos1, annotations_trnaScan$pos2)
       )
     ))
 
@@ -141,8 +144,11 @@ annotate <- function(
         arwen_len <- circ_len(p1, p2, L)
         hits <- annotations_trnaScan[
           annotations_trnaScan$contig == ctg &
-          circ_overlap(p1, p2, annotations_trnaScan$pos1, annotations_trnaScan$pos2), ]
-        if (nrow(hits) == 0L) return(FALSE)
+            circ_overlap(p1, p2, annotations_trnaScan$pos1, annotations_trnaScan$pos2),
+        ]
+        if (nrow(hits) == 0L) {
+          return(FALSE)
+        }
         total_overlap <- sum(purrr::map2_int(
           hits$pos1, hits$pos2, \(q1, q2) circ_overlap_len(p1, p2, q1, q2, L)
         ))
@@ -174,35 +180,39 @@ annotate <- function(
     dplyr::mutate(gene = normalize_trna_gene(gene)) |>
     dplyr::filter(
       type != "tRNA" |
-      !purrr::pmap_lgl(
-        list(contig, pos1, pos2),
-        \(ctg, p1, p2) {
-          L <- contig_lens[ctg]
-          mitos_len <- circ_len(p1, p2, L)
-          hits <- combined_trna[
-            combined_trna$contig == ctg &
-            circ_overlap(p1, p2, combined_trna$pos1, combined_trna$pos2), ]
-          if (nrow(hits) == 0L) return(FALSE)
-          total_overlap <- sum(purrr::map2_int(
-            hits$pos1, hits$pos2, \(q1, q2) circ_overlap_len(p1, p2, q1, q2, L)
-          ))
-          total_overlap / mitos_len > 0.10
-        }
-      )
+        !purrr::pmap_lgl(
+          list(contig, pos1, pos2),
+          \(ctg, p1, p2) {
+            L <- contig_lens[ctg]
+            mitos_len <- circ_len(p1, p2, L)
+            hits <- combined_trna[
+              combined_trna$contig == ctg &
+                circ_overlap(p1, p2, combined_trna$pos1, combined_trna$pos2),
+            ]
+            if (nrow(hits) == 0L) {
+              return(FALSE)
+            }
+            total_overlap <- sum(purrr::map2_int(
+              hits$pos1, hits$pos2, \(q1, q2) circ_overlap_len(p1, p2, q1, q2, L)
+            ))
+            total_overlap / mitos_len > 0.10
+          }
+        )
     )
   annotations <- dplyr::bind_rows(
     annotations_trnaScan,
     annotations_arwen,
     annotations_mitos
-  ) |> dplyr::select(-dplyr::any_of('tRNA_ID')) |> # remove temporary tRNA_ID column
-    dplyr::mutate(dplyr::across('gene', stringr::str_replace, 'trnS1|tnrS2', 'trnS')) |> # Rename trnS1 and trnS2 to trnS
-    dplyr::mutate(dplyr::across('gene', stringr::str_replace, 'trnL1|trnL2', 'trnL')) |> # Rename trnL1 and trnL2 to trnL
+  ) |>
+    dplyr::select(-dplyr::any_of("tRNA_ID")) |> # remove temporary tRNA_ID column
+    dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnS1|tnrS2", "trnS")) |> # Rename trnS1 and trnS2 to trnS
+    dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnL1|trnL2", "trnL")) |> # Rename trnL1 and trnL2 to trnL
     dplyr::filter(type != "tRNA" | is.na(anticodon) | anticodon != "NNN") |>
     dplyr::arrange(contig, pos1)
 
 
   # Rotate assembly and annotation if circular
-  if(stringr::str_detect(names(assembly), "circular")){
+  if (stringr::str_detect(names(assembly), "circular")) {
     rotate_results <- rotate_asmb(
       assembly = assembly,
       annotations = annotations,
@@ -251,7 +261,7 @@ annotate <- function(
       to_remove <- c(to_remove, idx)
     }
   }
-  if(length(to_remove) > 0) {
+  if (length(to_remove) > 0) {
     annotations <- annotations[-to_remove, ]
   }
 
