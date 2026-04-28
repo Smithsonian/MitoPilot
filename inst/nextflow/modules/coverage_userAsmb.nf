@@ -18,7 +18,8 @@ process coverage_userAsmb {
         tuple path("${outDir}/*"),     // output files
             path("${id}/assemble/${assembler}/NF_work_dir_coverage.txt"), // troubleshooting file
             val(id),  // ID
-            path("${outDir}/${id}_assembly_1.fasta")  // assembly fasta
+            path("${outDir}/${id}_assembly_1.fasta"),  // assembly fasta
+            val(assembler)  // opts_id (assemble_opts key)
 
     shell:
     outDir = "${id}/assemble/${assembler}"

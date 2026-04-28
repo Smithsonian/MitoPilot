@@ -15,6 +15,7 @@ include {ANNOTATE} from './modules/annotate_workflow.nf'
 include {CURATE} from './modules/curate_workflow.nf'
 include {VALIDATE} from './modules/validate_workflow.nf'
 include {COVERAGE_userAsmb} from './modules/coverage_userAsmb_workflow.nf'
+include {BLAST_GENBANK} from './modules/blast_genbank_workflow.nf'
 
 // ASSEMBLY WORKFLOW
 workflow WF1 {
@@ -22,14 +23,16 @@ workflow WF1 {
     PREPROCESS()
     ASSEMBLE(PREPROCESS.out[0])
     COVERAGE(ASSEMBLE.out[0])
+    BLAST_GENBANK(ASSEMBLE.out[0].map{ it -> tuple(it[0], it[1], it[4]) })
 
 }
 
 // ASSEMBLY WORKFLOW - user provided assemblies
 workflow WF1_userAsmb {
-    
+
     PREPROCESS()
     COVERAGE_userAsmb(PREPROCESS.out[0])
+    BLAST_GENBANK(COVERAGE_userAsmb.out.blast_in)
 
 }
 

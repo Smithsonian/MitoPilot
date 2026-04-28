@@ -33,6 +33,10 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       length,
       paths,
       scaffolds,
+      blast_accession,
+      blast_species,
+      blast_pident,
+      blast_qcovs,
       time_stamp,
       assemble_notes
     ) |>

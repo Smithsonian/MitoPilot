@@ -223,6 +223,10 @@ new_db <- function(
       assemble_lock INTEGER,
       hide_switch INTEGER,
       assemble_opts TEXT,
+      blast_accession TEXT,
+      blast_species TEXT,
+      blast_pident REAL,
+      blast_qcovs REAL,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"

@@ -155,4 +155,8 @@ workflow COVERAGE_userAsmb {
             }
             .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
 
+    emit:
+        // tuple(id, assembly, opts_id) for single-contig BLAST search
+        blast_in = coverage_out.map{ it -> tuple(it[2], it[3], it[4]) }
+
 }

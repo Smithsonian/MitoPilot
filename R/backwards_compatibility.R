@@ -30,6 +30,8 @@ backwards_compatibility <- function(
   annotate_opts_table <- DBI::dbReadTable(con, "annotate_opts") # read in annotations opts table
   curate_opts_table <- DBI::dbReadTable(con, "curate_opts") # read in curate opts table
 
+  assemble_table <- DBI::dbReadTable(con, "assemble")
+
   # check if .config file contains "asmbDir" parameter
   conf <- tryCatch({
     readLines(file.path(path, ".config"))
@@ -45,6 +47,7 @@ backwards_compatibility <- function(
     stop("Error reading .config file: ", e$message)
   })
   failOnIgnore <- any(grep("failOnIgnore = true", conf))
+  blast_gb_conf <- any(grepl("blast_gb", conf))
 
   # check if .config file contains latest container version
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
@@ -55,6 +58,7 @@ backwards_compatibility <- function(
 
   if (asmbDir &&
       failOnIgnore &&
+      blast_gb_conf &&
       containerVer &&
       !old_ref_str &&
       "arwen_opts" %in% names(annotate_opts_table) &&
@@ -69,7 +73,8 @@ backwards_compatibility <- function(
       "problematic" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
       "ID_verified" %in% names(annotate_table) &&
-      "reviewed" %in% names(annotate_table))
+      "reviewed" %in% names(annotate_table) &&
+      "blast_accession" %in% names(assemble_table))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -434,6 +439,31 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "assemble_opts"
       )
+  }
+
+  # if blast_accession column doesn't exist, add BLAST result columns
+  if (!("blast_accession" %in% names(assemble_table))) {
+    message("added BLAST result columns to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_accession TEXT")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_species TEXT")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_pident REAL")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_qcovs REAL")
+  }
+
+  # if .config does not contain "blast_gb" params section, add it
+  if (!blast_gb_conf) {
+    conf <- readLines(file.path(path, ".config"))
+    message("added 'blast_gb' section to nextflow .config file")
+    blast_gb_lines <- c(
+      "    blast_gb {",
+      "        container = process.container",
+      "        executor = process.executor",
+      "    }"
+    )
+    # Insert after the last nested closing brace (end of the validate block)
+    last_nested_close <- max(grep("^    }$", conf))
+    conf <- append(conf, blast_gb_lines, after = last_nested_close)
+    writeLines(conf, file.path(path, ".config"))
   }
 
 }

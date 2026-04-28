@@ -1817,17 +1817,18 @@ annotations_details_server <- function(id, rv) {
         shinyWidgets::sendSweetAlert(title = "No annotation selected")
         req(F)
       }
-      if (rv$annotations$type[selected()] != "PCG") {
+      sel_type <- rv$annotations$type[selected()]
+      if (!sel_type %in% c("PCG", "rRNA")) {
         shinyWidgets::sendSweetAlert(
-          title = "Merge only available for PCGs",
-          text = "Select a protein-coding gene annotation to merge."
+          title = "Merge only available for PCGs and rRNAs",
+          text = "Select a protein-coding gene or ribosomal RNA annotation to merge."
         )
         req(F)
       }
       sel_gene <- rv$annotations$gene[selected()]
       dup_idx <- which(
         rv$annotations$gene == sel_gene &
-        rv$annotations$type == "PCG" &
+        rv$annotations$type == sel_type &
         !stringr::str_detect(rv$annotations$gene, "_DELETED_")
       )
       if (length(dup_idx) < 2) {
@@ -1877,12 +1878,7 @@ annotations_details_server <- function(id, rv) {
       new_pos2 <- max(merge_anns$pos2)
       direction <- merge_anns$direction[1]
       sel_gene <- merge_anns$gene[1]
-      assembly <- get_assembly(
-        ID = merge_anns$ID[1],
-        path = merge_anns$path[1],
-        scaffold = merge_anns$scaffold[1],
-        con = session$userData$con
-      )
+      sel_type <- merge_anns$type[1]
       base_idx <- if (selected() %in% rows_to_merge) selected() else rows_to_merge[1]
       merged <- rv$annotations[base_idx, ]
       merged$pos1 <- new_pos1
@@ -1890,35 +1886,43 @@ annotations_details_server <- function(id, rv) {
       merged$length <- abs(new_pos2 - new_pos1) + 1
       merged$edited <- 1L
       merged$time_stamp <- as.numeric(Sys.time())
-      if (direction == "+") {
-        merged$start_codon <- assembly |>
-          Biostrings::subseq(new_pos1, new_pos1 + 2) |>
-          as.character()
-        merged$stop_codon <- assembly |>
-          Biostrings::subseq(new_pos2 - 2, new_pos2) |>
-          as.character()
-        merged$translation <- assembly |>
-          Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
-          Biostrings::translate(
-            genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
-          ) |>
-          as.character()
-      } else {
-        merged$start_codon <- assembly |>
-          Biostrings::subseq(new_pos2 - 2, new_pos2) |>
-          Biostrings::reverseComplement() |>
-          as.character()
-        merged$stop_codon <- assembly |>
-          Biostrings::subseq(new_pos1, new_pos1 + 2) |>
-          Biostrings::reverseComplement() |>
-          as.character()
-        merged$translation <- assembly |>
-          Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(
-            genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
-          ) |>
-          as.character()
+      if (sel_type == "PCG") {
+        assembly <- get_assembly(
+          ID = merge_anns$ID[1],
+          path = merge_anns$path[1],
+          scaffold = merge_anns$scaffold[1],
+          con = session$userData$con
+        )
+        if (direction == "+") {
+          merged$start_codon <- assembly |>
+            Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+            as.character()
+          merged$stop_codon <- assembly |>
+            Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+            as.character()
+          merged$translation <- assembly |>
+            Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
+            Biostrings::translate(
+              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+            ) |>
+            as.character()
+        } else {
+          merged$start_codon <- assembly |>
+            Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          merged$stop_codon <- assembly |>
+            Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          merged$translation <- assembly |>
+            Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
+            Biostrings::reverseComplement() |>
+            Biostrings::translate(
+              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+            ) |>
+            as.character()
+        }
       }
       base_orig_pos1 <- rv$annotations$pos1[base_idx]
       base_orig_pos2 <- rv$annotations$pos2[base_idx]
@@ -2194,7 +2198,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       div(
         id = ns("annotation_action_btns"),
         style = "display: flex; gap: 8px; margin: 6px 0;",
-        actionButton(ns("merge"), "Merge PCGs"),
+        actionButton(ns("merge"), "Merge PCGs/rRNAs"),
         actionButton(ns("delete"), "Delete")
       )
     ),

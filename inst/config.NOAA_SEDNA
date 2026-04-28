@@ -59,6 +59,10 @@ params {
         container = process.container
         executor = process.executor
     }
+    blast_gb {
+        container = process.container
+        executor = process.executor
+    }
 }
 
 // pipeline will exit with a non-zero exit code if any failed tasks are ignored using the ignore error strategy

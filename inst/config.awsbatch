@@ -73,4 +73,8 @@ params {
         container = process.container
         executor = process.executor
     }
+    blast_gb {
+        container = process.container
+        executor = process.executor
+    }
 }

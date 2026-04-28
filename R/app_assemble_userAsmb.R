@@ -148,6 +148,34 @@ assemble_server_userAsmb <- function(id) {
             scaffolds = colDef(
               show = TRUE, width = 100, name = "# Scaffolds", align = "center"
             ),
+            blast_accession = colDef(
+              show = TRUE,
+              name = "BLAST Top Hit",
+              html = TRUE,
+              width = 120,
+              cell = rt_ncbi_link()
+            ),
+            blast_species = colDef(
+              show = TRUE,
+              name = "BLAST Species",
+              html = TRUE,
+              minWidth = 160,
+              cell = rt_longtext()
+            ),
+            blast_pident = colDef(
+              show = TRUE,
+              name = "BLAST % Ident",
+              filterable = FALSE,
+              width = 90,
+              align = "center"
+            ),
+            blast_qcovs = colDef(
+              show = TRUE,
+              name = "BLAST % Cov",
+              filterable = FALSE,
+              width = 90,
+              align = "center"
+            ),
             time_stamp = colDef(
               show = TRUE,
               name = "Last Updated",
