@@ -12,10 +12,13 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
 
   dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID) |>
+    dplyr::select(ID, blast_accession, blast_species) |>
     dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
     dplyr::filter(annotate_lock == 1) |>
-    dplyr::select(ID, curate_opts, topology, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings) |>
+    dplyr::select(
+      ID, blast_accession, blast_species, curate_opts, topology,
+      structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings
+    ) |>
     dplyr::left_join(samples, by = "ID") |>
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>

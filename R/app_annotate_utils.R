@@ -11,7 +11,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 
   assemble <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID)
+    dplyr::select(ID, blast_accession, blast_species)
 
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
@@ -40,6 +40,8 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       length,
       topology,
       scaffolds,
+      blast_accession,
+      blast_species,
       structure,
       PCGCount,
       tRNACount,

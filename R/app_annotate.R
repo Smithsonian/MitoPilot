@@ -186,6 +186,20 @@ annotate_server <- function(id) {
           ),
           topology = colDef(show = TRUE, name = "Topology", align = "center"),
           scaffolds = colDef(show = TRUE, name = "Scaffolds", align = "center"),
+          blast_accession = colDef(
+            show = TRUE,
+            name = "BLAST Top Hit",
+            html = TRUE,
+            width = 120,
+            cell = rt_ncbi_link()
+          ),
+          blast_species = colDef(
+            show = TRUE,
+            name = "BLAST Species",
+            html = TRUE,
+            minWidth = 160,
+            cell = rt_longtext()
+          ),
           PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
           tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
           rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),

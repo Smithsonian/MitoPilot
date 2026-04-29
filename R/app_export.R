@@ -63,6 +63,20 @@ export_server <- function(id) {
             name = "Curate Opts.",
             width = 110
           ),
+          blast_accession = colDef(
+            show = TRUE,
+            name = "BLAST Top Hit",
+            html = TRUE,
+            width = 120,
+            cell = rt_ncbi_link()
+          ),
+          blast_species = colDef(
+            show = TRUE,
+            name = "BLAST Species",
+            html = TRUE,
+            minWidth = 160,
+            cell = rt_longtext()
+          ),
           topology = colDef(show = T, name = "Topology", width = 100),
           structure = colDef(show = T, name = "Structure"),
           export_group = colDef(name = "Group", sticky = "right")
