@@ -32,9 +32,10 @@ workflow BLAST_GENBANK {
 
         blast_genbank(blast_in).set { blast_out }
 
-        // Parse top hit, round numeric fields, and write to DB
+        // Parse top hit, round numeric fields; carry opts_id from result file path
         blast_out
             .map{ id, result_file ->
+                def opts_id = result_file.parent.name
                 def lines = result_file.readLines().findAll{ it.trim() }
                 def blast_accession, blast_species, blast_pident, blast_qcovs
                 if (lines) {
@@ -56,7 +57,20 @@ workflow BLAST_GENBANK {
                     blast_pident    = null
                     blast_qcovs     = null
                 }
-                tuple(blast_accession, blast_species, blast_pident, blast_qcovs, id)
+                tuple(id, opts_id, blast_accession, blast_species, blast_pident, blast_qcovs)
             }
+            // Fan out: one branch for DB insert, one for reference fetch
+            .multiMap { id, opts_id, accession, species, pident, qcovs ->
+                db_insert:  tuple(accession, species, pident, qcovs, id)
+                ref_input:  tuple(id, accession, opts_id)
+            }
+            .set { blast_parsed }
+
+        blast_parsed.db_insert
             .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')
+
+    emit:
+        // Downstream BLAST_REF_FETCH consumes this; filtered to real hits only
+        ref_input = blast_parsed.ref_input
+            .filter{ id, accession, opts_id -> accession != 'NO HIT' }
 }

@@ -446,5 +446,20 @@ new_db <- function(
     );"
   )
 
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_annotations (
+      ID TEXT NOT NULL,
+      gene TEXT NOT NULL,
+      type TEXT,
+      pos1 INTEGER,
+      pos2 INTEGER,
+      direction TEXT,
+      ref_length INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, gene, pos1)
+    );"
+  )
+
   invisible(return())
 }

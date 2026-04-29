@@ -35,6 +35,11 @@ annotations_details_server <- function(id, rv) {
         list.files(pattern = "coverageStats", full.names = T) |>
         read.csv()
 
+      ## Load BLAST reference annotations ----
+      rv$blast_ref <- dplyr::tbl(session$userData$con, "blast_ref_annotations") |>
+        dplyr::filter(ID == !!rv$updating$ID) |>
+        dplyr::collect()
+
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
     })
@@ -353,6 +358,122 @@ annotations_details_server <- function(id, rv) {
      req(rv$coverage_plot, rv$coverage)
      combined_plot <- rv$coverage_plot / rv$genes_plot + plot_layout(heights = c(3, 1))
        print(combined_plot)
+    })
+    # BLAST Reference Synteny ----
+    output$synteny_ui <- renderUI({
+      req(rv$blast_ref, rv$updating)
+      req(nrow(rv$blast_ref) > 0)
+      w <- max(rv$updating$length %||% 800L, 800L)
+      sample_lbl <- rv$updating$ID
+      ref_lbl <- rv$updating$blast_species %||% rv$updating$blast_accession
+      ref_acc <- rv$updating$blast_accession
+      div(
+        style = "display: flex; align-items: flex-start;",
+        div(
+          style = paste0(
+            "flex-shrink: 0; width: 160px; font-size: 11px; ",
+            "padding-right: 6px; box-sizing: border-box;"
+          ),
+          div(
+            style = "height: 100px; display: flex; align-items: center; word-break: break-word;",
+            sample_lbl
+          ),
+          div(
+            style = "height: 100px; display: flex; align-items: center; word-break: break-word;",
+            div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl))
+          )
+        ),
+        div(
+          style = "overflow-x: auto; flex: 1;",
+          plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = "200px")
+        )
+      )
+    })
+    output$synteny_plot <- renderPlot({
+      req(rv$blast_ref, rv$annotations, rv$coverage)
+      req(nrow(rv$blast_ref) > 0)
+
+      ref_length <- rv$blast_ref$ref_length[1]
+      sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
+
+      # Anchor: first gene in sample (by pos1); rotate reference to match
+      anchor_gene <- sample_genes |>
+        dplyr::arrange(pos1) |>
+        dplyr::pull(gene) |>
+        head(1)
+      anchor_ref <- rv$blast_ref |>
+        dplyr::filter(gene == anchor_gene) |>
+        dplyr::arrange(pos1)
+      # Only rotate for circular assemblies; linear genomes have a fixed start
+      rotation <- if (rv$updating$topology == "circular" && nrow(anchor_ref) > 0) {
+        as.integer(anchor_ref$pos1[1]) - 1L
+      } else {
+        0L
+      }
+
+      # Apply rotation; extend pos2 past ref_length for wrap-around features
+      ref_rotated <- rv$blast_ref |>
+        dplyr::mutate(
+          pos1_r = as.integer(((as.integer(pos1) - 1L - rotation) %% ref_length) + 1L),
+          pos2_r = as.integer(((as.integer(pos2) - 1L - rotation) %% ref_length) + 1L)
+        ) |>
+        dplyr::mutate(
+          pos2_r = dplyr::if_else(pos2_r < pos1_r, pos2_r + ref_length, pos2_r),
+          pos1_r = dplyr::if_else(pos2_r > ref_length, 1L, pos1_r)
+        ) |>
+        dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+
+      sample_len <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
+      sample_df <- sample_genes |>
+        dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+
+      # Normalise both genomes to 0–100% so tracks are directly comparable
+      sample_pct <- sample_df |>
+        dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100)
+      ref_pct <- ref_rotated |>
+        dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100)
+
+      gene_track <- list(
+        gggenes::geom_gene_arrow(
+          arrow_body_height = ggplot2::unit(12, "mm"),
+          arrowhead_height  = ggplot2::unit(12, "mm"),
+          arrowhead_width   = ggplot2::unit(4, "mm"),
+          alpha = 0.5
+        ),
+        gggenes::geom_gene_label(align = "left", height = ggplot2::unit(8, "mm")),
+        ggplot2::scale_fill_manual(values = c(
+          ctrl = "#FAA34A85",
+          PCG  = "#60BD6885",
+          rRNA = "#5DA5DA85",
+          tRNA = "#F17CB085"
+        )),
+        ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)),
+        ggplot2::coord_cartesian(clip = "off"),
+        ggthemes::theme_tufte(),
+        ggplot2::theme(
+          legend.position = "none",
+          axis.title      = ggplot2::element_blank(),
+          axis.text.y     = ggplot2::element_blank(),
+          axis.ticks.y    = ggplot2::element_blank(),
+          plot.margin     = ggplot2::margin(2, 0, 2, 0, "mm")
+        )
+      )
+
+      sample_plot <- ggplot2::ggplot(sample_pct) +
+        ggplot2::aes(
+          xmin = xmin, xmax = xmax, forward = direction == "+",
+          fill = type, y = gene, label = gene
+        ) +
+        gene_track
+
+      ref_plot <- ggplot2::ggplot(ref_pct) +
+        ggplot2::aes(
+          xmin = xmin, xmax = xmax, forward = direction == "+",
+          fill = type, y = gene, label = gene
+        ) +
+        gene_track
+
+      print(sample_plot / ref_plot + patchwork::plot_layout(heights = c(1, 1)))
     })
     ## Auto scroll ----
     observeEvent(selected(), {
@@ -2241,6 +2362,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         id = ns("coverageDiv"),
         style = "width: 100%; overflow-x: auto; padding: 5mm;",
         uiOutput(ns("coverage_map"))
+      )
+    ),
+    tags$details(
+      tags$summary("BLAST Reference Synteny"),
+      div(
+        style = "padding: 5mm;",
+        uiOutput(ns("synteny_ui"))
       )
     ),
     tags$details(

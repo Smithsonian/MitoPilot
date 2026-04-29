@@ -450,6 +450,25 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_qcovs REAL")
   }
 
+  # if blast_ref_annotations table doesn't exist, create it
+  existing_tables <- DBI::dbListTables(con)
+  if (!("blast_ref_annotations" %in% existing_tables)) {
+    message("created blast_ref_annotations table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_annotations (
+        ID TEXT NOT NULL,
+        gene TEXT NOT NULL,
+        type TEXT,
+        pos1 INTEGER,
+        pos2 INTEGER,
+        direction TEXT,
+        ref_length INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, gene, pos1)
+      );"
+    )
+  }
+
   # if .config does not contain "blast_gb" params section, add it
   if (!blast_gb_conf) {
     conf <- readLines(file.path(path, ".config"))
