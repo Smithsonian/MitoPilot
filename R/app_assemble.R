@@ -168,14 +168,14 @@ assemble_server <- function(id) {
               show = TRUE,
               name = "BLAST % Ident",
               filterable = FALSE,
-              width = 90,
+              minWidth = 90,
               align = "center"
             ),
             blast_qcovs = colDef(
               show = TRUE,
               name = "BLAST % Cov",
               filterable = FALSE,
-              width = 90,
+              minWidth = 90,
               align = "center"
             ),
             time_stamp = colDef(
