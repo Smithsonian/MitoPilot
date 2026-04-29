@@ -3,6 +3,10 @@ process blast_genbank {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
+    cpus { (params.blast_gb.cpus instanceof Integer) ? params.blast_gb.cpus : 1 }
+    memory = (params.blast_gb.memory instanceof Number) ? "${params.blast_gb.memory}.GB" : null
+    clusterOptions = (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : null
+
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, mode: 'copy'
 
     errorStrategy 'ignore'

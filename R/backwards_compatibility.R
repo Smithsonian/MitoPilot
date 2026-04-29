@@ -456,6 +456,7 @@ backwards_compatibility <- function(
     message("added 'blast_gb' section to nextflow .config file")
     blast_gb_lines <- c(
       "    blast_gb {",
+      "        cpus = 1",
       "        container = process.container",
       "        executor = process.executor",
       "    }"
