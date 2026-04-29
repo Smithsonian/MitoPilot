@@ -384,6 +384,7 @@ annotations_details_server <- function(id, rv) {
           )
         ),
         div(
+          id = ns("syntenyScrollDiv"),
           style = "overflow-x: auto; flex: 1;",
           plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = "200px")
         )
@@ -437,10 +438,10 @@ annotations_details_server <- function(id, rv) {
         gggenes::geom_gene_arrow(
           arrow_body_height = ggplot2::unit(12, "mm"),
           arrowhead_height  = ggplot2::unit(12, "mm"),
-          arrowhead_width   = ggplot2::unit(4, "mm"),
+          arrowhead_width   = ggplot2::unit(2, "mm"),
           alpha = 0.5
         ),
-        gggenes::geom_gene_label(align = "left", height = ggplot2::unit(8, "mm")),
+        gggenes::geom_gene_label(align = "left", height = ggplot2::unit(6, "mm")),
         ggplot2::scale_fill_manual(values = c(
           ctrl = "#FAA34A85",
           PCG  = "#60BD6885",
@@ -462,14 +463,14 @@ annotations_details_server <- function(id, rv) {
       sample_plot <- ggplot2::ggplot(sample_pct) +
         ggplot2::aes(
           xmin = xmin, xmax = xmax, forward = direction == "+",
-          fill = type, y = gene, label = gene
+          fill = type, y = 0, label = gene
         ) +
         gene_track
 
       ref_plot <- ggplot2::ggplot(ref_pct) +
         ggplot2::aes(
           xmin = xmin, xmax = xmax, forward = direction == "+",
-          fill = type, y = gene, label = gene
+          fill = type, y = 0, label = gene
         ) +
         gene_track
 
@@ -481,6 +482,15 @@ annotations_details_server <- function(id, rv) {
       session$sendCustomMessage(
         "hScroll", list(id = ns("coverageDiv"), px = as.numeric(rv$annotations$pos1[selected()]))
       )
+      if (!is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0 && !is.null(rv$coverage)) {
+        sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
+        sample_len <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
+        w <- max(rv$updating$length %||% 800L, 800L)
+        scroll_px <- as.numeric(rv$annotations$pos1[selected()]) / sample_len * w
+        session$sendCustomMessage(
+          "hScroll", list(id = ns("syntenyScrollDiv"), px = scroll_px)
+        )
+      }
     })
 
     # MSA ----
