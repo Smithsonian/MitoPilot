@@ -17,8 +17,8 @@ params.sqlDeleteAnnotations =  'DELETE FROM annotations WHERE ID = ? AND time_st
 
 params.sqlWriteAnnotations =    'INSERT OR REPLACE INTO annotations ' +
                                 '(ID, path, scaffold, type, gene, product, pos1, pos2, length, direction, start_codon, ' +
-                                    'stop_codon, anticodon, notes, warnings, translation, refHits, time_stamp, edited) ' +
-                                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
+                                    'stop_codon, anticodon, tool, notes, warnings, translation, refHits, time_stamp, edited) ' +
+                                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
 
 workflow VALIDATE {
     take:
@@ -96,6 +96,7 @@ workflow VALIDATE {
                     record.start_codon,
                     record.stop_codon,
                     record.anticodon,
+                    record.tool,
                     record.notes,
                     record.warnings,
                     record.translation,

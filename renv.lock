@@ -9,7 +9,7 @@
     ]
   },
   "Bioconductor": {
-    "Version": "3.20"
+    "Version": "3.22"
   },
   "Packages": {
     "BiocGenerics": {

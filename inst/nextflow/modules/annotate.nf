@@ -40,11 +40,15 @@ process annotate {
         ref_db = '!{ref_db_clean}', \
         ref_dir = '.', \
         mitos_opts = '!{opts.mitos}', \
+        use_mitos_best = !{opts.use_mitos_best == 1 ? "TRUE" : "FALSE"}, \
         mitos_condaenv = '!{params.mitos_condaenv}', \
         trnaScan_opts = '!{opts.trnaScan}', \
         trnaScan_condaenv = '!{params.trnaScan_condaenv}', \
         arwen_opts = '!{opts.arwen}', \
         use_arwen = !{opts.use_arwen == 1 ? "TRUE" : "FALSE"}, \
+        aragorn_opts = '!{opts.aragorn}', \
+        aragorn_condaenv = '!{params.aragorn_condaenv}', \
+        use_aragorn = !{opts.use_aragorn == 1 ? "TRUE" : "FALSE"}, \
         start_gene = '!{opts.start_gene}', \
         out_dir = '!{dir}'
     )"

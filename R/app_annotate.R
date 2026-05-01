@@ -490,12 +490,24 @@ annotate_server <- function(id) {
           value = cur$trnaScan_opts
         )
         shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_mitos_best",
+          value = isTRUE(as.logical(cur$use_mitos_best %||% 1L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
           inputId = "use_arwen",
           value = isTRUE(as.logical(cur$use_arwen))
         )
         updateTextInput(
           inputId = "arwen_opts",
           value = cur$arwen_opts
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_aragorn",
+          value = isTRUE(as.logical(cur$use_aragorn))
+        )
+        updateTextInput(
+          inputId = "aragorn_opts",
+          value = cur$aragorn_opts
         )
         updateSelectizeInput(
           inputId = "start_gene",
@@ -548,11 +560,14 @@ annotate_server <- function(id) {
       shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_mitos_best", condition = input$edit_annotate_opts)
       # shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_arwen", condition = input$edit_annotate_opts)
       shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_aragorn", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -606,11 +621,14 @@ annotate_server <- function(id) {
               cpus = req(input$annotate_opts_cpus),
               memory = req(input$annotate_opts_memory),
               mitos_opts = req(input$mitos_opts),
+              use_mitos_best = as.integer(isTRUE(input$use_mitos_best)),
               ref_dir = req(input$mitos_ref_dir),
               ref_db = req(input$mitos_ref_db),
               trnaScan_opts = req(input$trnaScan_opts),
               arwen_opts = req(input$arwen_opts),
               use_arwen = as.integer(isTRUE(input$use_arwen)),
+              aragorn_opts = req(input$aragorn_opts),
+              use_aragorn = as.integer(isTRUE(input$use_aragorn)),
               start_gene = req(input$start_gene)
             ),
             in_place = TRUE,

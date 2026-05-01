@@ -292,6 +292,66 @@ backwards_compatibility <- function(
       )
   }
 
+  # if use_mitos_best column doesn't exist, add it (default on, matching prior behaviour)
+  if(!("use_mitos_best" %in% names(annotate_opts_table))){
+    message("added 'use_mitos_best' column to annotate_opts table")
+    annotate_opts_table$use_mitos_best <- rep(1L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_mitos_best INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if use_aragorn column doesn't exist, add it (default off)
+  if(!("use_aragorn" %in% names(annotate_opts_table))){
+    message("added 'use_aragorn' column to annotate_opts table")
+    annotate_opts_table$use_aragorn <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_aragorn INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if aragorn_opts column doesn't exist, add it
+  if(!("aragorn_opts" %in% names(annotate_opts_table))){
+    message("added 'aragorn_opts' column to annotate_opts table")
+    annotate_opts_table$aragorn_opts <- rep("-m -gcstd", nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN aragorn_opts TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
   # if start_gene column doesn't exist, add it
   if(!("start_gene" %in% names(annotate_opts_table))){
     message("added 'start_gene' column to annotate_opts table")
@@ -448,6 +508,13 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_species TEXT")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_pident REAL")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_qcovs REAL")
+  }
+
+  # if tool column doesn't exist in annotations table, add it
+  annotations_cols <- DBI::dbListFields(con, "annotations")
+  if (!("tool" %in% annotations_cols)) {
+    message("added 'tool' column to annotations table")
+    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN tool TEXT")
   }
 
   # if blast_ref_annotations table doesn't exist, create it

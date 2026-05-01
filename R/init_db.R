@@ -21,6 +21,7 @@
 #' @param mitos_opts Default MITOS2 command line options
 #' @param trnaScan_opts Default tRNAscan-SE command line options
 #' @param arwen_opts Default ARWEN command line options
+#' @param aragorn_opts Default ARAGORN command line options
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
@@ -63,6 +64,7 @@ new_db <- function(
     mitos_opts = "--intron 0 --oril 0",
     trnaScan_opts = "-M vert -X 20",
     arwen_opts = "-mtx",
+    aragorn_opts = "-m -gcstd",
     # Default curation options
     curate_cpus = 4,
     curate_memory = 8,
@@ -361,9 +363,12 @@ new_db <- function(
       ref_db TEXT,
       ref_dir TEXT,
       mitos_opts TEXT,
+      use_mitos_best INTEGER,
       trnaScan_opts TEXT,
       arwen_opts TEXT,
       use_arwen INTEGER,
+      aragorn_opts TEXT,
+      use_aragorn INTEGER,
       start_gene TEXT,
       PRIMARY KEY (annotate_opts)
     );"
@@ -377,9 +382,12 @@ new_db <- function(
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
         mitos_opts = mitos_opts,
+        use_mitos_best = 1L,
         trnaScan_opts = trnaScan_opts,
         arwen_opts = arwen_opts,
         use_arwen = 0L,
+        aragorn_opts = aragorn_opts,
+        use_aragorn = 0L,
         start_gene = "trnF"
       ),
       in_place = TRUE,
@@ -434,6 +442,7 @@ new_db <- function(
       length INTEGER,
       direction TEXT,
       anticodon TEXT,
+      tool TEXT,
       start_codon TEXT,
       stop_codon TEXT,
       translation TEXT,

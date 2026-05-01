@@ -178,12 +178,27 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
-        textInput(
-          ns("mitos_opts"),
-          label = "Mitos2 options:",
-          value = current$mitos_opts %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            textInput(
+              ns("mitos_opts"),
+              label = "Mitos2 options:",
+              value = current$mitos_opts %||% character(0),
+              width = "100%"
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "margin-top: 24px;",
+            shinyWidgets::prettyCheckbox(
+              ns("use_mitos_best"),
+              label = "Use --best flag",
+              value = isTRUE(as.logical(current$use_mitos_best %||% 1L)),
+              status = "primary"
+            ) |> shinyjs::disabled()
+          )
+        ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -232,6 +247,18 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           ns("arwen_opts"),
           label = "ARWEN options:",
           value = current$arwen_opts %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("use_aragorn"),
+          label = "Also use ARAGORN for tRNA prediction",
+          value = isTRUE(as.logical(current$use_aragorn)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        textInput(
+          ns("aragorn_opts"),
+          label = "ARAGORN options:",
+          value = current$aragorn_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
         div(
