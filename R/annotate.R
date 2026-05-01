@@ -16,6 +16,10 @@
 #'   "base").
 #' @param use_arwen logical; whether to run ARWEN tRNA prediction (default: FALSE).
 #' @param arwen_opts Additional command line options for ARWEN (default: "-mtx").
+#' @param use_aragorn logical; whether to run ARAGORN tRNA prediction (default: FALSE).
+#' @param aragorn_opts Additional command line options for ARAGORN (default: "-m -gcstd").
+#' @param aragorn_condaenv Conda environment containing ARAGORN (default: "aragorn").
+#' @param use_mitos_best logical; whether to pass --best to MITOS2 (default: FALSE).
 #' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
 #' @param out_dir Output directory.
 #'
@@ -34,6 +38,10 @@ annotate <- function(
   trnaScan_condaenv = "base",
   arwen_opts = "-mtx",
   use_arwen = FALSE,
+  aragorn_opts = "-m -gcstd",
+  aragorn_condaenv = "aragorn",
+  use_aragorn = FALSE,
+  use_mitos_best = TRUE,
   start_gene = "trnF",
   out_dir = NULL
 ) {
@@ -86,6 +94,24 @@ annotate <- function(
       arwen_opts = arwen_opts,
       genetic_code = genetic_code,
       circular = all(stringr::str_detect(names(assembly), "circular"))
+    )
+  } else {
+    data.frame(
+      contig = character(), type = character(), gene = character(),
+      product = character(), pos1 = integer(), pos2 = integer(),
+      length = integer(), direction = character(),
+      tRNA_ID = character(), anticodon = character()
+    )
+  }
+
+  # ARAGORN tRNA annotation ----
+  annotations_aragorn <- if (use_aragorn) {
+    annotate_aragorn(
+      assembly = assembly,
+      aragorn_opts = aragorn_opts,
+      genetic_code = genetic_code,
+      circular = all(stringr::str_detect(names(assembly), "circular")),
+      condaenv = aragorn_condaenv
     )
   } else {
     data.frame(
@@ -156,25 +182,59 @@ annotate <- function(
       }
     ))
 
+  # Filter ARAGORN against tRNAscan + ARWEN combined (same logic as ARWEN filter)
+  combined_pre_aragorn <- dplyr::bind_rows(annotations_trnaScan, annotations_arwen)
+  annotations_aragorn <- annotations_aragorn |>
+    dplyr::filter(!purrr::pmap_lgl(
+      list(gene, contig, pos1, pos2),
+      \(g, ctg, p1, p2) any(
+        combined_pre_aragorn$gene == g &
+          combined_pre_aragorn$contig == ctg &
+          circ_overlap(p1, p2, combined_pre_aragorn$pos1, combined_pre_aragorn$pos2)
+      )
+    ))
+  annotations_aragorn <- annotations_aragorn |>
+    dplyr::filter(!purrr::pmap_lgl(
+      list(contig, pos1, pos2),
+      \(ctg, p1, p2) {
+        L <- contig_lens[ctg]
+        aragorn_len <- circ_len(p1, p2, L)
+        hits <- combined_pre_aragorn[
+          combined_pre_aragorn$contig == ctg &
+            circ_overlap(p1, p2, combined_pre_aragorn$pos1, combined_pre_aragorn$pos2),
+        ]
+        if (nrow(hits) == 0L) return(FALSE)
+        total_overlap <- sum(purrr::map2_int(
+          hits$pos1, hits$pos2, \(q1, q2) circ_overlap_len(p1, p2, q1, q2, L)
+        ))
+        total_overlap / aragorn_len > 0.10
+      }
+    ))
+
   # Mitos2 annotation ----
+  effective_mitos_opts <- if (isTRUE(use_mitos_best)) {
+    paste("--best", mitos_opts)
+  } else {
+    mitos_opts
+  }
   annotations_mitos <- annotate_mitos2(
     assembly = assembly,
     topology = ifelse(all(stringr::str_detect(names(assembly), "circular")), "circular", "linear"),
     genetic_code = genetic_code,
     ref_db = ref_db,
-    mitos_opts = mitos_opts,
+    mitos_opts = effective_mitos_opts,
     condaenv = mitos_condaenv
   )
 
   # Combine annotations ----
-  # Priority: tRNAscan > ARWEN > MITOS2
+  # Priority: tRNAscan > ARWEN > ARAGORN > MITOS2
   # Normalize trnL/trnS variants before deduplication so gene names match across tools
   normalize_trna_gene <- function(gene) {
     gene |>
       stringr::str_replace("trnL1|trnL2", "trnL") |>
       stringr::str_replace("trnS1|trnS2", "trnS")
   }
-  combined_trna <- dplyr::bind_rows(annotations_trnaScan, annotations_arwen) |>
+  combined_trna <- dplyr::bind_rows(annotations_trnaScan, annotations_arwen, annotations_aragorn) |>
     dplyr::mutate(gene = normalize_trna_gene(gene))
   annotations_mitos <- annotations_mitos |>
     dplyr::mutate(gene = normalize_trna_gene(gene)) |>
@@ -200,9 +260,10 @@ annotate <- function(
         )
     )
   annotations <- dplyr::bind_rows(
-    annotations_trnaScan,
-    annotations_arwen,
-    annotations_mitos
+    dplyr::mutate(annotations_trnaScan, tool = "tRNAscan-SE"),
+    dplyr::mutate(annotations_arwen,    tool = "ARWEN"),
+    dplyr::mutate(annotations_aragorn,  tool = "ARAGORN"),
+    dplyr::mutate(annotations_mitos,    tool = "MITOS2")
   ) |>
     dplyr::select(-dplyr::any_of("tRNA_ID")) |> # remove temporary tRNA_ID column
     dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnS1|tnrS2", "trnS")) |> # Rename trnS1 and trnS2 to trnS

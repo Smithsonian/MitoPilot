@@ -87,6 +87,33 @@ annotations_details_server <- function(id, rv) {
             pos2 = colDef(show = T),
             length = colDef(show = T),
             direction = colDef(show = T),
+            tool = colDef(
+              show = T,
+              name = "tool",
+              align = "center",
+              maxWidth = 100,
+              cell = function(value) {
+                color <- switch(value %||% "",
+                  "tRNAscan-SE" = "#5DA5DA",
+                  "ARWEN"       = "#F17CB0",
+                  "ARAGORN"     = "#B276B2",
+                  "MITOS2"      = "#60BD68",
+                  "#AAAAAA"
+                )
+                htmltools::span(
+                  style = paste0(
+                    "background:", color, "30;",
+                    "color:", color, ";",
+                    "border:1px solid ", color, ";",
+                    "border-radius:3px;",
+                    "padding:1px 4px;",
+                    "font-size:11px;",
+                    "white-space:nowrap;"
+                  ),
+                  value %||% ""
+                )
+              }
+            ),
             notes = colDef(
               show = T,
               maxWidth = 1000,

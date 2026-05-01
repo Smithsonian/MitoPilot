@@ -17,6 +17,10 @@ annotate(
   trnaScan_condaenv = "base",
   arwen_opts = "-mtx",
   use_arwen = FALSE,
+  aragorn_opts = "-m -gcstd",
+  aragorn_condaenv = "aragorn",
+  use_aragorn = FALSE,
+  use_mitos_best = TRUE,
   start_gene = "trnF",
   out_dir = NULL
 )
@@ -47,6 +51,14 @@ annotate(
 \item{arwen_opts}{Additional command line options for ARWEN (default: "-mtx").}
 
 \item{use_arwen}{logical; whether to run ARWEN tRNA prediction (default: FALSE).}
+
+\item{aragorn_opts}{Additional command line options for ARAGORN (default: "-m -gcstd").}
+
+\item{aragorn_condaenv}{Conda environment containing ARAGORN (default: "aragorn").}
+
+\item{use_aragorn}{logical; whether to run ARAGORN tRNA prediction (default: FALSE).}
+
+\item{use_mitos_best}{logical; whether to pass --best to MITOS2 (default: FALSE).}
 
 \item{start_gene}{name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")}
 
