@@ -106,6 +106,9 @@ workflow VALIDATE {
         }
         .sqlInsert( statement: params.sqlWriteAnnotations, db: 'sqlite')
 
-
+    emit:
+        // Emit (id, path) for each validated sample so downstream workflows
+        // (e.g. BLAST_REF_ALIGN) can use it as an ordering trigger
+        validated = validate_out.map { it -> tuple(it[0], it[1]) }
 
 }

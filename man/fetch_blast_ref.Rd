@@ -2,17 +2,22 @@
 % Please edit documentation in R/blast_ref_utils.R
 \name{fetch_blast_ref}
 \alias{fetch_blast_ref}
-\title{Fetch and parse NCBI GFF3 annotations for a BLAST top hit}
+\title{Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST top hit}
 \usage{
-fetch_blast_ref(accession, output_file)
+fetch_blast_ref(accession, output_file, sequence_file = NULL)
 }
 \arguments{
 \item{accession}{NCBI accession number (e.g. "NC_012345.1")}
 
-\item{output_file}{path to write the output CSV}
+\item{output_file}{path to write the annotations CSV}
+
+\item{sequence_file}{optional path to write the plain nucleotide sequence}
 }
 \description{
-Downloads the GFF3 record for the given accession from NCBI EFetch and
-writes a CSV of gene annotations suitable for ingestion into the
-blast_ref_annotations SQLite table.
+Downloads the GFF3 record and, optionally, the FASTA sequence for the given
+accession from NCBI EFetch.  The GFF3-derived annotations are written to
+\code{output_file} as a CSV suitable for ingestion into the
+\code{blast_ref_annotations} SQLite table.  When \code{sequence_file} is
+supplied the raw nucleotide sequence (no FASTA header, no line-breaks) is
+written there for ingestion into the \code{blast_ref_sequences} table.
 }

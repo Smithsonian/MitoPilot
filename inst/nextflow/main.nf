@@ -17,6 +17,7 @@ include {VALIDATE} from './modules/validate_workflow.nf'
 include {COVERAGE_userAsmb} from './modules/coverage_userAsmb_workflow.nf'
 include {BLAST_GENBANK} from './modules/blast_genbank_workflow.nf'
 include {BLAST_REF_FETCH} from './modules/blast_ref_fetch_workflow.nf'
+include {BLAST_REF_ALIGN} from './modules/blast_ref_align_workflow.nf'
 
 // ASSEMBLY WORKFLOW
 workflow WF1 {
@@ -45,6 +46,7 @@ workflow WF2 {
    ANNOTATE()
    CURATE(ANNOTATE.out[0])
    VALIDATE(CURATE.out[0])
+   BLAST_REF_ALIGN(VALIDATE.out.validated, CURATE.out[0])
 
 }
 

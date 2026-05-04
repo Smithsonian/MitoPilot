@@ -26,6 +26,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       Taxon,
       pre_opts,
       assemble_opts,
+      blast_opts,
       reads,
       trimmed_reads,
       mean_length,
@@ -261,6 +262,98 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       text = "Cannot edit different parameter sets simultaneously",
       type = "error",
       closeOnClickOutside = FALSE,
+    )
+  }
+}
+
+#' Update the BLAST options
+#'
+#' @param rv the local reactive vals object
+#' @param session current shiny session
+#'
+#' @noRd
+blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+
+  if (length(unique(rv$updating$blast_opts)) == 1) {
+    current <- rv$blast_opts[rv$blast_opts$blast_opts == rv$updating$blast_opts[1], ]
+
+    showModal(
+      modalDialog(
+        title = stringr::str_glue("Setting BLAST Options for {nrow(rv$updating)} Samples"),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          selectizeInput(
+            ns("blast_opts"),
+            label = "Parameter set name:",
+            choices = rv$blast_opts$blast_opts,
+            selected = current$blast_opts,
+            options = list(
+              create = TRUE,
+              maxItems = 1
+            )
+          ),
+          div(
+            class = "form-group shiny-input-container",
+            style = "margin-top: 39px;",
+            shinyWidgets::prettyCheckbox(
+              ns("edit_blast_opts"),
+              label = "Edit",
+              value = FALSE,
+              status = "primary"
+            )
+          )
+        ),
+        shinyWidgets::prettyCheckbox(
+          ns("run_blast"),
+          label = "Run remote BLAST search using using assembly as query",
+          value = as.logical(current$run_blast %||% 1L),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        div(
+          id = ns("blast_entrez_group"),
+          textInput(
+            ns("entrez_query"),
+            label = "Entrez query (filters BLAST to a taxonomic scope)",
+            value = current$entrez_query %||% "mitochondrion[Location]",
+            width = "100%"
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          id = ns("blast_extra_group"),
+          tags$label("Additional blastn options"),
+          tags$p(
+            class = "text-muted",
+            style = "margin-bottom: 4px; font-size: 0.85em;",
+            "Cannot override: -outfmt, -max_target_seqs, -max_hsps."
+          ),
+          textAreaInput(
+            ns("extra_opts"),
+            label = NULL,
+            value = current$extra_opts %||% "",
+            width = "100%",
+            rows = 2
+          ) |> shinyjs::disabled()
+        ),
+        size = "m",
+        footer = tagList(
+          actionButton(ns("update_blast_opts"), "Update"),
+          modalButton("Cancel")
+        )
+      )
+    )
+
+    if (!as.logical(current$run_blast %||% 1L)) {
+      shinyjs::hide(id = "blast_entrez_group")
+      shinyjs::hide(id = "blast_extra_group")
+    }
+
+  } else {
+    shinyWidgets::show_alert(
+      title = "Multiple BLAST parameter sets selected",
+      text = "Cannot edit different parameter sets simultaneously",
+      type = "error",
+      closeOnClickOutside = FALSE
     )
   }
 }

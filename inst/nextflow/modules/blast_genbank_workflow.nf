@@ -2,6 +2,11 @@ include {blast_genbank} from './blast_genbank.nf'
 
 params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ? WHERE ID = ?'
 
+params.sqlReadBlastOpts =
+    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
+    'FROM assemble a ' +
+    'JOIN blast_opts b ON a.blast_opts = b.blast_opts'
+
 workflow BLAST_GENBANK {
     take:
         // input: tuple(id, assembly_file_or_list, opts_id)
@@ -10,6 +15,12 @@ workflow BLAST_GENBANK {
         input
 
     main:
+        // Read per-sample BLAST opts from DB; filter to run_blast == 1
+        channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
+            .filter { row -> row[1] as Integer == 1 }
+            .map { row -> tuple(row[0], row[2], row[3] ?: '') }
+            .set { blast_opts_ch }  // (id, entrez_query, extra_opts)
+
         input
             // Normalize: wrap single Path in a list so downstream logic is uniform
             .map{ id, asmbs, opts_id ->
@@ -27,6 +38,11 @@ workflow BLAST_GENBANK {
             // Keep only single-scaffold assemblies (exactly 1 sequence in the FASTA)
             .filter{ id, asmb, opts_id ->
                 asmb.readLines().count{ it.startsWith('>') } == 1
+            }
+            // Join with blast opts; samples with run_blast = 0 have no entry and are dropped
+            .join(blast_opts_ch, by: 0)
+            .map{ id, asmb, opts_id, entrez_query, extra_opts ->
+                tuple(id, asmb, opts_id, entrez_query, extra_opts)
             }
             .set { blast_in }
 

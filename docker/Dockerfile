@@ -6,10 +6,14 @@ ARG GIT_VERSION_TAG=unspecified
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get install -y jq && \
-    apt-get install -y parallel && \
-    apt-get install -y default-jre && \
-    apt-get install -y python2.7 && \
+    apt-get install -y \
+        jq \
+        parallel \
+        default-jre \
+        python2.7 \
+        build-essential \
+        automake \
+        autoconf && \
     rm -rf /var/lib/apt/lists/*
 
 RUN conda config --set channel_priority true && \ 
@@ -42,9 +46,6 @@ RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never")'
 RUN rm /pkg.tar.gz
 
 # install MitoFinder
-RUN apt-get update && \
-    apt-get install -y build-essential && \
-    apt-get install -y automake autoconf
 RUN git clone https://github.com/RemiAllio/MitoFinder.git /opt/MitoFinder
 RUN cd /opt/MitoFinder;./install.sh;cd ~ 
 RUN chmod -R 777 /opt/MitoFinder

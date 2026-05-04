@@ -225,6 +225,7 @@ new_db <- function(
       assemble_lock INTEGER,
       hide_switch INTEGER,
       assemble_opts TEXT,
+      blast_opts TEXT,
       blast_accession TEXT,
       blast_species TEXT,
       blast_pident REAL,
@@ -247,6 +248,7 @@ new_db <- function(
           assemble_lock = 0,
           hide_switch = 0,
           assemble_opts = "default",
+          blast_opts = "default",
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -286,6 +288,30 @@ new_db <- function(
       in_place = TRUE,
       copy = TRUE,
       by = "assemble_opts"
+    )
+
+  ## BLAST options ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_opts (
+      blast_opts TEXT NOT NULL,
+      run_blast INTEGER,
+      entrez_query TEXT,
+      extra_opts TEXT,
+      PRIMARY KEY (blast_opts)
+    );"
+  )
+  dplyr::tbl(con, "blast_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        blast_opts    = "default",
+        run_blast     = 1L,
+        entrez_query  = "mitochondrion[Location]",
+        extra_opts    = ""
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "blast_opts"
     )
 
   ## Add assemblies output ----
@@ -467,6 +493,33 @@ new_db <- function(
       ref_length INTEGER,
       time_stamp INTEGER,
       PRIMARY KEY (ID, gene, pos1)
+    );"
+  )
+
+  # One row per NCBI accession; shared across samples with the same BLAST hit
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_sequences (
+      accession TEXT NOT NULL,
+      sequence TEXT NOT NULL,
+      ref_length INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (accession)
+    );"
+  )
+
+  # One row per sample; stores pre-computed whole-genome pairwise alignment
+  # aligned_sample / aligned_ref are the gap-character strings from pwalign
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_alignment (
+      ID TEXT NOT NULL,
+      aligned_sample TEXT NOT NULL,
+      aligned_ref TEXT NOT NULL,
+      rotation INTEGER NOT NULL DEFAULT 0,
+      ref_length INTEGER NOT NULL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID)
     );"
   )
 

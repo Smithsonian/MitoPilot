@@ -74,7 +74,9 @@ backwards_compatibility <- function(
       "genetic_code" %in% names(samples_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
-      "blast_accession" %in% names(assemble_table))
+      "blast_accession" %in% names(assemble_table) &&
+      "blast_opts" %in% names(assemble_table) &&
+      "blast_opts" %in% DBI::dbListTables(con))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -517,8 +519,8 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN tool TEXT")
   }
 
-  # if blast_ref_annotations table doesn't exist, create it
   existing_tables <- DBI::dbListTables(con)
+
   if (!("blast_ref_annotations" %in% existing_tables)) {
     message("created blast_ref_annotations table")
     DBI::dbExecute(con,
@@ -534,6 +536,75 @@ backwards_compatibility <- function(
         PRIMARY KEY (ID, gene, pos1)
       );"
     )
+  }
+
+  if (!("blast_ref_sequences" %in% existing_tables)) {
+    message("created blast_ref_sequences table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_sequences (
+        accession TEXT NOT NULL,
+        sequence TEXT NOT NULL,
+        ref_length INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (accession)
+      );"
+    )
+  }
+
+  if (!("blast_ref_alignment" %in% existing_tables)) {
+    message("created blast_ref_alignment table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_alignment (
+        ID TEXT NOT NULL,
+        aligned_sample TEXT NOT NULL,
+        aligned_ref TEXT NOT NULL,
+        rotation INTEGER NOT NULL DEFAULT 0,
+        ref_length INTEGER NOT NULL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID)
+      );"
+    )
+  }
+
+  # if blast_opts column doesn't exist in assemble table, add it
+  if (!("blast_opts" %in% names(assemble_table))) {
+    message("added 'blast_opts' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_opts TEXT")
+    assemble_table$blast_opts <- rep("default", nrow(assemble_table))
+    dplyr::tbl(con, "assemble") |>
+      dplyr::rows_update(
+        assemble_table[, c("ID", "blast_opts")],
+        unmatched = "ignore",
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+  }
+
+  # if blast_opts table doesn't exist, create it with a default entry
+  if (!("blast_opts" %in% DBI::dbListTables(con))) {
+    message("created blast_opts table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_opts (
+        blast_opts TEXT NOT NULL,
+        run_blast INTEGER,
+        entrez_query TEXT,
+        extra_opts TEXT,
+        PRIMARY KEY (blast_opts)
+      );"
+    )
+    dplyr::tbl(con, "blast_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          blast_opts   = "default",
+          run_blast    = 1L,
+          entrez_query = "mitochondrion[Location]",
+          extra_opts   = ""
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "blast_opts"
+      )
   }
 
   # if .config does not contain "blast_gb" params section, add it

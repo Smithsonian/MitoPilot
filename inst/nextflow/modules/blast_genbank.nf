@@ -14,14 +14,13 @@ process blast_genbank {
     tag "${id}"
 
     input:
-        tuple val(id), path(assembly), val(opts_id)
+        tuple val(id), path(assembly), val(opts_id), val(entrez_query), val(extra_opts)
 
     output:
         tuple val(id), path("${outDir}/blast_genbank.txt")
 
     shell:
     outDir = "${id}/assemble/${opts_id}"
-    // use entrez filter to only retain mitochondrial hits
     '''
     mkdir -p !{outDir}
     blastn \
@@ -32,7 +31,8 @@ process blast_genbank {
         -max_target_seqs 1 \
         -max_hsps 1 \
         -task megablast \
-        -entrez_query "mitochondrion[Location]" \
+        -entrez_query "!{entrez_query}" \
+        !{extra_opts} \
         > !{outDir}/blast_genbank.txt
     '''
 }

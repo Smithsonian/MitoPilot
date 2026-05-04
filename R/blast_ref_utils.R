@@ -1,14 +1,18 @@
-#' Fetch and parse NCBI GFF3 annotations for a BLAST top hit
+#' Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST top hit
 #'
-#' Downloads the GFF3 record for the given accession from NCBI EFetch and
-#' writes a CSV of gene annotations suitable for ingestion into the
-#' blast_ref_annotations SQLite table.
+#' Downloads the GFF3 record and, optionally, the FASTA sequence for the given
+#' accession from NCBI EFetch.  The GFF3-derived annotations are written to
+#' \code{output_file} as a CSV suitable for ingestion into the
+#' \code{blast_ref_annotations} SQLite table.  When \code{sequence_file} is
+#' supplied the raw nucleotide sequence (no FASTA header, no line-breaks) is
+#' written there for ingestion into the \code{blast_ref_sequences} table.
 #'
 #' @param accession NCBI accession number (e.g. "NC_012345.1")
-#' @param output_file path to write the output CSV
+#' @param output_file path to write the annotations CSV
+#' @param sequence_file optional path to write the plain nucleotide sequence
 #'
 #' @export
-fetch_blast_ref <- function(accession, output_file) {
+fetch_blast_ref <- function(accession, output_file, sequence_file = NULL) {
   empty <- data.frame(
     gene      = character(),
     type      = character(),
@@ -118,9 +122,33 @@ fetch_blast_ref <- function(accession, output_file) {
 
     write.csv(result, output_file, row.names = FALSE)
 
+    # Optionally fetch and write the reference nucleotide sequence
+    if (!is.null(sequence_file)) {
+      fasta_url <- paste0(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+        "?db=nuccore&id=", accession,
+        "&rettype=fasta&retmode=text"
+      )
+      fasta_text <- RCurl::getURL(
+        fasta_url,
+        .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 120)
+      )
+      # Strip FASTA header line(s) and collapse sequence lines into one string
+      seq_lines <- strsplit(fasta_text, "\n", fixed = TRUE)[[1]]
+      seq_lines <- seq_lines[!grepl("^>", seq_lines) & nchar(trimws(seq_lines)) > 0]
+      seq_str   <- paste(trimws(seq_lines), collapse = "")
+      # Only write if it looks like a valid nucleotide sequence (not an API error)
+      if (grepl("^[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+$", seq_str)) {
+        writeLines(seq_str, sequence_file)
+      } else {
+        writeLines("", sequence_file)
+      }
+    }
+
   }, error = function(e) {
     message("fetch_blast_ref error for ", accession, ": ", e$message)
     write.csv(empty, output_file, row.names = FALSE)
+    if (!is.null(sequence_file)) writeLines("", sequence_file)
   })
   invisible(NULL)
 }
@@ -371,4 +399,82 @@ normalize_trna <- function(n, product = NA_character_) {
     if (!is.na(result)) return(result)
   }
   NA_character_
+}
+
+
+#' Pre-compute a whole-genome pairwise alignment of a sample against its BLAST
+#' reference and write the result for ingestion into the
+#' \code{blast_ref_alignment} SQLite table.
+#'
+#' Called from the \code{blast_ref_align} Nextflow process after annotation is
+#' complete.  Both sequences are passed as plain nucleotide strings (no headers,
+#' no line-breaks) so that this function can run entirely from file-based inputs
+#' without a database connection.
+#'
+#' @param assembly_seq nucleotide sequence string for the sample assembly
+#' @param ref_seq nucleotide sequence string for the BLAST reference genome
+#' @param rotation integer offset (0-based) used to rotate the reference so
+#'   that it starts at the same anchor gene as the sample assembly.  Equals
+#'   \code{pos1 - 1} of the anchor gene in the reference's
+#'   \code{blast_ref_annotations} record.
+#' @param output_file path to write a one-row CSV with columns
+#'   \code{aligned_sample}, \code{aligned_ref}, \code{rotation},
+#'   \code{ref_length}
+#'
+#' @export
+compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
+                                        output_file) {
+  empty <- data.frame(
+    aligned_sample = character(),
+    aligned_ref    = character(),
+    rotation       = integer(),
+    ref_length     = integer()
+  )
+
+  tryCatch({
+    rotation <- as.integer(rotation)
+
+    # Sanitise: keep only valid IUPAC nucleotide characters
+    clean <- function(s) gsub("[^ACGTNacgtnRYSWKMBDHVryswkmbdhv]", "N", s)
+    sample_dna <- Biostrings::DNAString(clean(assembly_seq))
+    ref_dna    <- Biostrings::DNAString(clean(ref_seq))
+    ref_len    <- length(ref_dna)
+
+    # Rotate the reference so anchor gene aligns with sample start
+    if (rotation > 0L && rotation < ref_len) {
+      ref_dna <- Biostrings::xscat(
+        Biostrings::subseq(ref_dna, rotation + 1L, ref_len),
+        Biostrings::subseq(ref_dna, 1L, rotation)
+      )
+    }
+
+    subMx <- Biostrings::nucleotideSubstitutionMatrix(
+      match = 1, mismatch = -1, baseOnly = TRUE
+    )
+    aln <- pwalign::pairwiseAlignment(
+      pattern            = sample_dna,
+      subject            = ref_dna,
+      substitutionMatrix = subMx,
+      gapOpening         = 10,
+      gapExtension       = 4,
+      type               = "global"
+    )
+
+    aligned_sample <- as.character(pwalign::alignedPattern(aln))
+    aligned_ref    <- as.character(pwalign::alignedSubject(aln))
+
+    result <- data.frame(
+      aligned_sample = aligned_sample,
+      aligned_ref    = aligned_ref,
+      rotation       = rotation,
+      ref_length     = ref_len,
+      stringsAsFactors = FALSE
+    )
+    write.csv(result, output_file, row.names = FALSE)
+
+  }, error = function(e) {
+    message("compute_blast_ref_alignment error: ", e$message)
+    write.csv(empty, output_file, row.names = FALSE)
+  })
+  invisible(NULL)
 }

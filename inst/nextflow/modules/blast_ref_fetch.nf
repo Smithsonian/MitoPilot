@@ -15,12 +15,12 @@ process blast_ref_fetch {
         tuple val(id), val(blast_accession), val(opts_id)
 
     output:
-        tuple val(id), path("${outDir}/blast_ref_annotations.csv")
+        tuple val(id), val(blast_accession), path("${outDir}/blast_ref_annotations.csv"), path("${outDir}/blast_ref_sequence.txt")
 
     shell:
     outDir = "${id}/assemble/${opts_id}"
     '''
     mkdir -p !{outDir}
-    Rscript -e "MitoPilot::fetch_blast_ref('!{blast_accession}', '!{outDir}/blast_ref_annotations.csv')"
+    Rscript -e "MitoPilot::fetch_blast_ref('!{blast_accession}', '!{outDir}/blast_ref_annotations.csv', '!{outDir}/blast_ref_sequence.txt')"
     '''
 }

@@ -28,6 +28,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       assembly,
       topology,
       pre_opts,
+      blast_opts,
       reads,
       trimmed_reads,
       mean_length,
