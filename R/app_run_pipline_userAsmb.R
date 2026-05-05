@@ -376,6 +376,7 @@ pipeline_server_userAsmb <- function(id) {
       shinyjs::hide("stop")
       shinyjs::show("start")
       shinyjs::addClass("gears", "paused")
+      trigger(paste0("refresh_", tolower(session$userData$mode)))
     })
 
     # Close modal ----

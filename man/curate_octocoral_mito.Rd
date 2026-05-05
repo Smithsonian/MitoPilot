@@ -12,7 +12,9 @@ curate_octocoral_mito(
   out_dir = NULL,
   max_blast_hits = 100,
   params = NULL,
-  ref_dir = NULL
+  ref_dir = NULL,
+  sample_id = NULL,
+  db_path = NULL
 )
 }
 \arguments{

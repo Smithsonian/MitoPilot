@@ -503,6 +503,7 @@ new_db <- function(
       accession TEXT NOT NULL,
       sequence TEXT NOT NULL,
       ref_length INTEGER,
+      genetic_code INTEGER,
       time_stamp INTEGER,
       PRIMARY KEY (accession)
     );"

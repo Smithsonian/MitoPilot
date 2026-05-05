@@ -494,6 +494,7 @@ pipeline_server <- function(id) {
       shinyjs::hide("stop")
       shinyjs::show("start_button_ui") # Also show the buttons if stopped manually
       shinyjs::addClass("gears", "paused")
+      trigger(paste0("refresh_", tolower(session$userData$mode)))
     })
 
     # Close modal ----

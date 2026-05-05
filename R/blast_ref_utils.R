@@ -10,9 +10,10 @@
 #' @param accession NCBI accession number (e.g. "NC_012345.1")
 #' @param output_file path to write the annotations CSV
 #' @param sequence_file optional path to write the plain nucleotide sequence
+#' @param genetic_code_file optional path to write the NCBI translation table number
 #'
 #' @export
-fetch_blast_ref <- function(accession, output_file, sequence_file = NULL) {
+fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, genetic_code_file = NULL) {
   empty <- data.frame(
     gene      = character(),
     type      = character(),
@@ -78,11 +79,19 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL) {
       )
     }
 
-    df$gbkey   <- get_attr(df$attributes, "gbkey")
-    df$gene_nm <- get_attr(df$attributes, "gene")
-    df$product <- get_attr(df$attributes, "product")
-    df$reg_cls <- get_attr(df$attributes, "regulatory_class")
-    df$note    <- get_attr(df$attributes, "Note")
+    df$gbkey      <- get_attr(df$attributes, "gbkey")
+    df$gene_nm    <- get_attr(df$attributes, "gene")
+    df$product    <- get_attr(df$attributes, "product")
+    df$reg_cls    <- get_attr(df$attributes, "regulatory_class")
+    df$note       <- get_attr(df$attributes, "Note")
+    df$transl_tbl <- get_attr(df$attributes, "transl_table")
+
+    # Extract genetic code from CDS transl_table attribute; default 2
+    cds_gc <- df$transl_tbl[df$feature == "CDS" & !is.na(df$transl_tbl)]
+    genetic_code_num <- if (length(cds_gc) > 0) as.integer(cds_gc[1]) else 2L
+    if (!is.null(genetic_code_file)) {
+      writeLines(as.character(genetic_code_num), genetic_code_file)
+    }
 
     # Classify feature type then drop anything that doesn't match
     df$type <- dplyr::case_when(
@@ -149,8 +158,133 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL) {
     message("fetch_blast_ref error for ", accession, ": ", e$message)
     write.csv(empty, output_file, row.names = FALSE)
     if (!is.null(sequence_file)) writeLines("", sequence_file)
+    if (!is.null(genetic_code_file)) writeLines("2", genetic_code_file)
   })
   invisible(NULL)
+}
+
+
+#' Prepend remote BLAST top-hit translations to per-gene refHits in annotations
+#'
+#' Called in each \code{curate_*_mito()} function after the initial
+#' \code{refHits} column is populated by \code{get_top_hits}.  For each PCG
+#' row in \code{annotations}, all matching gene regions are extracted from
+#' the remote BLAST reference sequence, translated using the genetic code
+#' recorded in GenBank for that accession, and inserted as the first rows of
+#' that gene's \code{refHits} JSON so they appear at the top of the alignment
+#' table in the annotate details view.  When a gene has multiple copies in the
+#' reference, each copy is given a distinct name
+#' \code{<accession>:<pos1>-<pos2>} so they can be told apart.
+#'
+#' @param annotations The annotations data frame (with a \code{refHits} column)
+#' @param blast_ref_file Path to a JSON file staged by Nextflow containing blast
+#'   reference data (accession, blast_species, sequence, genetic_code, pcg list)
+#'
+#' @return The \code{annotations} data frame with updated \code{refHits} values
+#'
+#' @noRd
+prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
+  if (is.null(blast_ref_file) || !nzchar(blast_ref_file) || !file.exists(blast_ref_file)) {
+    return(annotations)
+  }
+
+  ref_data <- tryCatch(
+    jsonlite::fromJSON(blast_ref_file, simplifyDataFrame = TRUE),
+    error = function(e) {
+      message("prepend_blast_hit: cannot read blast_ref_file: ", e$message)
+      NULL
+    }
+  )
+  if (is.null(ref_data) || length(ref_data) == 0) return(annotations)
+
+  accession <- ref_data$accession
+  taxon     <- ref_data$blast_species %||% accession
+  if (is.null(accession) || is.na(accession) || accession %in% c("", "NO HIT")) {
+    return(annotations)
+  }
+
+  ref_seq <- ref_data$sequence
+  if (is.null(ref_seq) || !nzchar(ref_seq)) return(annotations)
+
+  gc_num <- ref_data$genetic_code
+  gc_num <- if (!is.null(gc_num) && !is.na(gc_num) && gc_num > 0) as.character(gc_num) else "2"
+  ref_gc <- tryCatch(
+    Biostrings::getGeneticCode(gc_num),
+    error = function(e) Biostrings::getGeneticCode("2")
+  )
+
+  pcg <- ref_data$pcg
+  if (is.null(pcg) || !is.data.frame(pcg) || nrow(pcg) == 0) return(annotations)
+
+  ref_dna <- Biostrings::DNAString(ref_seq)
+
+  # Translate one gene region; returns NULL on failure
+  translate_ref_gene <- function(pos1, pos2, dir) {
+    tryCatch({
+      s <- Biostrings::subseq(ref_dna, start = pos1, end = pos2)
+      if (identical(dir, "-")) s <- Biostrings::reverseComplement(s)
+      len <- floor(Biostrings::width(s) / 3L) * 3L
+      prot <- Biostrings::translate(Biostrings::subseq(s, 1L, len),
+                                    genetic.code = ref_gc,
+                                    if.fuzzy.codon = "solve")
+      prot_str <- as.character(prot)
+      if (endsWith(prot_str, "*")) prot_str <- substr(prot_str, 1L, nchar(prot_str) - 1L)
+      prot_str
+    }, error = function(e) NULL)
+  }
+
+  # Determine whether a gene has multiple copies in the reference
+  gene_counts <- table(pcg$gene)
+
+  # Update each PCG row's refHits
+  annotations$refHits <- purrr::pmap(
+    list(annotations$type, annotations$gene, annotations$translation, annotations$refHits),
+    function(type, gene, translation, refHits_json) {
+      if (type != "PCG") return(refHits_json)
+
+      pcg_rows <- pcg[pcg$gene == gene, , drop = FALSE]
+      if (nrow(pcg_rows) == 0) return(refHits_json)
+
+      multi_copy <- gene_counts[gene] > 1L
+
+      hit_rows <- purrr::pmap_dfr(pcg_rows, function(gene, pos1, pos2, direction) {
+        ref_aa <- translate_ref_gene(pos1, pos2, direction)
+        if (is.null(ref_aa) || !nzchar(ref_aa) ||
+            is.na(translation) || !nzchar(translation)) return(NULL)
+
+        # Use coordinates in the name only when the gene appears more than once
+        seq_name <- if (multi_copy) {
+          paste0(accession, ":", pos1, "-", pos2)
+        } else {
+          accession
+        }
+
+        tryCatch(
+          data.frame(
+            acc          = seq_name,
+            Taxon        = taxon,
+            eval         = 0, # TO DO: store remote BLAST eval in SQL db and insert it here
+            target       = ref_aa,
+            pctid        = compare_aa(translation, ref_aa, "pctId"),
+            similarity   = compare_aa(translation, ref_aa, "similarity"),
+            gap_leading  = count_end_gaps(translation, ref_aa, "leading"),
+            gap_trailing = count_end_gaps(translation, ref_aa, "trailing"),
+            stringsAsFactors = FALSE
+          ),
+          error = function(e) NULL
+        )
+      })
+
+      if (nrow(hit_rows) == 0) return(refHits_json)
+
+      existing <- json_parse(refHits_json[[1]] %|NA|% "{}", tibble = TRUE)
+      combined <- if (nrow(existing) > 0) dplyr::bind_rows(hit_rows, existing) else hit_rows
+      json_string(combined) %||% refHits_json
+    }
+  )
+
+  message("prepend_blast_hit: added ", accession, " to refHits")
+  annotations
 }
 
 

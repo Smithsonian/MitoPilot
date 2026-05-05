@@ -12,7 +12,7 @@ process curate {
     tag "${id}"
 
     input:
-    tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean)
+    tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean), path(blast_ref_file)
 
     output:
     tuple val(id), val(path), path("${id}/${id}_annotations_*.csv"), path("${id}/annotate/${id}_assembly_*.fasta"), path("${id}/annotate/${id}_coverageStats_*.csv"), path("${id}/annotate/NF_work_dir_curate.txt")
@@ -41,7 +41,8 @@ process curate {
         params = '!{opts.params}', \
         out_dir = '!{dir}', \
         max_blast_hits = '!{opts.max_blast_hits}', \
-        ref_dir = '!{ref_db_clean}' \
+        ref_dir = '!{ref_db_clean}', \
+        blast_ref_file = '!{blast_ref_file}' \
         )"
     mv !{dir}/*_annotations_*.csv !{id}/
     ### work dir info for troubleshooting ####

@@ -312,9 +312,17 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ) |> shinyjs::disabled(),
         div(
           id = ns("blast_entrez_group"),
+          tags$label(
+            "Entrez query (",
+            tags$a("see NCBI Entrez help page",
+              href = "https://www.ncbi.nlm.nih.gov/books/NBK3837/",
+              target = "_blank"
+            ),
+            ")"
+          ),
           textInput(
             ns("entrez_query"),
-            label = "Entrez query (filters BLAST to a taxonomic scope)",
+            label = NULL,
             value = current$entrez_query %||% "mitochondrion[Location]",
             width = "100%"
           ) |> shinyjs::disabled()

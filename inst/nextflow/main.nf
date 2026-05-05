@@ -7,6 +7,9 @@ import java.time.Instant
 // Time stamp
 params.ts = workflow.start.toInstant().getEpochSecond().toString()
 
+// SQLite database path (used by curate to prepend remote BLAST hits to refHits)
+params.db_path = "${launchDir}/.sqlite"
+
 // Modules
 include {PREPROCESS} from './modules/preprocess_workflow.nf'
 include {ASSEMBLE} from './modules/assemble_workflow.nf'

@@ -76,7 +76,11 @@ backwards_compatibility <- function(
       "reviewed" %in% names(annotate_table) &&
       "blast_accession" %in% names(assemble_table) &&
       "blast_opts" %in% names(assemble_table) &&
-      "blast_opts" %in% DBI::dbListTables(con))
+      "blast_opts" %in% DBI::dbListTables(con) &&
+      isTRUE(tryCatch(
+        "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
+        error = function(e) FALSE
+      )))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -545,10 +549,17 @@ backwards_compatibility <- function(
         accession TEXT NOT NULL,
         sequence TEXT NOT NULL,
         ref_length INTEGER,
+        genetic_code INTEGER,
         time_stamp INTEGER,
         PRIMARY KEY (accession)
       );"
     )
+  } else {
+    ref_seq_cols <- names(DBI::dbReadTable(con, "blast_ref_sequences"))
+    if (!("genetic_code" %in% ref_seq_cols)) {
+      message("added 'genetic_code' column to blast_ref_sequences table")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN genetic_code INTEGER")
+    }
   }
 
   if (!("blast_ref_alignment" %in% existing_tables)) {

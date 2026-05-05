@@ -20,7 +20,8 @@ curate_fish_mito <- function(
     out_dir = NULL,
     max_blast_hits = 100,
     params = NULL,
-    ref_dir = NULL) {
+    ref_dir = NULL,
+    blast_ref_file = NULL) {
   # Prepare environment ----
 
   ## load annotations ----
@@ -73,6 +74,7 @@ curate_fish_mito <- function(
     )
   }
   list2env(params, envir = environment())
+
 
   # set up ref_dbs list
   ref_dbs <- list(
@@ -192,6 +194,12 @@ curate_fish_mito <- function(
         json_string()
       out %||% '{}'
     })
+
+
+  # Prepend remote BLAST top hit to refHits for each PCG
+  if (!is.null(blast_ref_file)) {
+    annotations <- MitoPilot:::prepend_blast_hit_to_refhits(annotations, blast_ref_file)
+  }
 
   ## Curate against top hits ----
   annotations <- purrr::pmap_dfr(annotations, function(...) {

@@ -1,4 +1,5 @@
 import java.util.Base64
+import groovy.json.JsonOutput
 include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, c.curate_opts, ' +
@@ -14,6 +15,15 @@ params.sqlWriteAssemblies =  'UPDATE assemblies SET sequence = ?, length = ?, de
                             'WHERE ID=? and path=? and scaffold=?'
 
 params.sqlWriteAnnotate =   'UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, time_stamp = ? WHERE ID = ?'
+
+params.sqlBlastRefMeta =
+    'SELECT a.ID, a.blast_accession, a.blast_species, r.sequence, r.genetic_code ' +
+    'FROM assemble a ' +
+    'JOIN blast_ref_sequences r ON a.blast_accession = r.accession ' +
+    "WHERE a.blast_accession IS NOT NULL AND a.blast_accession NOT IN ('', 'NO HIT')"
+
+params.sqlBlastRefPCG =
+    "SELECT ID, gene, pos1, pos2, direction FROM blast_ref_annotations WHERE type = 'PCG'"
 
 workflow CURATE {
     take:

@@ -5,8 +5,8 @@ params.sqlWriteBlastRef = '''INSERT OR REPLACE INTO blast_ref_annotations
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
 
 params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
-    (accession, sequence, ref_length, time_stamp)
-    VALUES (?, ?, ?, ?)'''
+    (accession, sequence, ref_length, genetic_code, time_stamp)
+    VALUES (?, ?, ?, ?, ?)'''
 
 workflow BLAST_REF_FETCH {
     take:
@@ -18,7 +18,7 @@ workflow BLAST_REF_FETCH {
 
         // Parse CSV rows and insert one row per gene into the DB
         ref_out
-            .flatMap { id, accession, csv_file, seq_file ->
+            .flatMap { id, accession, csv_file, seq_file, gc_file ->
                 def rows = []
                 def lines = csv_file.readLines()
                 if (lines.size() <= 1) return rows   // empty or header-only
@@ -48,11 +48,13 @@ workflow BLAST_REF_FETCH {
 
         // Store reference nucleotide sequence (one row per accession)
         ref_out
-            .map { id, accession, csv_file, seq_file ->
+            .map { id, accession, csv_file, seq_file, gc_file ->
                 def seq = seq_file.text.trim()
                 if (!seq) return null
+                def gc_str = gc_file.text.trim()
+                def gc = gc_str.isInteger() ? gc_str.toInteger() : 2
                 def ts = java.time.Instant.now().getEpochSecond()
-                tuple(accession, seq, seq.length() as Long, ts)
+                tuple(accession, seq, seq.length() as Long, gc, ts)
             }
             .filter { it != null }
             .unique { it[0] }  // deduplicate by accession in case of reruns

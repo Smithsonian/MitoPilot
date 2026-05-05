@@ -4,7 +4,12 @@
 \alias{fetch_blast_ref}
 \title{Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST top hit}
 \usage{
-fetch_blast_ref(accession, output_file, sequence_file = NULL)
+fetch_blast_ref(
+  accession,
+  output_file,
+  sequence_file = NULL,
+  genetic_code_file = NULL
+)
 }
 \arguments{
 \item{accession}{NCBI accession number (e.g. "NC_012345.1")}
@@ -12,6 +17,8 @@ fetch_blast_ref(accession, output_file, sequence_file = NULL)
 \item{output_file}{path to write the annotations CSV}
 
 \item{sequence_file}{optional path to write the plain nucleotide sequence}
+
+\item{genetic_code_file}{optional path to write the NCBI translation table number}
 }
 \description{
 Downloads the GFF3 record and, optionally, the FASTA sequence for the given
