@@ -37,6 +37,46 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     }
   }
 
+  # Retry-aware NCBI EFetch helper. Returns the httr2 response on success;
+  # logs a message before each retry wait; stops on final failure so the
+  # outer tryCatch can re-throw transient errors to Nextflow.
+  ncbi_efetch <- function(url, timeout = 120L, label = "") {
+    transient <- c(429L, 500L, 503L)
+    max_tries <- 5L
+    for (attempt in seq_len(max_tries)) {
+      resp <- tryCatch(
+        httr2::request(url) |>
+          httr2::req_timeout(timeout) |>
+          httr2::req_error(is_error = \(r) FALSE) |>
+          httr2::req_perform(),
+        error = function(e) e
+      )
+      if (inherits(resp, "error")) {
+        err_msg <- conditionMessage(resp)
+        if (attempt < max_tries) {
+          message(sprintf("[blast_ref_fetch] %s attempt %d/%d failed: %s — retrying in %ds",
+                          label, attempt, max_tries, err_msg, 120L * attempt))
+          Sys.sleep(120L * attempt)
+          next
+        }
+        message(sprintf("[blast_ref_fetch] %s all %d attempts failed: %s",
+                        label, max_tries, err_msg))
+        stop(err_msg, call. = FALSE)
+      }
+      status <- httr2::resp_status(resp)
+      if (status == 200L) return(resp)
+      if (attempt < max_tries && status %in% transient) {
+        message(sprintf("[blast_ref_fetch] %s attempt %d/%d returned HTTP %d — retrying in %ds",
+                        label, attempt, max_tries, status, 120L * attempt))
+        Sys.sleep(120L * attempt)
+        next
+      }
+      message(sprintf("[blast_ref_fetch] %s all %d attempts failed: HTTP %d",
+                      label, max_tries, status))
+      stop(sprintf("HTTP %d", status), call. = FALSE)
+    }
+  }
+
   fasta_failed <- FALSE
 
   tryCatch({
@@ -45,9 +85,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
       "?db=nuccore&id=", accession,
       "&rettype=gff3&retmode=text"
     )
-    gff3_text <- RCurl::getURL(
-      url,
-      .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 120)
+    gff3_text <- httr2::resp_body_string(
+      ncbi_efetch(url, 120L, paste0("GFF3/", accession))
     )
 
     lines <- strsplit(gff3_text, "\n", fixed = TRUE)[[1]]
@@ -129,11 +168,16 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
           "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
           "?db=taxonomy&id=", taxid, "&retmode=xml"
         )
-        RCurl::getURL(
-          tax_url,
-          .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 60)
+        httr2::resp_body_string(
+          ncbi_efetch(tax_url, 60L, paste0("taxonomy/", taxid))
         )
-      }, error = function(e) NULL)
+      }, error = function(e) {
+        message(sprintf(
+          "[blast_ref_fetch] taxonomy/%s failed after all retries: %s — organism/lineage will be NULL",
+          taxid, conditionMessage(e)
+        ))
+        NULL
+      })
     } else NULL
 
     # Clean species name = first <ScientificName> before <LineageEx>
@@ -219,18 +263,12 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
         "?db=nuccore&id=", accession,
         "&rettype=fasta&retmode=text"
       )
-      fasta_text <- ""
-      for (attempt in seq_len(3)) {
-        fasta_text <- tryCatch(
-          RCurl::getURL(
-            fasta_url,
-            .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 120)
-          ),
-          error = function(e) ""
-        )
-        if (is.character(fasta_text) && nzchar(fasta_text) && grepl("^>", fasta_text)) break
-        Sys.sleep(2 * attempt)
-      }
+      fasta_text <- tryCatch(
+        httr2::resp_body_string(
+          ncbi_efetch(fasta_url, 120L, paste0("FASTA/", accession))
+        ),
+        error = function(e) ""
+      )
       # Strip FASTA header line(s) and collapse sequence lines into one string
       seq_lines <- strsplit(fasta_text, "\n", fixed = TRUE)[[1]]
       seq_lines <- seq_lines[!grepl("^>", seq_lines) & nchar(trimws(seq_lines)) > 0]
@@ -261,7 +299,11 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     }
 
   }, error = function(e) {
-    message("fetch_blast_ref error for ", accession, ": ", e$message)
+    msg <- conditionMessage(e)
+    if (grepl("429|503|500|timed out|timeout", msg, ignore.case = TRUE)) {
+      stop(msg, call. = FALSE)
+    }
+    message("fetch_blast_ref error for ", accession, ": ", msg)
     write_empty_ref()
   })
 

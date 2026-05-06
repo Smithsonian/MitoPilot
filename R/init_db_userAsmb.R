@@ -14,6 +14,7 @@
 #' @param mitos_opts Default MITOS2 command line options
 #' @param trnaScan_opts Default tRNAscan-SE command line options
 #' @param arwen_opts Default ARWEN command line options
+#' @param aragorn_opts Default ARAGORN command line options
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
@@ -35,6 +36,7 @@ new_db_userAsmb <- function(
     mitos_opts = "--intron 0 --oril 0",
     trnaScan_opts = "-M vert -X 20",
     arwen_opts = "-mtx",
+    aragorn_opts = "-m -gcstd",
     # Default curation options
     curate_cpus = 4,
     curate_memory = 8,
@@ -199,6 +201,7 @@ new_db_userAsmb <- function(
       assemble_lock INTEGER,
       hide_switch INTEGER,
       assemble_opts TEXT,
+      blast_opts TEXT,
       blast_accession TEXT,
       blast_species TEXT,
       blast_pident REAL,
@@ -223,11 +226,36 @@ new_db_userAsmb <- function(
           assemble_lock = 0,
           hide_switch = 0,
           assemble_opts = "user",
+          blast_opts = "default",
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
       copy = TRUE,
       by = "ID"
+    )
+
+  ## BLAST options ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_opts (
+      blast_opts TEXT NOT NULL,
+      run_blast INTEGER,
+      entrez_query TEXT,
+      extra_opts TEXT,
+      PRIMARY KEY (blast_opts)
+    );"
+  )
+  dplyr::tbl(con, "blast_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        blast_opts    = "default",
+        run_blast     = 1L,
+        entrez_query  = "mitochondrion[Location]",
+        extra_opts    = ""
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "blast_opts"
     )
 
   ## Add assemblies output ----
@@ -245,6 +273,12 @@ new_db_userAsmb <- function(
       errors TEXT,
       ignore INTEGER,
       edited INTEGER,
+      blast_accession TEXT,
+      blast_species TEXT,
+      blast_pident REAL,
+      blast_qcovs REAL,
+      blast_evalue REAL,
+      blast_lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold)
     );"
@@ -305,9 +339,12 @@ new_db_userAsmb <- function(
       ref_db TEXT,
       ref_dir TEXT,
       mitos_opts TEXT,
+      use_mitos_best INTEGER,
       trnaScan_opts TEXT,
       arwen_opts TEXT,
       use_arwen INTEGER,
+      aragorn_opts TEXT,
+      use_aragorn INTEGER,
       start_gene TEXT,
       PRIMARY KEY (annotate_opts)
     );"
@@ -321,9 +358,12 @@ new_db_userAsmb <- function(
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
         mitos_opts = mitos_opts,
+        use_mitos_best = 1L,
         trnaScan_opts = trnaScan_opts,
         arwen_opts = arwen_opts,
         use_arwen = 0L,
+        aragorn_opts = aragorn_opts,
+        use_aragorn = 0L,
         start_gene = "trnF"
       ),
       in_place = TRUE,
@@ -378,6 +418,7 @@ new_db_userAsmb <- function(
       length INTEGER,
       direction TEXT,
       anticodon TEXT,
+      tool TEXT,
       start_codon TEXT,
       stop_codon TEXT,
       translation TEXT,
@@ -387,6 +428,46 @@ new_db_userAsmb <- function(
       edited INTEGER,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold, gene, pos1)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_annotations (
+      ID TEXT NOT NULL,
+      gene TEXT NOT NULL,
+      type TEXT,
+      pos1 INTEGER,
+      pos2 INTEGER,
+      direction TEXT,
+      ref_length INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, gene, pos1)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_sequences (
+      accession TEXT NOT NULL,
+      sequence TEXT NOT NULL,
+      ref_length INTEGER,
+      genetic_code INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (accession)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_alignment (
+      ID TEXT NOT NULL,
+      aligned_sample TEXT NOT NULL,
+      aligned_ref TEXT NOT NULL,
+      rotation INTEGER NOT NULL DEFAULT 0,
+      ref_length INTEGER NOT NULL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID)
     );"
   )
 

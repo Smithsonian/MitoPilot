@@ -57,7 +57,7 @@ Imports:
     zoo,
     pwalign,
     cli,
-    RCurl
+    httr2
 Suggests:
     knitr
 VignetteBuilder:

@@ -18,6 +18,7 @@ new_db_userAsmb(
   mitos_opts = "--intron 0 --oril 0",
   trnaScan_opts = "-M vert -X 20",
   arwen_opts = "-mtx",
+  aragorn_opts = "-m -gcstd",
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
@@ -51,6 +52,8 @@ for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 \item{trnaScan_opts}{Default tRNAscan-SE command line options}
 
 \item{arwen_opts}{Default ARWEN command line options}
+
+\item{aragorn_opts}{Default ARAGORN command line options}
 
 \item{curate_cpus}{Default # cpus for curation}
 
