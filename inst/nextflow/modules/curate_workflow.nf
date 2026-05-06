@@ -1,8 +1,7 @@
 import java.util.Base64
-import groovy.json.JsonOutput
 include {curate} from './curate.nf'
 
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, c.curate_opts, ' +
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
                     'd.ref_dir, d.ref_db ' +
                     'FROM assemblies a ' +
@@ -16,15 +15,6 @@ params.sqlWriteAssemblies =  'UPDATE assemblies SET sequence = ?, length = ?, de
 
 params.sqlWriteAnnotate =   'UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, time_stamp = ? WHERE ID = ?'
 
-params.sqlBlastRefMeta =
-    'SELECT a.ID, a.blast_accession, a.blast_species, r.sequence, r.genetic_code ' +
-    'FROM assemble a ' +
-    'JOIN blast_ref_sequences r ON a.blast_accession = r.accession ' +
-    "WHERE a.blast_accession IS NOT NULL AND a.blast_accession NOT IN ('', 'NO HIT')"
-
-params.sqlBlastRefPCG =
-    "SELECT ID, gene, pos1, pos2, direction FROM blast_ref_annotations WHERE type = 'PCG'"
-
 workflow CURATE {
     take:
         input
@@ -36,31 +26,37 @@ workflow CURATE {
             .map { it ->
 
                 // Check if refDir is a GitHub link
-                if (it[8].contains('githubusercontent')) {
-                    if (!it[9].endsWith('.tar.gz')) {
-                        it[9] = it[9] + '.tar.gz'
+                if (it[9].contains('githubusercontent')) {
+                    if (!it[10].endsWith('.tar.gz')) {
+                        it[10] = it[10] + '.tar.gz'
                     }
                 }
 
-                def jsonParams = it[6].toString()
+                def jsonParams = it[7].toString()
                 def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
+                def blastRefRel = "${params.publishDir}/${it[0]}/assemble/${it[2]}/remote_blast_ref.json"
+                def blastRefAbs = new File(launchDir.toString(), blastRefRel)
+                def blastRefFile = blastRefAbs.exists()
+                    ? file(blastRefRel)
+                    : file("${baseDir}/modules/empty_remote_blast_ref.json")
 
                 tuple(
                     it[0],                                          // ID
                     it[1],                                          // path
-                    it[10],                                          // Annotations
-                    it[11],                                          // Assembly
-                    it[12],                                          // Coverage
+                    it[11],                                          // Annotations
+                    it[12],                                          // Assembly
+                    it[13],                                          // Coverage
                     [
-                        cpus:  it[3],                                      // cpus
-                        memory: it[4],                                     // memory
-                        target: it[5],                                     // target
+                        cpus:  it[4],                                      // cpus
+                        memory: it[5],                                     // memory
+                        target: it[6],                                     // target
                         params: encodedParams,                              // params
-                        max_blast_hits: it[7]                             // maximum retained blast hits
+                        max_blast_hits: it[8]                             // maximum retained blast hits
                     ],
-                    file(it[8] + "/" + it[9]),                              // curation ref dir + clade
-                    it[9],                                                   // ref clade
-                    it[9].replaceFirst(/\.tar\.gz$/, '')                // ref_db without ".tar.gz"
+                    file(it[9] + "/" + it[10]),                              // curation ref dir + clade
+                    it[10],                                                   // ref clade
+                    it[10].replaceFirst(/\.tar\.gz$/, ''),                // ref_db without ".tar.gz"
+                    blastRefFile
 
                 )
             }

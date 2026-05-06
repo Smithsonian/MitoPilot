@@ -1,6 +1,6 @@
 include {blast_genbank} from './blast_genbank.nf'
 
-params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ? WHERE ID = ?'
+params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
 
 params.sqlReadBlastOpts =
     'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
@@ -53,32 +53,35 @@ workflow BLAST_GENBANK {
             .map{ id, result_file ->
                 def opts_id = result_file.parent.name
                 def lines = result_file.readLines().findAll{ it.trim() }
-                def blast_accession, blast_species, blast_pident, blast_qcovs
+                def blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue
                 if (lines) {
                     def parts = lines[0].split('\t')
-                    if (parts.size() >= 4) {
+                    if (parts.size() >= 5) {
                         blast_accession = parts[0]
                         blast_species   = parts[1]
                         blast_pident    = Math.round(parts[2].toFloat() * 100) / 100.0
                         blast_qcovs     = Math.round(parts[3].toFloat() * 100) / 100.0
+                        blast_evalue    = parts[4].toDouble()
                     } else {
                         blast_accession = 'NO HIT'
                         blast_species   = null
                         blast_pident    = null
                         blast_qcovs     = null
+                        blast_evalue    = null
                     }
                 } else {
                     blast_accession = 'NO HIT'
                     blast_species   = null
                     blast_pident    = null
                     blast_qcovs     = null
+                    blast_evalue    = null
                 }
-                tuple(id, opts_id, blast_accession, blast_species, blast_pident, blast_qcovs)
+                tuple(id, opts_id, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue)
             }
             // Fan out: one branch for DB insert, one for reference fetch
-            .multiMap { id, opts_id, accession, species, pident, qcovs ->
-                db_insert:  tuple(accession, species, pident, qcovs, id)
-                ref_input:  tuple(id, accession, opts_id)
+            .multiMap { id, opts_id, accession, species, pident, qcovs, evalue ->
+                db_insert:  tuple(accession, species, pident, qcovs, evalue, id)
+                ref_input:  tuple(id, accession, species, evalue, opts_id)
             }
             .set { blast_parsed }
 
@@ -88,5 +91,5 @@ workflow BLAST_GENBANK {
     emit:
         // Downstream BLAST_REF_FETCH consumes this; filtered to real hits only
         ref_input = blast_parsed.ref_input
-            .filter{ id, accession, opts_id -> accession != 'NO HIT' }
+            .filter{ id, accession, species, evalue, opts_id -> accession != 'NO HIT' }
 }

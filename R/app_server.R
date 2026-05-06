@@ -32,6 +32,10 @@ app_server <- function(input, output, session) {
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_pident REAL")
   if (!"blast_qcovs" %in% existing_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_qcovs REAL")
+  if (!"blast_evalue" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_evalue REAL")
+  if (!"blast_lineage" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
 
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>

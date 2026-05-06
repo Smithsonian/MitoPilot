@@ -1,4 +1,8 @@
+import groovy.json.JsonSlurper
+
 include {blast_ref_fetch} from './blast_ref_fetch.nf'
+
+params.sqlWriteBlastLineage = 'UPDATE assemble SET blast_lineage = ? WHERE ID = ?'
 
 params.sqlWriteBlastRef = '''INSERT OR REPLACE INTO blast_ref_annotations
     (ID, gene, type, pos1, pos2, direction, ref_length, time_stamp)
@@ -10,7 +14,7 @@ params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
 
 workflow BLAST_REF_FETCH {
     take:
-        // input: tuple(id, blast_accession, opts_id)
+        // input: tuple(id, blast_accession, blast_species, blast_evalue, opts_id)
         input
 
     main:
@@ -18,7 +22,7 @@ workflow BLAST_REF_FETCH {
 
         // Parse CSV rows and insert one row per gene into the DB
         ref_out
-            .flatMap { id, accession, csv_file, seq_file, gc_file ->
+            .flatMap { id, accession, csv_file, seq_file, gc_file, json_file ->
                 def rows = []
                 def lines = csv_file.readLines()
                 if (lines.size() <= 1) return rows   // empty or header-only
@@ -48,7 +52,7 @@ workflow BLAST_REF_FETCH {
 
         // Store reference nucleotide sequence (one row per accession)
         ref_out
-            .map { id, accession, csv_file, seq_file, gc_file ->
+            .map { id, accession, csv_file, seq_file, gc_file, json_file ->
                 def seq = seq_file.text.trim()
                 if (!seq) return null
                 def gc_str = gc_file.text.trim()
@@ -59,4 +63,14 @@ workflow BLAST_REF_FETCH {
             .filter { it != null }
             .unique { it[0] }  // deduplicate by accession in case of reruns
             .sqlInsert(statement: params.sqlWriteRefSeq, db: 'sqlite')
+
+        // Write lineage to assemble table
+        ref_out
+            .map { id, accession, csv_file, seq_file, gc_file, json_file ->
+                def json = new JsonSlurper().parseText(json_file.text)
+                def lineage = json?.lineage ?: null
+                lineage ? tuple(lineage, id) : null
+            }
+            .filter { it != null }
+            .sqlInsert(statement: params.sqlWriteBlastLineage, db: 'sqlite')
 }

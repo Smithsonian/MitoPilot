@@ -11,9 +11,14 @@
 #' @param output_file path to write the annotations CSV
 #' @param sequence_file optional path to write the plain nucleotide sequence
 #' @param genetic_code_file optional path to write the NCBI translation table number
+#' @param json_file optional path to write a JSON bundle used by curation
+#' @param blast_species optional BLAST hit species label to include in JSON
+#' @param blast_evalue optional BLAST hit e-value to include in JSON
 #'
 #' @export
-fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, genetic_code_file = NULL) {
+fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
+                            genetic_code_file = NULL, json_file = NULL,
+                            blast_species = NULL, blast_evalue = NULL) {
   empty <- data.frame(
     gene      = character(),
     type      = character(),
@@ -22,6 +27,15 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, geneti
     direction = character(),
     ref_length = integer()
   )
+
+  write_empty_ref <- function() {
+    write.csv(empty, output_file, row.names = FALSE)
+    if (!is.null(sequence_file)) writeLines("", sequence_file)
+    if (!is.null(genetic_code_file)) writeLines("2", genetic_code_file)
+    if (!is.null(json_file)) {
+      jsonlite::write_json(list(), json_file, auto_unbox = TRUE)
+    }
+  }
 
   tryCatch({
     url <- paste0(
@@ -47,14 +61,14 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, geneti
     # Data lines only
     data_lines <- lines[!grepl("^#", lines) & nchar(trimws(lines)) > 0]
     if (length(data_lines) == 0) {
-      write.csv(empty, output_file, row.names = FALSE)
+      write_empty_ref()
       return(invisible(NULL))
     }
 
     fields <- strsplit(data_lines, "\t", fixed = TRUE)
     fields <- fields[vapply(fields, length, integer(1)) >= 9]
     if (length(fields) == 0) {
-      write.csv(empty, output_file, row.names = FALSE)
+      write_empty_ref()
       return(invisible(NULL))
     }
 
@@ -86,6 +100,51 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, geneti
     df$note       <- get_attr(df$attributes, "Note")
     df$transl_tbl <- get_attr(df$attributes, "transl_table")
 
+    # Extract organism name and lineage from the region feature
+    region_attrs <- df$attributes[df$feature == "region"]
+    organism <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
+      org <- get_attr(region_attrs[1], "organism")
+      if (!is.na(org) && nzchar(org)) org else NULL
+    } else {
+      NULL
+    }
+
+    # Extract NCBI taxonomy ID from region Dbxref attribute (e.g. "taxon:9606")
+    taxid <- tryCatch({
+      dbxref <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
+        get_attr(region_attrs[1], "Dbxref")
+      } else NA_character_
+      if (is.na(dbxref)) return(NULL)
+      m <- regmatches(dbxref, regexpr("(?<=taxon:)\\d+", dbxref, perl = TRUE))
+      if (length(m) > 0L && nzchar(m)) m else NULL
+    }, error = function(e) NULL)
+
+    # Fetch phylum; order; family from NCBI taxonomy LineageEx
+    lineage <- if (!is.null(taxid)) {
+      tryCatch({
+        tax_url <- paste0(
+          "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+          "?db=taxonomy&id=", taxid, "&retmode=xml"
+        )
+        tax_xml <- RCurl::getURL(
+          tax_url,
+          .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 60)
+        )
+        lex_m <- regmatches(tax_xml, regexpr("(?s)<LineageEx>.*?</LineageEx>", tax_xml, perl = TRUE))
+        if (length(lex_m) == 0L) return(NULL)
+        taxon_blocks <- regmatches(lex_m, gregexpr("(?s)<Taxon>.*?</Taxon>", lex_m, perl = TRUE))[[1]]
+        get_tag <- function(block, tag) {
+          pat <- paste0("(?<=<", tag, ">)[^<]+")
+          m <- regmatches(block, regexpr(pat, block, perl = TRUE))
+          if (length(m) > 0L && nzchar(m)) m else NA_character_
+        }
+        ranks <- vapply(taxon_blocks, get_tag, character(1), tag = "Rank")
+        names_vec <- vapply(taxon_blocks, get_tag, character(1), tag = "ScientificName")
+        keep <- ranks %in% c("phylum", "order", "family") & !is.na(names_vec)
+        if (any(keep)) paste(names_vec[keep], collapse = "; ") else NULL
+      }, error = function(e) NULL)
+    } else NULL
+
     # Extract genetic code from CDS transl_table attribute; default 2
     cds_gc <- df$transl_tbl[df$feature == "CDS" & !is.na(df$transl_tbl)]
     genetic_code_num <- if (length(cds_gc) > 0) as.integer(cds_gc[1]) else 2L
@@ -107,7 +166,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, geneti
 
     df <- df[!is.na(df$type), ]
     if (nrow(df) == 0) {
-      write.csv(empty, output_file, row.names = FALSE)
+      write_empty_ref()
       return(invisible(NULL))
     }
 
@@ -132,6 +191,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, geneti
     write.csv(result, output_file, row.names = FALSE)
 
     # Optionally fetch and write the reference nucleotide sequence
+    seq_str <- ""
     if (!is.null(sequence_file)) {
       fasta_url <- paste0(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
@@ -150,15 +210,29 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL, geneti
       if (grepl("^[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+$", seq_str)) {
         writeLines(seq_str, sequence_file)
       } else {
+        seq_str <- ""
         writeLines("", sequence_file)
       }
     }
 
+    if (!is.null(json_file)) {
+      pcg <- result[result$type == "PCG", c("gene", "pos1", "pos2", "direction")]
+      ref_json <- list(
+        accession = accession,
+        blast_species = blast_species %||% accession,
+        blast_evalue = blast_evalue,
+        organism = organism,
+        lineage = lineage,
+        sequence = seq_str,
+        genetic_code = genetic_code_num,
+        pcg = pcg
+      )
+      jsonlite::write_json(ref_json, json_file, auto_unbox = TRUE, null = "null")
+    }
+
   }, error = function(e) {
     message("fetch_blast_ref error for ", accession, ": ", e$message)
-    write.csv(empty, output_file, row.names = FALSE)
-    if (!is.null(sequence_file)) writeLines("", sequence_file)
-    if (!is.null(genetic_code_file)) writeLines("2", genetic_code_file)
+    write_empty_ref()
   })
   invisible(NULL)
 }
@@ -197,8 +271,10 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
   )
   if (is.null(ref_data) || length(ref_data) == 0) return(annotations)
 
-  accession <- ref_data$accession
-  taxon     <- ref_data$blast_species %||% accession
+  accession    <- ref_data$accession
+  organism     <- ref_data$organism
+  taxon        <- if (!is.null(organism) && !is.na(organism) && nzchar(organism)) organism else (ref_data$blast_species %||% accession)
+  blast_evalue <- ref_data$blast_evalue %||% 0
   if (is.null(accession) || is.na(accession) || accession %in% c("", "NO HIT")) {
     return(annotations)
   }
@@ -223,7 +299,7 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
     tryCatch({
       s <- Biostrings::subseq(ref_dna, start = pos1, end = pos2)
       if (identical(dir, "-")) s <- Biostrings::reverseComplement(s)
-      len <- floor(Biostrings::width(s) / 3L) * 3L
+      len <- floor(length(s) / 3L) * 3L
       prot <- Biostrings::translate(Biostrings::subseq(s, 1L, len),
                                     genetic.code = ref_gc,
                                     if.fuzzy.codon = "solve")
@@ -236,8 +312,12 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
   # Determine whether a gene has multiple copies in the reference
   gene_counts <- table(pcg$gene)
 
+  metric_or_na <- function(expr) {
+    tryCatch(expr, error = function(e) NA_real_)
+  }
+
   # Update each PCG row's refHits
-  annotations$refHits <- purrr::pmap(
+  annotations$refHits <- purrr::pmap_chr(
     list(annotations$type, annotations$gene, annotations$translation, annotations$refHits),
     function(type, gene, translation, refHits_json) {
       if (type != "PCG") return(refHits_json)
@@ -260,15 +340,16 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
         }
 
         tryCatch(
+
           data.frame(
             acc          = seq_name,
-            Taxon        = taxon,
-            eval         = 0, # TO DO: store remote BLAST eval in SQL db and insert it here
+            Taxon        = paste0(seq_name, "_", taxon),
+            eval         = blast_evalue,
             target       = ref_aa,
-            pctid        = compare_aa(translation, ref_aa, "pctId"),
-            similarity   = compare_aa(translation, ref_aa, "similarity"),
-            gap_leading  = count_end_gaps(translation, ref_aa, "leading"),
-            gap_trailing = count_end_gaps(translation, ref_aa, "trailing"),
+            pctid        = metric_or_na(compare_aa(translation, ref_aa, "pctId")),
+            similarity   = metric_or_na(compare_aa(translation, ref_aa, "similarity")),
+            gap_leading  = metric_or_na(count_end_gaps(translation, ref_aa, "leading")),
+            gap_trailing = metric_or_na(count_end_gaps(translation, ref_aa, "trailing")),
             stringsAsFactors = FALSE
           ),
           error = function(e) NULL
@@ -278,7 +359,12 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
       if (nrow(hit_rows) == 0) return(refHits_json)
 
       existing <- json_parse(refHits_json[[1]] %|NA|% "{}", tibble = TRUE)
-      combined <- if (nrow(existing) > 0) dplyr::bind_rows(hit_rows, existing) else hit_rows
+      has_existing <- is.data.frame(existing) && nrow(existing) > 0
+      if (has_existing && "acc" %in% names(existing)) {
+        existing <- existing[!existing$acc %in% hit_rows$acc, , drop = FALSE]
+        has_existing <- nrow(existing) > 0
+      }
+      combined <- if (has_existing) dplyr::bind_rows(hit_rows, existing) else hit_rows
       json_string(combined) %||% refHits_json
     }
   )

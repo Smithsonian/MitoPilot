@@ -38,6 +38,8 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       blast_species,
       blast_pident,
       blast_qcovs,
+      blast_evalue,
+      blast_lineage,
       time_stamp,
       assemble_notes
     ) |>
@@ -313,12 +315,11 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         div(
           id = ns("blast_entrez_group"),
           tags$label(
-            "Entrez query (",
-            tags$a("see NCBI Entrez help page",
+            "Entrez query -",
+            tags$a("Entrez help documentation",
               href = "https://www.ncbi.nlm.nih.gov/books/NBK3837/",
               target = "_blank"
-            ),
-            ")"
+            )
           ),
           textInput(
             ns("entrez_query"),

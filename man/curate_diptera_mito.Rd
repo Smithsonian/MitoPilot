@@ -13,8 +13,7 @@ curate_diptera_mito(
   max_blast_hits = 100,
   params = NULL,
   ref_dir = NULL,
-  sample_id = NULL,
-  db_path = NULL
+  blast_ref_file = NULL
 )
 }
 \arguments{

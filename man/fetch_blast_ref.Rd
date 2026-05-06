@@ -8,7 +8,10 @@ fetch_blast_ref(
   accession,
   output_file,
   sequence_file = NULL,
-  genetic_code_file = NULL
+  genetic_code_file = NULL,
+  json_file = NULL,
+  blast_species = NULL,
+  blast_evalue = NULL
 )
 }
 \arguments{
@@ -19,6 +22,12 @@ fetch_blast_ref(
 \item{sequence_file}{optional path to write the plain nucleotide sequence}
 
 \item{genetic_code_file}{optional path to write the NCBI translation table number}
+
+\item{json_file}{optional path to write a JSON bundle used by curation}
+
+\item{blast_species}{optional BLAST hit species label to include in JSON}
+
+\item{blast_evalue}{optional BLAST hit e-value to include in JSON}
 }
 \description{
 Downloads the GFF3 record and, optionally, the FASTA sequence for the given

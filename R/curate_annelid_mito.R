@@ -617,6 +617,11 @@ curate_annelid_mito <- function(
     return(cur)
   })
 
+  # Restore remote BLAST hit rows after any curation step that recomputed refHits
+  if (!is.null(blast_ref_file)) {
+    annotations <- MitoPilot:::prepend_blast_hit_to_refhits(annotations, blast_ref_file)
+  }
+
   ## Stop codon trimming ----
   for (idx in seq_len(nrow(annotations))) {
     if (annotations$type[idx] != "PCG") next

@@ -203,6 +203,8 @@ new_db_userAsmb <- function(
       blast_species TEXT,
       blast_pident REAL,
       blast_qcovs REAL,
+      blast_evalue REAL,
+      blast_lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"

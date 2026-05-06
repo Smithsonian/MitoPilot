@@ -173,6 +173,13 @@ assemble_server <- function(id) {
               minWidth = 160,
               cell = rt_longtext()
             ),
+            blast_lineage = colDef(
+              show = TRUE,
+              name = "BLAST Lineage",
+              html = TRUE,
+              minWidth = 200,
+              cell = rt_longtext()
+            ),
             blast_pident = colDef(
               show = TRUE,
               name = "BLAST % Ident",

@@ -514,6 +514,8 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_species TEXT")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_pident REAL")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_qcovs REAL")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_evalue REAL")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
   }
 
   # if tool column doesn't exist in annotations table, add it
