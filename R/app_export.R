@@ -246,9 +246,7 @@ export_server <- function(id) {
       ) |> showModal()
     })
 
-    observeEvent(input$export_data, ignoreInit = T, {
-      req(input$export_group)
-      req(input$group_name)
+    run_export <- function() {
       shinyjs::removeClass("gears", "paused")
       shinyjs::disable("export_data")
       export_files(
@@ -261,10 +259,35 @@ export_server <- function(id) {
       )
       shinyjs::show("output_path")
       output$out_path_location <- renderText({
-        paste0(session$userData$dir_out, "/export/", input$group_name)
+        paste0(session$userData$dir_out, "/export/", input$export_group)
       })
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
+    }
+
+    observeEvent(input$export_data, ignoreInit = T, {
+      req(input$export_group)
+      export_path <- file.path(session$userData$dir_out, "export", input$export_group)
+      if (dir.exists(export_path)) {
+        shinyWidgets::confirmSweetAlert(
+          session = session,
+          inputId = ns("overwrite_confirm"),
+          title = "Export already exists",
+          text = stringr::str_glue(
+            "Export files for group '{input$export_group}' already exist. Overwrite them?"
+          ),
+          type = "warning",
+          btn_labels = c("Cancel", "Overwrite"),
+          btn_colors = c("#0056b3", "#d9534f")
+        )
+        return()
+      }
+      run_export()
+    })
+
+    observeEvent(input$overwrite_confirm, ignoreInit = T, {
+      req(input$overwrite_confirm)
+      run_export()
     })
   })
 }
