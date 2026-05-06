@@ -40,14 +40,9 @@ RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock
 RUN R -e 'renv::restore()'
 
-# Install MitoPilot
-COPY docker/MitoPilot_*.tar.gz /pkg.tar.gz
-RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never")'
-RUN rm /pkg.tar.gz
-
 # install MitoFinder
 RUN git clone https://github.com/RemiAllio/MitoFinder.git /opt/MitoFinder
-RUN cd /opt/MitoFinder;./install.sh;cd ~ 
+RUN cd /opt/MitoFinder;./install.sh;cd ~
 RUN chmod -R 777 /opt/MitoFinder
 ENV PATH="/opt/MitoFinder:${PATH}"
 
@@ -57,6 +52,11 @@ RUN gcc -O2 -ffast-math -o /opt/arwen/arwen /opt/arwen/arwen.c -lm
 ENV PATH="/opt/arwen:${PATH}"
 
 RUN ln -s /usr/lib/x86_64-linux-gnu/libidn2.so.0 /usr/lib/x86_64-linux-gnu/libidn.so.11
+
+# Install MitoPilot — kept last so R code edits only invalidate this layer
+COPY docker/MitoPilot_*.tar.gz /pkg.tar.gz
+RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never")'
+RUN rm /pkg.tar.gz
 
 # Default Reference DBs
 # not needed for >= v1.3.0, since dbs are downloaded directly from GitHub

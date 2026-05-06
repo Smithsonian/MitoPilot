@@ -40,6 +40,14 @@ annotations_details_server <- function(id, rv) {
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::collect()
 
+      ## Load BLAST reference alignment ----
+      rv$blast_ref_aln <- tryCatch(
+        dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
+          dplyr::filter(ID == !!rv$updating$ID) |>
+          dplyr::collect(),
+        error = function(e) NULL
+      )
+
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
     })
@@ -390,10 +398,31 @@ annotations_details_server <- function(id, rv) {
     output$synteny_ui <- renderUI({
       req(rv$blast_ref, rv$updating)
       req(nrow(rv$blast_ref) > 0)
-      w <- max(rv$updating$length %||% 800L, 800L)
+      w          <- max(rv$updating$length %||% 800L, 800L)
       sample_lbl <- rv$updating$ID
-      ref_lbl <- rv$updating$blast_species %||% rv$updating$blast_accession
-      ref_acc <- rv$updating$blast_accession
+      ref_lbl    <- rv$updating$blast_species %||% rv$updating$blast_accession
+      ref_acc    <- rv$updating$blast_accession
+      has_aln    <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
+      plot_h     <- if (has_aln) "280px" else "200px"
+      lbl <- function(h, ...) div(
+        style = paste0("height: ", h, "; display: flex; align-items: center; word-break: break-word;"),
+        ...
+      )
+      lbl_col <- if (has_aln) {
+        tagList(
+          lbl("95px", sample_lbl),
+          lbl("45px", div(style = "color: #888; font-size: 10px;", "aligned sample")),
+          lbl("45px", div(style = "color: #888; font-size: 10px;", "aligned ref")),
+          lbl("95px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
+        )
+      } else {
+        tagList(
+          lbl("100px", sample_lbl),
+          lbl("100px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
+        )
+      }
       div(
         style = "display: flex; align-items: flex-start;",
         div(
@@ -401,19 +430,12 @@ annotations_details_server <- function(id, rv) {
             "flex-shrink: 0; width: 160px; font-size: 11px; ",
             "padding-right: 6px; box-sizing: border-box;"
           ),
-          div(
-            style = "height: 100px; display: flex; align-items: center; word-break: break-word;",
-            sample_lbl
-          ),
-          div(
-            style = "height: 100px; display: flex; align-items: center; word-break: break-word;",
-            div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl))
-          )
+          lbl_col
         ),
         div(
           id = ns("syntenyScrollDiv"),
           style = "overflow-x: auto; flex: 1;",
-          plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = "200px")
+          plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h)
         )
       )
     })
@@ -421,45 +443,9 @@ annotations_details_server <- function(id, rv) {
       req(rv$blast_ref, rv$annotations, rv$coverage)
       req(nrow(rv$blast_ref) > 0)
 
-      ref_length <- rv$blast_ref$ref_length[1]
+      ref_length   <- rv$blast_ref$ref_length[1]
       sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
-
-      # Anchor: first gene in sample (by pos1); rotate reference to match
-      anchor_gene <- sample_genes |>
-        dplyr::arrange(pos1) |>
-        dplyr::pull(gene) |>
-        head(1)
-      anchor_ref <- rv$blast_ref |>
-        dplyr::filter(gene == anchor_gene) |>
-        dplyr::arrange(pos1)
-      # Only rotate for circular assemblies; linear genomes have a fixed start
-      rotation <- if (rv$updating$topology == "circular" && nrow(anchor_ref) > 0) {
-        as.integer(anchor_ref$pos1[1]) - 1L
-      } else {
-        0L
-      }
-
-      # Apply rotation; extend pos2 past ref_length for wrap-around features
-      ref_rotated <- rv$blast_ref |>
-        dplyr::mutate(
-          pos1_r = as.integer(((as.integer(pos1) - 1L - rotation) %% ref_length) + 1L),
-          pos2_r = as.integer(((as.integer(pos2) - 1L - rotation) %% ref_length) + 1L)
-        ) |>
-        dplyr::mutate(
-          pos2_r = dplyr::if_else(pos2_r < pos1_r, pos2_r + ref_length, pos2_r),
-          pos1_r = dplyr::if_else(pos2_r > ref_length, 1L, pos1_r)
-        ) |>
-        dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
-
-      sample_len <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
-      sample_df <- sample_genes |>
-        dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
-
-      # Normalise both genomes to 0–100% so tracks are directly comparable
-      sample_pct <- sample_df |>
-        dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100)
-      ref_pct <- ref_rotated |>
-        dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100)
+      sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
 
       gene_track <- list(
         gggenes::geom_gene_arrow(
@@ -470,10 +456,8 @@ annotations_details_server <- function(id, rv) {
         ),
         gggenes::geom_gene_label(align = "left", height = ggplot2::unit(6, "mm")),
         ggplot2::scale_fill_manual(values = c(
-          ctrl = "#FAA34A85",
-          PCG  = "#60BD6885",
-          rRNA = "#5DA5DA85",
-          tRNA = "#F17CB085"
+          ctrl = "#FAA34A85", PCG = "#60BD6885",
+          rRNA = "#5DA5DA85", tRNA = "#F17CB085"
         )),
         ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)),
         ggplot2::coord_cartesian(clip = "off"),
@@ -487,21 +471,154 @@ annotations_details_server <- function(id, rv) {
         )
       )
 
-      sample_plot <- ggplot2::ggplot(sample_pct) +
-        ggplot2::aes(
-          xmin = xmin, xmax = xmax, forward = direction == "+",
-          fill = type, y = 0, label = gene
-        ) +
-        gene_track
+      has_aln <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
 
-      ref_plot <- ggplot2::ggplot(ref_pct) +
-        ggplot2::aes(
-          xmin = xmin, xmax = xmax, forward = direction == "+",
-          fill = type, y = 0, label = gene
-        ) +
-        gene_track
+      if (has_aln) {
+        aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
+        aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
+        aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
+        s_chars <- strsplit(aligned_sample, "")[[1]]
+        r_chars <- strsplit(aligned_ref,    "")[[1]]
+        aln_len <- length(s_chars)
 
-      print(sample_plot / ref_plot + patchwork::plot_layout(heights = c(1, 1)))
+        # Non-gap index: s_nongap[i] = alignment column for sample position i
+        s_nongap <- which(s_chars != "-")
+        r_nongap <- which(r_chars != "-")
+
+        # Project sample position (original coords) → 0-100 in alignment space
+        s_to_pct <- function(pos) {
+          idx <- pmin(pmax(as.integer(pos), 1L), length(s_nongap))
+          s_nongap[idx] / aln_len * 100
+        }
+        # Project ref position (original coords) → rotate → 0-100 in alignment space
+        r_to_pct <- function(pos) {
+          pos_r <- ((as.integer(pos) - 1L - aln_rotation) %% ref_length) + 1L
+          idx   <- pmin(pmax(pos_r, 1L), length(r_nongap))
+          r_nongap[idx] / aln_len * 100
+        }
+
+        # Gene data frames in alignment coordinates
+        sample_df <- sample_genes |>
+          dplyr::mutate(
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
+          )
+        ref_df <- rv$blast_ref |>
+          dplyr::mutate(
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            xmin = r_to_pct(pos1), xmax = r_to_pct(pos2)
+          )
+
+        # Classify each alignment column; RLE-compress into rect data frames
+        aln_class <- dplyr::case_when(
+          s_chars == "-" ~ "gap_s",
+          r_chars == "-" ~ "gap_r",
+          tolower(s_chars) == tolower(r_chars) ~ "match",
+          TRUE ~ "mismatch"
+        )
+        rls    <- rle(aln_class)
+        ends   <- cumsum(rls$lengths)
+        starts <- c(1L, head(ends, -1L) + 1L)
+        aln_rect <- data.frame(
+          xmin = (starts - 1L) / aln_len * 100,
+          xmax = ends / aln_len * 100,
+          type = rls$values,
+          stringsAsFactors = FALSE
+        )
+
+        # Sample alignment track: show non-gap-s positions colored by match/mismatch/gap_r
+        saln_df <- aln_rect |>
+          dplyr::mutate(fill_col = dplyr::case_when(
+            type == "match"    ~ "#60BD68",
+            type == "mismatch" ~ "#E55330",
+            type == "gap_r"    ~ "#CCCCCC",
+            TRUE ~ NA_character_
+          )) |>
+          dplyr::filter(!is.na(fill_col))
+
+        # Ref alignment track: show non-gap-r positions colored by match/mismatch/gap_s
+        raln_df <- aln_rect |>
+          dplyr::mutate(fill_col = dplyr::case_when(
+            type == "match"    ~ "#60BD68",
+            type == "mismatch" ~ "#E55330",
+            type == "gap_s"    ~ "#CCCCCC",
+            TRUE ~ NA_character_
+          )) |>
+          dplyr::filter(!is.na(fill_col))
+
+        aln_base_theme <- list(
+          ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)),
+          ggplot2::scale_fill_identity(),
+          ggplot2::coord_cartesian(clip = "off"),
+          ggthemes::theme_tufte(),
+          ggplot2::theme(
+            legend.position  = "none",
+            axis.title       = ggplot2::element_blank(),
+            axis.text        = ggplot2::element_blank(),
+            axis.ticks       = ggplot2::element_blank(),
+            panel.background = ggplot2::element_rect(fill = "#F0F0F0", colour = NA),
+            plot.margin      = ggplot2::margin(1, 0, 1, 0, "mm")
+          )
+        )
+
+        saln_plot <- ggplot2::ggplot(saln_df,
+          ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = 1, fill = fill_col)
+        ) + ggplot2::geom_rect() + aln_base_theme
+
+        raln_plot <- ggplot2::ggplot(raln_df,
+          ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = 1, fill = fill_col)
+        ) + ggplot2::geom_rect() + aln_base_theme
+
+        sample_plot <- ggplot2::ggplot(sample_df) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) +
+          gene_track
+
+        ref_plot <- ggplot2::ggplot(ref_df) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) +
+          gene_track
+
+        print(sample_plot / saln_plot / raln_plot / ref_plot +
+                patchwork::plot_layout(heights = c(2, 1, 1, 2)))
+
+      } else {
+        # Fallback: no alignment — 2-track view with normalised genome coordinates
+        anchor_gene <- sample_genes |>
+          dplyr::arrange(pos1) |> dplyr::pull(gene) |> head(1)
+        anchor_ref <- rv$blast_ref |>
+          dplyr::filter(gene == anchor_gene) |> dplyr::arrange(pos1)
+        rotation <- if (rv$updating$topology == "circular" && nrow(anchor_ref) > 0) {
+          as.integer(anchor_ref$pos1[1]) - 1L
+        } else {
+          0L
+        }
+        ref_rotated <- rv$blast_ref |>
+          dplyr::mutate(
+            pos1_r = as.integer(((as.integer(pos1) - 1L - rotation) %% ref_length) + 1L),
+            pos2_r = as.integer(((as.integer(pos2) - 1L - rotation) %% ref_length) + 1L)
+          ) |>
+          dplyr::mutate(
+            pos2_r = dplyr::if_else(pos2_r < pos1_r, pos2_r + ref_length, pos2_r),
+            pos1_r = dplyr::if_else(pos2_r > ref_length, 1L, pos1_r)
+          ) |>
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+        sample_df  <- sample_genes |>
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+        sample_pct <- sample_df |>
+          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100)
+        ref_pct    <- ref_rotated |>
+          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100)
+        sample_plot <- ggplot2::ggplot(sample_pct) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) + gene_track
+        ref_plot <- ggplot2::ggplot(ref_pct) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) + gene_track
+        print(sample_plot / ref_plot + patchwork::plot_layout(heights = c(1, 1)))
+      }
     })
     ## Auto scroll ----
     observeEvent(selected(), {

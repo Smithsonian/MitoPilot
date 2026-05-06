@@ -24,8 +24,8 @@ process blast_ref_align {
     '''
     mkdir -p !{outDir}
     # Write sequences to files — avoids Rscript -e expression length limits
-    printf '%s' '!{assembly_seq}' > _assembly.txt
-    printf '%s' '!{ref_seq}'      > _ref.txt
+    printf '%s\n' '!{assembly_seq}' > _assembly.txt
+    printf '%s\n' '!{ref_seq}'      > _ref.txt
     Rscript -e "MitoPilot::compute_blast_ref_alignment( \
         assembly_seq = paste(readLines('_assembly.txt'), collapse = ''), \
         ref_seq      = paste(readLines('_ref.txt'),      collapse = ''), \

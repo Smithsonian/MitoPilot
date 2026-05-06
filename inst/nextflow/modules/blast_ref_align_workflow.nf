@@ -1,20 +1,36 @@
 include {blast_ref_align} from './blast_ref_align.nf'
 
-// Query only reference sequence and rotation — all data from WF1 (BLAST_REF_FETCH),
-// available at WF2 startup. Assembly sequence is read directly from the curate output
-// FASTA, avoiding the timing issue where annotate.path is NULL when fromQuery runs
-// at pipeline start (before CURATE writes it to the DB).
-// The rotation is pos1 - 1 of the start_gene in blast_ref_annotations; if the
-// gene is absent (no BLAST ref data) the subquery returns NULL → COALESCE to 0.
-params.sqlReadAlign =
+// Reference sequence and rotation for newly-curated samples (gated on curate_out).
+// Assembly sequence comes from the curate output FASTA (already rotated to start_gene).
+params.sqlReadRef =
     'SELECT b.ID, s.sequence, ' +
         'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
                   'WHERE r.ID = b.ID AND r.gene = d.start_gene), 0) ' +
     'FROM assemble b ' +
-    'JOIN annotate a   ON b.ID = a.ID ' +
+    'JOIN annotate a     ON b.ID = a.ID ' +
     'JOIN annotate_opts d ON a.annotate_opts = d.annotate_opts ' +
     'JOIN blast_ref_sequences s ON b.blast_accession = s.accession ' +
     'WHERE b.blast_accession IS NOT NULL'
+
+// Backfill: samples already validated in a prior run (assemblies.sequence is the
+// rotated post-curate sequence) that are missing an alignment row. annotate_switch = 2
+// is the post-VALIDATE state and is the only safe signal that the stored sequence
+// has been rotated to start_gene — for userAsmb projects, assemblies.sequence is
+// pre-populated with the unrotated user FASTA in WF1_userAsmb and only becomes
+// rotated after CURATE runs in WF2.
+params.sqlBackfill =
+    'SELECT b.ID, a.sequence, s.sequence, ' +
+        'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
+                  'WHERE r.ID = b.ID AND r.gene = d.start_gene), 0) ' +
+    'FROM assemble b ' +
+    'JOIN assemblies a   ON b.ID = a.ID AND a.scaffold = 1 ' +
+    'JOIN annotate c     ON b.ID = c.ID ' +
+    'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
+    'JOIN blast_ref_sequences s ON b.blast_accession = s.accession ' +
+    'WHERE b.blast_accession IS NOT NULL ' +
+      'AND a.sequence IS NOT NULL ' +
+      'AND c.annotate_switch = 2 ' +
+      'AND NOT EXISTS (SELECT 1 FROM blast_ref_alignment al WHERE al.ID = b.ID)'
 
 params.sqlWriteAlignment = '''INSERT OR REPLACE INTO blast_ref_alignment
     (ID, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
@@ -22,21 +38,20 @@ params.sqlWriteAlignment = '''INSERT OR REPLACE INTO blast_ref_alignment
 
 workflow BLAST_REF_ALIGN {
     take:
-        validated   // (id, path) per newly validated sample; gates timing
+        validated   // (id, path) — gates timing: only fires after VALIDATE completes
         curate_out  // (id, path, annotations, assembly_fasta, coverage, work_dir)
 
     main:
-        // Reference sequence + rotation; all from WF1 data, available at WF2 startup.
-        // Filter out rows where the stored sequence is not a valid nucleotide string
-        // (e.g. an NCBI API error JSON stored by a failed BLAST_REF_FETCH run).
-        channel.fromQuery(params.sqlReadAlign, db: 'sqlite')
+        // Reference data (sequence + rotation) available at WF2 startup from WF1.
+        channel.fromQuery(params.sqlReadRef, db: 'sqlite')
             .map { row -> tuple(row[0], row[1], row[2] as Long) }
             .filter { id, ref_seq, rotation ->
                 ref_seq && ref_seq.matches('[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+')
             }
             .set { ref_ch }  // (id, ref_seq, rotation)
 
-        // Gate on validated, pull assembly FASTA from curate_out, join with ref data
+        // Newly-validated samples: gate on `validated` so alignment runs after
+        // VALIDATE completes. Pull the rotated assembly FASTA from curate_out.
         validated
             .join(curate_out, by: [0, 1])
             .map { id, path, annotations, assembly_fasta, coverage, work_dir ->
@@ -49,7 +64,21 @@ workflow BLAST_REF_ALIGN {
                     .join('')
                 tuple(id, seq, ref_seq, rotation)
             }
-            .set { align_in }
+            .set { new_align_in }
+
+        // Backfill: already-curated samples with no alignment row.
+        channel.fromQuery(params.sqlBackfill, db: 'sqlite')
+            .map { row ->
+                def asm_seq = row[1]?.toString()
+                def ref_seq = row[2]?.toString()
+                if (!asm_seq || !ref_seq) return null
+                if (!ref_seq.matches('[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+')) return null
+                tuple(row[0], asm_seq, ref_seq, row[3] as Long)
+            }
+            .filter { it != null }
+            .set { backfill_ch }
+
+        new_align_in.mix(backfill_ch).set { align_in }
 
         blast_ref_align(align_in).set { align_out }
 

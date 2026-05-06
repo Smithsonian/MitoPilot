@@ -746,7 +746,7 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
       )
     }
 
-    subMx <- Biostrings::nucleotideSubstitutionMatrix(
+    subMx <- pwalign::nucleotideSubstitutionMatrix(
       match = 1, mismatch = -1, baseOnly = TRUE
     )
     aln <- pwalign::pairwiseAlignment(
