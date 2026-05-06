@@ -110,6 +110,11 @@ export_files <- function(
           dplyr::distinct(),
         by = "ID"
       ) |>
+      dplyr::left_join(
+        dplyr::tbl(con, "assemble") |>
+          dplyr::select(ID, blast_accession),
+        by = "ID"
+      ) |>
       dplyr::collect()
 
     seq <- MitoPilot::get_assembly(
@@ -120,7 +125,13 @@ export_files <- function(
     if (length(seq) > 1) {
       stop("Multiple sequences found. Export not supported for fragmented assemblies.")
     }
-    names(seq) <- stringr::str_glue_data(dat, fasta_header)
+    blast_acc <- dat$blast_accession[1]
+    blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) && blast_acc != "NO HIT") {
+      paste0(" [note=annotation compared to GenBank accession ", blast_acc, "]")
+    } else {
+      ""
+    }
+    names(seq) <- paste0(stringr::str_glue_data(dat, fasta_header), blast_note)
 
     # sequence name, to be used as first column in GFF
     seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)
