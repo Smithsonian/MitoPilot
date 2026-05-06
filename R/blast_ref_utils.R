@@ -37,6 +37,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     }
   }
 
+  fasta_failed <- FALSE
+
   tryCatch({
     url <- paste0(
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
@@ -100,48 +102,67 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     df$note       <- get_attr(df$attributes, "Note")
     df$transl_tbl <- get_attr(df$attributes, "transl_table")
 
-    # Extract organism name and lineage from the region feature
+    # GFF region organism attribute is best-effort fallback (often absent on RefSeq)
     region_attrs <- df$attributes[df$feature == "region"]
-    organism <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
+    gff_organism <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
       org <- get_attr(region_attrs[1], "organism")
       if (!is.na(org) && nzchar(org)) org else NULL
-    } else {
-      NULL
-    }
+    } else NULL
 
     # Extract NCBI taxonomy ID from region Dbxref attribute (e.g. "taxon:9606")
     taxid <- tryCatch({
       dbxref <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
         get_attr(region_attrs[1], "Dbxref")
       } else NA_character_
-      if (is.na(dbxref)) return(NULL)
-      m <- regmatches(dbxref, regexpr("(?<=taxon:)\\d+", dbxref, perl = TRUE))
-      if (length(m) > 0L && nzchar(m)) m else NULL
+      if (is.na(dbxref)) {
+        NULL
+      } else {
+        m <- regmatches(dbxref, regexpr("(?<=taxon:)\\d+", dbxref, perl = TRUE))
+        if (length(m) > 0L && nzchar(m)) m else NULL
+      }
     }, error = function(e) NULL)
 
-    # Fetch phylum; order; family from NCBI taxonomy LineageEx
-    lineage <- if (!is.null(taxid)) {
+    # Fetch taxonomy XML once; derive both species name and condensed lineage
+    tax_xml <- if (!is.null(taxid)) {
       tryCatch({
         tax_url <- paste0(
           "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
           "?db=taxonomy&id=", taxid, "&retmode=xml"
         )
-        tax_xml <- RCurl::getURL(
+        RCurl::getURL(
           tax_url,
           .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 60)
         )
+      }, error = function(e) NULL)
+    } else NULL
+
+    # Clean species name = first <ScientificName> before <LineageEx>
+    tax_species <- if (!is.null(tax_xml) && nzchar(tax_xml)) {
+      prefix <- sub("(?s)<LineageEx>.*", "", tax_xml, perl = TRUE)
+      m <- regmatches(prefix, regexpr("(?<=<ScientificName>)[^<]+", prefix, perl = TRUE))
+      if (length(m) > 0L && nzchar(m)) m else NULL
+    } else NULL
+
+    organism <- tax_species %||% gff_organism
+
+    # Phylum; order; family from <LineageEx>
+    lineage <- if (!is.null(tax_xml) && nzchar(tax_xml)) {
+      tryCatch({
         lex_m <- regmatches(tax_xml, regexpr("(?s)<LineageEx>.*?</LineageEx>", tax_xml, perl = TRUE))
-        if (length(lex_m) == 0L) return(NULL)
-        taxon_blocks <- regmatches(lex_m, gregexpr("(?s)<Taxon>.*?</Taxon>", lex_m, perl = TRUE))[[1]]
-        get_tag <- function(block, tag) {
-          pat <- paste0("(?<=<", tag, ">)[^<]+")
-          m <- regmatches(block, regexpr(pat, block, perl = TRUE))
-          if (length(m) > 0L && nzchar(m)) m else NA_character_
+        if (length(lex_m) == 0L) {
+          NULL
+        } else {
+          taxon_blocks <- regmatches(lex_m, gregexpr("(?s)<Taxon>.*?</Taxon>", lex_m, perl = TRUE))[[1]]
+          get_tag <- function(block, tag) {
+            pat <- paste0("(?<=<", tag, ">)[^<]+")
+            m <- regmatches(block, regexpr(pat, block, perl = TRUE))
+            if (length(m) > 0L && nzchar(m)) m else NA_character_
+          }
+          ranks <- vapply(taxon_blocks, get_tag, character(1), tag = "Rank")
+          names_vec <- vapply(taxon_blocks, get_tag, character(1), tag = "ScientificName")
+          keep <- ranks %in% c("phylum", "order", "family") & !is.na(names_vec)
+          if (any(keep)) paste(names_vec[keep], collapse = "; ") else NULL
         }
-        ranks <- vapply(taxon_blocks, get_tag, character(1), tag = "Rank")
-        names_vec <- vapply(taxon_blocks, get_tag, character(1), tag = "ScientificName")
-        keep <- ranks %in% c("phylum", "order", "family") & !is.na(names_vec)
-        if (any(keep)) paste(names_vec[keep], collapse = "; ") else NULL
       }, error = function(e) NULL)
     } else NULL
 
@@ -190,7 +211,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
 
     write.csv(result, output_file, row.names = FALSE)
 
-    # Optionally fetch and write the reference nucleotide sequence
+    # Optionally fetch and write the reference nucleotide sequence (with retries)
     seq_str <- ""
     if (!is.null(sequence_file)) {
       fasta_url <- paste0(
@@ -198,20 +219,29 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
         "?db=nuccore&id=", accession,
         "&rettype=fasta&retmode=text"
       )
-      fasta_text <- RCurl::getURL(
-        fasta_url,
-        .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 120)
-      )
+      fasta_text <- ""
+      for (attempt in seq_len(3)) {
+        fasta_text <- tryCatch(
+          RCurl::getURL(
+            fasta_url,
+            .opts = list(ssl.verifypeer = FALSE, connecttimeout = 30, timeout = 120)
+          ),
+          error = function(e) ""
+        )
+        if (is.character(fasta_text) && nzchar(fasta_text) && grepl("^>", fasta_text)) break
+        Sys.sleep(2 * attempt)
+      }
       # Strip FASTA header line(s) and collapse sequence lines into one string
       seq_lines <- strsplit(fasta_text, "\n", fixed = TRUE)[[1]]
       seq_lines <- seq_lines[!grepl("^>", seq_lines) & nchar(trimws(seq_lines)) > 0]
       seq_str   <- paste(trimws(seq_lines), collapse = "")
       # Only write if it looks like a valid nucleotide sequence (not an API error)
-      if (grepl("^[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+$", seq_str)) {
+      if (nzchar(seq_str) && grepl("^[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+$", seq_str)) {
         writeLines(seq_str, sequence_file)
       } else {
         seq_str <- ""
         writeLines("", sequence_file)
+        fasta_failed <- TRUE
       }
     }
 
@@ -234,6 +264,12 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     message("fetch_blast_ref error for ", accession, ": ", e$message)
     write_empty_ref()
   })
+
+  # Signal failure to Nextflow so the process can retry on transient FASTA fetch errors
+  if (isTRUE(fasta_failed)) {
+    stop("fetch_blast_ref: FASTA sequence fetch failed for ", accession,
+         " after retries", call. = FALSE)
+  }
   invisible(NULL)
 }
 
