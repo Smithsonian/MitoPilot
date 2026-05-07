@@ -2,6 +2,17 @@
 #'
 #' @import patchwork
 #' @noRd
+
+# Shared gene-type fill palette for coverage and synteny plots.
+# Keep entries in the same order as the `type` factor levels used downstream.
+gene_type_fill <- c(
+  ctrl = "#FAA34A",
+  PCG  = "#60BD68",
+  rRNA = "#5DA5DA",
+  tRNA = "#F17CB0"
+)
+gene_type_alpha <- 0.5
+
 annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -290,13 +301,13 @@ annotations_details_server <- function(id, rv) {
           arrow_body_height = ggplot2::unit(6, "mm"),
           arrowhead_height = ggplot2::unit(6, "mm"),
           arrowhead_width = ggplot2::unit(1, "mm"),
-          alpha = 0.5
+          alpha = gene_type_alpha
         ) +
         gggenes::geom_gene_label(
           align = "left",
           height = ggplot2::unit(4, "mm")
         ) +
-        ggplot2::scale_fill_manual(values = c("#FAA34A85", "#60BD6885", "#5DA5DA85", "#F17CB085")) +
+        ggplot2::scale_fill_manual(values = gene_type_fill) +
         ggplot2::scale_x_continuous(
           expand = c(0, 0),
           limits = c(
@@ -425,7 +436,7 @@ annotations_details_server <- function(id, rv) {
       toolbar <- if (has_aln) {
         div(
           style = paste0("display: flex; align-items: center; gap: 14px; ",
-                         "margin-bottom: 6px; font-size: 11px;"),
+                         "margin-top: 6px; font-size: 11px;"),
           div(
             style = "display: flex; align-items: center; gap: 4px;",
             tags$input(
@@ -449,7 +460,6 @@ annotations_details_server <- function(id, rv) {
         )
       } else NULL
       tagList(
-        toolbar,
         div(
           style = "display: flex; align-items: flex-start;",
           div(
@@ -465,6 +475,7 @@ annotations_details_server <- function(id, rv) {
             plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h)
           )
         ),
+        toolbar,
         if (has_aln) {
           conditionalPanel(
             condition = "input.synteny_zoom == true", ns = ns,
@@ -489,13 +500,10 @@ annotations_details_server <- function(id, rv) {
           arrow_body_height = ggplot2::unit(12, "mm"),
           arrowhead_height  = ggplot2::unit(12, "mm"),
           arrowhead_width   = ggplot2::unit(2, "mm"),
-          alpha = 0.5
+          alpha = gene_type_alpha
         ),
         gggenes::geom_gene_label(align = "left", height = ggplot2::unit(6, "mm")),
-        ggplot2::scale_fill_manual(values = c(
-          ctrl = "#FAA34A85", PCG = "#60BD6885",
-          rRNA = "#5DA5DA85", tRNA = "#F17CB085"
-        )),
+        ggplot2::scale_fill_manual(values = gene_type_fill),
         ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)),
         ggplot2::coord_cartesian(clip = "off"),
         ggthemes::theme_tufte(),
@@ -687,7 +695,7 @@ annotations_details_server <- function(id, rv) {
           div(
             style = "overflow-x: auto; flex: 1;",
             plotOutput(ns("synteny_zoom_plot"),
-                       width = paste0(plot_w, "px"), height = "150px")
+                       width = paste0(plot_w, "px"), height = "180px")
           )
         )
       )
@@ -720,12 +728,12 @@ annotations_details_server <- function(id, rv) {
       r_nongap <- which(r_chars != "-")
 
       gene_pos1 <- as.integer(rv$annotations$pos1[sel_idx])
-      center_idx <- pmin(pmax(gene_pos1, 1L), length(s_nongap))
-      center_col <- s_nongap[center_idx]
+      # Anchor window 20 bp upstream of gene start (clamped to sequence bounds)
+      start_idx <- pmin(pmax(gene_pos1 - 20L, 1L), length(s_nongap))
+      start_col <- s_nongap[start_idx]
 
       win  <- max(30L, min(2000L, as.integer(input$synteny_zoom_window %||% 200L)))
-      half <- win %/% 2L
-      win_start <- max(1L, center_col - half)
+      win_start <- max(1L, start_col)
       win_end   <- min(aln_len, win_start + win - 1L)
       win_start <- max(1L, win_end - win + 1L)
       win_cols  <- win_start:win_end
@@ -755,12 +763,6 @@ annotations_details_server <- function(id, rv) {
         )
       }
 
-      # Sample base position at each alignment column (cumulative non-gap count)
-      win_s_pos <- cumsum(s_chars != "-")[win_cols]
-
-      tick_step <- max(10L, as.integer(round(length(win_cols) / 8L)))
-      tick_idx  <- seq(1L, length(win_cols), by = tick_step)
-
       df <- data.frame(
         col      = seq_along(win_cols),
         s_char   = win_s,
@@ -772,13 +774,8 @@ annotations_details_server <- function(id, rv) {
       )
 
       type_color <- function(t) {
-        dplyr::case_when(
-          t == "ctrl" ~ "#FAA34A",
-          t == "PCG"  ~ "#60BD68",
-          t == "rRNA" ~ "#5DA5DA",
-          t == "tRNA" ~ "#F17CB0",
-          TRUE        ~ "#888888"
-        )
+        out <- unname(gene_type_fill[as.character(t)])
+        ifelse(is.na(out), "#888888", out)
       }
       to_local <- function(aln_col) aln_col - win_start + 1L
 
@@ -793,6 +790,7 @@ annotations_details_server <- function(id, rv) {
           xmax = to_local(pmin(sg_aln2[sg_in], win_end)) + 0.5,
           gene = sg$gene[sg_in],
           fill = type_color(sg$type[sg_in]),
+          forward = sg$direction[sg_in] == "+",
           stringsAsFactors = FALSE
         )
       } else NULL
@@ -811,6 +809,7 @@ annotations_details_server <- function(id, rv) {
           xmax = to_local(pmin(rg_aln2[rg_in], win_end)) + 0.5,
           gene = rg$gene[rg_in],
           fill = type_color(rg$type[rg_in]),
+          forward = rg$direction[rg_in] == "+",
           stringsAsFactors = FALSE
         )
       } else NULL
@@ -828,15 +827,19 @@ annotations_details_server <- function(id, rv) {
         ) +
         # Sample gene track
         (if (!is.null(sample_gene_df)) list(
-          ggplot2::geom_rect(
+          gggenes::geom_gene_arrow(
             data = sample_gene_df,
-            ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 3.75, ymax = 4.25, fill = fill),
-            inherit.aes = FALSE, alpha = 0.6
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, fill = fill, forward = forward),
+            inherit.aes = FALSE, alpha = gene_type_alpha,
+            arrow_body_height = ggplot2::unit(6, "mm"),
+            arrowhead_height  = ggplot2::unit(6, "mm"),
+            arrowhead_width   = ggplot2::unit(3, "mm")
           ),
-          ggplot2::geom_text(
+          gggenes::geom_gene_label(
             data = sample_gene_df,
-            ggplot2::aes(x = (xmin + xmax) / 2, y = 4.0, label = gene),
-            inherit.aes = FALSE, size = 2.8
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, label = gene, forward = forward),
+            inherit.aes = FALSE, align = "centre",
+            height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
         # Identity bar
@@ -856,23 +859,21 @@ annotations_details_server <- function(id, rv) {
         ) +
         # Ref gene track
         (if (!is.null(ref_gene_df)) list(
-          ggplot2::geom_rect(
+          gggenes::geom_gene_arrow(
             data = ref_gene_df,
-            ggplot2::aes(xmin = xmin, xmax = xmax, ymin = -0.25, ymax = 0.25, fill = fill),
-            inherit.aes = FALSE, alpha = 0.6
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, fill = fill, forward = forward),
+            inherit.aes = FALSE, alpha = gene_type_alpha,
+            arrow_body_height = ggplot2::unit(6, "mm"),
+            arrowhead_height  = ggplot2::unit(6, "mm"),
+            arrowhead_width   = ggplot2::unit(3, "mm")
           ),
-          ggplot2::geom_text(
+          gggenes::geom_gene_label(
             data = ref_gene_df,
-            ggplot2::aes(x = (xmin + xmax) / 2, y = 0.0, label = gene),
-            inherit.aes = FALSE, size = 2.8
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, label = gene, forward = forward),
+            inherit.aes = FALSE, align = "centre",
+            height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
-        # Position ticks (above sample gene track)
-        ggplot2::geom_text(
-          data = data.frame(col = tick_idx, lbl = win_s_pos[tick_idx]),
-          ggplot2::aes(x = col, y = 4.7, label = lbl),
-          family = "mono", size = 2.6, colour = "#888"
-        ) +
         ggplot2::scale_fill_identity() +
         ggplot2::scale_colour_identity() +
         ggplot2::scale_x_continuous(expand = c(0, 0),
