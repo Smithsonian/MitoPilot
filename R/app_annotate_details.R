@@ -163,6 +163,10 @@ annotations_details_server <- function(id, rv) {
 
     ## Table selection ----
     sel <- reactiveVal("init")
+
+    # Synteny-overview click anchor: alignment column to center zoom on.
+    # Set by clicking the overview plot; cleared when user picks a new gene row.
+    zoom_click_col <- reactiveVal(NULL)
     selected <- reactive({
       sel <- reactable::getReactableState("table", "selected")
       # Check for unsaved edits
@@ -460,6 +464,14 @@ annotations_details_server <- function(id, rv) {
         )
       } else NULL
       tagList(
+        if (has_aln) {
+          div(
+            style = "display: flex; margin: 0; padding: 0; line-height: 1;",
+            div(style = "flex-shrink: 0; width: 160px;"),
+            div(style = "flex: 1; text-align: center; font-size: 11px; color: #888; margin: 0; padding: 0;",
+                "click to zoom")
+          )
+        },
         div(
           style = "display: flex; align-items: flex-start;",
           div(
@@ -471,8 +483,10 @@ annotations_details_server <- function(id, rv) {
           ),
           div(
             id = ns("syntenyScrollDiv"),
-            style = "overflow-x: auto; flex: 1;",
-            plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h)
+            style = paste0("overflow-x: auto; flex: 1;",
+                           if (has_aln) " cursor: zoom-in;" else ""),
+            plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
+                       click = ns("synteny_click"))
           )
         ),
         toolbar,
@@ -659,22 +673,31 @@ annotations_details_server <- function(id, rv) {
                    "No alignment available."))
       }
       sel_idx <- selected()
-      if (is.null(sel_idx) || length(sel_idx) == 0) {
+      click_col <- zoom_click_col()
+      if ((is.null(sel_idx) || length(sel_idx) == 0) && is.null(click_col)) {
         return(div(style = "color: #888; font-style: italic; font-size: 11px;",
-                   "Select a gene row in the annotation table to view its base-pair alignment."))
+                   "Select a gene row, or click the synteny plot above, to view a base-pair alignment."))
       }
-      gene_name <- rv$annotations$gene[sel_idx]
-      gene_pos1 <- as.integer(rv$annotations$pos1[sel_idx])
-      gene_pos2 <- as.integer(rv$annotations$pos2[sel_idx])
       win <- max(30L, min(2000L, as.integer(input$synteny_zoom_window %||% 200L)))
       px_per_col <- 14L
       plot_w <- as.integer(win * px_per_col)
       sample_lbl <- rv$updating$ID
       ref_acc    <- rv$updating$blast_accession
+      header_txt <- if (!is.null(click_col)) {
+        s_chars   <- strsplit(rv$blast_ref_aln$aligned_sample[1], "")[[1]]
+        anchor_bp <- as.integer(cumsum(s_chars != "-")[click_col])
+        sprintf("Zoom: clicked region | sample pos ~%d | %d bp window",
+                anchor_bp, win)
+      } else {
+        gene_name <- rv$annotations$gene[sel_idx]
+        gene_pos1 <- as.integer(rv$annotations$pos1[sel_idx])
+        gene_pos2 <- as.integer(rv$annotations$pos2[sel_idx])
+        sprintf("Zoom: %s | sample pos %d-%d | %d bp window",
+                gene_name, gene_pos1, gene_pos2, win)
+      }
       div(
         div(style = "font-size: 11px; color: #555; margin-bottom: 4px;",
-            sprintf("Zoom: %s | sample pos %d-%d | %d bp window",
-                    gene_name, gene_pos1, gene_pos2, win)),
+            header_txt),
         div(
           style = "display: flex; align-items: flex-start;",
           div(
@@ -714,8 +737,9 @@ annotations_details_server <- function(id, rv) {
       req(rv$blast_ref_aln, rv$annotations, rv$blast_ref)
       req(nrow(rv$blast_ref_aln) > 0)
       req(nzchar(rv$blast_ref_aln$aligned_sample[1]))
-      sel_idx <- selected()
-      req(length(sel_idx) > 0)
+      sel_idx   <- selected()
+      click_col <- zoom_click_col()
+      req(length(sel_idx) > 0 || !is.null(click_col))
 
       ref_length     <- rv$blast_ref$ref_length[1]
       aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
@@ -727,13 +751,16 @@ annotations_details_server <- function(id, rv) {
       s_nongap <- which(s_chars != "-")
       r_nongap <- which(r_chars != "-")
 
-      gene_pos1 <- as.integer(rv$annotations$pos1[sel_idx])
-      # Anchor window 20 bp upstream of gene start (clamped to sequence bounds)
-      start_idx <- pmin(pmax(gene_pos1 - 20L, 1L), length(s_nongap))
-      start_col <- s_nongap[start_idx]
-
-      win  <- max(30L, min(2000L, as.integer(input$synteny_zoom_window %||% 200L)))
-      win_start <- max(1L, start_col)
+      win <- max(30L, min(2000L, as.integer(input$synteny_zoom_window %||% 200L)))
+      anchor_bp <- if (!is.null(click_col)) {
+        # Sample bp position at the clicked alignment column
+        as.integer(cumsum(s_chars != "-")[click_col])
+      } else {
+        as.integer(rv$annotations$pos1[sel_idx])
+      }
+      # Window starts 20 bp upstream of anchor (clamped to sequence bounds)
+      start_idx <- pmin(pmax(anchor_bp - 20L, 1L), length(s_nongap))
+      win_start <- max(1L, s_nongap[start_idx])
       win_end   <- min(aln_len, win_start + win - 1L)
       win_start <- max(1L, win_end - win + 1L)
       win_cols  <- win_start:win_end
@@ -838,7 +865,7 @@ annotations_details_server <- function(id, rv) {
           gggenes::geom_gene_label(
             data = sample_gene_df,
             ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, label = gene, forward = forward),
-            inherit.aes = FALSE, align = "centre",
+            inherit.aes = FALSE, align = "left",
             height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
@@ -870,7 +897,7 @@ annotations_details_server <- function(id, rv) {
           gggenes::geom_gene_label(
             data = ref_gene_df,
             ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, label = gene, forward = forward),
-            inherit.aes = FALSE, align = "centre",
+            inherit.aes = FALSE, align = "left",
             height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
@@ -891,9 +918,39 @@ annotations_details_server <- function(id, rv) {
       p
     })
 
+    # Synteny overview click → zoom centered at click x.
+    # Patchwork plots can break ggplot's data-space coordmap, so we compute the
+    # fraction along the plot width using CSS pixel coords (which are reliable),
+    # divided by the plot's pixel width (set in the UI).
+    observeEvent(input$synteny_click, {
+      ev <- input$synteny_click
+      req(ev)
+      has_aln <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1]))
+      if (!has_aln) return()
+      aln_len   <- nchar(rv$blast_ref_aln$aligned_sample[1])
+      plot_w_px <- max(rv$updating$length %||% 800L, 800L)
+      px <- if (!is.null(ev$coords_css$x)) {
+        ev$coords_css$x
+      } else {
+        (ev$x %||% 0) / 100 * plot_w_px
+      }
+      frac <- max(0, min(1, px / plot_w_px))
+      col  <- max(1L, min(aln_len, as.integer(round(frac * aln_len))))
+      zoom_click_col(col)
+      shinyjs::runjs(sprintf(
+        paste0("var el=document.getElementById('%s');",
+               "if(el && !el.checked){el.checked=true;",
+               "Shiny.setInputValue('%s', true);}"),
+        ns("synteny_zoom"), ns("synteny_zoom")
+      ))
+    })
+
     ## Auto scroll ----
     observeEvent(selected(), {
       req(selected())
+      # New gene selection overrides any prior click anchor
+      zoom_click_col(NULL)
       session$sendCustomMessage(
         "hScroll", list(id = ns("coverageDiv"), px = as.numeric(rv$annotations$pos1[selected()]))
       )
