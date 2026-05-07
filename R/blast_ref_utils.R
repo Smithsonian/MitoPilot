@@ -19,6 +19,11 @@
 fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
                             genetic_code_file = NULL, json_file = NULL,
                             blast_species = NULL, blast_evalue = NULL) {
+  message(sprintf("[fetch_blast_ref] START  accession=%s  time=%s", accession, format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
+  message(sprintf("[fetch_blast_ref] host=%s  pid=%d", Sys.info()[["nodename"]], Sys.getpid()))
+  mem <- tryCatch(gc(verbose = FALSE), error = function(e) NULL)
+  if (!is.null(mem)) message(sprintf("[fetch_blast_ref] mem_used_MB=%.1f", sum(mem[, 2])))
+
   empty <- data.frame(
     gene      = character(),
     type      = character(),
@@ -44,6 +49,9 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     transient <- c(429L, 500L, 503L)
     max_tries <- 5L
     for (attempt in seq_len(max_tries)) {
+      message(sprintf("[fetch_blast_ref] HTTP attempt %d/%d  label=%s  url=%s",
+                      attempt, max_tries, label, url))
+      t0 <- proc.time()[["elapsed"]]
       resp <- tryCatch(
         httr2::request(url) |>
           httr2::req_timeout(timeout) |>
@@ -51,27 +59,30 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
           httr2::req_perform(),
         error = function(e) e
       )
+      elapsed <- proc.time()[["elapsed"]] - t0
       if (inherits(resp, "error")) {
         err_msg <- conditionMessage(resp)
+        message(sprintf("[fetch_blast_ref] HTTP error after %.1fs: %s", elapsed, err_msg))
         if (attempt < max_tries) {
-          message(sprintf("[blast_ref_fetch] %s attempt %d/%d failed: %s — retrying in %ds",
+          message(sprintf("[fetch_blast_ref] %s attempt %d/%d failed: %s — retrying in %ds",
                           label, attempt, max_tries, err_msg, 120L * attempt))
           Sys.sleep(120L * attempt)
           next
         }
-        message(sprintf("[blast_ref_fetch] %s all %d attempts failed: %s",
+        message(sprintf("[fetch_blast_ref] %s all %d attempts failed: %s",
                         label, max_tries, err_msg))
         stop(err_msg, call. = FALSE)
       }
       status <- httr2::resp_status(resp)
+      message(sprintf("[fetch_blast_ref] HTTP %d after %.1fs  label=%s", status, elapsed, label))
       if (status == 200L) return(resp)
       if (attempt < max_tries && status %in% transient) {
-        message(sprintf("[blast_ref_fetch] %s attempt %d/%d returned HTTP %d — retrying in %ds",
+        message(sprintf("[fetch_blast_ref] %s attempt %d/%d returned HTTP %d — retrying in %ds",
                         label, attempt, max_tries, status, 120L * attempt))
         Sys.sleep(120L * attempt)
         next
       }
-      message(sprintf("[blast_ref_fetch] %s all %d attempts failed: HTTP %d",
+      message(sprintf("[fetch_blast_ref] %s all %d attempts failed: HTTP %d",
                       label, max_tries, status))
       stop(sprintf("HTTP %d", status), call. = FALSE)
     }
@@ -312,6 +323,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     stop("fetch_blast_ref: FASTA sequence fetch failed for ", accession,
          " after retries", call. = FALSE)
   }
+  message(sprintf("[fetch_blast_ref] DONE  accession=%s  time=%s", accession, format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
   invisible(NULL)
 }
 
