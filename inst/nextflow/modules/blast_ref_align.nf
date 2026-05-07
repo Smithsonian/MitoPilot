@@ -5,7 +5,13 @@ process blast_ref_align {
 
     cpus { (params.annotate.cpus instanceof Integer) ? params.annotate.cpus : 1 }
     memory = (params.annotate.memory instanceof Number) ? "${params.annotate.memory}.GB" : null
-    clusterOptions = (params.annotate.clusterOptions instanceof String) ? params.annotate.clusterOptions : null
+    clusterOptions {
+        def opts = [
+            (params.annotate.executor == 'sge') ? '-S /bin/bash' : '',
+            (params.annotate.clusterOptions instanceof String) ? params.annotate.clusterOptions : ''
+        ].findAll { it }.join(' ')
+        opts ?: null
+    }
 
     errorStrategy 'ignore'
 

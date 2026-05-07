@@ -7,7 +7,13 @@ process blast_ref_fetch {
 
     cpus { (params.blast_gb.cpus instanceof Integer) ? params.blast_gb.cpus : 1 }
     memory = (params.blast_gb.memory instanceof Number) ? "${params.blast_gb.memory}.GB" : null
-    clusterOptions = (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : null
+    clusterOptions {
+        def opts = [
+            (params.blast_gb.executor == 'sge') ? '-S /bin/bash' : '',
+            (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : ''
+        ].findAll { it }.join(' ')
+        opts ?: null
+    }
 
     errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
     maxRetries 3

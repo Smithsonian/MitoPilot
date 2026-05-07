@@ -8,7 +8,13 @@ process coverage {
     
     cpus {params.coverage.cpus}
     memory = params.coverage.memory ?: null
-    clusterOptions = params.coverage.clusterOptions ?: null
+    clusterOptions {
+        def opts = [
+            (params.coverage.executor == 'sge') ? '-S /bin/bash' : '',
+            params.coverage.clusterOptions ?: ''
+        ].findAll { it }.join(' ')
+        opts ?: null
+    }
 
     tag "${id}"
 

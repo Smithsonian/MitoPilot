@@ -4,6 +4,13 @@ process annotate {
 
     executor params.annotate.executor
     container params.annotate.container
+    clusterOptions {
+        def opts = [
+            (params.annotate.executor == 'sge') ? '-S /bin/bash' : '',
+            (params.annotate.clusterOptions instanceof String) ? params.annotate.clusterOptions : ''
+        ].findAll { it }.join(' ')
+        opts ?: null
+    }
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/NF_work_dir_annotate.txt", mode: 'copy'
 

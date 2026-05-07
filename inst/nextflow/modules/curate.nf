@@ -4,6 +4,13 @@ process curate {
 
     executor params.curate.executor
     container params.curate.container
+    clusterOptions {
+        def opts = [
+            (params.curate.executor == 'sge') ? '-S /bin/bash' : '',
+            (params.curate.clusterOptions instanceof String) ? params.curate.clusterOptions : ''
+        ].findAll { it }.join(' ')
+        opts ?: null
+    }
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/*", mode: 'copy'
 
