@@ -70,7 +70,7 @@ params {
     }
     blast_gb {
         cpus = 1
-        clusterOptions = "-l mres=4G,h_data=4G,h_vmem=4G -S /bin/bash"
+        clusterOptions = "-l mres=8G,h_data=8G,h_vmem=8G -S /bin/bash"
         container = process.container
         executor = process.executor
     }

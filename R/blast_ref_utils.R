@@ -452,6 +452,182 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
 }
 
 
+#' Append remote BLAST top-hit gene translations to local curation BLAST DB
+#'
+#' Translates each PCG region recorded in \code{blast_ref_file} from the remote
+#' reference nucleotide sequence (using the genetic code recorded in GenBank for
+#' that accession) and appends the resulting amino-acid sequences to the
+#' per-gene FASTA files in the local curation BLAST database
+#' (\code{<ref_dir>/featureProt/<gene>.fas}). After all sequences are appended,
+#' \code{makeblastdb -dbtype prot} is run on each modified FASTA to rebuild the
+#' BLAST index so subsequent \code{blastp} calls against the same gene FASTA
+#' include the remote-derived sequence.
+#'
+#' Header format: \code{>{accession}[:pos1-pos2] {tag} {species}}. The
+#' coordinate suffix is included only when the gene appears more than once in
+#' the reference. The short \code{tag} marks the sequence as remote-derived to
+#' distinguish it from the curated local DB entries in the BLAST hits table.
+#'
+#' Designed to run inside a Nextflow curation task where the reference DB has
+#' been staged with \code{stageInMode 'copy'}; modifications are confined to
+#' the task's private copy and do not bleed across samples.
+#'
+#' @param blast_ref_file path to remote BLAST hit JSON staged by Nextflow
+#' @param ref_dir path to the curation BLAST DB root (containing a
+#'   \code{featureProt/} subdirectory of per-gene FASTAs)
+#' @param tag short tag (default \code{"[remote]"}) prepended to the species
+#'   name in the FASTA header to indicate remote origin
+#' @param path_to_makeblastdb optional explicit path to the \code{makeblastdb}
+#'   executable; falls back to \code{Sys.which("makeblastdb")}
+#'
+#' @return Character vector of gene names whose FASTAs were modified
+#'   (invisible).
+#'
+#' @noRd
+inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
+                                              tag = "[remote]",
+                                              path_to_makeblastdb = NULL) {
+  if (is.null(blast_ref_file) || !nzchar(blast_ref_file) ||
+      !file.exists(blast_ref_file)) {
+    return(invisible(character()))
+  }
+  if (is.null(ref_dir) || !nzchar(ref_dir) || !dir.exists(ref_dir)) {
+    message("inject_remote_hits: ref_dir not found: ", ref_dir)
+    return(invisible(character()))
+  }
+  feature_prot_dir <- file.path(ref_dir, "featureProt")
+  if (!dir.exists(feature_prot_dir)) {
+    message("inject_remote_hits: featureProt/ not found in ref_dir")
+    return(invisible(character()))
+  }
+
+  ref_data <- tryCatch(
+    jsonlite::fromJSON(blast_ref_file, simplifyDataFrame = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(ref_data) || length(ref_data) == 0) {
+    return(invisible(character()))
+  }
+
+  accession <- ref_data$accession
+  if (is.null(accession) || is.na(accession) ||
+      accession %in% c("", "NO HIT")) {
+    return(invisible(character()))
+  }
+
+  organism <- ref_data$organism
+  species  <- if (!is.null(organism) && !is.na(organism) && nzchar(organism)) {
+    organism
+  } else {
+    accession
+  }
+
+  ref_seq <- ref_data$sequence
+  if (is.null(ref_seq) || !nzchar(ref_seq)) return(invisible(character()))
+
+  pcg <- ref_data$pcg
+  if (is.null(pcg) || !is.data.frame(pcg) || nrow(pcg) == 0) {
+    return(invisible(character()))
+  }
+
+  gc_num <- ref_data$genetic_code
+  gc_num <- if (!is.null(gc_num) && !is.na(gc_num) && gc_num > 0) {
+    as.character(gc_num)
+  } else "2"
+  ref_gc <- tryCatch(
+    Biostrings::getGeneticCode(gc_num),
+    error = function(e) Biostrings::getGeneticCode("2")
+  )
+
+  ref_dna <- tryCatch(Biostrings::DNAString(ref_seq),
+                      error = function(e) NULL)
+  if (is.null(ref_dna)) return(invisible(character()))
+
+  # Resolve makeblastdb. Missing executable is non-fatal — sequences are still
+  # appended to the FASTA so a later DB rebuild (or BLAST recompute) can pick
+  # them up. We just skip the index rebuild here.
+  mkdb <- if (!is.null(path_to_makeblastdb) &&
+              file.exists(path_to_makeblastdb)) {
+    path_to_makeblastdb
+  } else {
+    p <- unname(Sys.which("makeblastdb"))
+    if (nzchar(p)) p else NULL
+  }
+  if (is.null(mkdb)) {
+    message("inject_remote_hits: makeblastdb not found in PATH; ",
+            "DB index will not be rebuilt")
+  }
+
+  translate_region <- function(pos1, pos2, dir) {
+    tryCatch({
+      s <- Biostrings::subseq(ref_dna, start = pos1, end = pos2)
+      if (identical(dir, "-")) s <- Biostrings::reverseComplement(s)
+      len <- floor(length(s) / 3L) * 3L
+      if (len < 3L) return(NULL)
+      prot <- Biostrings::translate(Biostrings::subseq(s, 1L, len),
+                                    genetic.code = ref_gc,
+                                    if.fuzzy.codon = "solve")
+      prot_str <- as.character(prot)
+      if (endsWith(prot_str, "*")) {
+        prot_str <- substr(prot_str, 1L, nchar(prot_str) - 1L)
+      }
+      if (!nzchar(prot_str)) NULL else prot_str
+    }, error = function(e) NULL)
+  }
+
+  gene_counts <- table(pcg$gene)
+
+  # Collect translations per gene so we can append + rebuild once per FASTA
+  per_gene <- list()
+  for (i in seq_len(nrow(pcg))) {
+    gene <- pcg$gene[i]
+    fas  <- file.path(feature_prot_dir, paste0(gene, ".fas"))
+    if (!file.exists(fas)) next
+
+    aa <- translate_region(pcg$pos1[i], pcg$pos2[i], pcg$direction[i])
+    if (is.null(aa)) next
+
+    seq_name <- if (gene_counts[gene] > 1L) {
+      paste0(accession, ":", pcg$pos1[i], "-", pcg$pos2[i])
+    } else {
+      accession
+    }
+    header <- paste0(seq_name, " ", tag, " ", species)
+    per_gene[[gene]]$headers <- c(per_gene[[gene]]$headers, header)
+    per_gene[[gene]]$seqs    <- c(per_gene[[gene]]$seqs,    aa)
+  }
+
+  if (length(per_gene) == 0) return(invisible(character()))
+
+  modified <- character()
+  for (gene in names(per_gene)) {
+    fas <- file.path(feature_prot_dir, paste0(gene, ".fas"))
+    set <- Biostrings::AAStringSet(
+      setNames(per_gene[[gene]]$seqs, per_gene[[gene]]$headers)
+    )
+    tryCatch({
+      Biostrings::writeXStringSet(set, fas, append = TRUE)
+      modified <- c(modified, gene)
+    }, error = function(e) {
+      message("inject_remote_hits: failed to append to ", fas, ": ",
+              conditionMessage(e))
+    })
+  }
+
+  if (!is.null(mkdb)) {
+    for (gene in modified) {
+      fas <- file.path(feature_prot_dir, paste0(gene, ".fas"))
+      system2(mkdb, args = c("-dbtype", "prot", "-in", fas),
+              stdout = NULL, stderr = NULL)
+    }
+  }
+
+  message("inject_remote_hits: appended ", accession, " sequences to ",
+          length(modified), " gene FASTA(s)")
+  invisible(modified)
+}
+
+
 #' Normalize NCBI mitochondrial gene names to MitoPilot convention
 #'
 #' Accepts a raw gene/product name from an NCBI GFF3 record and returns the

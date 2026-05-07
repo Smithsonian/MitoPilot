@@ -62,7 +62,7 @@ params {
     }
     blast_gb {
         cpus = 1
-        memory = 4
+        memory = 8
         container = process.container
         executor = process.executor
     }

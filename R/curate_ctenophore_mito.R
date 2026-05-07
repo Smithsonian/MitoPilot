@@ -81,6 +81,11 @@ curate_ctenophore_mito <- function(
     default = paste0(ref_dir, "/featureProt/{gene}.fas")
   )
 
+  # Augment local BLAST DB with translated remote BLAST hit gene sequences
+  if (!is.null(blast_ref_file)) {
+    MitoPilot:::inject_remote_hits_into_blast_db(blast_ref_file, ref_dir)
+  }
+
   ## Prepare rules ----
   rules <- rules |>
     purrr::map(~ modifyList(default_rules[[.x$type]] %||% list(), .x))

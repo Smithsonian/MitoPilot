@@ -1045,7 +1045,7 @@ annotations_details_server <- function(id, rv) {
         seqlogo = FALSE,
         menu = FALSE,
         conservation = TRUE,
-        labelNameLength = 150,
+        labelNameLength = 200,
         colorscheme = "zappo",
         rowheight = 20,
         alignmentHeight = min(rv$alignment$alignmentHeight, 200)
