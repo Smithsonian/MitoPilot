@@ -1,14 +1,14 @@
 process blast_ref_align {
 
-    executor params.annotate.executor
-    container params.annotate.container
+    executor params.blast_ref_align.executor
+    container params.blast_ref_align.container
 
-    cpus { (params.annotate.cpus instanceof Integer) ? params.annotate.cpus : 1 }
-    memory = (params.annotate.memory instanceof Number) ? "${params.annotate.memory}.GB" : null
+    cpus { (params.blast_ref_align.cpus instanceof Integer) ? params.blast_ref_align.cpus : 1 }
+    memory = (params.blast_ref_align.memory instanceof Number) ? "${params.blast_ref_align.memory}.GB" : null
     clusterOptions {
         def opts = [
-            (params.annotate.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.annotate.clusterOptions instanceof String) ? params.annotate.clusterOptions : ''
+            (params.blast_ref_align.executor == 'sge') ? '-S /bin/bash' : '',
+            (params.blast_ref_align.clusterOptions instanceof String) ? params.blast_ref_align.clusterOptions : ''
         ].findAll { it }.join(' ')
         opts ?: null
     }

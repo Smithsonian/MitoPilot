@@ -68,6 +68,12 @@ params {
         container = process.container
         executor = process.executor
     }
+    blast_ref_align {
+        cpus = 1
+        clusterOptions = "-l mres=8G,h_data=8G,h_vmem=8G -S /bin/bash"
+        container = process.container
+        executor = process.executor
+    }
     blast_gb {
         cpus = 1
         clusterOptions = "-l mres=8G,h_data=8G,h_vmem=8G -S /bin/bash"
