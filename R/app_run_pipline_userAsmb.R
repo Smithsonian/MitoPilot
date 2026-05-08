@@ -208,6 +208,7 @@ pipeline_server_userAsmb <- function(id) {
           "#$ -cwd -j y",
           "#$ -q lTWFM.sq",
           "#$ -l wfmq",
+          "#$ -l mres=16G,h_data=8G,h_vmem=32G"
           "#$ -pe mthread 2",
           "#$ -S /bin/sh",
           "",
@@ -218,7 +219,7 @@ pipeline_server_userAsmb <- function(id) {
           "source ~/.bashrc",
           "module load tools/java/21.0.2",
           "",
-          "export NXF_OPTS=\"-Xms500m -Xmx8g\" # to deal with Java OOM error",
+          "export NXF_OPTS="-Xms2g -Xmx32g" # to deal with Java OOM error",
           full_nf_cmd,
           "",
           'echo "---"',

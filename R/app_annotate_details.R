@@ -429,7 +429,7 @@ annotations_details_server <- function(id, rv) {
         tagList(
           lbl("120px", sample_lbl),
           lbl("40px", div(
-            style = "position: relative; width: 100%; height: 100%;",
+            style = "position: relative; width: 100%; height: 40px; display: flex; align-items: center;",
             div(style = "position: absolute; top: 0; right: 0; font-size: 9px; color: #aaa; line-height: 1;", "100%"),
             div(style = "color: #888; font-size: 10px;", "identity"),
             div(style = "position: absolute; bottom: 0; right: 0; font-size: 9px; color: #aaa; line-height: 1;", "0%")
@@ -442,32 +442,6 @@ annotations_details_server <- function(id, rv) {
           lbl("100px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
         )
       }
-      toolbar <- if (has_aln) {
-        div(
-          style = paste0("display: flex; align-items: center; gap: 14px; ",
-                         "margin-top: 6px; font-size: 11px;"),
-          div(
-            style = "display: flex; align-items: center; gap: 4px;",
-            tags$input(
-              type = "checkbox",
-              id = ns("synteny_zoom"),
-              style = "margin: 0;",
-              onclick = sprintf("Shiny.setInputValue('%s', this.checked);", ns("synteny_zoom"))
-            ),
-            tags$label(`for` = ns("synteny_zoom"),
-                       style = "margin: 0; cursor: pointer;",
-                       "Zoom to selected gene")
-          ),
-          div(
-            style = "display: flex; align-items: center; gap: 4px;",
-            "Window:",
-            numericInput(ns("synteny_zoom_window"), label = NULL,
-                         value = 200L, min = 30L, max = 2000L, step = 50L,
-                         width = "80px"),
-            "bp"
-          )
-        )
-      } else NULL
       tagList(
         if (has_aln) {
           div(
@@ -494,7 +468,6 @@ annotations_details_server <- function(id, rv) {
                        click = ns("synteny_click"))
           )
         ),
-        toolbar,
         if (has_aln) {
           conditionalPanel(
             condition = "input.synteny_zoom == true", ns = ns,
@@ -504,6 +477,23 @@ annotations_details_server <- function(id, rv) {
             )
           )
         }
+      )
+    })
+    output$synteny_zoom_ctrl <- renderUI({
+      req(!is.null(rv$blast_ref_aln))
+      req(nrow(rv$blast_ref_aln) > 0)
+      div(
+        style = "display: flex; align-items: center;",
+        tags$style(HTML(sprintf(
+          "#%s .pretty { margin-bottom: 0; }",
+          ns("synteny_zoom")
+        ))),
+        shinyWidgets::prettyCheckbox(
+          ns("synteny_zoom"),
+          label = "Zoom to selected gene",
+          status = "primary",
+          inline = TRUE
+        )
       )
     })
     output$synteny_plot <- renderPlot({
@@ -725,8 +715,36 @@ annotations_details_server <- function(id, rv) {
             plotOutput(ns("synteny_zoom_plot"),
                        width = paste0(plot_w, "px"), height = "180px")
           )
+        ),
+        div(
+          style = "display: flex; align-items: center; gap: 4px; margin-top: 6px;",
+          tags$style(HTML(sprintf(
+            paste0(
+              "#%s.shiny-input-container {",
+              "  display: flex !important; flex-direction: row;",
+              "  align-items: center; gap: 6px;",
+              "  width: auto !important; margin-bottom: 0; }",
+              "#%s.shiny-input-container label { margin-bottom: 0; font-weight: normal; white-space: nowrap; }",
+              "#%s.shiny-input-container input { width: 70px !important; }"
+            ),
+            ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
+          ))),
+          numericInput(ns("synteny_zoom_window"), label = "window size (bp)",
+                       value = isolate(input$synteny_zoom_window) %||% 200L,
+                       min = 30L, max = 2000L, step = 50L,
+                       width = "auto")
         )
       )
+    })
+
+    # Open BLAST Reference Synteny details when zoom is enabled
+    observeEvent(input$synteny_zoom, ignoreInit = TRUE, {
+      if (isTRUE(input$synteny_zoom)) {
+        shinyjs::runjs(sprintf(
+          "var d = document.getElementById('%s'); if (d) d.open = true;",
+          ns("blast_synteny_details")
+        ))
+      }
     })
 
     # Clamp the window-size input to [30, 2000]
@@ -2809,28 +2827,32 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     textOutput(ns("reviewedText")),
     textOutput(ns("problematicText")),
     tags$details(
+      id = ns("annotation_table_details"),
       open = TRUE,
       tags$summary("Annotation Table"),
       reactableOutput(ns("table"), width = "100%")
     ),
-    shinyjs::hidden(
-      div(
-        id = ns("annotation_action_btns"),
-        style = "display: flex; gap: 8px; margin: 6px 0;",
-        actionButton(ns("merge"), "Merge PCGs/rRNAs"),
-        actionButton(ns("delete"), "Delete")
-      )
-    ),
-    shinyjs::hidden(
-      div(
-        id = ns("annotation_restore_btn"),
-        style = "display: flex; gap: 8px; margin: 6px 0;",
-        actionButton(ns("restore"), "Restore")
-      )
-    ),
-    shinyjs::hidden(
-      div(
-        id = ns("merge_select_div"),
+    div(
+      id = ns("annotation_btns_wrapper"),
+      shinyjs::hidden(
+        div(
+          id = ns("annotation_action_btns"),
+          style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
+          actionButton(ns("merge"), "Merge PCGs/rRNAs"),
+          actionButton(ns("delete"), "Delete"),
+          uiOutput(ns("synteny_zoom_ctrl"))
+        )
+      ),
+      shinyjs::hidden(
+        div(
+          id = ns("annotation_restore_btn"),
+          style = "display: flex; gap: 8px; margin: 6px 0;",
+          actionButton(ns("restore"), "Restore")
+        )
+      ),
+      shinyjs::hidden(
+        div(
+          id = ns("merge_select_div"),
         style = "border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin: 6px 0;",
         tags$b("Select annotations to merge:"),
         uiOutput(ns("merge_choices")),
@@ -2852,8 +2874,31 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           )
         )
       )
+    )
+  ),
+  tags$script(HTML(sprintf(
+      "document.getElementById('%s').addEventListener('toggle', function() {
+         var w = document.getElementById('%s');
+         if (w) w.style.display = this.open ? '' : 'none';
+       });
+       document.addEventListener('keydown', function(e) {
+         if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+             e.target && e.target.id === '%s') {
+           e.preventDefault();
+         }
+       });",
+      ns("annotation_table_details"), ns("annotation_btns_wrapper"),
+      ns("synteny_zoom_window")
+    ))),
+  tags$style(HTML(sprintf(
+    paste0(
+      "#%s::-webkit-inner-spin-button,",
+      "#%s::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }",
+      "#%s { -moz-appearance: textfield; appearance: textfield; }"
     ),
-    hr(),
+    ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
+  ))),
+    tags$hr(style = "margin: 4px 0; border: none; border-top: 1px solid #e0e0e0;"),
     tags$details(
       tags$summary("Coverage Map"),
       div(
@@ -2863,9 +2908,10 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     tags$details(
+      id = ns("blast_synteny_details"),
       tags$summary("BLAST Reference Synteny"),
       div(
-        style = "padding: 5mm;",
+        style = "padding: 2px 5mm;",
         uiOutput(ns("synteny_ui"))
       )
     ),
