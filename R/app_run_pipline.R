@@ -246,7 +246,7 @@ pipeline_server <- function(id) {
             "source ~/.bashrc",
             "module load tools/java/21.0.2",
             "",
-            "export NXF_OPTS=\"-Xms2g -Xmx32g\" # to deal with Java OOM error",
+            "export NXF_OPTS=\"-Xms2g -Xmx8g\" # to deal with Java OOM error",
             full_nf_cmd,
             "",
             'echo "---"',
