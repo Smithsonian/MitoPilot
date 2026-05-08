@@ -570,36 +570,34 @@ annotations_details_server <- function(id, rv) {
             xmin = r_to_pct(pos1), xmax = r_to_pct(pos2)
           )
 
-        # Classify each alignment column; RLE-compress into rect data frames
+        # Classify each alignment column
         aln_class <- dplyr::case_when(
           s_chars == "-" ~ "gap_s",
           r_chars == "-" ~ "gap_r",
           tolower(s_chars) == tolower(r_chars) ~ "match",
           TRUE ~ "mismatch"
         )
-        rls    <- rle(aln_class)
-        ends   <- cumsum(rls$lengths)
-        starts <- c(1L, head(ends, -1L) + 1L)
-        aln_rect <- data.frame(
-          xmin = (starts - 1L) / aln_len * 100,
-          xmax = ends / aln_len * 100,
-          type = rls$values,
+
+        # geom_raster renders as a pixmap — no polygon edges, no anti-aliasing
+        # seams between adjacent same-colour columns (fixes green/white stripes
+        # on Cairo devices at overview scale).
+        aln_raster_df <- data.frame(
+          x    = seq_len(aln_len),
+          y    = 0.5,
+          fill = dplyr::case_when(
+            aln_class == "match"    ~ "#60BD68",
+            aln_class == "mismatch" ~ "#E55330",
+            TRUE                    ~ "#CCCCCC"
+          ),
           stringsAsFactors = FALSE
         )
 
-        # Single alignment track: match/mismatch/gap (either sequence)
-        aln_df <- aln_rect |>
-          dplyr::mutate(fill_col = dplyr::case_when(
-            type == "match"    ~ "#60BD68",
-            type == "mismatch" ~ "#E55330",
-            TRUE               ~ "#CCCCCC"
-          ))
-
-        aln_plot <- ggplot2::ggplot(aln_df,
-          ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = 1, fill = fill_col)
+        aln_plot <- ggplot2::ggplot(aln_raster_df,
+          ggplot2::aes(x = x, y = y, fill = fill)
         ) +
-          ggplot2::geom_rect() +
-          ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) +
+          ggplot2::geom_raster() +
+          ggplot2::scale_x_continuous(expand = c(0, 0),
+                                      limits = c(0.5, aln_len + 0.5)) +
           ggplot2::scale_fill_identity() +
           ggplot2::coord_cartesian(clip = "off") +
           ggthemes::theme_tufte() +
@@ -701,19 +699,22 @@ annotations_details_server <- function(id, rv) {
         div(
           style = "display: flex; align-items: flex-start;",
           div(
+            # Labels pinned to track centres in the 180 px plot.
+            # y limits: -0.5 to 4.9 (range 5.4). 2 mm plot.margin ≈ 3 % of 180 px.
+            # top % = 3.15 + (4.9 - track_y) / 5.4 * 93.7
             style = paste0("flex-shrink: 0; width: 160px; font-size: 11px; ",
-                           "padding-right: 6px; box-sizing: border-box;"),
-            div(style = "height: 12px;"),
-            div(style = "height: 24px; display: flex; align-items: center; color: #888; font-size: 10px;",
-                "sample gene"),
-            div(style = "height: 32px; display: flex; align-items: center; word-break: break-word;",
+                           "padding-right: 6px; box-sizing: border-box; ",
+                           "position: relative; height: 180px;"),
+            div(style = "position: absolute; top: 19%; transform: translateY(-50%); color: #888; font-size: 10px;",
+                "sample annotations"),
+            div(style = "position: absolute; top: 36%; transform: translateY(-50%); word-break: break-word;",
                 sample_lbl),
-            div(style = "height: 26px; display: flex; align-items: center; color: #888; font-size: 10px;",
+            div(style = "position: absolute; top: 54%; transform: translateY(-50%); color: #888; font-size: 10px;",
                 "identity"),
-            div(style = "height: 32px; display: flex; align-items: center; word-break: break-word;",
+            div(style = "position: absolute; top: 71%; transform: translateY(-50%); word-break: break-word;",
                 ref_acc),
-            div(style = "height: 24px; display: flex; align-items: center; color: #888; font-size: 10px;",
-                "ref gene")
+            div(style = "position: absolute; top: 88%; transform: translateY(-50%); color: #888; font-size: 10px;",
+                "ref annotations")
           ),
           div(
             style = "overflow-x: auto; flex: 1;",
@@ -800,6 +801,16 @@ annotations_details_server <- function(id, rv) {
         stringsAsFactors = FALSE
       )
 
+      rle_fill    <- rle(mid_fill)
+      rle_ends    <- cumsum(rle_fill$lengths)
+      rle_starts  <- c(1L, head(rle_ends, -1L) + 1L)
+      identity_df <- data.frame(
+        xmin = rle_starts - 0.5,
+        xmax = rle_ends   + 0.5,
+        fill = rle_fill$values,
+        stringsAsFactors = FALSE
+      )
+
       type_color <- function(t) {
         out <- unname(gene_type_fill[as.character(t)])
         ifelse(is.na(out), "#888888", out)
@@ -869,10 +880,11 @@ annotations_details_server <- function(id, rv) {
             height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
-        # Identity bar
+        # Identity bar — merged runs reduce render items
         ggplot2::geom_rect(
-          ggplot2::aes(xmin = col - 0.5, xmax = col + 0.5,
-                       ymin = 1.65, ymax = 2.35, fill = mid_fill)
+          data = identity_df,
+          ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 1.65, ymax = 2.35, fill = fill),
+          inherit.aes = FALSE
         ) +
         # Sample base letters
         ggplot2::geom_text(
