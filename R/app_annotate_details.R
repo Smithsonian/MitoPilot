@@ -578,33 +578,36 @@ annotations_details_server <- function(id, rv) {
           TRUE ~ "mismatch"
         )
 
-        # geom_raster renders as a pixmap — no polygon edges, no anti-aliasing
-        # seams between adjacent same-colour columns (fixes green/white stripes
-        # on Cairo devices at overview scale).
-        aln_raster_df <- data.frame(
-          x    = seq_len(aln_len),
-          y    = 0.5,
-          fill = dplyr::case_when(
-            aln_class == "match"    ~ "#60BD68",
-            aln_class == "mismatch" ~ "#E55330",
-            TRUE                    ~ "#CCCCCC"
-          ),
-          stringsAsFactors = FALSE
+        # Rolling-window % identity area plot — avoids per-column sub-pixel
+        # rendering artifacts at overview scale.
+        win      <- min(100L, aln_len)
+        is_match <- as.integer(aln_class == "match")
+        n_wins   <- aln_len - win + 1L
+        win_pct  <- vapply(seq_len(n_wins), function(i) {
+          mean(is_match[i:(i + win - 1L)]) * 100
+        }, numeric(1))
+        # Pad x=0 and x=100 with edge values to fill to plot boundaries
+        aln_win_df <- data.frame(
+          x = c(0, (seq_len(n_wins) + win / 2 - 0.5) / aln_len * 100, 100),
+          y = c(win_pct[1], win_pct, win_pct[n_wins])
         )
 
-        aln_plot <- ggplot2::ggplot(aln_raster_df,
-          ggplot2::aes(x = x, y = y, fill = fill)
+        aln_plot <- ggplot2::ggplot(aln_win_df,
+          ggplot2::aes(x = x, y = y)
         ) +
-          ggplot2::geom_raster() +
-          ggplot2::scale_x_continuous(expand = c(0, 0),
-                                      limits = c(0.5, aln_len + 0.5)) +
-          ggplot2::scale_fill_identity() +
+          ggplot2::geom_area(fill = "#60BD68", colour = NA) +
+          ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) +
+          ggplot2::scale_y_continuous(
+            expand = c(0, 0), limits = c(0, 100),
+            breaks = c(0, 100), labels = c("0%", "100%")
+          ) +
           ggplot2::coord_cartesian(clip = "off") +
           ggthemes::theme_tufte() +
           ggplot2::theme(
             legend.position  = "none",
             axis.title       = ggplot2::element_blank(),
-            axis.text        = ggplot2::element_blank(),
+            axis.text.x      = ggplot2::element_blank(),
+            axis.text.y      = ggplot2::element_text(size = 7, colour = "grey40"),
             axis.ticks       = ggplot2::element_blank(),
             panel.background = ggplot2::element_rect(fill = "#F0F0F0", colour = NA),
             plot.margin      = ggplot2::margin(1, 0, 1, 0, "mm")
