@@ -428,7 +428,12 @@ annotations_details_server <- function(id, rv) {
       lbl_col <- if (has_aln) {
         tagList(
           lbl("120px", sample_lbl),
-          lbl("40px", div(style = "color: #888; font-size: 10px;", "identity")),
+          lbl("40px", div(
+            style = "position: relative; width: 100%; height: 100%;",
+            div(style = "position: absolute; top: 0; right: 0; font-size: 9px; color: #aaa; line-height: 1;", "100%"),
+            div(style = "color: #888; font-size: 10px;", "identity"),
+            div(style = "position: absolute; bottom: 0; right: 0; font-size: 9px; color: #aaa; line-height: 1;", "0%")
+          )),
           lbl("120px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
         )
       } else {
@@ -580,7 +585,7 @@ annotations_details_server <- function(id, rv) {
 
         # Rolling-window % identity area plot — avoids per-column sub-pixel
         # rendering artifacts at overview scale.
-        win      <- min(100L, aln_len)
+        win      <- min(10L, aln_len)
         is_match <- as.integer(aln_class == "match")
         n_wins   <- aln_len - win + 1L
         win_pct  <- vapply(seq_len(n_wins), function(i) {
@@ -597,17 +602,13 @@ annotations_details_server <- function(id, rv) {
         ) +
           ggplot2::geom_area(fill = "#60BD68", colour = NA) +
           ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) +
-          ggplot2::scale_y_continuous(
-            expand = c(0, 0), limits = c(0, 100),
-            breaks = c(0, 100), labels = c("0%", "100%")
-          ) +
+          ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 100)) +
           ggplot2::coord_cartesian(clip = "off") +
           ggthemes::theme_tufte() +
           ggplot2::theme(
             legend.position  = "none",
             axis.title       = ggplot2::element_blank(),
-            axis.text.x      = ggplot2::element_blank(),
-            axis.text.y      = ggplot2::element_text(size = 7, colour = "grey40"),
+            axis.text        = ggplot2::element_blank(),
             axis.ticks       = ggplot2::element_blank(),
             panel.background = ggplot2::element_rect(fill = "#F0F0F0", colour = NA),
             plot.margin      = ggplot2::margin(1, 0, 1, 0, "mm")
