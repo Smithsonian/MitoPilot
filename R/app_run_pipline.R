@@ -19,7 +19,7 @@ pipeline_server <- function(id) {
       # Count samples to update ----
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::filter(assemble_switch == 1) |>
+          dplyr::filter(assemble_switch %in% c(1, 4)) |>
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
@@ -477,16 +477,6 @@ pipeline_server <- function(id) {
         shinyjs::hide("stop")
         shinyjs::show("start_button_ui") # Show the button container again
         shinyjs::addClass("gears", "paused")
-        trigger(paste0("refresh_", tolower(session$userData$mode)))
-      }
-    })
-
-    # Live refresh of mode table while Nextflow is running ----
-    observe({
-      req(process())
-      invalidateLater(5000)
-      p <- process()
-      if (!is.null(p) && p$is_alive()) {
         trigger(paste0("refresh_", tolower(session$userData$mode)))
       }
     })

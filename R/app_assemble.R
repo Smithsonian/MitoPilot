@@ -87,7 +87,8 @@ assemble_server <- function(id) {
                   `0` = "fa fa-hourglass",
                   `1` = "fa fa-person-running",
                   `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation"
+                  `3` = "fa fa-triangle-exclamation",
+                  `4` = "fa fa-circle-half-stroke"
                 )
               )
             ),
@@ -277,7 +278,7 @@ assemble_server <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
+            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "In Progress" = 4, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
             selected = current,
             shape = "square",
             status = "primary"

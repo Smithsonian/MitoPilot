@@ -247,7 +247,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           div(
             style = "flex: 1",
             numericInput(
-              ns("max_paths"), "Max paths:",
+              ns("max_paths"), "Max assembly paths:",
               width = "100%",
               min = 1,
               step = 1,
@@ -268,7 +268,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         tags$p(
           class = "text-muted",
           style = "margin-top: -8px; font-size: 0.85em;",
-          "Samples whose assembly exceeds either limit are marked failed and skipped from downstream steps."
+          "Samples above max paths or max scaffolds threshold will be marked as failed"
         ),
         size = "m",
         footer = tagList(

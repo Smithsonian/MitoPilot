@@ -9,7 +9,7 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
                   'JOIN samples s ' +
                   'ON a.ID = s.ID ' +
-                  'WHERE a.assemble_switch = 1 AND a.assemble_lock = 0'
+                  'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
@@ -157,7 +157,7 @@ workflow ASSEMBLE {
         // PASS: write per-sample summary live, then propagate downstream
         branched.pass
             .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
-                def status = '2'
+                def status = '4'
                 def notes  = ''
                 if (n_scaffolds > 1) {
                     notes  = 'Output contains disconnected contigs'

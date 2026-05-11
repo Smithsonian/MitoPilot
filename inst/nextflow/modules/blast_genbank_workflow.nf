@@ -1,6 +1,7 @@
 include {blast_genbank} from './blast_genbank.nf'
 
 params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
+params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
 
 params.sqlReadBlastOpts =
     'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
@@ -27,6 +28,14 @@ workflow BLAST_GENBANK {
                 def asmb_list = (asmbs instanceof List) ? asmbs : [asmbs]
                 tuple(id, asmb_list, opts_id)
             }
+            .set { normalized_input }
+
+        // Track all IDs entering this workflow so we can mark skipped samples as complete
+        normalized_input
+            .map { id, asmb_list, opts_id -> tuple(id, true) }
+            .set { all_ids }
+
+        normalized_input
             // Keep only single-path assemblies (exactly 1 file, not a failed assembly)
             .filter{ id, asmb_list, opts_id ->
                 asmb_list.size() == 1 &&
@@ -52,12 +61,35 @@ workflow BLAST_GENBANK {
             .map{ id, asmb, opts_id, entrez_query, extra_opts ->
                 tuple(id, asmb, opts_id, entrez_query, extra_opts)
             }
-            .set { blast_in }
+            // Split so we can track which IDs ran BLAST without consuming the channel
+            .multiMap { id, asmb, opts_id, entrez_query, extra_opts ->
+                process: tuple(id, asmb, opts_id, entrez_query, extra_opts)
+                ids:     tuple(id, true)
+            }
+            .set { blast_in_split }
 
-        blast_genbank(blast_in).set { blast_out }
+        blast_genbank(blast_in_split.process)
+            .multiMap { id, result_file ->
+                state:  tuple(id, result_file)
+                parse:  tuple(id, result_file)
+            }
+            .set { blast_out }
+
+        // Write state=2 (WF1 complete) for samples that ran BLAST
+        blast_out.state
+            .map { id, result_file -> tuple('2', id) }
+            .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
+
+        // Write state=2 for samples that were filtered out before BLAST
+        // (multi-path, single-scaffold filter fail, or run_blast = 0)
+        all_ids
+            .join(blast_in_split.ids, remainder: true)
+            .filter { id, all_flag, blast_flag -> blast_flag == null }
+            .map { id, all_flag, blast_flag -> tuple('2', id) }
+            .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
 
         // Parse top hit, round numeric fields; carry opts_id from result file path
-        blast_out
+        blast_out.parse
             .map{ id, result_file ->
                 def opts_id = result_file.parent.name
                 def lines = result_file.readLines().findAll{ it.trim() }
