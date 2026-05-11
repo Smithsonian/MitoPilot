@@ -8,8 +8,10 @@ pipeline_server_userAsmb <- function(id) {
     nf_cmd <- reactiveVal()
     process <- reactiveVal()
     process_out <- reactiveVal()
+    job_submitting <- reactiveVal(FALSE)
 
     on("run_modal", {
+      job_submitting(FALSE)
       # Generate Nextflow params ----
       nf_cmd(nextflow_cmd(session$userData$mode, userAsmbs = TRUE))
       message(nf_cmd())
@@ -185,6 +187,9 @@ pipeline_server_userAsmb <- function(id) {
 
     # create Hydra job script and submit
     observeEvent(input$submit_job, {
+      req(!job_submitting())
+      job_submitting(TRUE)
+      shinyjs::disable(ns("submit_job"))
       tryCatch({
         work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
         full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
@@ -251,6 +256,8 @@ pipeline_server_userAsmb <- function(id) {
         }
 
       }, error = function(e) {
+        job_submitting(FALSE)
+        shinyjs::enable(ns("submit_job"))
         shinyWidgets::sendSweetAlert(
           title = "Failed to submit job:",
           text = e$message,
