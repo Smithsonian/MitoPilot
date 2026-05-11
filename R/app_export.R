@@ -77,6 +77,13 @@ export_server <- function(id) {
             minWidth = 160,
             cell = rt_longtext()
           ),
+          blast_lineage = colDef(
+            show = TRUE,
+            name = "BLAST Lineage",
+            html = TRUE,
+            minWidth = 200,
+            cell = rt_longtext()
+          ),
           topology = colDef(show = T, name = "Topology", width = 100),
           structure = colDef(show = T, name = "Structure"),
           export_group = colDef(name = "Group", sticky = "right")

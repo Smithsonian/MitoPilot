@@ -200,6 +200,13 @@ annotate_server <- function(id) {
             minWidth = 160,
             cell = rt_longtext()
           ),
+          blast_lineage = colDef(
+            show = TRUE,
+            name = "BLAST Lineage",
+            html = TRUE,
+            minWidth = 200,
+            cell = rt_longtext()
+          ),
           PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
           tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
           rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),
