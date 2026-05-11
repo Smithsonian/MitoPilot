@@ -242,6 +242,34 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = current$labels_db %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("max_paths"), "Max paths:",
+              width = "100%",
+              min = 1,
+              step = 1,
+              value = current$max_paths %||% 10
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("max_scaffolds"), "Max scaffolds:",
+              width = "100%",
+              min = 1,
+              step = 1,
+              value = current$max_scaffolds %||% 10
+            ) |> shinyjs::disabled()
+          )
+        ),
+        tags$p(
+          class = "text-muted",
+          style = "margin-top: -8px; font-size: 0.85em;",
+          "Samples whose assembly exceeds either limit are marked failed and skipped from downstream steps."
+        ),
         size = "m",
         footer = tagList(
           actionButton(ns("update_assemble_opts"), "Update"),

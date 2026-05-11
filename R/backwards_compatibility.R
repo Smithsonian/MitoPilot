@@ -80,6 +80,8 @@ backwards_compatibility <- function(
       "use_mitos_best" %in% names(annotate_opts_table) &&
       "use_aragorn" %in% names(annotate_opts_table) &&
       "aragorn_opts" %in% names(annotate_opts_table) &&
+      "max_paths" %in% names(assemble_opts_table) &&
+      "max_scaffolds" %in% names(assemble_opts_table) &&
       "tool" %in% DBI::dbListFields(con, "annotations") &&
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
@@ -505,6 +507,46 @@ backwards_compatibility <- function(
     ) |> DBI::dbExecute(con, statement = _)
 
     dplyr::tbl(con, "assemble_opts") |> # update SQL database
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if max_paths column doesn't exist, add it
+  if(!("max_paths" %in% names(assemble_opts_table))){
+    message("added 'max_paths' column to assemble_opts table")
+    assemble_opts_table$max_paths <- rep(10L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN max_paths INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if max_scaffolds column doesn't exist, add it
+  if(!("max_scaffolds" %in% names(assemble_opts_table))){
+    message("added 'max_scaffolds' column to assemble_opts table")
+    assemble_opts_table$max_scaffolds <- rep(10L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN max_scaffolds INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
       dplyr::rows_upsert(
         assemble_opts_table,
         in_place = TRUE,

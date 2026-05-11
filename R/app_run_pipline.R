@@ -481,6 +481,16 @@ pipeline_server <- function(id) {
       }
     })
 
+    # Live refresh of mode table while Nextflow is running ----
+    observe({
+      req(process())
+      invalidateLater(5000)
+      p <- process()
+      if (!is.null(p) && p$is_alive()) {
+        trigger(paste0("refresh_", tolower(session$userData$mode)))
+      }
+    })
+
     # Render progress ----
     output$progress_header <- renderText({
       req(prog_header())

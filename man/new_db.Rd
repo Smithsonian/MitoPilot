@@ -22,6 +22,8 @@ new_db(
   mitofinder_db =
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
   mitofinder = paste("--megahit"),
+  max_paths = 10,
+  max_scaffolds = 10,
   annotate_cpus = 6,
   annotate_memory = 36,
   annotate_ref_db = "Chordata",
@@ -69,6 +71,15 @@ Default is a fish database built from RefSeq. https://raw.githubusercontent.com/
 Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)}
 
 \item{mitofinder}{Default MitoFinder command line options}
+
+\item{max_paths}{Maximum number of assembly paths allowed for a sample to
+continue past the Assemble step (default = 10). Samples exceeding this are
+flagged as failed and skipped by downstream steps in WF1.}
+
+\item{max_scaffolds}{Maximum number of scaffolds (within a single path)
+allowed for a sample to continue past the Assemble step (default = 10).
+Samples exceeding this are flagged as failed and skipped by downstream
+steps in WF1.}
 
 \item{annotate_cpus}{Default # cpus for annotation}
 
