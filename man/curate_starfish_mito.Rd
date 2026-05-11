@@ -33,6 +33,8 @@ curate_starfish_mito(
 base64 encoded json string.}
 
 \item{ref_dir}{Path to reference directory for curation}
+
+\item{blast_ref_file}{Path to a JSON file of remote BLAST reference hits to inject into the local curation database (default = NULL)}
 }
 \description{
 Annotation curation for starfish mitogenomes

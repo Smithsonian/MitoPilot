@@ -9,6 +9,7 @@
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
 #' @param ref_dir Path to reference directory for curation
+#' @param blast_ref_file Path to a JSON file of remote BLAST reference hits to inject into the local curation database (default = NULL)
 #'
 #' @export
 #'
