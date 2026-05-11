@@ -36,8 +36,16 @@ workflow BLAST_GENBANK {
                 tuple(id, asmb_list[0], opts_id)
             }
             // Keep only single-scaffold assemblies (exactly 1 sequence in the FASTA)
+            // Use early-exit reader to avoid loading large multi-contig files into master JVM heap
             .filter{ id, asmb, opts_id ->
-                asmb.readLines().count{ it.startsWith('>') } == 1
+                asmb.withReader { reader ->
+                    int count = 0
+                    String line
+                    while ((line = reader.readLine()) != null) {
+                        if (line.startsWith('>') && ++count > 1) return false
+                    }
+                    count == 1
+                }
             }
             // Join with blast opts; samples with run_blast = 0 have no entry and are dropped
             .join(blast_opts_ch, by: 0)

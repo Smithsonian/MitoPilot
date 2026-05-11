@@ -51,6 +51,8 @@ workflow BLAST_REF_FETCH {
             .sqlInsert(statement: params.sqlWriteBlastRef, db: 'sqlite')
 
         // Store reference nucleotide sequence (one row per accession)
+        // .unique() removed: it buffers all sequences in master JVM heap until the channel closes.
+        // INSERT OR REPLACE with PRIMARY KEY (accession) makes duplicate writes idempotent.
         ref_out
             .map { id, accession, csv_file, seq_file, gc_file, json_file ->
                 def seq = seq_file.text.trim()
@@ -61,13 +63,12 @@ workflow BLAST_REF_FETCH {
                 tuple(accession, seq, seq.length() as Long, gc, ts)
             }
             .filter { it != null }
-            .unique { it[0] }  // deduplicate by accession in case of reruns
             .sqlInsert(statement: params.sqlWriteRefSeq, db: 'sqlite')
 
         // Write lineage to assemble table
         ref_out
             .map { id, accession, csv_file, seq_file, gc_file, json_file ->
-                def json = new JsonSlurper().parseText(json_file.text)
+                def json = new JsonSlurper().parse(json_file)
                 def lineage = json?.lineage ?: null
                 lineage ? tuple(lineage, id) : null
             }
