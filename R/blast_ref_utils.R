@@ -917,6 +917,15 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
     ref_length     = integer()
   )
 
+  # Quick guard: first character must be a valid IUPAC nucleotide.
+  # Catches HTML error responses or other garbage from a failed NCBI fetch
+  # without scanning the full sequence string in the master process.
+  if (!grepl("^[ACGTNacgtnRYSWKMBDHVryswkmbdhv]", ref_seq)) {
+    message("compute_blast_ref_alignment: ref_seq does not appear to be a valid nucleotide sequence, skipping")
+    write.csv(empty, output_file, row.names = FALSE)
+    return(invisible(NULL))
+  }
+
   tryCatch({
     rotation <- as.integer(rotation)
 

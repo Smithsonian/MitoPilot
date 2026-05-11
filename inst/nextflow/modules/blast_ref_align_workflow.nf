@@ -45,9 +45,7 @@ workflow BLAST_REF_ALIGN {
         // Reference data (sequence + rotation) available at WF2 startup from WF1.
         channel.fromQuery(params.sqlReadRef, db: 'sqlite')
             .map { row -> tuple(row[0], row[1], row[2] as Long) }
-            .filter { id, ref_seq, rotation ->
-                ref_seq && ref_seq.matches('[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+')
-            }
+            .filter { id, ref_seq, rotation -> ref_seq }
             .set { ref_ch }  // (id, ref_seq, rotation)
 
         // Newly-validated samples: gate on `validated` so alignment runs after
