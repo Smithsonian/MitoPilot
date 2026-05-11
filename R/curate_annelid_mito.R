@@ -83,7 +83,7 @@ curate_annelid_mito <- function(
 
   # Augment local BLAST DB with translated remote BLAST hit gene sequences
   if (!is.null(blast_ref_file)) {
-    MitoPilot:::inject_remote_hits_into_blast_db(blast_ref_file, ref_dir)
+    inject_remote_hits_into_blast_db(blast_ref_file, ref_dir)
   }
 
   ## Prepare rules ----
@@ -204,7 +204,7 @@ curate_annelid_mito <- function(
 
   # Prepend remote BLAST top hit to refHits for each PCG
   if (!is.null(blast_ref_file)) {
-    annotations <- MitoPilot:::prepend_blast_hit_to_refhits(annotations, blast_ref_file)
+    annotations <- prepend_blast_hit_to_refhits(annotations, blast_ref_file)
   }
 
   ## Curate against top hits ----
@@ -624,7 +624,7 @@ curate_annelid_mito <- function(
 
   # Restore remote BLAST hit rows after any curation step that recomputed refHits
   if (!is.null(blast_ref_file)) {
-    annotations <- MitoPilot:::prepend_blast_hit_to_refhits(annotations, blast_ref_file)
+    annotations <- prepend_blast_hit_to_refhits(annotations, blast_ref_file)
   }
 
   ## Stop codon trimming ----

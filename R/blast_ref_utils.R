@@ -64,7 +64,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
         err_msg <- conditionMessage(resp)
         message(sprintf("[fetch_blast_ref] HTTP error after %.1fs: %s", elapsed, err_msg))
         if (attempt < max_tries) {
-          message(sprintf("[fetch_blast_ref] %s attempt %d/%d failed: %s — retrying in %ds",
+          message(sprintf("[fetch_blast_ref] %s attempt %d/%d failed: %s - retrying in %ds",
                           label, attempt, max_tries, err_msg, 120L * attempt))
           Sys.sleep(120L * attempt)
           next
@@ -77,7 +77,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
       message(sprintf("[fetch_blast_ref] HTTP %d after %.1fs  label=%s", status, elapsed, label))
       if (status == 200L) return(resp)
       if (attempt < max_tries && status %in% transient) {
-        message(sprintf("[fetch_blast_ref] %s attempt %d/%d returned HTTP %d — retrying in %ds",
+        message(sprintf("[fetch_blast_ref] %s attempt %d/%d returned HTTP %d - retrying in %ds",
                         label, attempt, max_tries, status, 120L * attempt))
         Sys.sleep(120L * attempt)
         next
@@ -184,7 +184,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
         )
       }, error = function(e) {
         message(sprintf(
-          "[blast_ref_fetch] taxonomy/%s failed after all retries: %s — organism/lineage will be NULL",
+          "[blast_ref_fetch] taxonomy/%s failed after all retries: %s - organism/lineage will be NULL",
           taxid, conditionMessage(e)
         ))
         NULL
@@ -555,7 +555,7 @@ inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
                       error = function(e) NULL)
   if (is.null(ref_dna)) return(invisible(character()))
 
-  # Resolve makeblastdb. Missing executable is non-fatal — sequences are still
+  # Resolve makeblastdb. Missing executable is non-fatal - sequences are still
   # appended to the FASTA so a later DB rebuild (or BLAST recompute) can pick
   # them up. We just skip the index rebuild here.
   mkdb <- if (!is.null(path_to_makeblastdb) &&
