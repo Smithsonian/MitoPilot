@@ -207,11 +207,11 @@ workflow ASSEMBLE {
             .map { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
                 def msg
                 if (n_paths > max_paths && n_scaffolds > max_scaffolds) {
-                    msg = "Exceeded path (${n_paths} > ${max_paths}) and scaffold (${n_scaffolds} > ${max_scaffolds}) limits"
+                    msg = "${n_paths} assembly paths, exceeds limit (${max_paths}); ${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"
                 } else if (n_paths > max_paths) {
-                    msg = "Exceeded path limit (${n_paths} > ${max_paths})"
+                    msg = "${n_paths} assembly paths, exceeds limit (${max_paths})"
                 } else {
-                    msg = "Exceeded scaffold limit (${n_scaffolds} > ${max_scaffolds})"
+                    msg = "${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"
                 }
                 tuple(n_paths, n_scaffolds, length_str, topo_str, '3', msg, params.ts, id)
             }
