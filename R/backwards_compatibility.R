@@ -77,6 +77,12 @@ backwards_compatibility <- function(
       "blast_accession" %in% names(assemble_table) &&
       "blast_opts" %in% names(assemble_table) &&
       "blast_opts" %in% DBI::dbListTables(con) &&
+      "use_mitos_best" %in% names(annotate_opts_table) &&
+      "use_aragorn" %in% names(annotate_opts_table) &&
+      "aragorn_opts" %in% names(annotate_opts_table) &&
+      "tool" %in% DBI::dbListFields(con, "annotations") &&
+      "blast_ref_annotations" %in% DBI::dbListTables(con) &&
+      "blast_ref_alignment" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
