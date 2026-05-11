@@ -219,7 +219,7 @@ pipeline_server_userAsmb <- function(id) {
           "source ~/.bashrc",
           "module load tools/java/21.0.2",
           "",
-          "export NXF_OPTS=\"-Xms2g -Xmx8g\" # to deal with Java OOM error",
+          "export NXF_OPTS=\"-Xms512m -Xmx6g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
           full_nf_cmd,
           "",
           'echo "---"',

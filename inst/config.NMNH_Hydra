@@ -2,6 +2,12 @@ plugins {
 	id 'nf-sqldb@0.5.0'
 }
 
+executor {
+    queueSize = 50
+    pollInterval = '30 sec'
+    submitRateLimit = '10/1min'
+}
+
 singularity {
   enabled = true
 }
