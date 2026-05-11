@@ -2,13 +2,14 @@ include {assemble} from './assemble.nf'
 
 params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.seeds_db, opts.labels_db, opts.getOrganelle, opts.assembler, ' +
-                  'opts.mitofinder_db, opts.mitofinder, s.genetic_code ' +
+                  'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
+                  'opts.max_paths, opts.max_scaffolds ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
                   'JOIN samples s ' +
                   'ON a.ID = s.ID ' +
-                  'WHERE a.assemble_switch = 1 AND a.assemble_lock = 0'
+                  'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
@@ -20,13 +21,12 @@ params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?,
                             'assemble_switch=?, assemble_notes=?, time_stamp=? WHERE ID=?'
 
 
-
 workflow ASSEMBLE {
     take:
         input
 
     main:
-        // Assembly Options Channel from DB
+        // Assembly Options Channel from DB (includes max_paths/max_scaffolds thresholds)
         channel.fromQuery(params.sqlRead, db: 'sqlite')
             .map{ it ->
                 tuple(
@@ -35,16 +35,18 @@ workflow ASSEMBLE {
                     [                                                           //## assembly options ##//
                         cpus: it[2],                                            // cpus
                         memory: it[3],                                          // memory
-                        getOrganelle: it[6],                                     // getOrganelle options
+                        getOrganelle: it[6],                                    // getOrganelle options
                         mitofinder: it[9],                                      // mitofinder options
                         assembler: it[7]                                        // assembler
                     ],
                     [
-                        it[4],                                        // getOrganelle seeds_db
-                        it[5]                                        // getOrganelle labels_db
+                        it[4],                                                  // getOrganelle seeds_db
+                        it[5]                                                   // getOrganelle labels_db
                     ],
-                    it[8],                                          // mitofinder .gb reference database
-                    it[10]                                         // genetic code
+                    it[8],                                                      // mitofinder .gb reference database
+                    it[10],                                                     // genetic code
+                    (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
+                    (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer))  // max_scaffolds
                 )
             }
             .set { assemble_opts }
@@ -67,17 +69,32 @@ workflow ASSEMBLE {
                     it[1][1],                                                   // assembly options id
                     it[0][1],                                                   // trimmed reads in
                     it[1][2],                                                   // assembly options
-                    it[1][3],                                                    // getOrganelle databases (seeds_db and labels_db)
-                    it[1][4],                                                    // mitofinder .gb reference database
-                    it[1][5]                                                    // genetic code
+                    it[1][3],                                                   // getOrganelle databases
+                    it[1][4],                                                   // mitofinder .gb reference db
+                    it[1][5],                                                   // genetic code
+                    it[1][6],                                                   // max_paths
+                    it[1][7]                                                    // max_scaffolds
                 )
+            }
+            .set { assemble_in_full }
+
+        // Keep thresholds aside; strip them from the assemble process input
+        assemble_in_full
+            .map { id, opts_id, reads, opts, dbs, mfdb, gc, mp, ms ->
+                tuple(id, mp, ms)
+            }
+            .set { thresholds_ch }
+
+        assemble_in_full
+            .map { id, opts_id, reads, opts, dbs, mfdb, gc, mp, ms ->
+                tuple(id, opts_id, reads, opts, dbs, mfdb, gc)
             }
             .set { assemble_in }
 
         // Assemble
         assemble(assemble_in).set { assemble_out }
 
-        // Clear old assemblies from db
+        // Clear old assemblies from db (per-sample, fires as each completes)
         assemble_out[0]
           .map { it ->
             tuple(
@@ -87,10 +104,84 @@ workflow ASSEMBLE {
           }
           .sqlInsert( statement: params.sqlDeleteAssemblies, db: 'sqlite')
 
-        // Write to assemblies table
+        // Per-sample summary: count paths, max scaffolds-per-path, lengths, topologies
+        // (replaces the splitFasta + groupTuple aggregation that previously blocked the batch)
         assemble_out[0]
-            .filter{ it[1] ==~ /^(?!.*assembly_0\.fasta$).*$/ }         // exclude empty assemblies
-            .map { it -> it[1] }.flatten()
+            .filter{ it[1] ==~ /^(?!.*assembly_0\.fasta$).*$/ }    // exclude empty assemblies
+            .map { it ->
+                def files = (it[1] instanceof List) ? it[1] : [it[1]]
+                def n_paths = files.size()
+                def scaffold_counts = []
+                def lengths = []
+                def topologies = []
+                files.each { f ->
+                    def n = 0
+                    def currentSeq = new StringBuilder()
+                    def currentTopo = null
+                    def closeSeq = {
+                        if (currentTopo != null) {
+                            lengths << currentSeq.length()
+                            topologies << currentTopo
+                        }
+                    }
+                    f.eachLine { line ->
+                        if (line.startsWith('>')) {
+                            closeSeq()
+                            n++
+                            def parts = line.substring(1).split(/\s+/, 2)
+                            currentTopo = parts.size() > 1 ? parts[1] : ''
+                            currentSeq = new StringBuilder()
+                        } else {
+                            currentSeq.append(line.trim())
+                        }
+                    }
+                    closeSeq()
+                    scaffold_counts << n
+                }
+                def n_scaffolds = scaffold_counts ? scaffold_counts.max() : 0
+                def length_str  = lengths.unique().sort().reverse().join(';')
+                def topo_str    = topologies.unique().sort().join(';')
+                tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, it)
+            }
+            .set { summarized }
+
+        // Apply user-configured thresholds: split into pass / fail branches
+        summarized
+            .join(thresholds_ch, by: 0)
+            .branch { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+                fail: (n_paths > max_paths) || (n_scaffolds > max_scaffolds)
+                pass: true
+            }
+            .set { branched }
+
+        // PASS: write per-sample summary live, then propagate downstream
+        branched.pass
+            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+                def status = '4'
+                def notes  = ''
+                if (n_scaffolds > 1) {
+                    notes  = 'Output contains disconnected contigs'
+                    topo_str = 'fragmented'
+                    status = '3'
+                }
+                if (n_paths > 1) {
+                    notes  = 'Unable to resolve single assembly from reads'
+                    status = '3'
+                }
+                db_write:   tuple(n_paths, n_scaffolds, length_str, topo_str, status, notes, params.ts, id)
+                fasta:      tuple(id, raw[1])
+                downstream: raw
+            }
+            .set { pass_ch }
+
+        // Live per-sample UPDATE of the assemble table
+        pass_ch.db_write
+            .sqlInsert(statement: params.sqlWriteAssemble, db: 'sqlite')
+
+        // Per-scaffold INSERT into assemblies table (still live; no groupTuple)
+        pass_ch.fasta
+            .map { id, files -> files }
+            .flatten()
             .splitFasta(record: [id: true, desc: true, seqString: true])
             .map { record ->
                 tuple(
@@ -101,7 +192,7 @@ workflow ASSEMBLE {
                     record.seqString                    // sequence
                 ).flatten()
             }
-            .map { it ->                                            // add ignore flag for short assemblies
+            .map { it ->                                            // mark short assemblies
                 if(it[3] < params.minAssemblyLength){
                     it[7] = 1
                 }else{
@@ -109,68 +200,39 @@ workflow ASSEMBLE {
                 }
                 return it
             }
-            .set { assemblies_ch }
-        assemblies_ch.sqlInsert( statement: params.sqlWriteAssemblies, db: 'sqlite')
+            .sqlInsert(statement: params.sqlWriteAssemblies, db: 'sqlite')
 
-        // Update DB assemble table
-        assemblies_ch
-            // Add summary stats
-            .map { it ->
-                tuple(
-                    it[0],                                          // ID
-                    it[1].toInteger(),                              // paths
-                    it[2].toInteger(),                              // scaffold
-                    it[3].toInteger(),                              // length
-                    it[4]                                           // topology
-                )
-            }
-            .groupTuple()
-            .map { it ->
-                tuple(
-                    it[1].max(),                                    // # paths
-                    it[2].max(),                                    // # scaffolds
-                    it[3].unique().sort().reverse().join(";"),      // length(s)
-                    it[4].unique().sort().join(";"),                // topology(s)
-                    '2',                                            // assembly status
-                    '',                                             // assembly notes
-                    params.ts,                                      // time stamp
-                    it[0]                                           // ID
-                ).flatten()
-            }
-            .map { it ->
-                if(it[1] > 1){                      // mark fragmented assemblies
-                    it[2] = 'fragmented'
-                    it[4] = '3'
-                    it[5] = 'Output contains disconnected contigs'
+        // FAIL (too many paths/scaffolds): write status=3 with reason, drop from downstream
+        branched.fail
+            .map { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+                def msg
+                if (n_paths > max_paths && n_scaffolds > max_scaffolds) {
+                    msg = "${n_paths} assembly paths, exceeds limit (${max_paths}); ${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"
+                } else if (n_paths > max_paths) {
+                    msg = "${n_paths} assembly paths, exceeds limit (${max_paths})"
+                } else {
+                    msg = "${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"
                 }
-                if(it[0] > 1){                      // mark unresolved assemblies
-                    it[4] = '3'
-                    it[5] = 'Unable to resolve single assembly from reads'
-                }
-                return it
+                tuple(n_paths, n_scaffolds, length_str, topo_str, '3', msg, params.ts, id)
             }
-            .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
+            .sqlInsert(statement: params.sqlWriteAssemble, db: 'sqlite')
 
-        // Update assemble table for failed assemblies
+        // Empty assemblies (assembly_0.fasta)
         assemble_out[0]
             .filter{ it[1] ==~ /(.*assembly_0\.fasta)$/ }
             .map { it ->
                 tuple(
-                    null,                   // # paths
-                    null,                   // # scaffolds
-                    null,                   // length(s)
-                    null,                   // topology(s)
-                    '3',                    // assembly status
-                    'failed assembly',      // assembly notes
-                    params.ts,              // time stamp
-                    it[0]                   // ID
+                    null, null, null, null,
+                    '3',
+                    'failed assembly',
+                    params.ts,
+                    it[0]
                 )
             }
             .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
 
-        // Mark samples with too few reads
+        // Samples with too few reads
         input
-            // filter on min seq depth
             .filter{
                 try {
                     it[2].toInteger() < params.minDepth
@@ -180,19 +242,16 @@ workflow ASSEMBLE {
             }.cross(assemble_opts)
             .map { it ->
                 tuple(
-                    null,                                     // # paths
-                    null,                                     // # scaffolds
-                    null,                                     // length(s)
-                    null,                                     // topology(s)
-                    '3',                                      // assembly status
-                    'Insufficient sequencing depth',          // assembly notes
-                    params.ts,                                // time stamp
-                    it[0][0]                                  // ID
+                    null, null, null, null,
+                    '3',
+                    'Insufficient sequencing depth',
+                    params.ts,
+                    it[0][0]
                 )
             }
             .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
 
-        // Reset annotation data for updated assemblies
+        // Reset annotation data for updated assemblies (all that produced output)
         assemble_out[0]
           .map { it ->
             tuple(
@@ -204,7 +263,8 @@ workflow ASSEMBLE {
             .join(update_ids)
             .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, 1, 0, "no")', db: 'sqlite')
 
-        emit:
-           ch = assemble_out[0]
+    emit:
+        // Only samples passing thresholds proceed to COVERAGE / BLAST_GENBANK
+        ch = pass_ch.downstream
 
 }

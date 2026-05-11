@@ -5,7 +5,7 @@ params.sqlRead =  'SELECT s.ID, s.assembly, s.topology, ' +
                   'FROM samples s ' +
                   'JOIN assemble a ' +
                   'ON s.ID = a.ID ' +
-                  'WHERE a.assemble_switch = 1 AND a.assemble_lock = 0'
+                  'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 
 params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ?, time_stamp = ? ' +
@@ -135,7 +135,7 @@ workflow COVERAGE_userAsmb {
                     it[2].max(),                                    // # scaffolds
                     it[3].unique().sort().reverse().join(";"),      // length(s)
                     it[4].unique().sort().join(";"),                // topology(s)
-                    '2',                                            // assembly status
+                    '4',                                            // assembly status (In Progress)
                     '',                                             // assembly notes
                     params.ts,                                      // time stamp
                     it[0]                                           // ID

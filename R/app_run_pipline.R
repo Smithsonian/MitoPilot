@@ -19,7 +19,7 @@ pipeline_server <- function(id) {
       # Count samples to update ----
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::filter(assemble_switch == 1) |>
+          dplyr::filter(assemble_switch %in% c(1, 4)) |>
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {

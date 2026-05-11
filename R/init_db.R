@@ -31,6 +31,13 @@
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
 #'   Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)
 #' @param mitofinder Default MitoFinder command line options
+#' @param max_paths Maximum number of assembly paths allowed for a sample to
+#'   continue past the Assemble step (default = 10). Samples exceeding this are
+#'   flagged as failed and skipped by downstream steps in WF1.
+#' @param max_scaffolds Maximum number of scaffolds (within a single path)
+#'   allowed for a sample to continue past the Assemble step (default = 10).
+#'   Samples exceeding this are flagged as failed and skipped by downstream
+#'   steps in WF1.
 #' @export
 #'
 new_db <- function(
@@ -56,6 +63,8 @@ new_db <- function(
     mitofinder = paste(
       "--megahit"
     ),
+    max_paths = 10,
+    max_scaffolds = 10,
     # Default annotation options
     annotate_cpus = 6,
     annotate_memory = 36,
@@ -271,6 +280,8 @@ new_db <- function(
       assembler TEXT,
       mitofinder_db TEXT,
       mitofinder TEXT,
+      max_paths INTEGER,
+      max_scaffolds INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -285,7 +296,9 @@ new_db <- function(
         assembler = assembler,
         getOrganelle = getOrganelle,
         mitofinder_db = mitofinder_db,
-        mitofinder = mitofinder
+        mitofinder = mitofinder,
+        max_paths = max_paths,
+        max_scaffolds = max_scaffolds
       ),
       in_place = TRUE,
       copy = TRUE,

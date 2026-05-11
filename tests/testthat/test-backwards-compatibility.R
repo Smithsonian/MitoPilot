@@ -199,7 +199,9 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
                 "blast_qcovs", "blast_evalue", "blast_lineage", "blast_opts"))
 
   # assemble_opts
-  expect_cols(con, "assemble_opts", c("assembler", "mitofinder_db", "mitofinder"))
+  expect_cols(con, "assemble_opts",
+              c("assembler", "mitofinder_db", "mitofinder",
+                "max_paths", "max_scaffolds"))
 
   # annotate_opts
   expect_cols(con, "annotate_opts",
@@ -255,6 +257,9 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   # annotate_opts — missing mitos_best / aragorn trio in 1.3.10
   expect_cols(con, "annotate_opts",
               c("use_mitos_best", "use_aragorn", "aragorn_opts"))
+
+  # assemble_opts — max_paths / max_scaffolds added in this release
+  expect_cols(con, "assemble_opts", c("max_paths", "max_scaffolds"))
 
   # annotations
   expect_cols(con, "annotations", "tool")

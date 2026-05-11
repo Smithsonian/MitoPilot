@@ -85,7 +85,8 @@ assemble_server_userAsmb <- function(id) {
                   `0` = "fa fa-hourglass",
                   `1` = "fa fa-person-running",
                   `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation"
+                  `3` = "fa fa-triangle-exclamation",
+                  `4` = "fa fa-circle-half-stroke"
                 )
               )
             ),
@@ -275,7 +276,11 @@ assemble_server_userAsmb <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Coverage (wait)" = 0, "Ready to Calculate Coverage" = 1, "Successful Coverage Calculation" = 2, "Failed Coverage Calculation" = 3),
+            choices = c("Pre-Coverage (wait)" = 0, 
+             "Ready to Calculate Coverage" = 1,
+             "In Progress" = 4, 
+             "Successful Coverage Calculation" = 2, 
+             "Failed Coverage Calculation" = 3),
             selected = current,
             shape = "square",
             status = "primary"

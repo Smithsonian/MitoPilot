@@ -87,7 +87,8 @@ assemble_server <- function(id) {
                   `0` = "fa fa-hourglass",
                   `1` = "fa fa-person-running",
                   `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation"
+                  `3` = "fa fa-triangle-exclamation",
+                  `4` = "fa fa-circle-half-stroke"
                 )
               )
             ),
@@ -277,7 +278,7 @@ assemble_server <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
+            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "In Progress" = 4, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
             selected = current,
             shape = "square",
             status = "primary"
@@ -516,6 +517,14 @@ assemble_server <- function(id) {
           inputId = "assemble_opts_memory",
           value = cur$memory
         )
+        updateNumericInput(
+          inputId = "max_paths",
+          value = cur$max_paths %||% 10
+        )
+        updateNumericInput(
+          inputId = "max_scaffolds",
+          value = cur$max_scaffolds %||% 10
+        )
         updateTextAreaInput(
           inputId = "getOrganelle",
           value = cur$getOrganelle
@@ -568,6 +577,8 @@ assemble_server <- function(id) {
       shinyjs::toggleState("labels_db", condition = input$edit_assemble_opts)
       shinyjs::toggleState("mf_db", condition = input$edit_assemble_opts)
       shinyjs::toggleState("mitofinder", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("max_paths", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
@@ -640,7 +651,9 @@ assemble_server <- function(id) {
               labels_db = req(input$labels_db),
               assembler = req(input$assembler),
               mitofinder_db = req(input$mf_db),
-              mitofinder = req(input$mitofinder)
+              mitofinder = req(input$mitofinder),
+              max_paths = as.integer(req(input$max_paths)),
+              max_scaffolds = as.integer(req(input$max_scaffolds))
             ),
             in_place = TRUE,
             copy = TRUE,
