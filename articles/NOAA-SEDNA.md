@@ -53,6 +53,7 @@ In the new R session, run the following to install MitoPilot. It will
 take a while to install all of the necessary dependencies.
 
 ``` r
+
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
   install.packages("remotes")

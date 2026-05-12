@@ -21,6 +21,8 @@ raw input and performs the following steps.
       mitogenome assembly
     - [bowtie2](https://github.com/BenLangmead/bowtie2) for read mapping
       to calculate coverage and error rates.
+    - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) remotely
+      fetch closest match from GenBank for automatic and manual curation
 2.  Mitogenome annotation
     - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA
       annotation
@@ -28,6 +30,8 @@ raw input and performs the following steps.
       tRNA annotation
     - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
       annotation (optional)
+    - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA annotation
+      (optional)
     - Custom scripts for gene boundary refinement and annotation file
       formatting
     - Validation to flag possible issues or known errors that would be
@@ -124,6 +128,7 @@ Once you have R and Nextflow installed, install
 [MitoPilot](https://github.com/Smithsonian/MitoPilot) in R from GitHub:
 
 ``` r
+
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
 }
@@ -134,6 +139,7 @@ Alternatively, you can clone this repository and install the package
 locally from the project folder:
 
 ``` r
+
 devtools::install()
 ```
 
@@ -159,6 +165,7 @@ RStudio (recommended) a new R-project will also be initialized and
 opened in a new RStudio session.
 
 ``` r
+
 MitoPilot::new_project(
   path = "path/to/project",
   mapping_fn = "path/to/mapping_file.csv",
@@ -280,6 +287,7 @@ options would modify the allocated memory and GetOrganelle command line
 options :
 
 ``` r
+
 MitoPilot::new_project(
   mapping = "path/to/mapping_file.csv",
   executor = "local",
@@ -327,9 +335,6 @@ in a new browser window and is primarily comprised of an interactive
 table, with 3 modules (Assembly, Annotate, Export), where each row
 represents a sample in the project.
 
-Please note that we have tested the MitoPilot GUI on Chrome and Firefox
-web browsers. There are known bugs when running the GUI on Safari.
-
 ## Sample Status
 
 In the Assemble and Annotate modules the icon at the start of each row
@@ -339,9 +344,11 @@ indicates the sample status, where:
     updated, but will not be updated the next time the pipeline is run.
 2.  (🏃) Ready to Run = Indicates that the sample will be updated the
     next time the pipeline is run.
-3.  (✅) Completed Successfully = Indicates that the sample has been
+3.  (◑) In Progress = Indicates that the sample has partially progressed
+    through the current module.
+4.  (✅) Completed Successfully = Indicates that the sample has been
     successfully processed.
-4.  (⚠️) Completed with Warning - Processing is complete but may have
+5.  (⚠️) Completed with Warning - Processing is complete but may have
     failed or needs manual review.
 
 There is an additional icon indicating whether a samples is locked () or

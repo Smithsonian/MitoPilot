@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -115,6 +115,17 @@ following commands in your project directory.</p>
 <span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="ex">sqlite3</span> .sqlite_corrupted <span class="st">".recover"</span> <span class="kw">|</span> <span class="ex">sqlite3</span> .sqlite</span></code></pre></div>
 <p>Then try relaunching the MitoPilot app.</p>
 </div>
+<div class="section level3">
+<h3 id="insufficient-memory-for-the-java-runtime-environment">“Insufficient memory for the Java Runtime Environment”<a class="anchor" aria-label="anchor" href="#insufficient-memory-for-the-java-runtime-environment"></a>
+</h3>
+<p>This suggests that the Nextflow head process (which controls all
+other jobs) is running out of Java heap space. To fix, run the following
+command in the console or add it to your submission submission script
+before launching Nextflow.</p>
+<p>Alternatively, submit the Nextflow job with fewer samples at
+time.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_OPTS</span><span class="op">=</span><span class="st">"-Xms500m -Xmx8g"</span></span></code></pre></div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="can-i-annotate-my-own-mitogenome-assemblies-with-mitopilot">Can I annotate my own mitogenome assemblies with MitoPilot?<a class="anchor" aria-label="anchor" href="#can-i-annotate-my-own-mitogenome-assemblies-with-mitopilot"></a>
@@ -170,11 +181,14 @@ in your project directory.</p>
 <div class="section level2">
 <h2 id="how-do-i-restore-annotatations-after-manual-editing">How do I restore annotatations after manual editing?<a class="anchor" aria-label="anchor" href="#how-do-i-restore-annotatations-after-manual-editing"></a>
 </h2>
-<p>The easiest way to restore the original annotations is by rerunning
-the sample with the Nextflow <code>-resume</code> flag. This will
-quickly generate clean, unedited annotations from previously completed
-results in the <code>work</code> directory. This approach could be used
-to fix any mistakes made during manual edits.</p>
+<p>If you simply wish to bring back a deleted annotation, select the
+deleted annotation in the table and click the <code>Restore</code>
+button.</p>
+<p>To completely restore the original annotations, rerun the sample with
+the Nextflow <code>-resume</code> flag. This will quickly generate
+clean, unedited annotations from previously completed results in the
+<code>work</code> directory. This approach could be used to fix any
+mistakes made during manual edits.</p>
 <p>Note that rerunning a sample will erase all manual edits and
 notes.</p>
 <p>To rerun specific samples:</p>
@@ -208,14 +222,14 @@ directory, just in case you need them later.</p>
 <p>The safest option to save disk space is deleting sub-directories in
 <code>work</code> that contain failed processes. The following bash
 one-liner can help identify directories to remove.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># list subdirectories in `work` that contain failed analyses</span></span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="cf">for</span> f <span class="kw">in</span> work/<span class="pp">*</span>/<span class="pp">*</span>/.exitcode<span class="kw">;</span> <span class="cf">do</span> <span class="bu">[</span> <span class="st">"</span><span class="va">$(</span><span class="fu">cat</span> <span class="st">"</span><span class="va">$f</span><span class="st">"</span><span class="va">)</span><span class="st">"</span> <span class="ot">!=</span> <span class="st">"0"</span> <span class="bu">]</span> <span class="kw">&amp;&amp;</span> <span class="bu">echo</span> <span class="st">"</span><span class="va">${f</span><span class="op">%</span>/.exitcode<span class="va">}</span><span class="st">"</span><span class="kw">;</span> <span class="cf">done</span></span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co"># then manually delete these directories</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># list subdirectories in `work` that contain failed analyses</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="cf">for</span> f <span class="kw">in</span> work/<span class="pp">*</span>/<span class="pp">*</span>/.exitcode<span class="kw">;</span> <span class="cf">do</span> <span class="bu">[</span> <span class="st">"</span><span class="va">$(</span><span class="fu">cat</span> <span class="st">"</span><span class="va">$f</span><span class="st">"</span><span class="va">)</span><span class="st">"</span> <span class="ot">!=</span> <span class="st">"0"</span> <span class="bu">]</span> <span class="kw">&amp;&amp;</span> <span class="bu">echo</span> <span class="st">"</span><span class="va">${f</span><span class="op">%</span>/.exitcode<span class="va">}</span><span class="st">"</span><span class="kw">;</span> <span class="cf">done</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co"># then manually delete these directories</span></span></code></pre></div>
 <p>If you are completely done with your project, consider running <a href="https://www.nextflow.io/docs/latest/reference/cli.html#clean" class="external-link"><code>nextflow clean</code></a>.
 This command will delete all temporary folders and files in
 <code>work</code>. USE WITH CAUTION.</p>
 <div class="alert alert-warning">
-<p><strong>Warning:</strong> Be careful when deleting files and
+<p><strong>Warning:</strong> Use caution when deleting files and
 directories in <code>work</code>. Nextflow’s caching and resuming system
 relies on these intermediate files. We recommend not cleaning up the
 <code>work</code> directory until you are finished with a project.</p>

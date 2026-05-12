@@ -52,6 +52,19 @@ sqlite3 .sqlite_corrupted ".recover" | sqlite3 .sqlite
 
 Then try relaunching the MitoPilot app.
 
+### “Insufficient memory for the Java Runtime Environment”
+
+This suggests that the Nextflow head process (which controls all other
+jobs) is running out of Java heap space. To fix, run the following
+command in the console or add it to your submission submission script
+before launching Nextflow.
+
+Alternatively, submit the Nextflow job with fewer samples at time.
+
+``` bash
+export NXF_OPTS="-Xms500m -Xmx8g"
+```
+
 ## Can I annotate my own mitogenome assemblies with MitoPilot?
 
 Yes! See the [“Initializing a Project with User
@@ -107,11 +120,14 @@ project directory.
 
 ## How do I restore annotatations after manual editing?
 
-The easiest way to restore the original annotations is by rerunning the
-sample with the Nextflow `-resume` flag. This will quickly generate
-clean, unedited annotations from previously completed results in the
-`work` directory. This approach could be used to fix any mistakes made
-during manual edits.
+If you simply wish to bring back a deleted annotation, select the
+deleted annotation in the table and click the `Restore` button.
+
+To completely restore the original annotations, rerun the sample with
+the Nextflow `-resume` flag. This will quickly generate clean, unedited
+annotations from previously completed results in the `work` directory.
+This approach could be used to fix any mistakes made during manual
+edits.
 
 Note that rerunning a sample will erase all manual edits and notes.
 
@@ -156,7 +172,7 @@ If you are completely done with your project, consider running
 This command will delete all temporary folders and files in `work`. USE
 WITH CAUTION.
 
-**Warning:** Be careful when deleting files and directories in `work`.
+**Warning:** Use caution when deleting files and directories in `work`.
 Nextflow’s caching and resuming system relies on these intermediate
 files. We recommend not cleaning up the `work` directory until you are
 finished with a project.

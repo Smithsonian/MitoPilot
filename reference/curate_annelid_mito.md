@@ -13,7 +13,8 @@ curate_annelid_mito(
   out_dir = NULL,
   max_blast_hits = 100,
   params = NULL,
-  ref_dir = NULL
+  ref_dir = NULL,
+  blast_ref_file = NULL
 )
 ```
 
@@ -51,3 +52,8 @@ curate_annelid_mito(
 - ref_dir:
 
   Path to reference directory for curation
+
+- blast_ref_file:
+
+  Path to a JSON file of remote BLAST reference hits to inject into the
+  local curation database (default = NULL)

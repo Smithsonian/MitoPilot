@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,6 +64,8 @@
 <span>  mitofinder_db <span class="op">=</span></span>
 <span>    <span class="st">"https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb"</span>,</span>
 <span>  mitofinder <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"--megahit"</span><span class="op">)</span>,</span>
+<span>  max_paths <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  max_scaffolds <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  annotate_cpus <span class="op">=</span> <span class="fl">6</span>,</span>
 <span>  annotate_memory <span class="op">=</span> <span class="fl">36</span>,</span>
 <span>  annotate_ref_db <span class="op">=</span> <span class="st">"Chordata"</span>,</span>
@@ -72,6 +74,7 @@
 <span>  mitos_opts <span class="op">=</span> <span class="st">"--intron 0 --oril 0"</span>,</span>
 <span>  trnaScan_opts <span class="op">=</span> <span class="st">"-M vert -X 20"</span>,</span>
 <span>  arwen_opts <span class="op">=</span> <span class="st">"-mtx"</span>,</span>
+<span>  aragorn_opts <span class="op">=</span> <span class="st">"-m -gcstd"</span>,</span>
 <span>  curate_cpus <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  curate_memory <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  curate_target <span class="op">=</span> <span class="st">"fish_mito"</span>,</span>
@@ -141,6 +144,19 @@ Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithso
 <dd><p>Default MitoFinder command line options</p></dd>
 
 
+<dt id="arg-max-paths">max_paths<a class="anchor" aria-label="anchor" href="#arg-max-paths"></a></dt>
+<dd><p>Maximum number of assembly paths allowed for a sample to
+continue past the Assemble step (default = 10). Samples exceeding this are
+flagged as failed and skipped by downstream steps in WF1.</p></dd>
+
+
+<dt id="arg-max-scaffolds">max_scaffolds<a class="anchor" aria-label="anchor" href="#arg-max-scaffolds"></a></dt>
+<dd><p>Maximum number of scaffolds (within a single path)
+allowed for a sample to continue past the Assemble step (default = 10).
+Samples exceeding this are flagged as failed and skipped by downstream
+steps in WF1.</p></dd>
+
+
 <dt id="arg-annotate-cpus">annotate_cpus<a class="anchor" aria-label="anchor" href="#arg-annotate-cpus"></a></dt>
 <dd><p>Default # cpus for annotation</p></dd>
 
@@ -167,6 +183,10 @@ Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithso
 
 <dt id="arg-arwen-opts">arwen_opts<a class="anchor" aria-label="anchor" href="#arg-arwen-opts"></a></dt>
 <dd><p>Default ARWEN command line options</p></dd>
+
+
+<dt id="arg-aragorn-opts">aragorn_opts<a class="anchor" aria-label="anchor" href="#arg-aragorn-opts"></a></dt>
+<dd><p>Default ARAGORN command line options</p></dd>
 
 
 <dt id="arg-curate-cpus">curate_cpus<a class="anchor" aria-label="anchor" href="#arg-curate-cpus"></a></dt>

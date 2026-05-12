@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,6 +80,8 @@
 <a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a> (default) or <a href="https://github.com/RemiAllio/MitoFinder" class="external-link">MitoFinder</a> for mitogenome assembly</li>
 <li>
 <a href="https://github.com/BenLangmead/bowtie2" class="external-link">bowtie2</a> for read mapping to calculate coverage and error rates.</li>
+<li>
+<a href="https://blast.ncbi.nlm.nih.gov/Blast.cgi" class="external-link">NCBI BLAST</a> remotely fetch closest match from GenBank for automatic and manual curation</li>
 </ul>
 </li>
 <li>Mitogenome annotation
@@ -90,6 +92,8 @@
 <a href="https://github.com/UCSC-LoweLab/tRNAscan-SE" class="external-link">tRNAscan-SE</a> for tRNA annotation</li>
 <li>
 <a href="https://doi.org/10.1093/bioinformatics/btm573" class="external-link">ARWEN</a> for tRNA annotation (optional)</li>
+<li>
+<a href="https://doi.org/10.1093/nar/gkh152" class="external-link">ARAGORN</a> for tRNA annotation (optional)</li>
 <li>Custom scripts for gene boundary refinement and annotation file formatting</li>
 <li>Validation to flag possible issues or known errors that would be rejected by NCBI GenBank</li>
 <li>Manual curation of annotations using the integrated Shiny App.</li>
@@ -257,7 +261,6 @@
 <h1 id="running-the-pipeline">Running The Pipeline<a class="anchor" aria-label="anchor" href="#running-the-pipeline"></a>
 </h1>
 <p>Once a project is initialized, the pipeline status can be viewed using the MitoPilot GUI. The GUI can be launched by running the <code><a href="reference/MitoPilot.html">MitoPilot()</a></code> command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assembly, Annotate, Export), where each row represents a sample in the project.</p>
-<p>Please note that we have tested the MitoPilot GUI on Chrome and Firefox web browsers. There are known bugs when running the GUI on Safari.</p>
 <div class="section level2">
 <h2 id="sample-status">Sample Status<a class="anchor" aria-label="anchor" href="#sample-status"></a>
 </h2>
@@ -265,6 +268,7 @@
 <ol style="list-style-type: decimal">
 <li>(⏳) Hold / Waiting = Indicates that the sample is ready to be updated, but will not be updated the next time the pipeline is run.</li>
 <li>(🏃) Ready to Run = Indicates that the sample will be updated the next time the pipeline is run.</li>
+<li>(◑) In Progress = Indicates that the sample has partially progressed through the current module.</li>
 <li>(✅) Completed Successfully = Indicates that the sample has been successfully processed.</li>
 <li>(⚠️) Completed with Warning - Processing is complete but may have failed or needs manual review.</li>
 </ol>

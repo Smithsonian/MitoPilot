@@ -47,6 +47,7 @@ increased to 2 and the default percent similarity of an “acceptable” PCG
 match could be reduced to 85 by initializing a new project with:
 
 ``` r
+
 new_project(
   ...,
   curate_params = params_fish_mito(
