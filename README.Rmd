@@ -30,10 +30,12 @@ MitoPilot is a package for the assembly and annotation of mitochondrial genomess
    - [fastp](https://github.com/OpenGene/fastp) for quality control and adapter trimming
    - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (default) or [MitoFinder](https://github.com/RemiAllio/MitoFinder) for mitogenome assembly
    - [bowtie2](https://github.com/BenLangmead/bowtie2) for read mapping to calculate coverage and error rates.
+   - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) remotely fetch closest match from GenBank for automatic and manual curation 
 2. Mitogenome annotation 
    - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA annotation
    - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for tRNA annotation
    - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA annotation (optional)
+   - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA annotation (optional)
    - Custom scripts for gene boundary refinement and annotation file formatting
    - Validation to flag possible issues or known errors that would be rejected by NCBI GenBank
    - Manual curation of annotations using the integrated Shiny App.
@@ -186,16 +188,15 @@ MitoPilot databases can be modified using the R helper functions `update_sample_
 
 Once a project is initialized, the pipeline status can be viewed using the MitoPilot GUI. The GUI can be launched by running the `MitoPilot()` command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assembly, Annotate, Export), where each row represents a sample in the project. 
 
-Please note that we have tested the MitoPilot GUI on Chrome and Firefox web browsers. There are known bugs when running the GUI on Safari.
-
 ## Sample Status
 
 In the Assemble and Annotate modules the icon at the start of each row indicates the sample status, where:
 
 1. (⏳) Hold / Waiting = Indicates that the sample is ready to be updated, but will not be updated the next time the pipeline is run.
 2. (🏃) Ready to Run = Indicates that the sample will be updated the next time the pipeline is run.
-3. (✅) Completed Successfully = Indicates that the sample has been successfully processed.
-4. (⚠️) Completed with Warning - Processing is complete but may have failed or needs manual review.
+3. (◑) In Progress = Indicates that the sample has partially progressed through the current module.
+4. (✅) Completed Successfully = Indicates that the sample has been successfully processed.
+5. (⚠️) Completed with Warning - Processing is complete but may have failed or needs manual review.
 
 There is an additional icon indicating whether a samples is locked () or unlocked (). A locked sample will be protected from further updates by Nextflow. Locking a sample will also make it available in the next MitoPilot module - a sample must be locked in the Assemble module to proceed with Annotation and must be locked the the Annotation modules to proceed with data Export. Both the "state" and "locked" status of one or more samples can be modified by selecting the sample rows in the table and using the "STATE" and "LOCK" buttons at the top of the interface. 
 

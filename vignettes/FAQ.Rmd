@@ -58,6 +58,8 @@ Then try relaunching the MitoPilot app.
 
 This suggests that the Nextflow head process (which controls all other jobs) is running out of Java heap space. To fix, run the following command in the console or add it to your submission submission script before launching Nextflow.
 
+Alternatively, submit the Nextflow job with fewer samples at time.
+
 ```{bash eval=FALSE}
 export NXF_OPTS="-Xms500m -Xmx8g"
 ```
@@ -102,7 +104,9 @@ Alternatively, if you are familiar with SQL, you can directly pull the necessary
 
 ## How do I restore annotatations after manual editing?
 
-The easiest way to restore the original annotations is by rerunning the sample with the Nextflow `-resume` flag. This will quickly generate clean, unedited annotations from previously completed results in the `work` directory. This approach could be used to fix any mistakes made during manual edits.
+If you simply wish to bring back a deleted annotation, select the deleted annotation in the table and click the `Restore` button.
+
+To completely restore the original annotations, rerun the sample with the Nextflow `-resume` flag. This will quickly generate clean, unedited annotations from previously completed results in the `work` directory. This approach could be used to fix any mistakes made during manual edits.
 
 Note that rerunning a sample will erase all manual edits and notes.
 
@@ -136,7 +140,7 @@ for f in work/*/*/.exitcode; do [ "$(cat "$f")" != "0" ] && echo "${f%/.exitcode
 If you are completely done with your project, consider running [`nextflow clean`](https://www.nextflow.io/docs/latest/reference/cli.html#clean). This command will delete all temporary folders and files in `work`. USE WITH CAUTION. 
 
 <div class="alert alert-warning">
-  <strong>Warning:</strong> Be careful when deleting files and directories in `work`. Nextflow's caching and resuming system relies on these intermediate files. We recommend not cleaning up the `work` directory until you are finished with a project.
+  <strong>Warning:</strong> Use caution when deleting files and directories in `work`. Nextflow's caching and resuming system relies on these intermediate files. We recommend not cleaning up the `work` directory until you are finished with a project.
 </div>
 
 
