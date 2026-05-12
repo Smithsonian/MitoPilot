@@ -2,6 +2,12 @@ plugins {
 	id 'nf-sqldb@0.5.0'
 }
 
+executor {
+    queueSize = 50
+    pollInterval = '30 sec'
+    submitRateLimit = '10/1min'
+}
+
 singularity {
   enabled = true
 }
@@ -40,6 +46,7 @@ params {
     genetic_code = <<GENETIC_CODE>>
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
+    aragorn_condaenv = 'aragorn'
     preprocess {
         container = process.container
         executor = process.executor
@@ -64,6 +71,18 @@ params {
         executor = process.executor
     }
     validate {
+        container = process.container
+        executor = process.executor
+    }
+    blast_ref_align {
+        cpus = 1
+        clusterOptions = "-l mres=32G,h_data=32G,h_vmem=32G,himem -S /bin/bash"
+        container = process.container
+        executor = process.executor
+    }
+    blast_gb {
+        cpus = 1
+        clusterOptions = "-l mres=32G,h_data=32G,h_vmem=32G,himem -S /bin/bash"
         container = process.container
         executor = process.executor
     }

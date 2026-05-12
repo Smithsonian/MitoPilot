@@ -21,6 +21,7 @@
 #' @param mitos_opts Default MITOS2 command line options
 #' @param trnaScan_opts Default tRNAscan-SE command line options
 #' @param arwen_opts Default ARWEN command line options
+#' @param aragorn_opts Default ARAGORN command line options
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
@@ -30,6 +31,13 @@
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
 #'   Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)
 #' @param mitofinder Default MitoFinder command line options
+#' @param max_paths Maximum number of assembly paths allowed for a sample to
+#'   continue past the Assemble step (default = 10). Samples exceeding this are
+#'   flagged as failed and skipped by downstream steps in WF1.
+#' @param max_scaffolds Maximum number of scaffolds (within a single path)
+#'   allowed for a sample to continue past the Assemble step (default = 10).
+#'   Samples exceeding this are flagged as failed and skipped by downstream
+#'   steps in WF1.
 #' @export
 #'
 new_db <- function(
@@ -55,6 +63,8 @@ new_db <- function(
     mitofinder = paste(
       "--megahit"
     ),
+    max_paths = 10,
+    max_scaffolds = 10,
     # Default annotation options
     annotate_cpus = 6,
     annotate_memory = 36,
@@ -63,6 +73,7 @@ new_db <- function(
     mitos_opts = "--intron 0 --oril 0",
     trnaScan_opts = "-M vert -X 20",
     arwen_opts = "-mtx",
+    aragorn_opts = "-m -gcstd",
     # Default curation options
     curate_cpus = 4,
     curate_memory = 8,
@@ -223,6 +234,13 @@ new_db <- function(
       assemble_lock INTEGER,
       hide_switch INTEGER,
       assemble_opts TEXT,
+      blast_opts TEXT,
+      blast_accession TEXT,
+      blast_species TEXT,
+      blast_pident REAL,
+      blast_qcovs REAL,
+      blast_evalue REAL,
+      blast_lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
@@ -241,6 +259,7 @@ new_db <- function(
           assemble_lock = 0,
           hide_switch = 0,
           assemble_opts = "default",
+          blast_opts = "default",
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -261,6 +280,8 @@ new_db <- function(
       assembler TEXT,
       mitofinder_db TEXT,
       mitofinder TEXT,
+      max_paths INTEGER,
+      max_scaffolds INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -275,11 +296,37 @@ new_db <- function(
         assembler = assembler,
         getOrganelle = getOrganelle,
         mitofinder_db = mitofinder_db,
-        mitofinder = mitofinder
+        mitofinder = mitofinder,
+        max_paths = max_paths,
+        max_scaffolds = max_scaffolds
       ),
       in_place = TRUE,
       copy = TRUE,
       by = "assemble_opts"
+    )
+
+  ## BLAST options ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_opts (
+      blast_opts TEXT NOT NULL,
+      run_blast INTEGER,
+      entrez_query TEXT,
+      extra_opts TEXT,
+      PRIMARY KEY (blast_opts)
+    );"
+  )
+  dplyr::tbl(con, "blast_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        blast_opts    = "default",
+        run_blast     = 1L,
+        entrez_query  = "mitochondrion[Location]",
+        extra_opts    = ""
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "blast_opts"
     )
 
   ## Add assemblies output ----
@@ -357,9 +404,12 @@ new_db <- function(
       ref_db TEXT,
       ref_dir TEXT,
       mitos_opts TEXT,
+      use_mitos_best INTEGER,
       trnaScan_opts TEXT,
       arwen_opts TEXT,
       use_arwen INTEGER,
+      aragorn_opts TEXT,
+      use_aragorn INTEGER,
       start_gene TEXT,
       PRIMARY KEY (annotate_opts)
     );"
@@ -373,9 +423,12 @@ new_db <- function(
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
         mitos_opts = mitos_opts,
+        use_mitos_best = 1L,
         trnaScan_opts = trnaScan_opts,
         arwen_opts = arwen_opts,
         use_arwen = 0L,
+        aragorn_opts = aragorn_opts,
+        use_aragorn = 0L,
         start_gene = "trnF"
       ),
       in_place = TRUE,
@@ -430,6 +483,7 @@ new_db <- function(
       length INTEGER,
       direction TEXT,
       anticodon TEXT,
+      tool TEXT,
       start_codon TEXT,
       stop_codon TEXT,
       translation TEXT,
@@ -439,6 +493,49 @@ new_db <- function(
       edited INTEGER,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold, gene, pos1)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_annotations (
+      ID TEXT NOT NULL,
+      gene TEXT NOT NULL,
+      type TEXT,
+      pos1 INTEGER,
+      pos2 INTEGER,
+      direction TEXT,
+      ref_length INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, gene, pos1)
+    );"
+  )
+
+  # One row per NCBI accession; shared across samples with the same BLAST hit
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_sequences (
+      accession TEXT NOT NULL,
+      sequence TEXT NOT NULL,
+      ref_length INTEGER,
+      genetic_code INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (accession)
+    );"
+  )
+
+  # One row per sample; stores pre-computed whole-genome pairwise alignment
+  # aligned_sample / aligned_ref are the gap-character strings from pwalign
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_alignment (
+      ID TEXT NOT NULL,
+      aligned_sample TEXT NOT NULL,
+      aligned_ref TEXT NOT NULL,
+      rotation INTEGER NOT NULL DEFAULT 0,
+      ref_length INTEGER NOT NULL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID)
     );"
   )
 

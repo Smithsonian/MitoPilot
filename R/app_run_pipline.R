@@ -8,8 +8,10 @@ pipeline_server <- function(id) {
     nf_cmd <- reactiveVal()
     process <- reactiveVal()
     process_out <- reactiveVal()
+    job_submitting <- reactiveVal(FALSE)
 
     on("run_modal", {
+      job_submitting(FALSE)
       # Generate Nextflow params ----
       nf_cmd(nextflow_cmd(session$userData$mode))
       message(nf_cmd())
@@ -17,7 +19,7 @@ pipeline_server <- function(id) {
       # Count samples to update ----
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::filter(assemble_switch == 1) |>
+          dplyr::filter(assemble_switch %in% c(1, 4)) |>
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
@@ -191,6 +193,9 @@ pipeline_server <- function(id) {
 
     # create Hydra job script and submit
     observeEvent(input$submit_job, {
+      req(!job_submitting())
+      job_submitting(TRUE)
+      shinyjs::disable(ns("submit_job"))
       is_hydra_cluster <- FALSE
       is_sedna_cluster <- FALSE
 
@@ -235,6 +240,7 @@ pipeline_server <- function(id) {
             "#$ -cwd -j y",
             "#$ -q lTWFM.sq",
             "#$ -l wfmq",
+            "#$ -l mres=16G,h_data=8G,h_vmem=32G",
             "#$ -pe mthread 2",
             "#$ -S /bin/sh",
             "",
@@ -245,6 +251,7 @@ pipeline_server <- function(id) {
             "source ~/.bashrc",
             "module load tools/java/21.0.2",
             "",
+            "export NXF_OPTS=\"-Xms512m -Xmx6g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
             full_nf_cmd,
             "",
             'echo "---"',
@@ -280,6 +287,8 @@ pipeline_server <- function(id) {
           }
 
         }, error = function(e) {
+          job_submitting(FALSE)
+          shinyjs::enable(ns("submit_job"))
           shinyWidgets::sendSweetAlert(title = "Failed to submit job:",
                                        text = e$message,
                                        type = "error")
@@ -355,6 +364,8 @@ pipeline_server <- function(id) {
           }
 
         }, error = function(e) {
+          job_submitting(FALSE)
+          shinyjs::enable(ns("submit_job"))
           shinyWidgets::sendSweetAlert(title = "Failed to submit job:",
                                        text = e$message,
                                        type = "error")
@@ -493,6 +504,7 @@ pipeline_server <- function(id) {
       shinyjs::hide("stop")
       shinyjs::show("start_button_ui") # Also show the buttons if stopped manually
       shinyjs::addClass("gears", "paused")
+      trigger(paste0("refresh_", tolower(session$userData$mode)))
     })
 
     # Close modal ----

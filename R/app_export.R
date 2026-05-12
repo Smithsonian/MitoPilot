@@ -63,6 +63,27 @@ export_server <- function(id) {
             name = "Curate Opts.",
             width = 110
           ),
+          blast_accession = colDef(
+            show = TRUE,
+            name = "BLAST Top Hit",
+            html = TRUE,
+            width = 120,
+            cell = rt_ncbi_link()
+          ),
+          blast_species = colDef(
+            show = TRUE,
+            name = "BLAST Species",
+            html = TRUE,
+            minWidth = 160,
+            cell = rt_longtext()
+          ),
+          blast_lineage = colDef(
+            show = TRUE,
+            name = "BLAST Lineage",
+            html = TRUE,
+            minWidth = 200,
+            cell = rt_longtext()
+          ),
           topology = colDef(show = T, name = "Topology", width = 100),
           structure = colDef(show = T, name = "Structure"),
           export_group = colDef(name = "Group", sticky = "right")
@@ -232,9 +253,7 @@ export_server <- function(id) {
       ) |> showModal()
     })
 
-    observeEvent(input$export_data, ignoreInit = T, {
-      req(input$export_group)
-      req(input$group_name)
+    run_export <- function() {
       shinyjs::removeClass("gears", "paused")
       shinyjs::disable("export_data")
       export_files(
@@ -247,10 +266,35 @@ export_server <- function(id) {
       )
       shinyjs::show("output_path")
       output$out_path_location <- renderText({
-        paste0(session$userData$dir_out, "/export/", input$group_name)
+        paste0(session$userData$dir_out, "/export/", input$export_group)
       })
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
+    }
+
+    observeEvent(input$export_data, ignoreInit = T, {
+      req(input$export_group)
+      export_path <- file.path(session$userData$dir_out, "export", input$export_group)
+      if (dir.exists(export_path)) {
+        shinyWidgets::confirmSweetAlert(
+          session = session,
+          inputId = ns("overwrite_confirm"),
+          title = "Export already exists",
+          text = stringr::str_glue(
+            "Export files for group '{input$export_group}' already exist. Overwrite them?"
+          ),
+          type = "warning",
+          btn_labels = c("Cancel", "Overwrite"),
+          btn_colors = c("#0056b3", "#d9534f")
+        )
+        return()
+      }
+      run_export()
+    })
+
+    observeEvent(input$overwrite_confirm, ignoreInit = T, {
+      req(input$overwrite_confirm)
+      run_export()
     })
   })
 }

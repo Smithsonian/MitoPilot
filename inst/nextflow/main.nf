@@ -15,6 +15,9 @@ include {ANNOTATE} from './modules/annotate_workflow.nf'
 include {CURATE} from './modules/curate_workflow.nf'
 include {VALIDATE} from './modules/validate_workflow.nf'
 include {COVERAGE_userAsmb} from './modules/coverage_userAsmb_workflow.nf'
+include {BLAST_GENBANK} from './modules/blast_genbank_workflow.nf'
+include {BLAST_REF_FETCH} from './modules/blast_ref_fetch_workflow.nf'
+include {BLAST_REF_ALIGN} from './modules/blast_ref_align_workflow.nf'
 
 // ASSEMBLY WORKFLOW
 workflow WF1 {
@@ -22,14 +25,18 @@ workflow WF1 {
     PREPROCESS()
     ASSEMBLE(PREPROCESS.out[0])
     COVERAGE(ASSEMBLE.out[0])
+    BLAST_GENBANK(ASSEMBLE.out[0].map{ it -> tuple(it[0], it[1], it[4]) })
+    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input)
 
 }
 
 // ASSEMBLY WORKFLOW - user provided assemblies
 workflow WF1_userAsmb {
-    
+
     PREPROCESS()
     COVERAGE_userAsmb(PREPROCESS.out[0])
+    BLAST_GENBANK(COVERAGE_userAsmb.out.blast_in)
+    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input)
 
 }
 
@@ -39,6 +46,6 @@ workflow WF2 {
    ANNOTATE()
    CURATE(ANNOTATE.out[0])
    VALIDATE(CURATE.out[0])
+   BLAST_REF_ALIGN(VALIDATE.out.validated, CURATE.out[0])
 
 }
-

@@ -21,6 +21,8 @@ assemble_server_userAsmb <- function(id) {
     rv <- reactiveValues(
       pre_opts = dplyr::tbl(session$userData$con, "pre_opts") |>
         dplyr::collect(),
+      blast_opts = dplyr::tbl(session$userData$con, "blast_opts") |>
+        dplyr::collect(),
       data = fetch_assemble_data_userAsmb(),
       updating = NULL
     )
@@ -83,7 +85,8 @@ assemble_server_userAsmb <- function(id) {
                   `0` = "fa fa-hourglass",
                   `1` = "fa fa-person-running",
                   `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation"
+                  `3` = "fa fa-triangle-exclamation",
+                  `4` = "fa fa-circle-half-stroke"
                 )
               )
             ),
@@ -120,6 +123,13 @@ assemble_server_userAsmb <- function(id) {
               width = 130,
               cell = rt_link(ns("set_pre_opts"))
             ),
+            blast_opts = colDef(
+              show = T,
+              name = "BLAST Opts.",
+              html = T,
+              width = 120,
+              cell = rt_link(ns("set_blast_opts"))
+            ),
             trimmed_reads = colDef(
               show = T,
               name = "Reads",
@@ -147,6 +157,41 @@ assemble_server_userAsmb <- function(id) {
             ),
             scaffolds = colDef(
               show = TRUE, width = 100, name = "# Scaffolds", align = "center"
+            ),
+            blast_accession = colDef(
+              show = TRUE,
+              name = "BLAST Top Hit",
+              html = TRUE,
+              width = 120,
+              cell = rt_ncbi_link()
+            ),
+            blast_species = colDef(
+              show = TRUE,
+              name = "BLAST Species",
+              html = TRUE,
+              minWidth = 160,
+              cell = rt_longtext()
+            ),
+            blast_lineage = colDef(
+              show = TRUE,
+              name = "BLAST Lineage",
+              html = TRUE,
+              minWidth = 200,
+              cell = rt_longtext()
+            ),
+            blast_pident = colDef(
+              show = TRUE,
+              name = "BLAST % Ident",
+              filterable = FALSE,
+              width = 90,
+              align = "center"
+            ),
+            blast_qcovs = colDef(
+              show = TRUE,
+              name = "BLAST % Cov",
+              filterable = FALSE,
+              width = 90,
+              align = "center"
             ),
             time_stamp = colDef(
               show = TRUE,
@@ -231,7 +276,11 @@ assemble_server_userAsmb <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Coverage (wait)" = 0, "Ready to Calculate Coverage" = 1, "Successful Coverage Calculation" = 2, "Failed Coverage Calculation" = 3),
+            choices = c("Pre-Coverage (wait)" = 0, 
+             "Ready to Calculate Coverage" = 1,
+             "In Progress" = 4, 
+             "Successful Coverage Calculation" = 2, 
+             "Failed Coverage Calculation" = 3),
             selected = current,
             shape = "square",
             status = "primary"
@@ -436,6 +485,123 @@ assemble_server_userAsmb <- function(id) {
             .default = NA_character_
           )
         )
+      rv$updating <- rv$updating_indirect <- NULL
+      removeModal()
+      trigger("update_assemble_table")
+    })
+
+    # Set BLAST Opts ----
+    observeEvent(input$set_blast_opts, {
+      row <- as.numeric(input$set_blast_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      } else {
+        selected <- c(row, selected()) |> unique()
+      }
+      req(all(rv$data$assemble_lock[selected] == 0))
+      rv$updating <- rv$data |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      blast_opts_modal(rv)
+    })
+    observeEvent(input$blast_opts, ignoreInit = T, {
+      exists <- input$blast_opts %in% rv$blast_opts$blast_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_blast_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$blast_opts[rv$blast_opts$blast_opts == input$blast_opts, ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "run_blast",
+          value = as.logical(cur$run_blast)
+        )
+        updateTextInput(inputId = "entrez_query", value = cur$entrez_query %||% "")
+        updateTextAreaInput(inputId = "extra_opts", value = cur$extra_opts %||% "")
+        if (as.logical(cur$run_blast)) {
+          shinyjs::show(id = "blast_entrez_group")
+          shinyjs::show(id = "blast_extra_group")
+        } else {
+          shinyjs::hide(id = "blast_entrez_group")
+          shinyjs::hide(id = "blast_extra_group")
+        }
+      }
+    })
+    observeEvent(input$edit_blast_opts, ignoreInit = T, {
+      shinyjs::toggleState("run_blast",    condition = input$edit_blast_opts)
+      shinyjs::toggleState("entrez_query", condition = input$edit_blast_opts)
+      shinyjs::toggleState("extra_opts",   condition = input$edit_blast_opts)
+      if (input$edit_blast_opts && input$blast_opts %in% rv$data$blast_opts) {
+        rv$updating_indirect <- rv$data |>
+          dplyr::filter(blast_opts == input$blast_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
+          )
+          shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
+          req(F)
+        }
+        if (nrow(rv$updating_indirect) > 0L) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_blast_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit BLAST options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
+          )
+        }
+      } else {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    observeEvent(input$editing_blast_opts_indirect, ignoreInit = T, {
+      if (!input$editing_blast_opts_indirect) {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
+      }
+    })
+    observeEvent(input$run_blast, ignoreInit = T, {
+      if (isTRUE(input$run_blast)) {
+        shinyjs::show(id = "blast_entrez_group")
+        shinyjs::show(id = "blast_extra_group")
+      } else {
+        shinyjs::hide(id = "blast_entrez_group")
+        shinyjs::hide(id = "blast_extra_group")
+      }
+    })
+    observeEvent(input$update_blast_opts, ignoreInit = T, {
+      if (input$edit_blast_opts) {
+        dplyr::tbl(session$userData$con, "blast_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              blast_opts   = req(input$blast_opts),
+              run_blast    = as.integer(isTRUE(input$run_blast)),
+              entrez_query = input$entrez_query %||% "mitochondrion[Location]",
+              extra_opts   = input$extra_opts %||% ""
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "blast_opts"
+          )
+        rv$blast_opts <- dplyr::tbl(session$userData$con, "blast_opts") |>
+          dplyr::collect()
+      }
+      update <- data.frame(
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
+        blast_opts = input$blast_opts,
+        assemble_switch = 1L
+      )
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(
+          update,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(update, by = "ID")
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")

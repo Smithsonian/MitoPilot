@@ -22,6 +22,21 @@ app_server <- function(input, output, session) {
   })
   message(paste("Database attached:", db))
 
+  # Migrate: add BLAST result columns to assemble table for pre-existing databases
+  existing_fields <- DBI::dbListFields(session$userData$con, "assemble")
+  if (!"blast_accession" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_accession TEXT")
+  if (!"blast_species" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_species TEXT")
+  if (!"blast_pident" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_pident REAL")
+  if (!"blast_qcovs" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_qcovs REAL")
+  if (!"blast_evalue" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_evalue REAL")
+  if (!"blast_lineage" %in% existing_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
+
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>
     stringr::str_extract("publishDir.*") |>

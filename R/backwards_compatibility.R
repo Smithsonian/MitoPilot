@@ -30,6 +30,8 @@ backwards_compatibility <- function(
   annotate_opts_table <- DBI::dbReadTable(con, "annotate_opts") # read in annotations opts table
   curate_opts_table <- DBI::dbReadTable(con, "curate_opts") # read in curate opts table
 
+  assemble_table <- DBI::dbReadTable(con, "assemble")
+
   # check if .config file contains "asmbDir" parameter
   conf <- tryCatch({
     readLines(file.path(path, ".config"))
@@ -45,6 +47,7 @@ backwards_compatibility <- function(
     stop("Error reading .config file: ", e$message)
   })
   failOnIgnore <- any(grep("failOnIgnore = true", conf))
+  blast_gb_conf <- any(grepl("blast_gb", conf))
 
   # check if .config file contains latest container version
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
@@ -55,6 +58,7 @@ backwards_compatibility <- function(
 
   if (asmbDir &&
       failOnIgnore &&
+      blast_gb_conf &&
       containerVer &&
       !old_ref_str &&
       "arwen_opts" %in% names(annotate_opts_table) &&
@@ -69,7 +73,22 @@ backwards_compatibility <- function(
       "problematic" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
       "ID_verified" %in% names(annotate_table) &&
-      "reviewed" %in% names(annotate_table))
+      "reviewed" %in% names(annotate_table) &&
+      "blast_accession" %in% names(assemble_table) &&
+      "blast_opts" %in% names(assemble_table) &&
+      "blast_opts" %in% DBI::dbListTables(con) &&
+      "use_mitos_best" %in% names(annotate_opts_table) &&
+      "use_aragorn" %in% names(annotate_opts_table) &&
+      "aragorn_opts" %in% names(annotate_opts_table) &&
+      "max_paths" %in% names(assemble_opts_table) &&
+      "max_scaffolds" %in% names(assemble_opts_table) &&
+      "tool" %in% DBI::dbListFields(con, "annotations") &&
+      "blast_ref_annotations" %in% DBI::dbListTables(con) &&
+      "blast_ref_alignment" %in% DBI::dbListTables(con) &&
+      isTRUE(tryCatch(
+        "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
+        error = function(e) FALSE
+      )))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -287,6 +306,66 @@ backwards_compatibility <- function(
       )
   }
 
+  # if use_mitos_best column doesn't exist, add it (default on, matching prior behaviour)
+  if(!("use_mitos_best" %in% names(annotate_opts_table))){
+    message("added 'use_mitos_best' column to annotate_opts table")
+    annotate_opts_table$use_mitos_best <- rep(1L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_mitos_best INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if use_aragorn column doesn't exist, add it (default off)
+  if(!("use_aragorn" %in% names(annotate_opts_table))){
+    message("added 'use_aragorn' column to annotate_opts table")
+    annotate_opts_table$use_aragorn <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_aragorn INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if aragorn_opts column doesn't exist, add it
+  if(!("aragorn_opts" %in% names(annotate_opts_table))){
+    message("added 'aragorn_opts' column to annotate_opts table")
+    annotate_opts_table$aragorn_opts <- rep("-m -gcstd", nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN aragorn_opts TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
   # if start_gene column doesn't exist, add it
   if(!("start_gene" %in% names(annotate_opts_table))){
     message("added 'start_gene' column to annotate_opts table")
@@ -434,6 +513,176 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "assemble_opts"
       )
+  }
+
+  # if max_paths column doesn't exist, add it
+  if(!("max_paths" %in% names(assemble_opts_table))){
+    message("added 'max_paths' column to assemble_opts table")
+    assemble_opts_table$max_paths <- rep(10L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN max_paths INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if max_scaffolds column doesn't exist, add it
+  if(!("max_scaffolds" %in% names(assemble_opts_table))){
+    message("added 'max_scaffolds' column to assemble_opts table")
+    assemble_opts_table$max_scaffolds <- rep(10L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN max_scaffolds INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if blast_accession column doesn't exist, add BLAST result columns
+  if (!("blast_accession" %in% names(assemble_table))) {
+    message("added BLAST result columns to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_accession TEXT")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_species TEXT")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_pident REAL")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_qcovs REAL")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_evalue REAL")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
+  }
+
+  # if tool column doesn't exist in annotations table, add it
+  annotations_cols <- DBI::dbListFields(con, "annotations")
+  if (!("tool" %in% annotations_cols)) {
+    message("added 'tool' column to annotations table")
+    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN tool TEXT")
+  }
+
+  existing_tables <- DBI::dbListTables(con)
+
+  if (!("blast_ref_annotations" %in% existing_tables)) {
+    message("created blast_ref_annotations table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_annotations (
+        ID TEXT NOT NULL,
+        gene TEXT NOT NULL,
+        type TEXT,
+        pos1 INTEGER,
+        pos2 INTEGER,
+        direction TEXT,
+        ref_length INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, gene, pos1)
+      );"
+    )
+  }
+
+  if (!("blast_ref_sequences" %in% existing_tables)) {
+    message("created blast_ref_sequences table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_sequences (
+        accession TEXT NOT NULL,
+        sequence TEXT NOT NULL,
+        ref_length INTEGER,
+        genetic_code INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (accession)
+      );"
+    )
+  } else {
+    ref_seq_cols <- names(DBI::dbReadTable(con, "blast_ref_sequences"))
+    if (!("genetic_code" %in% ref_seq_cols)) {
+      message("added 'genetic_code' column to blast_ref_sequences table")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN genetic_code INTEGER")
+    }
+  }
+
+  if (!("blast_ref_alignment" %in% existing_tables)) {
+    message("created blast_ref_alignment table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_alignment (
+        ID TEXT NOT NULL,
+        aligned_sample TEXT NOT NULL,
+        aligned_ref TEXT NOT NULL,
+        rotation INTEGER NOT NULL DEFAULT 0,
+        ref_length INTEGER NOT NULL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID)
+      );"
+    )
+  }
+
+  # if blast_opts column doesn't exist in assemble table, add it
+  if (!("blast_opts" %in% names(assemble_table))) {
+    message("added 'blast_opts' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_opts TEXT")
+    assemble_table$blast_opts <- rep("default", nrow(assemble_table))
+    dplyr::tbl(con, "assemble") |>
+      dplyr::rows_update(
+        assemble_table[, c("ID", "blast_opts")],
+        unmatched = "ignore",
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+  }
+
+  # if blast_opts table doesn't exist, create it with a default entry
+  if (!("blast_opts" %in% DBI::dbListTables(con))) {
+    message("created blast_opts table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_opts (
+        blast_opts TEXT NOT NULL,
+        run_blast INTEGER,
+        entrez_query TEXT,
+        extra_opts TEXT,
+        PRIMARY KEY (blast_opts)
+      );"
+    )
+    dplyr::tbl(con, "blast_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          blast_opts   = "default",
+          run_blast    = 1L,
+          entrez_query = "mitochondrion[Location]",
+          extra_opts   = ""
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "blast_opts"
+      )
+  }
+
+  # if .config does not contain "blast_gb" params section, add it
+  if (!blast_gb_conf) {
+    conf <- readLines(file.path(path, ".config"))
+    message("added 'blast_gb' section to nextflow .config file")
+    blast_gb_lines <- c(
+      "    blast_gb {",
+      "        cpus = 1",
+      "        container = process.container",
+      "        executor = process.executor",
+      "    }"
+    )
+    # Insert after the last nested closing brace (end of the validate block)
+    last_nested_close <- max(grep("^    }$", conf))
+    conf <- append(conf, blast_gb_lines, after = last_nested_close)
+    writeLines(conf, file.path(path, ".config"))
   }
 
 }

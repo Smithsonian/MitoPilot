@@ -60,6 +60,20 @@ rt_longtext <- function() {
   )
 }
 
+#' Render an NCBI GenBank accession as a clickable hyperlink
+#'
+#' @noRd
+rt_ncbi_link <- function() {
+  htmlwidgets::JS(
+    "function(cellInfo) {
+      var text = cellInfo.value ? cellInfo.value : ''
+      if (!text || text === 'NO HIT') return text
+      var url = 'https://www.ncbi.nlm.nih.gov/nuccore/' + text
+      return `<a href='${url}' target='_blank' rel='noopener noreferrer'>${text}</a>`
+    }"
+  )
+}
+
 #' Add text click action to a cell
 #'
 #' @param InputId shiny input id to use

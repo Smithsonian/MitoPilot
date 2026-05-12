@@ -38,19 +38,16 @@ export_files <- function(
     IDs <- dplyr::tbl(con, "samples") |>
       dplyr::filter(export_group == !!group) |>
       dplyr::pull("ID")
-    group_pth <- file.path(
-      out_dir,
-      "export",
-      group
-    )
+    group_pth <- file.path(out_dir, "export", group)
+    unlink(group_pth, recursive = TRUE)
     group_gff_pth <- file.path(group_pth, "GFFs")
-    dir.create(group_pth, recursive = T, showWarnings = F)
-    dir.create(group_gff_pth, recursive = T, showWarnings = F)
-    unlink(group_fasta <- file.path(group_pth, paste0(group, ".fasta")))
-    unlink(group_tbl <- file.path(group_pth, paste0(group, ".tbl")))
-    if(gene_export){
+    dir.create(group_pth, recursive = TRUE, showWarnings = FALSE)
+    dir.create(group_gff_pth, recursive = TRUE, showWarnings = FALSE)
+    group_fasta <- file.path(group_pth, paste0(group, ".fasta"))
+    group_tbl   <- file.path(group_pth, paste0(group, ".tbl"))
+    if (gene_export) {
       group_genes_pth <- file.path(group_pth, "genes")
-      dir.create(group_genes_pth, recursive = T, showWarnings = F)
+      dir.create(group_genes_pth, recursive = TRUE, showWarnings = FALSE)
     }
   }
 
@@ -58,16 +55,9 @@ export_files <- function(
     stop("No samples selected")
   }
 
-  if(gene_export){
-    # cleanup prior run
+  if (gene_export) {
     group_allgene_tbl_fn <- file.path(group_pth, "genes", paste0(group, "_PCGs.tbl"))
-    if (file.exists(group_allgene_tbl_fn)) {
-      file.remove(group_allgene_tbl_fn)
-    }
-    group_allgene_fasta <- file.path(group_pth, "genes", paste0(group, "_PCGs.fasta"))
-    if (file.exists(group_allgene_fasta)) {
-      file.remove(group_allgene_fasta)
-    }
+    group_allgene_fasta  <- file.path(group_pth, "genes", paste0(group, "_PCGs.fasta"))
   }
 
   purrr::walk(IDs, ~ {
@@ -110,6 +100,11 @@ export_files <- function(
           dplyr::distinct(),
         by = "ID"
       ) |>
+      dplyr::left_join(
+        dplyr::tbl(con, "assemble") |>
+          dplyr::select(ID, blast_accession),
+        by = "ID"
+      ) |>
       dplyr::collect()
 
     seq <- MitoPilot::get_assembly(
@@ -120,7 +115,13 @@ export_files <- function(
     if (length(seq) > 1) {
       stop("Multiple sequences found. Export not supported for fragmented assemblies.")
     }
-    names(seq) <- stringr::str_glue_data(dat, fasta_header)
+    blast_acc <- dat$blast_accession[1]
+    blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) && blast_acc != "NO HIT") {
+      paste0(" [note=annotation compared to GenBank accession ", blast_acc, "]")
+    } else {
+      ""
+    }
+    names(seq) <- paste0(stringr::str_glue_data(dat, fasta_header), blast_note)
 
     # sequence name, to be used as first column in GFF
     seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)

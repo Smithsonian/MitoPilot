@@ -22,6 +22,8 @@ new_db(
   mitofinder_db =
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
   mitofinder = paste("--megahit"),
+  max_paths = 10,
+  max_scaffolds = 10,
   annotate_cpus = 6,
   annotate_memory = 36,
   annotate_ref_db = "Chordata",
@@ -30,6 +32,7 @@ new_db(
   mitos_opts = "--intron 0 --oril 0",
   trnaScan_opts = "-M vert -X 20",
   arwen_opts = "-mtx",
+  aragorn_opts = "-m -gcstd",
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
@@ -69,6 +72,15 @@ Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithso
 
 \item{mitofinder}{Default MitoFinder command line options}
 
+\item{max_paths}{Maximum number of assembly paths allowed for a sample to
+continue past the Assemble step (default = 10). Samples exceeding this are
+flagged as failed and skipped by downstream steps in WF1.}
+
+\item{max_scaffolds}{Maximum number of scaffolds (within a single path)
+allowed for a sample to continue past the Assemble step (default = 10).
+Samples exceeding this are flagged as failed and skipped by downstream
+steps in WF1.}
+
 \item{annotate_cpus}{Default # cpus for annotation}
 
 \item{annotate_memory}{Default memory (GB) for annotation}
@@ -82,6 +94,8 @@ Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithso
 \item{trnaScan_opts}{Default tRNAscan-SE command line options}
 
 \item{arwen_opts}{Default ARWEN command line options}
+
+\item{aragorn_opts}{Default ARAGORN command line options}
 
 \item{curate_cpus}{Default # cpus for curation}
 

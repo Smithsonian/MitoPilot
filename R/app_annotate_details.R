@@ -2,6 +2,17 @@
 #'
 #' @import patchwork
 #' @noRd
+
+# Shared gene-type fill palette for coverage and synteny plots.
+# Keep entries in the same order as the `type` factor levels used downstream.
+gene_type_fill <- c(
+  ctrl = "#FAA34A",
+  PCG  = "#60BD68",
+  rRNA = "#5DA5DA",
+  tRNA = "#F17CB0"
+)
+gene_type_alpha <- 0.5
+
 annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -34,6 +45,19 @@ annotations_details_server <- function(id, rv) {
       ) |>
         list.files(pattern = "coverageStats", full.names = T) |>
         read.csv()
+
+      ## Load BLAST reference annotations ----
+      rv$blast_ref <- dplyr::tbl(session$userData$con, "blast_ref_annotations") |>
+        dplyr::filter(ID == !!rv$updating$ID) |>
+        dplyr::collect()
+
+      ## Load BLAST reference alignment ----
+      rv$blast_ref_aln <- tryCatch(
+        dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
+          dplyr::filter(ID == !!rv$updating$ID) |>
+          dplyr::collect(),
+        error = function(e) NULL
+      )
 
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
@@ -71,7 +95,31 @@ annotations_details_server <- function(id, rv) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(maxWidth = 80, align = "center", show = F),
           columns = list(
-            type = colDef(show = T, align = "left"),
+            type = colDef(
+              show = T,
+              align = "left",
+              cell = function(value) {
+                color <- switch(value %||% "",
+                  ctrl  = "#FAA34A",
+                  PCG   = "#60BD68",
+                  rRNA  = "#5DA5DA",
+                  tRNA  = "#F17CB0",
+                  "#888888"
+                )
+                htmltools::span(
+                  style = paste0(
+                    "background:", color, "30;",
+                    "color:#111111;",
+                    "border:1px solid ", color, ";",
+                    "border-radius:3px;",
+                    "padding:1px 4px;",
+                    "font-size:11px;",
+                    "white-space:nowrap;"
+                  ),
+                  value %||% ""
+                )
+              }
+            ),
             gene = colDef(show = T,
                           align = "left",
                           maxWidth = 300,
@@ -82,6 +130,33 @@ annotations_details_server <- function(id, rv) {
             pos2 = colDef(show = T),
             length = colDef(show = T),
             direction = colDef(show = T),
+            tool = colDef(
+              show = T,
+              name = "tool",
+              align = "center",
+              maxWidth = 100,
+              cell = function(value) {
+                color <- switch(value %||% "",
+                  "MITOS2"      = "#444444",
+                  "tRNAscan-SE" = "#666666",
+                  "ARWEN"       = "#888888",
+                  "ARAGORN"     = "#AAAAAA",
+                  "#CCCCCC"
+                )
+                htmltools::span(
+                  style = paste0(
+                    "background:", color, "30;",
+                    "color:#111111;",
+                    "border:1px solid ", color, ";",
+                    "border-radius:3px;",
+                    "padding:1px 4px;",
+                    "font-size:11px;",
+                    "white-space:nowrap;"
+                  ),
+                  value %||% ""
+                )
+              }
+            ),
             notes = colDef(
               show = T,
               maxWidth = 1000,
@@ -112,6 +187,10 @@ annotations_details_server <- function(id, rv) {
 
     ## Table selection ----
     sel <- reactiveVal("init")
+
+    # Synteny-overview click anchor: alignment column to center zoom on.
+    # Set by clicking the overview plot; cleared when user picks a new gene row.
+    zoom_click_col <- reactiveVal(NULL)
     selected <- reactive({
       sel <- reactable::getReactableState("table", "selected")
       # Check for unsaved edits
@@ -250,13 +329,13 @@ annotations_details_server <- function(id, rv) {
           arrow_body_height = ggplot2::unit(6, "mm"),
           arrowhead_height = ggplot2::unit(6, "mm"),
           arrowhead_width = ggplot2::unit(1, "mm"),
-          alpha = 0.5
+          alpha = gene_type_alpha
         ) +
         gggenes::geom_gene_label(
           align = "left",
           height = ggplot2::unit(4, "mm")
         ) +
-        ggplot2::scale_fill_manual(values = c("#FAA34A85", "#60BD6885", "#5DA5DA85", "#F17CB085")) +
+        ggplot2::scale_fill_manual(values = gene_type_fill) +
         ggplot2::scale_x_continuous(
           expand = c(0, 0),
           limits = c(
@@ -354,12 +433,598 @@ annotations_details_server <- function(id, rv) {
      combined_plot <- rv$coverage_plot / rv$genes_plot + plot_layout(heights = c(3, 1))
        print(combined_plot)
     })
+    # BLAST Reference Synteny ----
+    output$synteny_ui <- renderUI({
+      req(rv$blast_ref, rv$updating)
+      req(nrow(rv$blast_ref) > 0)
+      w          <- max(rv$updating$length %||% 800L, 800L)
+      sample_lbl <- rv$updating$ID
+      ref_lbl    <- rv$updating$blast_species %||% rv$updating$blast_accession
+      ref_acc    <- rv$updating$blast_accession
+      has_aln    <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
+      plot_h     <- if (has_aln) "280px" else "200px"
+      lbl <- function(h, ...) div(
+        style = paste0("height: ", h, "; display: flex; align-items: center; word-break: break-word;"),
+        ...
+      )
+      lbl_col <- if (has_aln) {
+        tagList(
+          lbl("120px", sample_lbl),
+          lbl("40px", div(
+            style = "position: relative; width: 100%; height: 40px; display: flex; align-items: center;",
+            div(style = "position: absolute; top: 0; right: 0; font-size: 9px; color: #aaa; line-height: 1;", "100%"),
+            div(style = "color: #888; font-size: 10px;", "identity"),
+            div(style = "position: absolute; bottom: 0; right: 0; font-size: 9px; color: #aaa; line-height: 1;", "0%")
+          )),
+          lbl("120px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
+        )
+      } else {
+        tagList(
+          lbl("100px", sample_lbl),
+          lbl("100px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
+        )
+      }
+      tagList(
+        if (has_aln) {
+          div(
+            style = "display: flex; margin: 0; padding: 0; line-height: 1;",
+            div(style = "flex-shrink: 0; width: 160px;"),
+            div(style = "flex: 1; text-align: center; font-size: 11px; color: #888; margin: 0; padding: 0;",
+                "click to zoom")
+          )
+        },
+        div(
+          style = "display: flex; align-items: flex-start;",
+          div(
+            style = paste0(
+              "flex-shrink: 0; width: 160px; font-size: 11px; ",
+              "padding-right: 6px; box-sizing: border-box;"
+            ),
+            lbl_col
+          ),
+          div(
+            id = ns("syntenyScrollDiv"),
+            style = paste0("overflow-x: auto; flex: 1;",
+                           if (has_aln) " cursor: zoom-in;" else ""),
+            plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
+                       click = ns("synteny_click"))
+          )
+        ),
+        if (has_aln) {
+          conditionalPanel(
+            condition = "input.synteny_zoom == true", ns = ns,
+            div(
+              style = "margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px;",
+              uiOutput(ns("synteny_zoom_ui"))
+            )
+          )
+        }
+      )
+    })
+    output$synteny_zoom_ctrl <- renderUI({
+      req(!is.null(rv$blast_ref_aln))
+      req(nrow(rv$blast_ref_aln) > 0)
+      div(
+        style = "display: flex; align-items: center;",
+        tags$style(HTML(sprintf(
+          "#%s .pretty { margin-bottom: 0; }",
+          ns("synteny_zoom")
+        ))),
+        shinyWidgets::prettyCheckbox(
+          ns("synteny_zoom"),
+          label = "Zoom to selected gene",
+          status = "primary",
+          inline = TRUE
+        )
+      )
+    })
+    output$synteny_plot <- renderPlot({
+      req(rv$blast_ref, rv$annotations, rv$coverage)
+      req(nrow(rv$blast_ref) > 0)
+
+      ref_length   <- rv$blast_ref$ref_length[1]
+      sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
+      sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
+
+      gene_track <- list(
+        gggenes::geom_gene_arrow(
+          arrow_body_height = ggplot2::unit(12, "mm"),
+          arrowhead_height  = ggplot2::unit(12, "mm"),
+          arrowhead_width   = ggplot2::unit(2, "mm"),
+          alpha = gene_type_alpha
+        ),
+        gggenes::geom_gene_label(align = "left", height = ggplot2::unit(6, "mm")),
+        ggplot2::scale_fill_manual(values = gene_type_fill),
+        ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)),
+        ggplot2::coord_cartesian(clip = "off"),
+        ggthemes::theme_tufte(),
+        ggplot2::theme(
+          legend.position = "none",
+          axis.title      = ggplot2::element_blank(),
+          axis.text.y     = ggplot2::element_blank(),
+          axis.ticks.y    = ggplot2::element_blank(),
+          plot.margin     = ggplot2::margin(2, 0, 2, 0, "mm")
+        )
+      )
+
+      has_aln <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
+
+      if (has_aln) {
+        aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
+        aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
+        aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
+        s_chars <- strsplit(aligned_sample, "")[[1]]
+        r_chars <- strsplit(aligned_ref,    "")[[1]]
+        aln_len <- length(s_chars)
+
+        # Non-gap index: s_nongap[i] = alignment column for sample position i
+        s_nongap <- which(s_chars != "-")
+        r_nongap <- which(r_chars != "-")
+
+        # Project sample position (original coords) → 0-100 in alignment space
+        s_to_pct <- function(pos) {
+          idx <- pmin(pmax(as.integer(pos), 1L), length(s_nongap))
+          s_nongap[idx] / aln_len * 100
+        }
+        # Project ref position (original coords) → rotate → 0-100 in alignment space
+        r_to_pct <- function(pos) {
+          pos_r <- ((as.integer(pos) - 1L - aln_rotation) %% ref_length) + 1L
+          idx   <- pmin(pmax(pos_r, 1L), length(r_nongap))
+          r_nongap[idx] / aln_len * 100
+        }
+
+        # Gene data frames in alignment coordinates
+        sample_df <- sample_genes |>
+          dplyr::mutate(
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
+          )
+        ref_df <- rv$blast_ref |>
+          dplyr::mutate(
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            xmin = r_to_pct(pos1), xmax = r_to_pct(pos2)
+          )
+
+        # Classify each alignment column
+        aln_class <- dplyr::case_when(
+          s_chars == "-" ~ "gap_s",
+          r_chars == "-" ~ "gap_r",
+          tolower(s_chars) == tolower(r_chars) ~ "match",
+          TRUE ~ "mismatch"
+        )
+
+        # Rolling-window % identity area plot — avoids per-column sub-pixel
+        # rendering artifacts at overview scale.
+        win      <- min(10L, aln_len)
+        is_match <- as.integer(aln_class == "match")
+        n_wins   <- aln_len - win + 1L
+        win_pct  <- vapply(seq_len(n_wins), function(i) {
+          mean(is_match[i:(i + win - 1L)]) * 100
+        }, numeric(1))
+        # Pad x=0 and x=100 with edge values to fill to plot boundaries
+        aln_win_df <- data.frame(
+          x = c(0, (seq_len(n_wins) + win / 2 - 0.5) / aln_len * 100, 100),
+          y = c(win_pct[1], win_pct, win_pct[n_wins])
+        )
+
+        aln_plot <- ggplot2::ggplot(aln_win_df,
+          ggplot2::aes(x = x, y = y)
+        ) +
+          ggplot2::geom_area(fill = "#60BD68", colour = NA) +
+          ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) +
+          ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 100)) +
+          ggplot2::coord_cartesian(clip = "off") +
+          ggthemes::theme_tufte() +
+          ggplot2::theme(
+            legend.position  = "none",
+            axis.title       = ggplot2::element_blank(),
+            axis.text        = ggplot2::element_blank(),
+            axis.ticks       = ggplot2::element_blank(),
+            panel.background = ggplot2::element_rect(fill = "#F0F0F0", colour = NA),
+            plot.margin      = ggplot2::margin(1, 0, 1, 0, "mm")
+          )
+
+        sample_plot <- ggplot2::ggplot(sample_df) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) +
+          gene_track
+
+        ref_plot <- ggplot2::ggplot(ref_df) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) +
+          gene_track
+
+        print(sample_plot / aln_plot / ref_plot +
+                patchwork::plot_layout(heights = c(3, 1, 3)))
+
+      } else {
+        # Fallback: no alignment — 2-track view with normalised genome coordinates
+        anchor_gene <- sample_genes |>
+          dplyr::arrange(pos1) |> dplyr::pull(gene) |> head(1)
+        anchor_ref <- rv$blast_ref |>
+          dplyr::filter(gene == anchor_gene) |> dplyr::arrange(pos1)
+        rotation <- if (rv$updating$topology == "circular" && nrow(anchor_ref) > 0) {
+          as.integer(anchor_ref$pos1[1]) - 1L
+        } else {
+          0L
+        }
+        ref_rotated <- rv$blast_ref |>
+          dplyr::mutate(
+            pos1_r = as.integer(((as.integer(pos1) - 1L - rotation) %% ref_length) + 1L),
+            pos2_r = as.integer(((as.integer(pos2) - 1L - rotation) %% ref_length) + 1L)
+          ) |>
+          dplyr::mutate(
+            pos2_r = dplyr::if_else(pos2_r < pos1_r, pos2_r + ref_length, pos2_r),
+            pos1_r = dplyr::if_else(pos2_r > ref_length, 1L, pos1_r)
+          ) |>
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+        sample_df  <- sample_genes |>
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+        sample_pct <- sample_df |>
+          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100)
+        ref_pct    <- ref_rotated |>
+          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100)
+        sample_plot <- ggplot2::ggplot(sample_pct) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) + gene_track
+        ref_plot <- ggplot2::ggplot(ref_pct) +
+          ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
+                       fill = type, y = 0, label = gene) + gene_track
+        print(sample_plot / ref_plot + patchwork::plot_layout(heights = c(1, 1)))
+      }
+    })
+
+    # Zoomed base-pair view of selected gene's alignment region ----
+    output$synteny_zoom_ui <- renderUI({
+      req(isTRUE(input$synteny_zoom))
+      has_aln <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
+      if (!has_aln) {
+        return(div(style = "color: #888; font-style: italic; font-size: 11px;",
+                   "No alignment available."))
+      }
+      sel_idx <- selected()
+      click_col <- zoom_click_col()
+      if ((is.null(sel_idx) || length(sel_idx) == 0) && is.null(click_col)) {
+        return(div(style = "color: #888; font-style: italic; font-size: 11px;",
+                   "Select a gene row, or click the synteny plot above, to view a base-pair alignment."))
+      }
+      win <- zoom_window_rv()
+      px_per_col <- 14L
+      plot_w <- as.integer(win * px_per_col)
+      sample_lbl <- rv$updating$ID
+      ref_acc    <- rv$updating$blast_accession
+      header_txt <- if (!is.null(click_col)) {
+        s_chars   <- strsplit(rv$blast_ref_aln$aligned_sample[1], "")[[1]]
+        anchor_bp <- as.integer(cumsum(s_chars != "-")[click_col])
+        sprintf("Zoom: clicked region | sample pos ~%d | %d bp window",
+                anchor_bp, win)
+      } else {
+        gene_name <- rv$annotations$gene[sel_idx]
+        gene_pos1 <- as.integer(rv$annotations$pos1[sel_idx])
+        gene_pos2 <- as.integer(rv$annotations$pos2[sel_idx])
+        sprintf("Zoom: %s | sample pos %d-%d | %d bp window",
+                gene_name, gene_pos1, gene_pos2, win)
+      }
+      div(
+        div(style = "font-size: 11px; color: #555; margin-bottom: 4px;",
+            header_txt),
+        div(
+          style = "display: flex; align-items: flex-start;",
+          div(
+            # Labels pinned to track centres in the 180 px plot.
+            # y limits: -0.5 to 4.9 (range 5.4). 2 mm plot.margin ≈ 3 % of 180 px.
+            # top % = 3.15 + (4.9 - track_y) / 5.4 * 93.7
+            style = paste0("flex-shrink: 0; width: 160px; font-size: 11px; ",
+                           "padding-right: 6px; box-sizing: border-box; ",
+                           "position: relative; height: 180px;"),
+            div(style = "position: absolute; top: 19%; transform: translateY(-50%); color: #888; font-size: 10px;",
+                "sample annotations"),
+            div(style = "position: absolute; top: 36%; transform: translateY(-50%); word-break: break-word;",
+                sample_lbl),
+            div(style = "position: absolute; top: 54%; transform: translateY(-50%); color: #888; font-size: 10px;",
+                "identity"),
+            div(style = "position: absolute; top: 71%; transform: translateY(-50%); word-break: break-word;",
+                ref_acc),
+            div(style = "position: absolute; top: 88%; transform: translateY(-50%); color: #888; font-size: 10px;",
+                "ref annotations")
+          ),
+          div(
+            style = "overflow-x: auto; flex: 1;",
+            plotOutput(ns("synteny_zoom_plot"),
+                       width = paste0(plot_w, "px"), height = "180px")
+          )
+        ),
+        div(
+          style = "display: flex; align-items: center; gap: 4px; margin-top: 6px;",
+          tags$style(HTML(sprintf(
+            paste0(
+              "#%s.shiny-input-container {",
+              "  display: flex !important; flex-direction: row;",
+              "  align-items: center; gap: 6px;",
+              "  width: auto !important; margin-bottom: 0; }",
+              "#%s.shiny-input-container label { margin-bottom: 0; font-weight: normal; white-space: nowrap; }",
+              "#%s.shiny-input-container input { width: 70px !important; }"
+            ),
+            ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
+          ))),
+          numericInput(ns("synteny_zoom_window"), label = "window size (bp)",
+                       value = isolate(input$synteny_zoom_window) %||% 200L,
+                       min = 30L, max = 2000L, step = 50L,
+                       width = "auto")
+        )
+      )
+    })
+
+    # Open BLAST Reference Synteny details when zoom is enabled
+    observeEvent(input$synteny_zoom, ignoreInit = TRUE, {
+      if (isTRUE(input$synteny_zoom)) {
+        shinyjs::runjs(sprintf(
+          "var d = document.getElementById('%s'); if (d) d.open = true;",
+          ns("blast_synteny_details")
+        ))
+      }
+    })
+
+    # Validated window size — only invalidates when value actually changes (breaks render loop)
+    zoom_window_rv <- reactiveVal(200L)
+
+    # Clamp the window-size input to [30, 2000] and drive zoom_window_rv
+    observeEvent(input$synteny_zoom_window, ignoreInit = TRUE, {
+      v <- input$synteny_zoom_window
+      if (is.null(v) || is.na(v)) return()
+      clamped <- max(30L, min(2000L, as.integer(v)))
+      if (clamped != v) updateNumericInput(session, "synteny_zoom_window", value = clamped)
+      if (clamped != zoom_window_rv()) zoom_window_rv(clamped)
+    })
+
+    output$synteny_zoom_plot <- renderPlot({
+      req(isTRUE(input$synteny_zoom))
+      req(rv$blast_ref_aln, rv$annotations, rv$blast_ref)
+      req(nrow(rv$blast_ref_aln) > 0)
+      req(nzchar(rv$blast_ref_aln$aligned_sample[1]))
+      sel_idx   <- selected()
+      click_col <- zoom_click_col()
+      req(length(sel_idx) > 0 || !is.null(click_col))
+
+      ref_length     <- rv$blast_ref$ref_length[1]
+      aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
+      aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
+      aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
+      s_chars <- strsplit(aligned_sample, "")[[1]]
+      r_chars <- strsplit(aligned_ref,    "")[[1]]
+      aln_len <- length(s_chars)
+      s_nongap <- which(s_chars != "-")
+      r_nongap <- which(r_chars != "-")
+
+      win <- zoom_window_rv()
+      anchor_bp <- if (!is.null(click_col)) {
+        # Sample bp position at the clicked alignment column
+        as.integer(cumsum(s_chars != "-")[click_col])
+      } else {
+        as.integer(rv$annotations$pos1[sel_idx])
+      }
+      # Window starts 20 bp upstream of anchor (clamped to sequence bounds)
+      start_idx <- pmin(pmax(anchor_bp - 20L, 1L), length(s_nongap))
+      win_start <- max(1L, s_nongap[start_idx])
+      win_end   <- min(aln_len, win_start + win - 1L)
+      win_start <- max(1L, win_end - win + 1L)
+      win_cols  <- win_start:win_end
+      win_s <- s_chars[win_cols]
+      win_r <- r_chars[win_cols]
+
+      col_class <- dplyr::case_when(
+        win_s == "-" ~ "gap",
+        win_r == "-" ~ "gap",
+        tolower(win_s) == tolower(win_r) ~ "match",
+        TRUE ~ "mismatch"
+      )
+      mid_fill <- dplyr::case_when(
+        col_class == "match"    ~ "#60BD68",
+        col_class == "mismatch" ~ "#E55330",
+        TRUE                    ~ "#CCCCCC"
+      )
+      base_color <- function(b) {
+        u <- toupper(b)
+        dplyr::case_when(
+          u == "A" ~ "#D9342B",
+          u == "C" ~ "#3878C5",
+          u == "G" ~ "#E6A500",
+          u == "T" ~ "#2D9E3F",
+          b == "-" ~ "#BBBBBB",
+          TRUE     ~ "#666666"
+        )
+      }
+
+      df <- data.frame(
+        col      = seq_along(win_cols),
+        s_char   = win_s,
+        r_char   = win_r,
+        s_color  = base_color(win_s),
+        r_color  = base_color(win_r),
+        mid_fill = mid_fill,
+        stringsAsFactors = FALSE
+      )
+
+      rle_fill    <- rle(mid_fill)
+      rle_ends    <- cumsum(rle_fill$lengths)
+      rle_starts  <- c(1L, head(rle_ends, -1L) + 1L)
+      identity_df <- data.frame(
+        xmin = rle_starts - 0.5,
+        xmax = rle_ends   + 0.5,
+        fill = rle_fill$values,
+        stringsAsFactors = FALSE
+      )
+
+      type_color <- function(t) {
+        out <- unname(gene_type_fill[as.character(t)])
+        ifelse(is.na(out), "#888888", out)
+      }
+      to_local <- function(aln_col) aln_col - win_start + 1L
+
+      # Sample genes overlapping the window — project pos1/pos2 to alignment cols
+      sg <- rv$annotations |> dplyr::filter(pos1 > 0)
+      sg_aln1 <- s_nongap[pmin(pmax(as.integer(sg$pos1), 1L), length(s_nongap))]
+      sg_aln2 <- s_nongap[pmin(pmax(as.integer(sg$pos2), 1L), length(s_nongap))]
+      sg_in <- sg_aln2 >= win_start & sg_aln1 <= win_end
+      sample_gene_df <- if (any(sg_in)) {
+        data.frame(
+          xmin = to_local(pmax(sg_aln1[sg_in], win_start)) - 0.5,
+          xmax = to_local(pmin(sg_aln2[sg_in], win_end)) + 0.5,
+          gene = sg$gene[sg_in],
+          fill = type_color(sg$type[sg_in]),
+          forward = sg$direction[sg_in] == "+",
+          stringsAsFactors = FALSE
+        )
+      } else NULL
+
+      # Ref genes — rotate to alignment-ref coords first, then map via r_nongap
+      rg <- rv$blast_ref
+      rg_pos1_r <- ((as.integer(rg$pos1) - 1L - aln_rotation) %% ref_length) + 1L
+      rg_pos2_r <- ((as.integer(rg$pos2) - 1L - aln_rotation) %% ref_length) + 1L
+      rg_ok <- rg_pos2_r >= rg_pos1_r  # skip wrap-around genes
+      rg_aln1 <- r_nongap[pmin(pmax(rg_pos1_r, 1L), length(r_nongap))]
+      rg_aln2 <- r_nongap[pmin(pmax(rg_pos2_r, 1L), length(r_nongap))]
+      rg_in <- rg_ok & rg_aln2 >= win_start & rg_aln1 <= win_end
+      ref_gene_df <- if (any(rg_in)) {
+        data.frame(
+          xmin = to_local(pmax(rg_aln1[rg_in], win_start)) - 0.5,
+          xmax = to_local(pmin(rg_aln2[rg_in], win_end)) + 0.5,
+          gene = rg$gene[rg_in],
+          fill = type_color(rg$type[rg_in]),
+          forward = rg$direction[rg_in] == "+",
+          stringsAsFactors = FALSE
+        )
+      } else NULL
+
+      # Vertical guide lines every 10 cols (behind everything)
+      guide_x <- seq(10L, length(win_cols), by = 10L)
+
+      # Layout: y=0 ref gene, y=1 ref bases, y=2 identity, y=3 sample bases, y=4 sample gene
+      p <- ggplot2::ggplot(df) +
+        ggplot2::geom_segment(
+          data = data.frame(x = guide_x + 0.5),
+          ggplot2::aes(x = x, xend = x, y = -0.5, yend = 4.9),
+          inherit.aes = FALSE,
+          colour = "#A0A0A0", linewidth = 0.6
+        ) +
+        # Sample gene track
+        (if (!is.null(sample_gene_df)) list(
+          gggenes::geom_gene_arrow(
+            data = sample_gene_df,
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, fill = fill, forward = forward),
+            inherit.aes = FALSE, alpha = gene_type_alpha,
+            arrow_body_height = ggplot2::unit(6, "mm"),
+            arrowhead_height  = ggplot2::unit(6, "mm"),
+            arrowhead_width   = ggplot2::unit(3, "mm")
+          ),
+          gggenes::geom_gene_label(
+            data = sample_gene_df,
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, label = gene),
+            inherit.aes = FALSE, align = "left",
+            height = ggplot2::unit(4.5, "mm")
+          )
+        ) else NULL) +
+        # Identity bar — merged runs reduce render items
+        ggplot2::geom_rect(
+          data = identity_df,
+          ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 1.65, ymax = 2.35, fill = fill),
+          inherit.aes = FALSE
+        ) +
+        # Sample base letters
+        ggplot2::geom_text(
+          ggplot2::aes(x = col, y = 3, label = s_char, colour = s_color),
+          family = "mono", size = 5, fontface = "bold"
+        ) +
+        # Ref base letters
+        ggplot2::geom_text(
+          ggplot2::aes(x = col, y = 1, label = r_char, colour = r_color),
+          family = "mono", size = 5, fontface = "bold"
+        ) +
+        # Ref gene track
+        (if (!is.null(ref_gene_df)) list(
+          gggenes::geom_gene_arrow(
+            data = ref_gene_df,
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, fill = fill, forward = forward),
+            inherit.aes = FALSE, alpha = gene_type_alpha,
+            arrow_body_height = ggplot2::unit(6, "mm"),
+            arrowhead_height  = ggplot2::unit(6, "mm"),
+            arrowhead_width   = ggplot2::unit(3, "mm")
+          ),
+          gggenes::geom_gene_label(
+            data = ref_gene_df,
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, label = gene),
+            inherit.aes = FALSE, align = "left",
+            height = ggplot2::unit(4.5, "mm")
+          )
+        ) else NULL) +
+        ggplot2::scale_fill_identity() +
+        ggplot2::scale_colour_identity() +
+        ggplot2::scale_x_continuous(expand = c(0, 0),
+                                    limits = c(0.5, length(win_cols) + 0.5)) +
+        ggplot2::scale_y_continuous(limits = c(-0.5, 4.9), expand = c(0, 0)) +
+        ggplot2::coord_cartesian(clip = "off") +
+        ggthemes::theme_tufte() +
+        ggplot2::theme(
+          legend.position = "none",
+          axis.title      = ggplot2::element_blank(),
+          axis.text       = ggplot2::element_blank(),
+          axis.ticks      = ggplot2::element_blank(),
+          plot.margin     = ggplot2::margin(2, 2, 2, 2, "mm")
+        )
+      p
+    })
+
+    # Synteny overview click → zoom centered at click x.
+    # Patchwork plots can break ggplot's data-space coordmap, so we compute the
+    # fraction along the plot width using CSS pixel coords (which are reliable),
+    # divided by the plot's pixel width (set in the UI).
+    observeEvent(input$synteny_click, {
+      ev <- input$synteny_click
+      req(ev)
+      has_aln <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+        isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1]))
+      if (!has_aln) return()
+      aln_len   <- nchar(rv$blast_ref_aln$aligned_sample[1])
+      plot_w_px <- max(rv$updating$length %||% 800L, 800L)
+      px <- if (!is.null(ev$coords_css$x)) {
+        ev$coords_css$x
+      } else {
+        (ev$x %||% 0) / 100 * plot_w_px
+      }
+      frac <- max(0, min(1, px / plot_w_px))
+      col  <- max(1L, min(aln_len, as.integer(round(frac * aln_len))))
+      zoom_click_col(col)
+      shinyjs::runjs(sprintf(
+        paste0("var el=document.getElementById('%s');",
+               "if(el && !el.checked){el.checked=true;",
+               "Shiny.setInputValue('%s', true);}"),
+        ns("synteny_zoom"), ns("synteny_zoom")
+      ))
+    })
+
     ## Auto scroll ----
     observeEvent(selected(), {
       req(selected())
+      # New gene selection overrides any prior click anchor
+      zoom_click_col(NULL)
       session$sendCustomMessage(
         "hScroll", list(id = ns("coverageDiv"), px = as.numeric(rv$annotations$pos1[selected()]))
       )
+      if (!is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0 && !is.null(rv$coverage)) {
+        sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
+        sample_len <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
+        w <- max(rv$updating$length %||% 800L, 800L)
+        scroll_px <- as.numeric(rv$annotations$pos1[selected()]) / sample_len * w
+        session$sendCustomMessage(
+          "hScroll", list(id = ns("syntenyScrollDiv"), px = scroll_px)
+        )
+      }
     })
 
     # MSA ----
@@ -442,7 +1107,7 @@ annotations_details_server <- function(id, rv) {
         seqlogo = FALSE,
         menu = FALSE,
         conservation = TRUE,
-        labelNameLength = 150,
+        labelNameLength = 200,
         colorscheme = "zappo",
         rowheight = 20,
         alignmentHeight = min(rv$alignment$alignmentHeight, 200)
@@ -1817,17 +2482,18 @@ annotations_details_server <- function(id, rv) {
         shinyWidgets::sendSweetAlert(title = "No annotation selected")
         req(F)
       }
-      if (rv$annotations$type[selected()] != "PCG") {
+      sel_type <- rv$annotations$type[selected()]
+      if (!sel_type %in% c("PCG", "rRNA")) {
         shinyWidgets::sendSweetAlert(
-          title = "Merge only available for PCGs",
-          text = "Select a protein-coding gene annotation to merge."
+          title = "Merge only available for PCGs and rRNAs",
+          text = "Select a protein-coding gene or ribosomal RNA annotation to merge."
         )
         req(F)
       }
       sel_gene <- rv$annotations$gene[selected()]
       dup_idx <- which(
         rv$annotations$gene == sel_gene &
-        rv$annotations$type == "PCG" &
+        rv$annotations$type == sel_type &
         !stringr::str_detect(rv$annotations$gene, "_DELETED_")
       )
       if (length(dup_idx) < 2) {
@@ -1877,12 +2543,7 @@ annotations_details_server <- function(id, rv) {
       new_pos2 <- max(merge_anns$pos2)
       direction <- merge_anns$direction[1]
       sel_gene <- merge_anns$gene[1]
-      assembly <- get_assembly(
-        ID = merge_anns$ID[1],
-        path = merge_anns$path[1],
-        scaffold = merge_anns$scaffold[1],
-        con = session$userData$con
-      )
+      sel_type <- merge_anns$type[1]
       base_idx <- if (selected() %in% rows_to_merge) selected() else rows_to_merge[1]
       merged <- rv$annotations[base_idx, ]
       merged$pos1 <- new_pos1
@@ -1890,35 +2551,43 @@ annotations_details_server <- function(id, rv) {
       merged$length <- abs(new_pos2 - new_pos1) + 1
       merged$edited <- 1L
       merged$time_stamp <- as.numeric(Sys.time())
-      if (direction == "+") {
-        merged$start_codon <- assembly |>
-          Biostrings::subseq(new_pos1, new_pos1 + 2) |>
-          as.character()
-        merged$stop_codon <- assembly |>
-          Biostrings::subseq(new_pos2 - 2, new_pos2) |>
-          as.character()
-        merged$translation <- assembly |>
-          Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
-          Biostrings::translate(
-            genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
-          ) |>
-          as.character()
-      } else {
-        merged$start_codon <- assembly |>
-          Biostrings::subseq(new_pos2 - 2, new_pos2) |>
-          Biostrings::reverseComplement() |>
-          as.character()
-        merged$stop_codon <- assembly |>
-          Biostrings::subseq(new_pos1, new_pos1 + 2) |>
-          Biostrings::reverseComplement() |>
-          as.character()
-        merged$translation <- assembly |>
-          Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(
-            genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
-          ) |>
-          as.character()
+      if (sel_type == "PCG") {
+        assembly <- get_assembly(
+          ID = merge_anns$ID[1],
+          path = merge_anns$path[1],
+          scaffold = merge_anns$scaffold[1],
+          con = session$userData$con
+        )
+        if (direction == "+") {
+          merged$start_codon <- assembly |>
+            Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+            as.character()
+          merged$stop_codon <- assembly |>
+            Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+            as.character()
+          merged$translation <- assembly |>
+            Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
+            Biostrings::translate(
+              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+            ) |>
+            as.character()
+        } else {
+          merged$start_codon <- assembly |>
+            Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          merged$stop_codon <- assembly |>
+            Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+            Biostrings::reverseComplement() |>
+            as.character()
+          merged$translation <- assembly |>
+            Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
+            Biostrings::reverseComplement() |>
+            Biostrings::translate(
+              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+            ) |>
+            as.character()
+        }
       }
       base_orig_pos1 <- rv$annotations$pos1[base_idx]
       base_orig_pos2 <- rv$annotations$pos2[base_idx]
@@ -2186,28 +2855,32 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     textOutput(ns("reviewedText")),
     textOutput(ns("problematicText")),
     tags$details(
+      id = ns("annotation_table_details"),
       open = TRUE,
       tags$summary("Annotation Table"),
       reactableOutput(ns("table"), width = "100%")
     ),
-    shinyjs::hidden(
-      div(
-        id = ns("annotation_action_btns"),
-        style = "display: flex; gap: 8px; margin: 6px 0;",
-        actionButton(ns("merge"), "Merge PCGs"),
-        actionButton(ns("delete"), "Delete")
-      )
-    ),
-    shinyjs::hidden(
-      div(
-        id = ns("annotation_restore_btn"),
-        style = "display: flex; gap: 8px; margin: 6px 0;",
-        actionButton(ns("restore"), "Restore")
-      )
-    ),
-    shinyjs::hidden(
-      div(
-        id = ns("merge_select_div"),
+    div(
+      id = ns("annotation_btns_wrapper"),
+      shinyjs::hidden(
+        div(
+          id = ns("annotation_action_btns"),
+          style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
+          actionButton(ns("merge"), "Merge PCGs/rRNAs"),
+          actionButton(ns("delete"), "Delete"),
+          uiOutput(ns("synteny_zoom_ctrl"))
+        )
+      ),
+      shinyjs::hidden(
+        div(
+          id = ns("annotation_restore_btn"),
+          style = "display: flex; gap: 8px; margin: 6px 0;",
+          actionButton(ns("restore"), "Restore")
+        )
+      ),
+      shinyjs::hidden(
+        div(
+          id = ns("merge_select_div"),
         style = "border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin: 6px 0;",
         tags$b("Select annotations to merge:"),
         uiOutput(ns("merge_choices")),
@@ -2229,14 +2902,45 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           )
         )
       )
+    )
+  ),
+  tags$script(HTML(sprintf(
+      "document.getElementById('%s').addEventListener('toggle', function() {
+         var w = document.getElementById('%s');
+         if (w) w.style.display = this.open ? '' : 'none';
+       });
+       document.addEventListener('keydown', function(e) {
+         if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+             e.target && e.target.id === '%s') {
+           e.preventDefault();
+         }
+       });",
+      ns("annotation_table_details"), ns("annotation_btns_wrapper"),
+      ns("synteny_zoom_window")
+    ))),
+  tags$style(HTML(sprintf(
+    paste0(
+      "#%s::-webkit-inner-spin-button,",
+      "#%s::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }",
+      "#%s { -moz-appearance: textfield; appearance: textfield; }"
     ),
-    hr(),
+    ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
+  ))),
+    tags$hr(style = "margin: 4px 0; border: none; border-top: 1px solid #e0e0e0;"),
     tags$details(
       tags$summary("Coverage Map"),
       div(
         id = ns("coverageDiv"),
         style = "width: 100%; overflow-x: auto; padding: 5mm;",
         uiOutput(ns("coverage_map"))
+      )
+    ),
+    tags$details(
+      id = ns("blast_synteny_details"),
+      tags$summary("BLAST Reference Synteny"),
+      div(
+        style = "padding: 2px 5mm;",
+        uiOutput(ns("synteny_ui"))
       )
     ),
     tags$details(

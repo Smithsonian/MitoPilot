@@ -46,6 +46,7 @@ params {
     genetic_code = <<GENETIC_CODE>>
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
+    aragorn_condaenv = 'aragorn'
     preprocess {
         container = process.container
         executor = process.executor
@@ -70,6 +71,18 @@ params {
         executor = process.executor
     }
     validate {
+        container = process.container
+        executor = process.executor
+    }
+    blast_ref_align {
+        cpus = 1
+        memory = 8
+        container = process.container
+        executor = process.executor
+    }
+    blast_gb {
+        cpus = 1
+        memory = 8
         container = process.container
         executor = process.executor
     }

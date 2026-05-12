@@ -54,6 +54,14 @@ sqlite3 .sqlite_corrupted ".recover" | sqlite3 .sqlite
 
 Then try relaunching the MitoPilot app.
 
+### "Insufficient memory for the Java Runtime Environment"
+
+This suggests that the Nextflow head process (which controls all other jobs) is running out of Java heap space. To fix, run the following command in the console or add it to your submission submission script before launching Nextflow.
+
+```{bash eval=FALSE}
+export NXF_OPTS="-Xms500m -Xmx8g"
+```
+
 ## Can I annotate my own mitogenome assemblies with MitoPilot?
 
 Yes! See the ["Initializing a Project with User Assemblies"](https://smithsonian.github.io/MitoPilot/#initializing-a-project-with-user-assemblies) section of the main page.

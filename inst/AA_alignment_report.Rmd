@@ -24,6 +24,34 @@ library(dplyr)
 library(msaR)
 ```
 
+```{r render_gene_aln, echo=F}
+render_gene_aln <- function(gene) {
+  gene_seqs <- annotations |>
+    dplyr::filter(gene == !!gene) |>
+    dplyr::pull(translation, ID) |>
+    Biostrings::AAStringSet()
+  if (length(gene_seqs) < 2) {
+    cat(paste0("_Gene **", gene, "** found in fewer than 2 samples — alignment skipped._\n"))
+    return(invisible(NULL))
+  }
+  gene_aln <- DECIPHER::AlignSeqs(gene_seqs, processors = NULL, verbose = FALSE)
+  dst <- DECIPHER::DistanceMatrix(gene_aln,
+    includeTerminalGaps = TRUE, processors = NULL, type = "dist", verbose = FALSE
+  )
+  clust <- hclust(dst, "complete")
+  msaR(
+    gene_aln[clust$order],
+    overviewbox = FALSE,
+    seqlogo = FALSE,
+    menu = FALSE,
+    conservation = TRUE,
+    labelNameLength = 150,
+    colorscheme = "zappo",
+    alignmentHeight = 400
+  )
+}
+```
+
 ```{r, echo=F, message=T, warning=F}
 
 con <- DBI::dbConnect(RSQLite::SQLite(), dbname = params$db_path)
@@ -165,402 +193,77 @@ if (length(rows_to_remove) > 0) {
 ## NAD1
 
 ```{r nad1, echo=F, cache=F}
-gene <- "nad1"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("nad1")
 ```
 
 ## NAD2
 
 ```{r nad2, echo=F, cache=F}
-gene <- "nad2"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("nad2")
 ```
 
 ## COX1
 
 ```{r cox1, echo=F, cache=F}
-gene <- "cox1"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("cox1")
 ```
 
 ## COX2
 
 ```{r cox2, echo=F, cache=F}
-gene <- "cox2"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("cox2")
 ```
 
 ## ATP8
 
 ```{r atp8, echo=F, cache=F}
-gene <- "atp8"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("atp8")
 ```
 
 ## ATP6
 
 ```{r atp6, echo=F, cache=F}
-gene <- "atp6"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("atp6")
 ```
 
 ## COX3
 
 ```{r cox3, echo=F, cache=F}
-gene <- "cox3"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("cox3")
 ```
 
 ## NAD3
 
 ```{r nad3, echo=F, cache=F}
-gene <- "nad3"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("nad3")
 ```
 
 ## NAD4
 
 ```{r nad4, echo=F, cache=F}
-gene <- "nad4"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("nad4")
 ```
 
 ## NAD4l
 
 ```{r nad4l, echo=F, cache=F}
-gene <- "nad4l"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("nad4l")
 ```
 
 ## NAD5
 
 ```{r nad5, echo=F, cache=F}
-gene <- "nad5"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("nad5")
 ```
 
 ## NAD6
 
 ```{r nad6, echo=F, cache=F}
-gene <- "nad6"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("nad6")
 ```
 
 ## CYTB
 
 ```{r cob, echo=F, cache=F}
-gene <- "cob"
-gene_seqs <- annotations |>
-  dplyr::filter(gene == !!gene) |>
-  pull(translation, ID) |>
-  Biostrings::AAStringSet()
-gene_aln <- DECIPHER::AlignSeqs(
-  gene_seqs,
-  processors = NULL,
-  verbose = FALSE
-)
-dst <- DECIPHER::DistanceMatrix(gene_aln,
-  includeTerminalGaps = T,
-  processors = NULL, type = "dist",
-  verbose = F
-)
-clust <- hclust(dst, "complete")
-msaR(
-  gene_aln[clust$order],
-  overviewbox = FALSE,
-  seqlogo = FALSE,
-  menu = FALSE,
-  conservation = TRUE,
-  labelNameLength = 150,
-  colorscheme = "zappo",
-  alignmentHeight = 400
-)
+render_gene_aln("cob")
 ```

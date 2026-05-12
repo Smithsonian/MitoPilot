@@ -9,6 +9,7 @@
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
 #' @param ref_dir Path to reference directory for curation
+#' @param blast_ref_file Path to a JSON file of remote BLAST reference hits to inject into the local curation database (default = NULL)
 #'
 #' @export
 #'
@@ -20,7 +21,8 @@ curate_ctenophore_mito <- function(
     out_dir = NULL,
     max_blast_hits = 100,
     params = NULL,
-    ref_dir = NULL) {
+    ref_dir = NULL,
+    blast_ref_file = NULL) {
   # Prepare environment ----
 
   ## load annotations ----
@@ -74,10 +76,16 @@ curate_ctenophore_mito <- function(
   }
   list2env(params, envir = environment())
 
+
   # set up ref_dbs list
   ref_dbs <- list(
     default = paste0(ref_dir, "/featureProt/{gene}.fas")
   )
+
+  # Augment local BLAST DB with translated remote BLAST hit gene sequences
+  if (!is.null(blast_ref_file)) {
+    inject_remote_hits_into_blast_db(blast_ref_file, ref_dir)
+  }
 
   ## Prepare rules ----
   rules <- rules |>
@@ -193,6 +201,12 @@ curate_ctenophore_mito <- function(
         json_string()
       out %||% '{}'
     })
+
+
+  # Prepend remote BLAST top hit to refHits for each PCG
+  if (!is.null(blast_ref_file)) {
+    annotations <- prepend_blast_hit_to_refhits(annotations, blast_ref_file)
+  }
 
   ## Curate against top hits ----
   annotations <- purrr::pmap_dfr(annotations, function(...) {
@@ -610,6 +624,11 @@ curate_ctenophore_mito <- function(
 
     return(cur)
   })
+
+  # Restore remote BLAST hit rows after any curation step that recomputed refHits
+  if (!is.null(blast_ref_file)) {
+    annotations <- prepend_blast_hit_to_refhits(annotations, blast_ref_file)
+  }
 
   ## Stop codon trimming ----
   for (idx in seq_len(nrow(annotations))) {

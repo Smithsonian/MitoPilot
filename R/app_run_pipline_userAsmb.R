@@ -8,8 +8,10 @@ pipeline_server_userAsmb <- function(id) {
     nf_cmd <- reactiveVal()
     process <- reactiveVal()
     process_out <- reactiveVal()
+    job_submitting <- reactiveVal(FALSE)
 
     on("run_modal", {
+      job_submitting(FALSE)
       # Generate Nextflow params ----
       nf_cmd(nextflow_cmd(session$userData$mode, userAsmbs = TRUE))
       message(nf_cmd())
@@ -185,6 +187,9 @@ pipeline_server_userAsmb <- function(id) {
 
     # create Hydra job script and submit
     observeEvent(input$submit_job, {
+      req(!job_submitting())
+      job_submitting(TRUE)
+      shinyjs::disable(ns("submit_job"))
       tryCatch({
         work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
         full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
@@ -208,6 +213,7 @@ pipeline_server_userAsmb <- function(id) {
           "#$ -cwd -j y",
           "#$ -q lTWFM.sq",
           "#$ -l wfmq",
+          "#$ -l mres=16G,h_data=8G,h_vmem=32G",
           "#$ -pe mthread 2",
           "#$ -S /bin/sh",
           "",
@@ -218,6 +224,7 @@ pipeline_server_userAsmb <- function(id) {
           "source ~/.bashrc",
           "module load tools/java/21.0.2",
           "",
+          "export NXF_OPTS=\"-Xms512m -Xmx6g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
           full_nf_cmd,
           "",
           'echo "---"',
@@ -249,6 +256,8 @@ pipeline_server_userAsmb <- function(id) {
         }
 
       }, error = function(e) {
+        job_submitting(FALSE)
+        shinyjs::enable(ns("submit_job"))
         shinyWidgets::sendSweetAlert(
           title = "Failed to submit job:",
           text = e$message,
@@ -375,6 +384,7 @@ pipeline_server_userAsmb <- function(id) {
       shinyjs::hide("stop")
       shinyjs::show("start")
       shinyjs::addClass("gears", "paused")
+      trigger(paste0("refresh_", tolower(session$userData$mode)))
     })
 
     # Close modal ----
