@@ -95,7 +95,31 @@ annotations_details_server <- function(id, rv) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(maxWidth = 80, align = "center", show = F),
           columns = list(
-            type = colDef(show = T, align = "left"),
+            type = colDef(
+              show = T,
+              align = "left",
+              cell = function(value) {
+                color <- switch(value %||% "",
+                  ctrl  = "#FAA34A",
+                  PCG   = "#60BD68",
+                  rRNA  = "#5DA5DA",
+                  tRNA  = "#F17CB0",
+                  "#888888"
+                )
+                htmltools::span(
+                  style = paste0(
+                    "background:", color, "30;",
+                    "color:#111111;",
+                    "border:1px solid ", color, ";",
+                    "border-radius:3px;",
+                    "padding:1px 4px;",
+                    "font-size:11px;",
+                    "white-space:nowrap;"
+                  ),
+                  value %||% ""
+                )
+              }
+            ),
             gene = colDef(show = T,
                           align = "left",
                           maxWidth = 300,
@@ -113,16 +137,16 @@ annotations_details_server <- function(id, rv) {
               maxWidth = 100,
               cell = function(value) {
                 color <- switch(value %||% "",
-                  "tRNAscan-SE" = "#5DA5DA",
-                  "ARWEN"       = "#F17CB0",
-                  "ARAGORN"     = "#B276B2",
-                  "MITOS2"      = "#60BD68",
-                  "#AAAAAA"
+                  "MITOS2"      = "#444444",
+                  "tRNAscan-SE" = "#666666",
+                  "ARWEN"       = "#888888",
+                  "ARAGORN"     = "#AAAAAA",
+                  "#CCCCCC"
                 )
                 htmltools::span(
                   style = paste0(
                     "background:", color, "30;",
-                    "color:", color, ";",
+                    "color:#111111;",
                     "border:1px solid ", color, ";",
                     "border-radius:3px;",
                     "padding:1px 4px;",
@@ -670,7 +694,7 @@ annotations_details_server <- function(id, rv) {
         return(div(style = "color: #888; font-style: italic; font-size: 11px;",
                    "Select a gene row, or click the synteny plot above, to view a base-pair alignment."))
       }
-      win <- max(30L, min(2000L, as.integer(input$synteny_zoom_window %||% 200L)))
+      win <- zoom_window_rv()
       px_per_col <- 14L
       plot_w <- as.integer(win * px_per_col)
       sample_lbl <- rv$updating$ID
@@ -747,12 +771,16 @@ annotations_details_server <- function(id, rv) {
       }
     })
 
-    # Clamp the window-size input to [30, 2000]
+    # Validated window size — only invalidates when value actually changes (breaks render loop)
+    zoom_window_rv <- reactiveVal(200L)
+
+    # Clamp the window-size input to [30, 2000] and drive zoom_window_rv
     observeEvent(input$synteny_zoom_window, ignoreInit = TRUE, {
       v <- input$synteny_zoom_window
       if (is.null(v) || is.na(v)) return()
-      if (v > 2000L) updateNumericInput(session, "synteny_zoom_window", value = 2000L)
-      else if (v < 30L)  updateNumericInput(session, "synteny_zoom_window", value = 30L)
+      clamped <- max(30L, min(2000L, as.integer(v)))
+      if (clamped != v) updateNumericInput(session, "synteny_zoom_window", value = clamped)
+      if (clamped != zoom_window_rv()) zoom_window_rv(clamped)
     })
 
     output$synteny_zoom_plot <- renderPlot({
@@ -774,7 +802,7 @@ annotations_details_server <- function(id, rv) {
       s_nongap <- which(s_chars != "-")
       r_nongap <- which(r_chars != "-")
 
-      win <- max(30L, min(2000L, as.integer(input$synteny_zoom_window %||% 200L)))
+      win <- zoom_window_rv()
       anchor_bp <- if (!is.null(click_col)) {
         # Sample bp position at the clicked alignment column
         as.integer(cumsum(s_chars != "-")[click_col])
@@ -897,7 +925,7 @@ annotations_details_server <- function(id, rv) {
           ),
           gggenes::geom_gene_label(
             data = sample_gene_df,
-            ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, label = gene, forward = forward),
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, label = gene),
             inherit.aes = FALSE, align = "left",
             height = ggplot2::unit(4.5, "mm")
           )
@@ -930,7 +958,7 @@ annotations_details_server <- function(id, rv) {
           ),
           gggenes::geom_gene_label(
             data = ref_gene_df,
-            ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, label = gene, forward = forward),
+            ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, label = gene),
             inherit.aes = FALSE, align = "left",
             height = ggplot2::unit(4.5, "mm")
           )
