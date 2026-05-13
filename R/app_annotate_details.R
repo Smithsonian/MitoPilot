@@ -467,6 +467,14 @@ annotations_details_server <- function(id, rv) {
         )
       }
       tagList(
+        if (isTRUE(rv$updating$topology == "linear")) {
+          div(
+            class = "alert alert-warning",
+            style = "padding: 6px 10px; font-size: 0.85em; margin-bottom: 6px;",
+            shiny::icon("triangle-exclamation"),
+            " One or more assemblies is linear; may produce poor alignment."
+          )
+        },
         if (has_aln) {
           div(
             style = "display: flex; margin: 0; padding: 0; line-height: 1;",

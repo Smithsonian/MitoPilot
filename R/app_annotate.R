@@ -207,6 +207,20 @@ annotate_server <- function(id) {
             minWidth = 200,
             cell = rt_longtext()
           ),
+          blast_pident = colDef(
+            show = TRUE,
+            name = "BLAST % Ident",
+            filterable = FALSE,
+            minWidth = 90,
+            align = "center"
+          ),
+          blast_qcovs = colDef(
+            show = TRUE,
+            name = "BLAST % Cov",
+            filterable = FALSE,
+            minWidth = 90,
+            align = "center"
+          ),
           PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
           tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
           rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),
