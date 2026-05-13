@@ -16,16 +16,6 @@ assembly_coverage_details_server <- function(id, rv) {
           view_coverage = NA_character_
         )
 
-      # TODO - refactor to handle fragmented assemblies
-      if (any(rv$focal_assembly$scaffold > 1)) {
-        shinyWidgets::sendSweetAlert(
-          title = "Fragmented assembly",
-          text = "Interactive mode is not currently supported for fragmented assemblies.",
-          type = "warning"
-        )
-        req(F)
-      }
-
       modalDialog(
         title = stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
         size = "l",
@@ -68,7 +58,18 @@ assembly_coverage_details_server <- function(id, rv) {
             ID = colDef(
               align = "left", minWidth = 100, html = T, cell = rt_longtext()
             ),
-            scaffold = colDef(show = FALSE),
+            path = colDef(
+              name = "Path", width = 60, align = "center"
+            ),
+            scaffold = colDef(
+              name = "Scaffold", width = 80, align = "center"
+            ),
+            topology = colDef(
+              name = "Topology", width = 90, align = "center"
+            ),
+            length = colDef(
+              name = "Length (bp)", width = 100, align = "center"
+            ),
             sequence = colDef(
               minWidth = 250, maxWidth = 1000, align = "center", html = TRUE,
               cell = rt_longtext()
