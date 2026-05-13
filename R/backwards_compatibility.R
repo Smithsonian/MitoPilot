@@ -555,6 +555,26 @@ backwards_compatibility <- function(
       )
   }
 
+  # if min_assembly_length column doesn't exist, add it
+  if(!("min_assembly_length" %in% names(assemble_opts_table))){
+    message("added 'min_assembly_length' column to assemble_opts table")
+    assemble_opts_table$min_assembly_length <- rep(500L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN min_assembly_length INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
   # if blast_accession column doesn't exist, add BLAST result columns
   if (!("blast_accession" %in% names(assemble_table))) {
     message("added BLAST result columns to assemble table")

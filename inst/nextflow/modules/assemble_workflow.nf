@@ -3,7 +3,7 @@ include {assemble} from './assemble.nf'
 params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.seeds_db, opts.labels_db, opts.getOrganelle, opts.assembler, ' +
                   'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
-                  'opts.max_paths, opts.max_scaffolds ' +
+                  'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
@@ -26,10 +26,10 @@ workflow ASSEMBLE {
         input
 
     main:
-        // Assembly Options Channel from DB (includes max_paths/max_scaffolds thresholds)
+        // Assembly Options Channel from DB (includes max_paths/max_scaffolds/min_assembly_length)
         channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .map{ it ->
-                tuple(
+            .multiMap { it ->
+                opts: tuple(
                     it[0],                                                      // ID
                     it[1],                                                      // options id
                     [                                                           //## assembly options ##//
@@ -48,8 +48,12 @@ workflow ASSEMBLE {
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
                     (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer))  // max_scaffolds
                 )
+                min_len: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length
             }
-            .set { assemble_opts }
+            .set { query_ch }
+
+        query_ch.opts.set { assemble_opts }
+        query_ch.min_len.set { min_len_lookup }
 
         // Assemble Input Channel
         input
@@ -180,12 +184,10 @@ workflow ASSEMBLE {
                     record.seqString                    // sequence
                 ).flatten()
             }
-            .map { it ->                                            // mark short assemblies
-                if(it[3] < params.minAssemblyLength){
-                    it[7] = 1
-                }else{
-                    it[7] = 0
-                }
+            .combine(min_len_lookup, by: 0)             // append per-sample min_assembly_length
+            .map { it ->                                // mark short assemblies
+                def min_len = it[7] as Integer
+                it[7] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
                 return it
             }
             .sqlInsert(statement: params.sqlWriteAssemblies, db: 'sqlite')

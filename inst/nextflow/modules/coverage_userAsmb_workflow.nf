@@ -1,10 +1,10 @@
 include {coverage_userAsmb} from './coverage_userAsmb.nf'
 
 params.sqlRead =  'SELECT s.ID, s.assembly, s.topology, ' +
-                  'a.assemble_opts ' +
+                  'a.assemble_opts, opts.min_assembly_length ' +
                   'FROM samples s ' +
-                  'JOIN assemble a ' +
-                  'ON s.ID = a.ID ' +
+                  'JOIN assemble a ON s.ID = a.ID ' +
+                  'JOIN assemble_opts opts ON a.assemble_opts = opts.assemble_opts ' +
                   'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 
@@ -28,15 +28,19 @@ workflow COVERAGE_userAsmb {
     main:
         // sample info channel from DB
         channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .map{ it ->
-                tuple(
+            .multiMap { it ->
+                info: tuple(
                     it[0],                                          // ID
                     file(params.asmbDir + "/" + it[1]),             // assembly
                     it[2],                                          // topology
                     it[3]                                          // assemble opts dummy var
                 )
+                min_len: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length
             }
-            .set { sample_info }
+            .set { query_ch }
+
+        query_ch.info.set { sample_info }
+        query_ch.min_len.set { min_len_lookup }
 
         // Coverage Input Channel
         input
@@ -105,12 +109,10 @@ workflow COVERAGE_userAsmb {
                     record.seqString                    // sequence
                 ).flatten()
             }
-            .map { it ->                                            // add ignore flag for short assemblies
-                if(it[3] < params.minAssemblyLength){
-                    it[7] = 1
-                }else{
-                    it[7] = 0
-                }
+            .combine(min_len_lookup, by: 0)             // append per-sample min_assembly_length
+            .map { it ->                                // mark short assemblies
+                def min_len = it[7] as Integer
+                it[7] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
                 return it
             }
             .set { assemblies_ch }

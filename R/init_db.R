@@ -38,6 +38,9 @@
 #'   allowed for a sample to continue past the Assemble step (default = 10).
 #'   Samples exceeding this are flagged as failed and skipped by downstream
 #'   steps in WF1.
+#' @param min_assembly_length Minimum contig length (bp) to retain for
+#'   annotation and BLAST. Scaffolds shorter than this threshold are stored
+#'   but flagged as ignored (default = 500).
 #' @export
 #'
 new_db <- function(
@@ -65,6 +68,7 @@ new_db <- function(
     ),
     max_paths = 10,
     max_scaffolds = 10,
+    min_assembly_length = 500,
     # Default annotation options
     annotate_cpus = 6,
     annotate_memory = 36,
@@ -282,6 +286,7 @@ new_db <- function(
       mitofinder TEXT,
       max_paths INTEGER,
       max_scaffolds INTEGER,
+      min_assembly_length INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -298,7 +303,8 @@ new_db <- function(
         mitofinder_db = mitofinder_db,
         mitofinder = mitofinder,
         max_paths = max_paths,
-        max_scaffolds = max_scaffolds
+        max_scaffolds = max_scaffolds,
+        min_assembly_length = min_assembly_length
       ),
       in_place = TRUE,
       copy = TRUE,

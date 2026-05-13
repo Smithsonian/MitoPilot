@@ -270,6 +270,24 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           style = "margin-top: -8px; font-size: 0.85em;",
           "Samples above max paths or max scaffolds threshold will be marked as failed"
         ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("min_assembly_length"), "Min assembly length (bp):",
+              width = "100%",
+              min = 1,
+              step = 1,
+              value = current$min_assembly_length %||% 500
+            ) |> shinyjs::disabled()
+          )
+        ),
+        tags$p(
+          class = "text-muted",
+          style = "margin-top: -8px; font-size: 0.85em;",
+          "Scaffolds shorter than this threshold are stored but excluded from annotation and BLAST"
+        ),
         size = "m",
         footer = tagList(
           actionButton(ns("update_assemble_opts"), "Update"),

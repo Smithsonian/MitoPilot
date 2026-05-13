@@ -525,6 +525,10 @@ assemble_server <- function(id) {
           inputId = "max_scaffolds",
           value = cur$max_scaffolds %||% 10
         )
+        updateNumericInput(
+          inputId = "min_assembly_length",
+          value = cur$min_assembly_length %||% 500
+        )
         updateTextAreaInput(
           inputId = "getOrganelle",
           value = cur$getOrganelle
@@ -579,6 +583,7 @@ assemble_server <- function(id) {
       shinyjs::toggleState("mitofinder", condition = input$edit_assemble_opts)
       shinyjs::toggleState("max_paths", condition = input$edit_assemble_opts)
       shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("min_assembly_length", condition = input$edit_assemble_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
@@ -653,7 +658,8 @@ assemble_server <- function(id) {
               mitofinder_db = req(input$mf_db),
               mitofinder = req(input$mitofinder),
               max_paths = as.integer(req(input$max_paths)),
-              max_scaffolds = as.integer(req(input$max_scaffolds))
+              max_scaffolds = as.integer(req(input$max_scaffolds)),
+              min_assembly_length = as.integer(req(input$min_assembly_length))
             ),
             in_place = TRUE,
             copy = TRUE,

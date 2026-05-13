@@ -42,7 +42,6 @@ params {
     bucket-dir = '<<bucket-dir>>'           // Path to s3 bucket for stroing intermediate data
     publishDir = 'out'                      // Directory (or s3 bucket) to publish pipeline outputs
     minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
-    minAssemblyLength = 500                 // min contig size to retain for annotation
     genetic_code = <<GENETIC_CODE>>
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
