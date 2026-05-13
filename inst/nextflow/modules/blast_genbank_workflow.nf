@@ -3,6 +3,8 @@ include {blast_genbank} from './blast_genbank.nf'
 params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
 params.sqlWriteBlastHitScaffold = 'UPDATE assemblies SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ? AND path = ? AND scaffold = ?'
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
+params.sqlWriteAssemblyBlast = 'INSERT OR REPLACE INTO assembly_blast (ID, path, blast_opts, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+params.sqlDeleteAssemblyBlast = 'DELETE FROM assembly_blast WHERE ID = ? AND time_stamp != ?'
 
 params.sqlReadBlastOpts =
     'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
@@ -46,17 +48,19 @@ workflow BLAST_GENBANK {
             .map { row -> tuple(row[0], row[1] == null ? 500 : (row[1] as Integer)) }
             .set { min_len_ch }  // (id, min_assembly_length)
 
+        // Per-path stream: filter qualifying scaffolds within each path FASTA by
+        // min_assembly_length, write a per-path multi-FASTA, and emit one task per
+        // (id, path_idx) for BLAST. Headers are preserved so qseqid
+        // ("{id}.{path}.{scaffold}") can be parsed back downstream.
         normalized_input
-            // Join with per-sample min_assembly_length, then collect every qualifying scaffold
-            // (length >= min_assembly_length) across all assembly paths into a single
-            // multi-FASTA for BLAST input. Header is preserved so qseqid (the first
-            // whitespace-delimited token, e.g. "{id}.{path}.{scaffold}") can be parsed
-            // back to (path, scaffold) downstream.
             .join(min_len_ch, by: 0)
-            .map { id, asmb_list, opts_id, min_len ->
-                def qualifying = []
+            .flatMap { id, asmb_list, opts_id, min_len ->
                 def realFiles = asmb_list.findAll { !(it.name =~ /assembly_0\.fasta$/) }
+                def emitted = []
                 for (def f : realFiles) {
+                    def m = (f.name =~ /assembly_(\d+)\.fasta$/)
+                    def path_idx = m ? (m[0][1] as Integer) : 0
+                    def qualifying = []
                     def header = null
                     def seq = new StringBuilder()
                     f.eachLine { line ->
@@ -73,59 +77,65 @@ workflow BLAST_GENBANK {
                     if (header != null && seq.length() >= min_len) {
                         qualifying << [header: header, seq: seq.toString()]
                     }
+                    if (qualifying.size() < 1) continue
+                    def targetDirStr = "${workflow.workDir}/blast_select_targets"
+                    new File(targetDirStr).mkdirs()
+                    def targetFasta = new File("${targetDirStr}/${id}.path${path_idx}.blast_target.fasta")
+                    targetFasta.text = qualifying.collect { "${it.header}\n${it.seq}" }.join('\n') + '\n'
+                    emitted << tuple(id, path_idx, targetFasta.toPath(), opts_id)
                 }
-                if (qualifying.size() < 1) return null
-                def targetDirStr = "${workflow.workDir}/blast_select_targets"
-                new File(targetDirStr).mkdirs()
-                def targetFasta = new File("${targetDirStr}/${id}.blast_target.fasta")
-                targetFasta.text = qualifying.collect { "${it.header}\n${it.seq}" }.join('\n') + '\n'
-                tuple(id, targetFasta.toPath(), opts_id)
+                return emitted
             }
-            .filter { it != null }
             // Join with blast opts; samples with run_blast = 0 have no entry and are dropped
-            .join(blast_opts_ch, by: 0)
-            .map{ id, asmb, opts_id, entrez_query, extra_opts ->
-                tuple(id, asmb, opts_id, entrez_query, extra_opts)
+            .combine(blast_opts_ch, by: 0)
+            .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts ->
+                tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts)
             }
-            // Split so we can track which IDs ran BLAST without consuming the channel
-            .multiMap { id, asmb, opts_id, entrez_query, extra_opts ->
-                process: tuple(id, asmb, opts_id, entrez_query, extra_opts)
+            .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts ->
+                process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts)
                 ids:     tuple(id, true)
             }
             .set { blast_in_split }
 
+        // Clear stale per-path rows before re-inserting. Time-stamp gating mirrors
+        // the assemblies-table delete pattern so this is safe regardless of channel
+        // emission order vs the insert below.
+        normalized_input
+            .map { id, asmb_list, opts_id -> tuple(id, params.ts) }
+            .sqlInsert(statement: params.sqlDeleteAssemblyBlast, db: 'sqlite')
+
         blast_genbank(blast_in_split.process)
-            .multiMap { id, result_file ->
+            .multiMap { id, path_idx, result_file ->
                 state:  tuple(id, result_file)
-                parse:  tuple(id, result_file)
+                parse:  tuple(id, path_idx, result_file)
             }
             .set { blast_out }
 
-        // Write state=2 (WF1 complete) for samples that ran BLAST
+        // Write state=2 (WF1 complete) for each (id, path) result; redundant updates
+        // on the same id are safe (the WHERE clause is keyed on assemble_switch = 4)
         blast_out.state
             .map { id, result_file -> tuple('2', id) }
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
 
         // Write state=2 for samples that were filtered out before BLAST
-        // (no single qualifying scaffold >= min_assembly_length across all paths, or run_blast = 0)
+        // (no qualifying scaffold >= min_assembly_length in any path, or run_blast = 0)
         all_ids
             .join(blast_in_split.ids, remainder: true)
             .filter { id, all_flag, blast_flag -> blast_flag == null }
             .map { id, all_flag, blast_flag -> tuple('2', id) }
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
 
-        // Parse all hits, round numeric fields. blast outfmt is now
+        // Parse each per-path result file. blast outfmt is
         //   qseqid saccver stitle pident qcovs evalue
         // qseqid encodes scaffold identity as "{id}.{path}.{scaffold}".
-        // Emits one record per qualifying scaffold (including no-hit scaffolds derived
-        // from the BLAST query FASTA) plus a single "top hit" record per ID.
+        // Emits:
+        //   kind='scaffold' rows per qualifying scaffold (including no-hit) for the assemblies table
+        //   kind='path' row per (id, path_idx) holding the path's top hit for the assembly_blast table
         blast_out.parse
-            .flatMap{ id, result_file ->
+            .flatMap{ id, path_idx, result_file ->
                 def opts_id = result_file.parent.name
                 def lines = result_file.readLines().findAll{ it.trim() }
-                // Collect ALL queried scaffolds from the target FASTA so no-hit
-                // scaffolds still get a row written to the assemblies table.
-                def targetFasta = new File("${workflow.workDir}/blast_select_targets/${id}.blast_target.fasta")
+                def targetFasta = new File("${workflow.workDir}/blast_select_targets/${id}.path${path_idx}.blast_target.fasta")
                 def queried = []
                 if (targetFasta.exists()) {
                     targetFasta.eachLine { line ->
@@ -161,49 +171,18 @@ workflow BLAST_GENBANK {
                         out << tuple('scaffold', id, opts_id, path, scaffold, 'NO HIT', null, null, null, null)
                     }
                 }
-                // Pick top hit for ID-level row: lowest evalue, tie-broken by highest pident
+                // Path-level top hit: lowest evalue, tie-broken by highest pident
                 def top = per_scaffold.values().toList()
                     .sort { a, b -> (a[4] <=> b[4]) ?: -(a[2] <=> b[2]) }
                     .find { true }
                 if (top) {
-                    out << tuple('id', id, opts_id, null, null, top[0], top[1], top[2], top[3], top[4])
+                    out << tuple('path', id, opts_id, path_idx, null, top[0], top[1], top[2], top[3], top[4])
                 } else {
-                    out << tuple('id', id, opts_id, null, null, 'NO HIT', null, null, null, null)
-                }
-                // Per-id deduped ref-fetch rows (one per unique accession across all
-                // scaffolds of this sample). Emitting here instead of via a downstream
-                // groupTuple avoids a global channel-close barrier — BLAST_REF_FETCH
-                // can start for sample N as soon as BLAST_GENBANK for N finishes,
-                // rather than waiting for every sample's BLAST_GENBANK to complete.
-                // kind = 'reffetch_top' marks the accession matching the id-level top
-                // hit (drives is_top downstream); 'reffetch_dup' marks the rest.
-                def top_accession = top ? top[0] : null
-                def seen = [:] as LinkedHashMap
-                per_scaffold.values().each { v ->
-                    def acc = v[0]
-                    if (acc != null && acc != 'NO HIT' && !seen.containsKey(acc)) {
-                        seen[acc] = [species: v[1], evalue: v[4]]
-                    }
-                }
-                seen.each { acc, info ->
-                    def kind_str = (acc == top_accession) ? 'reffetch_top' : 'reffetch_dup'
-                    out << tuple(kind_str, id, opts_id, null, null, acc, info.species, null, null, info.evalue)
+                    out << tuple('path', id, opts_id, path_idx, null, 'NO HIT', null, null, null, null)
                 }
                 return out
             }
             .set { blast_records }
-
-        // ID-level row: update assemble table + feed ref_fetch
-        blast_records
-            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'id' }
-            .multiMap { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                db_insert:  tuple(accession, species, pident, qcovs, evalue, id)
-                ref_input:  tuple(id, accession, species, evalue, opts_id)
-            }
-            .set { blast_parsed }
-
-        blast_parsed.db_insert
-            .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')
 
         // Per-scaffold rows: update assemblies table
         blast_records
@@ -213,16 +192,64 @@ workflow BLAST_GENBANK {
             }
             .sqlInsert(statement: params.sqlWriteBlastHitScaffold, db: 'sqlite')
 
-        // Per-id ref-fetch inputs already deduped inside the flatMap above.
-        // Filter to just the reffetch_* rows and map to the shape BLAST_REF_FETCH
-        // expects. No groupTuple here, so items flow through as each sample's
-        // BLAST_GENBANK task completes.
+        // Per-path rows: insert into assembly_blast (path_idx stored in 'path' slot)
         blast_records
-            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                kind == 'reffetch_top' || kind == 'reffetch_dup'
+            .filter { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue -> kind == 'path' }
+            .map { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, path_idx, opts_id, accession, species, pident, qcovs, evalue, params.ts)
             }
-            .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                tuple(id, accession, species, evalue, opts_id, kind == 'reffetch_top')
+            .sqlInsert(statement: params.sqlWriteAssemblyBlast, db: 'sqlite')
+
+        // Pick id-level representative across all paths (best pident*qcovs) for the
+        // assemble table and as the "top" marker for ref-fetch dedup.
+        blast_records
+            .filter { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue -> kind == 'path' }
+            .map { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, [opts_id, accession, species, pident, qcovs, evalue])
+            }
+            .groupTuple()
+            .map { id, rows ->
+                def real = rows.findAll { it[1] != 'NO HIT' && it[1] != null }
+                def best = real ? real.max { (it[3] ?: 0) * (it[4] ?: 0) } : rows[0]
+                tuple(id, best[0], best[1], best[2], best[3], best[4], best[5])
+            }
+            .multiMap { id, opts_id, accession, species, pident, qcovs, evalue ->
+                db_assemble: tuple(accession, species, pident, qcovs, evalue, id)
+                ref_input:   tuple(id, accession, species, evalue, opts_id)
+            }
+            .set { blast_rep }
+
+        // Representative hit into assemble table (one row per id)
+        blast_rep.db_assemble
+            .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')
+
+        // Per-id deduped ref-fetch rows: one entry per unique accession across all
+        // paths of this sample, with is_top set on the row whose accession matches
+        // the id-level top hit. Per-id groupTuple here doesn't impose a global
+        // barrier — each sample's ref fetch can start as its BLAST_GENBANK tasks
+        // for that id finish.
+        blast_records
+            .filter { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue -> kind == 'path' }
+            .map { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, [opts_id, accession, species, pident, qcovs, evalue])
+            }
+            .groupTuple()
+            .flatMap { id, rows ->
+                def real = rows.findAll { it[1] != 'NO HIT' && it[1] != null }
+                if (real.isEmpty()) return []
+                def top = real.max { (it[3] ?: 0) * (it[4] ?: 0) }
+                def top_accession = top[1]
+                def opts_id = rows[0][0]
+                def seen = [:] as LinkedHashMap
+                def emitted = []
+                real.each { r ->
+                    def acc = r[1]
+                    if (!seen.containsKey(acc)) {
+                        seen[acc] = true
+                        emitted << tuple(id, acc, r[2], r[5], opts_id, acc == top_accession)
+                    }
+                }
+                return emitted
             }
             .set { ref_fetch_input }
 
