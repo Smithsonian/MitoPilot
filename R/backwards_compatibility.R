@@ -85,6 +85,7 @@ backwards_compatibility <- function(
       "tool" %in% DBI::dbListFields(con, "annotations") &&
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
+      "assembly_blast" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
@@ -666,6 +667,26 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "blast_opts"
       )
+  }
+
+  # if assembly_blast table doesn't exist, create it (per-path BLAST hits)
+  if (!("assembly_blast" %in% DBI::dbListTables(con))) {
+    message("created assembly_blast table")
+    DBI::dbExecute(con,
+      "CREATE TABLE assembly_blast (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL,
+        blast_opts TEXT,
+        blast_accession TEXT,
+        blast_species TEXT,
+        blast_pident REAL,
+        blast_qcovs REAL,
+        blast_evalue REAL,
+        blast_lineage TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path)
+      );"
+    )
   }
 
   # if .config does not contain "blast_gb" params section, add it

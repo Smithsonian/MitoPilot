@@ -349,6 +349,24 @@ new_db <- function(
     );"
   )
 
+  ## Per-path BLAST hits ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE assembly_blast (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL,
+      blast_opts TEXT,
+      blast_accession TEXT,
+      blast_species TEXT,
+      blast_pident REAL,
+      blast_qcovs REAL,
+      blast_evalue REAL,
+      blast_lineage TEXT,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path)
+    );"
+  )
+
   # Add Annotate table ----
   DBI::dbExecute(
     con,

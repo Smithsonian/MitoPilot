@@ -153,10 +153,21 @@ assemble_server <- function(id) {
               cell = rt_longtext()
             ),
             paths = colDef(
-              show = TRUE, width = 100, name = "# Paths", align = "center",
-              cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
+              show = TRUE, width = 110, name = "# Paths", align = "center", html = TRUE,
+              cell = JS("function(cellInfo){
+                var v = cellInfo.value;
+                var label = (v < 0) ? -v : v;
+                var flag = cellInfo.row['path_flag'];
+                var reasons = cellInfo.row['path_flag_reasons'] || '';
+                var color = {ok:'#2ca02c', minor:'#ff7f0e', divergent:'#d62728'}[flag];
+                if (!color) return label;
+                var title = reasons ? ('Path discrepancy: ' + reasons) : ('Paths agree');
+                return label + ' <span title=\"' + title + '\" style=\"display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-left:6px;vertical-align:middle;\"></span>';
+              }"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
+            path_flag = colDef(show = FALSE, filterable = FALSE),
+            path_flag_reasons = colDef(show = FALSE, filterable = FALSE),
             scaffolds = colDef(
               show = TRUE, width = 100, name = "# Scaffolds", align = "center"
             ),

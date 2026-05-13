@@ -16,6 +16,21 @@ assembly_coverage_details_server <- function(id, rv) {
           view_coverage = NA_character_
         )
 
+      # Attach per-path BLAST hits (assembly_blast keyed on ID, path). Table may not
+      # exist on very old projects; fall back to empty join in that case.
+      path_blast <- tryCatch(
+        dplyr::tbl(session$userData$con, "assembly_blast") |>
+          dplyr::filter(ID == !!rv$updating$ID) |>
+          dplyr::select(path, blast_accession, blast_species, blast_pident, blast_qcovs) |>
+          dplyr::collect(),
+        error = function(e) data.frame(
+          path = integer(0), blast_accession = character(0),
+          blast_species = character(0),
+          blast_pident = numeric(0), blast_qcovs = numeric(0)
+        )
+      )
+      rv$focal_assembly <- dplyr::left_join(rv$focal_assembly, path_blast, by = "path")
+
       # TODO - refactor to handle fragmented assemblies
       if (any(rv$focal_assembly$scaffold > 1)) {
         shinyWidgets::sendSweetAlert(
@@ -26,8 +41,25 @@ assembly_coverage_details_server <- function(id, rv) {
         req(F)
       }
 
+      flag_row <- path_discrepancy_flags(session$userData$con) |>
+        dplyr::filter(ID == !!rv$updating$ID)
+      flag <- if (nrow(flag_row) == 0) "none" else flag_row$path_flag[1]
+      reasons <- if (nrow(flag_row) == 0) "" else (flag_row$path_flag_reasons[1] %|NA|% "")
+      flag_color <- c(ok = "#2ca02c", minor = "#ff7f0e", divergent = "#d62728")[flag]
+      if (is.na(flag_color)) flag_color <- "#cccccc"
+
       modalDialog(
-        title = stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
+        title = tagList(
+          stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
+          if (flag != "none")
+            tags$span(
+              style = sprintf(
+                "display:inline-block;margin-left:8px;padding:2px 10px;border-radius:10px;background:%s;color:white;font-size:0.7em;vertical-align:middle;",
+                flag_color
+              ),
+              paste0(flag, if (nzchar(reasons)) paste0(" — ", reasons) else "")
+            )
+        ),
         size = "l",
         reactableOutput(ns("table"), width = "100%"),
         uiOutput(ns("msa_div")),
@@ -72,6 +104,20 @@ assembly_coverage_details_server <- function(id, rv) {
             sequence = colDef(
               minWidth = 250, maxWidth = 1000, align = "center", html = TRUE,
               cell = rt_longtext()
+            ),
+            blast_accession = colDef(
+              name = "BLAST Hit", minWidth = 110, html = TRUE,
+              cell = rt_ncbi_link()
+            ),
+            blast_species = colDef(
+              name = "Species", minWidth = 140, html = TRUE,
+              cell = rt_longtext()
+            ),
+            blast_pident = colDef(
+              name = "% Ident", minWidth = 75, align = "center"
+            ),
+            blast_qcovs = colDef(
+              name = "% Cov", minWidth = 75, align = "center"
             ),
             ignore = colDef(
               html = TRUE, align = "center",
@@ -195,13 +241,17 @@ assembly_coverage_details_server <- function(id, rv) {
         )
       })
       rv$alignment$seqs <- DECIPHER::AlignSeqs(seqs, verbose = F, processors = NULL)
-      dists <- DECIPHER::DistanceMatrix(
+
+      dist_mat <- DECIPHER::DistanceMatrix(
         rv$alignment$seqs,
         includeTerminalGaps = T,
-        type = "dist",
+        type = "matrix",
         verbose = FALSE
-      ) |>
-        range()
+      )
+      rv$alignment$dist_matrix <- dist_mat
+      dist_off <- dist_mat[upper.tri(dist_mat)]
+      dists <- range(dist_off)
+
       if (dists[1] != dists[2]) {
         rv$alignment$pct_id_range <- stringr::str_glue(
           "Pairwise similarity: {round(100-100*dists[1],4)}% - {round(100-100*dists[2],4)}%"
@@ -212,12 +262,17 @@ assembly_coverage_details_server <- function(id, rv) {
         )
       }
 
-      # Run length encoded aligned positions
-      align_pos <- rv$alignment$seqs |>
-        as.matrix() |>
-        apply(2, function(x) {
-          length(unique(x)) == 1
-        })
+      # Aligned matrix and per-column match indicator
+      seqs_mat <- as.matrix(rv$alignment$seqs)
+      align_pos <- apply(seqs_mat, 2, function(x) length(unique(x)) == 1)
+      rv$alignment$seqs_mat <- seqs_mat
+      rv$alignment$align_pos <- align_pos
+      rv$alignment$mismatch_cols <- which(!align_pos)
+      rv$alignment$n_aln <- length(align_pos)
+      rv$alignment$nav_idx <- if (length(rv$alignment$mismatch_cols) > 0) 1L else 0L
+      rv$alignment$click_pos <- NA_integer_
+
+      # Longest consensus block (existing logic)
       align_rle <- rle(align_pos)
       rv$alignment$consEnd <- sum(align_rle$lengths[1:which.max(align_rle$lengths & align_rle$values)])
       rv$alignment$consStart <- rv$alignment$consEnd - align_rle$lengths[which.max(align_rle$lengths & align_rle$values)] + 1
@@ -249,7 +304,189 @@ assembly_coverage_details_server <- function(id, rv) {
       )
 
       rv$alignment$alignmentHeight <- 5 + (length(selected()) * 20)
+
+      # Per-path coverage with raw→alignment position mapping
+      paths_used <- rv$focal_assembly$path[selected()]
+      rv$alignment$paths_used <- paths_used
+
+      cov_list <- purrr::map(seq_along(paths_used), function(i) {
+        p <- paths_used[i]
+        csv_path <- file.path(
+          session$userData$dir_out,
+          rv$updating$ID,
+          "assemble",
+          rv$updating$assemble_opts,
+          paste0(rv$updating$ID, "_assembly_", p, "_coverageStats.csv")
+        )
+        if (!file.exists(csv_path)) return(NULL)
+        cov <- tryCatch(read.csv(csv_path), error = function(e) NULL)
+        if (is.null(cov) || nrow(cov) == 0) return(NULL)
+        row_chars <- seqs_mat[i, ]
+        nongap <- which(row_chars != "-")
+        n <- min(nrow(cov), length(nongap))
+        cov <- cov[seq_len(n), , drop = FALSE]
+        cov$align_position <- nongap[seq_len(n)]
+        cov$path <- p
+        cov
+      })
+      cov_list <- cov_list[!vapply(cov_list, is.null, logical(1))]
+      rv$alignment$coverage <- if (length(cov_list) > 0) do.call(rbind, cov_list) else NULL
     })
+
+    # Mismatch nav ----
+    observeEvent(input$nav_next, {
+      req(rv$alignment, length(rv$alignment$mismatch_cols) > 0)
+      cur <- rv$alignment$nav_idx %||% 0L
+      rv$alignment$nav_idx <- min(cur + 1L, length(rv$alignment$mismatch_cols))
+      rv$alignment$click_pos <- rv$alignment$mismatch_cols[rv$alignment$nav_idx]
+    })
+    observeEvent(input$nav_prev, {
+      req(rv$alignment, length(rv$alignment$mismatch_cols) > 0)
+      cur <- rv$alignment$nav_idx %||% 1L
+      rv$alignment$nav_idx <- max(cur - 1L, 1L)
+      rv$alignment$click_pos <- rv$alignment$mismatch_cols[rv$alignment$nav_idx]
+    })
+
+    output$nav_pos <- renderText({
+      req(rv$alignment)
+      m <- rv$alignment$mismatch_cols
+      if (length(m) == 0) return("0 mismatches")
+      idx <- rv$alignment$nav_idx %||% 1L
+      sprintf("Mismatch %d / %d  —  column %d", idx, length(m), m[idx])
+    })
+
+    # Plotly: mismatch track ----
+    output$mismatch_track <- plotly::renderPlotly({
+      req(rv$alignment)
+      m <- rv$alignment$mismatch_cols
+      cur <- if (!is.null(rv$alignment$click_pos) && !is.na(rv$alignment$click_pos)) {
+        rv$alignment$click_pos
+      } else if (length(m) > 0) m[rv$alignment$nav_idx %||% 1L] else NA_integer_
+
+      p <- plotly::plot_ly(source = "mismatch_src") |>
+        plotly::layout(
+          xaxis = list(title = "Alignment column", range = c(1, rv$alignment$n_aln), zeroline = FALSE),
+          yaxis = list(showticklabels = FALSE, zeroline = FALSE, showgrid = FALSE, range = c(0, 1)),
+          margin = list(l = 40, r = 10, t = 5, b = 30),
+          showlegend = FALSE,
+          shapes = if (!is.na(cur)) list(list(
+            type = "line", x0 = cur, x1 = cur, y0 = 0, y1 = 1,
+            line = list(color = "#000", width = 1, dash = "dot")
+          )) else list()
+        )
+      if (length(m) > 0) {
+        p <- p |> plotly::add_segments(
+          x = m, xend = m, y = 0, yend = 1,
+          line = list(color = "#d62728", width = 1),
+          hoverinfo = "x",
+          customdata = m
+        )
+      }
+      plotly::event_register(p, "plotly_click")
+    })
+
+    # Plotly click → set drilldown position ----
+    observe({
+      ev <- plotly::event_data("plotly_click", source = "mismatch_src")
+      req(ev, rv$alignment)
+      pos <- round(ev$x)
+      rv$alignment$click_pos <- pos
+      m <- rv$alignment$mismatch_cols
+      hit <- which(m == pos)
+      if (length(hit) > 0) rv$alignment$nav_idx <- hit[1]
+    })
+
+    # Plotly: per-path coverage tracks ----
+    output$coverage_tracks <- plotly::renderPlotly({
+      req(rv$alignment)
+      cov <- rv$alignment$coverage
+      paths <- rv$alignment$paths_used
+      if (is.null(cov) || length(paths) == 0) {
+        return(
+          plotly::plot_ly() |>
+            plotly::layout(
+              annotations = list(list(
+                text = "No coverage CSVs found for selected paths.",
+                xref = "paper", yref = "paper", x = 0.5, y = 0.5, showarrow = FALSE
+              )),
+              xaxis = list(visible = FALSE), yaxis = list(visible = FALSE)
+            )
+        )
+      }
+      cur <- if (!is.null(rv$alignment$click_pos) && !is.na(rv$alignment$click_pos)) {
+        rv$alignment$click_pos
+      } else NA_integer_
+      plots <- lapply(paths, function(p) {
+        d <- cov[cov$path == p, ]
+        d <- d[order(d$align_position), ]
+        plotly::plot_ly(d, x = ~align_position, y = ~Depth,
+          type = "scatter", mode = "lines",
+          line = list(color = "#1f77b4"),
+          hovertemplate = paste0("Path ", p, "<br>Col: %{x}<br>Depth: %{y}<extra></extra>")
+        ) |>
+          plotly::layout(
+            yaxis = list(title = paste0("p", p, " depth")),
+            shapes = if (!is.na(cur)) list(list(
+              type = "line", x0 = cur, x1 = cur, y0 = 0, y1 = 1,
+              yref = "paper", line = list(color = "#000", width = 1, dash = "dot")
+            )) else list()
+          )
+      })
+      plotly::subplot(plots, nrows = length(plots), shareX = TRUE, titleY = TRUE) |>
+        plotly::layout(
+          xaxis = list(range = c(1, rv$alignment$n_aln), title = "Alignment column"),
+          showlegend = FALSE,
+          margin = list(l = 60, r = 10, t = 5, b = 30)
+        )
+    })
+
+    # Plotly: pairwise identity heatmap ----
+    output$identity_heatmap <- plotly::renderPlotly({
+      req(rv$alignment, rv$alignment$dist_matrix)
+      d <- rv$alignment$dist_matrix
+      if (nrow(d) < 2) return(plotly::plot_ly())
+      ident <- (1 - d) * 100
+      labs <- rownames(ident)
+      if (is.null(labs)) labs <- as.character(seq_len(nrow(ident)))
+      plotly::plot_ly(
+        x = labs, y = labs, z = ident, type = "heatmap",
+        colorscale = "Viridis", zauto = FALSE,
+        zmin = min(ident, na.rm = TRUE), zmax = 100,
+        hovertemplate = "%{y} vs %{x}<br>%{z:.2f}%<extra></extra>"
+      ) |> plotly::layout(
+        xaxis = list(tickangle = -45),
+        yaxis = list(autorange = "reversed"),
+        margin = list(l = 100, r = 10, t = 10, b = 100)
+      )
+    })
+
+    # Drilldown ----
+    output$drilldown <- renderReactable({
+      req(rv$alignment)
+      pos <- rv$alignment$click_pos
+      if (is.null(pos) || is.na(pos)) return(NULL)
+      seqs_mat <- rv$alignment$seqs_mat
+      if (pos < 1 || pos > ncol(seqs_mat)) return(NULL)
+      d <- data.frame(
+        path = rv$alignment$paths_used,
+        base = seqs_mat[, pos],
+        stringsAsFactors = FALSE
+      )
+      cov <- rv$alignment$coverage
+      if (!is.null(cov)) {
+        sub <- cov[cov$align_position == pos, c("path", "Depth", "ErrorRate", "GC"), drop = FALSE]
+        d <- dplyr::left_join(d, sub, by = "path")
+      }
+      reactable(
+        d, compact = TRUE,
+        defaultColDef = colDef(align = "center"),
+        columns = list(
+          path = colDef(name = "Path", width = 60),
+          base = colDef(name = "Base", width = 60)
+        )
+      )
+    })
+
     output$msa_div <- renderUI({
       req(rv$alignment)
 
@@ -267,11 +504,32 @@ assembly_coverage_details_server <- function(id, rv) {
 
       wait_align$hide()
 
+      n_paths <- length(rv$alignment$paths_used)
+      cov_height <- max(120, 80 * n_paths)
+
       div(
-        style = "margin: 30px 5px 30px 5px;",
+        style = "margin: 20px 5px 30px 5px;",
+        h5("Mismatches"),
+        div(
+          style = "display:flex; gap:0.5em; align-items:center; margin-bottom:0.3em;",
+          actionButton(ns("nav_prev"), "Prev", icon("angle-left"), class = "btn-sm"),
+          actionButton(ns("nav_next"), "Next", icon("angle-right"), class = "btn-sm"),
+          tags$span(textOutput(ns("nav_pos"), inline = TRUE),
+            style = "margin-left: 0.5em; font-family: monospace;")
+        ),
+        plotly::plotlyOutput(ns("mismatch_track"), height = "70px"),
+        h5("Per-path coverage"),
+        plotly::plotlyOutput(ns("coverage_tracks"), height = sprintf("%dpx", cov_height)),
+        h5("Alignment"),
         msa,
         p(rv$alignment$pct_id_range),
         p(rv$alignment$consRegion),
+        h5("Position drilldown"),
+        p(class = "text-muted", style = "font-size: 0.85em;",
+          "Click a mismatch column above or use Prev/Next to inspect per-path base + coverage."),
+        reactableOutput(ns("drilldown")),
+        h5("Pairwise identity"),
+        plotly::plotlyOutput(ns("identity_heatmap"), height = sprintf("%dpx", max(180, 30 * n_paths + 120))),
         actionButton(ns("trim_consensus"), "Trim Consensus")
       ) |> tagList()
     })

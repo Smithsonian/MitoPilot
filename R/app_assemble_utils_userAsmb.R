@@ -16,10 +16,15 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon, topology, assembly)
 
-  dplyr::left_join(assemble, preprocess, by = "ID") |>
+  out <- dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
-    dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::arrange(dplyr::desc(time_stamp))
+
+  flags <- path_discrepancy_flags(db)
+  out <- dplyr::left_join(out, flags, by = "ID")
+
+  out |>
     dplyr::relocate(
       assemble_lock,
       assemble_switch,
@@ -35,6 +40,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       length,
       paths,
       scaffolds,
+      path_flag,
       blast_accession,
       blast_species,
       blast_pident,
