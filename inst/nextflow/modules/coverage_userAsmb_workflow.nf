@@ -35,12 +35,14 @@ workflow COVERAGE_userAsmb {
                     it[2],                                          // topology
                     it[3]                                          // assemble opts dummy var
                 )
-                min_len: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length
+                min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
+                min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
             }
             .set { query_ch }
 
         query_ch.info.set { sample_info }
-        query_ch.min_len.set { min_len_lookup }
+        query_ch.min_len_scaffolds.set { min_len_lookup }
+        query_ch.min_len_summary.set { min_len_summary }
 
         // Coverage Input Channel
         input
@@ -120,7 +122,6 @@ workflow COVERAGE_userAsmb {
 
         // Update DB assemble table
         assemblies_ch
-            // Add summary stats
             .map { it ->
                 tuple(
                     it[0],                                          // ID
@@ -131,29 +132,29 @@ workflow COVERAGE_userAsmb {
                 )
             }
             .groupTuple()
-            .map { it ->
-                tuple(
-                    it[1].max(),                                    // # paths
-                    it[2].max(),                                    // # scaffolds
-                    it[3].unique().sort().reverse().join(";"),      // length(s)
-                    it[4].unique().sort().join(";"),                // topology(s)
-                    '4',                                            // assembly status (In Progress)
-                    '',                                             // assembly notes
-                    params.ts,                                      // time stamp
-                    it[0]                                           // ID
-                ).flatten()
-            }
-            .map { it ->
-                if(it[1] > 1){                      // mark fragmented assemblies
-                    it[2] = 'fragmented'
-                    it[4] = '3'
-                    it[5] = 'Output contains disconnected contigs'
+            .combine(min_len_summary, by: 0)        // append per-sample min_assembly_length
+            .map { id, paths_list, scaffolds_list, lengths_list, topos_list, min_assembly_length ->
+                def max_paths      = paths_list.max()
+                def max_scaffolds  = scaffolds_list.max()
+                def length_str     = lengths_list.unique().sort().reverse().join(";")
+                def topo_str       = topos_list.unique().sort().join(";")
+                def max_len        = lengths_list.max() ?: 0
+                def status         = '4'
+                def notes          = ''
+                if (max_scaffolds > 1) {
+                    topo_str = 'fragmented'
+                    status   = '3'
+                    notes    = 'Output contains disconnected contigs'
                 }
-                if(it[0] > 1){                      // mark unresolved assemblies
-                    it[4] = '3'
-                    it[5] = 'Unable to resolve single assembly from reads'
+                if (max_paths > 1) {
+                    status = '3'
+                    notes  = 'Unable to resolve single assembly from reads'
                 }
-                return it
+                if (max_len < (min_assembly_length as Integer)) {
+                    status = '3'
+                    notes  = "All scaffolds below min assembly length (${min_assembly_length} bp)"
+                }
+                tuple(max_paths, max_scaffolds, length_str, topo_str, status, notes, params.ts, id)
             }
             .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
 

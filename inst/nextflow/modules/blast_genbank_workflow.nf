@@ -8,6 +8,11 @@ params.sqlReadBlastOpts =
     'FROM assemble a ' +
     'JOIN blast_opts b ON a.blast_opts = b.blast_opts'
 
+params.sqlReadMinLen =
+    'SELECT a.ID, opts.min_assembly_length ' +
+    'FROM assemble a ' +
+    'JOIN assemble_opts opts ON a.assemble_opts = opts.assemble_opts'
+
 workflow BLAST_GENBANK {
     take:
         // input: tuple(id, assembly_file_or_list, opts_id)
@@ -35,27 +40,45 @@ workflow BLAST_GENBANK {
             .map { id, asmb_list, opts_id -> tuple(id, true) }
             .set { all_ids }
 
+        // Read per-sample min_assembly_length from DB
+        channel.fromQuery(params.sqlReadMinLen, db: 'sqlite')
+            .map { row -> tuple(row[0], row[1] == null ? 500 : (row[1] as Integer)) }
+            .set { min_len_ch }  // (id, min_assembly_length)
+
         normalized_input
-            // Keep only single-path assemblies (exactly 1 file, not a failed assembly)
-            .filter{ id, asmb_list, opts_id ->
-                asmb_list.size() == 1 &&
-                !(asmb_list[0].name =~ /assembly_0\.fasta$/)
-            }
-            .map{ id, asmb_list, opts_id ->
-                tuple(id, asmb_list[0], opts_id)
-            }
-            // Keep only single-scaffold assemblies (exactly 1 sequence in the FASTA)
-            // Use early-exit reader to avoid loading large multi-contig files into master JVM heap
-            .filter{ id, asmb, opts_id ->
-                asmb.withReader { reader ->
-                    int count = 0
-                    String line
-                    while ((line = reader.readLine()) != null) {
-                        if (line.startsWith('>') && ++count > 1) return false
+            // Join with per-sample min_assembly_length, then find the single qualifying scaffold
+            // across all assembly paths; write it to a temp FASTA for BLAST input
+            .join(min_len_ch, by: 0)
+            .map { id, asmb_list, opts_id, min_len ->
+                def qualifying = []
+                def realFiles = asmb_list.findAll { !(it.name =~ /assembly_0\.fasta$/) }
+                for (def f : realFiles) {
+                    def header = null
+                    def seq = new StringBuilder()
+                    f.eachLine { line ->
+                        if (line.startsWith('>')) {
+                            if (header != null && seq.length() >= min_len) {
+                                qualifying << [header: header, seq: seq.toString()]
+                            }
+                            header = line
+                            seq = new StringBuilder()
+                        } else {
+                            seq.append(line.trim())
+                        }
                     }
-                    count == 1
+                    if (header != null && seq.length() >= min_len) {
+                        qualifying << [header: header, seq: seq.toString()]
+                    }
+                    if (qualifying.size() > 1) break
                 }
+                if (qualifying.size() != 1) return null
+                def targetDirStr = "${workflow.workDir}/blast_select_targets"
+                new File(targetDirStr).mkdirs()
+                def targetFasta = new File("${targetDirStr}/${id}.blast_target.fasta")
+                targetFasta.text = "${qualifying[0].header}\n${qualifying[0].seq}\n"
+                tuple(id, targetFasta.toPath(), opts_id)
             }
+            .filter { it != null }
             // Join with blast opts; samples with run_blast = 0 have no entry and are dropped
             .join(blast_opts_ch, by: 0)
             .map{ id, asmb, opts_id, entrez_query, extra_opts ->
@@ -81,7 +104,7 @@ workflow BLAST_GENBANK {
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
 
         // Write state=2 for samples that were filtered out before BLAST
-        // (multi-path, single-scaffold filter fail, or run_blast = 0)
+        // (no single qualifying scaffold >= min_assembly_length across all paths, or run_blast = 0)
         all_ids
             .join(blast_in_split.ids, remainder: true)
             .filter { id, all_flag, blast_flag -> blast_flag == null }

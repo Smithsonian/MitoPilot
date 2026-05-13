@@ -48,12 +48,14 @@ workflow ASSEMBLE {
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
                     (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer))  // max_scaffolds
                 )
-                min_len: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length
+                min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
+                min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
             }
             .set { query_ch }
 
         query_ch.opts.set { assemble_opts }
-        query_ch.min_len.set { min_len_lookup }
+        query_ch.min_len_scaffolds.set { min_len_lookup }
+        query_ch.min_len_summary.set { min_len_summary }
 
         // Assemble Input Channel
         input
@@ -139,8 +141,10 @@ workflow ASSEMBLE {
             .set { summarized }
 
         // Apply user-configured thresholds: split into pass / fail branches
+        // Combine with min_len_summary so the all-short check can fire per-sample
         summarized
-            .branch { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+            .combine(min_len_summary, by: 0)
+            .branch { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds, min_assembly_length ->
                 fail: (n_paths > max_paths) || (n_scaffolds > max_scaffolds)
                 pass: true
             }
@@ -148,7 +152,7 @@ workflow ASSEMBLE {
 
         // PASS: write per-sample summary live, then propagate downstream
         branched.pass
-            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds, min_assembly_length ->
                 def status = '4'
                 def notes  = ''
                 if (n_scaffolds > 1) {
@@ -159,6 +163,11 @@ workflow ASSEMBLE {
                 if (n_paths > 1) {
                     notes  = 'Unable to resolve single assembly from reads'
                     status = '3'
+                }
+                def max_len = length_str ? length_str.split(';').collect { it as Integer }.max() : 0
+                if (max_len < min_assembly_length) {
+                    status = '3'
+                    notes  = "All scaffolds below min assembly length (${min_assembly_length} bp)"
                 }
                 db_write:   tuple(n_paths, n_scaffolds, length_str, topo_str, status, notes, params.ts, id)
                 fasta:      tuple(id, raw[1])
@@ -194,7 +203,7 @@ workflow ASSEMBLE {
 
         // FAIL (too many paths/scaffolds): write status=3 with reason, drop from downstream
         branched.fail
-            .map { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+            .map { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds, min_assembly_length ->
                 def msg
                 if (n_paths > max_paths && n_scaffolds > max_scaffolds) {
                     msg = "${n_paths} assembly paths, exceeds limit (${max_paths}); ${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"
