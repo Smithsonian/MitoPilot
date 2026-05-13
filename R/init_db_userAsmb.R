@@ -273,6 +273,7 @@ new_db_userAsmb <- function(
       errors TEXT,
       ignore INTEGER,
       edited INTEGER,
+      edit_positions TEXT,
       blast_accession TEXT,
       blast_species TEXT,
       blast_pident REAL,

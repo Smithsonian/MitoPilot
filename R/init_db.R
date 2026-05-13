@@ -344,6 +344,7 @@ new_db <- function(
       errors TEXT,
       ignore INTEGER,
       edited INTEGER,
+      edit_positions TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold)
     );"

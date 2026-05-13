@@ -63,6 +63,24 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     )
 }
 
+#' IUPAC ambiguity code for a set of observed bases
+#'
+#' Given a character vector of DNA bases (may include "-" gaps, which are
+#' ignored), returns the single-character IUPAC code representing all distinct
+#' bases observed. Returns "N" for unrecognised combinations.
+#'
+#' @noRd
+iupac_code <- function(bases) {
+  bases <- sort(unique(toupper(bases[!bases %in% c("-", "N", "")])))
+  lu <- c(
+    A = "A", C = "C", G = "G", T = "T",
+    AC = "M", AG = "R", AT = "W", CG = "S", CT = "Y", GT = "K",
+    ACG = "V", ACT = "H", AGT = "D", CGT = "B", ACGT = "N"
+  )
+  key <- paste(bases, collapse = "")
+  unname(lu[key]) %||% "N"
+}
+
 #' Compute per-sample path-discrepancy flags
 #'
 #' Returns one row per ID with `path_flag` (ok|none|minor|divergent) and

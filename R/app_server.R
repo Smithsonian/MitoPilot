@@ -37,6 +37,11 @@ app_server <- function(input, output, session) {
   if (!"blast_lineage" %in% existing_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
 
+  # Migrate: add edit_positions column to assemblies table for pre-existing databases
+  assemblies_fields <- DBI::dbListFields(session$userData$con, "assemblies")
+  if (!"edit_positions" %in% assemblies_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
+
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>
     stringr::str_extract("publishDir.*") |>
