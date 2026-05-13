@@ -83,7 +83,7 @@ Samples exceeding this are flagged as failed and skipped by downstream
 steps in WF1.}
 
 \item{min_assembly_length}{Minimum contig length (bp) to retain for
-annotation and BLAST. Scaffolds shorter than this threshold are stored
+coverage calculations, BLAST, and annotation. Scaffolds shorter than this threshold are stored
 but flagged as ignored (default = 500).}
 
 \item{annotate_cpus}{Default # cpus for annotation}
