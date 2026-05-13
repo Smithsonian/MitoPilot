@@ -359,6 +359,7 @@ new_db <- function(
       blast_qcovs REAL,
       blast_evalue REAL,
       blast_lineage TEXT,
+      edit_positions TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold)
     );"

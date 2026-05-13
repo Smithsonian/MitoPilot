@@ -87,6 +87,7 @@ backwards_compatibility <- function(
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
       "assembly_blast" %in% DBI::dbListTables(con) &&
+      "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
       isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
@@ -793,6 +794,12 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "blast_opts"
       )
+  }
+
+  # if edit_positions column doesn't exist in assemblies, add it
+  if (!("edit_positions" %in% DBI::dbListFields(con, "assemblies"))) {
+    message("added 'edit_positions' column to assemblies table")
+    DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
   }
 
   # if assembly_blast table doesn't exist, create it (per-path BLAST hits)

@@ -5,9 +5,13 @@ assembly_coverage_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Local state for consensus review (separate from rv to avoid pollution)
+    lrv <- reactiveValues(consensus_review = NULL)
+
     init("coverage_modal")
     on("coverage_modal", {
       rv$alignment <- NULL
+      lrv$consensus_review <- NULL
       rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::select(
@@ -57,6 +61,7 @@ assembly_coverage_details_server <- function(id, rv) {
         size = "l",
         reactableOutput(ns("table"), width = "100%"),
         uiOutput(ns("msa_div")),
+        uiOutput(ns("consensus_panel")),
         div(
           style = "margin: 10px;",
           textAreaInput(
@@ -71,6 +76,9 @@ assembly_coverage_details_server <- function(id, rv) {
             style = "display: flex; justify-content: right; gap: 0.5em;",
             uiOutput(ns("clip")) |> shinyjs::hidden(),
             actionButton(ns("align"), "Align", icon("align-justify")) |> shinyjs::hidden(),
+            actionButton(ns("build_consensus"), "Build Consensus", icon("dna")) |> shinyjs::hidden(),
+            actionButton(ns("finalize_consensus"), "Finalize Consensus", icon("check"), class = "btn-success") |> shinyjs::hidden(),
+            actionButton(ns("exit_review"), "Exit Review", icon("xmark")) |> shinyjs::hidden(),
             actionButton(ns("close_modal"), "Close")
           )
         )
@@ -150,9 +158,16 @@ assembly_coverage_details_server <- function(id, rv) {
     # Table selection ----
     selected <- reactive(reactable::getReactableState("table", "selected"))
     observe({
-      shinyjs::toggle("clip", condition = length(selected()) > 0)
-      shinyjs::toggle("align", condition = length(selected()) > 1)
-      shinyjs::toggle("msa_div", condition = length(selected()) > 1)
+      in_review <- isTRUE(lrv$consensus_review$active)
+      has_selection <- length(selected()) > 0
+      has_multi <- length(selected()) > 1
+      is_aligned <- !is.null(rv$alignment)
+
+      shinyjs::toggle("clip", condition = has_selection && !in_review)
+      shinyjs::toggle("align", condition = has_multi && !in_review)
+      shinyjs::toggle("build_consensus", condition = is_aligned && !in_review && length(rv$alignment$mismatch_cols) > 0)
+      shinyjs::toggle("finalize_consensus", condition = in_review)
+      shinyjs::toggle("exit_review", condition = in_review)
     })
 
     # Ignore bttn ----
@@ -290,6 +305,7 @@ assembly_coverage_details_server <- function(id, rv) {
       color = waiter::transparent(.5)
     )
     observeEvent(input$align, {
+      lrv$consensus_review <- NULL
       wait_align$show()
       seqs <- rv$focal_assembly$sequence[selected()] |> Biostrings::DNAStringSet()
       names(seqs) <- purrr::map_chr(selected(), ~ {
@@ -396,15 +412,27 @@ assembly_coverage_details_server <- function(id, rv) {
     # Mismatch nav ----
     observeEvent(input$nav_next, {
       req(rv$alignment, length(rv$alignment$mismatch_cols) > 0)
-      cur <- rv$alignment$nav_idx %||% 0L
-      rv$alignment$nav_idx <- min(cur + 1L, length(rv$alignment$mismatch_cols))
-      rv$alignment$click_pos <- rv$alignment$mismatch_cols[rv$alignment$nav_idx]
+      m <- rv$alignment$mismatch_cols
+      in_review <- isTRUE(lrv$consensus_review$active)
+      if (in_review) {
+        cur <- lrv$consensus_review$mismatch_idx %||% 1L
+        lrv$consensus_review$mismatch_idx <- min(cur + 1L, length(m))
+      }
+      cur_nav <- rv$alignment$nav_idx %||% 0L
+      rv$alignment$nav_idx <- min(cur_nav + 1L, length(m))
+      rv$alignment$click_pos <- m[rv$alignment$nav_idx]
     })
     observeEvent(input$nav_prev, {
       req(rv$alignment, length(rv$alignment$mismatch_cols) > 0)
-      cur <- rv$alignment$nav_idx %||% 1L
-      rv$alignment$nav_idx <- max(cur - 1L, 1L)
-      rv$alignment$click_pos <- rv$alignment$mismatch_cols[rv$alignment$nav_idx]
+      m <- rv$alignment$mismatch_cols
+      in_review <- isTRUE(lrv$consensus_review$active)
+      if (in_review) {
+        cur <- lrv$consensus_review$mismatch_idx %||% 1L
+        lrv$consensus_review$mismatch_idx <- max(cur - 1L, 1L)
+      }
+      cur_nav <- rv$alignment$nav_idx %||% 1L
+      rv$alignment$nav_idx <- max(cur_nav - 1L, 1L)
+      rv$alignment$click_pos <- m[rv$alignment$nav_idx]
     })
 
     output$nav_pos <- renderText({
@@ -423,6 +451,16 @@ assembly_coverage_details_server <- function(id, rv) {
         rv$alignment$click_pos
       } else if (length(m) > 0) m[rv$alignment$nav_idx %||% 1L] else NA_integer_
 
+      # In review mode, color columns by decision status
+      cr <- lrv$consensus_review
+      decided_cols <- integer(0)
+      undecided_cols <- m
+      if (!is.null(cr) && isTRUE(cr$active)) {
+        decided_mask <- !is.na(cr$decisions)
+        decided_cols <- cr$valid_cols[decided_mask]
+        undecided_cols <- setdiff(m, decided_cols)
+      }
+
       p <- plotly::plot_ly(source = "mismatch_src") |>
         plotly::layout(
           xaxis = list(title = "Alignment column", range = c(1, rv$alignment$n_aln), zeroline = FALSE),
@@ -434,18 +472,24 @@ assembly_coverage_details_server <- function(id, rv) {
             line = list(color = "#000", width = 1, dash = "dot")
           )) else list()
         )
-      if (length(m) > 0) {
+      if (length(undecided_cols) > 0) {
         p <- p |> plotly::add_segments(
-          x = m, xend = m, y = 0, yend = 1,
+          x = undecided_cols, xend = undecided_cols, y = 0, yend = 1,
           line = list(color = "#d62728", width = 1),
-          hoverinfo = "x",
-          customdata = m
+          hoverinfo = "x", name = "undecided"
+        )
+      }
+      if (length(decided_cols) > 0) {
+        p <- p |> plotly::add_segments(
+          x = decided_cols, xend = decided_cols, y = 0, yend = 1,
+          line = list(color = "#2ca02c", width = 1),
+          hoverinfo = "x", name = "decided"
         )
       }
       plotly::event_register(p, "plotly_click")
     })
 
-    # Plotly click → set drilldown position ----
+    # Plotly click → set drilldown / review position ----
     observe({
       ev <- plotly::event_data("plotly_click", source = "mismatch_src")
       req(ev, rv$alignment)
@@ -453,7 +497,13 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$alignment$click_pos <- pos
       m <- rv$alignment$mismatch_cols
       hit <- which(m == pos)
-      if (length(hit) > 0) rv$alignment$nav_idx <- hit[1]
+      if (length(hit) > 0) {
+        rv$alignment$nav_idx <- hit[1]
+        if (isTRUE(lrv$consensus_review$active)) {
+          valid_hit <- which(lrv$consensus_review$valid_cols == pos)
+          if (length(valid_hit) > 0) lrv$consensus_review$mismatch_idx <- valid_hit[1]
+        }
+      }
     })
 
     # Plotly: per-path coverage tracks ----
@@ -594,6 +644,326 @@ assembly_coverage_details_server <- function(id, rv) {
       ) |> tagList()
     })
 
+    # ---- Consensus review state machine ----
+
+    # Enter review mode
+    observeEvent(input$build_consensus, ignoreInit = TRUE, {
+      req(rv$alignment)
+      m <- rv$alignment$mismatch_cols
+      seqs_mat <- rv$alignment$seqs_mat
+      backbone_row <- 1L
+      # Only review positions where backbone is not a gap (substitutions only)
+      backbone_gaps <- seqs_mat[backbone_row, m] == "-"
+      valid_cols <- m[!backbone_gaps]
+      if (length(valid_cols) == 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "Nothing to review",
+          text = "All mismatch positions are insertions relative to the backbone (gaps). No substitutions to resolve.",
+          type = "info"
+        )
+        return()
+      }
+      lrv$consensus_review <- list(
+        active = TRUE,
+        backbone_row = backbone_row,
+        valid_cols = valid_cols,
+        mismatch_idx = 1L,
+        decisions = setNames(
+          rep(NA_character_, length(valid_cols)),
+          as.character(valid_cols)
+        )
+      )
+      rv$alignment$nav_idx <- 1L
+      rv$alignment$click_pos <- valid_cols[1]
+    })
+
+    # Exit review mode
+    observeEvent(input$exit_review, ignoreInit = TRUE, {
+      lrv$consensus_review <- NULL
+    })
+
+    # Accept decision for current position
+    observeEvent(input$cons_accept, ignoreInit = TRUE, {
+      req(lrv$consensus_review$active)
+      cr <- lrv$consensus_review
+      m <- cr$valid_cols
+      idx <- cr$mismatch_idx
+      if (idx > length(m)) return()
+      pos <- m[idx]
+      lrv$consensus_review$decisions[as.character(pos)] <- input$cons_choice
+      next_idx <- min(idx + 1L, length(m) + 1L)
+      lrv$consensus_review$mismatch_idx <- next_idx
+      if (next_idx <= length(m)) {
+        rv$alignment$nav_idx <- which(rv$alignment$mismatch_cols == m[next_idx])[1]
+        rv$alignment$click_pos <- m[next_idx]
+      }
+    })
+
+    # Skip (keep backbone) at current position
+    observeEvent(input$cons_skip, ignoreInit = TRUE, {
+      req(lrv$consensus_review$active)
+      cr <- lrv$consensus_review
+      m <- cr$valid_cols
+      idx <- cr$mismatch_idx
+      if (idx > length(m)) return()
+      pos <- m[idx]
+      backbone_base <- rv$alignment$seqs_mat[cr$backbone_row, pos]
+      lrv$consensus_review$decisions[as.character(pos)] <- backbone_base
+      next_idx <- min(idx + 1L, length(m) + 1L)
+      lrv$consensus_review$mismatch_idx <- next_idx
+      if (next_idx <= length(m)) {
+        rv$alignment$nav_idx <- which(rv$alignment$mismatch_cols == m[next_idx])[1]
+        rv$alignment$click_pos <- m[next_idx]
+      }
+    })
+
+    # Consensus review panel (replaces drilldown when active)
+    output$consensus_panel <- renderUI({
+      cr <- lrv$consensus_review
+      if (is.null(cr) || !isTRUE(cr$active)) return(NULL)
+
+      m <- cr$valid_cols
+      idx <- cr$mismatch_idx
+      n_reviewed <- sum(!is.na(cr$decisions))
+
+      if (idx > length(m)) {
+        return(div(
+          class = "alert alert-success",
+          style = "margin: 10px 5px;",
+          icon("check-circle"),
+          sprintf(" All %d positions reviewed. Click 'Finalize Consensus' to generate the sequence.", length(m))
+        ))
+      }
+
+      pos <- m[idx]
+      seqs_mat <- rv$alignment$seqs_mat
+      bases <- seqs_mat[, pos]
+      non_gap <- bases[bases != "-"]
+      tbl_counts <- sort(table(non_gap), decreasing = TRUE)
+      majority_base <- names(tbl_counts)[1]
+      majority_count <- as.integer(tbl_counts[1])
+      backbone_base <- seqs_mat[cr$backbone_row, pos]
+      is_tie <- length(tbl_counts) > 1 && tbl_counts[1] == tbl_counts[2]
+      n_paths <- length(bases)
+      iupac <- iupac_code(names(tbl_counts))
+
+      # Build choice list
+      choices <- c()
+      if (!is_tie) {
+        choices <- c(choices, setNames(
+          majority_base,
+          sprintf("Majority: %s  (%d / %d paths)", majority_base, majority_count, n_paths)
+        ))
+      } else {
+        choices <- c(choices, setNames(
+          iupac,
+          sprintf("Tied majority — IUPAC ambiguity code: %s", iupac)
+        ))
+      }
+      if (backbone_base != majority_base && !is_tie) {
+        choices <- c(choices, setNames(
+          backbone_base,
+          sprintf("Keep backbone: %s", backbone_base)
+        ))
+      }
+      if (!is_tie && iupac != majority_base) {
+        choices <- c(choices, setNames(iupac, sprintf("IUPAC ambiguity: %s", iupac)))
+      }
+      choices <- c(choices, "N" = "N  (ambiguous)")
+      for (b in setdiff(names(tbl_counts), c(majority_base, backbone_base))) {
+        choices <- c(choices, setNames(b, sprintf("Minority: %s  (%d path%s)", b, tbl_counts[b], if (tbl_counts[b] > 1) "s" else "")))
+      }
+
+      prev_decision <- cr$decisions[as.character(pos)]
+      selected_choice <- if (!is.na(prev_decision)) prev_decision else if (!is_tie) majority_base else iupac
+
+      div(
+        style = "border: 1px solid #bee5eb; border-radius: 6px; padding: 14px; margin: 10px 5px; background: #f0f9ff;",
+        div(
+          style = "display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;",
+          tags$h5(style = "margin:0;",
+            sprintf("Consensus Review — Mismatch %d / %d  (column %d)", idx, length(m), pos)
+          ),
+          tags$span(
+            style = sprintf("padding:3px 10px; border-radius:10px; font-size:0.8em; color:white; background:%s;",
+              if (n_reviewed == length(m)) "#2ca02c" else "#6c757d"),
+            sprintf("%d / %d decided", n_reviewed, length(m))
+          )
+        ),
+        div(
+          style = "display:flex; gap:0.5em; flex-wrap:wrap; margin-bottom:10px;",
+          lapply(seq_along(bases), function(i) {
+            b <- bases[i]
+            bg <- if (b == "-") "#e9ecef" else if (b == majority_base) "#d4edda" else "#f8d7da"
+            tags$span(
+              style = sprintf(
+                "padding:4px 10px; border-radius:4px; font-family:monospace; font-size:1.1em; background:%s; border:1px solid #ccc;",
+                bg
+              ),
+              sprintf("path %s: %s", rv$alignment$paths_used[i], b)
+            )
+          })
+        ),
+        if (is_tie) tags$p(
+          class = "text-warning",
+          style = "margin-bottom:6px; font-size:0.9em;",
+          icon("triangle-exclamation"), " Tied majority — no single base has more votes. IUPAC ambiguity code pre-selected."
+        ),
+        selectInput(
+          ns("cons_choice"),
+          label = "Decision for this position:",
+          choices = choices,
+          selected = selected_choice,
+          width = "100%"
+        ),
+        div(
+          style = "display:flex; gap:0.5em;",
+          actionButton(ns("cons_accept"), "Accept", class = "btn-success btn-sm", icon = icon("check")),
+          actionButton(ns("cons_skip"), "Skip (keep backbone)", class = "btn-secondary btn-sm")
+        )
+      )
+    })
+
+    # Finalize Consensus ----
+    observeEvent(input$finalize_consensus, ignoreInit = TRUE, {
+      req(rv$alignment, lrv$consensus_review$active)
+      if (rv$updating$assemble_lock == 1) {
+        shinyWidgets::sendSweetAlert(title = "Assembly Locked!", type = "warning")
+        req(F)
+      }
+
+      cr <- lrv$consensus_review
+      seqs_mat <- rv$alignment$seqs_mat
+      backbone_row <- cr$backbone_row
+      backbone_chars <- seqs_mat[backbone_row, ]
+      nongap <- which(backbone_chars != "-")
+      consensus_chars <- backbone_chars[nongap]
+
+      # Apply decisions; build edit log
+      edit_log <- list()
+      for (pos_str in names(cr$decisions)) {
+        dec <- cr$decisions[[pos_str]]
+        if (is.na(dec)) next
+        pos <- as.integer(pos_str)
+        raw_idx <- which(nongap == pos)
+        if (length(raw_idx) == 0) next
+        old_base <- consensus_chars[raw_idx]
+        if (dec != old_base) {
+          consensus_chars[raw_idx] <- dec
+          edit_log <- c(edit_log, list(list(
+            aln_col = pos,
+            raw_pos = as.integer(raw_idx),
+            from = old_base,
+            to = dec
+          )))
+        }
+      }
+
+      consensus_seq <- paste(consensus_chars, collapse = "")
+      consensus_bs <- Biostrings::DNAStringSet(consensus_seq)
+      names(consensus_bs) <- paste(rv$updating$ID, 0, 0, sep = ".") |> paste("linear")
+
+      out_fasta <- file.path(
+        session$userData$dir_out, rv$updating$ID, "assemble",
+        rv$updating$assemble_opts,
+        paste0(rv$updating$ID, "_assembly_0.fasta")
+      )
+      Biostrings::writeXStringSet(consensus_bs, out_fasta)
+
+      # Coverage stats from backbone path
+      backbone_path <- rv$alignment$paths_used[backbone_row]
+      cov_in <- file.path(
+        session$userData$dir_out, rv$updating$ID, "assemble",
+        rv$updating$assemble_opts,
+        paste0(rv$updating$ID, "_assembly_", backbone_path, "_coverageStats.csv")
+      )
+      coverage <- tryCatch(read.csv(cov_in), error = function(e) NULL)
+      if (!is.null(coverage)) {
+        coverage <- dplyr::mutate(coverage,
+          Position = dplyr::row_number(),
+          SeqId = stringr::str_replace(SeqId, "[0-9]+\\.[0-9]+$", "0.0")
+        )
+        readr::write_csv(
+          coverage,
+          file.path(
+            session$userData$dir_out, rv$updating$ID, "assemble",
+            rv$updating$assemble_opts,
+            paste0(rv$updating$ID, "_assembly_0_coverageStats.csv")
+          ),
+          quote = "none", na = ""
+        )
+      }
+
+      edit_positions_json <- if (length(edit_log) > 0)
+        as.character(jsonlite::toJSON(edit_log, auto_unbox = TRUE))
+      else
+        "[]"
+
+      # Ignore all current assemblies for this ID
+      DBI::dbExecute(
+        session$userData$con,
+        sprintf("UPDATE assemblies SET ignore = 1 WHERE ID = '%s';", rv$updating$ID)
+      )
+
+      # Build insert row
+      new_row <- data.frame(
+        ID = rv$updating$ID,
+        path = 0L,
+        scaffold = 0L,
+        topology = "linear",
+        length = nchar(consensus_seq),
+        sequence = consensus_seq,
+        depth = if (!is.null(coverage)) paste(coverage$Depth, collapse = " ") else NA_character_,
+        gc = if (!is.null(coverage)) paste(coverage$GC, collapse = " ") else NA_character_,
+        errors = if (!is.null(coverage)) paste(coverage$ErrorRate, collapse = " ") else NA_character_,
+        ignore = 0L,
+        edited = 1L,
+        time_stamp = as.numeric(Sys.time()),
+        stringsAsFactors = FALSE
+      )
+      if ("edit_positions" %in% DBI::dbListFields(session$userData$con, "assemblies")) {
+        new_row$edit_positions <- edit_positions_json
+      }
+
+      dplyr::tbl(session$userData$con, "assemblies") |>
+        dplyr::rows_upsert(new_row, by = c("ID", "path", "scaffold"), copy = TRUE, in_place = TRUE)
+
+      # Summary note for assemble table
+      n_edits <- length(edit_log)
+      edit_detail <- if (n_edits > 0) {
+        changes <- paste(
+          vapply(edit_log, function(x) sprintf("col%d:%s→%s", x$aln_col, x$from, x$to), character(1)),
+          collapse = "; "
+        )
+        sprintf(
+          "Consensus built from %d paths (%d edit%s: %s). ",
+          length(rv$alignment$paths_used), n_edits,
+          if (n_edits == 1) "" else "s", changes
+        )
+      } else {
+        sprintf(
+          "Consensus built from %d paths (0 edits — backbone identical at all reviewed positions). ",
+          length(rv$alignment$paths_used)
+        )
+      }
+
+      update <- data.frame(
+        ID = rv$updating$ID,
+        paths = -abs(rv$updating$paths),
+        assemble_lock = 1L,
+        topology = "linear",
+        assemble_notes = paste0(edit_detail, rv$updating$assemble_notes %|NA|% ""),
+        stringsAsFactors = FALSE
+      )
+      rv$data <- rv$data |> dplyr::rows_update(update, by = "ID")
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(update, by = "ID", copy = TRUE, in_place = TRUE, unmatched = "ignore")
+
+      lrv$consensus_review <- NULL
+      rv$updating <- rv$data |> dplyr::filter(ID == !!rv$updating$ID)
+      trigger("coverage_modal")
+    })
+
     # Trim Consensus ----
     observeEvent(input$trim_consensus, {
       if (rv$updating$assemble_lock == 1) {
@@ -709,7 +1079,6 @@ assembly_coverage_details_server <- function(id, rv) {
           in_place = T,
           unmatched = "ignore"
         )
-
 
       rv$updating <- rv$data |>
         dplyr::filter(ID == !!rv$updating$ID)
