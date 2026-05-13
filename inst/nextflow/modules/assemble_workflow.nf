@@ -78,18 +78,7 @@ workflow ASSEMBLE {
             }
             .set { assemble_in_full }
 
-        // Keep thresholds aside; strip them from the assemble process input
-        assemble_in_full
-            .map { id, opts_id, reads, opts, dbs, mfdb, gc, mp, ms ->
-                tuple(id, mp, ms)
-            }
-            .set { thresholds_ch }
-
-        assemble_in_full
-            .map { id, opts_id, reads, opts, dbs, mfdb, gc, mp, ms ->
-                tuple(id, opts_id, reads, opts, dbs, mfdb, gc)
-            }
-            .set { assemble_in }
+        assemble_in_full.set { assemble_in }
 
         // Assemble
         assemble(assemble_in).set { assemble_out }
@@ -141,13 +130,12 @@ workflow ASSEMBLE {
                 def n_scaffolds = scaffold_counts ? scaffold_counts.max() : 0
                 def length_str  = lengths.unique().sort().reverse().join(';')
                 def topo_str    = topologies.unique().sort().join(';')
-                tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, it)
+                tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, it, it[8], it[9])
             }
             .set { summarized }
 
         // Apply user-configured thresholds: split into pass / fail branches
         summarized
-            .join(thresholds_ch, by: 0)
             .branch { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
                 fail: (n_paths > max_paths) || (n_scaffolds > max_scaffolds)
                 pass: true
