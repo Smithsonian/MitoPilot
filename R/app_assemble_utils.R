@@ -286,7 +286,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         tags$p(
           class = "text-muted",
           style = "margin-top: -8px; font-size: 0.85em;",
-          "Scaffolds shorter than this threshold are stored but excluded from annotation and BLAST"
+          "Scaffolds shorter than this threshold are stored but ignored for additional processing"
         ),
         size = "m",
         footer = tagList(
