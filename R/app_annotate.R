@@ -177,9 +177,16 @@ annotate_server <- function(id) {
             width = 110,
             cell = rt_link(ns("set_curate_opts"))
           ),
+          length_raw = colDef(
+            show = TRUE,
+            name = "Length (raw)",
+            filterable = FALSE,
+            html = TRUE,
+            cell = rt_longtext()
+          ),
           length = colDef(
             show = TRUE,
-            name = "Length",
+            name = "Length (trimmed)",
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()
@@ -530,6 +537,10 @@ annotate_server <- function(id) {
           inputId = "aragorn_opts",
           value = cur$aragorn_opts
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "coverage_trim",
+          value = isTRUE(as.logical(cur$coverage_trim %||% 1L))
+        )
         updateSelectizeInput(
           inputId = "start_gene",
           choices = c(
@@ -589,6 +600,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_aragorn", condition = input$edit_annotate_opts)
       shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -650,7 +662,8 @@ annotate_server <- function(id) {
               use_arwen = as.integer(isTRUE(input$use_arwen)),
               aragorn_opts = req(input$aragorn_opts),
               use_aragorn = as.integer(isTRUE(input$use_aragorn)),
-              start_gene = req(input$start_gene)
+              start_gene = req(input$start_gene),
+              coverage_trim = as.integer(isTRUE(input$coverage_trim))
             ),
             in_place = TRUE,
             copy = TRUE,

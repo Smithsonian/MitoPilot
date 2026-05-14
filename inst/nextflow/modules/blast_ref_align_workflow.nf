@@ -23,7 +23,8 @@ params.sqlBackfill =
         'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
                   'WHERE r.ID = b.ID AND r.gene = d.start_gene), 0) ' +
     'FROM assemble b ' +
-    'JOIN assemblies a   ON b.ID = a.ID AND a.scaffold = 1 ' +
+    'JOIN assemblies a   ON b.ID = a.ID AND a.ignore = 0 ' +
+        'AND a.scaffold = (SELECT MIN(scaffold) FROM assemblies a2 WHERE a2.ID = a.ID AND a2.ignore = 0) ' +
     'JOIN annotate c     ON b.ID = c.ID ' +
     'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
     'JOIN blast_ref_sequences s ON b.blast_accession = s.accession ' +

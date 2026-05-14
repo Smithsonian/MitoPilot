@@ -11,7 +11,8 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 
   assemble <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs)
+    dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs,
+                  length_raw = length)
 
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
@@ -37,6 +38,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       ID_verified,
       annotate_opts,
       curate_opts,
+      length_raw,
       length,
       topology,
       scaffolds,
@@ -263,6 +265,12 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           label = "ARAGORN options:",
           value = current$aragorn_opts %||% character(0),
           width = "100%"
+        ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("coverage_trim"),
+          label = "Trim low-coverage ends of linear assemblies",
+          value = isTRUE(as.logical(current$coverage_trim %||% 1L)),
+          status = "primary"
         ) |> shinyjs::disabled(),
         div(
           selectizeInput(

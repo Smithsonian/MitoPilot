@@ -107,9 +107,13 @@ export_files <- function(
       ) |>
       dplyr::collect()
 
+    kept_scaffolds <- dplyr::tbl(con, "assemblies") |>
+      dplyr::filter(ID == !!.x & path == !!dat$path & ignore == 0) |>
+      dplyr::pull("scaffold")
     seq <- MitoPilot::get_assembly(
       ID = .x,
       path = dat$path,
+      scaffold = kept_scaffolds,
       con = con
     )
     if (length(seq) > 1) {

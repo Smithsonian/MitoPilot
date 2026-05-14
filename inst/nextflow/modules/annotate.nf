@@ -57,6 +57,8 @@ process annotate {
         aragorn_condaenv = '!{params.aragorn_condaenv}', \
         use_aragorn = !{opts.use_aragorn == 1 ? "TRUE" : "FALSE"}, \
         start_gene = '!{opts.start_gene}', \
+        ignore_scaffolds = '!{opts.ignore_scaffolds}', \
+        coverage_trim = !{opts.coverage_trim == 1 ? "TRUE" : "FALSE"}, \
         out_dir = '!{dir}'
     )"
     ### work dir info for troubleshooting ####

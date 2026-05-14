@@ -472,7 +472,7 @@ annotations_details_server <- function(id, rv) {
             class = "alert alert-warning",
             style = "padding: 6px 10px; font-size: 0.85em; margin-bottom: 6px;",
             shiny::icon("triangle-exclamation"),
-            " One or more assemblies is linear; may produce poor alignment."
+            " One or more assemblies is linear; alignment below may be poor"
           )
         },
         if (has_aln) {
