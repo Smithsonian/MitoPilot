@@ -55,7 +55,7 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libidn2.so.0 /usr/lib/x86_64-linux-gnu/libid
 
 # Install MitoPilot — kept last so R code edits only invalidate this layer
 COPY docker/MitoPilot_*.tar.gz /pkg.tar.gz
-RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never",dependencies=FALSE)'
+RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never")'
 RUN rm /pkg.tar.gz
 
 # Default Reference DBs
