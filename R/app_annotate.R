@@ -179,14 +179,14 @@ annotate_server <- function(id) {
           ),
           length_raw = colDef(
             show = TRUE,
-            name = "Length (raw)",
+            name = "Asmb. Length (raw)",
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()
           ),
           length = colDef(
             show = TRUE,
-            name = "Length (trimmed)",
+            name = "Asmb. Length (trimmed)",
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()

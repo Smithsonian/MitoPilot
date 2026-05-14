@@ -10,7 +10,7 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$alignment <- NULL
       rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
-        dplyr::select(ID, path, scaffold, topology, length, sequence, ignore) |>
+        dplyr::select(ID, path, scaffold, topology, length_raw, length, sequence, ignore) |>
         dplyr::collect() |>
         dplyr::mutate(
           view_coverage = NA_character_
@@ -67,13 +67,13 @@ assembly_coverage_details_server <- function(id, rv) {
             topology = colDef(
               name = "Topology", width = 90, align = "center"
             ),
+            length_raw = colDef(
+              name = "Length (raw)", width = 110, align = "center"
+            ),
             length = colDef(
-              name = "Length (bp)", width = 100, align = "center"
+              name = "Length (trimmed)", width = 130, align = "center"
             ),
-            sequence = colDef(
-              minWidth = 250, maxWidth = 1000, align = "center", html = TRUE,
-              cell = rt_longtext()
-            ),
+            sequence = colDef(show = FALSE),
             ignore = colDef(
               html = TRUE, align = "center",
               cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
@@ -351,6 +351,7 @@ assembly_coverage_details_server <- function(id, rv) {
         scaffold = 0,
         topology = "linear",
         length = trimmed@ranges@width,
+        length_raw = trimmed@ranges@width,
         sequence = unname(as.character(trimmed)),
         depth = paste(coverage$Depth, collapse = " "),
         gc = paste(coverage$GC, collapse = " "),

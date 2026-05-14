@@ -88,7 +88,8 @@ backwards_compatibility <- function(
       isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
-      )))
+      )) &&
+      "length_raw" %in% DBI::dbListFields(con, "assemblies"))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -679,6 +680,13 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "ID"
       )
+  }
+
+  # if length_raw column doesn't exist in assemblies table, add it
+  if (!("length_raw" %in% DBI::dbListFields(con, "assemblies"))) {
+    message("added 'length_raw' column to assemblies table")
+    DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN length_raw INTEGER")
+    DBI::dbExecute(con, "UPDATE assemblies SET length_raw = length WHERE length_raw IS NULL")
   }
 
   # if blast_opts table doesn't exist, create it with a default entry

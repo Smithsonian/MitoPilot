@@ -15,8 +15,12 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
 
+  assemble_opts_tbl <- dplyr::tbl(db, "assemble_opts") |>
+    dplyr::select(assemble_opts, min_assembly_length)
+
   dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
+    dplyr::left_join(assemble_opts_tbl, by = "assemble_opts") |>
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::relocate(

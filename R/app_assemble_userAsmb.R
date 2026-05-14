@@ -145,7 +145,7 @@ assemble_server_userAsmb <- function(id) {
             length = colDef(
               show = TRUE,
               minWidth = 140,
-              name = "Assembly Length",
+              name = "Asmb. Length (raw)",
               filterable = FALSE,
               html = TRUE,
               cell = rt_longtext()

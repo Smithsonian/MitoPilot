@@ -344,6 +344,7 @@ new_db <- function(
       scaffold INTEGER NOT NULL,
       topology TEXT,
       length INTEGER,
+      length_raw INTEGER,
       sequence TEXT,
       depth TEXT,
       gc TEXT,

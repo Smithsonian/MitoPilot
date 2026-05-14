@@ -147,11 +147,26 @@ assemble_server <- function(id) {
             length = colDef(
               show = TRUE,
               minWidth = 140,
-              name = "Assembly Length",
+              name = "Asmb. Length (raw)",
               filterable = FALSE,
               html = TRUE,
-              cell = rt_longtext()
+              cell = JS("function(cellInfo) {
+                var val = cellInfo.value;
+                if (!val) return val;
+                var minLen = cellInfo.row['min_assembly_length'];
+                if (minLen == null) return String(val);
+                var parts = String(val).split(';');
+                var colored = parts.map(function(p) {
+                  var n = parseInt(p.trim(), 10);
+                  if (!isNaN(n) && n < minLen) {
+                    return '<span style=\"color:#e74c3c;font-weight:bold\">' + p.trim() + '</span>';
+                  }
+                  return p.trim();
+                });
+                return colored.join('; ');
+              }")
             ),
+            min_assembly_length = colDef(show = FALSE),
             paths = colDef(
               show = TRUE, width = 100, name = "# Paths", align = "center",
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
