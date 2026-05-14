@@ -37,6 +37,21 @@ app_server <- function(input, output, session) {
   if (!"blast_lineage" %in% existing_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
 
+  # Migrate: add per-scaffold BLAST result columns to assemblies table
+  asmb_fields <- DBI::dbListFields(session$userData$con, "assemblies")
+  if (!"blast_accession" %in% asmb_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_accession TEXT")
+  if (!"blast_species" %in% asmb_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_species TEXT")
+  if (!"blast_pident" %in% asmb_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_pident REAL")
+  if (!"blast_qcovs" %in% asmb_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_qcovs REAL")
+  if (!"blast_evalue" %in% asmb_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_evalue REAL")
+  if (!"blast_lineage" %in% asmb_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_lineage TEXT")
+
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>
     stringr::str_extract("publishDir.*") |>

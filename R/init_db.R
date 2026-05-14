@@ -351,6 +351,12 @@ new_db <- function(
       errors TEXT,
       ignore INTEGER,
       edited INTEGER,
+      blast_accession TEXT,
+      blast_species TEXT,
+      blast_pident REAL,
+      blast_qcovs REAL,
+      blast_evalue REAL,
+      blast_lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold)
     );"
