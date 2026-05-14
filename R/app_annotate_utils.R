@@ -11,8 +11,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 
   assemble <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs,
-                  length_raw = length)
+    dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs)
 
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
@@ -26,10 +25,18 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
         paste(collapse = "; ")
     )
 
+  assemblies_length <- dplyr::tbl(db, "assemblies") |>
+    dplyr::filter(ignore != 1) |>
+    dplyr::group_by(ID, path) |>
+    dplyr::summarise(length_raw = sum(length_raw, na.rm = TRUE), .groups = "drop") |>
+    dplyr::collect() |>
+    dplyr::mutate(path = as.character(path))
+
   dplyr::left_join(assemble, annotate, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::left_join(annotations, by = "ID") |>
+    dplyr::left_join(assemblies_length, by = c("ID", "path")) |>
     dplyr::select(
       annotate_lock,
       annotate_switch,
