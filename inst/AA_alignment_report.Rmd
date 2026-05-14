@@ -102,14 +102,18 @@ for (ID in IDs) {
     ) |>
     dplyr::collect()
   
-  # Get mitogenome sequence
+  # Get mitogenome sequence (respecting per-scaffold ignore flag)
+  kept_scaffolds <- dplyr::tbl(con, "assemblies") |>
+    dplyr::filter(ID == !!ID & path == !!dat$path & ignore == 0) |>
+    dplyr::pull("scaffold")
   seq <- MitoPilot::get_assembly(
     ID = ID,
     path = dat$path,
+    scaffold = kept_scaffolds,
     con = con
   )
   if (length(seq) > 1) {
-    stop("Multiple sequences found. Export not supported for fragmented assemblies.")
+    stop("Multiple non-ignored scaffolds found. Export not supported for fragmented assemblies. Mark all but one scaffold as ignore to export.")
   }
   
   # Get all unique genes for the current ID to avoid processing the same gene multiple times
