@@ -9,7 +9,7 @@ If your Nextflow log contains an error that looks something like this:
     Caused by:
       Process `WF2:ANNOTATE:annotate (SAMPLE_ID)` terminated with an error exit status (140)
 
-This usually indicates that the process ran out of memory (RAM).
+Usually this indicates that the process ran out of memory (RAM).
 Sometimes this will happen for all samples, other times only certain
 difficult samples will need more RAM. Try using the R Shiny GUI to
 increase the requested memory for the process that failed, then rerun
@@ -22,6 +22,13 @@ executable. Double check that the paths you specified when creating your
 project are correct. Also make sure you’re using the correct execution
 environment. This error is commonly caused by using the “local” executor
 when running MitoPilot on a computing cluster.
+
+### “exit status (255)”
+
+Often this indicates that one or more of your input FASTQ files could
+not be found. Double check the R1 and R2 columns of your map file and
+make sure all of the `data_path` contains all of your sequence read
+files.
 
 ### “database disk image is malformed”
 
