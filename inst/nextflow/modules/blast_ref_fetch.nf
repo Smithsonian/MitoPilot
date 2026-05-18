@@ -15,6 +15,8 @@ process blast_ref_fetch {
         opts ?: null
     }
 
+    // 'ignore' keeps other samples running when this one times out. Failed tasks are NOT
+    // cached as successful, so -resume will re-execute this step for the affected sample.
     errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
     maxRetries 3
 

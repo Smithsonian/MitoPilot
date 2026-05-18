@@ -11,7 +11,7 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::select(
-          ID, path, scaffold, topology, length_raw, length, sequence, ignore,
+          ignore, ID, path, scaffold, topology, length_raw, length, sequence,
           dplyr::any_of(c("blast_accession", "blast_species", "blast_pident", "blast_qcovs", "blast_lineage"))
         ) |>
         dplyr::collect() |>
@@ -58,8 +58,12 @@ assembly_coverage_details_server <- function(id, rv) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(maxWidth = 80, align = "center"),
           columns = list(
+            ignore = colDef(
+              html = TRUE, align = "center",
+              cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
+            ),
             ID = colDef(
-              align = "left", minWidth = 100, html = T, cell = rt_longtext()
+              align = "left", minWidth = 100, resizable = TRUE, html = T, cell = rt_longtext()
             ),
             path = colDef(
               name = "Path", width = 60, align = "center"
@@ -78,26 +82,22 @@ assembly_coverage_details_server <- function(id, rv) {
             ),
             sequence = colDef(show = FALSE),
             blast_accession = colDef(
-              name = "BLAST Top Hit", width = 120, align = "center", html = TRUE,
+              name = "BLAST Top Hit", minWidth = 120, resizable = TRUE, align = "center", html = TRUE,
               cell = rt_ncbi_link()
             ),
             blast_species = colDef(
-              name = "BLAST Species", minWidth = 160, align = "left", html = TRUE,
+              name = "BLAST Species", minWidth = 160, resizable = TRUE, align = "left", html = TRUE,
               cell = rt_longtext()
             ),
             blast_pident = colDef(
-              name = "% Ident", width = 80, align = "center"
+              name = "% Ident", width = 80, resizable = TRUE, align = "center"
             ),
             blast_qcovs = colDef(
-              name = "% Cov", width = 80, align = "center"
+              name = "% Cov", width = 80, resizable = TRUE, align = "center"
             ),
             blast_lineage = colDef(
-              name = "BLAST Lineage", minWidth = 200, align = "left", html = TRUE,
+              name = "BLAST Lineage", minWidth = 200, resizable = TRUE, align = "left", html = TRUE,
               cell = rt_longtext()
-            ),
-            ignore = colDef(
-              html = TRUE, align = "center",
-              cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
             ),
             view_coverage = colDef(
               name = "", html = T, width = 70, align = "center", sticky = "right",

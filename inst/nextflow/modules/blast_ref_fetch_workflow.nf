@@ -18,12 +18,23 @@ params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
     (accession, sequence, ref_length, genetic_code, time_stamp)
     VALUES (?, ?, ?, ?, ?)'''
 
+// Written when the top-hit ref fetch fails after all retries (NCBI timeout / transient error).
+// blast_ref_fetch uses errorStrategy 'ignore' so the pipeline keeps running for other samples.
+// 'ignore' does NOT cache the failure as a successful task, so -resume will retry the step.
+params.sqlWriteBlastRefFetchFailed = 'UPDATE assemble SET assemble_switch = 3, assemble_notes = ? WHERE ID = ?'
+
 workflow BLAST_REF_FETCH {
     take:
         // input: tuple(id, blast_accession, blast_species, blast_evalue, opts_id, is_top)
         input
 
     main:
+        // Track top-hit IDs entering the workflow so failures can be detected below
+        input
+            .filter { id, accession, species, evalue, opts_id, is_top -> is_top }
+            .map    { id, accession, species, evalue, opts_id, is_top -> tuple(id, true) }
+            .set { all_top_ids }
+
         blast_ref_fetch(input).set { ref_out }
         // ref_out: tuple(id, accession, is_top, csv_file, seq_file, gc_file, json_file)
 
@@ -93,4 +104,18 @@ workflow BLAST_REF_FETCH {
         lineage_records
             .map { id, accession, is_top, lineage -> tuple(lineage, id, accession) }
             .sqlInsert(statement: params.sqlWriteBlastLineageScaffold, db: 'sqlite')
+
+        // Detect top-hit fetch failures: IDs that entered but produced no output after all retries
+        ref_out
+            .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
+            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id, true) }
+            .set { succeeded_top_ids }
+
+        all_top_ids
+            .join(succeeded_top_ids, remainder: true)
+            .filter { id, all_flag, success_flag -> success_flag == null }
+            .map    { id, all_flag, success_flag ->
+                tuple('BLAST reference fetch timed out after all retries. Rerun pipeline with -resume to retry.', id)
+            }
+            .sqlInsert(statement: params.sqlWriteBlastRefFetchFailed, db: 'sqlite')
 }

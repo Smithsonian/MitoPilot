@@ -293,7 +293,7 @@ assemble_server <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "In Progress" = 4, "Successful Assembly" = 2, "Failed / Problematic Assembly" = 3),
+            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "In Progress" = 4, "Successful Assembly" = 2, "Failed / Problematic" = 3),
             selected = current,
             shape = "square",
             status = "primary"

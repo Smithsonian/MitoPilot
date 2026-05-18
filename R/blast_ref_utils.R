@@ -236,7 +236,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
       df$feature == "D-loop" |
         (!is.na(df$gbkey)   & df$gbkey == "D_loop") |
         (!is.na(df$reg_cls) & grepl("control", df$reg_cls, ignore.case = TRUE)) |
-        (!is.na(df$note)    & grepl("control region", df$note, ignore.case = TRUE)) ~ "ctrl",
+        (!is.na(df$note)    & grepl("control region|d-loop|d loop|displacement loop", df$note, ignore.case = TRUE)) ~ "ctrl",
       .default = NA_character_
     )
 
