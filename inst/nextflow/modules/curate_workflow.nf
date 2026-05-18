@@ -3,11 +3,12 @@ include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
-                    'd.ref_dir, d.ref_db ' +
+                    'd.ref_dir, d.ref_db, e.feature_trim ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
                     'JOIN curate_opts d ON c.curate_opts = d.curate_opts ' +
+                    'JOIN annotate_opts e ON c.annotate_opts = e.annotate_opts ' +
                     'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
 
 params.sqlWriteAssemblies =  'UPDATE assemblies SET sequence = ?, length = ?, depth = ?, gc = ?, errors = ?, time_stamp = ? ' +
@@ -43,15 +44,16 @@ workflow CURATE {
                 tuple(
                     it[0],                                          // ID
                     it[1],                                          // path
-                    it[11],                                          // Annotations
-                    it[12],                                          // Assembly
-                    it[13],                                          // Coverage
+                    it[12],                                          // Annotations
+                    it[13],                                          // Assembly
+                    it[14],                                          // Coverage
                     [
                         cpus:  it[4],                                      // cpus
                         memory: it[5],                                     // memory
                         target: it[6],                                     // target
                         params: encodedParams,                              // params
-                        max_blast_hits: it[8]                             // maximum retained blast hits
+                        max_blast_hits: it[8],                             // maximum retained blast hits
+                        feature_trim: it[11] != null ? it[11] as Integer : 1   // trim un-annotated ends (default on)
                     ],
                     file(it[9] + "/" + it[10]),                              // curation ref dir + clade
                     it[10],                                                   // ref clade

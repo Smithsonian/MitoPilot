@@ -386,6 +386,25 @@ backwards_compatibility <- function(
       )
   }
 
+  # if feature_trim column doesn't exist, add it (default on)
+  if (!("feature_trim" %in% names(annotate_opts_table))) {
+    message("added 'feature_trim' column to annotate_opts table")
+    annotate_opts_table$feature_trim <- rep(1L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN feature_trim INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
   # if start_gene column doesn't exist, add it
   if(!("start_gene" %in% names(annotate_opts_table))){
     message("added 'start_gene' column to annotate_opts table")

@@ -212,34 +212,41 @@ coverage <- function(
     ) |>
     dplyr::filter(Val == 1)
 
-  # Coverage plot ----
-  plot <- stats_long |>
-    dplyr::filter(!stringr::str_detect(Stat, "_mask$")) |>
-    dplyr::mutate(
-      Stat = factor(Stat, levels = c("MeanDepth", "ErrorRate", "GC"))
-    ) |>
-    tidyr::drop_na() |>
-    ggplot2::ggplot(ggplot2::aes(x = Position, y = Val)) +
-    ggplot2::geom_vline(
-      data = mask_dat,
-      ggplot2::aes(xintercept = Position),
-      color = "#FF6670",
-      size = 1.2
-    ) +
-    ggplot2::geom_line() +
-    ggplot2::facet_grid(
-      rows = ggplot2::vars(Stat), cols = ggplot2::vars(Scaffold), switch = "y",
-      scales = "free", space = "free_x"
-    ) +
-    ggplot2::xlab("Base Position") +
-    ggplot2::ylab("") +
-    ggplot2::theme_minimal() +
-    ggplot2::theme(
-      strip.placement = "outside",
-      axis.text.x = ggplot2::element_text(hjust = 1)
-    )
-  file.path(outDir, paste0(basename_prefix, "_coverage.pdf")) |>
-    ggplot2::ggsave(plot, width = 12, height = 5, units = "in")
+  # Coverage plot — one PDF per scaffold ----
+  for (seq_id in unique(stats_long$SeqId)) {
+    scaffold_num <- stringr::str_extract(seq_id, "[0-9]+$")
+
+    scaf_stats <- stats_long |>
+      dplyr::filter(SeqId == seq_id, !stringr::str_detect(Stat, "_mask$")) |>
+      dplyr::mutate(Stat = factor(Stat, levels = c("MeanDepth", "ErrorRate", "GC"))) |>
+      tidyr::drop_na()
+
+    scaf_mask  <- mask_dat |> dplyr::filter(SeqId == seq_id)
+    scaf_label <- unique(scaf_stats$Scaffold)[1]
+
+    plot <- ggplot2::ggplot(scaf_stats, ggplot2::aes(x = Position, y = Val)) +
+      ggplot2::geom_vline(
+        data = scaf_mask,
+        ggplot2::aes(xintercept = Position),
+        color = "#FF6670",
+        size = 1.2
+      ) +
+      ggplot2::geom_line() +
+      ggplot2::facet_grid(
+        rows = ggplot2::vars(Stat), switch = "y",
+        scales = "free"
+      ) +
+      ggplot2::labs(title = scaf_label, x = "Base Position", y = "") +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        strip.placement = "outside",
+        plot.title = ggplot2::element_text(hjust = 0.5),
+        axis.text.x = ggplot2::element_text(hjust = 1)
+      )
+
+    file.path(outDir, paste0(basename_prefix, "_", scaffold_num, "_coverage.pdf")) |>
+      ggplot2::ggsave(plot, width = 8, height = 5, units = "in")
+  }
 
   # Save output ----
   stats_out <- stats |>

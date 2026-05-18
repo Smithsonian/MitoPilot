@@ -20,7 +20,13 @@ assembly_coverage_details_server <- function(id, rv) {
         )
 
       modalDialog(
-        title = stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
+        title = tagList(
+          div(stringr::str_glue("Assembly details for ID: {rv$updating$ID}")),
+          div(
+            style = "font-size: 0.85em; font-weight: normal; color: #555; margin-top: 4px;",
+            stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
+          )
+        ),
         size = "l",
         reactableOutput(ns("table"), width = "100%"),
         uiOutput(ns("msa_div")),
@@ -56,15 +62,16 @@ assembly_coverage_details_server <- function(id, rv) {
           selection = "multiple",
           defaultPageSize = 20,
           rowStyle = rt_highlight_row(),
-          defaultColDef = colDef(maxWidth = 80, align = "center"),
+          defaultColDef = colDef(align = "center"),
           columns = list(
             ignore = colDef(
+              width = 60,
               html = TRUE, align = "center",
               cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
             ),
-            ID = colDef(
-              align = "left", minWidth = 100, resizable = TRUE, html = T, cell = rt_longtext()
-            ),
+            #ID = colDef(
+            #  align = "left", minWidth = 80, resizable = TRUE, html = T, cell = rt_longtext()
+            #),
             path = colDef(
               name = "Path", width = 60, align = "center"
             ),
@@ -90,10 +97,10 @@ assembly_coverage_details_server <- function(id, rv) {
               cell = rt_longtext()
             ),
             blast_pident = colDef(
-              name = "% Ident", width = 80, resizable = TRUE, align = "center"
+              name = "% Ident", width = 80, align = "center"
             ),
             blast_qcovs = colDef(
-              name = "% Cov", width = 80, resizable = TRUE, align = "center"
+              name = "% Cov", width = 80, align = "center"
             ),
             blast_lineage = colDef(
               name = "BLAST Lineage", minWidth = 200, resizable = TRUE, align = "left", html = TRUE,
@@ -110,7 +117,7 @@ assembly_coverage_details_server <- function(id, rv) {
     # Close modal ----
     observeEvent(input$close_modal, ignoreInit = T, {
       removeModal()
-      trigger("update_assemble_table")
+      trigger("refresh_assemble")
     })
 
     # Table selection ----
@@ -167,11 +174,14 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # View Coverage PDF ----
     observeEvent(input$view_coverage, {
+      row <- as.numeric(input$view_coverage)
       url <- file.path(
         dirname(getOption("MitoPilot.db") %||% "."),
         "out", rv$updating$ID,
         "assemble", rv$updating$assemble_opts,
-        paste0(rv$updating$ID, "_assembly_", rv$focal_assembly$path[as.numeric(input$view_coverage)], "_coverage.pdf")
+        paste0(rv$updating$ID, "_assembly_",
+               rv$focal_assembly$path[row], "_",
+               rv$focal_assembly$scaffold[row], "_coverage.pdf")
       ) |>
         browseURL()
     })

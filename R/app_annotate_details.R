@@ -200,6 +200,11 @@ annotations_details_server <- function(id, rv) {
         is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
         shinyjs::toggle("annotation_action_btns", condition = length(sel) > 0 && !is_deleted)
         shinyjs::toggle("annotation_restore_btn", condition = is_deleted)
+        # No row selected: skip sel-indexed branches so consumers (e.g. the
+        # synteny zoom plot, which also accepts a click anchor) don't break.
+        if (length(sel) == 0) {
+          return(sel)
+        }
         if (identical(sel, rv$editing$idx)) {
           return(sel)
         }

@@ -23,7 +23,8 @@ new_db_userAsmb(
   curate_memory = 8,
   curate_target = "fish_mito",
   max_blast_hits = 100,
-  curate_params = NULL
+  curate_params = NULL,
+  min_assembly_length = 500
 )
 }
 \arguments{

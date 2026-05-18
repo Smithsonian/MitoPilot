@@ -170,6 +170,25 @@ workflow BLAST_GENBANK {
                 } else {
                     out << tuple('id', id, opts_id, null, null, 'NO HIT', null, null, null, null)
                 }
+                // Per-id deduped ref-fetch rows (one per unique accession across all
+                // scaffolds of this sample). Emitting here instead of via a downstream
+                // groupTuple avoids a global channel-close barrier — BLAST_REF_FETCH
+                // can start for sample N as soon as BLAST_GENBANK for N finishes,
+                // rather than waiting for every sample's BLAST_GENBANK to complete.
+                // kind = 'reffetch_top' marks the accession matching the id-level top
+                // hit (drives is_top downstream); 'reffetch_dup' marks the rest.
+                def top_accession = top ? top[0] : null
+                def seen = [:] as LinkedHashMap
+                per_scaffold.values().each { v ->
+                    def acc = v[0]
+                    if (acc != null && acc != 'NO HIT' && !seen.containsKey(acc)) {
+                        seen[acc] = [species: v[1], evalue: v[4]]
+                    }
+                }
+                seen.each { acc, info ->
+                    def kind_str = (acc == top_accession) ? 'reffetch_top' : 'reffetch_dup'
+                    out << tuple(kind_str, id, opts_id, null, null, acc, info.species, null, null, info.evalue)
+                }
                 return out
             }
             .set { blast_records }
@@ -194,20 +213,16 @@ workflow BLAST_GENBANK {
             }
             .sqlInsert(statement: params.sqlWriteBlastHitScaffold, db: 'sqlite')
 
-        // Per-scaffold ref-fetch inputs: one tuple per unique (id, accession) across
-        // scaffolds, plus the id-level top hit. is_top=true only for the top-hit row;
-        // downstream uses this to gate writes to blast_ref_annotations (per-ID table).
+        // Per-id ref-fetch inputs already deduped inside the flatMap above.
+        // Filter to just the reffetch_* rows and map to the shape BLAST_REF_FETCH
+        // expects. No groupTuple here, so items flow through as each sample's
+        // BLAST_GENBANK task completes.
         blast_records
             .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                accession != null && accession != 'NO HIT'
+                kind == 'reffetch_top' || kind == 'reffetch_dup'
             }
             .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                tuple(id, accession, species, evalue, opts_id, kind == 'id')
-            }
-            // Dedupe by (id, accession); preserve is_top=true if any duplicate is top
-            .groupTuple(by: [0, 1])
-            .map { id, accession, species_list, evalue_list, opts_list, is_top_list ->
-                tuple(id, accession, species_list[0], evalue_list[0], opts_list[0], is_top_list.any { it })
+                tuple(id, accession, species, evalue, opts_id, kind == 'reffetch_top')
             }
             .set { ref_fetch_input }
 

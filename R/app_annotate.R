@@ -24,6 +24,9 @@ annotate_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Help-doc icons (one observer per tool, registered once at module init).
+    register_tool_help("mitos", input)
+
     # Prepare data ----
     rv <- reactiveValues(
       curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
@@ -541,6 +544,10 @@ annotate_server <- function(id) {
           inputId = "coverage_trim",
           value = isTRUE(as.logical(cur$coverage_trim %||% 1L))
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "feature_trim",
+          value = isTRUE(as.logical(cur$feature_trim %||% 1L))
+        )
         updateSelectizeInput(
           inputId = "start_gene",
           choices = c(
@@ -601,6 +608,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("use_aragorn", condition = input$edit_annotate_opts)
       shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -663,7 +671,8 @@ annotate_server <- function(id) {
               aragorn_opts = req(input$aragorn_opts),
               use_aragorn = as.integer(isTRUE(input$use_aragorn)),
               start_gene = req(input$start_gene),
-              coverage_trim = as.integer(isTRUE(input$coverage_trim))
+              coverage_trim = as.integer(isTRUE(input$coverage_trim)),
+              feature_trim = as.integer(isTRUE(input$feature_trim))
             ),
             in_place = TRUE,
             copy = TRUE,

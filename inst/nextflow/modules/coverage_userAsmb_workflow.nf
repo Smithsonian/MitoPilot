@@ -14,8 +14,8 @@ params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ?, time_s
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
 params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
-                            '(ID, path, scaffold, length, topology, time_stamp, sequence, ignore, edited) ' +
-                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)'
+                            '(ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited) ' +
+                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
                             'assemble_switch=?, assemble_notes=?, time_stamp=? WHERE ID=?'
@@ -106,6 +106,7 @@ workflow COVERAGE_userAsmb {
                 tuple(
                     record.id.split('\\.'),             // ID, path, scaffold
                     record.seqString.length(),          // length
+                    record.seqString.length(),          // length_raw (initially equal to length; curate may later trim length)
                     record.desc,                        // topology
                     params.ts,                          // time stamp
                     record.seqString                    // sequence
@@ -113,8 +114,8 @@ workflow COVERAGE_userAsmb {
             }
             .combine(min_len_lookup, by: 0)             // append per-sample min_assembly_length
             .map { it ->                                // mark short assemblies
-                def min_len = it[7] as Integer
-                it[7] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
+                def min_len = it[8] as Integer
+                it[8] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
                 return it
             }
             .set { assemblies_ch }
@@ -128,7 +129,7 @@ workflow COVERAGE_userAsmb {
                     it[1].toInteger(),                              // paths
                     it[2].toInteger(),                              // scaffold
                     it[3].toInteger(),                              // length
-                    it[4]                                           // topology
+                    it[5]                                           // topology (shifted after adding length_raw at it[4])
                 )
             }
             .groupTuple()

@@ -425,6 +425,7 @@ new_db <- function(
       use_aragorn INTEGER,
       start_gene TEXT,
       coverage_trim INTEGER,
+      feature_trim INTEGER,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -444,7 +445,8 @@ new_db <- function(
         aragorn_opts = aragorn_opts,
         use_aragorn = 0L,
         start_gene = "trnF",
-        coverage_trim = 1L
+        coverage_trim = 1L,
+        feature_trim = 1L
       ),
       in_place = TRUE,
       copy = TRUE,

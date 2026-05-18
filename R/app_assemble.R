@@ -17,6 +17,9 @@ assemble_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Help-doc icons (one observer per tool, registered once at module init).
+    register_tool_help("fastp", input)
+
     # Prepare data ----
     rv <- reactiveValues(
       pre_opts = dplyr::tbl(session$userData$con, "pre_opts") |>
@@ -147,18 +150,19 @@ assemble_server <- function(id) {
             length = colDef(
               show = TRUE,
               minWidth = 140,
-              name = "Asmb. Length (raw)",
+              name = "Asmb. Length (ignored)",
+              header = htmltools::HTML('Asmb. Length (<span style="color:#e74c3c;font-weight:bold">ignored</span>)'),
               filterable = FALSE,
               html = TRUE,
               cell = JS("function(cellInfo) {
                 var val = cellInfo.value;
                 if (!val) return val;
-                var minLen = cellInfo.row['min_assembly_length'];
-                if (minLen == null) return String(val);
+                var flagsStr = cellInfo.row['ignore_flags'];
+                var flags = flagsStr ? String(flagsStr).split(';') : [];
                 var parts = String(val).split(';');
-                var colored = parts.map(function(p) {
-                  var n = parseInt(p.trim(), 10);
-                  if (!isNaN(n) && n < minLen) {
+                var colored = parts.map(function(p, i) {
+                  var ign = flags[i];
+                  if (ign === '1') {
                     return '<span style=\"color:#e74c3c;font-weight:bold\">' + p.trim() + '</span>';
                   }
                   return p.trim();
@@ -167,6 +171,7 @@ assemble_server <- function(id) {
               }")
             ),
             min_assembly_length = colDef(show = FALSE),
+            ignore_flags = colDef(show = FALSE),
             paths = colDef(
               show = TRUE, width = 100, name = "# Paths", align = "center",
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),

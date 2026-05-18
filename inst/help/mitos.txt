@@ -1,0 +1,9 @@
+# MitoPilot image: <not yet captured>
+# Tool: mitos
+# Version: <run tools/capture_tool_help.sh to populate>
+# ----------------------------------------------------------------
+
+Help docs for MITOS have not been captured yet.
+
+Run `tools/capture_tool_help.sh` from the repo root with the MitoPilot
+Docker image pulled locally to populate this file.

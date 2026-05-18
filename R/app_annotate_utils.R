@@ -196,7 +196,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             style = "flex: 1",
             textInput(
               ns("mitos_opts"),
-              label = "Mitos2 options:",
+              label = tagList("Mitos2 options:", tool_help_icon("mitos")),
               value = current$mitos_opts %||% character(0),
               width = "100%"
             ) |> shinyjs::disabled()
@@ -277,6 +277,12 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           ns("coverage_trim"),
           label = "Trim low-coverage ends of linear assemblies",
           value = isTRUE(as.logical(current$coverage_trim %||% 1L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("feature_trim"),
+          label = "Trim un-annotated ends of linear contigs (by gene features)",
+          value = isTRUE(as.logical(current$feature_trim %||% 1L)),
           status = "primary"
         ) |> shinyjs::disabled(),
         div(

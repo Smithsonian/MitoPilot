@@ -13,7 +13,8 @@ curate_annelid_mito(
   max_blast_hits = 100,
   params = NULL,
   ref_dir = NULL,
-  blast_ref_file = NULL
+  blast_ref_file = NULL,
+  feature_trim = TRUE
 )
 }
 \arguments{
