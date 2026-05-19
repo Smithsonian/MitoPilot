@@ -276,7 +276,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ),
         textInput(
           ns("mitofinder"),
-          label = "MitoFinder options",
+          label = tagList("MitoFinder options", tool_help_icon("mitofinder")),
           value = current$mitofinder %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -288,7 +288,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         textInput(
           ns("getOrganelle"),
-          label = "getOrganelle options",
+          label = tagList("getOrganelle options", tool_help_icon("getOrganelle")),
           value = current$getOrganelle %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -438,7 +438,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         div(
           id = ns("blast_extra_group"),
-          tags$label("Additional blastn options"),
+          tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",

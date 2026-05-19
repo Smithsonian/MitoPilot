@@ -39,6 +39,7 @@ TOOLS=(
     "trnaScan-SE||/opt/conda/envs/trnascan-se/bin/tRNAscan-SE --help|/opt/conda/envs/trnascan-se/bin/tRNAscan-SE --version"
     "arwen||arwen -h|true"
     "aragorn||/opt/conda/envs/aragorn/bin/aragorn -h|true"
+    "blastn||blastn -help|blastn -version"
 )
 
 run_in_image() {

@@ -18,7 +18,10 @@ assemble_server <- function(id) {
     ns <- session$ns
 
     # Help-doc icons (one observer per tool, registered once at module init).
-    register_tool_help("fastp", input)
+    register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
+    register_tool_help("getOrganelle", input, reopen = function() assemble_opts_modal(rv))
+    register_tool_help("mitofinder", input, reopen = function() assemble_opts_modal(rv))
+    register_tool_help("blastn", input, reopen = function() blast_opts_modal(rv))
 
     # Prepare data ----
     rv <- reactiveValues(

@@ -141,7 +141,7 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         textInput(
           ns("fastp"),
-          label = "fastp options",
+          label = tagList("fastp options", tool_help_icon("fastp")),
           value =  current$fastp %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -225,7 +225,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         div(
           id = ns("blast_extra_group"),
-          tags$label("Additional blastn options"),
+          tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",

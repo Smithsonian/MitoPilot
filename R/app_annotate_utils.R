@@ -245,7 +245,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ),
         textInput(
           ns("trnaScan_opts"),
-          label = "trnAScan-SE options:",
+          label = tagList("trnAScan-SE options:", tool_help_icon("trnaScan-SE")),
           value = current$trnaScan_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -257,7 +257,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         textInput(
           ns("arwen_opts"),
-          label = "ARWEN options:",
+          label = tagList("ARWEN options:", tool_help_icon("arwen")),
           value = current$arwen_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -269,7 +269,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         textInput(
           ns("aragorn_opts"),
-          label = "ARAGORN options:",
+          label = tagList("ARAGORN options:", tool_help_icon("aragorn")),
           value = current$aragorn_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),

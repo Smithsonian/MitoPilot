@@ -17,6 +17,9 @@ assemble_server_userAsmb <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
+    register_tool_help("blastn", input, reopen = function() blast_opts_modal(rv))
+
     # Prepare data ----
     rv <- reactiveValues(
       pre_opts = dplyr::tbl(session$userData$con, "pre_opts") |>

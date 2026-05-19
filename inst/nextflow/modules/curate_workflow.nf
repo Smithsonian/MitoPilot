@@ -3,7 +3,7 @@ include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
-                    'd.ref_dir, d.ref_db, e.feature_trim ' +
+                    'd.ref_dir, d.ref_db, e.feature_trim, b.blast_accession ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -35,7 +35,10 @@ workflow CURATE {
 
                 def jsonParams = it[7].toString()
                 def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
-                def blastRefRel = "${params.publishDir}/${it[0]}/assemble/${it[2]}/remote_blast_ref.json"
+                def blastAccession = it[12] ?: ""
+                def blastRefRel = blastAccession
+                    ? "${params.publishDir}/${it[0]}/assemble/${it[2]}/blast_ref_${blastAccession}/remote_blast_ref.json"
+                    : "${params.publishDir}/${it[0]}/assemble/${it[2]}/remote_blast_ref.json"
                 def blastRefAbs = new File(launchDir.toString(), blastRefRel)
                 def blastRefFile = blastRefAbs.exists()
                     ? file(blastRefRel)
@@ -44,9 +47,9 @@ workflow CURATE {
                 tuple(
                     it[0],                                          // ID
                     it[1],                                          // path
-                    it[12],                                          // Annotations
-                    it[13],                                          // Assembly
-                    it[14],                                          // Coverage
+                    it[13],                                          // Annotations
+                    it[14],                                          // Assembly
+                    it[15],                                          // Coverage
                     [
                         cpus:  it[4],                                      // cpus
                         memory: it[5],                                     // memory

@@ -48,13 +48,16 @@ tool_help_icon <- function(tool,
 #' @param tool short name (must match the tool_help_icon() call)
 #' @param input the moduleServer's `input` object
 #' @noRd
-register_tool_help <- function(tool, input) {
+register_tool_help <- function(tool, input, reopen = NULL,
+                               session = shiny::getDefaultReactiveDomain()) {
+  ns <- session$ns
   input_id <- paste0("help_", tool)
+  close_id <- paste0("help_close_", tool)
   shiny::observeEvent(input[[input_id]], ignoreInit = TRUE, {
     shiny::showModal(shiny::modalDialog(
       title = paste("Documentation:", tool),
       size = "l",
-      easyClose = TRUE,
+      easyClose = FALSE,
       shiny::tags$pre(
         style = paste(
           "white-space: pre-wrap; font-size: 12px; max-height: 60vh;",
@@ -63,7 +66,11 @@ register_tool_help <- function(tool, input) {
         ),
         read_tool_help(tool)
       ),
-      footer = shiny::tagList(shiny::modalButton("Close"))
+      footer = shiny::tagList(shiny::actionButton(ns(close_id), "Close"))
     ))
+  })
+  shiny::observeEvent(input[[close_id]], ignoreInit = TRUE, {
+    shiny::removeModal()
+    if (is.function(reopen)) reopen()
   })
 }
