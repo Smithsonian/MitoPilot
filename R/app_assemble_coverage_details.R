@@ -150,6 +150,50 @@ assembly_coverage_details_server <- function(id, rv) {
         data = rv$focal_assembly,
         selected = selected()
       )
+
+      # Auto-promote/demote based on number of non-ignored scaffolds/paths
+      n_active <- sum(rv$focal_assembly$ignore == 0)
+      if (n_active == 1L && isTRUE(rv$updating$assemble_switch == 3)) {
+        dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 4L),
+            in_place = TRUE,
+            copy = TRUE,
+            unmatched = "ignore",
+            by = "ID"
+          )
+        rv$updating$assemble_switch <- 4L
+        rv$data <- rv$data |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 4L),
+            by = "ID"
+          )
+        shiny::showNotification(
+          "Auto-promoted to pending BLAST — 1 scaffold/path remaining.",
+          type = "message",
+          duration = 5
+        )
+      } else if (n_active > 1L && isTRUE(rv$updating$assemble_switch == 4)) {
+        dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 3L),
+            in_place = TRUE,
+            copy = TRUE,
+            unmatched = "ignore",
+            by = "ID"
+          )
+        rv$updating$assemble_switch <- 3L
+        rv$data <- rv$data |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 3L),
+            by = "ID"
+          )
+        shiny::showNotification(
+          "Reverted to needs attention — multiple scaffolds/paths active.",
+          type = "warning",
+          duration = 5
+        )
+      }
     })
 
     # Notes ----
