@@ -26,38 +26,37 @@ fi
 
 echo "Capturing help docs from image: $image" >&2
 
-# Each entry: <out-name>|<conda-env or "">|<help-cmd>|<version-cmd>
-# Conda env handles tools installed into named envs (mitos, trnascan-se, aragorn,
-# bam-readcount). Empty env runs the cmd directly. Version cmd is best-effort —
-# many tools print version with --version, some with -v or in --help output.
+# Each entry: <out-name>||<help-cmd>|<version-cmd>     (3 separators, 4 fields)
+# Tools installed into a named conda env (mitos, trnascan-se, aragorn) are
+# invoked through their absolute path in /opt/conda/envs/<env>/bin so we don't
+# depend on `conda activate` working in a non-interactive bash. Version cmd is
+# best-effort — set to `true` when the tool has no --version flag.
 TOOLS=(
-    "fastp|||fastp --help|fastp --version"
-    "getOrganelle|||get_organelle_from_reads.py --help|get_organelle_from_reads.py --version"
-    "mitofinder|||mitofinder --help|mitofinder --version"
-    "mitos|mitos|runmitos.py --help|runmitos.py --version"
-    "trnaScan-SE|trnascan-se|tRNAscan-SE --help|tRNAscan-SE --version"
-    "arwen|||arwen -h|arwen -h | head -1"
-    "aragorn|aragorn|aragorn -h|aragorn -h | head -1"
-    "blastn|||blastn -help|blastn -version"
+    "fastp||fastp --help|fastp --version"
+    "getOrganelle||get_organelle_from_reads.py --help|get_organelle_from_reads.py --version"
+    "mitofinder||mitofinder -h|true"
+    "mitos||/opt/conda/envs/mitos/bin/runmitos --help|/opt/conda/envs/mitos/bin/runmitos --version"
+    "trnaScan-SE||/opt/conda/envs/trnascan-se/bin/tRNAscan-SE --help|/opt/conda/envs/trnascan-se/bin/tRNAscan-SE --version"
+    "arwen||arwen -h|true"
+    "aragorn||/opt/conda/envs/aragorn/bin/aragorn -h|true"
 )
 
 run_in_image() {
-    # Runs a shell command inside the image. Conda env optional.
-    local env="$1"; shift
+    # Runs a shell command inside the image (always via /bin/bash so pipes work).
     local cmd="$*"
-    if [[ -n "$env" ]]; then
-        cmd="source activate $env && $cmd"
-    fi
     docker run --rm --entrypoint /bin/bash "$image" -c "$cmd" 2>&1 || true
 }
 
 for spec in "${TOOLS[@]}"; do
-    IFS='|' read -r name env help_cmd version_cmd <<<"$spec"
+    IFS='|' read -r name _env help_cmd version_cmd <<<"$spec"
     out="$out_dir/${name}.txt"
     echo "  $name -> $out" >&2
 
-    version="$(run_in_image "$env" "$version_cmd" | head -3 | tr -d '\r')"
-    help="$(run_in_image "$env" "$help_cmd")"
+    version="$(run_in_image "$version_cmd" | head -1 | tr -d '\r')"
+    if [[ "$version" == *"not found"* || "$version" == *"unrecognized"* || -z "$version" ]]; then
+        version="(version not detected)"
+    fi
+    help="$(run_in_image "$help_cmd")"
 
     {
         echo "# MitoPilot image: $image"

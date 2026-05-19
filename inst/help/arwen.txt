@@ -1,0 +1,105 @@
+# MitoPilot image: macguigand/mitopilot:1.4.0
+# Tool: arwen
+# Version: (version not detected)
+# Captured: 2026-05-19T00:10:03Z
+# ----------------------------------------------------------------
+
+
+---------------------------
+ARWEN v1.2 Dean Laslett
+---------------------------
+
+Please reference the following paper if you use this
+program as part of any published research.
+
+Laslett, D. and Canback, B. (2008) ARWEN: a
+program to detect tRNA genes in metazoan mitochondrial
+nucleotide sequences
+Bioinformatics, 24(2); 172-175.
+
+
+ARWEN detects metazoan mitochondrial tRNA genes.
+
+Usage:
+arwen -v -s -d -c -l -a -w -j -seq -mt -tv -gc -o <outfile> <filename>
+
+<filename> is assumed to contain one or more sequences
+in FASTA format. Results of the search are printed to
+STDOUT. All switches are optional and case-insensitive.
+
+    -mtmam        Search for Mammalian mitochondrial tRNA
+                  genes. -tv switch set.
+                  Mammalian mitochondrial genetic code used.
+    -mtx          Low scoring tRNA genes are
+                  not reported.
+    -gc<num>      Use the GenBank transl_table = <num> genetic code.
+    -gcstd        Use standard genetic code.
+    -gcmet        Use composite Metazoan mitochondrial genetic code.
+    -gcvert       Use Vertebrate mitochondrial genetic code.
+    -gcinvert     Use Invertebrate mitochondrial genetic code.
+    -gcyeast      Use Yeast mitochondrial genetic code.
+    -gcprot       Use Mold/Protozoan/Coelenterate mitochondrial genetic code.
+    -gcciliate    Use Ciliate genetic code.
+    -gcflatworm   Use Echinoderm/Flatworm mitochondrial genetic code.
+    -gceuplot     Use Euplotid genetic code.
+    -gcbact       Use Bacterial/Plant Chloroplast genetic code.
+    -gcaltyeast   Use alternative Yeast genetic code.
+    -gcascid      Use Ascidian Mitochondrial genetic code.
+    -gcaltflat    Use alternative Flatworm Mitochondrial genetic code.
+    -gcblep       Use Blepharisma genetic code.
+    -gcchloroph   Use Chlorophycean Mitochondrial genetic code.
+    -gctrem       Use Trematode Mitochondrial genetic code.
+    -gcscen       Use Scenedesmus obliquus Mitochondrial genetic code.
+    -gcthraust    Use Thraustochytrium Mitochondrial genetic code.
+                  Individual modifications can be appended using
+    ,BBB=<aa>     B = A,C,G, or T. <aa> is the three letter
+                  code for an amino-acid. More than one modification
+                  can be specified. eg -gcvert,aga=Trp,agg=Trp uses
+                  the Vertebrate Mitochondrial code and the codons
+                  AGA and AGG changed to Tryptophan.
+    -tv           Do not search for mitochondrial TV replacement
+                  loop tRNA genes.
+    -c            Assume that each sequence has a circular
+                  topology. Search wraps around each end.
+                  Default setting.
+    -l            Assume that each sequence has a linear
+                  topology. Search does not wrap.
+    -d            Double. Search both strands of each
+                  sequence. Default setting.
+    -s or -s+     Single. Do not search the complementary
+                  (antisense) strand of each sequence.
+    -sc or -s-    Single complementary. Do not search the sense
+                  strand of each sequence.
+    -rp           Report low scoring genes as possible pseudogenes
+    -seq          Print out primary sequence.
+    -br           Show secondary structure of tRNA gene primary
+                  sequence with round brackets.
+    -fasta        Print out primary sequence in fasta format.
+    -fo           Print out primary sequence in fasta format only
+                  (no secondary structure).
+    -j            Display 4-base sequence on 3' end of astem
+                  regardless of predicted amino-acyl acceptor
+                  length.
+    -jr           Allow some divergence of 3' amino-acyl acceptor
+                  sequence from NCCA.
+    -jr4          Allow some divergence of 3' amino-acyl acceptor
+                  sequence from NCCA, and display 4 bases.
+    -v            Verbose. Prints out search progress
+                  to STDERR.
+    -o <outfile>  print output into <outfile>. If <outfile>
+                  exists, it is overwritten.
+                  By default, output goes to STDOUT.
+    -w            Print out genes in batch mode.
+                  Output is in the form:
+
+                  Sequence name
+                  N genes found
+                  1 tRNA-<species> [locus 1] <Apos> (nnn)
+                            .          
+                            .          
+                  N tRNA-<species> [Locus N] <Apos> (nnn)
+
+                  N is the number of genes found
+                  <species> is the tRNA iso-acceptor species
+                  <Apos> is the tRNA anticodon relative position
+                  (nnn) is the tRNA anticodon base triplet
