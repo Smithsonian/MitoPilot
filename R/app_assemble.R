@@ -190,6 +190,16 @@ assemble_server <- function(id) {
               width = 120,
               cell = rt_ncbi_link()
             ),
+            poor_blast_ref = colDef(show = FALSE),
+            blast_ref_status = colDef(
+              show = TRUE,
+              name = "BLAST Ref Align",
+              html = TRUE,
+              width = 100,
+              align = "center",
+              filterable = TRUE,
+              cell = rt_blast_ref_status()
+            ),
             blast_species = colDef(
               show = TRUE,
               name = "BLAST Species",

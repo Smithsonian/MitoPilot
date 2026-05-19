@@ -165,10 +165,11 @@ annotate_server <- function(id) {
           ),
           ID_verified = colDef(
             show = TRUE,
-            name = "ID_verified",
+            name = "ID Verified",
             html = TRUE,
             align = "center",
             width = 100,
+            cell = rt_bool_badge()
           ),
           annotate_opts = colDef(
             show = TRUE,
@@ -200,6 +201,16 @@ annotate_server <- function(id) {
           ),
           topology = colDef(show = TRUE, name = "Topology", align = "center"),
           scaffolds = colDef(show = TRUE, name = "Scaffolds", align = "center"),
+          poor_blast_ref = colDef(show = FALSE),
+          blast_ref_status = colDef(
+            show = TRUE,
+            name = "BLAST Ref Align",
+            html = TRUE,
+            width = 100,
+            align = "center",
+            filterable = TRUE,
+            cell = rt_blast_ref_status()
+          ),
           blast_accession = colDef(
             show = TRUE,
             name = "BLAST Top Hit",
@@ -247,6 +258,7 @@ annotate_server <- function(id) {
             html = TRUE,
             align = "center",
             width = 100,
+            cell = rt_bool_badge()
           ),
           problematic = colDef(
             show = TRUE,
@@ -254,6 +266,7 @@ annotate_server <- function(id) {
             html = TRUE,
             align = "center",
             width = 100,
+            cell = rt_bool_badge(invert = TRUE)
           ),
           time_stamp = colDef(
             show = TRUE,

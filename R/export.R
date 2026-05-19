@@ -102,7 +102,7 @@ export_files <- function(
       ) |>
       dplyr::left_join(
         dplyr::tbl(con, "assemble") |>
-          dplyr::select(ID, blast_accession),
+          dplyr::select(ID, blast_accession, dplyr::any_of("poor_blast_ref")),
         by = "ID"
       ) |>
       dplyr::collect()
@@ -130,7 +130,9 @@ export_files <- function(
       dat$topology <- kept$topology[1]
     }
     blast_acc <- dat$blast_accession[1]
-    blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) && blast_acc != "NO HIT") {
+    blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) &&
+                      blast_acc != "NO HIT" &&
+                      !isTRUE(dat$poor_blast_ref[1] %in% c("poor", "failed"))) {
       paste0(" [note=annotation compared to GenBank accession ", blast_acc, "]")
     } else {
       ""

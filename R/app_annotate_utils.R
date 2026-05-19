@@ -11,7 +11,8 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 
   assemble <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs)
+    dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs,
+                  dplyr::any_of("poor_blast_ref"))
 
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
@@ -65,9 +66,12 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       problematic,
       time_stamp,
       annotate_notes,
-      warnings_details
+      warnings_details,
+      dplyr::any_of("poor_blast_ref")
     ) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
+    dplyr::relocate(blast_ref_status, .after = blast_accession) |>
     dplyr::mutate(
       output = dplyr::case_when(
         annotate_switch > 1 ~ "output",

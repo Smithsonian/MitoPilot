@@ -37,6 +37,10 @@ params.sqlWriteAlignment = '''INSERT OR REPLACE INTO blast_ref_alignment
     (ID, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
     VALUES (?, ?, ?, ?, ?, ?)'''
 
+// Mark poor_blast_ref = 'failed' when blast_ref_align fails for a sample
+// (errorStrategy 'ignore' suppresses task failure; we detect missing output downstream).
+params.sqlWriteBlastRefAlignFailed = "UPDATE assemble SET poor_blast_ref = 'failed' WHERE ID = ?"
+
 workflow BLAST_REF_ALIGN {
     take:
         validated   // (id, path) — gates timing: only fires after VALIDATE completes
@@ -84,6 +88,11 @@ workflow BLAST_REF_ALIGN {
 
         new_align_in.mix(backfill_ch).set { align_in }
 
+        // Track all IDs entering align so failures (no output) can be detected
+        align_in
+            .map { id, assembly_seq, ref_seq, rotation -> tuple(id, true) }
+            .set { all_align_ids }
+
         blast_ref_align(align_in).set { align_out }
 
         // Parse the one-row CSV and write to blast_ref_alignment table
@@ -106,4 +115,15 @@ workflow BLAST_REF_ALIGN {
             }
             .filter { it != null }
             .sqlInsert(statement: params.sqlWriteAlignment, db: 'sqlite')
+
+        // Detect align failures: IDs that entered but produced no CSV output
+        align_out
+            .map { id, csv_file -> tuple(id, true) }
+            .set { succeeded_align_ids }
+
+        all_align_ids
+            .join(succeeded_align_ids, remainder: true)
+            .filter { id, all_flag, success_flag -> success_flag == null }
+            .map    { id, all_flag, success_flag -> tuple(id) }
+            .sqlInsert(statement: params.sqlWriteBlastRefAlignFailed, db: 'sqlite')
 }

@@ -471,7 +471,22 @@ annotations_details_server <- function(id, rv) {
           lbl("100px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
         )
       }
+      is_poor <- isTRUE(rv$updating$poor_blast_ref == "poor")
       tagList(
+        div(
+          style = "display: flex; justify-content: start; margin-bottom: 6px;",
+          shinyWidgets::prettyToggle(
+            ns("poor_blast_ref_toggle"),
+            label_on  = "Poor reference flagged",
+            label_off = "Flag as poor reference",
+            icon_on   = shiny::icon("flag"),
+            icon_off  = shiny::icon("flag"),
+            status_on  = "warning",
+            status_off = "default",
+            value = is_poor,
+            inline = TRUE
+          )
+        ),
         if (isTRUE(rv$updating$topology == "linear")) {
           div(
             class = "alert alert-warning",
@@ -1495,6 +1510,25 @@ annotations_details_server <- function(id, rv) {
         stringr::str_glue("Sample problematic: {rv$updating$problematic}")
       })
     }) # END PROBLEMATIC
+
+    # Poor BLAST reference toggle ----
+    observeEvent(input$poor_blast_ref_toggle, ignoreInit = TRUE, {
+      val <- if (isTRUE(input$poor_blast_ref_toggle)) "poor" else "good"
+      rv$updating$poor_blast_ref <- val
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(
+          data.frame(ID = rv$updating$ID, poor_blast_ref = val),
+          by = "ID",
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          data.frame(ID = rv$updating$ID, poor_blast_ref = val),
+          by = "ID"
+        )
+    })
 
     # Edit Annotation ----
     observeEvent(input$edit_mode, {

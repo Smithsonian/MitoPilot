@@ -211,6 +211,7 @@ new_db_userAsmb <- function(
       blast_qcovs REAL,
       blast_evalue REAL,
       blast_lineage TEXT,
+      poor_blast_ref TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
@@ -230,6 +231,7 @@ new_db_userAsmb <- function(
           hide_switch = 0,
           assemble_opts = "user",
           blast_opts = "default",
+          poor_blast_ref = NA_character_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,

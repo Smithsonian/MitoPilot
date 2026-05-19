@@ -72,6 +72,7 @@ backwards_compatibility <- function(
       "mitofinder" %in% names(assemble_opts_table) &&
       "problematic" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
+      "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
       "blast_accession" %in% names(assemble_table) &&
@@ -206,6 +207,36 @@ backwards_compatibility <- function(
         by = "ID"
       )
   }
+
+  # if poor_blast_ref column doesn't exist on assemble, add it (TEXT: good/poor/failed/NULL)
+  if (!("poor_blast_ref" %in% names(assemble_table))) {
+    message("added 'poor_blast_ref' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN poor_blast_ref TEXT")
+    # migrate from samples if the column lived there in older projects
+    if ("poor_blast_ref" %in% names(samples_table)) {
+      message("migrating 'poor_blast_ref' values from samples to assemble")
+      DBI::dbExecute(
+        con,
+        "UPDATE assemble SET poor_blast_ref = (
+           SELECT CASE samples.poor_blast_ref WHEN 1 THEN 'poor' WHEN 0 THEN 'good' END
+             FROM samples WHERE samples.ID = assemble.ID
+         ) WHERE EXISTS (
+           SELECT 1 FROM samples WHERE samples.ID = assemble.ID
+             AND samples.poor_blast_ref IS NOT NULL
+         )"
+      )
+      DBI::dbExecute(con, "ALTER TABLE samples DROP COLUMN poor_blast_ref")
+    }
+  }
+  # convert any legacy integer values left in poor_blast_ref to TEXT (idempotent)
+  DBI::dbExecute(
+    con,
+    "UPDATE assemble SET poor_blast_ref = CASE
+       WHEN typeof(poor_blast_ref) = 'integer' AND poor_blast_ref = 1 THEN 'poor'
+       WHEN typeof(poor_blast_ref) = 'integer' AND poor_blast_ref = 0 THEN 'good'
+       ELSE poor_blast_ref
+     END"
+  )
 
   # if reviewed column doesn't exist, add it
   if(!("reviewed" %in% names(annotate_table))){

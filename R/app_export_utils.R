@@ -12,19 +12,23 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
 
   dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID, blast_accession, blast_species, blast_lineage) |>
+    dplyr::select(ID, blast_accession, blast_species, blast_lineage,
+                  dplyr::any_of("poor_blast_ref")) |>
     dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(
       ID, blast_accession, blast_species, blast_lineage, curate_opts, topology,
-      structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings
+      structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
+      dplyr::any_of("poor_blast_ref")
     ) |>
     dplyr::left_join(samples, by = "ID") |>
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
     dplyr::collect() |>
     dplyr::mutate(
+      blast_ref_status = poor_blast_ref,
       structure = stringr::str_replace_all(structure, "trn[A-Z]", "\u2022"),
       export_group = as.character(export_group)
-    )
+    ) |>
+    dplyr::relocate(blast_ref_status, .after = blast_accession)
 }

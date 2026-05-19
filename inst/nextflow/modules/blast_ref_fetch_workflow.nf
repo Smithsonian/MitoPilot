@@ -21,7 +21,10 @@ params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
 // Written when the top-hit ref fetch fails after all retries (NCBI timeout / transient error).
 // blast_ref_fetch uses errorStrategy 'ignore' so the pipeline keeps running for other samples.
 // 'ignore' does NOT cache the failure as a successful task, so -resume will retry the step.
-params.sqlWriteBlastRefFetchFailed = 'UPDATE assemble SET assemble_switch = 3, assemble_notes = ? WHERE ID = ?'
+params.sqlWriteBlastRefFetchFailed = "UPDATE assemble SET assemble_switch = 3, assemble_notes = ?, poor_blast_ref = 'failed' WHERE ID = ?"
+
+// Mark poor_blast_ref = 'good' when the top-hit ref fetch + parse succeeds.
+params.sqlWriteBlastRefGood = "UPDATE assemble SET poor_blast_ref = 'good' WHERE ID = ?"
 
 workflow BLAST_REF_FETCH {
     take:
@@ -110,6 +113,12 @@ workflow BLAST_REF_FETCH {
             .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
             .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id, true) }
             .set { succeeded_top_ids }
+
+        // Mark poor_blast_ref = 'good' for IDs whose top-hit ref fetch succeeded
+        ref_out
+            .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
+            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id) }
+            .sqlInsert(statement: params.sqlWriteBlastRefGood, db: 'sqlite')
 
         all_top_ids
             .join(succeeded_top_ids, remainder: true)

@@ -55,7 +55,17 @@ export_server <- function(id) {
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),
+        theme = reactable::reactableTheme(
+          headerStyle = list(whiteSpace = "normal", lineHeight = "1.2", textAlign = "left")
+        ),
         defaultColDef = colDef(align = "left"),
+        columnGroups = list(
+          reactable::colGroup(
+            name = "BLAST",
+            columns = c("blast_accession", "blast_ref_status", "blast_species",
+                        "blast_lineage")
+          )
+        ),
         columns = list(
           ID = colDef(show = T, minWidth = 120, sticky = "left"),
           curate_opts = colDef(
@@ -63,23 +73,33 @@ export_server <- function(id) {
             name = "Curate Opts.",
             width = 110
           ),
+          poor_blast_ref = colDef(show = FALSE),
+          blast_ref_status = colDef(
+            show = TRUE,
+            name = "Ref Align",
+            html = TRUE,
+            width = 100,
+            align = "center",
+            filterable = TRUE,
+            cell = rt_blast_ref_status()
+          ),
           blast_accession = colDef(
             show = TRUE,
-            name = "BLAST Top Hit",
+            name = "Top Hit",
             html = TRUE,
             width = 120,
             cell = rt_ncbi_link()
           ),
           blast_species = colDef(
             show = TRUE,
-            name = "BLAST Species",
+            name = "Species",
             html = TRUE,
             minWidth = 160,
             cell = rt_longtext()
           ),
           blast_lineage = colDef(
             show = TRUE,
-            name = "BLAST Lineage",
+            name = "Lineage",
             html = TRUE,
             minWidth = 200,
             cell = rt_longtext()

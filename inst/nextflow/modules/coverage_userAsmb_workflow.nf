@@ -18,7 +18,7 @@ params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
                             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
-                            'assemble_switch=?, assemble_notes=?, time_stamp=? WHERE ID=?'
+                            'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'
 
 
 workflow COVERAGE_userAsmb {

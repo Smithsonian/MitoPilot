@@ -81,6 +81,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(-n_total, -n_kept, -length_per_scaffold,
                   -dplyr::any_of(paste0(blast_cols, "_kept"))) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(
       assemble_lock,
       assemble_switch,
@@ -97,6 +98,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       paths,
       scaffolds,
       blast_accession,
+      blast_ref_status,
       blast_species,
       blast_pident,
       blast_qcovs,

@@ -20,6 +20,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(
       assemble_lock,
       assemble_switch,
@@ -36,6 +37,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       paths,
       scaffolds,
       blast_accession,
+      blast_ref_status,
       blast_species,
       blast_pident,
       blast_qcovs,
