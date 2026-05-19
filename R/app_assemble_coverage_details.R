@@ -151,29 +151,32 @@ assembly_coverage_details_server <- function(id, rv) {
         selected = selected()
       )
 
-      # Auto-promote/demote based on number of non-ignored scaffolds/paths
+      # Auto-promote/demote based on number of non-ignored scaffolds/paths.
+      # Single remaining scaffold/path -> mark successful (2). For multi-
+      # scaffold assemblies this is correct because BLAST info already exists;
+      # multi-path assemblies will lack BLAST info, which is a known gap.
       n_active <- sum(rv$focal_assembly$ignore == 0)
       if (n_active == 1L && isTRUE(rv$updating$assemble_switch == 3)) {
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::rows_update(
-            data.frame(ID = rv$updating$ID, assemble_switch = 4L),
+            data.frame(ID = rv$updating$ID, assemble_switch = 2L),
             in_place = TRUE,
             copy = TRUE,
             unmatched = "ignore",
             by = "ID"
           )
-        rv$updating$assemble_switch <- 4L
+        rv$updating$assemble_switch <- 2L
         rv$data <- rv$data |>
           dplyr::rows_update(
-            data.frame(ID = rv$updating$ID, assemble_switch = 4L),
+            data.frame(ID = rv$updating$ID, assemble_switch = 2L),
             by = "ID"
           )
         shiny::showNotification(
-          "Auto-promoted to pending BLAST — 1 scaffold/path remaining.",
+          "Auto-promoted to successful — 1 scaffold/path remaining.",
           type = "message",
           duration = 5
         )
-      } else if (n_active > 1L && isTRUE(rv$updating$assemble_switch == 4)) {
+      } else if (n_active > 1L && isTRUE(rv$updating$assemble_switch == 2)) {
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::rows_update(
             data.frame(ID = rv$updating$ID, assemble_switch = 3L),

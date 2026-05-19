@@ -1,3 +1,24 @@
+# Togglable column groups for the Assemble table. Cols not listed here
+# (sticky cols, action buttons) are always shown.
+ASSEMBLE_COL_GROUPS <- list(
+  Options  = c("pre_opts", "assemble_opts", "blast_opts"),
+  Stats    = c("trimmed_reads", "mean_length", "topology", "length",
+               "paths", "scaffolds"),
+  BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
+               "blast_lineage", "blast_pident", "blast_qcovs"),
+  Metadata = c("time_stamp", "assemble_notes")
+)
+# Reverse lookup col -> group, used to tag colDefs with a CSS class so the
+# column-group picker can show/hide columns via CSS without re-rendering
+# the table (preserves filters, sort, page, selection).
+ASSEMBLE_COL_GROUP_LOOKUP <- {
+  out <- character()
+  for (.g in names(ASSEMBLE_COL_GROUPS)) {
+    for (.c in ASSEMBLE_COL_GROUPS[[.g]]) out[.c] <- .g
+  }
+  out
+}
+
 #' assemble UI
 #'
 #' @param id,input,output,session Internal parameters for {shiny}.
@@ -6,6 +27,19 @@
 assemble_ui <- function(id) {
   ns <- NS(id)
   tagList(
+    uiOutput(ns("col_css")),
+    shinyWidgets::pickerInput(
+      inputId  = ns("col_groups"),
+      label    = "Show columns:",
+      choices  = names(ASSEMBLE_COL_GROUPS),
+      selected = names(ASSEMBLE_COL_GROUPS),
+      multiple = TRUE,
+      options  = list(
+        `actions-box`          = TRUE,
+        `selected-text-format` = "count > 0"
+      ),
+      inline = TRUE
+    ),
     reactableOutput(ns("table"))
   )
 }
@@ -43,6 +77,33 @@ assemble_server <- function(id) {
         "table",
         data = rv$data
       )
+    })
+
+    # Mirror the column-group picker so NULL (= user cleared all) is
+    # distinguishable from the pre-init state. Default: all groups on.
+    col_groups_rv <- reactiveVal(names(ASSEMBLE_COL_GROUPS))
+    observeEvent(input$col_groups, {
+      col_groups_rv(input$col_groups %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+    # CSS class for a togglable column. Returned class is added to both the
+    # body cell (class) and the header cell (headerClass) so the
+    # whole column collapses when the matching group is unselected.
+    .grp <- function(col) {
+      g <- ASSEMBLE_COL_GROUP_LOOKUP[col]
+      if (is.na(g)) NULL else paste0("mp-grp-", g)
+    }
+
+    # Inject a <style> tag that display:nones unselected column groups.
+    # Hiding via CSS keeps the columns mounted in the DOM, so filters,
+    # sort order, current page, and selection all survive toggling.
+    output$col_css <- renderUI({
+      hidden <- setdiff(names(ASSEMBLE_COL_GROUPS), col_groups_rv())
+      if (length(hidden) == 0) return(NULL)
+      rules <- paste0(".mp-grp-", hidden,
+                      " { display: none !important; }",
+                      collapse = "\n")
+      tags$style(HTML(rules))
     })
 
     # Render table ----
@@ -113,45 +174,45 @@ assemble_server <- function(id) {
               cell = rt_longtext()
             ),
             pre_opts = colDef(
-              show = T,
+              show = TRUE, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
               name = "Preprocess Opts.",
               html = T,
               width = 130,
               cell = rt_link(ns("set_pre_opts"))
             ),
             trimmed_reads = colDef(
-              show = T,
+              show = TRUE, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
               name = "Reads",
               filterable = FALSE,
               minWidth = 100
             ),
             mean_length = colDef(
-              show = T,
+              show = TRUE, class = .grp("mean_length"), headerClass = .grp("mean_length"),
               name = "Read Length",
               filterable = FALSE,
               minWidth = 100
             ),
             assemble_opts = colDef(
-              show = T,
+              show = TRUE, class = .grp("assemble_opts"), headerClass = .grp("assemble_opts"),
               name = "Assembly Opts.",
               html = T,
               width = 130,
               cell = rt_link(ns("set_assemble_opts"))
             ),
             blast_opts = colDef(
-              show = T,
+              show = TRUE, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
               name = "BLAST Opts.",
               html = T,
               width = 120,
               cell = rt_link(ns("set_blast_opts"))
             ),
             topology = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
               width = 100,
               name = "Topology"
             ),
             length = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("length"), headerClass = .grp("length"),
               minWidth = 140,
               name = "Asmb. Length (ignored)",
               header = htmltools::HTML('Asmb. Length (<span style="color:#e74c3c;font-weight:bold">ignored</span>)'),
@@ -176,15 +237,15 @@ assemble_server <- function(id) {
             min_assembly_length = colDef(show = FALSE),
             ignore_flags = colDef(show = FALSE),
             paths = colDef(
-              show = TRUE, width = 100, name = "# Paths", align = "center",
+              show = TRUE, class = .grp("paths"), headerClass = .grp("paths"), width = 100, name = "# Paths", align = "center",
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
             scaffolds = colDef(
-              show = TRUE, width = 100, name = "# Scaffolds", align = "center"
+              show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"), width = 100, name = "# Scaffolds", align = "center"
             ),
             blast_accession = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
               name = "BLAST Top Hit",
               html = TRUE,
               width = 120,
@@ -192,44 +253,45 @@ assemble_server <- function(id) {
             ),
             poor_blast_ref = colDef(show = FALSE),
             blast_ref_status = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
               name = "BLAST Ref Align",
               html = TRUE,
-              width = 100,
+              minWidth = 130,
+              resizable = TRUE,
               align = "center",
               filterable = TRUE,
               cell = rt_blast_ref_status()
             ),
             blast_species = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
               name = "BLAST Species",
               html = TRUE,
               minWidth = 160,
               cell = rt_longtext()
             ),
             blast_lineage = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
               name = "BLAST Lineage",
               html = TRUE,
               minWidth = 200,
               cell = rt_longtext()
             ),
             blast_pident = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
               name = "BLAST % Ident",
               filterable = FALSE,
               minWidth = 90,
               align = "center"
             ),
             blast_qcovs = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
               name = "BLAST % Cov",
               filterable = FALSE,
               minWidth = 90,
               align = "center"
             ),
             time_stamp = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
               name = "Last Updated",
               filterable = FALSE,
               html = T,
@@ -237,7 +299,7 @@ assemble_server <- function(id) {
               cell = rt_ts_date()
             ),
             assemble_notes = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("assemble_notes"), headerClass = .grp("assemble_notes"),
               name = "Notes",
               html = TRUE,
               align = "left",
