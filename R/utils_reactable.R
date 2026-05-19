@@ -77,8 +77,11 @@ rt_ncbi_link <- function() {
 #' Render a yes/no text column as a colored badge
 #'
 #' @param invert if TRUE, "yes" is orange (bad) and "no" is green (good)
+#' @param hide_no if TRUE, render an empty cell for "no"/NA values (only
+#'   "yes" gets a badge). Useful for columns where "no" is the default
+#'   and noisy to display.
 #' @noRd
-rt_bool_badge <- function(invert = FALSE) {
+rt_bool_badge <- function(invert = FALSE, hide_no = FALSE) {
   yes_bg <- if (invert) "#fde8d0" else "#d4edda"
   yes_fg <- if (invert) "#7d4a1e" else "#2d6a4f"
   no_bg  <- if (invert) "#d4edda" else "#fde8d0"
@@ -86,12 +89,13 @@ rt_bool_badge <- function(invert = FALSE) {
   sprintf(
     "function(cellInfo) {
       var val = cellInfo.value ? cellInfo.value : 'no'
+      if (val !== 'yes' && %s) return ''
       var bg  = val === 'yes' ? '%s' : '%s'
       var fg  = val === 'yes' ? '%s' : '%s'
       return '<span style=\"background:' + bg + '; color:' + fg + '; border-radius:3px; ' +
              'padding:1px 6px; font-size:0.85em;\">' + val + '</span>'
     }",
-    yes_bg, no_bg, yes_fg, no_fg
+    tolower(as.character(hide_no)), yes_bg, no_bg, yes_fg, no_fg
   ) |> htmlwidgets::JS()
 }
 

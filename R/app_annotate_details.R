@@ -63,19 +63,71 @@ annotations_details_server <- function(id, rv) {
       render_annotations_table(Sys.time())
     })
 
-    # Render "id verified" status
-    output$idText <- shiny::renderText({
-      stringr::str_glue("ID verified: {rv$updating$ID_verified}")
+    # Compact status pill renderer. `state` is one of "yes" / "no" / NA;
+    # `invert = TRUE` flips the color mapping so "yes" reads as warning.
+    status_badge <- function(label, state, invert = FALSE) {
+      val <- if (is.na(state)) "na" else as.character(state)
+      bg <- if (val == "yes") {
+        if (invert) "#fde8d0" else "#d4edda"
+      } else if (val == "no") {
+        if (invert) "#d4edda" else "#fde8d0"
+      } else {
+        "#e9ecef"
+      }
+      fg <- if (val == "yes") {
+        if (invert) "#7d4a1e" else "#2d6a4f"
+      } else if (val == "no") {
+        if (invert) "#2d6a4f" else "#7d4a1e"
+      } else {
+        "#6c757d"
+      }
+      span(
+        style = paste0(
+          "background:", bg, "; color:", fg,
+          "; border-radius:3px; padding:2px 8px; font-size:0.75em;",
+          " font-weight: 600; white-space: nowrap;"
+        ),
+        paste0(label, ": ", toupper(val))
+      )
+    }
+
+    # Title-area passive badges: ID verified / Reviewed / Problematic.
+    output$status_badges <- shiny::renderUI({
+      tagList(
+        status_badge("ID verified", rv$updating$ID_verified),
+        status_badge("Reviewed",    rv$updating$reviewed),
+        status_badge("Problematic", rv$updating$problematic, invert = TRUE)
+      )
     })
 
-    # Render "reviewed" status
-    output$reviewedText <- shiny::renderText({
-      stringr::str_glue("Sample reviewed: {rv$updating$reviewed}")
-    })
-
-    # Render "problematic" status
-    output$problematicText <- shiny::renderText({
-      stringr::str_glue("Sample problematic: {rv$updating$problematic}")
+    # Footer toggle buttons: clicking still drives the same input$ID_verified /
+    # input$reviewed / input$problematic observers below; visual state reflects
+    # the current value so the user sees what each click will flip.
+    toggle_btn <- function(id, label, state, invert = FALSE) {
+      val <- if (is.na(state)) "na" else as.character(state)
+      cls <- if (val == "yes") {
+        if (invert) "btn btn-warning" else "btn btn-success"
+      } else if (val == "no") {
+        if (invert) "btn btn-success" else "btn btn-default"
+      } else {
+        "btn btn-default"
+      }
+      ico <- if (val == "yes") {
+        shiny::icon(if (invert) "triangle-exclamation" else "check")
+      } else if (val == "no") {
+        shiny::icon("xmark")
+      } else {
+        shiny::icon("question")
+      }
+      actionButton(id, label, icon = ico, class = cls)
+    }
+    output$status_toggles <- shiny::renderUI({
+      tagList(
+        toggle_btn(ns("ID_verified"), "ID verified", rv$updating$ID_verified),
+        toggle_btn(ns("reviewed"),    "Reviewed",    rv$updating$reviewed),
+        toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
+                   invert = TRUE)
+      )
     })
 
     # Render table ----
@@ -442,6 +494,11 @@ annotations_details_server <- function(id, rv) {
     output$synteny_ui <- renderUI({
       req(rv$blast_ref, rv$updating)
       req(nrow(rv$blast_ref) > 0)
+      # Don't render synteny when no current BLAST ref exists on this sample
+      # (e.g. BLAST disabled in opts). Stale rows may linger in
+      # blast_ref_annotations from a prior run with BLAST enabled.
+      req(!is.na(rv$updating$blast_accession),
+          nzchar(rv$updating$blast_accession))
       w          <- max(rv$updating$length %||% 800L, 800L)
       sample_lbl <- rv$updating$ID
       ref_lbl    <- rv$updating$blast_species %||% rv$updating$blast_accession
@@ -1438,9 +1495,6 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
       }
-      output$idText <- shiny::renderText({
-        stringr::str_glue("ID verified: {rv$updating$ID_verified}")
-      })
     }) # END ID VERIFIED
 
     # Mark as reviewed ----
@@ -1472,9 +1526,6 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       }
-      output$reviewedText <- shiny::renderText({
-        stringr::str_glue("Sample reviewed: {rv$updating$reviewed}")
-      })
     }) # END REVIEWED
 
     # Mark as problematic ----
@@ -1506,15 +1557,13 @@ annotations_details_server <- function(id, rv) {
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
       }
-      output$problematicText <- shiny::renderText({
-        stringr::str_glue("Sample problematic: {rv$updating$problematic}")
-      })
     }) # END PROBLEMATIC
 
     # Poor BLAST reference toggle ----
     observeEvent(input$poor_blast_ref_toggle, ignoreInit = TRUE, {
       val <- if (isTRUE(input$poor_blast_ref_toggle)) "poor" else "good"
-      rv$updating$poor_blast_ref <- val
+      rv$updating$poor_blast_ref  <- val
+      rv$updating$blast_ref_status <- val
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           data.frame(ID = rv$updating$ID, poor_blast_ref = val),
@@ -1523,9 +1572,16 @@ annotations_details_server <- function(id, rv) {
           copy = TRUE,
           in_place = TRUE
         )
+      # Update both poor_blast_ref (source) and blast_ref_status (derived
+      # alias used by the reactable cell renderer) so the Annotate table
+      # reflects the new state on modal close via update_annotate_table.
       rv$data <- rv$data |>
         dplyr::rows_update(
-          data.frame(ID = rv$updating$ID, poor_blast_ref = val),
+          data.frame(
+            ID               = rv$updating$ID,
+            poor_blast_ref   = val,
+            blast_ref_status = val
+          ),
           by = "ID"
         )
     })
@@ -2895,12 +2951,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   ns <- session$ns
 
   modalDialog(
-    title = stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}"),
+    title = div(
+      style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
+      span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
+      uiOutput(ns("status_badges"), inline = TRUE)
+    ),
     size = "l",
     easyClose = F,
-    textOutput(ns("idText")),
-    textOutput(ns("reviewedText")),
-    textOutput(ns("problematicText")),
     tags$details(
       id = ns("annotation_table_details"),
       open = TRUE,
@@ -3188,9 +3245,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
-      actionButton(ns("ID_verified"), "Toggle ID verified"),
-      actionButton(ns("reviewed"), "Toggle reviewed"),
-      actionButton(ns("problematic"), "Toggle problematic"),
+      uiOutput(ns("status_toggles"), inline = TRUE),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("lock"), "Lock&Close"),
       actionButton(ns("close"), "Close")

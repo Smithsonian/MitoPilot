@@ -328,7 +328,7 @@ annotate_server <- function(id) {
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge(invert = TRUE)
+            cell = rt_bool_badge(invert = TRUE, hide_no = TRUE)
           ),
           time_stamp = colDef(
             show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
