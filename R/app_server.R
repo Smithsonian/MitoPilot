@@ -37,22 +37,20 @@ app_server <- function(input, output, session) {
   if (!"blast_lineage" %in% existing_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
 
-  # Migrate: add per-scaffold BLAST result columns + edit_positions to assemblies table
-  assemblies_fields <- DBI::dbListFields(session$userData$con, "assemblies")
-  if (!"blast_accession" %in% assemblies_fields)
+  # Migrate: add per-scaffold BLAST result columns to assemblies table
+  asmb_fields <- DBI::dbListFields(session$userData$con, "assemblies")
+  if (!"blast_accession" %in% asmb_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_accession TEXT")
-  if (!"blast_species" %in% assemblies_fields)
+  if (!"blast_species" %in% asmb_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_species TEXT")
-  if (!"blast_pident" %in% assemblies_fields)
+  if (!"blast_pident" %in% asmb_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_pident REAL")
-  if (!"blast_qcovs" %in% assemblies_fields)
+  if (!"blast_qcovs" %in% asmb_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_qcovs REAL")
-  if (!"blast_evalue" %in% assemblies_fields)
+  if (!"blast_evalue" %in% asmb_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_evalue REAL")
-  if (!"blast_lineage" %in% assemblies_fields)
+  if (!"blast_lineage" %in% asmb_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_lineage TEXT")
-  if (!"edit_positions" %in% assemblies_fields)
-    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
 
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>
