@@ -220,6 +220,8 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
   expect_true("blast_ref_annotations" %in% tables)
   expect_true("blast_ref_sequences"   %in% tables)
   expect_true("blast_ref_alignment"   %in% tables)
+  expect_true("assemblies"            %in% tables)
+  expect_cols(con, "assemblies", "length_raw")
 
   # .config updates
   conf <- readLines(file.path(td, ".config"))
@@ -270,6 +272,8 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   expect_true("blast_ref_annotations" %in% tables)
   expect_true("blast_ref_sequences"   %in% tables)
   expect_true("blast_ref_alignment"   %in% tables)
+  expect_true("assemblies"            %in% tables)
+  expect_cols(con, "assemblies", "length_raw")
 
   # .config — only blast_gb and container missing in 1.3.10
   conf <- readLines(file.path(td, ".config"))

@@ -90,7 +90,10 @@ backwards_compatibility <- function(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
       )) &&
-      "length_raw" %in% DBI::dbListFields(con, "assemblies"))
+      isTRUE(tryCatch(
+        "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
+        error = function(e) FALSE
+      )))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -732,8 +735,34 @@ backwards_compatibility <- function(
       )
   }
 
-  # if length_raw column doesn't exist in assemblies table, add it
-  if (!("length_raw" %in% DBI::dbListFields(con, "assemblies"))) {
+  # if assemblies table doesn't exist, create it; otherwise add length_raw if missing
+  if (!("assemblies" %in% existing_tables)) {
+    message("created assemblies table")
+    DBI::dbExecute(con,
+      "CREATE TABLE assemblies (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL,
+        scaffold INTEGER NOT NULL,
+        topology TEXT,
+        length INTEGER,
+        length_raw INTEGER,
+        sequence TEXT,
+        depth TEXT,
+        gc TEXT,
+        errors TEXT,
+        ignore INTEGER,
+        edited INTEGER,
+        blast_accession TEXT,
+        blast_species TEXT,
+        blast_pident REAL,
+        blast_qcovs REAL,
+        blast_evalue REAL,
+        blast_lineage TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+  } else if (!("length_raw" %in% DBI::dbListFields(con, "assemblies"))) {
     message("added 'length_raw' column to assemblies table")
     DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN length_raw INTEGER")
     DBI::dbExecute(con, "UPDATE assemblies SET length_raw = length WHERE length_raw IS NULL")
