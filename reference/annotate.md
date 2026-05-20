@@ -23,6 +23,8 @@ annotate(
   use_aragorn = FALSE,
   use_mitos_best = TRUE,
   start_gene = "trnF",
+  coverage_trim = TRUE,
+  ignore_scaffolds = NULL,
   out_dir = NULL
 )
 ```
@@ -97,6 +99,18 @@ annotate(
 
   name of gene (PCG, rRNA, or tRNA) to start circular assembly (default
   = "trnF")
+
+- coverage_trim:
+
+  logical; whether to trim low-coverage ends of linear assemblies
+  (default: TRUE).
+
+- ignore_scaffolds:
+
+  Comma-separated scaffold numbers (e.g. "1,3") to drop from the
+  assembly before annotation. These correspond to the \`scaffold\`
+  column in the assemblies table and reflect the per-scaffold \`ignore\`
+  flag.
 
 - out_dir:
 

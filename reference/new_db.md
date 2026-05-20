@@ -25,6 +25,7 @@ new_db(
   mitofinder = paste("--megahit"),
   max_paths = 10,
   max_scaffolds = 10,
+  min_assembly_length = 500,
   annotate_cpus = 6,
   annotate_memory = 36,
   annotate_ref_db = "Chordata",
@@ -119,6 +120,12 @@ new_db(
   sample to continue past the Assemble step (default = 10). Samples
   exceeding this are flagged as failed and skipped by downstream steps
   in WF1.
+
+- min_assembly_length:
+
+  Minimum contig length (bp) to retain for coverage calculations, BLAST,
+  and annotation. Scaffolds shorter than this threshold are stored but
+  flagged as ignored (default = 500).
 
 - annotate_cpus:
 

@@ -24,7 +24,8 @@ new_db_userAsmb(
   curate_memory = 8,
   curate_target = "fish_mito",
   max_blast_hits = 100,
-  curate_params = NULL
+  curate_params = NULL,
+  min_assembly_length = 500
 )
 ```
 
@@ -104,3 +105,7 @@ new_db_userAsmb(
 - curate_params:
 
   Default curation parameters
+
+- min_assembly_length:
+
+  Minimum scaffold length to include in analysis (default = 500)

@@ -14,7 +14,8 @@ curate_bird_mito(
   max_blast_hits = 100,
   params = NULL,
   ref_dir = NULL,
-  blast_ref_file = NULL
+  blast_ref_file = NULL,
+  feature_trim = TRUE
 )
 ```
 
@@ -57,3 +58,7 @@ curate_bird_mito(
 
   Path to a JSON file of remote BLAST reference hits to inject into the
   local curation database (default = NULL)
+
+- feature_trim:
+
+  Trim feature coordinates to assembly boundaries (default = TRUE)
