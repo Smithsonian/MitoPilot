@@ -135,8 +135,9 @@ workflow ASSEMBLE {
                 }
                 def n_scaffolds = scaffold_counts ? scaffold_counts.max() : 0
                 def length_str  = lengths.unique().sort().reverse().join(';')
+                def lengths_all = lengths.sort().reverse().join(';')
                 def topo_str    = topologies.unique().sort().join(';')
-                tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, it, it[8], it[9])
+                tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, lengths_all, it, it[8], it[9])
             }
             .set { summarized }
 
@@ -144,7 +145,7 @@ workflow ASSEMBLE {
         // Combine with min_len_summary so the all-short check can fire per-sample
         summarized
             .combine(min_len_summary, by: 0)
-            .branch { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds, min_assembly_length ->
+            .branch { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
                 fail: (n_paths > max_paths) || (n_scaffolds > max_scaffolds)
                 pass: true
             }
@@ -152,13 +153,17 @@ workflow ASSEMBLE {
 
         // PASS: write per-sample summary live, then propagate downstream
         branched.pass
-            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds, min_assembly_length ->
+            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
                 def status = '4'
                 def notes  = ''
                 if (n_scaffolds > 1) {
-                    notes  = 'Output contains disconnected contigs'
-                    topo_str = 'fragmented'
-                    status = '3'
+                    notes = 'Output contains disconnected contigs'
+                    def all_lengths_list = lengths_all ? lengths_all.split(';').collect { it as Integer } : []
+                    def n_passing = all_lengths_list.count { it >= min_assembly_length }
+                    if (n_passing != 1) {
+                        topo_str = 'fragmented'
+                        status   = '3'
+                    }
                 }
                 if (n_paths > 1) {
                     notes  = 'Unable to resolve single assembly from reads'
@@ -204,7 +209,7 @@ workflow ASSEMBLE {
 
         // FAIL (too many paths/scaffolds): write status=3 with reason, drop from downstream
         branched.fail
-            .map { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds, min_assembly_length ->
+            .map { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
                 def msg
                 if (n_paths > max_paths && n_scaffolds > max_scaffolds) {
                     msg = "${n_paths} assembly paths, exceeds limit (${max_paths}); ${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"

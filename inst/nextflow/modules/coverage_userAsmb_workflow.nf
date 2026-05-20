@@ -143,9 +143,12 @@ workflow COVERAGE_userAsmb {
                 def status         = '4'
                 def notes          = ''
                 if (max_scaffolds > 1) {
-                    topo_str = 'fragmented'
-                    status   = '3'
-                    notes    = 'Output contains disconnected contigs'
+                    notes = 'Output contains disconnected contigs'
+                    def n_passing = lengths_list.count { it >= (min_assembly_length as Integer) }
+                    if (n_passing != 1) {
+                        topo_str = 'fragmented'
+                        status   = '3'
+                    }
                 }
                 if (max_paths > 1) {
                     status = '3'
