@@ -1,15 +1,15 @@
 #' Read a bundled tool help text file
 #'
-#' @param tool short name (matches `inst/help/<tool>.txt`)
+#' @param tool short name (matches `inst/tool_help/<tool>.txt`)
 #' @return character scalar with the file contents, or a fallback message
 #' @noRd
 read_tool_help <- function(tool) {
-  f <- system.file("help", paste0(tool, ".txt"), package = "MitoPilot")
+  f <- system.file("tool_help", paste0(tool, ".txt"), package = "MitoPilot")
   if (!nzchar(f) || !file.exists(f)) {
     return(paste0(
       "No bundled help for '", tool, "' found.\n\n",
       "Run tools/capture_tool_help.sh against the MitoPilot Docker image to ",
-      "generate inst/help/", tool, ".txt"
+      "generate inst/tool_help/", tool, ".txt"
     ))
   }
   paste(readLines(f, warn = FALSE), collapse = "\n")
@@ -21,7 +21,7 @@ read_tool_help <- function(tool) {
 #' Each call creates a namespaced actionLink whose click is wired to its own
 #' observer (so multiple icons coexist without colliding).
 #'
-#' @param tool short name (matches inst/help/<tool>.txt)
+#' @param tool short name (matches inst/tool_help/<tool>.txt)
 #' @param label optional tooltip label (default: tool name + "options")
 #' @param session current Shiny session (defaults to the calling reactive
 #'   context's session). Required to namespace input IDs correctly.

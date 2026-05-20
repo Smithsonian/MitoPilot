@@ -172,7 +172,7 @@ assembly_coverage_details_server <- function(id, rv) {
             by = "ID"
           )
         shiny::showNotification(
-          "Auto-promoted to successful — 1 scaffold/path remaining.",
+          "Auto-promoted to successful \u2014 1 scaffold/path remaining.",
           type = "message",
           duration = 5
         )
@@ -192,7 +192,7 @@ assembly_coverage_details_server <- function(id, rv) {
             by = "ID"
           )
         shiny::showNotification(
-          "Reverted to needs attention — multiple scaffolds/paths active.",
+          "Reverted to needs attention \u2014 multiple scaffolds/paths active.",
           type = "warning",
           duration = 5
         )

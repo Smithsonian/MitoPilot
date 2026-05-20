@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 #
 # Capture --help (and --version) output for each user-arg-taking tool inside
-# the MitoPilot Docker image, write the results to inst/help/<tool>.txt for
+# the MitoPilot Docker image, write the results to inst/tool_help/<tool>.txt for
 # bundling with the R package. Re-run whenever the Docker image is rebuilt
 # with new tool versions so the in-app help docs stay in sync.
 #
 # Usage: tools/capture_tool_help.sh [<docker-image>]
 #   Defaults to: macguigand/mitopilot:<R-package-version>
 #
-# Output: inst/help/<tool>.txt — leading "MitoPilot image: ..." + tool version
+# Output: inst/tool_help/<tool>.txt — leading "MitoPilot image: ..." + tool version
 # header line then the raw --help dump.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$here/.." && pwd)"
-out_dir="$repo_root/inst/help"
+out_dir="$repo_root/inst/tool_help"
 mkdir -p "$out_dir"
 
 if [[ "${1-}" == "" ]]; then
