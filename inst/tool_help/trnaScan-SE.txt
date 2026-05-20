@@ -1,7 +1,7 @@
-# MitoPilot image: macguigand/mitopilot:1.4.0
+# MitoPilot image: macguigand/mitopilot:1.4.1
 # Tool: trnaScan-SE
 # Version: Unknown option: version
-# Captured: 2026-05-19T12:27:35Z
+# Captured: 2026-05-20T16:43:04Z
 # ----------------------------------------------------------------
 
 

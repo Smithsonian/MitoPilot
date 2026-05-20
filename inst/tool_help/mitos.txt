@@ -1,7 +1,7 @@
-# MitoPilot image: macguigand/mitopilot:1.4.0
+# MitoPilot image: macguigand/mitopilot:1.4.1
 # Tool: mitos
 # Version: runmitos.py 2.1.10
-# Captured: 2026-05-19T12:27:34Z
+# Captured: 2026-05-20T16:43:03Z
 # ----------------------------------------------------------------
 
 usage: runmitos.py [options]

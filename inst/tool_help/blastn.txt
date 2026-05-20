@@ -1,7 +1,7 @@
-# MitoPilot image: macguigand/mitopilot:1.4.0
+# MitoPilot image: macguigand/mitopilot:1.4.1
 # Tool: blastn
 # Version: blastn: 2.16.0+
-# Captured: 2026-05-19T12:27:37Z
+# Captured: 2026-05-20T16:43:06Z
 # ----------------------------------------------------------------
 
 USAGE
