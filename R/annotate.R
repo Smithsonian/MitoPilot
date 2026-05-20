@@ -21,6 +21,10 @@
 #' @param aragorn_condaenv Conda environment containing ARAGORN (default: "aragorn").
 #' @param use_mitos_best logical; whether to pass --best to MITOS2 (default: FALSE).
 #' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
+#' @param coverage_trim logical; whether to trim low-coverage ends of linear assemblies (default: TRUE).
+#' @param ignore_scaffolds Comma-separated scaffold numbers (e.g. "1,3") to drop
+#'   from the assembly before annotation. These correspond to the `scaffold`
+#'   column in the assemblies table and reflect the per-scaffold `ignore` flag.
 #' @param out_dir Output directory.
 #'
 #' @export
@@ -43,12 +47,25 @@ annotate <- function(
   use_aragorn = FALSE,
   use_mitos_best = TRUE,
   start_gene = "trnF",
+  coverage_trim = TRUE,
+  ignore_scaffolds = NULL,
   out_dir = NULL
 ) {
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
-  # Coverage trimming (optional)
-  # TODO? Move coverage trimming opt to dynamic params
+  # Drop scaffolds flagged ignore=1 in the assemblies table. Scaffold IDs in the
+  # FASTA are <sample>.<path>.<scaffold>; match on the trailing scaffold number.
+  if (!is.null(ignore_scaffolds) && nzchar(ignore_scaffolds)) {
+    drop <- stringr::str_split_1(ignore_scaffolds, ",") |> stringr::str_trim()
+    drop <- drop[nzchar(drop)]
+    if (length(drop) > 0) {
+      scaffold_nums <- stringr::str_extract(names(assembly), "(?<=\\.)\\d+(?=\\s|$)")
+      keep <- !scaffold_nums %in% drop
+      assembly <- assembly[keep]
+    }
+  }
+
+  # Load coverage stats (always, when available — used for trimming and output)
   if (length(coverage_fn) == 1L && file.exists(coverage_fn)) {
     coverage <- read.csv(coverage_fn) |>
       dplyr::arrange(SeqId, Position) |>
@@ -58,22 +75,18 @@ annotate <- function(
         MeanDepth = as.numeric(stringr::str_remove(MeanDepth, "^#")),
         ErrorRate = as.numeric(stringr::str_remove(ErrorRate, "^#"))
       )
-    coverage_trimmed <- assembly |> purrr::imap(~ {
-      stats <- coverage[coverage$SeqId == stringr::str_extract(.y, "\\S+"), ]
-      # Skip for circular assemblies
-      if (stringr::str_detect("circular", .y)) {
-        return({
-          list(
-            assembly = .x,
-            stats = stats
-          )
-        })
-      }
-      # Run coverage trimming
-      coverage_trim(assembly = .x, stats = stats)
-    })
-    assembly <- purrr::map(coverage_trimmed, ~ .x$assembly) |> Biostrings::DNAStringSet()
-    coverage <- purrr::map(coverage_trimmed, ~ .x$stats) |> dplyr::bind_rows()
+    if (isTRUE(coverage_trim)) {
+      coverage_trimmed <- assembly |> purrr::imap(~ {
+        stats <- coverage[coverage$SeqId == stringr::str_extract(.y, "\\S+"), ]
+        # Skip for circular assemblies
+        if (stringr::str_detect("circular", .y)) {
+          return(list(assembly = .x, stats = stats))
+        }
+        coverage_trim(assembly = .x, stats = stats)
+      })
+      assembly <- purrr::map(coverage_trimmed, ~ .x$assembly) |> Biostrings::DNAStringSet()
+      coverage <- purrr::map(coverage_trimmed, ~ .x$stats) |> dplyr::bind_rows()
+    }
   }
 
   # tRNA annotation ----
@@ -273,7 +286,7 @@ annotate <- function(
 
 
   # Rotate assembly and annotation if circular
-  if (stringr::str_detect(names(assembly), "circular")) {
+  if (all(stringr::str_detect(names(assembly), "circular"))) {
     rotate_results <- rotate_asmb(
       assembly = assembly,
       annotations = annotations,

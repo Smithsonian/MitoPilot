@@ -38,6 +38,9 @@
 #'   allowed for a sample to continue past the Assemble step (default = 10).
 #'   Samples exceeding this are flagged as failed and skipped by downstream
 #'   steps in WF1.
+#' @param min_assembly_length Minimum contig length (bp) to retain for
+#'   coverage calculations, BLAST, and annotation. Scaffolds shorter than this threshold are stored
+#'   but flagged as ignored (default = 500).
 #' @export
 #'
 new_db <- function(
@@ -65,6 +68,7 @@ new_db <- function(
     ),
     max_paths = 10,
     max_scaffolds = 10,
+    min_assembly_length = 500,
     # Default annotation options
     annotate_cpus = 6,
     annotate_memory = 36,
@@ -241,6 +245,7 @@ new_db <- function(
       blast_qcovs REAL,
       blast_evalue REAL,
       blast_lineage TEXT,
+      poor_blast_ref TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
@@ -260,6 +265,7 @@ new_db <- function(
           hide_switch = 0,
           assemble_opts = "default",
           blast_opts = "default",
+          poor_blast_ref = NA_character_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -282,6 +288,7 @@ new_db <- function(
       mitofinder TEXT,
       max_paths INTEGER,
       max_scaffolds INTEGER,
+      min_assembly_length INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -298,7 +305,8 @@ new_db <- function(
         mitofinder_db = mitofinder_db,
         mitofinder = mitofinder,
         max_paths = max_paths,
-        max_scaffolds = max_scaffolds
+        max_scaffolds = max_scaffolds,
+        min_assembly_length = min_assembly_length
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -338,12 +346,19 @@ new_db <- function(
       scaffold INTEGER NOT NULL,
       topology TEXT,
       length INTEGER,
+      length_raw INTEGER,
       sequence TEXT,
       depth TEXT,
       gc TEXT,
       errors TEXT,
       ignore INTEGER,
       edited INTEGER,
+      blast_accession TEXT,
+      blast_species TEXT,
+      blast_pident REAL,
+      blast_qcovs REAL,
+      blast_evalue REAL,
+      blast_lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold)
     );"
@@ -411,6 +426,8 @@ new_db <- function(
       aragorn_opts TEXT,
       use_aragorn INTEGER,
       start_gene TEXT,
+      coverage_trim INTEGER,
+      feature_trim INTEGER,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -429,7 +446,9 @@ new_db <- function(
         use_arwen = 0L,
         aragorn_opts = aragorn_opts,
         use_aragorn = 0L,
-        start_gene = "trnF"
+        start_gene = "trnF",
+        coverage_trim = 1L,
+        feature_trim = 1L
       ),
       in_place = TRUE,
       copy = TRUE,

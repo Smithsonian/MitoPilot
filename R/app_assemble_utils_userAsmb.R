@@ -20,6 +20,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(
       assemble_lock,
       assemble_switch,
@@ -36,6 +37,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       paths,
       scaffolds,
       blast_accession,
+      blast_ref_status,
       blast_species,
       blast_pident,
       blast_qcovs,
@@ -141,7 +143,7 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         textInput(
           ns("fastp"),
-          label = "fastp options",
+          label = tagList("fastp options", tool_help_icon("fastp")),
           value =  current$fastp %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -225,7 +227,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         div(
           id = ns("blast_extra_group"),
-          tags$label("Additional blastn options"),
+          tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",

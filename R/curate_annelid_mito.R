@@ -10,6 +10,7 @@
 #'   base64 encoded json string.
 #' @param ref_dir Path to reference directory for curation
 #' @param blast_ref_file Path to a JSON file of remote BLAST reference hits to inject into the local curation database (default = NULL)
+#' @param feature_trim Trim feature coordinates to assembly boundaries (default = TRUE)
 #'
 #' @export
 #'
@@ -22,7 +23,8 @@ curate_annelid_mito <- function(
     max_blast_hits = 100,
     params = NULL,
     ref_dir = NULL,
-    blast_ref_file = NULL) {
+    blast_ref_file = NULL,
+    feature_trim = TRUE) {
   # Prepare environment ----
 
   ## load annotations ----
@@ -680,6 +682,7 @@ curate_annelid_mito <- function(
 
   # End trimming ----
   # Remove un-annotated regions at the beginning or end of linear contigs
+  if (isTRUE(feature_trim)) {
   purrr::iwalk(contig_key, ~ {
     # Skip circular contigs
     if (stringr::str_detect(.x, "circular")) {
@@ -727,6 +730,8 @@ curate_annelid_mito <- function(
         )
     }
   })
+
+  }
 
   # Outputs ----
   readr::write_csv(

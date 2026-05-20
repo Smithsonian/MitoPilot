@@ -1,12 +1,16 @@
 include {annotate} from './annotate.nf'
 
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, ' +
-                        'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn ' +
+params.sqlRead =    'SELECT a.ID, a.path, b.assemble_opts, ' +
+                        'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, ' +
+                        "GROUP_CONCAT(CASE WHEN a.ignore = 1 THEN a.scaffold END, ',') AS ignore_scaffolds, " +
+                        'd.coverage_trim ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
                     'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
-                    'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
+                    'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 ' +
+                    'GROUP BY a.ID, a.path, b.assemble_opts, d.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, d.coverage_trim ' +
+                    'HAVING SUM(CASE WHEN a.ignore = 0 THEN 1 ELSE 0 END) > 0'
 
 workflow ANNOTATE {
 
@@ -45,7 +49,9 @@ workflow ANNOTATE {
                     arwen: it[11],                                     // arwen_opts
                     use_arwen: it[12],                                 // use_arwen toggle
                     aragorn: it[13],                                   // aragorn_opts
-                    use_aragorn: it[14]                                // use_aragorn toggle
+                    use_aragorn: it[14],                               // use_aragorn toggle
+                    ignore_scaffolds: it[15] ?: '',                    // comma-separated scaffold numbers to drop
+                    coverage_trim: it[16] != null ? it[16] as Integer : 1  // coverage trimming toggle (default on)
                 ],
                 file(it[6] + "/" + it[5]),                              // curation ref dir + clade
                 it[5].replaceFirst(/\.tar\.gz$/, '')                // ref_db without ".tar.gz"

@@ -72,6 +72,7 @@ backwards_compatibility <- function(
       "mitofinder" %in% names(assemble_opts_table) &&
       "problematic" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
+      "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
       "blast_accession" %in% names(assemble_table) &&
@@ -87,6 +88,10 @@ backwards_compatibility <- function(
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
         error = function(e) FALSE
       )))
   {
@@ -205,6 +210,36 @@ backwards_compatibility <- function(
         by = "ID"
       )
   }
+
+  # if poor_blast_ref column doesn't exist on assemble, add it (TEXT: good/poor/failed/NULL)
+  if (!("poor_blast_ref" %in% names(assemble_table))) {
+    message("added 'poor_blast_ref' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN poor_blast_ref TEXT")
+    # migrate from samples if the column lived there in older projects
+    if ("poor_blast_ref" %in% names(samples_table)) {
+      message("migrating 'poor_blast_ref' values from samples to assemble")
+      DBI::dbExecute(
+        con,
+        "UPDATE assemble SET poor_blast_ref = (
+           SELECT CASE samples.poor_blast_ref WHEN 1 THEN 'poor' WHEN 0 THEN 'good' END
+             FROM samples WHERE samples.ID = assemble.ID
+         ) WHERE EXISTS (
+           SELECT 1 FROM samples WHERE samples.ID = assemble.ID
+             AND samples.poor_blast_ref IS NOT NULL
+         )"
+      )
+      DBI::dbExecute(con, "ALTER TABLE samples DROP COLUMN poor_blast_ref")
+    }
+  }
+  # convert any legacy integer values left in poor_blast_ref to TEXT (idempotent)
+  DBI::dbExecute(
+    con,
+    "UPDATE assemble SET poor_blast_ref = CASE
+       WHEN typeof(poor_blast_ref) = 'integer' AND poor_blast_ref = 1 THEN 'poor'
+       WHEN typeof(poor_blast_ref) = 'integer' AND poor_blast_ref = 0 THEN 'good'
+       ELSE poor_blast_ref
+     END"
+  )
 
   # if reviewed column doesn't exist, add it
   if(!("reviewed" %in% names(annotate_table))){
@@ -357,6 +392,44 @@ backwards_compatibility <- function(
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if coverage_trim column doesn't exist, add it (default on)
+  if (!("coverage_trim" %in% names(annotate_opts_table))) {
+    message("added 'coverage_trim' column to annotate_opts table")
+    annotate_opts_table$coverage_trim <- rep(1L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN coverage_trim INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if feature_trim column doesn't exist, add it (default on)
+  if (!("feature_trim" %in% names(annotate_opts_table))) {
+    message("added 'feature_trim' column to annotate_opts table")
+    annotate_opts_table$feature_trim <- rep(1L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN feature_trim INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
     dplyr::tbl(con, "annotate_opts") |>
       dplyr::rows_upsert(
         annotate_opts_table,
@@ -555,6 +628,26 @@ backwards_compatibility <- function(
       )
   }
 
+  # if min_assembly_length column doesn't exist, add it
+  if(!("min_assembly_length" %in% names(assemble_opts_table))){
+    message("added 'min_assembly_length' column to assemble_opts table")
+    assemble_opts_table$min_assembly_length <- rep(500L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN min_assembly_length INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
   # if blast_accession column doesn't exist, add BLAST result columns
   if (!("blast_accession" %in% names(assemble_table))) {
     message("added BLAST result columns to assemble table")
@@ -640,6 +733,39 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "ID"
       )
+  }
+
+  # if assemblies table doesn't exist, create it; otherwise add length_raw if missing
+  if (!("assemblies" %in% existing_tables)) {
+    message("created assemblies table")
+    DBI::dbExecute(con,
+      "CREATE TABLE assemblies (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL,
+        scaffold INTEGER NOT NULL,
+        topology TEXT,
+        length INTEGER,
+        length_raw INTEGER,
+        sequence TEXT,
+        depth TEXT,
+        gc TEXT,
+        errors TEXT,
+        ignore INTEGER,
+        edited INTEGER,
+        blast_accession TEXT,
+        blast_species TEXT,
+        blast_pident REAL,
+        blast_qcovs REAL,
+        blast_evalue REAL,
+        blast_lineage TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+  } else if (!("length_raw" %in% DBI::dbListFields(con, "assemblies"))) {
+    message("added 'length_raw' column to assemblies table")
+    DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN length_raw INTEGER")
+    DBI::dbExecute(con, "UPDATE assemblies SET length_raw = length WHERE length_raw IS NULL")
   }
 
   # if blast_opts table doesn't exist, create it with a default entry

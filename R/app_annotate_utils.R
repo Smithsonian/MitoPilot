@@ -11,7 +11,8 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 
   assemble <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID, blast_accession, blast_species, blast_lineage)
+    dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs,
+                  dplyr::any_of("poor_blast_ref"))
 
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
@@ -25,10 +26,18 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
         paste(collapse = "; ")
     )
 
+  assemblies_length <- dplyr::tbl(db, "assemblies") |>
+    dplyr::filter(ignore != 1) |>
+    dplyr::group_by(ID, path) |>
+    dplyr::summarise(length_raw = sum(length_raw, na.rm = TRUE), .groups = "drop") |>
+    dplyr::collect() |>
+    dplyr::mutate(path = as.character(path))
+
   dplyr::left_join(assemble, annotate, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::left_join(annotations, by = "ID") |>
+    dplyr::left_join(assemblies_length, by = c("ID", "path")) |>
     dplyr::select(
       annotate_lock,
       annotate_switch,
@@ -37,12 +46,15 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       ID_verified,
       annotate_opts,
       curate_opts,
+      length_raw,
       length,
       topology,
       scaffolds,
       blast_accession,
       blast_species,
       blast_lineage,
+      blast_pident,
+      blast_qcovs,
       structure,
       PCGCount,
       tRNACount,
@@ -54,9 +66,12 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       problematic,
       time_stamp,
       annotate_notes,
-      warnings_details
+      warnings_details,
+      dplyr::any_of("poor_blast_ref")
     ) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
+    dplyr::relocate(blast_ref_status, .after = blast_accession) |>
     dplyr::mutate(
       output = dplyr::case_when(
         annotate_switch > 1 ~ "output",
@@ -185,7 +200,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             style = "flex: 1",
             textInput(
               ns("mitos_opts"),
-              label = "Mitos2 options:",
+              label = tagList("Mitos2 options:", tool_help_icon("mitos")),
               value = current$mitos_opts %||% character(0),
               width = "100%"
             ) |> shinyjs::disabled()
@@ -234,7 +249,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ),
         textInput(
           ns("trnaScan_opts"),
-          label = "trnAScan-SE options:",
+          label = tagList("trnAScan-SE options:", tool_help_icon("trnaScan-SE")),
           value = current$trnaScan_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -246,7 +261,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         textInput(
           ns("arwen_opts"),
-          label = "ARWEN options:",
+          label = tagList("ARWEN options:", tool_help_icon("arwen")),
           value = current$arwen_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -258,9 +273,21 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         textInput(
           ns("aragorn_opts"),
-          label = "ARAGORN options:",
+          label = tagList("ARAGORN options:", tool_help_icon("aragorn")),
           value = current$aragorn_opts %||% character(0),
           width = "100%"
+        ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("coverage_trim"),
+          label = "Trim low-coverage ends of linear assemblies",
+          value = isTRUE(as.logical(current$coverage_trim %||% 1L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("feature_trim"),
+          label = "Trim un-annotated ends of linear contigs (by gene features)",
+          value = isTRUE(as.logical(current$feature_trim %||% 1L)),
+          status = "primary"
         ) |> shinyjs::disabled(),
         div(
           selectizeInput(

@@ -20,6 +20,7 @@
 #' @param curate_target Default target database for curation
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param curate_params Default curation parameters
+#' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
 #' @export
 #'
 new_db_userAsmb <- function(
@@ -42,7 +43,10 @@ new_db_userAsmb <- function(
     curate_memory = 8,
     curate_target = "fish_mito",
     max_blast_hits = 100,
-    curate_params = NULL) {
+    curate_params = NULL,
+    # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
+    # set per-scaffold ignore flags; matches the regular pipeline default)
+    min_assembly_length = 500) {
   # Read mapping file
   if (is.null(mapping_fn)) {
     mapping_fn <- "./mapping.csv"
@@ -208,6 +212,7 @@ new_db_userAsmb <- function(
       blast_qcovs REAL,
       blast_evalue REAL,
       blast_lineage TEXT,
+      poor_blast_ref TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
@@ -227,11 +232,36 @@ new_db_userAsmb <- function(
           hide_switch = 0,
           assemble_opts = "user",
           blast_opts = "default",
+          poor_blast_ref = NA_character_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
       copy = TRUE,
       by = "ID"
+    )
+
+  ## Assemble options ----
+  # Minimal table for userAsmb: only the columns the Nextflow workflows and the
+  # app actually query (assemble_opts FK + min_assembly_length). The regular
+  # pipeline schema carries assembler/getOrganelle/etc. fields that don't apply
+  # when assemblies are user-provided.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE assemble_opts (
+      assemble_opts TEXT NOT NULL,
+      min_assembly_length INTEGER,
+      PRIMARY KEY (assemble_opts)
+    );"
+  )
+  dplyr::tbl(con, "assemble_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        assemble_opts = "user",
+        min_assembly_length = min_assembly_length
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "assemble_opts"
     )
 
   ## BLAST options ----
@@ -267,6 +297,7 @@ new_db_userAsmb <- function(
       scaffold INTEGER NOT NULL,
       topology TEXT,
       length INTEGER,
+      length_raw INTEGER,
       sequence TEXT,
       depth TEXT,
       gc TEXT,
@@ -346,6 +377,8 @@ new_db_userAsmb <- function(
       aragorn_opts TEXT,
       use_aragorn INTEGER,
       start_gene TEXT,
+      coverage_trim INTEGER,
+      feature_trim INTEGER,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -364,7 +397,9 @@ new_db_userAsmb <- function(
         use_arwen = 0L,
         aragorn_opts = aragorn_opts,
         use_aragorn = 0L,
-        start_gene = "trnF"
+        start_gene = "trnF",
+        coverage_trim = 1L,
+        feature_trim = 1L
       ),
       in_place = TRUE,
       copy = TRUE,

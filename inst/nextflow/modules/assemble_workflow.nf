@@ -3,7 +3,7 @@ include {assemble} from './assemble.nf'
 params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.seeds_db, opts.labels_db, opts.getOrganelle, opts.assembler, ' +
                   'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
-                  'opts.max_paths, opts.max_scaffolds ' +
+                  'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
@@ -14,11 +14,11 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
 params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
-                            '(ID, path, scaffold, length, topology, time_stamp, sequence, ignore, edited) ' +
-                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)'
+                            '(ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited) ' +
+                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
-                            'assemble_switch=?, assemble_notes=?, time_stamp=? WHERE ID=?'
+                            'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'
 
 
 workflow ASSEMBLE {
@@ -26,10 +26,10 @@ workflow ASSEMBLE {
         input
 
     main:
-        // Assembly Options Channel from DB (includes max_paths/max_scaffolds thresholds)
+        // Assembly Options Channel from DB (includes max_paths/max_scaffolds/min_assembly_length)
         channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .map{ it ->
-                tuple(
+            .multiMap { it ->
+                opts: tuple(
                     it[0],                                                      // ID
                     it[1],                                                      // options id
                     [                                                           //## assembly options ##//
@@ -48,8 +48,14 @@ workflow ASSEMBLE {
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
                     (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer))  // max_scaffolds
                 )
+                min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
+                min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
             }
-            .set { assemble_opts }
+            .set { query_ch }
+
+        query_ch.opts.set { assemble_opts }
+        query_ch.min_len_scaffolds.set { min_len_lookup }
+        query_ch.min_len_summary.set { min_len_summary }
 
         // Assemble Input Channel
         input
@@ -78,18 +84,7 @@ workflow ASSEMBLE {
             }
             .set { assemble_in_full }
 
-        // Keep thresholds aside; strip them from the assemble process input
-        assemble_in_full
-            .map { id, opts_id, reads, opts, dbs, mfdb, gc, mp, ms ->
-                tuple(id, mp, ms)
-            }
-            .set { thresholds_ch }
-
-        assemble_in_full
-            .map { id, opts_id, reads, opts, dbs, mfdb, gc, mp, ms ->
-                tuple(id, opts_id, reads, opts, dbs, mfdb, gc)
-            }
-            .set { assemble_in }
+        assemble_in_full.set { assemble_in }
 
         // Assemble
         assemble(assemble_in).set { assemble_out }
@@ -140,15 +135,17 @@ workflow ASSEMBLE {
                 }
                 def n_scaffolds = scaffold_counts ? scaffold_counts.max() : 0
                 def length_str  = lengths.unique().sort().reverse().join(';')
+                def lengths_all = lengths.sort().reverse().join(';')
                 def topo_str    = topologies.unique().sort().join(';')
-                tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, it)
+                tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, lengths_all, it, it[8], it[9])
             }
             .set { summarized }
 
         // Apply user-configured thresholds: split into pass / fail branches
+        // Combine with min_len_summary so the all-short check can fire per-sample
         summarized
-            .join(thresholds_ch, by: 0)
-            .branch { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+            .combine(min_len_summary, by: 0)
+            .branch { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
                 fail: (n_paths > max_paths) || (n_scaffolds > max_scaffolds)
                 pass: true
             }
@@ -156,17 +153,26 @@ workflow ASSEMBLE {
 
         // PASS: write per-sample summary live, then propagate downstream
         branched.pass
-            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
                 def status = '4'
                 def notes  = ''
                 if (n_scaffolds > 1) {
-                    notes  = 'Output contains disconnected contigs'
-                    topo_str = 'fragmented'
-                    status = '3'
+                    notes = 'Output contains disconnected contigs'
+                    def all_lengths_list = lengths_all ? lengths_all.split(';').collect { it as Integer } : []
+                    def n_passing = all_lengths_list.count { it >= min_assembly_length }
+                    if (n_passing != 1) {
+                        topo_str = 'fragmented'
+                        status   = '3'
+                    }
                 }
                 if (n_paths > 1) {
                     notes  = 'Unable to resolve single assembly from reads'
                     status = '3'
+                }
+                def max_len = length_str ? length_str.split(';').collect { it as Integer }.max() : 0
+                if (max_len < min_assembly_length) {
+                    status = '3'
+                    notes  = "All scaffolds below min assembly length (${min_assembly_length} bp)"
                 }
                 db_write:   tuple(n_paths, n_scaffolds, length_str, topo_str, status, notes, params.ts, id)
                 fasta:      tuple(id, raw[1])
@@ -187,24 +193,23 @@ workflow ASSEMBLE {
                 tuple(
                     record.id.split('\\.'),             // ID, path, scaffold
                     record.seqString.length(),          // length
+                    record.seqString.length(),          // length_raw (preserved; curate updates length only)
                     record.desc,                        // topology
                     params.ts,                          // time stamp
                     record.seqString                    // sequence
                 ).flatten()
             }
-            .map { it ->                                            // mark short assemblies
-                if(it[3] < params.minAssemblyLength){
-                    it[7] = 1
-                }else{
-                    it[7] = 0
-                }
+            .combine(min_len_lookup, by: 0)             // append per-sample min_assembly_length
+            .map { it ->                                // mark short assemblies
+                def min_len = it[8] as Integer
+                it[8] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
                 return it
             }
             .sqlInsert(statement: params.sqlWriteAssemblies, db: 'sqlite')
 
         // FAIL (too many paths/scaffolds): write status=3 with reason, drop from downstream
         branched.fail
-            .map { id, n_paths, n_scaffolds, length_str, topo_str, raw, max_paths, max_scaffolds ->
+            .map { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
                 def msg
                 if (n_paths > max_paths && n_scaffolds > max_scaffolds) {
                     msg = "${n_paths} assembly paths, exceeds limit (${max_paths}); ${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"

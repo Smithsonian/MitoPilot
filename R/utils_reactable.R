@@ -74,6 +74,52 @@ rt_ncbi_link <- function() {
   )
 }
 
+#' Render a yes/no text column as a colored badge
+#'
+#' @param invert if TRUE, "yes" is orange (bad) and "no" is green (good)
+#' @param hide_no if TRUE, render an empty cell for "no"/NA values (only
+#'   "yes" gets a badge). Useful for columns where "no" is the default
+#'   and noisy to display.
+#' @noRd
+rt_bool_badge <- function(invert = FALSE, hide_no = FALSE) {
+  yes_bg <- if (invert) "#fde8d0" else "#d4edda"
+  yes_fg <- if (invert) "#7d4a1e" else "#2d6a4f"
+  no_bg  <- if (invert) "#d4edda" else "#fde8d0"
+  no_fg  <- if (invert) "#2d6a4f" else "#7d4a1e"
+  sprintf(
+    "function(cellInfo) {
+      var val = cellInfo.value ? cellInfo.value : 'no'
+      if (val !== 'yes' && %s) return ''
+      var bg  = val === 'yes' ? '%s' : '%s'
+      var fg  = val === 'yes' ? '%s' : '%s'
+      return '<span style=\"background:' + bg + '; color:' + fg + '; border-radius:3px; ' +
+             'padding:1px 6px; font-size:0.85em;\">' + val + '</span>'
+    }",
+    tolower(as.character(hide_no)), yes_bg, no_bg, yes_fg, no_fg
+  ) |> htmlwidgets::JS()
+}
+
+#' Render BLAST reference alignment status as a colored badge
+#'
+#' States: good (green), poor (orange), failed (red), NULL/empty (none).
+#'
+#' @noRd
+rt_blast_ref_status <- function() {
+  htmlwidgets::JS(
+    "function(cellInfo) {
+      var val = cellInfo.value
+      if (!val) return ''
+      var bg, fg
+      if (val === 'poor')   { bg = '#fde8d0'; fg = '#7d4a1e' }
+      else if (val === 'failed') { bg = '#f5c6cb'; fg = '#721c24' }
+      else if (val === 'good')   { bg = '#d4edda'; fg = '#2d6a4f' }
+      else return val
+      return '<span style=\"background:' + bg + '; color:' + fg + '; border-radius:3px; ' +
+             'padding:1px 6px; font-size:0.85em;\">' + val + '</span>'
+    }"
+  )
+}
+
 #' Add text click action to a cell
 #'
 #' @param InputId shiny input id to use

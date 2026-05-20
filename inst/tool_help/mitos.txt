@@ -1,0 +1,70 @@
+# MitoPilot image: macguigand/mitopilot:1.4.0
+# Tool: mitos
+# Version: runmitos.py 2.1.10
+# Captured: 2026-05-19T12:27:34Z
+# ----------------------------------------------------------------
+
+usage: runmitos.py [options]
+
+options:
+  -h, --help            show this help message and exit
+  -i FILE, --input FILE
+                        the input file
+  --fasta FASTA         input fasta sequence
+
+mandatory options:
+  -c CODE, --code CODE  the genetic code
+  -o OUTDIR, --outdir OUTDIR
+                        the directory where the output is written.
+  --linear              treat sequence as linear
+  -r REFSEQVER, --refseqver REFSEQVER
+                        directory containing the reference data (relative to
+                        --refdir)
+
+advanced options:
+  -R REFDIR, --refdir REFDIR
+                        base directory containing the reference data
+  --prot PROT           position of protein prediction in 1st round (0: skip)
+  --trna TRNA           position of tRNA prediction in 1st round (0: skip)
+  --rrna RRNA           position of rRNA prediction in 1st round (0: skip)
+  --intron INTRON       position of intron prediction in 1st round (0: skip)
+  --oril ORIL           position of OL prediction in 1st round (0: skip)
+  --orih ORIH           position of OH prediction in 1st round (0: skip)
+  --finovl NRNT         final overlap <= NRNT nucleotides
+  --circrot DEG         cir circular: rotate mitogenome by DEG and DEG+180
+  --best                annotate only the best copy of each feature
+  --fragfac FACTOR      allow fragments to differ in quality/evalue by at most
+                        a factor FACTOR. Ignored if <= 0.
+  --fragovl FRACTION    allow query range overlaps up for FRACTION for
+                        fragments
+  --noplots             do not create the plots.
+
+protein prediction advanced options:
+  --evalue EVL          discard BLAST hits with -1*log(e-value)<EVL (EVL < 1
+                        has no effect)
+  --cutoff fraction     discard positions with quality <.5 of max
+  --clipfac FACTOR      overlapping features of the same name differing by at
+                        most a factor of FACTOR are clipped
+  --ncbicode            use start/stop codons as in NCBI (default: learned
+                        start/stop codons)
+  --alarab              Use the hmmer based method of Al Arab et al. 2016.
+                        This will consider the evalue, ncbicode, fragovl,
+                        fragfac
+  --oldstst             Use the old start/stop prediction method of MITOS1
+
+ArgumentParser(prog='runmitos.py', usage='%(prog)s [options]', description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True):
+  RNA prediction advanced options
+
+  --locandgloc          run mitfi in glocal and local mode (default: local
+                        only)
+  --ncev NCEV           evalue to use for inferal fast mode
+  --sensitive           use infernals sensitive mode only
+  --maxtrnaovl NT       allow tRNA overlap of up to X nt for mitfi
+  --maxrrnaovl NT       allow rRNA overlap of up to X nt for mitfi
+
+debug/misc options:
+  --debug               print debug output
+  --zip                 create zip
+  --json JSON           a JSON file with parameters. then outdir is the only
+                        other argument needed.
+  --version             show program's version number and exit

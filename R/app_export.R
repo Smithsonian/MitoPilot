@@ -1,3 +1,19 @@
+# Togglable column groups for the Export table. Cols not listed here
+# (sticky cols, action buttons) are always shown.
+EXPORT_COL_GROUPS <- list(
+  Options = c("curate_opts"),
+  Stats   = c("topology", "structure"),
+  BLAST   = c("blast_accession", "blast_ref_status", "blast_species",
+              "blast_lineage")
+)
+EXPORT_COL_GROUP_LOOKUP <- {
+  out <- character()
+  for (.g in names(EXPORT_COL_GROUPS)) {
+    for (.c in EXPORT_COL_GROUPS[[.g]]) out[.c] <- .g
+  }
+  out
+}
+
 #' export UI Function
 #'
 #' @description A shiny Module.
@@ -10,6 +26,19 @@
 export_ui <- function(id) {
   ns <- NS(id)
   tagList(
+    uiOutput(ns("col_css")),
+    shinyWidgets::pickerInput(
+      inputId  = ns("col_groups"),
+      label    = "Show columns:",
+      choices  = names(EXPORT_COL_GROUPS),
+      selected = names(EXPORT_COL_GROUPS),
+      multiple = TRUE,
+      options  = list(
+        `actions-box`          = TRUE,
+        `selected-text-format` = "count > 0"
+      ),
+      inline = TRUE
+    ),
     reactableOutput(ns("table"))
   )
 }
@@ -36,6 +65,29 @@ export_server <- function(id) {
       trigger("update_export_table")
     })
 
+    # Mirror the column-group picker so NULL (= user cleared all) is
+    # distinguishable from the pre-init state. Default: all groups on.
+    col_groups_rv <- reactiveVal(names(EXPORT_COL_GROUPS))
+    observeEvent(input$col_groups, {
+      col_groups_rv(input$col_groups %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+    .grp <- function(col) {
+      g <- EXPORT_COL_GROUP_LOOKUP[col]
+      if (is.na(g)) NULL else paste0("mp-grp-", g)
+    }
+
+    # CSS hide for unselected groups; keeps DOM intact so filter/sort/page
+    # state survives toggling.
+    output$col_css <- renderUI({
+      hidden <- setdiff(names(EXPORT_COL_GROUPS), col_groups_rv())
+      if (length(hidden) == 0) return(NULL)
+      rules <- paste0(".mp-grp-", hidden,
+                      " { display: none !important; }",
+                      collapse = "\n")
+      tags$style(HTML(rules))
+    })
+
     # Render table ----
     output$table <- reactable::renderReactable({
       reactable::reactable(
@@ -59,33 +111,50 @@ export_server <- function(id) {
         columns = list(
           ID = colDef(show = T, minWidth = 120, sticky = "left"),
           curate_opts = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
             name = "Curate Opts.",
             width = 110
           ),
+          poor_blast_ref = colDef(show = FALSE),
+          blast_ref_status = colDef(
+            show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
+            name = "BLAST Ref Align",
+            html = TRUE,
+            minWidth = 130,
+            resizable = TRUE,
+            align = "center",
+            filterable = TRUE,
+            cell = rt_blast_ref_status()
+          ),
           blast_accession = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
             name = "BLAST Top Hit",
             html = TRUE,
             width = 120,
             cell = rt_ncbi_link()
           ),
           blast_species = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
             name = "BLAST Species",
             html = TRUE,
             minWidth = 160,
             cell = rt_longtext()
           ),
           blast_lineage = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
             name = "BLAST Lineage",
             html = TRUE,
             minWidth = 200,
             cell = rt_longtext()
           ),
-          topology = colDef(show = T, name = "Topology", width = 100),
-          structure = colDef(show = T, name = "Structure"),
+          topology = colDef(
+            show = T, class = .grp("topology"), headerClass = .grp("topology"),
+            name = "Topology", width = 100
+          ),
+          structure = colDef(
+            show = T, class = .grp("structure"), headerClass = .grp("structure"),
+            name = "Structure"
+          ),
           export_group = colDef(name = "Group", sticky = "right")
         )
       )

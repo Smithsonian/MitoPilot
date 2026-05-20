@@ -33,7 +33,7 @@ process blast_genbank {
         -remote \
         -db nt \
         -query !{assembly} \
-        -outfmt "6 saccver stitle pident qcovs evalue" \
+        -outfmt "6 qseqid saccver stitle pident qcovs evalue" \
         -max_target_seqs 1 \
         -max_hsps 1 \
         -task megablast \

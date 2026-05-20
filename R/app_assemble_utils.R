@@ -15,10 +15,73 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
 
+  assemble_opts_tbl <- dplyr::tbl(db, "assemble_opts") |>
+    dplyr::select(assemble_opts, min_assembly_length)
+
+  # Per-sample BLAST display rule (n_total = rows in assemblies for this ID):
+  #   n_total NA               → keep sample-level value (assembly not yet run)
+  #   n_kept == 1              → show kept scaffold's BLAST
+  #   n_kept != 1 (incl. 0)    → blank
+  blast_cols <- c("blast_accession", "blast_species", "blast_pident",
+                  "blast_qcovs", "blast_evalue", "blast_lineage")
+
+  assemblies_tbl <- dplyr::tbl(db, "assemblies") |>
+    dplyr::select(ID, length, ignore, dplyr::any_of(blast_cols)) |>
+    dplyr::collect()
+
+  total_counts <- assemblies_tbl |>
+    dplyr::count(ID, name = "n_total")
+
+  kept <- assemblies_tbl |> dplyr::filter(ignore == 0)
+
+  kept_counts <- kept |>
+    dplyr::count(ID, name = "n_kept")
+
+  kept_single <- kept |>
+    dplyr::semi_join(dplyr::filter(kept_counts, n_kept == 1L), by = "ID") |>
+    dplyr::select(ID, dplyr::any_of(blast_cols)) |>
+    dplyr::rename_with(~ paste0(.x, "_kept"), dplyr::any_of(blast_cols))
+
+  # Per-scaffold length + ignore (sorted by length desc) so the "Asmb. Length"
+  # cell can color each scaffold red when ignore == 1. Replaces the deduped
+  # length string from assemble_workflow.nf because we need one-to-one mapping
+  # with the ignore vector.
+  length_ignore <- assemblies_tbl |>
+    dplyr::arrange(ID, dplyr::desc(length)) |>
+    dplyr::summarise(
+      length_per_scaffold = paste(length, collapse = ";"),
+      ignore_flags        = paste(ignore, collapse = ";"),
+      .by = "ID"
+    )
+
+  swap_blast <- function(df, col) {
+    kept_col <- paste0(col, "_kept")
+    if (!col %in% names(df) || !kept_col %in% names(df)) return(df)
+    na_val <- if (is.numeric(df[[col]])) NA_real_ else NA_character_
+    df[[col]] <- dplyr::case_when(
+      is.na(df$n_total) ~ df[[col]],
+      df$n_kept == 1L   ~ df[[kept_col]],
+      .default = na_val
+    )
+    df
+  }
+
   dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
+    dplyr::left_join(assemble_opts_tbl, by = "assemble_opts") |>
     dplyr::collect() |>
+    dplyr::left_join(total_counts, by = "ID") |>
+    dplyr::left_join(kept_counts, by = "ID") |>
+    dplyr::left_join(kept_single, by = "ID") |>
+    dplyr::left_join(length_ignore, by = "ID") |>
+    dplyr::mutate(
+      length = dplyr::coalesce(length_per_scaffold, length)
+    ) |>
+    (\(df) purrr::reduce(blast_cols, swap_blast, .init = df))() |>
+    dplyr::select(-n_total, -n_kept, -length_per_scaffold,
+                  -dplyr::any_of(paste0(blast_cols, "_kept"))) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(
       assemble_lock,
       assemble_switch,
@@ -35,6 +98,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       paths,
       scaffolds,
       blast_accession,
+      blast_ref_status,
       blast_species,
       blast_pident,
       blast_qcovs,
@@ -115,7 +179,7 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         textInput(
           ns("fastp"),
-          label = "fastp options",
+          label = tagList("fastp options", tool_help_icon("fastp")),
           value =  current$fastp %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -214,7 +278,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ),
         textInput(
           ns("mitofinder"),
-          label = "MitoFinder options",
+          label = tagList("MitoFinder options", tool_help_icon("mitofinder")),
           value = current$mitofinder %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -226,7 +290,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         textInput(
           ns("getOrganelle"),
-          label = "getOrganelle options",
+          label = tagList("getOrganelle options", tool_help_icon("getOrganelle")),
           value = current$getOrganelle %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
@@ -269,6 +333,24 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           class = "text-muted",
           style = "margin-top: -8px; font-size: 0.85em;",
           "Samples above max paths or max scaffolds threshold will be marked as failed"
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("min_assembly_length"), "Min assembly length (bp):",
+              width = "100%",
+              min = 1,
+              step = 1,
+              value = current$min_assembly_length %||% 500
+            ) |> shinyjs::disabled()
+          )
+        ),
+        tags$p(
+          class = "text-muted",
+          style = "margin-top: -8px; font-size: 0.85em;",
+          "Scaffolds shorter than this threshold are stored but ignored for additional processing"
         ),
         size = "m",
         footer = tagList(
@@ -358,7 +440,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         div(
           id = ns("blast_extra_group"),
-          tags$label("Additional blastn options"),
+          tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",

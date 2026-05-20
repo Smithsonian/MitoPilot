@@ -10,24 +10,23 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$alignment <- NULL
       rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
-        dplyr::select(ID, path, scaffold, topology, length, sequence, ignore) |>
+        dplyr::select(
+          ignore, ID, path, scaffold, topology, length_raw, length, sequence,
+          dplyr::any_of(c("blast_accession", "blast_species", "blast_pident", "blast_qcovs", "blast_lineage"))
+        ) |>
         dplyr::collect() |>
         dplyr::mutate(
           view_coverage = NA_character_
         )
 
-      # TODO - refactor to handle fragmented assemblies
-      if (any(rv$focal_assembly$scaffold > 1)) {
-        shinyWidgets::sendSweetAlert(
-          title = "Fragmented assembly",
-          text = "Interactive mode is not currently supported for fragmented assemblies.",
-          type = "warning"
-        )
-        req(F)
-      }
-
       modalDialog(
-        title = stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
+        title = tagList(
+          div(stringr::str_glue("Assembly details for ID: {rv$updating$ID}")),
+          div(
+            style = "font-size: 0.85em; font-weight: normal; color: #555; margin-top: 4px;",
+            stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
+          )
+        ),
         size = "l",
         reactableOutput(ns("table"), width = "100%"),
         uiOutput(ns("msa_div")),
@@ -63,19 +62,49 @@ assembly_coverage_details_server <- function(id, rv) {
           selection = "multiple",
           defaultPageSize = 20,
           rowStyle = rt_highlight_row(),
-          defaultColDef = colDef(maxWidth = 80, align = "center"),
+          defaultColDef = colDef(align = "center"),
           columns = list(
-            ID = colDef(
-              align = "left", minWidth = 100, html = T, cell = rt_longtext()
-            ),
-            scaffold = colDef(show = FALSE),
-            sequence = colDef(
-              minWidth = 250, maxWidth = 1000, align = "center", html = TRUE,
-              cell = rt_longtext()
-            ),
             ignore = colDef(
+              width = 60,
               html = TRUE, align = "center",
               cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
+            ),
+            #ID = colDef(
+            #  align = "left", minWidth = 80, resizable = TRUE, html = T, cell = rt_longtext()
+            #),
+            path = colDef(
+              name = "Path", width = 60, align = "center"
+            ),
+            scaffold = colDef(
+              name = "Scaffold", width = 80, align = "center"
+            ),
+            topology = colDef(
+              name = "Topology", width = 90, align = "center"
+            ),
+            length_raw = colDef(
+              name = "Length (raw)", width = 110, align = "center"
+            ),
+            length = colDef(
+              name = "Length (trimmed)", width = 130, align = "center"
+            ),
+            sequence = colDef(show = FALSE),
+            blast_accession = colDef(
+              name = "BLAST Top Hit", minWidth = 120, resizable = TRUE, align = "center", html = TRUE,
+              cell = rt_ncbi_link()
+            ),
+            blast_species = colDef(
+              name = "BLAST Species", minWidth = 160, resizable = TRUE, align = "left", html = TRUE,
+              cell = rt_longtext()
+            ),
+            blast_pident = colDef(
+              name = "% Ident", width = 80, align = "center"
+            ),
+            blast_qcovs = colDef(
+              name = "% Cov", width = 80, align = "center"
+            ),
+            blast_lineage = colDef(
+              name = "BLAST Lineage", minWidth = 200, resizable = TRUE, align = "left", html = TRUE,
+              cell = rt_longtext()
             ),
             view_coverage = colDef(
               name = "", html = T, width = 70, align = "center", sticky = "right",
@@ -88,7 +117,7 @@ assembly_coverage_details_server <- function(id, rv) {
     # Close modal ----
     observeEvent(input$close_modal, ignoreInit = T, {
       removeModal()
-      trigger("update_assemble_table")
+      trigger("refresh_assemble")
     })
 
     # Table selection ----
@@ -121,6 +150,53 @@ assembly_coverage_details_server <- function(id, rv) {
         data = rv$focal_assembly,
         selected = selected()
       )
+
+      # Auto-promote/demote based on number of non-ignored scaffolds/paths.
+      # Single remaining scaffold/path -> mark successful (2). For multi-
+      # scaffold assemblies this is correct because BLAST info already exists;
+      # multi-path assemblies will lack BLAST info, which is a known gap.
+      n_active <- sum(rv$focal_assembly$ignore == 0)
+      if (n_active == 1L && isTRUE(rv$updating$assemble_switch == 3)) {
+        dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 2L),
+            in_place = TRUE,
+            copy = TRUE,
+            unmatched = "ignore",
+            by = "ID"
+          )
+        rv$updating$assemble_switch <- 2L
+        rv$data <- rv$data |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 2L),
+            by = "ID"
+          )
+        shiny::showNotification(
+          "Auto-promoted to successful \u2014 1 scaffold/path remaining.",
+          type = "message",
+          duration = 5
+        )
+      } else if (n_active > 1L && isTRUE(rv$updating$assemble_switch == 2)) {
+        dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 3L),
+            in_place = TRUE,
+            copy = TRUE,
+            unmatched = "ignore",
+            by = "ID"
+          )
+        rv$updating$assemble_switch <- 3L
+        rv$data <- rv$data |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, assemble_switch = 3L),
+            by = "ID"
+          )
+        shiny::showNotification(
+          "Reverted to needs attention \u2014 multiple scaffolds/paths active.",
+          type = "warning",
+          duration = 5
+        )
+      }
     })
 
     # Notes ----
@@ -145,11 +221,14 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # View Coverage PDF ----
     observeEvent(input$view_coverage, {
+      row <- as.numeric(input$view_coverage)
       url <- file.path(
         dirname(getOption("MitoPilot.db") %||% "."),
         "out", rv$updating$ID,
         "assemble", rv$updating$assemble_opts,
-        paste0(rv$updating$ID, "_assembly_", rv$focal_assembly$path[as.numeric(input$view_coverage)], "_coverage.pdf")
+        paste0(rv$updating$ID, "_assembly_",
+               rv$focal_assembly$path[row], "_",
+               rv$focal_assembly$scaffold[row], "_coverage.pdf")
       ) |>
         browseURL()
     })
@@ -350,6 +429,7 @@ assembly_coverage_details_server <- function(id, rv) {
         scaffold = 0,
         topology = "linear",
         length = trimmed@ranges@width,
+        length_raw = trimmed@ranges@width,
         sequence = unname(as.character(trimmed)),
         depth = paste(coverage$Depth, collapse = " "),
         gc = paste(coverage$GC, collapse = " "),

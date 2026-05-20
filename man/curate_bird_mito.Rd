@@ -13,7 +13,8 @@ curate_bird_mito(
   max_blast_hits = 100,
   params = NULL,
   ref_dir = NULL,
-  blast_ref_file = NULL
+  blast_ref_file = NULL,
+  feature_trim = TRUE
 )
 }
 \arguments{
@@ -35,6 +36,8 @@ base64 encoded json string.}
 \item{ref_dir}{Path to reference directory for curation}
 
 \item{blast_ref_file}{Path to a JSON file of remote BLAST reference hits to inject into the local curation database (default = NULL)}
+
+\item{feature_trim}{Trim feature coordinates to assembly boundaries (default = TRUE)}
 }
 \description{
 Annotation curation for bird mitogenomes

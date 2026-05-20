@@ -1,3 +1,22 @@
+# Togglable column groups for the Annotate table. Cols not listed here
+# (sticky cols, action buttons) are always shown.
+ANNOTATE_COL_GROUPS <- list(
+  Options  = c("annotate_opts", "curate_opts"),
+  Stats    = c("length_raw", "length", "topology", "scaffolds"),
+  BLAST    = c("blast_ref_status", "blast_accession", "blast_species",
+               "blast_lineage", "blast_pident", "blast_qcovs"),
+  Counts   = c("PCGCount", "tRNACount", "rRNACount", "missing", "extra"),
+  Review   = c("ID_verified", "reviewed", "problematic", "warnings"),
+  Metadata = c("time_stamp", "annotate_notes")
+)
+ANNOTATE_COL_GROUP_LOOKUP <- {
+  out <- character()
+  for (.g in names(ANNOTATE_COL_GROUPS)) {
+    for (.c in ANNOTATE_COL_GROUPS[[.g]]) out[.c] <- .g
+  }
+  out
+}
+
 #' annotate UI Function
 #'
 #' @description A shiny Module.
@@ -11,7 +30,23 @@ annotate_ui <- function(id) {
   ns <- NS(id)
   tagList(
     tagList(
-      uiOutput(ns("warnings_select")),
+      uiOutput(ns("col_css")),
+      div(
+        style = "display: flex; align-items: center; gap: 20px; flex-wrap: wrap;",
+        shinyWidgets::pickerInput(
+          inputId  = ns("col_groups"),
+          label    = "Show columns:",
+          choices  = names(ANNOTATE_COL_GROUPS),
+          selected = names(ANNOTATE_COL_GROUPS),
+          multiple = TRUE,
+          options  = list(
+            `actions-box`          = TRUE,
+            `selected-text-format` = "count > 0"
+          ),
+          inline = TRUE
+        ),
+        uiOutput(ns("warnings_select"))
+      ),
       reactable::reactableOutput(ns("table")),
     )
   )
@@ -23,6 +58,13 @@ annotate_ui <- function(id) {
 annotate_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # Help-doc icons (one observer per tool, registered once at module init).
+    reopen_annotate <- function() annotate_opts_modal(rv)
+    register_tool_help("mitos", input, reopen = reopen_annotate)
+    register_tool_help("trnaScan-SE", input, reopen = reopen_annotate)
+    register_tool_help("arwen", input, reopen = reopen_annotate)
+    register_tool_help("aragorn", input, reopen = reopen_annotate)
 
     # Prepare data ----
     rv <- reactiveValues(
@@ -83,6 +125,32 @@ annotate_server <- function(id) {
           sum(wd_list %in% selected)
         })
       )
+    })
+
+    # Mirror the column-group picker so NULL (= user cleared all) is
+    # distinguishable from the pre-init state. Default: all groups on.
+    col_groups_rv <- reactiveVal(names(ANNOTATE_COL_GROUPS))
+    observeEvent(input$col_groups, {
+      col_groups_rv(input$col_groups %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+    # CSS class for a togglable column. Added to both body cells and the
+    # header cell so the whole column collapses when the group is hidden.
+    .grp <- function(col) {
+      g <- ANNOTATE_COL_GROUP_LOOKUP[col]
+      if (is.na(g)) NULL else paste0("mp-grp-", g)
+    }
+
+    # Inject a <style> tag that display:nones unselected column groups.
+    # Hiding via CSS keeps columns mounted, so filters, sort, page, and
+    # selection survive toggling.
+    output$col_css <- renderUI({
+      hidden <- setdiff(names(ANNOTATE_COL_GROUPS), col_groups_rv())
+      if (length(hidden) == 0) return(NULL)
+      rules <- paste0(".mp-grp-", hidden,
+                      " { display: none !important; }",
+                      collapse = "\n")
+      tags$style(HTML(rules))
     })
 
     # Render table ----
@@ -157,78 +225,113 @@ annotate_server <- function(id) {
             cell = rt_longtext()
           ),
           ID_verified = colDef(
-            show = TRUE,
-            name = "ID_verified",
+            show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
+            name = "ID Verified",
             html = TRUE,
             align = "center",
             width = 100,
+            cell = rt_bool_badge()
           ),
           annotate_opts = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("annotate_opts"), headerClass = .grp("annotate_opts"),
             name = "Annotate Opts.",
             html = TRUE,
             width = 130,
             cell = rt_link(ns("set_annotate_opts"))
           ),
           curate_opts = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
             name = "Curate Opts.",
             html = TRUE,
             width = 110,
             cell = rt_link(ns("set_curate_opts"))
           ),
-          length = colDef(
-            show = TRUE,
-            name = "Length",
+          length_raw = colDef(
+            show = TRUE, class = .grp("length_raw"), headerClass = .grp("length_raw"),
+            name = "Asmb. Length (raw)",
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()
           ),
-          topology = colDef(show = TRUE, name = "Topology", align = "center"),
-          scaffolds = colDef(show = TRUE, name = "Scaffolds", align = "center"),
+          length = colDef(
+            show = TRUE, class = .grp("length"), headerClass = .grp("length"),
+            name = "Asmb. Length (trimmed)",
+            filterable = FALSE,
+            html = TRUE,
+            cell = rt_longtext()
+          ),
+          topology = colDef(show = TRUE, class = .grp("topology"), headerClass = .grp("topology"), name = "Topology", align = "center"),
+          scaffolds = colDef(show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"), name = "Scaffolds", align = "center"),
+          poor_blast_ref = colDef(show = FALSE),
+          blast_ref_status = colDef(
+            show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
+            name = "BLAST Ref Align",
+            html = TRUE,
+            minWidth = 130,
+            resizable = TRUE,
+            align = "center",
+            filterable = TRUE,
+            cell = rt_blast_ref_status()
+          ),
           blast_accession = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
             name = "BLAST Top Hit",
             html = TRUE,
             width = 120,
             cell = rt_ncbi_link()
           ),
           blast_species = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
             name = "BLAST Species",
             html = TRUE,
             minWidth = 160,
             cell = rt_longtext()
           ),
           blast_lineage = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
             name = "BLAST Lineage",
             html = TRUE,
             minWidth = 200,
             cell = rt_longtext()
           ),
-          PCGCount = colDef(show = TRUE, name = "# PCGs", align = "center"),
-          tRNACount = colDef(show = TRUE, name = "# tRNAs", align = "center"),
-          rRNACount = colDef(show = TRUE, name = "# rRNAs", align = "center"),
-          missing = colDef(show = TRUE, name = "Missing", align = "center", html = TRUE, cell = rt_longtext()),
-          extra = colDef(show = TRUE, name = "Extra", align = "center", html = TRUE, cell = rt_longtext()),
-          warnings = colDef(show = TRUE, name = "Warnings", align = "center"),
+          blast_pident = colDef(
+            show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
+            name = "BLAST % Ident",
+            filterable = FALSE,
+            minWidth = 90,
+            align = "center"
+          ),
+          blast_qcovs = colDef(
+            show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
+            name = "BLAST % Cov",
+            filterable = FALSE,
+            minWidth = 90,
+            align = "center"
+          ),
+          PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = "# PCGs", align = "center"),
+          tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = "# tRNAs", align = "center"),
+          rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = "# rRNAs", align = "center"),
+          missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"), name = "Missing", align = "center", html = TRUE, cell = rt_longtext()),
+          extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"), name = "Extra", align = "center", html = TRUE, cell = rt_longtext()),
+          warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"), name = "Warnings", align = "center"),
           reviewed = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("reviewed"), headerClass = .grp("reviewed"),
             name = "Reviewed",
             html = TRUE,
             align = "center",
             width = 100,
+            cell = rt_bool_badge()
           ),
           problematic = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("problematic"), headerClass = .grp("problematic"),
             name = "Problematic",
             html = TRUE,
             align = "center",
             width = 100,
+            cell = rt_bool_badge(invert = TRUE, hide_no = TRUE)
           ),
           time_stamp = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
             name = "Last Updated",
             filterable = FALSE,
             html = T,
@@ -236,7 +339,7 @@ annotate_server <- function(id) {
             cell = rt_ts_date()
           ),
           annotate_notes = colDef(
-            show = TRUE,
+            show = TRUE, class = .grp("annotate_notes"), headerClass = .grp("annotate_notes"),
             name = "Notes",
             html = TRUE,
             align = "left",
@@ -516,6 +619,14 @@ annotate_server <- function(id) {
           inputId = "aragorn_opts",
           value = cur$aragorn_opts
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "coverage_trim",
+          value = isTRUE(as.logical(cur$coverage_trim %||% 1L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "feature_trim",
+          value = isTRUE(as.logical(cur$feature_trim %||% 1L))
+        )
         updateSelectizeInput(
           inputId = "start_gene",
           choices = c(
@@ -575,6 +686,8 @@ annotate_server <- function(id) {
       shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_aragorn", condition = input$edit_annotate_opts)
       shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -636,7 +749,9 @@ annotate_server <- function(id) {
               use_arwen = as.integer(isTRUE(input$use_arwen)),
               aragorn_opts = req(input$aragorn_opts),
               use_aragorn = as.integer(isTRUE(input$use_aragorn)),
-              start_gene = req(input$start_gene)
+              start_gene = req(input$start_gene),
+              coverage_trim = as.integer(isTRUE(input$coverage_trim)),
+              feature_trim = as.integer(isTRUE(input$feature_trim))
             ),
             in_place = TRUE,
             copy = TRUE,

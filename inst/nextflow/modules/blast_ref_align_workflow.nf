@@ -23,7 +23,8 @@ params.sqlBackfill =
         'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
                   'WHERE r.ID = b.ID AND r.gene = d.start_gene), 0) ' +
     'FROM assemble b ' +
-    'JOIN assemblies a   ON b.ID = a.ID AND a.scaffold = 1 ' +
+    'JOIN assemblies a   ON b.ID = a.ID AND a.ignore = 0 ' +
+        'AND a.scaffold = (SELECT MIN(scaffold) FROM assemblies a2 WHERE a2.ID = a.ID AND a2.ignore = 0) ' +
     'JOIN annotate c     ON b.ID = c.ID ' +
     'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
     'JOIN blast_ref_sequences s ON b.blast_accession = s.accession ' +
@@ -36,6 +37,10 @@ params.sqlWriteAlignment = '''INSERT OR REPLACE INTO blast_ref_alignment
     (ID, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
     VALUES (?, ?, ?, ?, ?, ?)'''
 
+// Mark poor_blast_ref = 'failed' when blast_ref_align fails for a sample
+// (errorStrategy 'ignore' suppresses task failure; we detect missing output downstream).
+params.sqlWriteBlastRefAlignFailed = "UPDATE assemble SET poor_blast_ref = 'failed' WHERE ID = ?"
+
 workflow BLAST_REF_ALIGN {
     take:
         validated   // (id, path) — gates timing: only fires after VALIDATE completes
@@ -43,6 +48,11 @@ workflow BLAST_REF_ALIGN {
 
     main:
         // Reference data (sequence + rotation) available at WF2 startup from WF1.
+        // TODO: ref_ch (fromQuery) closes at WF2 startup, but the left side of the
+        //   .join(ref_ch) below closes much later (after ANNOTATE→CURATE→VALIDATE).
+        //   This asymmetric-lifetime join is the same deadlock class fixed in
+        //   assemble_workflow.nf (thresholds_ch). Fix by carrying ref_seq/rotation
+        //   through upstream channels or doing a per-item DB lookup instead of joining.
         channel.fromQuery(params.sqlReadRef, db: 'sqlite')
             .map { row -> tuple(row[0], row[1], row[2] as Long) }
             .filter { id, ref_seq, rotation -> ref_seq }
@@ -78,6 +88,11 @@ workflow BLAST_REF_ALIGN {
 
         new_align_in.mix(backfill_ch).set { align_in }
 
+        // Track all IDs entering align so failures (no output) can be detected
+        align_in
+            .map { id, assembly_seq, ref_seq, rotation -> tuple(id, true) }
+            .set { all_align_ids }
+
         blast_ref_align(align_in).set { align_out }
 
         // Parse the one-row CSV and write to blast_ref_alignment table
@@ -100,4 +115,15 @@ workflow BLAST_REF_ALIGN {
             }
             .filter { it != null }
             .sqlInsert(statement: params.sqlWriteAlignment, db: 'sqlite')
+
+        // Detect align failures: IDs that entered but produced no CSV output
+        align_out
+            .map { id, csv_file -> tuple(id, true) }
+            .set { succeeded_align_ids }
+
+        all_align_ids
+            .join(succeeded_align_ids, remainder: true)
+            .filter { id, all_flag, success_flag -> success_flag == null }
+            .map    { id, all_flag, success_flag -> tuple(id) }
+            .sqlInsert(statement: params.sqlWriteBlastRefAlignFailed, db: 'sqlite')
 }

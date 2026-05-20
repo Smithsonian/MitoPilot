@@ -102,21 +102,37 @@ export_files <- function(
       ) |>
       dplyr::left_join(
         dplyr::tbl(con, "assemble") |>
-          dplyr::select(ID, blast_accession),
+          dplyr::select(ID, blast_accession, dplyr::any_of("poor_blast_ref")),
         by = "ID"
       ) |>
       dplyr::collect()
 
+    kept <- dplyr::tbl(con, "assemblies") |>
+      dplyr::filter(ID == !!.x & path == !!dat$path & ignore == 0) |>
+      dplyr::select(scaffold, topology) |>
+      dplyr::collect()
+    if (nrow(kept) == 0) {
+      warning(.x, ": No scaffolds remain after ignore filter. Skipping.")
+      return()
+    }
+    if (nrow(kept) > 1) {
+      warning(.x, ": Multiple non-ignored scaffolds found. Export not supported for fragmented assemblies. Mark all but one scaffold as ignore to export. Skipping.")
+      return()
+    }
     seq <- MitoPilot::get_assembly(
       ID = .x,
       path = dat$path,
+      scaffold = kept$scaffold,
       con = con
     )
-    if (length(seq) > 1) {
-      stop("Multiple sequences found. Export not supported for fragmented assemblies.")
+    # Override fragmented topology with the kept scaffold's per-scaffold topology
+    if (isTRUE(dat$topology == "fragmented") && !is.na(kept$topology[1])) {
+      dat$topology <- kept$topology[1]
     }
     blast_acc <- dat$blast_accession[1]
-    blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) && blast_acc != "NO HIT") {
+    blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) &&
+                      blast_acc != "NO HIT" &&
+                      !isTRUE(dat$poor_blast_ref[1] %in% c("poor", "failed"))) {
       paste0(" [note=annotation compared to GenBank accession ", blast_acc, "]")
     } else {
       ""

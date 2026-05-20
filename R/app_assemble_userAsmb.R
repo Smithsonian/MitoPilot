@@ -17,6 +17,9 @@ assemble_server_userAsmb <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
+    register_tool_help("blastn", input, reopen = function() blast_opts_modal(rv))
+
     # Prepare data ----
     rv <- reactiveValues(
       pre_opts = dplyr::tbl(session$userData$con, "pre_opts") |>
@@ -54,7 +57,17 @@ assemble_server_userAsmb <- function(id) {
           wrap = FALSE,
           pageSizeOptions = c(25, 50, 100, 200, 500),
           rowStyle = rt_highlight_row(),
+          theme = reactable::reactableTheme(
+            headerStyle = list(whiteSpace = "normal", lineHeight = "1.2", textAlign = "left")
+          ),
           defaultColDef = colDef(align = "left", show = F),
+          columnGroups = list(
+            reactable::colGroup(
+              name = "BLAST",
+              columns = c("blast_accession", "blast_ref_status", "blast_species",
+                          "blast_pident", "blast_qcovs", "blast_evalue", "blast_lineage")
+            )
+          ),
           columns = list(
             `.selection` = colDef(show = T, sticky = "left", width = 28),
             assemble_lock = colDef(
@@ -145,7 +158,7 @@ assemble_server_userAsmb <- function(id) {
             length = colDef(
               show = TRUE,
               minWidth = 140,
-              name = "Assembly Length",
+              name = "Asmb. Length (raw)",
               filterable = FALSE,
               html = TRUE,
               cell = rt_longtext()
@@ -160,35 +173,45 @@ assemble_server_userAsmb <- function(id) {
             ),
             blast_accession = colDef(
               show = TRUE,
-              name = "BLAST Top Hit",
+              name = "Top Hit",
               html = TRUE,
               width = 120,
               cell = rt_ncbi_link()
             ),
+            poor_blast_ref = colDef(show = FALSE),
+            blast_ref_status = colDef(
+              show = TRUE,
+              name = "Ref Align",
+              html = TRUE,
+              width = 100,
+              align = "center",
+              filterable = TRUE,
+              cell = rt_blast_ref_status()
+            ),
             blast_species = colDef(
               show = TRUE,
-              name = "BLAST Species",
+              name = "Species",
               html = TRUE,
               minWidth = 160,
               cell = rt_longtext()
             ),
             blast_lineage = colDef(
               show = TRUE,
-              name = "BLAST Lineage",
+              name = "Lineage",
               html = TRUE,
               minWidth = 200,
               cell = rt_longtext()
             ),
             blast_pident = colDef(
               show = TRUE,
-              name = "BLAST % Ident",
+              name = "% Ident",
               filterable = FALSE,
               width = 90,
               align = "center"
             ),
             blast_qcovs = colDef(
               show = TRUE,
-              name = "BLAST % Cov",
+              name = "% Cov",
               filterable = FALSE,
               width = 90,
               align = "center"

@@ -49,7 +49,8 @@ process curate {
         out_dir = '!{dir}', \
         max_blast_hits = '!{opts.max_blast_hits}', \
         ref_dir = '!{ref_db_clean}', \
-        blast_ref_file = '!{blast_ref_file}' \
+        blast_ref_file = '!{blast_ref_file}', \
+        feature_trim = !{opts.feature_trim == 1 ? "TRUE" : "FALSE"} \
         )"
     mv !{dir}/*_annotations_*.csv !{id}/
     ### work dir info for troubleshooting ####
