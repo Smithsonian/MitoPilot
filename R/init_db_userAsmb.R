@@ -20,6 +20,7 @@
 #' @param curate_target Default target database for curation
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param curate_params Default curation parameters
+#' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
 #' @export
 #'
 new_db_userAsmb <- function(

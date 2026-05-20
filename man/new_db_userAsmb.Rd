@@ -65,6 +65,8 @@ for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 \item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
 
 \item{curate_params}{Default curation parameters}
+
+\item{min_assembly_length}{Minimum scaffold length to include in analysis (default = 500)}
 }
 \description{
 Initialize a new project database
