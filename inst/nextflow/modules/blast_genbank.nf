@@ -29,6 +29,8 @@ process blast_genbank {
     outDir = "${id}/assemble/${opts_id}"
     '''
     mkdir -p !{outDir}
+    # Optional NCBI API key raises remote BLAST rate limit. BLAST+ honors NCBI_API_KEY env var.
+    export NCBI_API_KEY='!{params.ncbi_api_key ?: ""}'
     blastn \
         -remote \
         -db nt \

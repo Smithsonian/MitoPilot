@@ -37,6 +37,9 @@ process blast_ref_fetch {
     if [ "!{task.attempt}" -gt 1 ]; then
         sleep $(( (!{task.attempt} - 1) * 30 ))
     fi
+    # Optional NCBI API key raises EFetch rate limit (3 -> 10 req/s).
+    # Read inside R via Sys.getenv("NCBI_API_KEY").
+    export NCBI_API_KEY='!{params.ncbi_api_key ?: ""}'
     Rscript -e "MitoPilot::fetch_blast_ref('!{blast_accession}', '!{outDir}/blast_ref_annotations.csv', '!{outDir}/blast_ref_sequence.txt', '!{outDir}/blast_ref_genetic_code.txt', '!{outDir}/remote_blast_ref.json', '!{blast_species}', !{blast_evalue})"
     '''
 }

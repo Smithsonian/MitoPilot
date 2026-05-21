@@ -28,6 +28,10 @@
 #'   file. If not provided a config file template will be created based on the
 #'   specified executor.
 #' @param container The docker container to use for pipeline execution.
+#' @param ncbi_api_key Optional NCBI API key string. Used to raise NCBI request
+#'   rate limits for the remote BLAST + GenBank fetch steps. See
+#'   <https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/>. May be left
+#'   empty and edited later in `.config` (`params.ncbi_api_key`).
 #' @param ... Additional arguments passed as default processing parameters to
 #'   `new_db()`
 #'
@@ -45,6 +49,7 @@ new_project <- function(
     custom_seeds_db = NULL,
     custom_labels_db = NULL,
     config = NULL,
+    ncbi_api_key = NULL,
     Rproj = TRUE,
     force = FALSE,
     ...) {
@@ -128,6 +133,7 @@ new_project <- function(
     stringr::str_replace("<<ASMB_DIR>>", "NA" %||% "<<ASMB_DIR>>") |>
     stringr::str_replace("<<MIN_DEPTH>>", format(min_depth %||% "<<MIN_DEPTH>>", scientific = F)) |>
     stringr::str_replace("<<GENETIC_CODE>>", format(genetic_code %||% "<<GENETIC_CODE>>", scientific = F)) |>
+    stringr::str_replace("<<NCBI_API_KEY>>", ncbi_api_key %||% "") |>
     writeLines(file.path(path, ".config"))
 
   message("Project initialized successfully.")
