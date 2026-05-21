@@ -23,8 +23,8 @@ params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
 // 'ignore' does NOT cache the failure as a successful task, so -resume will retry the step.
 params.sqlWriteBlastRefFetchFailed = "UPDATE assemble SET assemble_switch = 3, assemble_notes = ?, poor_blast_ref = 'failed' WHERE ID = ?"
 
-// Mark poor_blast_ref = 'good' when the top-hit ref fetch + parse succeeds.
-params.sqlWriteBlastRefGood = "UPDATE assemble SET poor_blast_ref = 'good' WHERE ID = ?"
+// Mark state=2 (WF1 complete) and poor_blast_ref = 'good' when the top-hit ref fetch + parse succeeds.
+params.sqlWriteBlastRefGood = "UPDATE assemble SET assemble_switch = 2, poor_blast_ref = 'good' WHERE ID = ?"
 
 workflow BLAST_REF_FETCH {
     take:

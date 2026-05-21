@@ -3,6 +3,7 @@ include {blast_genbank} from './blast_genbank.nf'
 params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
 params.sqlWriteBlastHitScaffold = 'UPDATE assemblies SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ? AND path = ? AND scaffold = ?'
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
+params.sqlWriteBlastNoHit = "UPDATE assemble SET assemble_switch = 3, assemble_notes = ?, poor_blast_ref = 'failed' WHERE ID = ?"
 
 params.sqlReadBlastOpts =
     'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
@@ -96,15 +97,26 @@ workflow BLAST_GENBANK {
 
         blast_genbank(blast_in_split.process)
             .multiMap { id, result_file ->
-                state:  tuple(id, result_file)
-                parse:  tuple(id, result_file)
+                state:     tuple(id, result_file)
+                parse:     tuple(id, result_file)
+                succeeded: tuple(id, true)
             }
             .set { blast_out }
 
-        // Write state=2 (WF1 complete) for samples that ran BLAST
+        // Write state=4 (BLAST done, ref fetch pending) for samples that ran BLAST successfully;
+        // state=2 is written by BLAST_REF_FETCH once the reference fetch also completes
         blast_out.state
-            .map { id, result_file -> tuple('2', id) }
+            .map { id, result_file -> tuple('4', id) }
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
+
+        // Detect NO HIT failures: IDs that entered BLAST but produced no output after all retries
+        blast_in_split.ids
+            .join(blast_out.succeeded, remainder: true)
+            .filter { id, blast_flag, success_flag -> success_flag == null }
+            .map { id, blast_flag, success_flag ->
+                tuple('BLAST returned no hits after all retries. Possible connection failure. Use -resume to retry.', id)
+            }
+            .sqlInsert(statement: params.sqlWriteBlastNoHit, db: 'sqlite')
 
         // Write state=2 for samples that were filtered out before BLAST
         // (no single qualifying scaffold >= min_assembly_length across all paths, or run_blast = 0)
