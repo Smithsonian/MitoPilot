@@ -3,7 +3,7 @@ process blast_genbank {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
-    maxForks { params.blast_gb.maxForks }
+    maxForks params.blast_gb.maxForks
 
     // Retry up to 3 times (default) before ignoring (empty output = possible connection failure).
     // 'ignore' after retries keeps other samples running; failed tasks are NOT cached as
