@@ -292,14 +292,20 @@ workflow ASSEMBLE {
             .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, 1, 0, "no")', db: 'sqlite')
 
     emit:
-        // Only state=4 samples (PASS branch with no terminal failure) proceed
-        // to COVERAGE / BLAST_GENBANK. State=3 outcomes (e.g. all scaffolds
-        // below min_assembly_length) are terminal here and intentionally do
-        // NOT consume downstream BLAST/EFetch resources. This is also what
-        // guarantees the unguarded BLAST_REF_FETCH UPDATEs can never overwrite
-        // a terminal state=3 row written by ASSEMBLE.
-        ch = pass_ch.downstream
-                .filter { raw, status -> status == '4' }
-                .map    { raw, status -> raw }
+        // Two named channels with different gating:
+        //   cov   — samples with a usable assembly (status 4 OR status 2 from
+        //           run_blast=0). COVERAGE still runs for no_blast samples so
+        //           the per-scaffold depth/gc/errors columns get populated
+        //           and downstream ANNOTATE finds the coverageStats.csv.
+        //   blast — only status=4. State=2 (no_blast) and state=3 (terminal
+        //           assembly failure) are excluded so BLAST_GENBANK never
+        //           races with a finalized row and never wastes a remote
+        //           BLAST call on an unusable assembly.
+        cov   = pass_ch.downstream
+                    .filter { raw, status -> status == '4' || status == '2' }
+                    .map    { raw, status -> raw }
+        blast = pass_ch.downstream
+                    .filter { raw, status -> status == '4' }
+                    .map    { raw, status -> raw }
 
 }

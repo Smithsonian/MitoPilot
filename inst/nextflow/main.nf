@@ -24,8 +24,11 @@ workflow WF1 {
 
     PREPROCESS()
     ASSEMBLE(PREPROCESS.out[0])
-    COVERAGE(ASSEMBLE.out[0])
-    BLAST_GENBANK(ASSEMBLE.out[0].map{ it -> tuple(it[0], it[1], it[4]) })
+    // COVERAGE runs for samples with a usable assembly regardless of whether
+    // BLAST is requested; BLAST_GENBANK only runs for samples that still need
+    // BLAST (status=4). See ASSEMBLE emit comments.
+    COVERAGE(ASSEMBLE.out.cov)
+    BLAST_GENBANK(ASSEMBLE.out.blast.map{ it -> tuple(it[0], it[1], it[4]) })
     BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input)
 
 }

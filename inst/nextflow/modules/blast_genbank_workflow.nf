@@ -45,7 +45,7 @@ params.sqlReadMinLen =
 workflow BLAST_GENBANK {
     take:
         // input: tuple(id, assembly_file_or_list, opts_id)
-        // WF1:          from ASSEMBLE.out[0] mapped to (id, it[1], it[4])
+        // WF1:          from ASSEMBLE.out.blast mapped to (id, it[1], it[4])
         // WF1_userAsmb: from COVERAGE_userAsmb.out.blast_in as (id, assembly, opts_id)
         input
 
