@@ -2,6 +2,42 @@ import groovy.json.JsonSlurper
 
 include {blast_ref_fetch} from './blast_ref_fetch.nf'
 
+// SQL fragment: assemble_notes with any segment starting at `tag` stripped
+// (and a preceding '; ' if present). Mirrors the helper in
+// blast_genbank_workflow.nf; duplicated here so this module is self-contained.
+def stripTagSql(String tag) {
+    def lit = tag.replace("'", "''")
+    return "RTRIM(" +
+        "CASE WHEN INSTR(COALESCE(assemble_notes,''), '${lit}') > 0 " +
+            "THEN SUBSTR(COALESCE(assemble_notes,''), 1, INSTR(COALESCE(assemble_notes,''), '${lit}') - 1) " +
+            "ELSE COALESCE(assemble_notes,'') END" +
+    ", '; ')"
+}
+
+def appendTaggedNoteSql(String tag, String msg) {
+    def stripped = stripTagSql(tag)
+    def tagged = (tag + ' ' + msg).replace("'", "''")
+    return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
+}
+
+// Strip BOTH [blast] and [ref] tagged segments from assemble_notes. Used on
+// the success path so stale failure messages from prior -resume attempts are
+// removed when a sample reaches state=2.
+def stripBlastAndRefTagsSql() {
+    def stripBlast = "RTRIM(" +
+        "CASE WHEN INSTR(COALESCE(assemble_notes,''), '[blast]') > 0 " +
+            "THEN SUBSTR(COALESCE(assemble_notes,''), 1, INSTR(COALESCE(assemble_notes,''), '[blast]') - 1) " +
+            "ELSE COALESCE(assemble_notes,'') END" +
+    ", '; ')"
+    return "RTRIM(" +
+        "CASE WHEN INSTR(${stripBlast}, '[ref]') > 0 " +
+            "THEN SUBSTR(${stripBlast}, 1, INSTR(${stripBlast}, '[ref]') - 1) " +
+            "ELSE ${stripBlast} END" +
+    ", '; ')"
+}
+
+params.refFetchFailedMsg = 'BLAST reference fetch timed out after all retries. Rerun pipeline with -resume to retry.'
+
 params.sqlWriteBlastLineage = 'UPDATE assemble SET blast_lineage = ? WHERE ID = ?'
 // Per-scaffold lineage: matched on accession so each scaffold row inherits the
 // lineage of whichever ref was fetched for its BLAST hit. Relies on the
@@ -21,10 +57,23 @@ params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
 // Written when the top-hit ref fetch fails after all retries (NCBI timeout / transient error).
 // blast_ref_fetch uses errorStrategy 'ignore' so the pipeline keeps running for other samples.
 // 'ignore' does NOT cache the failure as a successful task, so -resume will retry the step.
-params.sqlWriteBlastRefFetchFailed = "UPDATE assemble SET assemble_switch = 3, assemble_notes = ?, poor_blast_ref = 'failed' WHERE ID = ?"
+// Guarded WHERE assemble_switch = 4 so terminal state=3 rows cannot be touched.
+// The [ref] message is embedded; the UPDATE strips any prior [ref] segment then appends.
+params.sqlWriteBlastRefFetchFailed = "UPDATE assemble SET " +
+    "assemble_switch = 3, " +
+    "assemble_notes = ${appendTaggedNoteSql('[ref]', params.refFetchFailedMsg)}, " +
+    "poor_blast_ref = 'failed' " +
+    "WHERE ID = ? AND assemble_switch = 4"
 
 // Mark state=2 (WF1 complete) and poor_blast_ref = 'good' when the top-hit ref fetch + parse succeeds.
-params.sqlWriteBlastRefGood = "UPDATE assemble SET assemble_switch = 2, poor_blast_ref = 'good' WHERE ID = ?"
+// Strips any [blast]/[ref] stale failure segments from prior -resume attempts; preserves
+// assembly-stage warnings (e.g. 'Output contains disconnected contigs').
+// Guarded WHERE assemble_switch = 4 so terminal state=3 rows cannot be touched.
+params.sqlWriteBlastRefGood = "UPDATE assemble SET " +
+    "assemble_switch = 2, " +
+    "poor_blast_ref = 'good', " +
+    "assemble_notes = ${stripBlastAndRefTagsSql()} " +
+    "WHERE ID = ? AND assemble_switch = 4"
 
 workflow BLAST_REF_FETCH {
     take:
@@ -120,11 +169,11 @@ workflow BLAST_REF_FETCH {
             .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastRefGood, db: 'sqlite')
 
+        // Failure message is embedded in params.sqlWriteBlastRefFetchFailed (with [ref] tag)
+        // and the UPDATE is guarded WHERE assemble_switch = 4.
         all_top_ids
             .join(succeeded_top_ids, remainder: true)
             .filter { id, all_flag, success_flag -> success_flag == null }
-            .map    { id, all_flag, success_flag ->
-                tuple('BLAST reference fetch timed out after all retries. Rerun pipeline with -resume to retry.', id)
-            }
+            .map    { id, all_flag, success_flag -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastRefFetchFailed, db: 'sqlite')
 }
