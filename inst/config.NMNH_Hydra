@@ -82,6 +82,8 @@ params {
     }
     blast_gb {
         cpus = 1
+        maxForks = 10 // only allow 10 concurrent BLAST runs to avoid server timeout issues
+        maxRetries = 3
         clusterOptions = "-l mres=32G,h_data=32G,h_vmem=32G,himem -S /bin/bash"
         container = process.container
         executor = process.executor

@@ -3,6 +3,14 @@ process blast_genbank {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
+    maxForks { params.blast_gb.maxForks }
+
+    // Retry up to 3 times (default) before ignoring (empty output = possible connection failure).
+    // 'ignore' after retries keeps other samples running; failed tasks are NOT cached as
+    // successful, so -resume will re-execute this step for the affected sample.
+    errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
+    maxRetries { params.blast_gb.maxRetries }
+
     cpus { (params.blast_gb.cpus instanceof Integer) ? params.blast_gb.cpus : 1 }
     memory = (params.blast_gb.memory instanceof Number) ? "${params.blast_gb.memory}.GB" : null
     clusterOptions {
@@ -15,11 +23,7 @@ process blast_genbank {
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, mode: 'copy'
 
-    // Retry up to 3 times before ignoring (empty output = possible connection failure).
-    // 'ignore' after retries keeps other samples running; failed tasks are NOT cached as
-    // successful, so -resume will re-execute this step for the affected sample.
-    errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
-    maxRetries 3
+
 
     tag "${id}"
 
