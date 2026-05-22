@@ -64,11 +64,6 @@ workflow BLAST_GENBANK {
             }
             .set { normalized_input }
 
-        // Track all IDs entering this workflow so we can mark skipped samples as complete
-        normalized_input
-            .map { id, asmb_list, opts_id -> tuple(id, true) }
-            .set { all_ids }
-
         // Read per-sample min_assembly_length from DB
         channel.fromQuery(params.sqlReadMinLen, db: 'sqlite')
             .map { row -> tuple(row[0], row[1] == null ? 500 : (row[1] as Integer)) }
@@ -146,13 +141,12 @@ workflow BLAST_GENBANK {
             .map { id, blast_flag, success_flag -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastNoHit, db: 'sqlite')
 
-        // Write state=2 for samples that were filtered out before BLAST
-        // (no single qualifying scaffold >= min_assembly_length across all paths, or run_blast = 0)
-        all_ids
-            .join(blast_in_split.ids, remainder: true)
-            .filter { id, all_flag, blast_flag -> blast_flag == null }
-            .map { id, all_flag, blast_flag -> tuple('2', id) }
-            .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
+        // (Removed: the prior "filtered out → state=2" UPDATE raced with ASSEMBLE's
+        // state=4 UPDATE on samples whose assembly finished in the same instant as
+        // BLAST_GENBANK's batched skip-write. ASSEMBLE now finalizes state=2 directly
+        // for run_blast=0 samples, and the upstream max_len < min_assembly_length
+        // check covers the no-qualifying-scaffold case, so no BLAST_GENBANK skip
+        // write is needed.)
 
         // Parse all hits, round numeric fields. blast outfmt is now
         //   qseqid saccver stitle pident qcovs evalue
