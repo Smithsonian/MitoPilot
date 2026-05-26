@@ -24,34 +24,32 @@ outputs. Currently the pipeline expects paired-end Illumina reads as the
 raw input and performs the following steps.
 
 1.  Mitogenome assembly
-      - [fastp](https://github.com/OpenGene/fastp) for quality control
-        and adapter trimming
-      - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle)
-        (default) or
-        [MitoFinder](https://github.com/RemiAllio/MitoFinder) for
-        mitogenome assembly
-      - [bowtie2](https://github.com/BenLangmead/bowtie2) for read
-        mapping to calculate coverage and error rates.
-      - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) remotely
-        fetch closest match from GenBank for automatic and manual
-        curation
+    - [fastp](https://github.com/OpenGene/fastp) for quality control and
+      adapter trimming
+    - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (default)
+      or [MitoFinder](https://github.com/RemiAllio/MitoFinder) for
+      mitogenome assembly
+    - [bowtie2](https://github.com/BenLangmead/bowtie2) for read mapping
+      to calculate coverage and error rates.
+    - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) remotely
+      fetch closest match from GenBank for automatic and manual curation
 2.  Mitogenome annotation
-      - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA
-        annotation
-      - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for
-        tRNA annotation
-      - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
-        annotation (optional)
-      - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA
-        annotation (optional)
-      - Custom scripts for gene boundary refinement and annotation file
-        formatting
-      - Validation to flag possible issues or known errors that would be
-        rejected by NCBI GenBank
-      - Manual curation of annotations using the integrated Shiny App.
+    - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA
+      annotation
+    - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for
+      tRNA annotation
+    - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
+      annotation (optional)
+    - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA annotation
+      (optional)
+    - Custom scripts for gene boundary refinement and annotation file
+      formatting
+    - Validation to flag possible issues or known errors that would be
+      rejected by NCBI GenBank
+    - Manual curation of annotations using the integrated Shiny App.
 3.  Data export
-      - Custom scripts to export data in a format suitable for
-        submission to NCBI GenBank
+    - Custom scripts to export data in a format suitable for submission
+      to NCBI GenBank
 
 Optionally, MitoPilot can proceed straight to annotation and curation if
 the user supplies mitogenome assemblies with the
@@ -85,18 +83,18 @@ the future.
 Currently, MitoPilot has curation/validation rulesets for the following
 groups of organisms:
 
-  - fishes
-  - starfish
-  - octocorals
-  - hexacorals
-  - dipterans
-  - turtles
-  - copepods (testing in progress)
-  - ctenophores (testing in progress)
-  - annelids (testing in progress)
-  - mammals (untested)
-  - lepidosaurs (untested)
-  - birds (untested)
+- fishes
+- starfish
+- octocorals
+- hexacorals
+- dipterans
+- turtles
+- copepods (testing in progress)
+- ctenophores (testing in progress)
+- annelids (testing in progress)
+- mammals (untested)
+- lepidosaurs (untested)
+- birds (untested)
 
 The custom logic in the annotation curation and validation scripts needs
 to be tweaked for optimal performance with other taxonomic groups. All
@@ -122,10 +120,10 @@ provide custom databases to improve the automatic curation step.
 We provide detailed installation instructions for the following
 computing clusters:
 
-  - [Smithsonian NMNH
-    Hydra](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
-  - [NOAA
-    SEDNA](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html)
+- [Smithsonian NMNH
+  Hydra](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
+- [NOAA
+  SEDNA](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html)
 
 To use MitoPilot, you will need [R
 (\>=4.4.0)](https://www.r-project.org/) and
@@ -175,44 +173,49 @@ MitoPilot::new_project(
   path = "path/to/project",
   mapping_fn = "path/to/mapping_file.csv",
   data_path = "path/to/raw_data",
-  executor = "local"
+  executor = "local",
+  ncbi_api_key = "MY_NCBI_API_KEY"
 )
 ```
 
-  - Path
-      - The path specifies where the new project directory will be
-        created. If no path is provided, the project will be created in
-        the current working directory.
-  - Mapping File
-      - The mapping file should be in CSV format and must contain the
-        following columns:
-          - `ID` (a unique identifier for each sample)
-          - `R1` and `R2` (specifying the forward and reverse file names
-            for the raw Illumina paired end data)
-          - `Taxon` (e.g. species or genus name, no required format)
-      - In addition to the required columns, any other sample metadata
-        can be included in the mapping file. These columns can also be
-        used when exporting files for NCBI GenBank Submissions, so
-        metadata that is important for submission (e.g., BioSample ID)
-        can be included here.
-  - Data Path
-      - Full path to the data directory, which should contain the raw
-        Illumina paired-end reads specified in the mapping file.
-  - Executor
-      - The executor specifies where the computational work will be
-        performed by Nextflow. For example choosing `local` will run the
-        pipeline on the local machine, while `awsbatch` will run the
-        pipeline on AWS Batch. Running `new_project()` will generate a
-        executor-specific .config file in the project directory that
-        must be edited to specify additional parameters for the pipeline
-        to run.
-      - Currently MitoPilot has built-in support four execution
-        environments: local, AWS Batch, the Smithsonian Hydra cluster,
-        or the NOAA SEDNA cluster. To use MitoPilot on a different
-        computing environment, you can pass a custom Nextflow
-        configuration to the `MitoPilot::new_test_project` function
-        using the parameter `config = config.MyEnv`. (This feature is
-        currently under development).
+- Path
+  - The path specifies where the new project directory will be created.
+    If no path is provided, the project will be created in the current
+    working directory.
+- Mapping File
+  - The mapping file should be in CSV format and must contain the
+    following columns:
+    - `ID` (a unique identifier for each sample)
+    - `R1` and `R2` (specifying the forward and reverse file names for
+      the raw Illumina paired end data)
+    - `Taxon` (e.g. species or genus name, no required format)
+  - In addition to the required columns, any other sample metadata can
+    be included in the mapping file. These columns can also be used when
+    exporting files for NCBI GenBank Submissions, so metadata that is
+    important for submission (e.g., BioSample ID) can be included here.
+- Data Path
+  - Full path to the data directory, which should contain the raw
+    Illumina paired-end reads specified in the mapping file.
+- Executor
+  - The executor specifies where the computational work will be
+    performed by Nextflow. For example choosing `local` will run the
+    pipeline on the local machine, while `awsbatch` will run the
+    pipeline on AWS Batch. Running `new_project()` will generate a
+    executor-specific .config file in the project directory that must be
+    edited to specify additional parameters for the pipeline to run.
+  - Currently MitoPilot has built-in support four execution
+    environments: local, AWS Batch, the Smithsonian Hydra cluster, or
+    the NOAA SEDNA cluster. To use MitoPilot on a different computing
+    environment, you can pass a custom Nextflow configuration to the
+    `MitoPilot::new_test_project` function using the parameter
+    `config = config.MyEnv`. (This feature is currently under
+    development).
+- NCBI Api Key
+  - We highly recommended [generating a NCBI API
+    key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
+    and providing it here during project initialization. This will
+    increase the efficiency of the remote BLAST search and corresponding
+    GenBank downloads during the Assemble module.
 
 **NOTE**: If running MitoPilot via RStudio Server on a computing
 cluster, you likely need to specify `Rproj = FALSE` when calling the
@@ -230,13 +233,13 @@ tool.
 To use your own mitogenome assemblies, you will need a mapping file with
 two additional columns:
 
-  - `Assembly`
-      - Contains the names of your mitogenome FASTA files. Ideally, each
-        FASTA file should contain a single contig or scaffold
-        representing the complete mitogenome. The format of the FASTA
-        file names and sequence headers does not matter.
-  - `Topology`
-      - Indicate whether the assembly is “linear” or “circular”.
+- `Assembly`
+  - Contains the names of your mitogenome FASTA files. Ideally, each
+    FASTA file should contain a single contig or scaffold representing
+    the complete mitogenome. The format of the FASTA file names and
+    sequence headers does not matter.
+- `Topology`
+  - Indicate whether the assembly is “linear” or “circular”.
 
 All of your mitogenome FASTA files must be located in a single
 directory, which you will supply to the `assembly_path` argument of the
@@ -248,7 +251,8 @@ MitoPilot::new_project_userAsmb(
   mapping_fn = "path/to/mapping_file.csv",
   data_path = "path/to/raw_data",
   assembly_path = "path/to/mitogenome/assembly/fasta/files"
-  executor = "local"
+  executor = "local",
+  ncbi_api_key = "MY_NCBI_API_KEY"
 )
 ```
 
@@ -326,7 +330,7 @@ Once a project is initialized, the pipeline status can be viewed using
 the MitoPilot GUI. The GUI can be launched by running the `MitoPilot()`
 command in the R console from the project directory. The GUI will open
 in a new browser window and is primarily comprised of an interactive
-table, with 3 modules (Assembly, Annotate, Export), where each row
+table, with 3 modules (Assemble, Annotate, Export), where each row
 represents a sample in the project.
 
 ## Sample Status
@@ -384,20 +388,17 @@ submission script for a computing cluster.
 
 # Development Notes
 
-  - This package uses [{renv}]() for package management. After cloning
-    the repository, run `renv::restore()` to install the necessary
-    packages.
-  - To work from the package repository, but reference a MitoPilot
-    project in a different directory, set the `MitoPilot.db` option to
-    the location of the `.sqlite` database for the project
-    (e.g. `options("MitoPilot.db" =
-    "~/Jonah/MitoPilot-testing/.sqlite")`).
-  - When modifying the underlying R-package functions references in the
-    Nextflow pipeline, or modifying / adding reference databases
-    specified in `docker/Dockerfile`, the docker image should be
-    rebuilt. The `docker/deploy-local.sh` script can be used to build a
-    local image, or the `docker/deploy-aws.sh` and
-    `docker/deploy-dockerhub.sh` scripts can be modified to deploy a
-    remote image to your account. In any case, the Nextflow `.config`
-    file should be modified such that one or more of the processing
-    steps reference the new image.
+- This package uses [{renv}]() for package management. After cloning the
+  repository, run `renv::restore()` to install the necessary packages.
+- To work from the package repository, but reference a MitoPilot project
+  in a different directory, set the `MitoPilot.db` option to the
+  location of the `.sqlite` database for the project
+  (e.g. `options("MitoPilot.db" = "~/Jonah/MitoPilot-testing/.sqlite")`).
+- When modifying the underlying R-package functions references in the
+  Nextflow pipeline, or modifying / adding reference databases specified
+  in `docker/Dockerfile`, the docker image should be rebuilt. The
+  `docker/deploy-local.sh` script can be used to build a local image, or
+  the `docker/deploy-aws.sh` and `docker/deploy-dockerhub.sh` scripts
+  can be modified to deploy a remote image to your account. In any case,
+  the Nextflow `.config` file should be modified such that one or more
+  of the processing steps reference the new image.

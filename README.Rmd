@@ -112,7 +112,8 @@ MitoPilot::new_project(
   path = "path/to/project",
   mapping_fn = "path/to/mapping_file.csv",
   data_path = "path/to/raw_data",
-  executor = "local"
+  executor = "local",
+  ncbi_api_key = "MY_NCBI_API_KEY"
 )
 ```
 
@@ -129,6 +130,8 @@ MitoPilot::new_project(
 + Executor
    - The executor specifies where the computational work will be performed by Nextflow. For example choosing `local` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.
    - Currently MitoPilot has built-in support four execution environments: local, AWS Batch, the Smithsonian Hydra cluster, or the NOAA SEDNA cluster. To use MitoPilot on a different computing environment, you can pass a custom Nextflow configuration to the `MitoPilot::new_test_project` function using the parameter `config = config.MyEnv`. (This feature is currently under development).
++ NCBI Api Key
+  - We highly recommended [generating a NCBI API key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/) and providing it here during project initialization. This will increase the efficiency of the remote BLAST search and corresponding GenBank downloads during the Assemble module.
 
 **NOTE**: If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify `Rproj = FALSE` when calling the `MitoPilot::new_project` function.
 
@@ -151,7 +154,8 @@ MitoPilot::new_project_userAsmb(
   mapping_fn = "path/to/mapping_file.csv",
   data_path = "path/to/raw_data",
   assembly_path = "path/to/mitogenome/assembly/fasta/files"
-  executor = "local"
+  executor = "local",
+  ncbi_api_key = "MY_NCBI_API_KEY"
 )
 ```
 
@@ -186,7 +190,7 @@ MitoPilot databases can be modified using the R helper functions `update_sample_
 
 # Running The Pipeline
 
-Once a project is initialized, the pipeline status can be viewed using the MitoPilot GUI. The GUI can be launched by running the `MitoPilot()` command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assembly, Annotate, Export), where each row represents a sample in the project. 
+Once a project is initialized, the pipeline status can be viewed using the MitoPilot GUI. The GUI can be launched by running the `MitoPilot()` command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assemble, Annotate, Export), where each row represents a sample in the project. 
 
 ## Sample Status
 
