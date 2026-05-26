@@ -28,6 +28,10 @@
 #'   file. If not provided a config file template will be created based on the
 #'   specified executor.
 #' @param container The docker container to use for pipeline execution.
+#' @param ncbi_api_key Optional NCBI API key string. Used to raise NCBI request
+#'   rate limits for the remote BLAST + GenBank fetch steps. See
+#'   <https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/>. May be left
+#'   empty and edited later in `.config` (`params.ncbi_api_key`).
 #' @param ... Additional arguments passed as default processing parameters to
 #'   `new_db()`
 #'
@@ -43,6 +47,7 @@ new_project_userAsmb <- function(
     executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     config = NULL,
+    ncbi_api_key = NULL,
     Rproj = TRUE,
     force = FALSE,
     ...) {
@@ -130,6 +135,7 @@ new_project_userAsmb <- function(
     stringr::str_replace("<<ASMB_DIR>>", assembly_path %||% "<<ASMB_DIR>>") |>
     stringr::str_replace("<<MIN_DEPTH>>", format(2000000 %||% "<<MIN_DEPTH>>", scientific = F)) |>
     stringr::str_replace("<<GENETIC_CODE>>", format(genetic_code %||% "<<GENETIC_CODE>>", scientific = F)) |>
+    stringr::str_replace("<<NCBI_API_KEY>>", ncbi_api_key %||% "") |>
     writeLines(file.path(path, ".config"))
 
   message("Project initialized successfully.")

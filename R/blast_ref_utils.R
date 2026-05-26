@@ -24,6 +24,14 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
   mem <- tryCatch(gc(verbose = FALSE), error = function(e) NULL)
   if (!is.null(mem)) message(sprintf("[fetch_blast_ref] mem_used_MB=%.1f", sum(mem[, 2])))
 
+  # Optional NCBI API key (set by nextflow process from params.ncbi_api_key).
+  # When present, appended to eutils URLs to raise the per-IP rate limit from
+  # 3 to 10 req/s. URL-encoded defensively even though valid keys are hex.
+  ncbi_api_key <- Sys.getenv("NCBI_API_KEY", unset = "")
+  api_key_qs <- if (nzchar(ncbi_api_key)) {
+    paste0("&api_key=", utils::URLencode(ncbi_api_key, reserved = TRUE))
+  } else ""
+
   empty <- data.frame(
     gene      = character(),
     type      = character(),
@@ -49,8 +57,9 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     transient <- c(429L, 500L, 503L)
     max_tries <- 5L
     for (attempt in seq_len(max_tries)) {
+      safe_url <- sub("&api_key=[^&]*", "&api_key=REDACTED", url)
       message(sprintf("[fetch_blast_ref] HTTP attempt %d/%d  label=%s  url=%s",
-                      attempt, max_tries, label, url))
+                      attempt, max_tries, label, safe_url))
       t0 <- proc.time()[["elapsed"]]
       resp <- tryCatch(
         httr2::request(url) |>
@@ -94,7 +103,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     url <- paste0(
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
       "?db=nuccore&id=", accession,
-      "&rettype=gff3&retmode=text"
+      "&rettype=gff3&retmode=text",
+      api_key_qs
     )
     gff3_text <- httr2::resp_body_string(
       ncbi_efetch(url, 120L, paste0("GFF3/", accession))
@@ -177,7 +187,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
       tryCatch({
         tax_url <- paste0(
           "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
-          "?db=taxonomy&id=", taxid, "&retmode=xml"
+          "?db=taxonomy&id=", taxid, "&retmode=xml",
+          api_key_qs
         )
         httr2::resp_body_string(
           ncbi_efetch(tax_url, 60L, paste0("taxonomy/", taxid))
@@ -272,7 +283,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
       fasta_url <- paste0(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
         "?db=nuccore&id=", accession,
-        "&rettype=fasta&retmode=text"
+        "&rettype=fasta&retmode=text",
+        api_key_qs
       )
       fasta_text <- tryCatch(
         httr2::resp_body_string(

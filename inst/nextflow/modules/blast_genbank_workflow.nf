@@ -1,8 +1,36 @@
 include {blast_genbank} from './blast_genbank.nf'
 
+// SQL fragment that returns assemble_notes with any segment starting with the
+// given tag (and a preceding '; ' if present) stripped. Used so each stage's
+// failure message can be idempotently replaced across re-runs instead of
+// accumulating duplicates on -resume.
+def stripTagSql(String tag) {
+    def lit = tag.replace("'", "''")
+    return "RTRIM(" +
+        "CASE WHEN INSTR(COALESCE(assemble_notes,''), '${lit}') > 0 " +
+            "THEN SUBSTR(COALESCE(assemble_notes,''), 1, INSTR(COALESCE(assemble_notes,''), '${lit}') - 1) " +
+            "ELSE COALESCE(assemble_notes,'') END" +
+    ", '; ')"
+}
+
+// SQL fragment that appends a tagged message to assemble_notes, after first
+// stripping any prior segment with the same tag.
+def appendTaggedNoteSql(String tag, String msg) {
+    def stripped = stripTagSql(tag)
+    def tagged = (tag + ' ' + msg).replace("'", "''")
+    return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
+}
+
+params.blastNoHitMsg = 'BLAST returned no hits after all retries. Possible connection failure. Use -resume to retry.'
+
 params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
 params.sqlWriteBlastHitScaffold = 'UPDATE assemblies SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ? AND path = ? AND scaffold = ?'
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
+params.sqlWriteBlastNoHit = "UPDATE assemble SET " +
+    "assemble_switch = 3, " +
+    "assemble_notes = ${appendTaggedNoteSql('[blast]', params.blastNoHitMsg)}, " +
+    "poor_blast_ref = 'failed' " +
+    "WHERE ID = ? AND assemble_switch = 4"
 
 params.sqlReadBlastOpts =
     'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
@@ -17,7 +45,7 @@ params.sqlReadMinLen =
 workflow BLAST_GENBANK {
     take:
         // input: tuple(id, assembly_file_or_list, opts_id)
-        // WF1:          from ASSEMBLE.out[0] mapped to (id, it[1], it[4])
+        // WF1:          from ASSEMBLE.out.blast mapped to (id, it[1], it[4])
         // WF1_userAsmb: from COVERAGE_userAsmb.out.blast_in as (id, assembly, opts_id)
         input
 
@@ -35,11 +63,6 @@ workflow BLAST_GENBANK {
                 tuple(id, asmb_list, opts_id)
             }
             .set { normalized_input }
-
-        // Track all IDs entering this workflow so we can mark skipped samples as complete
-        normalized_input
-            .map { id, asmb_list, opts_id -> tuple(id, true) }
-            .set { all_ids }
 
         // Read per-sample min_assembly_length from DB
         channel.fromQuery(params.sqlReadMinLen, db: 'sqlite')
@@ -96,23 +119,34 @@ workflow BLAST_GENBANK {
 
         blast_genbank(blast_in_split.process)
             .multiMap { id, result_file ->
-                state:  tuple(id, result_file)
-                parse:  tuple(id, result_file)
+                state:     tuple(id, result_file)
+                parse:     tuple(id, result_file)
+                succeeded: tuple(id, true)
             }
             .set { blast_out }
 
-        // Write state=2 (WF1 complete) for samples that ran BLAST
+        // Write state=4 (BLAST done, ref fetch pending) for samples that ran BLAST successfully;
+        // state=2 is written by BLAST_REF_FETCH once the reference fetch also completes
         blast_out.state
-            .map { id, result_file -> tuple('2', id) }
+            .map { id, result_file -> tuple('4', id) }
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
 
-        // Write state=2 for samples that were filtered out before BLAST
-        // (no single qualifying scaffold >= min_assembly_length across all paths, or run_blast = 0)
-        all_ids
-            .join(blast_in_split.ids, remainder: true)
-            .filter { id, all_flag, blast_flag -> blast_flag == null }
-            .map { id, all_flag, blast_flag -> tuple('2', id) }
-            .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
+        // Detect NO HIT failures: IDs that entered BLAST but produced no output after all retries.
+        // The failure message is embedded in params.sqlWriteBlastNoHit (with [blast] tag)
+        // and the UPDATE is guarded WHERE assemble_switch = 4 so it can never
+        // overwrite a terminal state=3 row from ASSEMBLE.
+        blast_in_split.ids
+            .join(blast_out.succeeded, remainder: true)
+            .filter { id, blast_flag, success_flag -> success_flag == null }
+            .map { id, blast_flag, success_flag -> tuple(id) }
+            .sqlInsert(statement: params.sqlWriteBlastNoHit, db: 'sqlite')
+
+        // (Removed: the prior "filtered out → state=2" UPDATE raced with ASSEMBLE's
+        // state=4 UPDATE on samples whose assembly finished in the same instant as
+        // BLAST_GENBANK's batched skip-write. ASSEMBLE now finalizes state=2 directly
+        // for run_blast=0 samples, and the upstream max_len < min_assembly_length
+        // check covers the no-qualifying-scaffold case, so no BLAST_GENBANK skip
+        // write is needed.)
 
         // Parse all hits, round numeric fields. blast outfmt is now
         //   qseqid saccver stitle pident qcovs evalue

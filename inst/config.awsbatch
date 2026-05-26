@@ -43,6 +43,7 @@ params {
     publishDir = 'out'                      // Directory (or s3 bucket) to publish pipeline outputs
     minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
     genetic_code = <<GENETIC_CODE>>
+    ncbi_api_key = '<<NCBI_API_KEY>>'       // Optional NCBI API key for BLAST + GenBank fetch (https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
     aragorn_condaenv = 'aragorn'
@@ -81,6 +82,8 @@ params {
     }
     blast_gb {
         cpus = 1
+        maxForks = 10 // only allow 10 concurrent BLAST runs to avoid server timeout issues
+        maxRetries = 3
         memory = 8
         container = process.container
         executor = process.executor

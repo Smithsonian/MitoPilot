@@ -1,14 +1,22 @@
 include {assemble} from './assemble.nf'
 
+// run_blast comes from blast_opts via LEFT JOIN so a missing/NULL blast_opts
+// still flows through (treated as run_blast=1 by the default-null coalesce
+// in the multiMap below). This is read by ASSEMBLE so it can finalize
+// state=2 directly for run_blast=0 samples, eliminating the race with
+// BLAST_GENBANK's filtered-out write.
 params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.seeds_db, opts.labels_db, opts.getOrganelle, opts.assembler, ' +
                   'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
-                  'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length ' +
+                  'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length, ' +
+                  'b.run_blast ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
                   'JOIN samples s ' +
                   'ON a.ID = s.ID ' +
+                  'LEFT JOIN blast_opts b ' +
+                  'ON a.blast_opts = b.blast_opts ' +
                   'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
@@ -50,12 +58,14 @@ workflow ASSEMBLE {
                 )
                 min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
+                run_blast_lookup:  tuple(it[0], it[14] == null ? 1 : (it[14] as Integer))   // ID, run_blast (NULL → 1, i.e. BLAST by default)
             }
             .set { query_ch }
 
         query_ch.opts.set { assemble_opts }
         query_ch.min_len_scaffolds.set { min_len_lookup }
         query_ch.min_len_summary.set { min_len_summary }
+        query_ch.run_blast_lookup.set { run_blast_lookup }
 
         // Assemble Input Channel
         input
@@ -142,41 +152,54 @@ workflow ASSEMBLE {
             .set { summarized }
 
         // Apply user-configured thresholds: split into pass / fail branches
-        // Combine with min_len_summary so the all-short check can fire per-sample
+        // Combine with min_len_summary so the all-short check can fire per-sample,
+        // and with run_blast_lookup so ASSEMBLE can finalize state=2 directly for
+        // run_blast=0 samples (single-writer fix for the BLAST_GENBANK race).
         summarized
             .combine(min_len_summary, by: 0)
-            .branch { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
+            .combine(run_blast_lookup, by: 0)
+            .branch { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length, run_blast ->
                 fail: (n_paths > max_paths) || (n_scaffolds > max_scaffolds)
                 pass: true
             }
             .set { branched }
 
-        // PASS: write per-sample summary live, then propagate downstream
+        // PASS: classify each sample's status/notes and emit per channel.
+        // Only state=4 outcomes are propagated downstream; state=3 (terminal
+        // failures) and state=2 (run_blast=0 success) do not consume
+        // downstream BLAST/EFetch resources.
         branched.pass
-            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
+            .map { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length, run_blast ->
                 def status = '4'
                 def notes  = ''
                 if (n_scaffolds > 1) {
-                    notes = 'Output contains disconnected contigs'
                     def all_lengths_list = lengths_all ? lengths_all.split(';').collect { it as Integer } : []
                     def n_passing = all_lengths_list.count { it >= min_assembly_length }
-                    if (n_passing != 1) {
-                        topo_str = 'fragmented'
-                        status   = '3'
-                    }
+                    notes = (n_passing == 1)
+                        ? 'Output contains disconnected contigs'
+                        : 'Output contains disconnected contigs (fragmented)'
                 }
                 if (n_paths > 1) {
-                    notes  = 'Unable to resolve single assembly from reads'
-                    status = '3'
+                    notes = 'Unable to resolve single assembly from reads'
                 }
                 def max_len = length_str ? length_str.split(';').collect { it as Integer }.max() : 0
                 if (max_len < min_assembly_length) {
                     status = '3'
                     notes  = "All scaffolds below min assembly length (${min_assembly_length} bp)"
                 }
+                // Single-writer finalization for no_blast samples: if assembly
+                // succeeded (status still '4') AND BLAST is not requested,
+                // write state=2 directly so BLAST_GENBANK never has to race
+                // with ASSEMBLE's UPDATE on this row.
+                if (status == '4' && (run_blast as Integer) == 0) {
+                    status = '2'
+                }
+                tuple(id, n_paths, n_scaffolds, length_str, topo_str, raw, status, notes)
+            }
+            .multiMap { id, n_paths, n_scaffolds, length_str, topo_str, raw, status, notes ->
                 db_write:   tuple(n_paths, n_scaffolds, length_str, topo_str, status, notes, params.ts, id)
                 fasta:      tuple(id, raw[1])
-                downstream: raw
+                downstream: tuple(raw, status)
             }
             .set { pass_ch }
 
@@ -209,7 +232,7 @@ workflow ASSEMBLE {
 
         // FAIL (too many paths/scaffolds): write status=3 with reason, drop from downstream
         branched.fail
-            .map { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length ->
+            .map { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length, run_blast ->
                 def msg
                 if (n_paths > max_paths && n_scaffolds > max_scaffolds) {
                     msg = "${n_paths} assembly paths, exceeds limit (${max_paths}); ${n_scaffolds} scaffolds, exceeds limit (${max_scaffolds})"
@@ -269,7 +292,20 @@ workflow ASSEMBLE {
             .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, 1, 0, "no")', db: 'sqlite')
 
     emit:
-        // Only samples passing thresholds proceed to COVERAGE / BLAST_GENBANK
-        ch = pass_ch.downstream
+        // Two named channels with different gating:
+        //   cov   — samples with a usable assembly (status 4 OR status 2 from
+        //           run_blast=0). COVERAGE still runs for no_blast samples so
+        //           the per-scaffold depth/gc/errors columns get populated
+        //           and downstream ANNOTATE finds the coverageStats.csv.
+        //   blast — only status=4. State=2 (no_blast) and state=3 (terminal
+        //           assembly failure) are excluded so BLAST_GENBANK never
+        //           races with a finalized row and never wastes a remote
+        //           BLAST call on an unusable assembly.
+        cov   = pass_ch.downstream
+                    .filter { raw, status -> status == '4' || status == '2' }
+                    .map    { raw, status -> raw }
+        blast = pass_ch.downstream
+                    .filter { raw, status -> status == '4' }
+                    .map    { raw, status -> raw }
 
 }

@@ -213,7 +213,7 @@ pipeline_server_userAsmb <- function(id) {
           "#$ -cwd -j y",
           "#$ -q lTWFM.sq",
           "#$ -l wfmq",
-          "#$ -l mres=24G,h_data=24G,h_vmem=32G",
+          "#$ -l mres=24G,h_data=24G,h_vmem=64G",
           "#$ -pe mthread 1",
           "#$ -S /bin/sh",
           "",
