@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -165,7 +165,8 @@
 <span>  path <span class="op">=</span> <span class="st">"path/to/project"</span>,</span>
 <span>  mapping_fn <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
 <span>  data_path <span class="op">=</span> <span class="st">"path/to/raw_data"</span>,</span>
-<span>  executor <span class="op">=</span> <span class="st">"local"</span></span>
+<span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>
+<span>  ncbi_api_key <span class="op">=</span> <span class="st">"MY_NCBI_API_KEY"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <ul>
 <li>Path
@@ -199,6 +200,11 @@
 <li>Currently MitoPilot has built-in support four execution environments: local, AWS Batch, the Smithsonian Hydra cluster, or the NOAA SEDNA cluster. To use MitoPilot on a different computing environment, you can pass a custom Nextflow configuration to the <code><a href="reference/new_test_project.html">MitoPilot::new_test_project</a></code> function using the parameter <code>config = config.MyEnv</code>. (This feature is currently under development).</li>
 </ul>
 </li>
+<li>NCBI Api Key
+<ul>
+<li>We highly recommended <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">generating a NCBI API key</a> and providing it here during project initialization. This will increase the efficiency of the remote BLAST search and corresponding GenBank downloads during the Assemble module.</li>
+</ul>
+</li>
 </ul>
 <p><strong>NOTE</strong>: If running MitoPilot via RStudio Server on a computing cluster, you likely need to specify <code>Rproj = FALSE</code> when calling the <code><a href="reference/new_project.html">MitoPilot::new_project</a></code> function.</p>
 <div class="section level3">
@@ -226,8 +232,9 @@
 <span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">mapping_fn =</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
 <span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">data_path =</span> <span class="st">"path/to/raw_data"</span>,</span>
 <span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">assembly_path =</span> <span class="st">"path/to/mitogenome/assembly/fasta/files"</span></span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">executor =</span> <span class="st">"local"</span></span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">executor =</span> <span class="st">"local"</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="at">ncbi_api_key =</span> <span class="st">"MY_NCBI_API_KEY"</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>)</span></code></pre></div>
 <p>Note that all samples in a MitoPilot project created with <code><a href="reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> must have user-supplied assemblies. You cannot have MitoPilot project with mixed samples (i.e. some assembled, some unassembled).</p>
 </div>
 <div class="section level3">
@@ -260,7 +267,7 @@
 <div class="section level1">
 <h1 id="running-the-pipeline">Running The Pipeline<a class="anchor" aria-label="anchor" href="#running-the-pipeline"></a>
 </h1>
-<p>Once a project is initialized, the pipeline status can be viewed using the MitoPilot GUI. The GUI can be launched by running the <code><a href="reference/MitoPilot.html">MitoPilot()</a></code> command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assembly, Annotate, Export), where each row represents a sample in the project.</p>
+<p>Once a project is initialized, the pipeline status can be viewed using the MitoPilot GUI. The GUI can be launched by running the <code><a href="reference/MitoPilot.html">MitoPilot()</a></code> command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assemble, Annotate, Export), where each row represents a sample in the project.</p>
 <div class="section level2">
 <h2 id="sample-status">Sample Status<a class="anchor" aria-label="anchor" href="#sample-status"></a>
 </h2>

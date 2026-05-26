@@ -170,7 +170,8 @@ MitoPilot::new_project(
   path = "path/to/project",
   mapping_fn = "path/to/mapping_file.csv",
   data_path = "path/to/raw_data",
-  executor = "local"
+  executor = "local",
+  ncbi_api_key = "MY_NCBI_API_KEY"
 )
 ```
 
@@ -208,6 +209,12 @@ MitoPilot::new_project(
     [`MitoPilot::new_test_project`](https://smithsonian.github.io/MitoPilot/reference/new_test_project.md)
     function using the parameter `config = config.MyEnv`. (This feature
     is currently under development).
+- NCBI Api Key
+  - We highly recommended [generating a NCBI API
+    key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
+    and providing it here during project initialization. This will
+    increase the efficiency of the remote BLAST search and corresponding
+    GenBank downloads during the Assemble module.
 
 **NOTE**: If running MitoPilot via RStudio Server on a computing
 cluster, you likely need to specify `Rproj = FALSE` when calling the
@@ -245,7 +252,8 @@ MitoPilot::new_project_userAsmb(
   mapping_fn = "path/to/mapping_file.csv",
   data_path = "path/to/raw_data",
   assembly_path = "path/to/mitogenome/assembly/fasta/files"
-  executor = "local"
+  executor = "local",
+  ncbi_api_key = "MY_NCBI_API_KEY"
 )
 ```
 
@@ -332,7 +340,7 @@ the MitoPilot GUI. The GUI can be launched by running the
 [`MitoPilot()`](https://smithsonian.github.io/MitoPilot/reference/MitoPilot.md)
 command in the R console from the project directory. The GUI will open
 in a new browser window and is primarily comprised of an interactive
-table, with 3 modules (Assembly, Annotate, Export), where each row
+table, with 3 modules (Assemble, Annotate, Export), where each row
 represents a sample in the project.
 
 ## Sample Status
