@@ -128,9 +128,9 @@ MitoPilot::new_project(
 + Data Path
    - Full path to the data directory, which should contain the raw Illumina paired-end reads specified in the mapping file. 
 + Executor
-   - The executor specifies where the computational work will be performed by Nextflow. For example choosing `local` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.
+   - The executor specifies where the computational work will be performed by Nextflow. For example choosing `local` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory.
    - MitoPilot ships built-in templates for `local`, `awsbatch`, the Smithsonian Hydra cluster (`NMNH_Hydra`), the NOAA SEDNA cluster (`NOAA_SEDNA`), and **generic schedulers**: `slurm`, `sge`, `pbs`, and `lsf`.
-   - To run on your own HPC cluster, configure it once with `MitoPilot::generate_config()` and reuse it for every project. This saves a named profile (partition, account, container engine, etc.) that `new_project(executor = "<name>")` then finds automatically:
+   - To run on your own HPC cluster, use `MitoPilot::generate_config()` to build a custom configuration. This creates a named profile (partition, account, container engine, etc.) that `new_project(executor = "<name>")`finds automatically:
 
      ```r
      # configure once
@@ -144,9 +144,11 @@ MitoPilot::new_project(
 
      # reuse for any project
      MitoPilot::new_project(..., executor = "my_cluster")
+     
+     # see all available configs
+     MitoPilot::list_configs()
      ```
-
-     Run `MitoPilot::list_configs()` to see all available executor names (built-ins plus your saved profiles). You can still pass a fully custom Nextflow config with `config = "path/to/.config"`.
+    - You can also pass a fully custom Nextflow config with `config = "path/to/.config"`.
 + NCBI Api Key
   - We highly recommended [generating a NCBI API key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/) and providing it here during project initialization. This will increase the efficiency of the remote BLAST search and corresponding GenBank downloads during the Assemble module.
 

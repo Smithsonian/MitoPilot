@@ -201,15 +201,37 @@ MitoPilot::new_project(
     performed by Nextflow. For example choosing `local` will run the
     pipeline on the local machine, while `awsbatch` will run the
     pipeline on AWS Batch. Running `new_project()` will generate a
-    executor-specific .config file in the project directory that must be
-    edited to specify additional parameters for the pipeline to run.
-  - Currently MitoPilot has built-in support four execution
-    environments: local, AWS Batch, the Smithsonian Hydra cluster, or
-    the NOAA SEDNA cluster. To use MitoPilot on a different computing
-    environment, you can pass a custom Nextflow configuration to the
-    `MitoPilot::new_test_project` function using the parameter
-    `config = config.MyEnv`. (This feature is currently under
-    development).
+    executor-specific .config file in the project directory.
+
+  - MitoPilot ships built-in templates for `local`, `awsbatch`, the
+    Smithsonian Hydra cluster (`NMNH_Hydra`), the NOAA SEDNA cluster
+    (`NOAA_SEDNA`), and **generic schedulers**: `slurm`, `sge`, `pbs`,
+    and `lsf`.
+
+  - To run on your own HPC cluster, use `MitoPilot::generate_config()`
+    to build a custom configuration. This creates a named profile
+    (partition, account, container engine, etc.) that
+    `new_project(executor = "<name>")`finds automatically:
+
+    ``` r
+    # configure once
+    MitoPilot::generate_config(
+      name = "my_cluster",
+      scheduler = "slurm",
+      queue = "general",
+      account = "my_allocation",
+      container_engine = "apptainer"
+    )
+
+    # reuse for any project
+    MitoPilot::new_project(..., executor = "my_cluster")
+
+    # see all available configs
+    MitoPilot::list_configs()
+    ```
+
+  - You can also pass a fully custom Nextflow config with
+    `config = "path/to/.config"`.
 - NCBI Api Key
   - We highly recommended [generating a NCBI API
     key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
