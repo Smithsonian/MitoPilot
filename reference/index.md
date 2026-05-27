@@ -91,6 +91,9 @@
   : Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST
   top hit
 
+- [`generate_config()`](https://smithsonian.github.io/MitoPilot/reference/generate_config.md)
+  : Generate and save a reusable cluster config profile
+
 - [`get_assembly()`](https://smithsonian.github.io/MitoPilot/reference/get_assembly.md)
   : Get assembly from database
 
@@ -100,8 +103,14 @@
 - [`get_top_hits_local()`](https://smithsonian.github.io/MitoPilot/reference/get_top_hits_local.md)
   : Get top BLASTP hits
 
+- [`list_configs()`](https://smithsonian.github.io/MitoPilot/reference/list_configs.md)
+  : List available executor configs
+
 - [`make_PCG_alignments()`](https://smithsonian.github.io/MitoPilot/reference/make_PCG_alignments.md)
   : Generate HTML report woth PCG alignments
+
+- [`mitopilot_config_dir()`](https://smithsonian.github.io/MitoPilot/reference/mitopilot_config_dir.md)
+  : MitoPilot user config directory
 
 - [`new_db()`](https://smithsonian.github.io/MitoPilot/reference/new_db.md)
   : Initialize a new project database

@@ -41,8 +41,10 @@ new_test_project(
 
 - executor:
 
-  The executor to use for running the nextflow pipeline. Must be one of
-  "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
+  The executor to use for running the nextflow pipeline. A built-in
+  template ("local" (default), "awsbatch", "slurm", "sge", "pbs", "lsf",
+  "NMNH_Hydra", "NOAA_SEDNA") or a saved profile from
+  \[generate_config()\]. See \[list_configs()\].
 
 - container:
 

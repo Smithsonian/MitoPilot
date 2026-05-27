@@ -11,7 +11,7 @@ project for faster set up."><meta property="og:image" content="https://smithsoni
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -24,6 +24,7 @@ project for faster set up."><meta property="og:image" content="https://smithsoni
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">Custom HPC Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
     <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
@@ -86,8 +87,10 @@ pre-filtered input files will be fetched from the MitoPilot github repo.</p></dd
 
 
 <dt id="arg-executor">executor<a class="anchor" aria-label="anchor" href="#arg-executor"></a></dt>
-<dd><p>The executor to use for running the nextflow pipeline. Must
-be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".</p></dd>
+<dd><p>The executor to use for running the nextflow pipeline. A
+built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
+"lsf", "NMNH_Hydra", "NOAA_SEDNA") or a saved profile from
+[generate_config()]. See [list_configs()].</p></dd>
 
 
 <dt id="arg-container">container<a class="anchor" aria-label="anchor" href="#arg-container"></a></dt>

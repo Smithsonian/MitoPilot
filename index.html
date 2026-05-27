@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="articles/Custom-HPC.html">Custom HPC Setup</a></li>
     <li><a class="dropdown-item" href="articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
     <li><a class="dropdown-item" href="articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
@@ -196,8 +197,24 @@
 </li>
 <li>Executor
 <ul>
-<li>The executor specifies where the computational work will be performed by Nextflow. For example choosing <code>local</code> will run the pipeline on the local machine, while <code>awsbatch</code> will run the pipeline on AWS Batch. Running <code><a href="reference/new_project.html">new_project()</a></code> will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.</li>
-<li>Currently MitoPilot has built-in support four execution environments: local, AWS Batch, the Smithsonian Hydra cluster, or the NOAA SEDNA cluster. To use MitoPilot on a different computing environment, you can pass a custom Nextflow configuration to the <code><a href="reference/new_test_project.html">MitoPilot::new_test_project</a></code> function using the parameter <code>config = config.MyEnv</code>. (This feature is currently under development).</li>
+<li><p>The executor specifies where the computational work will be performed by Nextflow. For example choosing <code>local</code> will run the pipeline on the local machine, while <code>awsbatch</code> will run the pipeline on AWS Batch. Running <code><a href="reference/new_project.html">new_project()</a></code> will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.</p></li>
+<li><p>MitoPilot ships built-in templates for <code>local</code>, <code>awsbatch</code>, the Smithsonian Hydra cluster (<code>NMNH_Hydra</code>), the NOAA SEDNA cluster (<code>NOAA_SEDNA</code>), and <strong>generic schedulers</strong>: <code>slurm</code>, <code>sge</code>, <code>pbs</code>, and <code>lsf</code>.</p></li>
+<li>
+<p>To run on your own HPC cluster, configure it once with <code><a href="reference/generate_config.html">MitoPilot::generate_config()</a></code> and reuse it for every project. This saves a named profile (partition, account, container engine, etc.) that <code>new_project(executor = "&lt;name&gt;")</code> then finds automatically:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># configure once</span></span>
+<span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/generate_config.html">generate_config</a></span><span class="op">(</span></span>
+<span>  name <span class="op">=</span> <span class="st">"my_cluster"</span>,</span>
+<span>  scheduler <span class="op">=</span> <span class="st">"slurm"</span>,</span>
+<span>  queue <span class="op">=</span> <span class="st">"general"</span>,</span>
+<span>  account <span class="op">=</span> <span class="st">"my_allocation"</span>,</span>
+<span>  container_engine <span class="op">=</span> <span class="st">"apptainer"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># reuse for any project</span></span>
+<span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span><span class="va">...</span>, executor <span class="op">=</span> <span class="st">"my_cluster"</span><span class="op">)</span></span></code></pre></div>
+<p>Run <code><a href="reference/list_configs.html">MitoPilot::list_configs()</a></code> to see all available executor names (built-ins plus your saved profiles). You can still pass a fully custom Nextflow config with <code>config = "path/to/.config"</code>.</p>
+</li>
 </ul>
 </li>
 <li>NCBI Api Key
@@ -227,14 +244,14 @@
 </li>
 </ul>
 <p>All of your mitogenome FASTA files must be located in a single directory, which you will supply to the <code>assembly_path</code> argument of the <code><a href="reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> function.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>MitoPilot<span class="sc">::</span><span class="fu">new_project_userAsmb</span>(</span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="at">path =</span> <span class="st">"path/to/project"</span>,</span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">mapping_fn =</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">data_path =</span> <span class="st">"path/to/raw_data"</span>,</span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">assembly_path =</span> <span class="st">"path/to/mitogenome/assembly/fasta/files"</span></span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">executor =</span> <span class="st">"local"</span>,</span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="at">ncbi_api_key =</span> <span class="st">"MY_NCBI_API_KEY"</span></span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>MitoPilot<span class="sc">::</span><span class="fu">new_project_userAsmb</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="at">path =</span> <span class="st">"path/to/project"</span>,</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="at">mapping_fn =</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="at">data_path =</span> <span class="st">"path/to/raw_data"</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="at">assembly_path =</span> <span class="st">"path/to/mitogenome/assembly/fasta/files"</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="at">executor =</span> <span class="st">"local"</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="at">ncbi_api_key =</span> <span class="st">"MY_NCBI_API_KEY"</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>)</span></code></pre></div>
 <p>Note that all samples in a MitoPilot project created with <code><a href="reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> must have user-supplied assemblies. You cannot have MitoPilot project with mixed samples (i.e. some assembled, some unassembled).</p>
 </div>
 <div class="section level3">
@@ -247,7 +264,7 @@
 </h3>
 <p>MitoPilot makes use of the Nextflow plugin <a href="https://github.com/nextflow-io/nf-sqldb" class="external-link">nf-sqldb</a> to store and retrieve processing parameters and information about the samples and their processing status. The database (<code>.sqlite</code>) is created automatically when the project is initialized and is stored in the project directory.</p>
 <p>The interactive MitoPilot GUI also interacts with this database to allow you run the pipeline, modify parameters, and view the results. When initializing a new project, default processing parameters for the pipeline modules are stored in the database, but any processing parameters can also be passed to the <code><a href="reference/new_project.html">new_project()</a></code> function to modify the initial defaults. For example, the following options would modify the allocated memory and GetOrganelle command line options :</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  mapping <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
 <span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>

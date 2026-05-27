@@ -12,11 +12,13 @@ new_project(
   data_path = NULL,
   min_depth = 2e+06,
   genetic_code = 2,
-  executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
+  executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
+    "NOAA_SEDNA"),
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
   custom_seeds_db = NULL,
   custom_labels_db = NULL,
   config = NULL,
+  profile_dir = mitopilot_config_dir(),
   ncbi_api_key = NULL,
   Rproj = TRUE,
   force = FALSE,
@@ -60,8 +62,11 @@ new_project(
 
 - executor:
 
-  The executor to use for running the nextflow pipeline. Must be one of
-  "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
+  The executor to use for running the nextflow pipeline. May be a
+  built-in template ("local" (default), "awsbatch", "slurm", "sge",
+  "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a saved
+  cluster profile created with \[generate_config()\]. See
+  \[list_configs()\] for available names.
 
 - container:
 
@@ -80,6 +85,11 @@ new_project(
   (optional) provide a path to an existing custom nextflow config file.
   If not provided a config file template will be created based on the
   specified executor.
+
+- profile_dir:
+
+  Directory searched for saved cluster profiles when resolving
+  \`executor\` (default \[mitopilot_config_dir()\]).
 
 - ncbi_api_key:
 
