@@ -40,7 +40,14 @@ assemble_ui <- function(id) {
       ),
       inline = TRUE
     ),
-    reactableOutput(ns("table"))
+    reactableOutput(ns("table")),
+    div(
+      style = "margin-top: 12px; display: flex; gap: 8px;",
+      downloadButton(ns("export_selected"), "Export Selected to CSV",
+                     class = "btn-sm btn-default"),
+      downloadButton(ns("export_all"), "Export All to CSV",
+                     class = "btn-sm btn-default")
+    )
   )
 }
 
@@ -112,6 +119,7 @@ assemble_server <- function(id) {
         reactable(
           resizable = TRUE,
           filterable = TRUE,
+          striped = TRUE,
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
@@ -929,5 +937,32 @@ assemble_server <- function(id) {
       trigger("coverage_modal")
     })
     assembly_coverage_details_server(ns("coverage_details"), rv)
+
+    # CSV Export ----
+    .export_cols_drop <- c("ignore_flags", "min_assembly_length", "output", "view", "poor_blast_ref")
+
+    observe({
+      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
+    })
+
+    output$export_selected <- downloadHandler(
+      filename = function() paste0("assemble_selected_", Sys.Date(), ".csv"),
+      content = function(file) {
+        req(length(selected()) > 0)
+        rv$data |>
+          dplyr::slice(selected()) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
+
+    output$export_all <- downloadHandler(
+      filename = function() paste0("assemble_all_", Sys.Date(), ".csv"),
+      content = function(file) {
+        rv$data |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
   })
 }
