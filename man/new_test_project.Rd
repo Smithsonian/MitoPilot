@@ -27,8 +27,10 @@ Setting to TRUE will download the raw data from ENA, which will require
 10GB and will take some time to complete. By default a set of smaller
 pre-filtered input files will be fetched from the MitoPilot github repo.}
 
-\item{executor}{The executor to use for running the nextflow pipeline. Must
-be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
+\item{executor}{The executor to use for running the nextflow pipeline. A
+built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
+"lsf", "NMNH_Hydra", "NOAA_SEDNA") or a saved profile from
+[generate_config()]. See [list_configs()].}
 
 \item{container}{The container to use for running the pipeline.}
 

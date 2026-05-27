@@ -39,6 +39,7 @@ articles:
 - title: "Nextflow Executors"
   navbar: ~
   contents:
+  - 'Custom-HPC'
   - 'NMNH-Hydra'
   - 'NOAA-SEDNA'
 

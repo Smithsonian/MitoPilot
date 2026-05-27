@@ -9,16 +9,15 @@ executor {
     submitRateLimit = '10/1min'
 }
 
-singularity {
-  enabled = true
-}
+<<CONTAINER_ENGINE>>
 
 process {
   executor = 'slurm'
   container = '<<CONTAINER_ID>>'
-  queue = 'standard'
-  cpus = { opts.cpus } // set number of CPUs based on value pulled from SQL database
-  memory = { opts.memory.GB } // set amount of memory based on value pulled from SQL database
+  queue = '<<QUEUE>>'                 // SLURM partition (maps to -p)
+  clusterOptions = '<<CLUSTER_OPTIONS>>' // extra sbatch directives, e.g. --account=...
+  cpus = { opts.cpus }               // set number of CPUs based on value pulled from SQL database
+  memory = { opts.memory.GB * task.attempt } // set memory based on value pulled from SQL database
 }
 
 // SQL database configuration (https://github.com/nextflow-io/nf-sqldb)
@@ -30,6 +29,7 @@ sql {
   }
 }
 
+// Pipeline parameters
 params {
     rawDir = '<<RAW_DIR>>'                  // Directory containing raw data
     asmbDir = '<<ASMB_DIR>>'                // Directory containing user-supplied mitogenomes
@@ -50,16 +50,19 @@ params {
         executor = process.executor
     }
     coverage {
-		cpus = 4
+        cpus = 4
         memory = 8
+        clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor
     }
     annotate {
+        clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor
     }
     curate {
+        clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor
     }
@@ -70,12 +73,14 @@ params {
     blast_ref_align {
         cpus = 1
         memory = 8
+        clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor
     }
     blast_gb {
         cpus = 1
         memory = 8
+        clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor
     }
