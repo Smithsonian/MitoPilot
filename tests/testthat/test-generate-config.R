@@ -6,7 +6,7 @@ nf_executor <- function(path) {
 }
 
 test_that("generate_config saves a reusable slurm profile", {
-  pdir <- withr::local_tempdir()
+  pdir <- tempfile()
   out <- generate_config(
     name = "my_cluster",
     scheduler = "slurm",
@@ -37,7 +37,7 @@ test_that("generate_config saves a reusable slurm profile", {
 })
 
 test_that("list_configs reports built-ins and saved profiles", {
-  pdir <- withr::local_tempdir()
+  pdir <- tempfile()
   generate_config("clusterA", scheduler = "sge", profile_dir = pdir)
   cfgs <- list_configs(profile_dir = pdir)
   expect_true("clusterA" %in% cfgs$name)
@@ -47,7 +47,7 @@ test_that("list_configs reports built-ins and saved profiles", {
 })
 
 test_that("resolve_config prefers a saved profile over a built-in", {
-  pdir <- withr::local_tempdir()
+  pdir <- tempfile()
   # shadow the built-in 'slurm' name with a saved profile
   generate_config("slurm", scheduler = "slurm", queue = "q", profile_dir = pdir)
   resolved <- resolve_config("slurm", profile_dir = pdir)
@@ -55,12 +55,12 @@ test_that("resolve_config prefers a saved profile over a built-in", {
 })
 
 test_that("resolve_config errors on unknown executor", {
-  pdir <- withr::local_tempdir()
+  pdir <- tempfile()
   expect_error(resolve_config("does_not_exist", profile_dir = pdir), "No config found")
 })
 
 test_that("overwrite guard protects existing profiles", {
-  pdir <- withr::local_tempdir()
+  pdir <- tempfile()
   generate_config("dup", scheduler = "lsf", profile_dir = pdir)
   expect_error(generate_config("dup", scheduler = "lsf", profile_dir = pdir), "already exists")
   expect_silent(suppressMessages(
@@ -69,14 +69,14 @@ test_that("overwrite guard protects existing profiles", {
 })
 
 test_that("queue directive is dropped when no queue is given", {
-  pdir <- withr::local_tempdir()
+  pdir <- tempfile()
   out <- generate_config("noq", scheduler = "pbs", profile_dir = pdir)
   txt <- readLines(out)
   expect_false(any(grepl("queue =", txt, fixed = TRUE)))
 })
 
 test_that("each scheduler template produces the right executor", {
-  pdir <- withr::local_tempdir()
+  pdir <- tempfile()
   expect_equal(nf_executor(generate_config("s", "slurm", profile_dir = pdir)), "slurm")
   expect_equal(nf_executor(generate_config("g", "sge", profile_dir = pdir)), "sge")
   expect_equal(nf_executor(generate_config("p", "pbs", profile_dir = pdir)), "pbspro")
