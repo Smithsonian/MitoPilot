@@ -11,11 +11,13 @@ new_project(
   data_path = NULL,
   min_depth = 2e+06,
   genetic_code = 2,
-  executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
+  executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
+    "NOAA_SEDNA"),
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
   custom_seeds_db = NULL,
   custom_labels_db = NULL,
   config = NULL,
+  profile_dir = mitopilot_config_dir(),
   ncbi_api_key = NULL,
   Rproj = TRUE,
   force = FALSE,
@@ -44,8 +46,10 @@ with assembly (default: 2000000 reads)}
 \item{genetic_code}{Translation table for your organisms. See NCBI website
 for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
-\item{executor}{The executor to use for running the nextflow pipeline. Must
-be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
+\item{executor}{The executor to use for running the nextflow pipeline. May be
+a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
+"lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a saved cluster profile
+created with [generate_config()]. See [list_configs()] for available names.}
 
 \item{container}{The docker container to use for pipeline execution.}
 
@@ -56,6 +60,9 @@ be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".}
 \item{config}{(optional) provide a path to an existing custom nextflow config
 file. If not provided a config file template will be created based on the
 specified executor.}
+
+\item{profile_dir}{Directory searched for saved cluster profiles when
+resolving `executor` (default [mitopilot_config_dir()]).}
 
 \item{ncbi_api_key}{Optional NCBI API key string. Used to raise NCBI request
 rate limits for the remote BLAST + GenBank fetch steps. See

@@ -17,8 +17,10 @@
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
 #' @param genetic_code Translation table for your organisms. See NCBI website
 #'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
-#' @param executor The executor to use for running the nextflow pipeline. Must
-#'   be one of "local" (default) or "awsbatch", "NMNH_Hydra", or "NOAA_SEDNA".
+#' @param executor The executor to use for running the nextflow pipeline. May be
+#'   a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
+#'   "lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a saved cluster profile
+#'   created with [generate_config()]. See [list_configs()] for available names.
 #' @param Rproj (logical) Initialize and open an RStudio project in the project
 #'   directory (default = TRUE). This option has no effect if not running
 #'   interactively in RStudio.
@@ -27,6 +29,8 @@
 #' @param config (optional) provide a path to an existing custom nextflow config
 #'   file. If not provided a config file template will be created based on the
 #'   specified executor.
+#' @param profile_dir Directory searched for saved cluster profiles when
+#'   resolving `executor` (default [mitopilot_config_dir()]).
 #' @param container The docker container to use for pipeline execution.
 #' @param ncbi_api_key Optional NCBI API key string. Used to raise NCBI request
 #'   rate limits for the remote BLAST + GenBank fetch steps. See
@@ -44,9 +48,10 @@ new_project_userAsmb <- function(
     data_path = NULL,
     assembly_path = "NA",
     genetic_code = 2,
-    executor = c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
+    executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     config = NULL,
+    profile_dir = mitopilot_config_dir(),
     ncbi_api_key = NULL,
     Rproj = TRUE,
     force = FALSE,
@@ -79,8 +84,10 @@ new_project_userAsmb <- function(
   }
 
   # Validate executor ----
+  # Accepts a built-in template, a saved cluster profile (see generate_config),
+  # or an explicit `config` path. Resolution is deferred to resolve_config().
   executor <- executor[1]
-  if (is.null(executor) || executor %nin% c("local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA")) {
+  if (is.null(config) && (is.null(executor) || !nzchar(executor))) {
     stop("Invalid executor.")
   }
 
@@ -124,18 +131,22 @@ new_project_userAsmb <- function(
 
 
   # Config file ----
-  config <- config %||% app_sys(paste0("config.", executor))
+  # Resolve a saved profile / built-in template (or use an explicit path),
+  # then fill in the per-project placeholders.
+  config <- config %||% resolve_config(executor, profile_dir = profile_dir)
   if (!file.exists(config)) {
     stop("Config file not found.")
     return()
   }
   readLines(config) |>
-    stringr::str_replace("<<CONTAINER_ID>>", container %||% "<<CONTAINER_ID>>") |>
-    stringr::str_replace("<<RAW_DIR>>", data_path %||% "<<RAW_DIR>>") |>
-    stringr::str_replace("<<ASMB_DIR>>", assembly_path %||% "<<ASMB_DIR>>") |>
-    stringr::str_replace("<<MIN_DEPTH>>", format(2000000 %||% "<<MIN_DEPTH>>", scientific = F)) |>
-    stringr::str_replace("<<GENETIC_CODE>>", format(genetic_code %||% "<<GENETIC_CODE>>", scientific = F)) |>
-    stringr::str_replace("<<NCBI_API_KEY>>", ncbi_api_key %||% "") |>
+    fill_config(list(
+      CONTAINER_ID = container,
+      RAW_DIR = data_path,
+      ASMB_DIR = assembly_path,
+      MIN_DEPTH = format(2000000, scientific = FALSE),
+      GENETIC_CODE = format(genetic_code, scientific = FALSE),
+      NCBI_API_KEY = ncbi_api_key %||% ""
+    )) |>
     writeLines(file.path(path, ".config"))
 
   message("Project initialized successfully.")
