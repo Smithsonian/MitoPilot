@@ -6,7 +6,8 @@ MitoPilot ships built-in executor templates for `local`, `awsbatch`, the
 Smithsonian Hydra cluster (`NMNH_Hydra`), and the NOAA SEDNA cluster
 (`NOAA_SEDNA`). For any other cluster, MitoPilot includes **generic
 templates** for the four most common schedulers, plus a helper function
-to configure your cluster once and reuse it for every project.
+to build a Nextflow config for your cluster once and reuse it for every
+project.
 
 | Scheduler | `scheduler =` | Nextflow executor |
 |----|----|----|
