@@ -48,6 +48,13 @@ annotate_ui <- function(id) {
         uiOutput(ns("warnings_select"))
       ),
       reactable::reactableOutput(ns("table")),
+      div(
+        style = "margin-top: 12px; display: flex; gap: 8px;",
+        downloadButton(ns("export_selected"), "Export Selected to CSV",
+                       class = "btn-sm btn-default"),
+        downloadButton(ns("export_all"), "Export All to CSV",
+                       class = "btn-sm btn-default")
+      )
     )
   )
 }
@@ -160,6 +167,7 @@ annotate_server <- function(id) {
       reactable(
         data = isolate(filtered_data()),
         compact = TRUE,
+        striped = TRUE,
         language = reactable::reactableLang(
           noData = "No Completed / Locked Assemblies Found"
         ),
@@ -1006,5 +1014,32 @@ annotate_server <- function(id) {
       trigger("annotations_modal")
     })
     annotations_details_server(ns("annotations"), rv)
+
+    # CSV Export ----
+    .export_cols_drop <- c("output", "view", "poor_blast_ref", "warnings_details")
+
+    observe({
+      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
+    })
+
+    output$export_selected <- downloadHandler(
+      filename = function() paste0("annotate_selected_", Sys.Date(), ".csv"),
+      content = function(file) {
+        req(length(selected()) > 0)
+        rv$data |>
+          dplyr::slice(selected()) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
+
+    output$export_all <- downloadHandler(
+      filename = function() paste0("annotate_all_", Sys.Date(), ".csv"),
+      content = function(file) {
+        rv$data |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
   })
 }

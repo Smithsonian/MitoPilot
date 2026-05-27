@@ -123,15 +123,13 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     # Data lines only
     data_lines <- lines[!grepl("^#", lines) & nchar(trimws(lines)) > 0]
     if (length(data_lines) == 0) {
-      write_empty_ref()
-      return(invisible(NULL))
+      stop("GFF3 response has no data lines for accession ", accession, call. = FALSE)
     }
 
     fields <- strsplit(data_lines, "\t", fixed = TRUE)
     fields <- fields[vapply(fields, length, integer(1)) >= 9]
     if (length(fields) == 0) {
-      write_empty_ref()
-      return(invisible(NULL))
+      stop("GFF3 response has no tab-separated feature lines for accession ", accession, call. = FALSE)
     }
 
     df <- data.frame(
@@ -253,8 +251,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
 
     df <- df[!is.na(df$type), ]
     if (nrow(df) == 0) {
-      write_empty_ref()
-      return(invisible(NULL))
+      stop("GFF3 has no recognized mitochondrial features for accession ", accession, call. = FALSE)
     }
 
     # Best available name for each row
@@ -323,11 +320,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
 
   }, error = function(e) {
     msg <- conditionMessage(e)
-    if (grepl("429|503|500|timed out|timeout", msg, ignore.case = TRUE)) {
-      stop(msg, call. = FALSE)
-    }
     message("fetch_blast_ref error for ", accession, ": ", msg)
-    write_empty_ref()
+    stop(msg, call. = FALSE)
   })
 
   # Signal failure to Nextflow so the process can retry on transient FASTA fetch errors

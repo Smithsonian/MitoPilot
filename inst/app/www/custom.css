@@ -140,3 +140,11 @@ details[open] summary {
   min-width: 600px;
   max-width: 50%;
 }
+
+.rt-tr-striped:not(.rt-tr-selected) {
+  background-color: #ebebeb !important;
+}
+
+.rt-tr-striped-sticky:not(.rt-tr-selected) {
+  background-color: #e4e4e4 !important;
+}

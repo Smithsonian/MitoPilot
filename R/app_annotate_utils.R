@@ -73,6 +73,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession) |>
     dplyr::mutate(
+      ID_verified = dplyr::coalesce(ID_verified, "no"),
       output = dplyr::case_when(
         annotate_switch > 1 ~ "output",
         .default = NA_character_
