@@ -129,7 +129,24 @@ MitoPilot::new_project(
    - Full path to the data directory, which should contain the raw Illumina paired-end reads specified in the mapping file. 
 + Executor
    - The executor specifies where the computational work will be performed by Nextflow. For example choosing `local` will run the pipeline on the local machine, while `awsbatch` will run the pipeline on AWS Batch. Running `new_project()` will generate a executor-specific .config file in the project directory that must be edited to specify additional parameters for the pipeline to run.
-   - Currently MitoPilot has built-in support four execution environments: local, AWS Batch, the Smithsonian Hydra cluster, or the NOAA SEDNA cluster. To use MitoPilot on a different computing environment, you can pass a custom Nextflow configuration to the `MitoPilot::new_test_project` function using the parameter `config = config.MyEnv`. (This feature is currently under development).
+   - MitoPilot ships built-in templates for `local`, `awsbatch`, the Smithsonian Hydra cluster (`NMNH_Hydra`), the NOAA SEDNA cluster (`NOAA_SEDNA`), and **generic schedulers**: `slurm`, `sge`, `pbs`, and `lsf`.
+   - To run on your own HPC cluster, configure it once with `MitoPilot::generate_config()` and reuse it for every project. This saves a named profile (partition, account, container engine, etc.) that `new_project(executor = "<name>")` then finds automatically:
+
+     ```r
+     # configure once
+     MitoPilot::generate_config(
+       name = "my_cluster",
+       scheduler = "slurm",
+       queue = "general",
+       account = "my_allocation",
+       container_engine = "apptainer"
+     )
+
+     # reuse for any project
+     MitoPilot::new_project(..., executor = "my_cluster")
+     ```
+
+     Run `MitoPilot::list_configs()` to see all available executor names (built-ins plus your saved profiles). You can still pass a fully custom Nextflow config with `config = "path/to/.config"`.
 + NCBI Api Key
   - We highly recommended [generating a NCBI API key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/) and providing it here during project initialization. This will increase the efficiency of the remote BLAST search and corresponding GenBank downloads during the Assemble module.
 
@@ -219,8 +236,3 @@ Alternatively, the Nextflow command displayed in the popup can be copied and run
   - This package uses [{renv}]() for package management. After cloning the repository, run `renv::restore()` to install the necessary packages.
   - To work from the package repository, but reference a MitoPilot project in a different directory, set the `MitoPilot.db` option to the location of the `.sqlite` database for the project (e.g. `options("MitoPilot.db" = "~/Jonah/MitoPilot-testing/.sqlite")`).
   - When modifying the underlying R-package functions references in the Nextflow pipeline, or modifying / adding reference databases specified in `docker/Dockerfile`, the docker image should be rebuilt. The `docker/deploy-local.sh` script can be used to build a local image, or the `docker/deploy-aws.sh` and `docker/deploy-dockerhub.sh` scripts can be modified to deploy a remote image to your account. In any case, the Nextflow `.config` file should be modified such that one or more of the processing steps reference the new image.
-
-
-
-
-

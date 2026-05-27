@@ -18,4 +18,7 @@ inst/doc
 /Meta/
 /docker/MitoPilot*
 .vscode
+CLAUDE.md
+.claude
+.codex
 .positai
