@@ -406,12 +406,17 @@ annotations_details_server <- function(id, rv) {
         ggplot2::theme(
           legend.position = "none",
           axis.title = ggplot2::element_blank(),
-          axis.text.y = ggplot2::element_blank(),
-          axis.ticks.y = ggplot2::element_blank(),
+          axis.text  = ggplot2::element_blank(),
+          axis.ticks = ggplot2::element_blank(),
           plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
         )
 
       y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
+      cov_max  <- max(rv$coverage$Position)
+      tick_x   <- seq(50, cov_max, by = 50)
+      depth_rng <- range(rv$coverage$Depth)
+      y_top    <- depth_rng[2]
+      y_tick   <- depth_rng[2] - diff(depth_rng) * 0.04
       rv$coverage_plot <- rv$coverage |>
         dplyr::mutate(
           # Zero-depth end-fill positions have NA ErrorRate; NA Errors drops the
@@ -437,6 +442,12 @@ annotations_details_server <- function(id, rv) {
           linewidth = 1,
           ggplot2::aes(xintercept = Position, color = Errors)
         ) +
+        ggplot2::geom_segment(
+          data = data.frame(x = tick_x),
+          ggplot2::aes(x = x, xend = x, y = y_top, yend = y_tick),
+          inherit.aes = FALSE,
+          color = "#00000080", linewidth = 0.3
+        ) +
         ggplot2::geom_line() +
         ggplot2::scale_color_manual(values = c("#00000000", "#FF667040")) +
         ggplot2::scale_y_continuous(breaks = y_breaks) +
@@ -446,16 +457,15 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = seq(50, max(rv$coverage$Position), by = 50)
+          breaks = NULL
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
         ggplot2::theme(
           legend.position = "none",
           axis.title = ggplot2::element_blank(),
-          axis.text = ggplot2::element_blank(),
-          axis.ticks.y = ggplot2::element_blank(),
-          axis.ticks.length.x = ggplot2::unit(2, "mm"),
+          axis.text  = ggplot2::element_blank(),
+          axis.ticks = ggplot2::element_blank(),
           panel.grid.major.y = ggplot2::element_line(
             linetype = "dotted", color = "#00000050"
           ),

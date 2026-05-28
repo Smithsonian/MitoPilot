@@ -79,7 +79,7 @@ annotate <- function(
       coverage_trimmed <- assembly |> purrr::imap(~ {
         stats <- coverage[coverage$SeqId == stringr::str_extract(.y, "\\S+"), ]
         # Skip for circular assemblies
-        if (stringr::str_detect("circular", .y)) {
+        if (stringr::str_detect(.y, "circular")) {
           return(list(assembly = .x, stats = stats))
         }
         coverage_trim(assembly = .x, stats = stats)
