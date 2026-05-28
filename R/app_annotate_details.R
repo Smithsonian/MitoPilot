@@ -446,7 +446,7 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = seq(1000, max(rv$coverage$Position), by = 1000)
+          breaks = seq(50, max(rv$coverage$Position), by = 50)
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
@@ -454,7 +454,8 @@ annotations_details_server <- function(id, rv) {
           legend.position = "none",
           axis.title = ggplot2::element_blank(),
           axis.text = ggplot2::element_blank(),
-          axis.ticks = ggplot2::element_blank(),
+          axis.ticks.y = ggplot2::element_blank(),
+          axis.ticks.length.x = ggplot2::unit(2, "mm"),
           panel.grid.major.y = ggplot2::element_line(
             linetype = "dotted", color = "#00000050"
           ),
