@@ -458,7 +458,7 @@ annotations_details_server <- function(id, rv) {
           panel.grid.major.y = ggplot2::element_line(
             linetype = "dotted", color = "#00000050"
           ),
-          plot.margin = ggplot2::margin(0, 0, 0, 2, "mm")
+          plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
         )
       # plot with dynamic width
       #plotOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")  # OLD CODE, problems with Cairo
@@ -487,11 +487,19 @@ annotations_details_server <- function(id, rv) {
     # }, deleteFile = TRUE)
     # OLD CODE, problems with Cairo
     # maybe stable now?
-    output$coverage_plot <- renderPlot({
-     req(rv$coverage_plot, rv$coverage)
-     combined_plot <- rv$coverage_plot / rv$genes_plot + plot_layout(heights = c(3, 1))
-       print(combined_plot)
-    })
+    output$coverage_plot <- renderPlot(
+      {
+        req(rv$coverage_plot, rv$coverage)
+        combined_plot <- cowplot::plot_grid(
+          rv$coverage_plot, rv$genes_plot,
+          ncol = 1, align = "v", axis = "lr",
+          rel_heights = c(3, 1)
+        )
+        print(combined_plot)
+      },
+      width  = function() rv$updating$length,
+      height = 125
+    )
     # BLAST Reference Synteny ----
     output$synteny_ui <- renderUI({
       req(rv$blast_ref, rv$updating)
@@ -2953,10 +2961,22 @@ annotations_details_server <- function(id, rv) {
 annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   ns <- session$ns
 
+  topo      <- rv$updating$topology %||% "unknown"
+  topo_icon <- switch(topo, circular = "↺", linear = "↔", "?")
+  topo_badge <- span(
+    style = paste0(
+      "background:", if (topo == "circular") "#cce5ff" else if (topo == "linear") "#fff3cd" else "#e9ecef", ";",
+      "color:",      if (topo == "circular") "#004085" else if (topo == "linear") "#856404" else "#6c757d", ";",
+      "border-radius:3px;padding:2px 8px;font-size:0.75em;font-weight:600;white-space:nowrap;"
+    ),
+    paste(topo_icon, toupper(topo))
+  )
+
   modalDialog(
     title = div(
       style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
       span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
+      topo_badge,
       uiOutput(ns("status_badges"), inline = TRUE)
     ),
     size = "l",
@@ -3041,7 +3061,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         tags$span(
           style = "display: inline-block; width: 10px; height: 10px; background: #FF667040; vertical-align: middle; margin-right: 4px;"
         ),
-        "Red bars mark positions with mean error rate > 5% (possible sequencing or assembly errors)."
+        "mean error rate > 5% (possible sequencing or assembly errors)."
       ),
       div(
         id = ns("coverageDiv"),

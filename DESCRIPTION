@@ -19,6 +19,7 @@ Imports:
     BiocGenerics,
     Biostrings,
     config,
+    cowplot,
     crayon,
     DBI,
     dbplyr,
