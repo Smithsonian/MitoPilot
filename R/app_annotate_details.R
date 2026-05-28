@@ -403,15 +403,21 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = seq(1000, max(rv$coverage$Position), by = 1000)
+          breaks = seq(1000, max(rv$coverage$Position), by = 1000),
+          labels = format(seq(1000, max(rv$coverage$Position), by = 1000), big.mark = ",")
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
         ggplot2::theme(
           legend.position = "none",
-          axis.title = ggplot2::element_blank(),
-          axis.text  = ggplot2::element_blank(),
-          axis.ticks = ggplot2::element_blank(),
+          axis.title  = ggplot2::element_blank(),
+          axis.text.y = ggplot2::element_blank(),
+          # Match coverage plot's bottom-axis bounding box (invisible) so cowplot
+          # align="lr" doesn't pad either panel.
+          axis.text.x = ggplot2::element_text(size = 7, color = NA),
+          axis.ticks.y = ggplot2::element_blank(),
+          axis.ticks.x = ggplot2::element_line(color = NA, linewidth = 0.4),
+          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
           plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
         )
 
@@ -420,9 +426,9 @@ annotations_details_server <- function(id, rv) {
       minor_tick_x <- setdiff(seq(50, cov_max, by = 50), seq(1000, cov_max, by = 1000))
       major_tick_x <- seq(1000, cov_max, by = 1000)
       depth_rng    <- range(rv$coverage$Depth)
-      y_top        <- depth_rng[2]
-      y_tick_minor <- depth_rng[2] - diff(depth_rng) * 0.04
-      y_tick_major <- depth_rng[2] - diff(depth_rng) * 0.10
+      y_bottom     <- depth_rng[1]
+      y_tick_minor <- depth_rng[1] + diff(depth_rng) * 0.04
+      major_tick_labels <- format(major_tick_x, big.mark = ",")
 
       # Bin coverage to ~one point per output pixel (max-depth per bin) to
       # cut geom_line vertex count on huge mitogenomes — visually lossless
@@ -465,15 +471,9 @@ annotations_details_server <- function(id, rv) {
         ) +
         ggplot2::geom_segment(
           data = data.frame(x = minor_tick_x),
-          ggplot2::aes(x = x, xend = x, y = y_top, yend = y_tick_minor),
+          ggplot2::aes(x = x, xend = x, y = y_bottom, yend = y_tick_minor),
           inherit.aes = FALSE,
           color = "#00000060", linewidth = 0.3
-        ) +
-        ggplot2::geom_segment(
-          data = data.frame(x = major_tick_x),
-          ggplot2::aes(x = x, xend = x, y = y_top, yend = y_tick_major),
-          inherit.aes = FALSE,
-          color = "#000000B0", linewidth = 0.5
         ) +
         ggplot2::geom_line() +
         ggplot2::scale_y_continuous(breaks = y_breaks) +
@@ -483,15 +483,19 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = NULL
+          breaks = major_tick_x,
+          labels = major_tick_labels
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
         ggplot2::theme(
           legend.position = "none",
           axis.title = ggplot2::element_blank(),
-          axis.text  = ggplot2::element_blank(),
-          axis.ticks = ggplot2::element_blank(),
+          axis.text.y = ggplot2::element_blank(),
+          axis.text.x = ggplot2::element_text(size = 7, color = "#000000B0"),
+          axis.ticks.y = ggplot2::element_blank(),
+          axis.ticks.x = ggplot2::element_line(color = "#000000B0", linewidth = 0.4),
+          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
           panel.grid.major.y = ggplot2::element_line(
             linetype = "dotted", color = "#00000050"
           ),
