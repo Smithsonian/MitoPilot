@@ -475,41 +475,32 @@ annotations_details_server <- function(id, rv) {
       #plotOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")  # OLD CODE, problems with Cairo
       shiny::imageOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")
     })
-    # possible fix for CAIRO error, but problems with JPEG libs on Hydra
-    # output$coverage_plot <- shiny::renderImage({
-    #   req(rv$coverage_plot, rv$coverage)
-    #
-    #   # Temporary file with .jpg extension
-    #   outfile <- tempfile(fileext = ".jpg")
-    #
-    #   # Save the combined plot as JPEG
-    #   grDevices::jpeg(outfile, width = rv$updating$length, height = 150, units = "px", quality = 100)
-    #   combined_plot <- rv$coverage_plot / rv$genes_plot + patchwork::plot_layout(heights = c(3, 1))
-    #   print(combined_plot)
-    #   dev.off()
-    #
-    #   list(
-    #     src = outfile,
-    #     contentType = "image/jpeg",
-    #     width = rv$updating$length,
-    #     height = 150,
-    #     alt = "Coverage Map"
-    #   )
-    # }, deleteFile = TRUE)
-    # OLD CODE, problems with Cairo
-    # maybe stable now?
-    output$coverage_plot <- renderPlot(
+    # Use renderImage + ragg::agg_png to bypass Cairo's per-dimension image
+    # surface limit (~16384 px on common libcairo builds), which silently
+    # truncated the right edge of large mitogenome plots under renderPlot.
+    output$coverage_plot <- shiny::renderImage(
       {
         req(rv$coverage_plot, rv$coverage)
+        w <- rv$updating$length
+        h <- 125L
+        outfile <- tempfile(fileext = ".png")
+        ragg::agg_png(outfile, width = w, height = h, units = "px", res = 72)
         combined_plot <- cowplot::plot_grid(
           rv$coverage_plot, rv$genes_plot,
           ncol = 1, align = "v", axis = "lr",
           rel_heights = c(3, 1)
         )
         print(combined_plot)
+        dev.off()
+        list(
+          src = outfile,
+          contentType = "image/png",
+          width = w,
+          height = h,
+          alt = "Coverage map"
+        )
       },
-      width  = function() rv$updating$length,
-      height = 125
+      deleteFile = TRUE
     )
     # BLAST Reference Synteny ----
     output$synteny_ui <- renderUI({
