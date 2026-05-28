@@ -413,23 +413,44 @@ annotations_details_server <- function(id, rv) {
 
       y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
       cov_max  <- max(rv$coverage$Position)
-      tick_x   <- seq(50, cov_max, by = 50)
-      depth_rng <- range(rv$coverage$Depth)
-      y_top    <- depth_rng[2]
-      y_tick   <- depth_rng[2] - diff(depth_rng) * 0.04
-      rv$coverage_plot <- rv$coverage |>
-        dplyr::mutate(
-          # Zero-depth end-fill positions have NA ErrorRate; NA Errors drops the
-          # background vline so the plot looks truncated. Treat NA as no error.
-          Errors = !is.na(ErrorRate) & ErrorRate > 0.05
-        ) |>
-        ggplot2::ggplot() +
+      minor_tick_x <- setdiff(seq(50, cov_max, by = 50), seq(1000, cov_max, by = 1000))
+      major_tick_x <- seq(1000, cov_max, by = 1000)
+      depth_rng    <- range(rv$coverage$Depth)
+      y_top        <- depth_rng[2]
+      y_tick_minor <- depth_rng[2] - diff(depth_rng) * 0.04
+      y_tick_major <- depth_rng[2] - diff(depth_rng) * 0.10
+
+      # Bin coverage to ~one point per output pixel (max-depth per bin) to
+      # cut geom_line vertex count on huge mitogenomes — visually lossless
+      # at 1px/bp display, ~10x faster path stroke.
+      target_pts  <- min(nrow(rv$coverage), 4000L)
+      bin_size    <- max(1L, ceiling(cov_max / target_pts))
+      cov_line_df <- rv$coverage |>
+        dplyr::mutate(.bin = ((Position - 1L) %/% bin_size) * bin_size + 1L) |>
+        dplyr::summarise(Depth = max(Depth), .by = .bin) |>
+        dplyr::rename(Position = .bin) |>
+        dplyr::arrange(Position)
+
+      # Only positions flagged as Errors get a red vline; everything else is
+      # invisible so emit no geom for them (drawing 16k transparent vlines was
+      # the dominant render cost).
+      err_df <- rv$coverage |>
+        dplyr::filter(!is.na(ErrorRate) & ErrorRate > 0.05) |>
+        dplyr::select(Position)
+
+      rv$coverage_plot <- ggplot2::ggplot(cov_line_df) +
         ggplot2::aes(x = Position, y = Depth) +
+        ggplot2::geom_vline(
+          data = err_df,
+          ggplot2::aes(xintercept = Position),
+          inherit.aes = FALSE,
+          color = "#FF667040", linewidth = 1
+        ) +
         ggplot2::geom_label(
           data = data.frame(
-            x = rep(seq(1000, max(rv$coverage$Position), by = 1000), length(y_breaks)),
-            y = rep(y_breaks, each = length(seq(1000, max(rv$coverage$Position), by = 1000))),
-            label = rep(y_breaks, each = length(seq(1000, max(rv$coverage$Position), by = 1000)))
+            x = rep(major_tick_x, length(y_breaks)),
+            y = rep(y_breaks, each = length(major_tick_x)),
+            label = rep(y_breaks, each = length(major_tick_x))
           ),
           ggplot2::aes(x = x, y = y, label = label),
           inherit.aes = FALSE,
@@ -438,18 +459,19 @@ annotations_details_server <- function(id, rv) {
           label.size = 0,
           size = 3
         ) +
-        ggplot2::geom_vline(
-          linewidth = 1,
-          ggplot2::aes(xintercept = Position, color = Errors)
+        ggplot2::geom_segment(
+          data = data.frame(x = minor_tick_x),
+          ggplot2::aes(x = x, xend = x, y = y_top, yend = y_tick_minor),
+          inherit.aes = FALSE,
+          color = "#00000060", linewidth = 0.3
         ) +
         ggplot2::geom_segment(
-          data = data.frame(x = tick_x),
-          ggplot2::aes(x = x, xend = x, y = y_top, yend = y_tick),
+          data = data.frame(x = major_tick_x),
+          ggplot2::aes(x = x, xend = x, y = y_top, yend = y_tick_major),
           inherit.aes = FALSE,
-          color = "#00000080", linewidth = 0.3
+          color = "#000000B0", linewidth = 0.5
         ) +
         ggplot2::geom_line() +
-        ggplot2::scale_color_manual(values = c("#00000000", "#FF667040")) +
         ggplot2::scale_y_continuous(breaks = y_breaks) +
         ggplot2::scale_x_continuous(
           expand = c(0, 0),
@@ -585,7 +607,7 @@ annotations_details_server <- function(id, rv) {
             id = ns("syntenyScrollDiv"),
             style = paste0("overflow-x: auto; flex: 1;",
                            if (has_aln) " cursor: zoom-in;" else ""),
-            plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
+            imageOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
                        click = ns("synteny_click"))
           )
         ),
@@ -617,10 +639,12 @@ annotations_details_server <- function(id, rv) {
         )
       )
     })
-    output$synteny_plot <- renderPlot({
+    output$synteny_plot <- shiny::renderImage(
+      {
       req(rv$blast_ref, rv$annotations, rv$coverage)
       req(nrow(rv$blast_ref) > 0)
 
+      img_w <- max(rv$updating$length %||% 800L, 800L)
       ref_length   <- rv$blast_ref$ref_length[1]
       sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
       sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
@@ -649,6 +673,11 @@ annotations_details_server <- function(id, rv) {
       has_aln <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
+
+      img_h <- if (has_aln) 280L else 200L
+      outfile <- tempfile(fileext = ".png")
+      ragg::agg_png(outfile, width = img_w, height = img_h, units = "px", res = 72)
+      on.exit(if (!is.null(dev.list())) dev.off(), add = TRUE)
 
       if (has_aln) {
         aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
@@ -698,10 +727,11 @@ annotations_details_server <- function(id, rv) {
         # rendering artifacts at overview scale.
         win      <- min(10L, aln_len)
         is_match <- as.integer(aln_class == "match")
-        n_wins   <- aln_len - win + 1L
-        win_pct  <- vapply(seq_len(n_wins), function(i) {
-          mean(is_match[i:(i + win - 1L)]) * 100
-        }, numeric(1))
+        # stats::filter does the rolling mean in C; ~20x faster than vapply for
+        # mitogenome-scale alignments.
+        win_pct  <- as.numeric(stats::filter(is_match, rep(1 / win, win), sides = 1)) * 100
+        win_pct  <- win_pct[!is.na(win_pct)]
+        n_wins   <- length(win_pct)
         # Pad x=0 and x=100 with edge values to fill to plot boundaries
         aln_win_df <- data.frame(
           x = c(0, (seq_len(n_wins) + win / 2 - 0.5) / aln_len * 100, 100),
@@ -774,7 +804,17 @@ annotations_details_server <- function(id, rv) {
                        fill = type, y = 0, label = gene) + gene_track
         print(sample_plot / ref_plot + patchwork::plot_layout(heights = c(1, 1)))
       }
-    })
+      dev.off()
+      list(
+        src = outfile,
+        contentType = "image/png",
+        width = img_w,
+        height = img_h,
+        alt = "Synteny plot"
+      )
+      },
+      deleteFile = TRUE
+    )
 
     # Zoomed base-pair view of selected gene's alignment region ----
     output$synteny_zoom_ui <- renderUI({
