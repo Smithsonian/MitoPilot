@@ -414,7 +414,9 @@ annotations_details_server <- function(id, rv) {
       y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
       rv$coverage_plot <- rv$coverage |>
         dplyr::mutate(
-          Errors = ErrorRate > 0.05
+          # Zero-depth end-fill positions have NA ErrorRate; NA Errors drops the
+          # background vline so the plot looks truncated. Treat NA as no error.
+          Errors = !is.na(ErrorRate) & ErrorRate > 0.05
         ) |>
         ggplot2::ggplot() +
         ggplot2::aes(x = Position, y = Depth) +
@@ -700,6 +702,7 @@ annotations_details_server <- function(id, rv) {
           ggplot2::aes(x = x, y = y)
         ) +
           ggplot2::geom_area(fill = "#60BD68", colour = NA) +
+          ggplot2::geom_line(colour = "#60BD68") +
           ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) +
           ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 100)) +
           ggplot2::coord_cartesian(clip = "off") +
@@ -3033,6 +3036,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     tags$hr(style = "margin: 4px 0; border: none; border-top: 1px solid #e0e0e0;"),
     tags$details(
       tags$summary("Coverage Map"),
+      div(
+        style = "padding: 2px 5mm 0 5mm; font-size: 0.85em; color: #555;",
+        tags$span(
+          style = "display: inline-block; width: 10px; height: 10px; background: #FF667040; vertical-align: middle; margin-right: 4px;"
+        ),
+        "Red bars mark positions with mean error rate > 5% (possible sequencing or assembly errors)."
+      ),
       div(
         id = ns("coverageDiv"),
         style = "width: 100%; overflow-x: auto; padding: 5mm;",
