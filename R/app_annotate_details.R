@@ -1228,7 +1228,7 @@ annotations_details_server <- function(id, rv) {
         }
         focal_set <- Biostrings::AAStringSet(focal)
         new_alignment$aln <- DECIPHER::AlignProfiles(
-          focal_set, ref_msa_cache$msa, verbose = FALSE
+          focal_set, ref_msa_cache$msa
         )
         new_alignment$alignmentHeight <- 20 + (length(new_alignment$seqs) * 20)
         new_alignment$id <- stringr::str_glue(
