@@ -34,6 +34,8 @@ app_server_userAsmb <- function(input, output, session) {
     stringr::str_extract("genetic_code.*") |>
     na.omit() |>
     stringr::str_extract("[0-9]+$")
+  # Cache the genetic code lookup table once; called ~30x during codon edits.
+  session$userData$gcode <- Biostrings::getGeneticCode(session$userData$genetic_code)
 
   # View mode ----
   observeEvent(input$mode, {

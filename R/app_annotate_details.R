@@ -272,6 +272,8 @@ annotations_details_server <- function(id, rv) {
           return(rv$editing$idx)
         }
         rv$alignment <- rv$local_hits <- NULL
+        ref_msa_cache$msa <- NULL
+        ref_msa_cache$key <- NULL
         if (rv$annotations$type[sel] == "PCG" & length(rv$alignment) != 0) {
           trigger("align_now")
         } else {
@@ -344,6 +346,8 @@ annotations_details_server <- function(id, rv) {
       rv$alignment <- NULL
       rv$coverage_width <- NULL
       rv$editing <- NULL
+      ref_msa_cache$msa <- NULL
+      ref_msa_cache$key <- NULL
       trigger("update_annotate_table")
       removeModal()
     })
@@ -1166,6 +1170,12 @@ annotations_details_server <- function(id, rv) {
     })
 
     # MSA ----
+    # Non-reactive cache for the reference-only MSA. Avoids re-running
+    # DECIPHER::AlignSeqs(refs) on every codon edit (refs don't change).
+    ref_msa_cache <- new.env(parent = emptyenv())
+    ref_msa_cache$msa <- NULL
+    ref_msa_cache$key <- NULL
+
     init("align_now")
     observeEvent(input$align, ignoreInit = T, {
       shinyWidgets::updatePrettyCheckbox(
@@ -1174,12 +1184,17 @@ annotations_details_server <- function(id, rv) {
       )
       trigger("align_now")
     })
-    on("align_now", {
+    # Debounce align_now: rapid codon-edit clicks collapse into one MSA rebuild
+    # after the user pauses for ~250ms.
+    align_now_dbnc <- shiny::debounce(
+      shiny::reactive(gargoyle::watch("align_now")),
+      250
+    )
+    observeEvent(align_now_dbnc(), ignoreInit = TRUE, {
       # check if user wants to use fewer reference samples in alignment
       if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
 
       req(rv$annotations$type[selected()] == "PCG")
-      rv$alignment <- NULL
 
       hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE) |>
         dplyr::slice_head(n = n_hits)
@@ -1187,47 +1202,51 @@ annotations_details_server <- function(id, rv) {
       focal <- rv$annotations$translation[selected()] |>
         setNames(paste(rv$annotations$gene[selected()], "(focal)"))
 
+      new_alignment <- list()
       if(nrow(hits)==0){
-        rv$alignment$seqs <- character(0)
-        rv$alignment$aln <- Biostrings::AAStringSet(focal)
-
-        rv$alignment$alignmentHeight <- 40
-        rv$alignment$id <- stringr::str_glue(
+        new_alignment$seqs <- character(0)
+        new_alignment$aln <- Biostrings::AAStringSet(focal)
+        new_alignment$alignmentHeight <- 40
+        new_alignment$id <- stringr::str_glue(
           "<b>Max Similarity:</b> n/a"
         )
-        rv$alignment$stop <- stringr::str_glue(
-          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
-        )
-        rv$alignment$start <- stringr::str_glue(
-          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
-        )
-        rv$alignment$internal_stop <- ifelse(
-          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
-          ""
-        )
       }else{
-        rv$alignment$seqs <- hits |>
+        new_alignment$seqs <- hits |>
           dplyr::pull(target, name = Taxon)
-        rv$alignment$aln <- c(focal, rv$alignment$seqs) |>
-          Biostrings::AAStringSet() |>
-          DECIPHER::AlignSeqs(verbose = FALSE)
-        rv$alignment$alignmentHeight <- 20 + (length(rv$alignment$seqs) * 20)
-        rv$alignment$id <- stringr::str_glue(
+        # Cache the reference-only MSA across codon edits: the references don't
+        # change while the user walks codons, so reuse the prior MSA and add
+        # the (cheap) focal sequence via profile alignment.
+        ref_key <- paste(selected(), n_hits, paste(new_alignment$seqs, collapse = "|"), sep = "::")
+        if (!identical(ref_msa_cache$key, ref_key)) {
+          ref_set <- Biostrings::AAStringSet(new_alignment$seqs)
+          ref_msa_cache$msa <- if (length(ref_set) == 1L) {
+            ref_set
+          } else {
+            DECIPHER::AlignSeqs(ref_set, verbose = FALSE)
+          }
+          ref_msa_cache$key <- ref_key
+        }
+        focal_set <- Biostrings::AAStringSet(focal)
+        new_alignment$aln <- DECIPHER::AlignProfiles(
+          focal_set, ref_msa_cache$msa, verbose = FALSE
+        )
+        new_alignment$alignmentHeight <- 20 + (length(new_alignment$seqs) * 20)
+        new_alignment$id <- stringr::str_glue(
           "<b>Max Similarity:</b> {ifelse(max(hits$similarity)<25,'-',paste0(round(max(hits$similarity),1),'%'))}"
         )
-        rv$alignment$stop <- stringr::str_glue(
-          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
-        )
-        rv$alignment$start <- stringr::str_glue(
-          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
-        )
-        rv$alignment$internal_stop <- ifelse(
-          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
-          ""
-        )
       }
+      new_alignment$stop <- stringr::str_glue(
+        "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
+      )
+      new_alignment$start <- stringr::str_glue(
+        "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
+      )
+      new_alignment$internal_stop <- ifelse(
+        stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
+        paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
+        ""
+      )
+      rv$alignment <- new_alignment
     })
     output$msa_header <- renderUI({
       div(
@@ -1690,7 +1709,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         while (codon %nin% rv$editing$params$start_codons) {
@@ -1705,7 +1724,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1735,7 +1754,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:5){
@@ -1754,7 +1773,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1784,7 +1803,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:10){
@@ -1803,7 +1822,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1851,7 +1870,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -1867,7 +1886,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1896,7 +1915,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:5){
@@ -1915,7 +1934,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1945,7 +1964,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:10){
@@ -1964,7 +1983,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2024,7 +2043,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2053,7 +2072,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2094,7 +2113,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2127,7 +2146,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2168,7 +2187,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2201,7 +2220,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2262,7 +2281,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2293,7 +2312,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2336,7 +2355,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2371,7 +2390,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2414,7 +2433,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2449,7 +2468,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2502,7 +2521,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::arrange(dplyr::desc(similarity))
 
       temp_hits <- json_string(hits)
-      rv$alignment <- NULL
+      # Keep rv$alignment around (incl. cached ref_msa); align_now rebuilds it.
       trigger("align_now")
     })
 
@@ -2724,7 +2743,7 @@ annotations_details_server <- function(id, rv) {
           merged$translation <- assembly |>
             Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         } else {
@@ -2740,7 +2759,7 @@ annotations_details_server <- function(id, rv) {
             Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         }
@@ -2935,7 +2954,7 @@ annotations_details_server <- function(id, rv) {
               merged_orig_pos2 - nchar(reverted$stop_codon)
             ) |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         } else {
@@ -2954,7 +2973,7 @@ annotations_details_server <- function(id, rv) {
             ) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         }
