@@ -290,6 +290,12 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = isTRUE(as.logical(current$feature_trim %||% 1L)),
           status = "primary"
         ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("retain_low_conf_trna"),
+          label = "Retain low-confidence (NNN anticodon) tRNAs",
+          value = isTRUE(as.logical(current$retain_low_conf_trna %||% 0L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
         div(
           selectizeInput(
             ns("start_gene"),

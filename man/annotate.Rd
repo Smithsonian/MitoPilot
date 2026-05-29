@@ -23,6 +23,7 @@ annotate(
   use_mitos_best = TRUE,
   start_gene = "trnF",
   coverage_trim = TRUE,
+  retain_low_conf_trna = FALSE,
   ignore_scaffolds = NULL,
   out_dir = NULL
 )
@@ -65,6 +66,11 @@ annotate(
 \item{start_gene}{name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")}
 
 \item{coverage_trim}{logical; whether to trim low-coverage ends of linear assemblies (default: TRUE).}
+
+\item{retain_low_conf_trna}{logical; whether to keep low-confidence tRNAs with an
+unresolved ("NNN") anticodon. When FALSE (default) these are dropped and are not
+allowed to suppress overlapping MITOS2 tRNA predictions. When TRUE they are
+retained (and may suppress overlapping MITOS2 predictions, the original behavior).}
 
 \item{ignore_scaffolds}{Comma-separated scaffold numbers (e.g. "1,3") to drop
 from the assembly before annotation. These correspond to the `scaffold`

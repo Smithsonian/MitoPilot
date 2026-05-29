@@ -22,6 +22,10 @@
 #' @param use_mitos_best logical; whether to pass --best to MITOS2 (default: FALSE).
 #' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
 #' @param coverage_trim logical; whether to trim low-coverage ends of linear assemblies (default: TRUE).
+#' @param retain_low_conf_trna logical; whether to keep low-confidence tRNAs with an
+#'   unresolved ("NNN") anticodon. When FALSE (default) these are dropped and are not
+#'   allowed to suppress overlapping MITOS2 tRNA predictions. When TRUE they are
+#'   retained (and may suppress overlapping MITOS2 predictions, the original behavior).
 #' @param ignore_scaffolds Comma-separated scaffold numbers (e.g. "1,3") to drop
 #'   from the assembly before annotation. These correspond to the `scaffold`
 #'   column in the assemblies table and reflect the per-scaffold `ignore` flag.
@@ -48,6 +52,7 @@ annotate <- function(
   use_mitos_best = TRUE,
   start_gene = "trnF",
   coverage_trim = TRUE,
+  retain_low_conf_trna = FALSE,
   ignore_scaffolds = NULL,
   out_dir = NULL
 ) {
@@ -249,6 +254,13 @@ annotate <- function(
   }
   combined_trna <- dplyr::bind_rows(annotations_trnaScan, annotations_arwen, annotations_aragorn) |>
     dplyr::mutate(gene = normalize_trna_gene(gene))
+  # Unless explicitly retaining low-confidence tRNAs, drop "NNN"-anticodon calls so
+  # they cannot suppress valid overlapping MITOS2 tRNA predictions (they are removed
+  # from the final output below anyway).
+  if (!isTRUE(retain_low_conf_trna)) {
+    combined_trna <- combined_trna |>
+      dplyr::filter(is.na(anticodon) | anticodon != "NNN")
+  }
   annotations_mitos <- annotations_mitos |>
     dplyr::mutate(gene = normalize_trna_gene(gene)) |>
     dplyr::filter(
@@ -280,8 +292,14 @@ annotate <- function(
   ) |>
     dplyr::select(-dplyr::any_of("tRNA_ID")) |> # remove temporary tRNA_ID column
     dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnS1|tnrS2", "trnS")) |> # Rename trnS1 and trnS2 to trnS
-    dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnL1|trnL2", "trnL")) |> # Rename trnL1 and trnL2 to trnL
-    dplyr::filter(type != "tRNA" | is.na(anticodon) | anticodon != "NNN") |>
+    dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnL1|trnL2", "trnL")) # Rename trnL1 and trnL2 to trnL
+  # Drop low-confidence "NNN"-anticodon tRNAs from the final output unless the user
+  # chose to retain them.
+  if (!isTRUE(retain_low_conf_trna)) {
+    annotations <- annotations |>
+      dplyr::filter(type != "tRNA" | is.na(anticodon) | anticodon != "NNN")
+  }
+  annotations <- annotations |>
     dplyr::arrange(contig, pos1)
 
 
