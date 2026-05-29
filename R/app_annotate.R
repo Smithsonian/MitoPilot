@@ -635,6 +635,10 @@ annotate_server <- function(id) {
           inputId = "feature_trim",
           value = isTRUE(as.logical(cur$feature_trim %||% 1L))
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "retain_low_conf_trna",
+          value = isTRUE(as.logical(cur$retain_low_conf_trna %||% 0L))
+        )
         updateSelectizeInput(
           inputId = "start_gene",
           choices = c(
@@ -696,6 +700,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("retain_low_conf_trna", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -759,7 +764,8 @@ annotate_server <- function(id) {
               use_aragorn = as.integer(isTRUE(input$use_aragorn)),
               start_gene = req(input$start_gene),
               coverage_trim = as.integer(isTRUE(input$coverage_trim)),
-              feature_trim = as.integer(isTRUE(input$feature_trim))
+              feature_trim = as.integer(isTRUE(input$feature_trim)),
+              retain_low_conf_trna = as.integer(isTRUE(input$retain_low_conf_trna))
             ),
             in_place = TRUE,
             copy = TRUE,

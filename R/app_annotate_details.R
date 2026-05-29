@@ -272,6 +272,8 @@ annotations_details_server <- function(id, rv) {
           return(rv$editing$idx)
         }
         rv$alignment <- rv$local_hits <- NULL
+        ref_msa_cache$msa <- NULL
+        ref_msa_cache$key <- NULL
         if (rv$annotations$type[sel] == "PCG" & length(rv$alignment) != 0) {
           trigger("align_now")
         } else {
@@ -344,6 +346,8 @@ annotations_details_server <- function(id, rv) {
       rv$alignment <- NULL
       rv$coverage_width <- NULL
       rv$editing <- NULL
+      ref_msa_cache$msa <- NULL
+      ref_msa_cache$key <- NULL
       trigger("update_annotate_table")
       removeModal()
     })
@@ -372,9 +376,31 @@ annotations_details_server <- function(id, rv) {
       shinyjs::click("close")
     })
 
+    # Snapshot of the sample fields the figures actually use. Updated only when one
+    # of them changes, so toggling unrelated state (reviewed / problematic / ID
+    # verified) leaves this value untouched and does not invalidate the coverage /
+    # synteny figures, which would otherwise re-render on every click.
+    fig_ctx <- reactiveVal(NULL)
+    observe({
+      u <- rv$updating
+      if (is.null(u) || is.null(u$ID)) {
+        if (!is.null(fig_ctx())) fig_ctx(NULL)
+        return()
+      }
+      ctx <- list(
+        ID              = u$ID,
+        length          = u$length,
+        topology        = u$topology,
+        blast_accession = u$blast_accession,
+        blast_species   = u$blast_species,
+        poor_blast_ref  = u$poor_blast_ref
+      )
+      if (!identical(ctx, fig_ctx())) fig_ctx(ctx)
+    })
+
     # Coverage Map ----
     output$coverage_map <- renderUI({
-      req(rv$coverage)
+      req(rv$coverage, fig_ctx())
       rv$genes_plot <- rv$annotations |>
         dplyr::filter(pos1 > 0) |>
         dplyr::mutate(
@@ -399,30 +425,64 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = seq(1000, max(rv$coverage$Position), by = 1000)
+          breaks = seq(1000, max(rv$coverage$Position), by = 1000),
+          labels = format(seq(1000, max(rv$coverage$Position), by = 1000), big.mark = ",")
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
         ggplot2::theme(
           legend.position = "none",
-          axis.title = ggplot2::element_blank(),
+          axis.title  = ggplot2::element_blank(),
           axis.text.y = ggplot2::element_blank(),
+          # Match coverage plot's bottom-axis bounding box (invisible) so cowplot
+          # align="lr" doesn't pad either panel.
+          axis.text.x = ggplot2::element_text(size = 7, color = NA),
           axis.ticks.y = ggplot2::element_blank(),
+          axis.ticks.x = ggplot2::element_line(color = NA, linewidth = 0.4),
+          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
           plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
         )
 
       y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
-      rv$coverage_plot <- rv$coverage |>
-        dplyr::mutate(
-          Errors = ErrorRate > 0.05
-        ) |>
-        ggplot2::ggplot() +
+      cov_max  <- max(rv$coverage$Position)
+      minor_tick_x <- setdiff(seq(50, cov_max, by = 50), seq(1000, cov_max, by = 1000))
+      major_tick_x <- seq(1000, cov_max, by = 1000)
+      depth_rng    <- range(rv$coverage$Depth)
+      y_bottom     <- depth_rng[1]
+      y_tick_minor <- depth_rng[1] + diff(depth_rng) * 0.04
+      major_tick_labels <- format(major_tick_x, big.mark = ",")
+
+      # Bin coverage to ~one point per output pixel (max-depth per bin) to
+      # cut geom_line vertex count on huge mitogenomes - visually lossless
+      # at 1px/bp display, ~10x faster path stroke.
+      target_pts  <- min(nrow(rv$coverage), 4000L)
+      bin_size    <- max(1L, ceiling(cov_max / target_pts))
+      cov_line_df <- rv$coverage |>
+        dplyr::mutate(.bin = ((Position - 1L) %/% bin_size) * bin_size + 1L) |>
+        dplyr::summarise(Depth = max(Depth), .by = .bin) |>
+        dplyr::rename(Position = .bin) |>
+        dplyr::arrange(Position)
+
+      # Only positions flagged as Errors get a red vline; everything else is
+      # invisible so emit no geom for them (drawing 16k transparent vlines was
+      # the dominant render cost).
+      err_df <- rv$coverage |>
+        dplyr::filter(!is.na(ErrorRate) & ErrorRate > 0.05) |>
+        dplyr::select(Position)
+
+      rv$coverage_plot <- ggplot2::ggplot(cov_line_df) +
         ggplot2::aes(x = Position, y = Depth) +
+        ggplot2::geom_vline(
+          data = err_df,
+          ggplot2::aes(xintercept = Position),
+          inherit.aes = FALSE,
+          color = "#FF667040", linewidth = 1
+        ) +
         ggplot2::geom_label(
           data = data.frame(
-            x = rep(seq(1000, max(rv$coverage$Position), by = 1000), length(y_breaks)),
-            y = rep(y_breaks, each = length(seq(1000, max(rv$coverage$Position), by = 1000))),
-            label = rep(y_breaks, each = length(seq(1000, max(rv$coverage$Position), by = 1000)))
+            x = rep(major_tick_x, length(y_breaks)),
+            y = rep(y_breaks, each = length(major_tick_x)),
+            label = rep(y_breaks, each = length(major_tick_x))
           ),
           ggplot2::aes(x = x, y = y, label = label),
           inherit.aes = FALSE,
@@ -431,12 +491,13 @@ annotations_details_server <- function(id, rv) {
           label.size = 0,
           size = 3
         ) +
-        ggplot2::geom_vline(
-          linewidth = 1,
-          ggplot2::aes(xintercept = Position, color = Errors)
+        ggplot2::geom_segment(
+          data = data.frame(x = minor_tick_x),
+          ggplot2::aes(x = x, xend = x, y = y_bottom, yend = y_tick_minor),
+          inherit.aes = FALSE,
+          color = "#00000060", linewidth = 0.3
         ) +
         ggplot2::geom_line() +
-        ggplot2::scale_color_manual(values = c("#00000000", "#FF667040")) +
         ggplot2::scale_y_continuous(breaks = y_breaks) +
         ggplot2::scale_x_continuous(
           expand = c(0, 0),
@@ -444,65 +505,69 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = seq(1000, max(rv$coverage$Position), by = 1000)
+          breaks = major_tick_x,
+          labels = major_tick_labels
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
         ggplot2::theme(
           legend.position = "none",
           axis.title = ggplot2::element_blank(),
-          axis.text = ggplot2::element_blank(),
-          axis.ticks = ggplot2::element_blank(),
+          axis.text.y = ggplot2::element_blank(),
+          axis.text.x = ggplot2::element_text(size = 7, color = "#000000B0"),
+          axis.ticks.y = ggplot2::element_blank(),
+          axis.ticks.x = ggplot2::element_line(color = "#000000B0", linewidth = 0.4),
+          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
           panel.grid.major.y = ggplot2::element_line(
             linetype = "dotted", color = "#00000050"
           ),
-          plot.margin = ggplot2::margin(0, 0, 0, 2, "mm")
+          plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
         )
       # plot with dynamic width
       #plotOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")  # OLD CODE, problems with Cairo
-      shiny::imageOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")
+      shiny::imageOutput(ns("coverage_plot"), width = paste0(fig_ctx()$length, "px"), height = "125px")
     })
-    # possible fix for CAIRO error, but problems with JPEG libs on Hydra
-    # output$coverage_plot <- shiny::renderImage({
-    #   req(rv$coverage_plot, rv$coverage)
-    #
-    #   # Temporary file with .jpg extension
-    #   outfile <- tempfile(fileext = ".jpg")
-    #
-    #   # Save the combined plot as JPEG
-    #   grDevices::jpeg(outfile, width = rv$updating$length, height = 150, units = "px", quality = 100)
-    #   combined_plot <- rv$coverage_plot / rv$genes_plot + patchwork::plot_layout(heights = c(3, 1))
-    #   print(combined_plot)
-    #   dev.off()
-    #
-    #   list(
-    #     src = outfile,
-    #     contentType = "image/jpeg",
-    #     width = rv$updating$length,
-    #     height = 150,
-    #     alt = "Coverage Map"
-    #   )
-    # }, deleteFile = TRUE)
-    # OLD CODE, problems with Cairo
-    # maybe stable now?
-    output$coverage_plot <- renderPlot({
-     req(rv$coverage_plot, rv$coverage)
-     combined_plot <- rv$coverage_plot / rv$genes_plot + plot_layout(heights = c(3, 1))
-       print(combined_plot)
-    })
+    # Use renderImage + ragg::agg_png to bypass Cairo's per-dimension image
+    # surface limit (~16384 px on common libcairo builds), which silently
+    # truncated the right edge of large mitogenome plots under renderPlot.
+    output$coverage_plot <- shiny::renderImage(
+      {
+        req(rv$coverage_plot, rv$coverage, fig_ctx())
+        w <- fig_ctx()$length
+        h <- 125L
+        outfile <- tempfile(fileext = ".png")
+        ragg::agg_png(outfile, width = w, height = h, units = "px", res = 72)
+        combined_plot <- cowplot::plot_grid(
+          rv$coverage_plot, rv$genes_plot,
+          ncol = 1, align = "v", axis = "lr",
+          rel_heights = c(3, 1)
+        )
+        print(combined_plot)
+        dev.off()
+        list(
+          src = outfile,
+          contentType = "image/png",
+          width = w,
+          height = h,
+          alt = "Coverage map"
+        )
+      },
+      deleteFile = TRUE
+    )
     # BLAST Reference Synteny ----
     output$synteny_ui <- renderUI({
-      req(rv$blast_ref, rv$updating)
+      req(rv$blast_ref)
+      ctx <- req(fig_ctx())
       req(nrow(rv$blast_ref) > 0)
       # Don't render synteny when no current BLAST ref exists on this sample
       # (e.g. BLAST disabled in opts). Stale rows may linger in
       # blast_ref_annotations from a prior run with BLAST enabled.
-      req(!is.na(rv$updating$blast_accession),
-          nzchar(rv$updating$blast_accession))
-      w          <- max(rv$updating$length %||% 800L, 800L)
-      sample_lbl <- rv$updating$ID
-      ref_lbl    <- rv$updating$blast_species %||% rv$updating$blast_accession
-      ref_acc    <- rv$updating$blast_accession
+      req(!is.na(ctx$blast_accession),
+          nzchar(ctx$blast_accession))
+      w          <- max(ctx$length %||% 800L, 800L)
+      sample_lbl <- ctx$ID
+      ref_lbl    <- ctx$blast_species %||% ctx$blast_accession
+      ref_acc    <- ctx$blast_accession
       has_aln    <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
@@ -528,7 +593,7 @@ annotations_details_server <- function(id, rv) {
           lbl("100px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
         )
       }
-      is_poor <- isTRUE(rv$updating$poor_blast_ref == "poor")
+      is_poor <- isTRUE(ctx$poor_blast_ref == "poor")
       tagList(
         div(
           style = "display: flex; justify-content: start; margin-bottom: 6px;",
@@ -544,7 +609,7 @@ annotations_details_server <- function(id, rv) {
             inline = TRUE
           )
         ),
-        if (isTRUE(rv$updating$topology == "linear")) {
+        if (isTRUE(ctx$topology == "linear")) {
           div(
             class = "alert alert-warning",
             style = "padding: 6px 10px; font-size: 0.85em; margin-bottom: 6px;",
@@ -573,7 +638,7 @@ annotations_details_server <- function(id, rv) {
             id = ns("syntenyScrollDiv"),
             style = paste0("overflow-x: auto; flex: 1;",
                            if (has_aln) " cursor: zoom-in;" else ""),
-            plotOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
+            imageOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
                        click = ns("synteny_click"))
           )
         ),
@@ -605,10 +670,12 @@ annotations_details_server <- function(id, rv) {
         )
       )
     })
-    output$synteny_plot <- renderPlot({
-      req(rv$blast_ref, rv$annotations, rv$coverage)
+    output$synteny_plot <- shiny::renderImage(
+      {
+      req(rv$blast_ref, rv$annotations, rv$coverage, fig_ctx())
       req(nrow(rv$blast_ref) > 0)
 
+      img_w <- max(fig_ctx()$length %||% 800L, 800L)
       ref_length   <- rv$blast_ref$ref_length[1]
       sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
       sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
@@ -638,6 +705,11 @@ annotations_details_server <- function(id, rv) {
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
 
+      img_h <- if (has_aln) 280L else 200L
+      outfile <- tempfile(fileext = ".png")
+      ragg::agg_png(outfile, width = img_w, height = img_h, units = "px", res = 72)
+      on.exit(if (!is.null(dev.list())) dev.off(), add = TRUE)
+
       if (has_aln) {
         aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
         aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
@@ -650,12 +722,12 @@ annotations_details_server <- function(id, rv) {
         s_nongap <- which(s_chars != "-")
         r_nongap <- which(r_chars != "-")
 
-        # Project sample position (original coords) → 0-100 in alignment space
+        # Project sample position (original coords) -> 0-100 in alignment space
         s_to_pct <- function(pos) {
           idx <- pmin(pmax(as.integer(pos), 1L), length(s_nongap))
           s_nongap[idx] / aln_len * 100
         }
-        # Project ref position (original coords) → rotate → 0-100 in alignment space
+        # Project ref position (original coords) -> rotate -> 0-100 in alignment space
         r_to_pct <- function(pos) {
           pos_r <- ((as.integer(pos) - 1L - aln_rotation) %% ref_length) + 1L
           idx   <- pmin(pmax(pos_r, 1L), length(r_nongap))
@@ -682,14 +754,15 @@ annotations_details_server <- function(id, rv) {
           TRUE ~ "mismatch"
         )
 
-        # Rolling-window % identity area plot — avoids per-column sub-pixel
+        # Rolling-window % identity area plot - avoids per-column sub-pixel
         # rendering artifacts at overview scale.
         win      <- min(10L, aln_len)
         is_match <- as.integer(aln_class == "match")
-        n_wins   <- aln_len - win + 1L
-        win_pct  <- vapply(seq_len(n_wins), function(i) {
-          mean(is_match[i:(i + win - 1L)]) * 100
-        }, numeric(1))
+        # stats::filter does the rolling mean in C; ~20x faster than vapply for
+        # mitogenome-scale alignments.
+        win_pct  <- as.numeric(stats::filter(is_match, rep(1 / win, win), sides = 1)) * 100
+        win_pct  <- win_pct[!is.na(win_pct)]
+        n_wins   <- length(win_pct)
         # Pad x=0 and x=100 with edge values to fill to plot boundaries
         aln_win_df <- data.frame(
           x = c(0, (seq_len(n_wins) + win / 2 - 0.5) / aln_len * 100, 100),
@@ -700,6 +773,7 @@ annotations_details_server <- function(id, rv) {
           ggplot2::aes(x = x, y = y)
         ) +
           ggplot2::geom_area(fill = "#60BD68", colour = NA) +
+          ggplot2::geom_line(colour = "#60BD68") +
           ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) +
           ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(0, 100)) +
           ggplot2::coord_cartesian(clip = "off") +
@@ -727,12 +801,12 @@ annotations_details_server <- function(id, rv) {
                 patchwork::plot_layout(heights = c(3, 1, 3)))
 
       } else {
-        # Fallback: no alignment — 2-track view with normalised genome coordinates
+        # Fallback: no alignment - 2-track view with normalised genome coordinates
         anchor_gene <- sample_genes |>
           dplyr::arrange(pos1) |> dplyr::pull(gene) |> head(1)
         anchor_ref <- rv$blast_ref |>
           dplyr::filter(gene == anchor_gene) |> dplyr::arrange(pos1)
-        rotation <- if (rv$updating$topology == "circular" && nrow(anchor_ref) > 0) {
+        rotation <- if (fig_ctx()$topology == "circular" && nrow(anchor_ref) > 0) {
           as.integer(anchor_ref$pos1[1]) - 1L
         } else {
           0L
@@ -761,7 +835,17 @@ annotations_details_server <- function(id, rv) {
                        fill = type, y = 0, label = gene) + gene_track
         print(sample_plot / ref_plot + patchwork::plot_layout(heights = c(1, 1)))
       }
-    })
+      dev.off()
+      list(
+        src = outfile,
+        contentType = "image/png",
+        width = img_w,
+        height = img_h,
+        alt = "Synteny plot"
+      )
+      },
+      deleteFile = TRUE
+    )
 
     # Zoomed base-pair view of selected gene's alignment region ----
     output$synteny_zoom_ui <- renderUI({
@@ -782,8 +866,9 @@ annotations_details_server <- function(id, rv) {
       win <- zoom_window_rv()
       px_per_col <- 14L
       plot_w <- as.integer(win * px_per_col)
-      sample_lbl <- rv$updating$ID
-      ref_acc    <- rv$updating$blast_accession
+      ctx <- req(fig_ctx())
+      sample_lbl <- ctx$ID
+      ref_acc    <- ctx$blast_accession
       header_txt <- if (!is.null(click_col)) {
         s_chars   <- strsplit(rv$blast_ref_aln$aligned_sample[1], "")[[1]]
         anchor_bp <- as.integer(cumsum(s_chars != "-")[click_col])
@@ -803,7 +888,7 @@ annotations_details_server <- function(id, rv) {
           style = "display: flex; align-items: flex-start;",
           div(
             # Labels pinned to track centres in the 180 px plot.
-            # y limits: -0.5 to 4.9 (range 5.4). 2 mm plot.margin ≈ 3 % of 180 px.
+            # y limits: -0.5 to 4.9 (range 5.4). 2 mm plot.margin ~ 3 % of 180 px.
             # top % = 3.15 + (4.9 - track_y) / 5.4 * 93.7
             style = paste0("flex-shrink: 0; width: 160px; font-size: 11px; ",
                            "padding-right: 6px; box-sizing: border-box; ",
@@ -856,7 +941,7 @@ annotations_details_server <- function(id, rv) {
       }
     })
 
-    # Validated window size — only invalidates when value actually changes (breaks render loop)
+    # Validated window size - only invalidates when value actually changes (breaks render loop)
     zoom_window_rv <- reactiveVal(200L)
 
     # Clamp the window-size input to [30, 2000] and drive zoom_window_rv
@@ -952,7 +1037,7 @@ annotations_details_server <- function(id, rv) {
       }
       to_local <- function(aln_col) aln_col - win_start + 1L
 
-      # Sample genes overlapping the window — project pos1/pos2 to alignment cols
+      # Sample genes overlapping the window - project pos1/pos2 to alignment cols
       sg <- rv$annotations |> dplyr::filter(pos1 > 0)
       sg_aln1 <- s_nongap[pmin(pmax(as.integer(sg$pos1), 1L), length(s_nongap))]
       sg_aln2 <- s_nongap[pmin(pmax(as.integer(sg$pos2), 1L), length(s_nongap))]
@@ -968,7 +1053,7 @@ annotations_details_server <- function(id, rv) {
         )
       } else NULL
 
-      # Ref genes — rotate to alignment-ref coords first, then map via r_nongap
+      # Ref genes - rotate to alignment-ref coords first, then map via r_nongap
       rg <- rv$blast_ref
       rg_pos1_r <- ((as.integer(rg$pos1) - 1L - aln_rotation) %% ref_length) + 1L
       rg_pos2_r <- ((as.integer(rg$pos2) - 1L - aln_rotation) %% ref_length) + 1L
@@ -1015,7 +1100,7 @@ annotations_details_server <- function(id, rv) {
             height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
-        # Identity bar — merged runs reduce render items
+        # Identity bar - merged runs reduce render items
         ggplot2::geom_rect(
           data = identity_df,
           ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 1.65, ymax = 2.35, fill = fill),
@@ -1065,7 +1150,7 @@ annotations_details_server <- function(id, rv) {
       p
     })
 
-    # Synteny overview click → zoom centered at click x.
+    # Synteny overview click -> zoom centered at click x.
     # Patchwork plots can break ggplot's data-space coordmap, so we compute the
     # fraction along the plot width using CSS pixel coords (which are reliable),
     # divided by the plot's pixel width (set in the UI).
@@ -1113,6 +1198,12 @@ annotations_details_server <- function(id, rv) {
     })
 
     # MSA ----
+    # Non-reactive cache for the reference-only MSA. Avoids re-running
+    # DECIPHER::AlignSeqs(refs) on every codon edit (refs don't change).
+    ref_msa_cache <- new.env(parent = emptyenv())
+    ref_msa_cache$msa <- NULL
+    ref_msa_cache$key <- NULL
+
     init("align_now")
     observeEvent(input$align, ignoreInit = T, {
       shinyWidgets::updatePrettyCheckbox(
@@ -1121,12 +1212,17 @@ annotations_details_server <- function(id, rv) {
       )
       trigger("align_now")
     })
-    on("align_now", {
+    # Debounce align_now: rapid codon-edit clicks collapse into one MSA rebuild
+    # after the user pauses for ~250ms.
+    align_now_dbnc <- shiny::debounce(
+      shiny::reactive(gargoyle::watch("align_now")),
+      250
+    )
+    observeEvent(align_now_dbnc(), ignoreInit = TRUE, {
       # check if user wants to use fewer reference samples in alignment
       if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
 
       req(rv$annotations$type[selected()] == "PCG")
-      rv$alignment <- NULL
 
       hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE) |>
         dplyr::slice_head(n = n_hits)
@@ -1134,47 +1230,51 @@ annotations_details_server <- function(id, rv) {
       focal <- rv$annotations$translation[selected()] |>
         setNames(paste(rv$annotations$gene[selected()], "(focal)"))
 
+      new_alignment <- list()
       if(nrow(hits)==0){
-        rv$alignment$seqs <- character(0)
-        rv$alignment$aln <- Biostrings::AAStringSet(focal)
-
-        rv$alignment$alignmentHeight <- 40
-        rv$alignment$id <- stringr::str_glue(
+        new_alignment$seqs <- character(0)
+        new_alignment$aln <- Biostrings::AAStringSet(focal)
+        new_alignment$alignmentHeight <- 40
+        new_alignment$id <- stringr::str_glue(
           "<b>Max Similarity:</b> n/a"
         )
-        rv$alignment$stop <- stringr::str_glue(
-          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
-        )
-        rv$alignment$start <- stringr::str_glue(
-          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
-        )
-        rv$alignment$internal_stop <- ifelse(
-          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
-          ""
-        )
       }else{
-        rv$alignment$seqs <- hits |>
+        new_alignment$seqs <- hits |>
           dplyr::pull(target, name = Taxon)
-        rv$alignment$aln <- c(focal, rv$alignment$seqs) |>
-          Biostrings::AAStringSet() |>
-          DECIPHER::AlignSeqs(verbose = FALSE)
-        rv$alignment$alignmentHeight <- 20 + (length(rv$alignment$seqs) * 20)
-        rv$alignment$id <- stringr::str_glue(
+        # Cache the reference-only MSA across codon edits: the references don't
+        # change while the user walks codons, so reuse the prior MSA and add
+        # the (cheap) focal sequence via profile alignment.
+        ref_key <- paste(selected(), n_hits, paste(new_alignment$seqs, collapse = "|"), sep = "::")
+        if (!identical(ref_msa_cache$key, ref_key)) {
+          ref_set <- Biostrings::AAStringSet(new_alignment$seqs)
+          ref_msa_cache$msa <- if (length(ref_set) == 1L) {
+            ref_set
+          } else {
+            DECIPHER::AlignSeqs(ref_set, verbose = FALSE)
+          }
+          ref_msa_cache$key <- ref_key
+        }
+        focal_set <- Biostrings::AAStringSet(focal)
+        new_alignment$aln <- DECIPHER::AlignProfiles(
+          focal_set, ref_msa_cache$msa
+        )
+        new_alignment$alignmentHeight <- 20 + (length(new_alignment$seqs) * 20)
+        new_alignment$id <- stringr::str_glue(
           "<b>Max Similarity:</b> {ifelse(max(hits$similarity)<25,'-',paste0(round(max(hits$similarity),1),'%'))}"
         )
-        rv$alignment$stop <- stringr::str_glue(
-          "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
-        )
-        rv$alignment$start <- stringr::str_glue(
-          "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
-        )
-        rv$alignment$internal_stop <- ifelse(
-          stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-          paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
-          ""
-        )
       }
+      new_alignment$stop <- stringr::str_glue(
+        "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
+      )
+      new_alignment$start <- stringr::str_glue(
+        "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
+      )
+      new_alignment$internal_stop <- ifelse(
+        stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
+        paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
+        ""
+      )
+      rv$alignment <- new_alignment
     })
     output$msa_header <- renderUI({
       div(
@@ -1211,19 +1311,25 @@ annotations_details_server <- function(id, rv) {
     # Notes ----
     notes_update <- debounce(reactive(input$notes), 500)
     observeEvent(notes_update(), ignoreInit = T, ignoreNULL = T, {
-      req(notes_update() != (rv$updating$annotate_notes %|NA|% ""))
-      rv$updating$annotate_notes <- notes_update() |>
-        stringr::str_remove_all(",")
+      cleaned <- notes_update() |> stringr::str_remove_all(",")
+      # Compare against the last-saved value (from rv$data) rather than rv$updating,
+      # so clearing notes back to empty still persists.
+      saved <- (rv$data$annotate_notes[rv$data$ID == rv$updating$ID])[1]
+      req(cleaned != (saved %|NA|% ""))
+      # Persist without mutating rv$updating: writing notes into rv$updating would
+      # invalidate every figure that reads it (coverage/synteny), reloading them on
+      # each keystroke.
+      notes_df <- data.frame(ID = rv$updating$ID, annotate_notes = cleaned)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
-          rv$updating[, c("ID", "annotate_notes")],
+          notes_df,
           by = "ID",
           unmatched = "ignore",
           copy = TRUE,
           in_place = TRUE
         )
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "annotate_notes")], by = "ID")
+        dplyr::rows_update(notes_df, by = "ID")
       trigger("update_annotate_table")
     })
 
@@ -1434,7 +1540,10 @@ annotations_details_server <- function(id, rv) {
       note <- stringr::str_glue(
         "EDITED: linearized circular assembly after rotating {start-1} bp"
       )
-      rv$updating$annotate_notes <- paste(note, rv$updating$annotate_notes, sep = "; ")
+      # Read the live notes input (rv$updating$annotate_notes is no longer synced on
+      # every keystroke) so notes typed this session are preserved.
+      cur_notes <- (input$notes %||% rv$updating$annotate_notes) %|NA|% ""
+      rv$updating$annotate_notes <- paste(note, cur_notes, sep = "; ")
       updateTextAreaInput(
         inputId = "notes",
         value = rv$updating$annotate_notes
@@ -1637,7 +1746,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         while (codon %nin% rv$editing$params$start_codons) {
@@ -1652,7 +1761,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1682,7 +1791,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:5){
@@ -1701,7 +1810,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1731,7 +1840,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:10){
@@ -1750,7 +1859,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1798,7 +1907,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -1814,7 +1923,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1843,7 +1952,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:5){
@@ -1862,7 +1971,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1892,7 +2001,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code))
+          Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for(counter in 1:10){
@@ -1911,7 +2020,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -1971,7 +2080,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2000,7 +2109,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2041,7 +2150,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2074,7 +2183,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2115,7 +2224,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2148,7 +2257,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2209,7 +2318,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2240,7 +2349,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2283,7 +2392,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2318,7 +2427,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2361,7 +2470,7 @@ annotations_details_server <- function(id, rv) {
         pos2 <- pos2 - (3 - nchar(codon))
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -2396,7 +2505,7 @@ annotations_details_server <- function(id, rv) {
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)) |>
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -2449,7 +2558,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::arrange(dplyr::desc(similarity))
 
       temp_hits <- json_string(hits)
-      rv$alignment <- NULL
+      # Keep rv$alignment around (incl. cached ref_msa); align_now rebuilds it.
       trigger("align_now")
     })
 
@@ -2671,7 +2780,7 @@ annotations_details_server <- function(id, rv) {
           merged$translation <- assembly |>
             Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         } else {
@@ -2687,7 +2796,7 @@ annotations_details_server <- function(id, rv) {
             Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         }
@@ -2882,7 +2991,7 @@ annotations_details_server <- function(id, rv) {
               merged_orig_pos2 - nchar(reverted$stop_codon)
             ) |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         } else {
@@ -2901,7 +3010,7 @@ annotations_details_server <- function(id, rv) {
             ) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = Biostrings::getGeneticCode(session$userData$genetic_code)
+              genetic.code = session$userData$gcode
             ) |>
             as.character()
         }
@@ -2950,10 +3059,22 @@ annotations_details_server <- function(id, rv) {
 annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   ns <- session$ns
 
+  topo      <- rv$updating$topology %||% "unknown"
+  topo_icon <- switch(topo, circular = "\u21ba", linear = "\u2194", "?")
+  topo_badge <- span(
+    style = paste0(
+      "background:", if (topo == "circular") "#cce5ff" else if (topo == "linear") "#fff3cd" else "#e9ecef", ";",
+      "color:",      if (topo == "circular") "#004085" else if (topo == "linear") "#856404" else "#6c757d", ";",
+      "border-radius:3px;padding:2px 8px;font-size:0.75em;font-weight:600;white-space:nowrap;"
+    ),
+    paste(topo_icon, toupper(topo))
+  )
+
   modalDialog(
     title = div(
       style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
       span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
+      topo_badge,
       uiOutput(ns("status_badges"), inline = TRUE)
     ),
     size = "l",
@@ -3033,6 +3154,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     tags$hr(style = "margin: 4px 0; border: none; border-top: 1px solid #e0e0e0;"),
     tags$details(
       tags$summary("Coverage Map"),
+      div(
+        style = "padding: 2px 5mm 0 5mm; font-size: 0.85em; color: #555;",
+        tags$span(
+          style = "display: inline-block; width: 10px; height: 10px; background: #FF667040; vertical-align: middle; margin-right: 4px;"
+        ),
+        "mean error rate > 5% (possible sequencing or assembly errors)."
+      ),
       div(
         id = ns("coverageDiv"),
         style = "width: 100%; overflow-x: auto; padding: 5mm;",

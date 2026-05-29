@@ -379,6 +379,7 @@ new_db_userAsmb <- function(
       start_gene TEXT,
       coverage_trim INTEGER,
       feature_trim INTEGER,
+      retain_low_conf_trna INTEGER,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -399,7 +400,8 @@ new_db_userAsmb <- function(
         use_aragorn = 0L,
         start_gene = "trnF",
         coverage_trim = 1L,
-        feature_trim = 1L
+        feature_trim = 1L,
+        retain_low_conf_trna = 0L
       ),
       in_place = TRUE,
       copy = TRUE,

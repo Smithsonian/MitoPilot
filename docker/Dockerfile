@@ -21,7 +21,7 @@ RUN conda config --set channel_priority true && \
     conda config --add channels conda-forge && \
     conda config --add channels bioconda 
 
-RUN mamba install -y -c conda-forge libtiff libxml2 libxml2-devel r-base=4.5.2 r-reticulate r-remotes
+RUN mamba install -y -c conda-forge libtiff libxml2 libxml2-devel r-base=4.5.2 r-reticulate r-remotes r-ragg
 
 # Install Conda packages
 RUN mamba install -c bioconda fastp=0.23.4 && \

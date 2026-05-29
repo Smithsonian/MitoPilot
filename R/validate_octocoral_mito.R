@@ -167,6 +167,12 @@ validate_octocoral_mito <- function(
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "tRNA within PCG or rRNA")
         total_warnings = total_warnings + 1
       }
+      # Flag low-confidence tRNAs whose anticodon could not be resolved ("NNN").
+      # These only reach validation when the user enabled retain_low_conf_trna.
+      if (isTRUE(annotations$anticodon[i] == "NNN")) {
+        annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low-confidence tRNA (NNN anticodon)")
+        total_warnings = total_warnings + 1
+      }
     }
 
     ## Length limits ----
