@@ -453,7 +453,7 @@ annotations_details_server <- function(id, rv) {
       major_tick_labels <- format(major_tick_x, big.mark = ",")
 
       # Bin coverage to ~one point per output pixel (max-depth per bin) to
-      # cut geom_line vertex count on huge mitogenomes — visually lossless
+      # cut geom_line vertex count on huge mitogenomes - visually lossless
       # at 1px/bp display, ~10x faster path stroke.
       target_pts  <- min(nrow(rv$coverage), 4000L)
       bin_size    <- max(1L, ceiling(cov_max / target_pts))
@@ -722,12 +722,12 @@ annotations_details_server <- function(id, rv) {
         s_nongap <- which(s_chars != "-")
         r_nongap <- which(r_chars != "-")
 
-        # Project sample position (original coords) → 0-100 in alignment space
+        # Project sample position (original coords) -> 0-100 in alignment space
         s_to_pct <- function(pos) {
           idx <- pmin(pmax(as.integer(pos), 1L), length(s_nongap))
           s_nongap[idx] / aln_len * 100
         }
-        # Project ref position (original coords) → rotate → 0-100 in alignment space
+        # Project ref position (original coords) -> rotate -> 0-100 in alignment space
         r_to_pct <- function(pos) {
           pos_r <- ((as.integer(pos) - 1L - aln_rotation) %% ref_length) + 1L
           idx   <- pmin(pmax(pos_r, 1L), length(r_nongap))
@@ -754,7 +754,7 @@ annotations_details_server <- function(id, rv) {
           TRUE ~ "mismatch"
         )
 
-        # Rolling-window % identity area plot — avoids per-column sub-pixel
+        # Rolling-window % identity area plot - avoids per-column sub-pixel
         # rendering artifacts at overview scale.
         win      <- min(10L, aln_len)
         is_match <- as.integer(aln_class == "match")
@@ -801,7 +801,7 @@ annotations_details_server <- function(id, rv) {
                 patchwork::plot_layout(heights = c(3, 1, 3)))
 
       } else {
-        # Fallback: no alignment — 2-track view with normalised genome coordinates
+        # Fallback: no alignment - 2-track view with normalised genome coordinates
         anchor_gene <- sample_genes |>
           dplyr::arrange(pos1) |> dplyr::pull(gene) |> head(1)
         anchor_ref <- rv$blast_ref |>
@@ -888,7 +888,7 @@ annotations_details_server <- function(id, rv) {
           style = "display: flex; align-items: flex-start;",
           div(
             # Labels pinned to track centres in the 180 px plot.
-            # y limits: -0.5 to 4.9 (range 5.4). 2 mm plot.margin ≈ 3 % of 180 px.
+            # y limits: -0.5 to 4.9 (range 5.4). 2 mm plot.margin ~ 3 % of 180 px.
             # top % = 3.15 + (4.9 - track_y) / 5.4 * 93.7
             style = paste0("flex-shrink: 0; width: 160px; font-size: 11px; ",
                            "padding-right: 6px; box-sizing: border-box; ",
@@ -941,7 +941,7 @@ annotations_details_server <- function(id, rv) {
       }
     })
 
-    # Validated window size — only invalidates when value actually changes (breaks render loop)
+    # Validated window size - only invalidates when value actually changes (breaks render loop)
     zoom_window_rv <- reactiveVal(200L)
 
     # Clamp the window-size input to [30, 2000] and drive zoom_window_rv
@@ -1037,7 +1037,7 @@ annotations_details_server <- function(id, rv) {
       }
       to_local <- function(aln_col) aln_col - win_start + 1L
 
-      # Sample genes overlapping the window — project pos1/pos2 to alignment cols
+      # Sample genes overlapping the window - project pos1/pos2 to alignment cols
       sg <- rv$annotations |> dplyr::filter(pos1 > 0)
       sg_aln1 <- s_nongap[pmin(pmax(as.integer(sg$pos1), 1L), length(s_nongap))]
       sg_aln2 <- s_nongap[pmin(pmax(as.integer(sg$pos2), 1L), length(s_nongap))]
@@ -1053,7 +1053,7 @@ annotations_details_server <- function(id, rv) {
         )
       } else NULL
 
-      # Ref genes — rotate to alignment-ref coords first, then map via r_nongap
+      # Ref genes - rotate to alignment-ref coords first, then map via r_nongap
       rg <- rv$blast_ref
       rg_pos1_r <- ((as.integer(rg$pos1) - 1L - aln_rotation) %% ref_length) + 1L
       rg_pos2_r <- ((as.integer(rg$pos2) - 1L - aln_rotation) %% ref_length) + 1L
@@ -1100,7 +1100,7 @@ annotations_details_server <- function(id, rv) {
             height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
-        # Identity bar — merged runs reduce render items
+        # Identity bar - merged runs reduce render items
         ggplot2::geom_rect(
           data = identity_df,
           ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 1.65, ymax = 2.35, fill = fill),
@@ -1150,7 +1150,7 @@ annotations_details_server <- function(id, rv) {
       p
     })
 
-    # Synteny overview click → zoom centered at click x.
+    # Synteny overview click -> zoom centered at click x.
     # Patchwork plots can break ggplot's data-space coordmap, so we compute the
     # fraction along the plot width using CSS pixel coords (which are reliable),
     # divided by the plot's pixel width (set in the UI).
@@ -3060,7 +3060,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   ns <- session$ns
 
   topo      <- rv$updating$topology %||% "unknown"
-  topo_icon <- switch(topo, circular = "↺", linear = "↔", "?")
+  topo_icon <- switch(topo, circular = "\u21ba", linear = "\u2194", "?")
   topo_badge <- span(
     style = paste0(
       "background:", if (topo == "circular") "#cce5ff" else if (topo == "linear") "#fff3cd" else "#e9ecef", ";",
