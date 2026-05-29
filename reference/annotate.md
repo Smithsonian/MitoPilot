@@ -24,6 +24,7 @@ annotate(
   use_mitos_best = TRUE,
   start_gene = "trnF",
   coverage_trim = TRUE,
+  retain_low_conf_trna = FALSE,
   ignore_scaffolds = NULL,
   out_dir = NULL
 )
@@ -104,6 +105,14 @@ annotate(
 
   logical; whether to trim low-coverage ends of linear assemblies
   (default: TRUE).
+
+- retain_low_conf_trna:
+
+  logical; whether to keep low-confidence tRNAs with an unresolved
+  ("NNN") anticodon. When FALSE (default) these are dropped and are not
+  allowed to suppress overlapping MITOS2 tRNA predictions. When TRUE
+  they are retained (and may suppress overlapping MITOS2 predictions,
+  the original behavior).
 
 - ignore_scaffolds:
 

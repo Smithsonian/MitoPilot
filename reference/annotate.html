@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,6 +66,7 @@
 <span>  use_mitos_best <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  start_gene <span class="op">=</span> <span class="st">"trnF"</span>,</span>
 <span>  coverage_trim <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  retain_low_conf_trna <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  ignore_scaffolds <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  out_dir <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -147,6 +148,13 @@
 
 <dt id="arg-coverage-trim">coverage_trim<a class="anchor" aria-label="anchor" href="#arg-coverage-trim"></a></dt>
 <dd><p>logical; whether to trim low-coverage ends of linear assemblies (default: TRUE).</p></dd>
+
+
+<dt id="arg-retain-low-conf-trna">retain_low_conf_trna<a class="anchor" aria-label="anchor" href="#arg-retain-low-conf-trna"></a></dt>
+<dd><p>logical; whether to keep low-confidence tRNAs with an
+unresolved ("NNN") anticodon. When FALSE (default) these are dropped and are not
+allowed to suppress overlapping MITOS2 tRNA predictions. When TRUE they are
+retained (and may suppress overlapping MITOS2 predictions, the original behavior).</p></dd>
 
 
 <dt id="arg-ignore-scaffolds">ignore_scaffolds<a class="anchor" aria-label="anchor" href="#arg-ignore-scaffolds"></a></dt>
