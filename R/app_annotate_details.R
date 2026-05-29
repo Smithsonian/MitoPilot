@@ -1287,19 +1287,25 @@ annotations_details_server <- function(id, rv) {
     # Notes ----
     notes_update <- debounce(reactive(input$notes), 500)
     observeEvent(notes_update(), ignoreInit = T, ignoreNULL = T, {
-      req(notes_update() != (rv$updating$annotate_notes %|NA|% ""))
-      rv$updating$annotate_notes <- notes_update() |>
-        stringr::str_remove_all(",")
+      cleaned <- notes_update() |> stringr::str_remove_all(",")
+      # Compare against the last-saved value (from rv$data) rather than rv$updating,
+      # so clearing notes back to empty still persists.
+      saved <- (rv$data$annotate_notes[rv$data$ID == rv$updating$ID])[1]
+      req(cleaned != (saved %|NA|% ""))
+      # Persist without mutating rv$updating: writing notes into rv$updating would
+      # invalidate every figure that reads it (coverage/synteny), reloading them on
+      # each keystroke.
+      notes_df <- data.frame(ID = rv$updating$ID, annotate_notes = cleaned)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
-          rv$updating[, c("ID", "annotate_notes")],
+          notes_df,
           by = "ID",
           unmatched = "ignore",
           copy = TRUE,
           in_place = TRUE
         )
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "annotate_notes")], by = "ID")
+        dplyr::rows_update(notes_df, by = "ID")
       trigger("update_annotate_table")
     })
 
@@ -1510,7 +1516,10 @@ annotations_details_server <- function(id, rv) {
       note <- stringr::str_glue(
         "EDITED: linearized circular assembly after rotating {start-1} bp"
       )
-      rv$updating$annotate_notes <- paste(note, rv$updating$annotate_notes, sep = "; ")
+      # Read the live notes input (rv$updating$annotate_notes is no longer synced on
+      # every keystroke) so notes typed this session are preserved.
+      cur_notes <- (input$notes %||% rv$updating$annotate_notes) %|NA|% ""
+      rv$updating$annotate_notes <- paste(note, cur_notes, sep = "; ")
       updateTextAreaInput(
         inputId = "notes",
         value = rv$updating$annotate_notes
