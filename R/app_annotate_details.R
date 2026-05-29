@@ -376,9 +376,31 @@ annotations_details_server <- function(id, rv) {
       shinyjs::click("close")
     })
 
+    # Snapshot of the sample fields the figures actually use. Updated only when one
+    # of them changes, so toggling unrelated state (reviewed / problematic / ID
+    # verified) leaves this value untouched and does not invalidate the coverage /
+    # synteny figures, which would otherwise re-render on every click.
+    fig_ctx <- reactiveVal(NULL)
+    observe({
+      u <- rv$updating
+      if (is.null(u) || is.null(u$ID)) {
+        if (!is.null(fig_ctx())) fig_ctx(NULL)
+        return()
+      }
+      ctx <- list(
+        ID              = u$ID,
+        length          = u$length,
+        topology        = u$topology,
+        blast_accession = u$blast_accession,
+        blast_species   = u$blast_species,
+        poor_blast_ref  = u$poor_blast_ref
+      )
+      if (!identical(ctx, fig_ctx())) fig_ctx(ctx)
+    })
+
     # Coverage Map ----
     output$coverage_map <- renderUI({
-      req(rv$coverage)
+      req(rv$coverage, fig_ctx())
       rv$genes_plot <- rv$annotations |>
         dplyr::filter(pos1 > 0) |>
         dplyr::mutate(
@@ -503,15 +525,15 @@ annotations_details_server <- function(id, rv) {
         )
       # plot with dynamic width
       #plotOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")  # OLD CODE, problems with Cairo
-      shiny::imageOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")
+      shiny::imageOutput(ns("coverage_plot"), width = paste0(fig_ctx()$length, "px"), height = "125px")
     })
     # Use renderImage + ragg::agg_png to bypass Cairo's per-dimension image
     # surface limit (~16384 px on common libcairo builds), which silently
     # truncated the right edge of large mitogenome plots under renderPlot.
     output$coverage_plot <- shiny::renderImage(
       {
-        req(rv$coverage_plot, rv$coverage)
-        w <- rv$updating$length
+        req(rv$coverage_plot, rv$coverage, fig_ctx())
+        w <- fig_ctx()$length
         h <- 125L
         outfile <- tempfile(fileext = ".png")
         ragg::agg_png(outfile, width = w, height = h, units = "px", res = 72)
@@ -534,17 +556,18 @@ annotations_details_server <- function(id, rv) {
     )
     # BLAST Reference Synteny ----
     output$synteny_ui <- renderUI({
-      req(rv$blast_ref, rv$updating)
+      req(rv$blast_ref)
+      ctx <- req(fig_ctx())
       req(nrow(rv$blast_ref) > 0)
       # Don't render synteny when no current BLAST ref exists on this sample
       # (e.g. BLAST disabled in opts). Stale rows may linger in
       # blast_ref_annotations from a prior run with BLAST enabled.
-      req(!is.na(rv$updating$blast_accession),
-          nzchar(rv$updating$blast_accession))
-      w          <- max(rv$updating$length %||% 800L, 800L)
-      sample_lbl <- rv$updating$ID
-      ref_lbl    <- rv$updating$blast_species %||% rv$updating$blast_accession
-      ref_acc    <- rv$updating$blast_accession
+      req(!is.na(ctx$blast_accession),
+          nzchar(ctx$blast_accession))
+      w          <- max(ctx$length %||% 800L, 800L)
+      sample_lbl <- ctx$ID
+      ref_lbl    <- ctx$blast_species %||% ctx$blast_accession
+      ref_acc    <- ctx$blast_accession
       has_aln    <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
@@ -570,7 +593,7 @@ annotations_details_server <- function(id, rv) {
           lbl("100px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
         )
       }
-      is_poor <- isTRUE(rv$updating$poor_blast_ref == "poor")
+      is_poor <- isTRUE(ctx$poor_blast_ref == "poor")
       tagList(
         div(
           style = "display: flex; justify-content: start; margin-bottom: 6px;",
@@ -586,7 +609,7 @@ annotations_details_server <- function(id, rv) {
             inline = TRUE
           )
         ),
-        if (isTRUE(rv$updating$topology == "linear")) {
+        if (isTRUE(ctx$topology == "linear")) {
           div(
             class = "alert alert-warning",
             style = "padding: 6px 10px; font-size: 0.85em; margin-bottom: 6px;",
@@ -649,10 +672,10 @@ annotations_details_server <- function(id, rv) {
     })
     output$synteny_plot <- shiny::renderImage(
       {
-      req(rv$blast_ref, rv$annotations, rv$coverage)
+      req(rv$blast_ref, rv$annotations, rv$coverage, fig_ctx())
       req(nrow(rv$blast_ref) > 0)
 
-      img_w <- max(rv$updating$length %||% 800L, 800L)
+      img_w <- max(fig_ctx()$length %||% 800L, 800L)
       ref_length   <- rv$blast_ref$ref_length[1]
       sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
       sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
@@ -783,7 +806,7 @@ annotations_details_server <- function(id, rv) {
           dplyr::arrange(pos1) |> dplyr::pull(gene) |> head(1)
         anchor_ref <- rv$blast_ref |>
           dplyr::filter(gene == anchor_gene) |> dplyr::arrange(pos1)
-        rotation <- if (rv$updating$topology == "circular" && nrow(anchor_ref) > 0) {
+        rotation <- if (fig_ctx()$topology == "circular" && nrow(anchor_ref) > 0) {
           as.integer(anchor_ref$pos1[1]) - 1L
         } else {
           0L
@@ -843,8 +866,9 @@ annotations_details_server <- function(id, rv) {
       win <- zoom_window_rv()
       px_per_col <- 14L
       plot_w <- as.integer(win * px_per_col)
-      sample_lbl <- rv$updating$ID
-      ref_acc    <- rv$updating$blast_accession
+      ctx <- req(fig_ctx())
+      sample_lbl <- ctx$ID
+      ref_acc    <- ctx$blast_accession
       header_txt <- if (!is.null(click_col)) {
         s_chars   <- strsplit(rv$blast_ref_aln$aligned_sample[1], "")[[1]]
         anchor_bp <- as.integer(cumsum(s_chars != "-")[click_col])
