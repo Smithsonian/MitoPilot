@@ -110,5 +110,8 @@ workflow VALIDATE {
         // Emit (id, path) for each validated sample so downstream workflows
         // (e.g. BLAST_REF_ALIGN) can use it as an ordering trigger
         validated = validate_out.map { it -> tuple(it[0], it[1]) }
+        // Emit the final, validated annotations TSV (id, path, tsv) so the
+        // optional ORF step can scan for ORFs in the finalized gene models
+        annotations = validate_out.map { it -> tuple(it[0], it[1], it[2]) }
 
 }

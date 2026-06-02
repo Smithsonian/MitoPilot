@@ -40,6 +40,7 @@ params {
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'
     aragorn_condaenv = 'aragorn'
+    orffinder_condaenv = 'orffinder'
     preprocess {
         container = process.container
         executor = process.executor
@@ -62,6 +63,11 @@ params {
         executor = process.executor
     }
     curate {
+        clusterOptions = '<<CLUSTER_OPTIONS>>'
+        container = process.container
+        executor = process.executor
+    }
+    orf {
         clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor

@@ -48,6 +48,8 @@ backwards_compatibility <- function(
   })
   failOnIgnore <- any(grep("failOnIgnore = true", conf))
   blast_gb_conf <- any(grepl("blast_gb", conf))
+  orffinder_conf <- any(grepl("orffinder_condaenv", conf))
+  orf_block_conf <- any(grepl("^\\s*orf \\{", conf))
 
   # check if .config file contains latest container version
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
@@ -86,6 +88,11 @@ backwards_compatibility <- function(
       "tool" %in% DBI::dbListFields(con, "annotations") &&
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
+      "use_orffinder" %in% names(annotate_opts_table) &&
+      "orf_opts" %in% names(annotate_table) &&
+      "orf_opts" %in% DBI::dbListTables(con) &&
+      orffinder_conf &&
+      orf_block_conf &&
       isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
@@ -188,6 +195,55 @@ backwards_compatibility <- function(
                "}")
     conf <- append(conf, lines)
     writeLines(conf, file.path(path, ".config"))
+  }
+
+  # if .config does not contain "orffinder_condaenv" param, add it. Anchor after
+  # the last *_condaenv line if present, otherwise just inside the params block.
+  if(!(orffinder_conf)){
+    conf <- readLines(file.path(path, ".config"))
+    anchor <- grep("_condaenv", conf)
+    anchor <- if (length(anchor) > 0) max(anchor) else grep("^\\s*params \\{", conf)[1]
+    if (length(anchor) == 1 && !is.na(anchor)) {
+      conf <- append(conf, "    orffinder_condaenv = 'orffinder'", after = anchor)
+      message("added \"orffinder_condaenv = 'orffinder'\" to nextflow .config file")
+      writeLines(conf, file.path(path, ".config"))
+    }
+  }
+
+  # if .config does not contain an "orf { }" process block, add one. Mirror the
+  # curate block when present (to inherit clusterOptions); otherwise insert a
+  # minimal block inside the params section.
+  if(!(orf_block_conf)){
+    conf <- readLines(file.path(path, ".config"))
+    cur_start <- grep("^\\s*curate \\{", conf)
+    if (length(cur_start) >= 1) {
+      cur_start <- cur_start[1]
+      cur_end <- cur_start
+      for (j in (cur_start + 1):length(conf)) {
+        if (grepl("^\\s*\\}", conf[j])) {
+          cur_end <- j
+          break
+        }
+      }
+      block <- conf[cur_start:cur_end]
+      block[1] <- sub("curate", "orf", block[1])
+      conf <- append(conf, block, after = cur_end)
+      message("added \"orf { }\" process block to nextflow .config file")
+      writeLines(conf, file.path(path, ".config"))
+    } else {
+      params_line <- grep("^\\s*params \\{", conf)[1]
+      if (!is.na(params_line)) {
+        block <- c(
+          "    orf {",
+          "        container = process.container",
+          "        executor = process.executor",
+          "    }"
+        )
+        conf <- append(conf, block, after = params_line)
+        message("added \"orf { }\" process block to nextflow .config file")
+        writeLines(conf, file.path(path, ".config"))
+      }
+    }
   }
 
   # if genetic_code column doesn't exist, add it
@@ -455,6 +511,87 @@ backwards_compatibility <- function(
         in_place = TRUE,
         copy = TRUE,
         by = "annotate_opts"
+      )
+  }
+
+  # if use_orffinder column doesn't exist, add it (default off)
+  if (!("use_orffinder" %in% names(annotate_opts_table))) {
+    message("added 'use_orffinder' column to annotate_opts table")
+    annotate_opts_table$use_orffinder <- rep(0L, nrow(annotate_opts_table))
+    DBI::dbExecute(con, "ALTER TABLE annotate_opts ADD COLUMN use_orffinder INTEGER")
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if orf_opts column doesn't exist in the annotate table, add it (default set)
+  if (!("orf_opts" %in% names(annotate_table))) {
+    message("added 'orf_opts' column to annotate table")
+    annotate_table$orf_opts <- rep("default", nrow(annotate_table))
+    DBI::dbExecute(con, "ALTER TABLE annotate ADD COLUMN orf_opts TEXT")
+    dplyr::tbl(con, "annotate") |>
+      dplyr::rows_upsert(
+        annotate_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+  }
+
+  # if orf_opts table doesn't exist, create it and seed a default row
+  if (!("orf_opts" %in% DBI::dbListTables(con))) {
+    message("created 'orf_opts' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE orf_opts (
+        orf_opts TEXT NOT NULL,
+        cpus INTEGER,
+        memory INTEGER,
+        orffinder_opts TEXT,
+        orf_min_len INTEGER,
+        orf_max_overlap REAL,
+        max_blast_hits INTEGER,
+        ref_db TEXT,
+        ref_dir TEXT,
+        PRIMARY KEY (orf_opts)
+      );"
+    )
+    # reuse the curation reference db/dir (the featureProt source) as the default,
+    # falling back to the annotate ref and finally to the package defaults
+    pick1 <- function(x, fallback) {
+      x <- x[!is.na(x)]
+      if (length(x) == 0) fallback else x[1]
+    }
+    ref_db_default <- pick1(
+      c(curate_opts_table$ref_db[curate_opts_table$curate_opts == "default"],
+        annotate_opts_table$ref_db),
+      "Chordata"
+    )
+    ref_dir_default <- pick1(
+      c(curate_opts_table$ref_dir[curate_opts_table$curate_opts == "default"],
+        annotate_opts_table$ref_dir),
+      "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2"
+    )
+    dplyr::tbl(con, "orf_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          orf_opts = "default",
+          cpus = 4L,
+          memory = 8L,
+          orffinder_opts = "-s 1 -n true",
+          orf_min_len = 300L,
+          orf_max_overlap = 0.1,
+          max_blast_hits = 100L,
+          ref_db = ref_db_default,
+          ref_dir = ref_dir_default
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "orf_opts"
       )
   }
 
