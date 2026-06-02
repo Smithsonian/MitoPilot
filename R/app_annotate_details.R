@@ -14,6 +14,40 @@ gene_type_fill <- c(
 )
 gene_type_alpha <- 0.5
 
+# Split gene rows that wrap the x-axis boundary into two arrow segments.
+#
+# A feature that crosses the origin of a circular sequence has its start beyond
+# its end, so after mapping to plot coordinates `xmin > xmax`. gggenes can't draw
+# such a feature as one arrow, so split it into `[xmin, x_hi]` and `[x_lo, xmax]`
+# (the two arcs on either side of the boundary). The gene label is kept on the
+# longer piece only to avoid a duplicated label. `df` must already carry numeric
+# `xmin`/`xmax` columns (in the same coordinate space as `x_lo`/`x_hi`).
+split_wrapped_genes <- function(df, x_lo, x_hi) {
+  if (nrow(df) == 0 || !all(c("xmin", "xmax") %in% names(df)) ||
+      !any(df$xmin > df$xmax, na.rm = TRUE)) {
+    return(df)
+  }
+  pieces <- lapply(seq_len(nrow(df)), function(i) {
+    row <- df[i, , drop = FALSE]
+    if (isTRUE(row$xmin > row$xmax)) {
+      seg_hi <- row
+      seg_hi$xmax <- x_hi # [xmin, x_hi]
+      seg_lo <- row
+      seg_lo$xmin <- x_lo # [x_lo, xmax]
+      # keep the label on the longer arc only
+      if ((x_hi - row$xmin) >= (row$xmax - x_lo)) {
+        seg_lo$gene <- ""
+      } else {
+        seg_hi$gene <- ""
+      }
+      dplyr::bind_rows(seg_hi, seg_lo)
+    } else {
+      row
+    }
+  })
+  dplyr::bind_rows(pieces)
+}
+
 annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -407,13 +441,18 @@ annotations_details_server <- function(id, rv) {
     # Coverage Map ----
     output$coverage_map <- renderUI({
       req(rv$coverage, fig_ctx())
-      rv$genes_plot <- rv$annotations |>
+      # Split features that wrap the circular origin (pos1 > pos2) into two arrows.
+      cov_seq_len <- max(rv$coverage$Position)
+      genes_df <- rv$annotations |>
         dplyr::filter(pos1 > 0) |>
         dplyr::mutate(
-          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF"))
+          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
+          xmin = pos1, xmax = pos2
         ) |>
+        split_wrapped_genes(x_lo = 1, x_hi = cov_seq_len)
+      rv$genes_plot <- genes_df |>
         ggplot2::ggplot() +
-        ggplot2::aes(xmin = pos1, xmax = pos2, forward = direction == "+", fill = type, y = scaffold, label = gene) +
+        ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+", fill = type, y = scaffold, label = gene) +
         gggenes::geom_gene_arrow(
           arrow_body_height = ggplot2::unit(6, "mm"),
           arrowhead_height = ggplot2::unit(6, "mm"),
@@ -740,17 +779,21 @@ annotations_details_server <- function(id, rv) {
           r_nongap[idx] / aln_len * 100
         }
 
-        # Gene data frames in alignment coordinates
+        # Gene data frames in alignment coordinates. Features that wrap the
+        # circular origin (or straddle the rotation point in the reference) map
+        # to xmin > xmax; split them into two arcs at the 0/100 boundary.
         sample_df <- sample_genes |>
           dplyr::mutate(
             type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
             xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
-          )
+          ) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_df <- rv$blast_ref |>
           dplyr::mutate(
             type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
             xmin = r_to_pct(pos1), xmax = r_to_pct(pos2)
-          )
+          ) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
 
         # Classify each alignment column
         aln_class <- dplyr::case_when(
@@ -817,22 +860,24 @@ annotations_details_server <- function(id, rv) {
         } else {
           0L
         }
+        # Rotate reference coordinates to the shared anchor gene (per endpoint,
+        # modulo the reference length). A feature that wraps the circular origin
+        # or straddles the rotation point then maps to xmin > xmax and is split
+        # into two arcs at the 0/100 boundary below.
         ref_rotated <- rv$blast_ref |>
           dplyr::mutate(
             pos1_r = as.integer(((as.integer(pos1) - 1L - rotation) %% ref_length) + 1L),
             pos2_r = as.integer(((as.integer(pos2) - 1L - rotation) %% ref_length) + 1L)
           ) |>
-          dplyr::mutate(
-            pos2_r = dplyr::if_else(pos2_r < pos1_r, pos2_r + ref_length, pos2_r),
-            pos1_r = dplyr::if_else(pos2_r > ref_length, 1L, pos1_r)
-          ) |>
           dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
         sample_df  <- sample_genes |>
           dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
         sample_pct <- sample_df |>
-          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100)
+          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_pct    <- ref_rotated |>
-          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100)
+          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         sample_plot <- ggplot2::ggplot(sample_pct) +
           ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
                        fill = type, y = 0, label = gene) + gene_track
