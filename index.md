@@ -87,6 +87,10 @@ groups of organisms:
 - lepidosaurs (untested)
 - birds (untested)
 
+See the [curation ruleset
+browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
+for a detailed description of each curation ruleset.
+
 The custom logic in the annotation curation and validation scripts needs
 to be tweaked for optimal performance with other taxonomic groups. All
 of the curation rulesets are contained in the underlying Docker image

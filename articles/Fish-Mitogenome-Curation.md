@@ -35,6 +35,11 @@ achieve this.
 
 ## Curation Parameters
 
+See the [curation ruleset
+browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
+for a detailed description of each curation ruleset currently
+implemented in MitoPilot.
+
 Currently, curation parameters are specified at project initialization
 and are applied to all samples within the project. By default, the
 parameters are set by the function,

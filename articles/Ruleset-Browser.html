@@ -38,9 +38,9 @@
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">Custom HPC Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
-    <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
   </ul>
 </li>
       </ul>
@@ -71,35 +71,15 @@
     
     
 <p>MitoPilot ships taxon-specific curation rulesets for a range of
-metazoan clades. The interactive browser below lets you explore them:
-navigate the taxonomy tree on the left (scroll, expand, and collapse
-clades), then select a highlighted clade to view its curation rules on
-the right, including the genetic code, gene-level length/overlap
-constraints, and start/stop codons.</p>
+metazoan lineages. The interactive browser below lets you explore
+them.</p>
 <p>The taxonomy backbone is built from <a href="https://www.ncbi.nlm.nih.gov/taxonomy" class="external-link">NCBI Taxonomy</a>.</p>
-<iframe src="../ruleset-browser.html" width="100%" height="820" style="border:1px solid #ddd; border-radius:8px;" title="MitoPilot curation ruleset browser">
-</iframe>
 <p>
 <a href="../ruleset-browser.html" target="_blank" rel="noopener">Open
 the browser in a full window</a>
 </p>
-<div class="section level2">
-<h2 id="regenerating-the-browser">Regenerating the browser<a class="anchor" aria-label="anchor" href="#regenerating-the-browser"></a>
-</h2>
-<p>The embedded page is a self-contained snapshot. To rebuild it
-(e.g. after editing a ruleset), regenerate the asset and rebuild the
-site:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="../reference/ruleset_browser.html">ruleset_browser</a></span><span class="op">(</span></span>
-<span>  output_file <span class="op">=</span> <span class="st">"pkgdown/assets/ruleset-browser.html"</span>,</span>
-<span>  open <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu">pkgdown</span><span class="fu">::</span><span class="fu"><a href="https://pkgdown.r-lib.org/reference/build_site.html" class="external-link">build_site</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>You can also generate a standalone copy for local use at any
-time:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="../reference/ruleset_browser.html">ruleset_browser</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-</div>
+<iframe src="../ruleset-browser.html" width="100%" height="820" style="border:1px solid #ddd; border-radius:8px;" title="MitoPilot curation ruleset browser">
+</iframe>
   </main>
 </div>
 
