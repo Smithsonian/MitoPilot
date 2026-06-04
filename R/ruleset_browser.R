@@ -322,7 +322,7 @@ build_ruleset_display <- function(params, label, ncbi, genetic_code = NA_integer
       start <- val$start
       stop  <- val$stop
       fmt_one <- function(x) {
-        if (is.null(x) || (length(x) == 1 && is.na(x))) return("—")
+        if (is.null(x) || (length(x) == 1 && is.na(x))) return(intToUtf8(0x2014))
         if (is.logical(x)) return(if (isTRUE(x)) "yes" else "no")
         as.character(x)
       }
@@ -433,6 +433,18 @@ build_ruleset_html <- function(tree, rules_data) {
                   template, fixed = TRUE)
   template <- sub("/*__TOOLTIPS__*/", paste0("var TOOLTIPS = ", tooltips_json, ";"),
                   template, fixed = TRUE)
+
+  # Substitute Unicode glyphs at runtime so the R source stays ASCII-only
+  glyphs <- c(
+    "@TRIDOWN@"  = intToUtf8(0x25be),  # down-pointing triangle (expanded)
+    "@TRIRIGHT@" = intToUtf8(0x25b8),  # right-pointing triangle (collapsed)
+    "@ELLIPSIS@" = intToUtf8(0x2026),  # horizontal ellipsis
+    "@EMDASH@"   = intToUtf8(0x2014),  # em dash
+    "@MIDDOT@"   = intToUtf8(0x00b7)   # middle dot
+  )
+  for (tok in names(glyphs)) {
+    template <- gsub(tok, glyphs[[tok]], template, fixed = TRUE)
+  }
   template
 }
 
@@ -595,7 +607,7 @@ ruleset_html_template <- function() {
       dedicated MitoPilot curation ruleset. Clades shown in
       <strong style="color:var(--accent)">blue</strong> with a badge are clickable;
       selecting one displays its curation rules here.</p>
-      <p>Use the toggles (▸/▾) to expand and collapse clades, or the filter
+      <p>Use the toggles (@TRIRIGHT@/@TRIDOWN@) to expand and collapse clades, or the filter
       box to find a taxon.</p>
     </div>
   </div>
@@ -629,13 +641,13 @@ function renderNode(node) {
   if (node.target) li.classList.add("ruleset");
 
   var row = el("div", "row");
-  var toggle = el("span", "toggle" + (hasChildren ? "" : " leaf"), hasChildren ? "▾" : "▸");
+  var toggle = el("span", "toggle" + (hasChildren ? "" : " leaf"), hasChildren ? "@TRIDOWN@" : "@TRIRIGHT@");
   row.appendChild(toggle);
 
   var parts = node.name.split(" > ");
   var display = node.name;
   if (parts.length > 3) {
-    display = parts[0] + " > … > " + parts[parts.length - 1];
+    display = parts[0] + " > @ELLIPSIS@ > " + parts[parts.length - 1];
   }
   var name = el("span", "name", display);
   if (display !== node.name) name.title = node.name;
@@ -658,7 +670,7 @@ function renderNode(node) {
     li.appendChild(ul);
     toggle.addEventListener("click", function () {
       li.classList.toggle("collapsed");
-      toggle.textContent = li.classList.contains("collapsed") ? "▸" : "▾";
+      toggle.textContent = li.classList.contains("collapsed") ? "@TRIRIGHT@" : "@TRIDOWN@";
     });
   }
   return li;
@@ -672,7 +684,7 @@ function buildTree() {
 
 function cell(val) {
   var td = document.createElement("td");
-  if (val == null) { td.textContent = "—"; td.className = "na"; }
+  if (val == null) { td.textContent = "@EMDASH@"; td.className = "na"; }
   else { td.textContent = val; }
   return td;
 }
@@ -712,7 +724,7 @@ function selectRuleset(target, row) {
   d.innerHTML = "";
 
   d.appendChild(el("h2", "detail-title", data.label));
-  d.appendChild(el("p", "detail-sub", "Ruleset: " + target + "  ·  NCBI anchor: " + data.ncbi));
+  d.appendChild(el("p", "detail-sub", "Ruleset: " + target + "  @MIDDOT@  NCBI anchor: " + data.ncbi));
 
   if (data.genetic_code && data.genetic_code.code != null) {
     var gc = el("div", "gcode");
@@ -724,7 +736,7 @@ function selectRuleset(target, row) {
     link.href = data.genetic_code.url;
     link.target = "_blank";
     link.rel = "noopener";
-    link.textContent = data.genetic_code.code + " — " + data.genetic_code.name;
+    link.textContent = data.genetic_code.code + " @EMDASH@ " + data.genetic_code.name;
     gc.appendChild(link);
     d.appendChild(gc);
   }
@@ -736,7 +748,7 @@ function selectRuleset(target, row) {
     var icon = helpIcon(kv[0]);
     if (icon) k.appendChild(icon);
     g.appendChild(k);
-    g.appendChild(el("div", "v", kv[1] == null ? "—" : kv[1]));
+    g.appendChild(el("div", "v", kv[1] == null ? "@EMDASH@" : kv[1]));
     globals.appendChild(g);
   });
   d.appendChild(globals);
@@ -766,8 +778,8 @@ function setCollapsedAll(collapsed) {
     var hasChildren = li.querySelector(":scope > ul");
     if (!hasChildren) return;
     var toggle = li.querySelector(":scope > .row > .toggle");
-    if (collapsed) { li.classList.add("collapsed"); if (toggle) toggle.textContent = "▸"; }
-    else { li.classList.remove("collapsed"); if (toggle) toggle.textContent = "▾"; }
+    if (collapsed) { li.classList.add("collapsed"); if (toggle) toggle.textContent = "@TRIRIGHT@"; }
+    else { li.classList.remove("collapsed"); if (toggle) toggle.textContent = "@TRIDOWN@"; }
   });
 }
 
@@ -787,7 +799,7 @@ function runSearch(q) {
         if (p.tagName === "LI") {
           p.classList.remove("collapsed");
           var t = p.querySelector(":scope > .row > .toggle");
-          if (t && !t.classList.contains("leaf")) t.textContent = "▾";
+          if (t && !t.classList.contains("leaf")) t.textContent = "@TRIDOWN@";
         }
         p = p.parentElement;
       }
