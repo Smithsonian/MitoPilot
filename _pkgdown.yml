@@ -46,13 +46,9 @@ articles:
 - title: "Usage"
   navbar: ~
   contents:
+  - 'Ruleset-Browser'
   - 'Fish-Mitogenome-Curation'
   - 'custom_dbs'
-
-- title: "Curation Rulesets"
-  navbar: ~
-  contents:
-  - 'Ruleset-Browser'
 
 
 

@@ -17,13 +17,13 @@ vignette: >
 
 Automated curation and validation of mitogenome annotations is a central goal of MitoPilot. When samples are processed through the Annotation Module, annotations are first generated using a combination of [MITOS2](https://gitlab.com/Bernt/MITOS) (for rRNA and PCG annotation) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) (for tRNA annotation). Following the initial annotation, samples are processed through an automated curation process where modifications are made in attempt to bring the annotations closer to a state that will be considered acceptable for publication by NCBI GenBank. This automated curation process is based on two important inputs to the pipeline, a high-quality reference database of protein coding genes and a set of user configurable parameters.
 
-
 ## Reference Databases
 
 MitoPilot expects the curation reference database files to be in the form of Blastp database files, one for each gene. By default, the pipeline will use the same database files used by Mitos2 during the initial annotation process. This can be modified using the `ref_db` property of the Curation Parameters (see below). The default value of ref_db, (`ref_db = list(default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas")`), specifies the location on the MitoPilot docker image where the database is located, where `{gene}` is translated to individual gene names during processing. This default database location can be overridden by gene-specific paths added as named entries to the ref_db parameter, e.g. `ref_db = list(default = "/ref_dbs/Mitos2/Chordata/featureProt/{gene}.fas", atp8 = "/ref_dbs/curation/atp8.fas")`. However, it is important to note that these paths are relative to the execution environment and must be accessible from that environment. Building a custom docker image from the base MitoPilot image, including any additional reference databases within its file system, is one way to achieve this.
 
-
 ## Curation Parameters
+
+See the [curation ruleset browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html) for a detailed description of each curation ruleset currently implemented in MitoPilot.
 
 Currently, curation parameters are specified at project initialization and are applied to all samples within the project. By default, the parameters are set by the function, `params_fish_mito()`. Customization of the parameters can be achieved by directly providing a complete named list, or by passing individual modifications to the `params_fish_mito()` function. For example, the default expected count of trnW genes could be increased to 2 and the default percent similarity of an "acceptable" PCG match could be reduced to 85 by initializing a new project with:
 

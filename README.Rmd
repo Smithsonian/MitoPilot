@@ -69,6 +69,8 @@ Currently, MitoPilot has curation/validation rulesets for the following groups o
 - lepidosaurs (untested)
 - birds (untested)
 
+See the [curation ruleset browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html) for a detailed description of each curation ruleset.
+
 The custom logic in the annotation curation and validation scripts needs to be tweaked for optimal performance with other taxonomic groups. All of the curation rulesets are contained in the underlying Docker image (currently hosted at [macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)). Adding rulesets for new taxa will involve updating the Docker image appropriately and specifying the new image in the Nextflow configuration file. 
 
 If you have a group of organisms that you would like to try with MitoPilot, feel free to post an [issue](https://github.com/Smithsonian/MitoPilot/issues) or reach out to Dan MacGuigan directly at <daniel.macguigan@noaa.gov>.
