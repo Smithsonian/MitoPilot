@@ -49,6 +49,11 @@ articles:
   - 'Fish-Mitogenome-Curation'
   - 'custom_dbs'
 
+- title: "Curation Rulesets"
+  navbar: ~
+  contents:
+  - 'Ruleset-Browser'
+
 
 
 
