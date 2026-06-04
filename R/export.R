@@ -193,6 +193,7 @@ export_files <- function(
     purrr::pwalk(annotations, function(...) {
       cur <- list(...)
       note <- NULL
+      transl_except <- NULL
       pos <- c(cur$pos1, cur$pos2) |> as.character()
       if (cur$direction == "-") {
         pos <- rev(pos)
@@ -298,6 +299,20 @@ export_files <- function(
           }
           if (nchar(cur$stop_codon) < 3) {
             note <- paste(c(note, "TAA stop codon is completed by the addition of 3' A residues to the mRNA"), collapse = "; ")
+            # transl_except marks the partial stop codon position(s) completed by poly-A
+            n_stop <- nchar(cur$stop_codon)
+            if (cur$direction == "+") {
+              te_end <- max(cur$pos1, cur$pos2)
+              te_start <- te_end - n_stop + 1
+            } else {
+              te_end <- min(cur$pos1, cur$pos2)
+              te_start <- te_end + n_stop - 1
+            }
+            if (n_stop == 1) {
+              transl_except <- paste0("(pos:", te_end, ",aa:TERM)")
+            } else {
+              transl_except <- paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
+            }
           }
 
           # write to .tbl
@@ -331,6 +346,10 @@ export_files <- function(
             cat(file = tbl_fn, sep = "\n", append = TRUE)
           paste("\t\t\ttransl_table\t", dat$genetic_code) |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
+          if (length(transl_except) > 0) {
+            paste0("\t\t\ttransl_except\t", transl_except) |>
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
+          }
           if (!cur$start_codon %in% start_codons) {
             paste("\t\t\tcodon_start\t", 1) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
@@ -428,6 +447,17 @@ export_files <- function(
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste("\t\t\ttransl_table\t", dat$genetic_code) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            if (nchar(cur$stop_codon) < 3) {
+              # extracted gene is oriented 5'->3', partial stop is the last base(s)
+              n_stop <- nchar(cur$stop_codon)
+              if (n_stop == 1) {
+                gene_transl_except <- paste0("(pos:", pos2_new, ",aa:TERM)")
+              } else {
+                gene_transl_except <- paste0("(pos:", pos2_new - n_stop + 1, "..", pos2_new, ",aa:TERM)")
+              }
+              paste0("\t\t\ttransl_except\t", gene_transl_except) |>
+                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            }
             if (!cur$start_codon %in% start_codons) {
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
@@ -478,6 +508,20 @@ export_files <- function(
           }
           if (nchar(cur$stop_codon) < 3) {
             note <- paste(c(note, "TAA stop codon is completed by the addition of 3' A residues to the mRNA"), collapse = "; ")
+            # transl_except marks the partial stop codon position(s) completed by poly-A
+            n_stop <- nchar(cur$stop_codon)
+            if (cur$direction == "+") {
+              te_end <- max(cur$pos1, cur$pos2)
+              te_start <- te_end - n_stop + 1
+            } else {
+              te_end <- min(cur$pos1, cur$pos2)
+              te_start <- te_end + n_stop - 1
+            }
+            if (n_stop == 1) {
+              transl_except <- paste0("(pos:", te_end, ",aa:TERM)")
+            } else {
+              transl_except <- paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
+            }
           }
 
           # write to .tbl
@@ -491,6 +535,10 @@ export_files <- function(
             cat(file = tbl_fn, sep = "\n", append = TRUE)
           paste("\t\t\ttransl_table\t", dat$genetic_code) |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
+          if (length(transl_except) > 0) {
+            paste0("\t\t\ttransl_except\t", transl_except) |>
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
+          }
           if (!cur$start_codon %in% start_codons) {
             paste("\t\t\tcodon_start\t", 1) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
@@ -573,6 +621,17 @@ export_files <- function(
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste("\t\t\ttransl_table\t", dat$genetic_code) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            if (nchar(cur$stop_codon) < 3) {
+              # extracted gene is oriented 5'->3', partial stop is the last base(s)
+              n_stop <- nchar(cur$stop_codon)
+              if (n_stop == 1) {
+                gene_transl_except <- paste0("(pos:", pos2_new, ",aa:TERM)")
+              } else {
+                gene_transl_except <- paste0("(pos:", pos2_new - n_stop + 1, "..", pos2_new, ",aa:TERM)")
+              }
+              paste0("\t\t\ttransl_except\t", gene_transl_except) |>
+                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            }
             if (!cur$start_codon %in% start_codons) {
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
