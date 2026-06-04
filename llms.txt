@@ -614,6 +614,9 @@ submission script for a computing cluster.
 - [`rotate_asmb()`](https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.md)
   : Rotate circular mitogenome to start at given gene
 
+- [`ruleset_browser()`](https://smithsonian.github.io/MitoPilot/reference/ruleset_browser.md)
+  : Interactive browser for MitoPilot curation rulesets
+
 - [`run_app()`](https://smithsonian.github.io/MitoPilot/reference/run_app.md)
   : Run the Shiny Application
 
@@ -684,3 +687,8 @@ submission script for a computing cluster.
   Curation](https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.md):
 - [Building Custom
   Databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md):
+
+### Curation Rulesets
+
+- [Curation Ruleset
+  Browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.md):

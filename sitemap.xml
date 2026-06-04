@@ -7,6 +7,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/index.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/authors.html</loc></url>
@@ -66,6 +67,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_starfish_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_turtle_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/ruleset_browser.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_app.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.html</loc></url>
@@ -82,5 +84,6 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/validate_octocoral_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/validate_starfish_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/validate_turtle_mito.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/ruleset-browser.html</loc></url>
 </urlset>
 

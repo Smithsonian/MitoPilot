@@ -174,6 +174,9 @@
 - [`rotate_asmb()`](https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.md)
   : Rotate circular mitogenome to start at given gene
 
+- [`ruleset_browser()`](https://smithsonian.github.io/MitoPilot/reference/ruleset_browser.md)
+  : Interactive browser for MitoPilot curation rulesets
+
 - [`run_app()`](https://smithsonian.github.io/MitoPilot/reference/run_app.md)
   : Run the Shiny Application
 

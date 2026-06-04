@@ -20,3 +20,8 @@
   Curation](https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.md):
 - [Building Custom
   Databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md):
+
+### Curation Rulesets
+
+- [Curation Ruleset
+  Browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.md):
