@@ -1713,7 +1713,10 @@ annotations_details_server <- function(id, rv) {
         dplyr::pull(params) |>
         json_parse() |>
         {
-          \(x) modifyList(x$rules[[rv$annotations$gene[selected()]]], x$default_rules[[rv$annotations$type[selected()]]])
+          \(x) modifyList(
+            x$default_rules[[rv$annotations$type[selected()]]] %||% list(),
+            x$rules[[rv$annotations$gene[selected()]]] %||% list()
+          )
         }()
       rv$editing$assembly <- get_assembly(
         ID = rv$annotations$ID[selected()],
@@ -1729,56 +1732,36 @@ annotations_details_server <- function(id, rv) {
     })
 
     ## Edit start-add ----
+    # Step magnitude (codons per click) comes from a numeric box (separate for
+    # START and STOP); clamp to [1, 50] and fall back to 1 for empty/invalid.
+    edit_step_size <- function(id) {
+      n <- suppressWarnings(as.integer(input[[id]]))
+      if (length(n) == 0 || is.na(n) || n < 1L) 1L else min(n, 50L)
+    }
+    # Keep the displayed box value inside [1, 50] when the user types directly.
+    for (.id in c("start_step_size", "stop_step_size")) {
+      local({
+        id <- .id
+        observeEvent(input[[id]], {
+          n <- input[[id]]
+          if (length(n) == 0 || is.na(n)) return()
+          clamped <- max(1, min(as.integer(n), 50))
+          if (!identical(as.integer(n), as.integer(clamped))) {
+            updateNumericInput(session, id, value = clamped)
+          }
+        })
+      })
+    }
     init("start-add-simple")
     on("start-add-simple", {
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
+      n_steps <- edit_step_size("start_step_size")
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
-        while (codon %nin% rv$editing$params$start_codons) {
-          pos1 <- pos1 - 3
-          req(pos1 > 0)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos1, pos1 + 2) |>
-            as.character()
-          if (isTRUE(input$single_codon)) break
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = session$userData$gcode)
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        while (codon %nin% rv$editing$params$start_codons) {
-          pos2 <- pos2 + 3
-          req(pos2 <= rv$editing$assembly@ranges@width)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos2 - 2, pos2) |>
-            Biostrings::reverseComplement() |>
-            as.character()
-          if (isTRUE(input$single_codon)) break
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$start_codon[selected()] <- codon
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$start_codon[selected()] <- unname(codon)
-    })
-    init("start-add-simple-5") # speed things up and avoid making big alignments lots of times
-    on("start-add-simple-5", {
-      rv$editing$stop_aln <- FALSE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos1 <- pos1 - 3
             req(pos1 > 0)
@@ -1794,8 +1777,8 @@ annotations_details_server <- function(id, rv) {
           Biostrings::translate(genetic.code = session$userData$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos2 <- pos2 + 3
             req(pos2 <= rv$editing$assembly@ranges@width)
@@ -1815,78 +1798,14 @@ annotations_details_server <- function(id, rv) {
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$start_codon[selected()] <- codon
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
-    })
-    init("start-add-simple-10") # speed things up and avoid making big alignments lots of times
-    on("start-add-simple-10", {
-      rv$editing$stop_aln <- FALSE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos1 <- pos1 - 3
-            req(pos1 > 0)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
-              as.character()
-            if (isTRUE(input$single_codon)) break
-            keep_going <- codon %nin% rv$editing$params$start_codons
-          }
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = session$userData$gcode)
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos2 <- pos2 + 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
-              Biostrings::reverseComplement() |>
-              as.character()
-            if (isTRUE(input$single_codon)) break
-            keep_going <- codon %nin% rv$editing$params$start_codons
-          }
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$start_codon[selected()] <- codon
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$start_codon[selected()] <- unname(codon)
-    })
-    observeEvent(input$`start-add-10`, {
-      message("moving start position +10...")
-      trigger("start-add-simple-10")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
-    })
-    observeEvent(input$`start-add-5`, {
-      message("moving start position +5...")
-      trigger("start-add-simple-5")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
     })
     observeEvent(input$`start-add`, {
       trigger("start-add-simple")
-      trigger("re_align")
+      shinyjs::delay(50, {
+        trigger("re_align")
+      })
     })
 
     ## Edit start-minus ----
@@ -1894,55 +1813,15 @@ annotations_details_server <- function(id, rv) {
     on("start-minus-simple", {
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
+      n_steps <- edit_step_size("start_step_size")
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
-        while (codon %nin% rv$editing$params$start_codons) {
-          pos1 <- pos1 + 3
-          req(pos1 < pos2)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos1, pos1 + 2) |>
-            as.character()
-          if (isTRUE(input$single_codon)) break
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        while (codon %nin% rv$editing$params$start_codons) {
-          pos2 <- pos2 - 3
-          req(pos2 > pos1)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos2 - 2, pos2) |>
-            Biostrings::reverseComplement() |>
-            as.character()
-          if (isTRUE(input$single_codon)) break
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$start_codon[selected()] <- unname(codon)
-    })
-    init("start-minus-simple-5") # speed things up and avoid making big alignments lots of times
-    on("start-minus-simple-5", {
-      rv$editing$stop_aln <- FALSE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos1 <- pos1 + 3
-            req(pos1 > 0)
+            req(pos1 < pos2)
             codon <- rv$editing$assembly |>
               Biostrings::subseq(pos1, pos1 + 2) |>
               as.character()
@@ -1952,14 +1831,15 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- rv$editing$assembly |>
           Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = session$userData$gcode)
+          Biostrings::translate(genetic.code = session$userData$gcode) |>
+          as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos2 <- pos2 - 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
+            req(pos2 > pos1)
             codon <- rv$editing$assembly |>
               Biostrings::subseq(pos2 - 2, pos2) |>
               Biostrings::reverseComplement() |>
@@ -1976,78 +1856,14 @@ annotations_details_server <- function(id, rv) {
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$start_codon[selected()] <- codon
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$start_codon[selected()] <- unname(codon)
-    })
-    init("start-minus-simple-10") # speed things up and avoid making big alignments lots of times
-    on("start-minus-simple-10", {
-      rv$editing$stop_aln <- FALSE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos1 <- pos1 + 3
-            req(pos1 > 0)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
-              as.character()
-            if (isTRUE(input$single_codon)) break
-            keep_going <- codon %nin% rv$editing$params$start_codons
-          }
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = session$userData$gcode)
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos2 <- pos2 - 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
-              Biostrings::reverseComplement() |>
-              as.character()
-            if (isTRUE(input$single_codon)) break
-            keep_going <- codon %nin% rv$editing$params$start_codons
-          }
-        }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$start_codon[selected()] <- codon
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$start_codon[selected()] <- unname(codon)
-    })
-    observeEvent(input$`start-minus-10`, {
-      message("moving start position -10...")
-      trigger("start-minus-simple-10")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
-    })
-    observeEvent(input$`start-minus-5`, {
-      message("moving start position -5...")
-      trigger("start-minus-simple-5")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
     })
     observeEvent(input$`start-minus`, {
       trigger("start-minus-simple")
-      trigger("re_align")
+      shinyjs::delay(50, {
+        trigger("re_align")
+      })
     })
 
     ## Edit stop-add ----
@@ -2055,78 +1871,13 @@ annotations_details_server <- function(id, rv) {
     on("stop-add-simple" , {
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
+      n_steps <- edit_step_size("stop_step_size")
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
         pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
-          pos2 <- pos2 + 3
-          req(pos2 <= rv$editing$assembly@ranges@width)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos2 - 2, pos2) |>
-            as.character() |>
-            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-            na.omit() |>
-            purrr::pluck(1)
-          if (isTRUE(input$single_codon) && length(codon) > 0) break
-          if (isTRUE(input$single_codon) && length(codon) == 0) {
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
-              as.character()
-            break
-          }
-          codon <- codon %||% "INIT"
-        }
-        pos2 <- pos2 - (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
-          pos1 <- pos1 - 3
-          req(pos1 >= 1)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos1, pos1 + 2) |>
-            Biostrings::reverseComplement() |>
-            as.character() |>
-            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-            na.omit() |>
-            purrr::pluck(1)
-          if (isTRUE(input$single_codon) && length(codon) > 0) break
-          if (isTRUE(input$single_codon) && length(codon) == 0) {
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
-              Biostrings::reverseComplement() |>
-              as.character()
-            break
-          }
-          codon <- codon %||% "INIT"
-        }
-        pos1 <- pos1 + (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
-    init("stop-add-simple-5")
-    on("stop-add-simple-5" , {
-      rv$editing$stop_aln <- TRUE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos2 <- pos2 + 3
             req(pos2 <= rv$editing$assembly@ranges@width)
@@ -2155,8 +1906,8 @@ annotations_details_server <- function(id, rv) {
       }
       if (rv$annotations$direction[selected()] == "-") {
         pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos1 <- pos1 - 3
             req(pos1 >= 1)
@@ -2190,100 +1941,12 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
-    init("stop-add-simple-10")
-    on("stop-add-simple-10" , {
-      rv$editing$stop_aln <- TRUE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos2 <- pos2 + 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
-              as.character() |>
-              stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-              na.omit() |>
-              purrr::pluck(1)
-            if (isTRUE(input$single_codon) && length(codon) > 0) break
-            if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos2 - 2, pos2) |>
-                as.character()
-              break
-            }
-            codon <- codon %||% "INIT"
-            keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
-          }
-        }
-        pos2 <- pos2 - (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos1 <- pos1 - 3
-            req(pos1 >= 1)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
-              Biostrings::reverseComplement() |>
-              as.character() |>
-              stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-              na.omit() |>
-              purrr::pluck(1)
-            if (isTRUE(input$single_codon) && length(codon) > 0) break
-            if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos1, pos1 + 2) |>
-                Biostrings::reverseComplement() |>
-                as.character()
-              break
-            }
-            codon <- codon %||% "INIT"
-            keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
-          }
-        }
-        pos1 <- pos1 + (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
-    observeEvent(input$`stop-add-10`, {
-      message("moving stop position +10...")
-      trigger("stop-add-simple-10")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
-    })
-    observeEvent(input$`stop-add-5`, {
-      message("moving stop position +5...")
-      trigger("stop-add-simple-5")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
     })
     observeEvent(input$`stop-add`, {
       trigger("stop-add-simple")
-      trigger("re_align")
+      shinyjs::delay(50, {
+        trigger("re_align")
+      })
     })
 
     ## Edit stop-minus ----
@@ -2291,82 +1954,13 @@ annotations_details_server <- function(id, rv) {
     on("stop-minus-simple", {
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
+      n_steps <- edit_step_size("stop_step_size")
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
         pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
-          pos2 <- pos2 - 3
-          req(pos2 <= rv$editing$assembly@ranges@width)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos2 - 2, pos2) |>
-            as.character() |>
-            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-            na.omit() |>
-            purrr::pluck(1)
-          if (isTRUE(input$single_codon) && length(codon) > 0){
-            break
-          }
-          if (isTRUE(input$single_codon) && length(codon) == 0) {
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
-              as.character()
-            break
-          }
-          codon <- codon %||% "INIT"
-        }
-        pos2 <- pos2 - (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        while (!any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))) {
-          pos1 <- pos1 + 3
-          req(pos1 >= 1)
-          codon <- rv$editing$assembly |>
-            Biostrings::subseq(pos1, pos1 + 2) |>
-            Biostrings::reverseComplement() |>
-            as.character() |>
-            stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-            na.omit() |>
-            purrr::pluck(1)
-          if (isTRUE(input$single_codon) && length(codon) > 0){
-            break
-          }
-          if (isTRUE(input$single_codon) && length(codon) == 0) {
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
-              Biostrings::reverseComplement() |>
-              as.character()
-            break
-          }
-          codon <- codon %||% "INIT"
-        }
-        pos1 <- pos1 + (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
-    init("stop-minus-simple-5")
-    on("stop-minus-simple-5", {
-      rv$editing$stop_aln <- TRUE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos2 <- pos2 - 3
             req(pos2 <= rv$editing$assembly@ranges@width)
@@ -2397,8 +1991,8 @@ annotations_details_server <- function(id, rv) {
       }
       if (rv$annotations$direction[selected()] == "-") {
         pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:5){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
+        for (counter in seq_len(n_steps)) {
+          keep_going <- TRUE
           while (keep_going) {
             pos1 <- pos1 + 3
             req(pos1 >= 1)
@@ -2434,105 +2028,12 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
       rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
-    init("stop-minus-simple-10")
-    on("stop-minus-simple-10", {
-      rv$editing$stop_aln <- TRUE
-      codon <- "INIT"
-      pos1 <- rv$annotations$pos1[selected()]
-      pos2 <- rv$annotations$pos2[selected()]
-      if (rv$annotations$direction[selected()] == "+") {
-        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos2 <- pos2 - 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
-              as.character() |>
-              stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-              na.omit() |>
-              purrr::pluck(1)
-            if (isTRUE(input$single_codon) && length(codon) > 0){
-              break
-            }
-            if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos2 - 2, pos2) |>
-                as.character()
-              break
-            }
-            codon <- codon %||% "INIT"
-            keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
-          }
-        }
-        pos2 <- pos2 - (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
-        for(counter in 1:10){
-          keep_going <- TRUE # modified loop logic to avoid premature exit
-          while (keep_going) {
-            pos1 <- pos1 + 3
-            req(pos1 >= 1)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
-              Biostrings::reverseComplement() |>
-              as.character() |>
-              stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
-              na.omit() |>
-              purrr::pluck(1)
-            if (isTRUE(input$single_codon) && length(codon) > 0){
-              break
-            }
-            if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos1, pos1 + 2) |>
-                Biostrings::reverseComplement() |>
-                as.character()
-              break
-            }
-            codon <- codon %||% "INIT"
-            keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
-          }
-        }
-        pos1 <- pos1 + (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
-          Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = session$userData$gcode) |>
-          as.character()
-      }
-      rv$annotations$pos1[selected()] <- pos1
-      rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
-      rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
-
-    observeEvent(input$`stop-minus-10`, {
-      message("moving start position -10...")
-      trigger("stop-minus-simple-10")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
-    })
-    observeEvent(input$`stop-minus-5`, {
-      message("moving start position -5...")
-      trigger("stop-minus-simple-5")
-      shinyjs::delay(50, {
-        trigger("re_align")
-        message("DONE")
-      })
     })
     observeEvent(input$`stop-minus`, {
       trigger("stop-minus-simple")
-      trigger("re_align")
+      shinyjs::delay(50, {
+        trigger("re_align")
+      })
     })
 
     ## RE-align after edit ----
@@ -3213,119 +2714,84 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           ),
           div(
             id = ns("edit_mode_ctrls"),
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 3em;",
+            class = "mp-edit-ctrls",
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1.5em;",
+            # Separate step boxes (codons per click) for START and STOP, each
+            # clamped to [1, 50] both in the UI and server-side. The - / +
+            # buttons sit to the left of each box; all on a single row.
+            # Zero the numericInput's default bottom margin and the pretty
+            # checkbox's vertical margin so every element lines up vertically.
+            tags$style(HTML(stringr::str_glue(
+              ".mp-step-box .form-group {{ margin-bottom: 0; }}",
+              ".mp-step-box .form-control {{ height: 28px; padding: 2px 4px; }}"
+            ))),
             div(
-              style = "display: flex; flex-flow: row nowrap; align-items: center;",
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add-10')}', 'plus-10', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+10"
-                )
-              ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add-5')}', 'plus-5', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+5"
-                )
-              ),
+              style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
+              tags$span(style = "font-weight: bold;", "START"),
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+1"
-                )
+                tags$span(style = "font-size: 0.75em;", "+")
               ),
-              div(style = "margin: 00.5em;", "START"),
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-1"
-                )
+                tags$span(style = "font-size: 0.75em;", "−")
               ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-5')}', 'minus-5', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-5"
-                )
-              ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-10')}', 'minus-10', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-10"
+              div(
+                class = "mp-step-box",
+                style = "width: 48px;",
+                numericInput(
+                  ns("start_step_size"),
+                  label = NULL,
+                  value = 1,
+                  min = 1,
+                  max = 50,
+                  step = 1,
+                  width = "48px"
                 )
               )
             ),
             div(
-              style = "display: flex; flex-flow: row nowrap; align-items: center;",
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus-10')}', 'minus-10', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-10"
-                )
-              ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus-5')}', 'minus-5', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-5"
-                )
-              ),
+              style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
+              tags$span(style = "font-weight: bold;", "STOP"),
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-1"
-                )
+                tags$span(style = "font-size: 0.75em;", "−")
               ),
-              div(style = "margin: 00.5em;", "STOP"),
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add')}', 'plus', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+1"
-                )
+                tags$span(style = "font-size: 0.75em;", "+")
               ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add-5')}', 'plus-5', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+5"
-                )
-              ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add-10')}', 'plus-10', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+10"
+              div(
+                class = "mp-step-box",
+                style = "width: 48px;",
+                numericInput(
+                  ns("stop_step_size"),
+                  label = NULL,
+                  value = 1,
+                  min = 1,
+                  max = 50,
+                  step = 1,
+                  width = "48px"
                 )
               )
             ),
-            div(
-              style = "padding-top: 14px;",
-              shinyWidgets::prettyCheckbox(
-                ns("single_codon"),
-                label = "single codon",
-                status = "primary",
-                inline = TRUE
-              )
+            tags$label(
+              style = paste(
+                "display: flex; align-items: center; gap: 4px;",
+                "margin: 0; font-weight: normal; cursor: pointer;"
+              ),
+              tags$input(
+                type = "checkbox",
+                style = "margin: 0; vertical-align: middle;",
+                onchange = stringr::str_glue(
+                  "Shiny.setInputValue('{ns('single_codon')}', this.checked, {{priority: 'event'}})"
+                )
+              ),
+              "single codon"
             )
           ) |> shinyjs::hidden()
         ),
