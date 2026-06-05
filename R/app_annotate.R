@@ -248,6 +248,7 @@ annotate_server <- function(id) {
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),
         rowClass = JS("function(rowInfo) {
+          if (!rowInfo || !rowInfo.values) return '';
           return 'mp-lock-' + rowInfo.values['annotate_lock'] +
                  ' mp-state-' + rowInfo.values['annotate_switch'];
         }"),
