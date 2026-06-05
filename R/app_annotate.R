@@ -17,6 +17,18 @@ ANNOTATE_COL_GROUP_LOOKUP <- {
   out
 }
 
+# Status-filter pickers. Values match the annotate_lock / annotate_switch
+# codes; each row is tagged with mp-lock-<v> / mp-state-<v> classes so
+# unselected codes can be hidden via CSS (same mechanism as the column
+# picker, so sort order, search, other filters, page, and selection survive).
+ANNOTATE_LOCK_CHOICES <- c("Unlocked" = "0", "Locked" = "1")
+ANNOTATE_STATE_CHOICES <- c(
+  "Pre-Annotate" = "0",
+  "In Progress"  = "1",
+  "Success"      = "2",
+  "Failed"       = "3"
+)
+
 #' annotate UI Function
 #'
 #' @description A shiny Module.
@@ -33,6 +45,30 @@ annotate_ui <- function(id) {
       uiOutput(ns("col_css")),
       div(
         style = "display: flex; align-items: center; gap: 20px; flex-wrap: wrap;",
+        shinyWidgets::pickerInput(
+          inputId  = ns("lock_filter"),
+          label    = "Lock:",
+          choices  = ANNOTATE_LOCK_CHOICES,
+          selected = ANNOTATE_LOCK_CHOICES,
+          multiple = TRUE,
+          options  = list(
+            `actions-box`          = TRUE,
+            `selected-text-format` = "count > 0"
+          ),
+          inline = TRUE
+        ),
+        shinyWidgets::pickerInput(
+          inputId  = ns("state_filter"),
+          label    = "State:",
+          choices  = ANNOTATE_STATE_CHOICES,
+          selected = ANNOTATE_STATE_CHOICES,
+          multiple = TRUE,
+          options  = list(
+            `actions-box`          = TRUE,
+            `selected-text-format` = "count > 0"
+          ),
+          inline = TRUE
+        ),
         shinyWidgets::pickerInput(
           inputId  = ns("col_groups"),
           label    = "Show columns:",
@@ -141,6 +177,17 @@ annotate_server <- function(id) {
       col_groups_rv(input$col_groups %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
+    # Mirror the lock / state status pickers the same way, so clearing all
+    # is distinguishable from the pre-init state. Default: all codes shown.
+    lock_filter_rv <- reactiveVal(unname(ANNOTATE_LOCK_CHOICES))
+    observeEvent(input$lock_filter, {
+      lock_filter_rv(input$lock_filter %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+    state_filter_rv <- reactiveVal(unname(ANNOTATE_STATE_CHOICES))
+    observeEvent(input$state_filter, {
+      state_filter_rv(input$state_filter %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
     # CSS class for a togglable column. Added to both body cells and the
     # header cell so the whole column collapses when the group is hidden.
     .grp <- function(col) {
@@ -151,13 +198,21 @@ annotate_server <- function(id) {
     # Inject a <style> tag that display:nones unselected column groups.
     # Hiding via CSS keeps columns mounted, so filters, sort, page, and
     # selection survive toggling.
+    # Also hide rows whose lock / state code is unselected. Rows are tagged
+    # with mp-lock-<v> / mp-state-<v> classes (see rowClass below); hiding via
+    # CSS keeps every row mounted, so sort, search, other column filters,
+    # page, and selection all survive toggling.
     output$col_css <- renderUI({
-      hidden <- setdiff(names(ANNOTATE_COL_GROUPS), col_groups_rv())
-      if (length(hidden) == 0) return(NULL)
-      rules <- paste0(".mp-grp-", hidden,
-                      " { display: none !important; }",
-                      collapse = "\n")
-      tags$style(HTML(rules))
+      hidden_grp   <- setdiff(names(ANNOTATE_COL_GROUPS), col_groups_rv())
+      hidden_lock  <- setdiff(unname(ANNOTATE_LOCK_CHOICES), lock_filter_rv())
+      hidden_state <- setdiff(unname(ANNOTATE_STATE_CHOICES), state_filter_rv())
+      rules <- c(
+        if (length(hidden_grp))   paste0(".mp-grp-",   hidden_grp,   " { display: none !important; }"),
+        if (length(hidden_lock))  paste0(".mp-lock-",  hidden_lock,  " { display: none !important; }"),
+        if (length(hidden_state)) paste0(".mp-state-", hidden_state, " { display: none !important; }")
+      )
+      if (length(rules) == 0) return(NULL)
+      tags$style(HTML(paste(rules, collapse = "\n")))
     })
 
     # Render table ----
@@ -183,6 +238,10 @@ annotate_server <- function(id) {
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),
+        rowClass = JS("function(rowInfo) {
+          return 'mp-lock-' + rowInfo.values['annotate_lock'] +
+                 ' mp-state-' + rowInfo.values['annotate_switch'];
+        }"),
         defaultColDef = colDef(align = "left", show = FALSE),
         columns = list(
           `.selection` = colDef(show = T, sticky = "left", width = 28),
