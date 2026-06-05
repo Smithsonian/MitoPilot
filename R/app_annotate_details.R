@@ -3218,35 +3218,10 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               style = "display: flex; flex-flow: row nowrap; align-items: center;",
               tags$button(
                 class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-10')}', 'minus-10', {{priority: 'event'}})"),
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add-10')}', 'plus-10', {{priority: 'event'}})"),
                 tags$span(
                   style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-10"
-                )
-              ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-5')}', 'minus-5', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-5"
-                )
-              ),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "-1"
-                )
-              ),
-              div(style = "margin: 00.5em;", "START"),
-              tags$button(
-                class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
-                tags$span(
-                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+1"
+                  "+10"
                 )
               ),
               tags$button(
@@ -3259,10 +3234,35 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               ),
               tags$button(
                 class = "icon-circle grow",
-                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add-10')}', 'plus-10', {{priority: 'event'}})"),
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
                 tags$span(
                   style = "font-size: 0.75em;",  # This matches fa-xs sizing
-                  "+10"
+                  "+1"
+                )
+              ),
+              div(style = "margin: 00.5em;", "START"),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-1"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-5')}', 'minus-5', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-5"
+                )
+              ),
+              tags$button(
+                class = "icon-circle grow",
+                onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus-10')}', 'minus-10', {{priority: 'event'}})"),
+                tags$span(
+                  style = "font-size: 0.75em;",  # This matches fa-xs sizing
+                  "-10"
                 )
               )
             ),
