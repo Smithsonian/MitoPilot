@@ -53,7 +53,8 @@ annotate_ui <- function(id) {
           multiple = TRUE,
           options  = list(
             `actions-box`          = TRUE,
-            `selected-text-format` = "count > 0"
+            `selected-text-format` = "count > 0",
+            width                  = "140px"
           ),
           inline = TRUE
         ),
@@ -65,7 +66,8 @@ annotate_ui <- function(id) {
           multiple = TRUE,
           options  = list(
             `actions-box`          = TRUE,
-            `selected-text-format` = "count > 0"
+            `selected-text-format` = "count > 0",
+            width                  = "140px"
           ),
           inline = TRUE
         ),
@@ -77,7 +79,8 @@ annotate_ui <- function(id) {
           multiple = TRUE,
           options  = list(
             `actions-box`          = TRUE,
-            `selected-text-format` = "count > 0"
+            `selected-text-format` = "count > 0",
+            width                  = "150px"
           ),
           inline = TRUE
         ),
