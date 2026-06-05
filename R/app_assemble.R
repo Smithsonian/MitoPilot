@@ -49,6 +49,8 @@ assemble_ui <- function(id) {
       multiple = TRUE,
       options  = list(
         `actions-box`          = TRUE,
+        selectAllText          = "All",
+        deselectAllText        = "None",
         `selected-text-format` = "count > 0",
         width                  = "140px"
       ),
@@ -62,6 +64,8 @@ assemble_ui <- function(id) {
       multiple = TRUE,
       options  = list(
         `actions-box`          = TRUE,
+        selectAllText          = "All",
+        deselectAllText        = "None",
         `selected-text-format` = "count > 0",
         width                  = "140px"
       ),
@@ -75,6 +79,8 @@ assemble_ui <- function(id) {
       multiple = TRUE,
       options  = list(
         `actions-box`          = TRUE,
+        selectAllText          = "All",
+        deselectAllText        = "None",
         `selected-text-format` = "count > 0",
         width                  = "150px"
       ),
