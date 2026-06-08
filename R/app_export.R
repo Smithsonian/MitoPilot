@@ -78,8 +78,13 @@ export_server <- function(id) {
       alns = NULL,        # named list of aligned AAStringSet (by gene)
       review_genes = NULL, # genes still pending review (drives navigation)
       review_idx = 1L,     # cursor into review_genes
-      resolved = character(0) # "ID|gene" keys the user marked resolved;
+      resolved = character(0), # "ID|gene" keys the user marked resolved;
                               # persists across flag/alignment recomputes
+      # Last-used review options, so the modal reopens with them (not defaults)
+      opt_review = TRUE,
+      opt_start = 10,
+      opt_stop = 10,
+      opt_ident = 60
     )
 
     # Refresh ----
@@ -339,7 +344,7 @@ export_server <- function(id) {
             "Review PCG annotations for outliers",
             "After exporting, align each protein-coding gene across samples and flag annotations with start/stop offsets or low identity."
           ),
-          value = T,
+          value = rv$opt_review,
           status = "primary"
         ),
         conditionalPanel(
@@ -355,7 +360,7 @@ export_server <- function(id) {
                   "Flag start offset > (aa):",
                   "Flag a sample when its start extends past, or falls short of, the alignment core by more than this many residues."
                 ),
-                value = 10, min = 1, step = 1, width = "100%"
+                value = rv$opt_start, min = 1, step = 1, width = "100%"
               )
             ),
             div(
@@ -366,7 +371,7 @@ export_server <- function(id) {
                   "Flag stop offset > (aa):",
                   "Flag a sample when its stop extends past, or falls short of, the alignment core by more than this many residues."
                 ),
-                value = 10, min = 1, step = 1, width = "100%"
+                value = rv$opt_stop, min = 1, step = 1, width = "100%"
               )
             ),
             div(
@@ -377,7 +382,7 @@ export_server <- function(id) {
                   "Flag sequence identity < (%):",
                   "Flag a sample when its mean percent identity to the rest of the group falls below this value."
                 ),
-                value = 60, min = 1, max = 100, step = 1, width = "100%"
+                value = rv$opt_ident, min = 1, max = 100, step = 1, width = "100%"
               )
             )
           )
@@ -479,6 +484,18 @@ export_server <- function(id) {
         )
         present_review(res)
       })
+    })
+
+    # Remember review-option edits so the modal reopens with them
+    observeEvent(input$review_outliers, rv$opt_review <- isTRUE(input$review_outliers))
+    observeEvent(input$start_aa, {
+      if (!is.null(input$start_aa) && !is.na(input$start_aa)) rv$opt_start <- input$start_aa
+    })
+    observeEvent(input$stop_aa, {
+      if (!is.null(input$stop_aa) && !is.na(input$stop_aa)) rv$opt_stop <- input$stop_aa
+    })
+    observeEvent(input$ident_pct, {
+      if (!is.null(input$ident_pct) && !is.na(input$ident_pct)) rv$opt_ident <- input$ident_pct
     })
 
     observeEvent(input$export_data, ignoreInit = T, {
