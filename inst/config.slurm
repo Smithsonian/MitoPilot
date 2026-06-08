@@ -80,6 +80,7 @@ params {
     blast_gb {
         cpus = 1
         memory = 8
+        maxForks = 10 // only allow 10 concurrent BLAST/ref-fetch runs to avoid NCBI timeout issues
         clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor

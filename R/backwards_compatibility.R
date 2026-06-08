@@ -820,6 +820,7 @@ backwards_compatibility <- function(
     blast_gb_lines <- c(
       "    blast_gb {",
       "        cpus = 1",
+      "        maxForks = 10 // only allow 10 concurrent BLAST/ref-fetch runs to avoid NCBI timeout issues",
       "        container = process.container",
       "        executor = process.executor",
       "    }"

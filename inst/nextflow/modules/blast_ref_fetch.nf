@@ -3,6 +3,8 @@ process blast_ref_fetch {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
+    maxForks params.blast_gb.maxForks
+
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/assemble/${opts_id}/blast_ref_${blast_accession}/remote_blast_ref.json", mode: 'copy'
 
     cpus { (params.blast_gb.cpus instanceof Integer) ? params.blast_gb.cpus : 1 }
