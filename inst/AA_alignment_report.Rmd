@@ -34,7 +34,7 @@ render_gene_aln <- function(gene) {
     dplyr::pull(translation, ID) |>
     Biostrings::AAStringSet()
   if (length(gene_seqs) < 2) {
-    cat(paste0("_Gene **", gene, "** found in fewer than 2 samples — alignment skipped._\n"))
+    cat(paste0("_Gene **", gene, "** found in fewer than 2 samples, alignment skipped._\n"))
     return(invisible(NULL))
   }
   gene_aln <- DECIPHER::AlignSeqs(gene_seqs, processors = NULL, verbose = FALSE)

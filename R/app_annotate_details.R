@@ -31,7 +31,7 @@ annotations_details_server <- function(id, rv) {
         ),
         icon("triangle-exclamation"),
         span(
-          tags$b(stringr::str_glue("Outlier review — {toupper(info$gene)}: ")),
+          tags$b(stringr::str_glue("Outlier review - {toupper(info$gene)}: ")),
           info$issue,
           tags$span(
             style = "color:#8a6d3b; margin-left:6px;",
@@ -43,7 +43,7 @@ annotations_details_server <- function(id, rv) {
           ),
           tags$span(
             style = "margin-left:6px;",
-            "— adjust this gene's start/stop position, then use “Back to Review”."
+            "- adjust this gene's start/stop position, then use 'Back to Review'."
           )
         )
       )

@@ -576,7 +576,7 @@ export_server <- function(id) {
       hl <- highlight_label()
       if (!is.null(hl) && hl %in% names(aln)) {
         aln <- aln[c(which(names(aln) == hl), which(names(aln) != hl))]
-        names(aln)[1] <- paste0("▶ ", names(aln)[1])
+        names(aln)[1] <- paste0(">> ", names(aln)[1])
       }
       msaR::msaR(
         aln,
