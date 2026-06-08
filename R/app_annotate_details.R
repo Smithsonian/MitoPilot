@@ -2733,7 +2733,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "−")
+                tags$span(style = "font-size: 0.75em;", "\u2212")
               ),
               div(
                 class = "mp-step-box",
@@ -2755,7 +2755,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               tags$button(
                 class = "icon-circle grow",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "−")
+                tags$span(style = "font-size: 0.75em;", "\u2212")
               ),
               tags$button(
                 class = "icon-circle grow",
