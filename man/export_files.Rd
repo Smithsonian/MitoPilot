@@ -16,7 +16,8 @@ export_files(
   generateAAalignments = T,
   gene_export = F,
   review = TRUE,
-  len_pct = 20,
+  start_aa = 10,
+  stop_aa = 10,
   ident_pct = 60
 )
 }
@@ -43,8 +44,11 @@ the export group will be exported}
 \item{review}{Run the PCG annotation outlier review after writing files and
 return the flagged results? (default: TRUE)}
 
-\item{len_pct}{Length-divergence threshold (percent) passed to
-[flag_PCG_outliers()]. Default 20.}
+\item{start_aa}{Start-offset threshold (amino acids) passed to
+[flag_PCG_outliers()]. Default 10.}
+
+\item{stop_aa}{Stop-offset threshold (amino acids) passed to
+[flag_PCG_outliers()]. Default 10.}
 
 \item{ident_pct}{Identity threshold (percent) passed to
 [flag_PCG_outliers()]. Default 60.}

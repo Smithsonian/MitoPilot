@@ -8,7 +8,8 @@ make_PCG_alignments(
   export_group = NULL,
   db = NULL,
   out_path = NULL,
-  len_pct = 20,
+  start_aa = 10,
+  stop_aa = 10,
   ident_pct = 60
 )
 }
@@ -19,8 +20,11 @@ make_PCG_alignments(
 
 \item{out_path}{path for output files}
 
-\item{len_pct}{Length-divergence threshold (percent) for the flagged-outlier
-section of the report. Default 20.}
+\item{start_aa}{Start-offset threshold (amino acids) for the flagged-outlier
+section of the report. Default 10.}
+
+\item{stop_aa}{Stop-offset threshold (amino acids) for the flagged-outlier
+section of the report. Default 10.}
 
 \item{ident_pct}{Identity threshold (percent) for the flagged-outlier section
 of the report. Default 60.}

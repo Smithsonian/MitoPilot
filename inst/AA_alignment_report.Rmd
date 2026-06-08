@@ -11,7 +11,8 @@ output:
 params:
   db_path: ""
   group: ""
-  len_pct: 20
+  start_aa: 10
+  stop_aa: 10
   ident_pct: 60
 ---
 
@@ -69,7 +70,8 @@ annotations <- MitoPilot:::get_export_PCG_annotations(con, group)
 outliers <- MitoPilot::flag_PCG_outliers(
   group = group,
   db = params$db_path,
-  len_pct = params$len_pct,
+  start_aa = params$start_aa,
+  stop_aa = params$stop_aa,
   ident_pct = params$ident_pct
 )$flags
 
@@ -81,7 +83,6 @@ if (nrow(outliers) == 0) {
       Sample = label,
       Gene = toupper(gene),
       Issue = issue,
-      `Length deviation (%)` = pct_len_dev,
       `Start offset (aa)` = start_offset,
       `Stop offset (aa)` = stop_offset,
       `Identity (%)` = pct_identity
@@ -90,8 +91,10 @@ if (nrow(outliers) == 0) {
 }
 ```
 
-Flags use a length-divergence threshold of `r params$len_pct`% (relative to each gene's
-group-median amino-acid length) and an identity threshold of `r params$ident_pct`%.
+Start/stop offset (aa) is the number of residues a sample's end extends past (+) or falls
+short of (-) the alignment's well-aligned core. Flags use a start-offset threshold of
+`r params$start_aa` aa, a stop-offset threshold of `r params$stop_aa` aa, and an identity
+threshold of `r params$ident_pct`%.
 
 # PCG Alignments
 

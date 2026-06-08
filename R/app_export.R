@@ -335,7 +335,7 @@ export_server <- function(id) {
           ns("review_outliers"),
           export_help_label(
             "Review PCG annotations for outliers",
-            "After exporting, align each protein-coding gene across samples and flag annotations with anomalous length or low identity."
+            "After exporting, align each protein-coding gene across samples and flag annotations with start/stop offsets or low identity."
           ),
           value = T,
           status = "primary"
@@ -348,12 +348,23 @@ export_server <- function(id) {
             div(
               style = "flex: 1",
               numericInput(
-                ns("len_pct"),
+                ns("start_aa"),
                 export_help_label(
-                  "Flag length divergence > (%):",
-                  "Flag a sample when its amino-acid length differs from the gene's group-median length by more than this percent."
+                  "Flag start offset > (aa):",
+                  "Flag a sample when its start extends past, or falls short of, the alignment core by more than this many residues."
                 ),
-                value = 20, min = 1, step = 1, width = "100%"
+                value = 10, min = 1, step = 1, width = "100%"
+              )
+            ),
+            div(
+              style = "flex: 1",
+              numericInput(
+                ns("stop_aa"),
+                export_help_label(
+                  "Flag stop offset > (aa):",
+                  "Flag a sample when its stop extends past, or falls short of, the alignment core by more than this many residues."
+                ),
+                value = 10, min = 1, step = 1, width = "100%"
               )
             ),
             div(
@@ -397,7 +408,8 @@ export_server <- function(id) {
         out_dir = session$userData$dir_out,
         gene_export = input$export_genes,
         review = isTRUE(input$review_outliers),
-        len_pct = input$len_pct %||% 20,
+        start_aa = input$start_aa %||% 10,
+        stop_aa = input$stop_aa %||% 10,
         ident_pct = input$ident_pct %||% 60
       )
       shinyjs::show("output_path")
@@ -409,7 +421,8 @@ export_server <- function(id) {
 
       # Remember params so "Back to Review" can recompute against fresh edits
       rv$review_group <- input$export_group
-      rv$review_len <- input$len_pct %||% 20
+      rv$review_start <- input$start_aa %||% 10
+      rv$review_stop <- input$stop_aa %||% 10
       rv$review_ident <- input$ident_pct %||% 60
 
       # Surface outlier review (if any flagged genes)
@@ -445,7 +458,8 @@ export_server <- function(id) {
       res <- flag_PCG_outliers(
         group = rv$review_group,
         db = file.path(session$userData$dir, ".sqlite"),
-        len_pct = rv$review_len %||% 20,
+        start_aa = rv$review_start %||% 10,
+        stop_aa = rv$review_stop %||% 10,
         ident_pct = rv$review_ident %||% 60
       )
       present_review(res)
@@ -569,7 +583,6 @@ export_server <- function(id) {
         dplyr::transmute(
           Sample = label,
           Issue = issue,
-          `Length deviation (%)` = pct_len_dev,
           `Start offset (aa)` = start_offset,
           `Stop offset (aa)` = stop_offset,
           `Identity (%)` = pct_identity,
@@ -587,12 +600,6 @@ export_server <- function(id) {
         columns = list(
           Sample = reactable::colDef(
             cell = rt_link(ns("review_pick"))
-          ),
-          `Length deviation (%)` = reactable::colDef(
-            header = export_help_label(
-              "Length deviation (%)",
-              "Percent difference between this sample's amino-acid length and the gene's group-median length."
-            )
           ),
           `Start offset (aa)` = reactable::colDef(
             cell = signed_cell,

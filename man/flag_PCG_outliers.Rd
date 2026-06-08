@@ -4,16 +4,19 @@
 \alias{flag_PCG_outliers}
 \title{Flag outlier PCG annotations in an export group}
 \usage{
-flag_PCG_outliers(group, db, len_pct = 20, ident_pct = 60)
+flag_PCG_outliers(group, db, start_aa = 10, stop_aa = 10, ident_pct = 60)
 }
 \arguments{
 \item{group}{Name of the export group.}
 
 \item{db}{Path to the project SQLite database.}
 
-\item{len_pct}{Length-divergence threshold (percent). A start or stop end is
-flagged when its residue offset from the alignment core exceeds this
-percent of the gene's median length. Default 20.}
+\item{start_aa}{Start-offset threshold (amino acids). A sample is flagged
+when its start extends past, or falls short of, the alignment core by more
+than this many residues. Default 10.}
+
+\item{stop_aa}{Stop-offset threshold (amino acids). As `start_aa`, but for
+the stop end. Default 10.}
 
 \item{ident_pct}{Identity threshold (percent). A sample is flagged when its
 mean pairwise identity to the rest of the group is below this. Default 60.}
@@ -22,9 +25,9 @@ mean pairwise identity to the rest of the group is below this. Default 60.}
 A list with two elements:
   \describe{
     \item{flags}{A tibble with one row per flagged (sample, gene):
-      `ID`, `label`, `path`, `scaffold`, `gene`, `aa_length`,
-      `median_length`, `pct_len_dev`, `pct_identity`, `start_flag`,
-      `stop_flag`, `identity_flag`, `issue`.}
+      `ID`, `label`, `path`, `scaffold`, `gene`, `pct_identity`,
+      `start_offset`, `stop_offset`, `start_flag`, `stop_flag`,
+      `identity_flag`, `issue`.}
     \item{alignments}{A named list (by gene) of clustering-ordered aligned
       `AAStringSet` objects, for every gene that has a flagged sample.}
   }
@@ -32,10 +35,9 @@ A list with two elements:
 \description{
 For each protein-coding gene in an export group, aligns the amino-acid
 translations across samples and flags annotations that are likely
-mis-positioned: those whose length diverges from the group median (pointing
-at a start/stop codon placed too short or too long) and those that align
-poorly to the rest of the group (a low sequence-identity catch-all for badly
-annotated regions). Start vs stop attribution is derived from where a
-sequence is missing from, or extends beyond, the alignment's well-occupied
-core columns.
+mis-positioned: those whose start or stop extends past, or falls short of,
+the alignment's well-occupied core by more than a set number of residues
+(pointing at a start/stop codon placed too long or too short) and those that
+align poorly to the rest of the group (a low sequence-identity catch-all for
+badly annotated regions).
 }

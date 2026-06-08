@@ -14,8 +14,10 @@
 #'   (default: FALSE)
 #' @param review Run the PCG annotation outlier review after writing files and
 #'   return the flagged results? (default: TRUE)
-#' @param len_pct Length-divergence threshold (percent) passed to
-#'   [flag_PCG_outliers()]. Default 20.
+#' @param start_aa Start-offset threshold (amino acids) passed to
+#'   [flag_PCG_outliers()]. Default 10.
+#' @param stop_aa Stop-offset threshold (amino acids) passed to
+#'   [flag_PCG_outliers()]. Default 10.
 #' @param ident_pct Identity threshold (percent) passed to
 #'   [flag_PCG_outliers()]. Default 60.
 #'
@@ -39,7 +41,8 @@ export_files <- function(
     generateAAalignments = T,
     gene_export = F,
     review = TRUE,
-    len_pct = 20,
+    start_aa = 10,
+    stop_aa = 10,
     ident_pct = 60) {
 
 
@@ -879,7 +882,8 @@ export_files <- function(
       export_group = group,
       db = db_path,
       out_path = group_pth,
-      len_pct = len_pct,
+      start_aa = start_aa,
+      stop_aa = stop_aa,
       ident_pct = ident_pct
     )
   }
@@ -888,7 +892,8 @@ export_files <- function(
     return(invisible(flag_PCG_outliers(
       group = group,
       db = db_path,
-      len_pct = len_pct,
+      start_aa = start_aa,
+      stop_aa = stop_aa,
       ident_pct = ident_pct
     )))
   }
@@ -902,8 +907,10 @@ export_files <- function(
 #' @param db path for sqlite database
 #' @param out_path path for output files
 #' @param export_group Name of the submission group
-#' @param len_pct Length-divergence threshold (percent) for the flagged-outlier
-#'   section of the report. Default 20.
+#' @param start_aa Start-offset threshold (amino acids) for the flagged-outlier
+#'   section of the report. Default 10.
+#' @param stop_aa Stop-offset threshold (amino acids) for the flagged-outlier
+#'   section of the report. Default 10.
 #' @param ident_pct Identity threshold (percent) for the flagged-outlier section
 #'   of the report. Default 60.
 #'
@@ -913,7 +920,8 @@ make_PCG_alignments <- function(
     export_group = NULL,
     db = NULL,
     out_path = NULL,
-    len_pct = 20,
+    start_aa = 10,
+    stop_aa = 10,
     ident_pct = 60) {
   rmarkdown::render(
     input = system.file("AA_alignment_report.Rmd", package = "MitoPilot"),
@@ -924,7 +932,8 @@ make_PCG_alignments <- function(
     params = list(
       group = export_group,
       db_path = db,
-      len_pct = len_pct,
+      start_aa = start_aa,
+      stop_aa = stop_aa,
       ident_pct = ident_pct
     )
   )
@@ -1063,33 +1072,34 @@ get_export_PCG_annotations <- function(con, group) {
 #'
 #' For each protein-coding gene in an export group, aligns the amino-acid
 #' translations across samples and flags annotations that are likely
-#' mis-positioned: those whose length diverges from the group median (pointing
-#' at a start/stop codon placed too short or too long) and those that align
-#' poorly to the rest of the group (a low sequence-identity catch-all for badly
-#' annotated regions). Start vs stop attribution is derived from where a
-#' sequence is missing from, or extends beyond, the alignment's well-occupied
-#' core columns.
+#' mis-positioned: those whose start or stop extends past, or falls short of,
+#' the alignment's well-occupied core by more than a set number of residues
+#' (pointing at a start/stop codon placed too long or too short) and those that
+#' align poorly to the rest of the group (a low sequence-identity catch-all for
+#' badly annotated regions).
 #'
 #' @param group Name of the export group.
 #' @param db Path to the project SQLite database.
-#' @param len_pct Length-divergence threshold (percent). A start or stop end is
-#'   flagged when its residue offset from the alignment core exceeds this
-#'   percent of the gene's median length. Default 20.
+#' @param start_aa Start-offset threshold (amino acids). A sample is flagged
+#'   when its start extends past, or falls short of, the alignment core by more
+#'   than this many residues. Default 10.
+#' @param stop_aa Stop-offset threshold (amino acids). As `start_aa`, but for
+#'   the stop end. Default 10.
 #' @param ident_pct Identity threshold (percent). A sample is flagged when its
 #'   mean pairwise identity to the rest of the group is below this. Default 60.
 #'
 #' @return A list with two elements:
 #'   \describe{
 #'     \item{flags}{A tibble with one row per flagged (sample, gene):
-#'       `ID`, `label`, `path`, `scaffold`, `gene`, `aa_length`,
-#'       `median_length`, `pct_len_dev`, `pct_identity`, `start_flag`,
-#'       `stop_flag`, `identity_flag`, `issue`.}
+#'       `ID`, `label`, `path`, `scaffold`, `gene`, `pct_identity`,
+#'       `start_offset`, `stop_offset`, `start_flag`, `stop_flag`,
+#'       `identity_flag`, `issue`.}
 #'     \item{alignments}{A named list (by gene) of clustering-ordered aligned
 #'       `AAStringSet` objects, for every gene that has a flagged sample.}
 #'   }
 #'
 #' @export
-flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
+flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct = 60) {
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
   on.exit(DBI::dbDisconnect(con))
 
@@ -1108,8 +1118,6 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
     if (nrow(sub) < 2) next
 
     seqs <- Biostrings::AAStringSet(stats::setNames(sub$translation, sub$ID))
-    aa_len <- as.integer(Biostrings::width(seqs))
-    med_len <- stats::median(aa_len)
 
     aln <- DECIPHER::AlignSeqs(seqs, processors = NULL, verbose = FALSE)
     dst <- DECIPHER::DistanceMatrix(
@@ -1137,8 +1145,6 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
     first_core <- min(core)
     last_core <- max(core)
 
-    res_threshold <- ceiling(len_pct / 100 * med_len)
-
     for (label in names(aln)) {
       row_chars <- cmat[label, ]
       res_cols <- which(row_chars != "-")
@@ -1152,8 +1158,8 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
       stop_short <- sum(core > max(res_cols)) # too short: annotation stops too early
       stop_long <- sum(res_cols > last_core) # too long: annotation stops too late
 
-      start_flag <- max(start_short, start_long) > res_threshold
-      stop_flag <- max(stop_short, stop_long) > res_threshold
+      start_flag <- max(start_short, start_long) > start_aa
+      stop_flag <- max(stop_short, stop_long) > stop_aa
 
       idx <- match(label, names(aln))
       ident <- unname(pct_identity[idx])
@@ -1178,9 +1184,6 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
         path = srow$path,
         scaffold = srow$scaffold,
         gene = g,
-        aa_length = aa_len[match(label, names(seqs))],
-        median_length = med_len,
-        pct_len_dev = round(100 * (aa_len[match(label, names(seqs))] - med_len) / med_len, 1),
         pct_identity = round(ident, 1),
         start_offset = start_offset,
         stop_offset = stop_offset,
@@ -1207,9 +1210,6 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
     path = integer(0),
     scaffold = integer(0),
     gene = character(0),
-    aa_length = integer(0),
-    median_length = numeric(0),
-    pct_len_dev = numeric(0),
     pct_identity = numeric(0),
     start_offset = integer(0),
     stop_offset = integer(0),
