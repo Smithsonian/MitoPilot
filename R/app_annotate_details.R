@@ -1212,13 +1212,7 @@ annotations_details_server <- function(id, rv) {
       )
       trigger("align_now")
     })
-    # Debounce align_now: rapid codon-edit clicks collapse into one MSA rebuild
-    # after the user pauses for ~250ms.
-    align_now_dbnc <- shiny::debounce(
-      shiny::reactive(gargoyle::watch("align_now")),
-      250
-    )
-    observeEvent(align_now_dbnc(), ignoreInit = TRUE, {
+    on("align_now", {
       # check if user wants to use fewer reference samples in alignment
       if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
 
@@ -1274,6 +1268,9 @@ annotations_details_server <- function(id, rv) {
         paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
         ""
       )
+      # Nonce so each edit invalidates: reactiveValues dedupes via identical(),
+      # which misses XStringSet content changes when the codon string repeats.
+      new_alignment$render_nonce <- isolate(rv$alignment$render_nonce %||% 0L) + 1L
       rv$alignment <- new_alignment
     })
     output$msa_header <- renderUI({
