@@ -455,14 +455,28 @@ export_server <- function(id) {
     # possibly edited) annotations so resolved flags drop off, then reopen.
     on("reopen_outlier_review", {
       req(rv$review_group)
-      res <- flag_PCG_outliers(
-        group = rv$review_group,
-        db = file.path(session$userData$dir, ".sqlite"),
-        start_aa = rv$review_start %||% 10,
-        stop_aa = rv$review_stop %||% 10,
-        ident_pct = rv$review_ident %||% 60
+      # Show the overlay first, then defer the (blocking) recompute one tick so
+      # the "hold tight" message actually paints before alignment starts.
+      waiter::waiter_show(
+        html = tagList(
+          waiter::spin_fading_circles(),
+          tags$h4(style = "color:white; margin-top:1em;", "Recomputing alignments, hold tight...")
+        ),
+        color = "rgba(40,40,40,0.85)"
       )
-      present_review(res)
+      shinyjs::delay(100, {
+        res <- tryCatch(
+          flag_PCG_outliers(
+            group = rv$review_group,
+            db = file.path(session$userData$dir, ".sqlite"),
+            start_aa = rv$review_start %||% 10,
+            stop_aa = rv$review_stop %||% 10,
+            ident_pct = rv$review_ident %||% 60
+          ),
+          finally = waiter::waiter_hide()
+        )
+        present_review(res)
+      })
     })
 
     observeEvent(input$export_data, ignoreInit = T, {
