@@ -109,6 +109,7 @@ export_server <- function(id) {
         height = 550,
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
+        striped = TRUE,
         rowStyle = rt_highlight_row(),
         defaultColDef = colDef(align = "left"),
         columns = list(
