@@ -61,6 +61,22 @@ annotations_details_server <- function(id, rv) {
 
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
+
+      # Cross-tab jump from the export outlier review: auto-select the flagged
+      # gene's row so the START/STOP editor opens directly on it. Delay lets the
+      # reactable widget render before we set its selection.
+      goto <- session$userData$goto_annotate
+      if (!is.null(goto) && !is.null(goto$gene) &&
+          identical(goto$ID, rv$updating$ID)) {
+        gidx <- which(rv$annotations$gene == goto$gene)
+        if (length(gidx) > 0) {
+          gidx <- gidx[[1]]
+          shinyjs::delay(500, {
+            reactable::updateReactable("table", selected = gidx, session = session)
+          })
+        }
+        session$userData$goto_annotate <- NULL
+      }
     })
 
     # Compact status pill renderer. `state` is one of "yes" / "no" / NA;

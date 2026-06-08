@@ -14,7 +14,10 @@ export_files(
     "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
   generateAAalignments = T,
-  gene_export = F
+  gene_export = F,
+  review = TRUE,
+  len_pct = 20,
+  ident_pct = 60
 )
 }
 \arguments{
@@ -36,6 +39,19 @@ the export group will be exported}
 
 \item{gene_export}{Export FASTAs and feature tables for individual genes?
 (default: FALSE)}
+
+\item{review}{Run the PCG annotation outlier review after writing files and
+return the flagged results? (default: TRUE)}
+
+\item{len_pct}{Length-divergence threshold (percent) passed to
+[flag_PCG_outliers()]. Default 20.}
+
+\item{ident_pct}{Identity threshold (percent) passed to
+[flag_PCG_outliers()]. Default 60.}
+}
+\value{
+Invisibly, the list returned by [flag_PCG_outliers()] when `review`
+  is TRUE (and a group of >1 sample is exported), otherwise `NULL`.
 }
 \description{
 Generate export NCBI files

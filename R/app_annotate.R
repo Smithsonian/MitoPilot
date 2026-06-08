@@ -1088,6 +1088,17 @@ annotate_server <- function(id) {
       rv$updating <- filtered_data() |> dplyr::slice(as.numeric(input$details))
       trigger("annotations_modal")
     })
+
+    # Open annotation details from the export outlier review (cross-tab jump)
+    on("goto_annotate", {
+      target <- session$userData$goto_annotate
+      req(target, target$ID)
+      hit <- rv$data |> dplyr::filter(ID == target$ID)
+      req(nrow(hit) > 0)
+      rv$updating <- hit |> dplyr::slice(1)
+      trigger("annotations_modal")
+    })
+
     annotations_details_server(ns("annotations"), rv)
 
     # CSV Export ----

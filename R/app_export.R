@@ -58,7 +58,11 @@ export_server <- function(id) {
       # curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
       #  dplyr::collect(),
       data = fetch_export_data(),
-      updating = NULL
+      updating = NULL,
+      outliers = NULL,    # flags tibble from flag_PCG_outliers()
+      alns = NULL,        # named list of aligned AAStringSet (by gene)
+      review_genes = NULL, # genes still pending review (drives navigation)
+      review_idx = 1L      # cursor into review_genes
     )
 
     # Refresh ----
@@ -303,6 +307,35 @@ export_server <- function(id) {
           value = F,
           status = "primary"
         ),
+        shinyWidgets::prettyCheckbox(
+          ns("review_outliers"),
+          "Review PCG annotations for outliers",
+          value = T,
+          status = "primary"
+        ),
+        conditionalPanel(
+          condition = "input.review_outliers == true",
+          ns = ns,
+          div(
+            style = "display: flex; flex-flow: row nowrap; gap: 1em;",
+            div(
+              style = "flex: 1",
+              numericInput(
+                ns("len_pct"),
+                "Flag length divergence > (%):",
+                value = 20, min = 1, step = 1, width = "100%"
+              )
+            ),
+            div(
+              style = "flex: 1",
+              numericInput(
+                ns("ident_pct"),
+                "Flag sequence identity < (%):",
+                value = 60, min = 1, max = 100, step = 1, width = "100%"
+              )
+            )
+          )
+        ),
         textAreaInput(
           ns("fasta_header_gene"),
           "Fasta Header Template for Gene Export (reference columns from your sample data using '{}', gene names will be automatically added):",
@@ -329,13 +362,16 @@ export_server <- function(id) {
     run_export <- function() {
       shinyjs::removeClass("gears", "paused")
       shinyjs::disable("export_data")
-      export_files(
+      review_res <- export_files(
         group = input$export_group,
         fasta_header = input$fasta_header,
         fasta_header_gene = input$fasta_header_gene,
         generateAAalignments = input$include_alignments,
         out_dir = session$userData$dir_out,
-        gene_export = input$export_genes
+        gene_export = input$export_genes,
+        review = isTRUE(input$review_outliers),
+        len_pct = input$len_pct %||% 20,
+        ident_pct = input$ident_pct %||% 60
       )
       shinyjs::show("output_path")
       output$out_path_location <- renderText({
@@ -343,6 +379,26 @@ export_server <- function(id) {
       })
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
+
+      # Surface outlier review (if any flagged genes)
+      if (isTRUE(input$review_outliers) && !is.null(review_res)) {
+        rv$outliers <- review_res$flags
+        rv$alns <- review_res$alignments
+        flagged_genes <- unique(review_res$flags$gene)
+        if (length(flagged_genes) > 0) {
+          rv$review_genes <- flagged_genes
+          rv$review_idx <- 1L
+          removeModal()
+          trigger("outlier_modal")
+        } else {
+          shinyWidgets::sendSweetAlert(
+            session = session,
+            title = "Outlier review",
+            text = "No outlier PCG annotations were flagged.",
+            type = "success"
+          )
+        }
+      }
     }
 
     observeEvent(input$export_data, ignoreInit = T, {
@@ -368,6 +424,122 @@ export_server <- function(id) {
     observeEvent(input$overwrite_confirm, ignoreInit = T, {
       req(input$overwrite_confirm)
       run_export()
+    })
+
+    # Outlier review ----
+    # Gene currently under review, and that gene's flagged samples
+    current_gene <- reactive({
+      req(rv$review_genes, rv$review_idx)
+      req(rv$review_idx <= length(rv$review_genes))
+      rv$review_genes[[rv$review_idx]]
+    })
+    current_flags <- reactive({
+      g <- current_gene()
+      rv$outliers[rv$outliers$gene == g, , drop = FALSE]
+    })
+
+    init("outlier_modal")
+    on("outlier_modal", {
+      req(length(rv$review_genes) > 0)
+      modalDialog(
+        title = "PCG Annotation Outlier Review",
+        size = "l",
+        div(
+          style = "margin-bottom: 0.5em; font-weight: bold;",
+          textOutput(ns("review_header"))
+        ),
+        p(
+          style = "color: #666; font-size: 0.9em;",
+          "Review the alignment below to decide whether the flagged samples are ",
+          "genuinely mis-annotated. Click 'edit' to jump to the annotation editor ",
+          "for a sample, or skip the gene if the flags look benign."
+        ),
+        msaR::msaROutput(ns("review_aln"), height = "420px"),
+        tags$hr(),
+        reactableOutput(ns("review_table")),
+        footer = tagList(
+          actionButton(ns("review_prev"), "Prev"),
+          actionButton(ns("review_next"), "Next"),
+          actionButton(ns("skip_gene"), "Skip this gene"),
+          modalButton("Done")
+        )
+      ) |> showModal()
+    })
+
+    output$review_header <- renderText({
+      req(rv$review_genes)
+      sprintf(
+        "Gene %d of %d: %s",
+        rv$review_idx, length(rv$review_genes), toupper(current_gene())
+      )
+    })
+
+    output$review_aln <- msaR::renderMsaR({
+      g <- current_gene()
+      aln <- rv$alns[[g]]
+      req(aln)
+      msaR::msaR(
+        aln,
+        overviewbox = FALSE,
+        seqlogo = FALSE,
+        menu = FALSE,
+        conservation = TRUE,
+        labelNameLength = 150,
+        colorscheme = "zappo",
+        alignmentHeight = 400
+      )
+    })
+
+    output$review_table <- renderReactable({
+      df <- current_flags()
+      req(nrow(df) > 0)
+      df <- df |>
+        dplyr::transmute(
+          Sample = label,
+          Issue = issue,
+          `Len dev (%)` = pct_len_dev,
+          `Identity (%)` = pct_identity,
+          edit = "edit"
+        )
+      reactable::reactable(
+        df,
+        sortable = TRUE,
+        highlight = TRUE,
+        defaultColDef = reactable::colDef(html = TRUE),
+        columns = list(
+          edit = reactable::colDef(
+            name = "",
+            width = 80,
+            align = "center",
+            cell = rt_icon_bttn_text(ns("goto_annot"), "fas fa-pen-to-square fa-xs")
+          )
+        )
+      )
+    })
+
+    observeEvent(input$review_prev, {
+      rv$review_idx <- max(1L, rv$review_idx - 1L)
+    })
+    observeEvent(input$review_next, {
+      rv$review_idx <- min(length(rv$review_genes), rv$review_idx + 1L)
+    })
+    observeEvent(input$skip_gene, {
+      g <- current_gene()
+      rv$review_genes <- setdiff(rv$review_genes, g)
+      if (length(rv$review_genes) == 0) {
+        removeModal()
+      } else {
+        rv$review_idx <- min(rv$review_idx, length(rv$review_genes))
+      }
+    })
+
+    # Jump to the annotate details modal for the chosen flagged sample
+    observeEvent(input$goto_annot, {
+      fr <- current_flags()[as.integer(input$goto_annot), ]
+      req(nrow(fr) == 1)
+      session$userData$goto_annotate <- list(ID = fr$ID, gene = fr$gene)
+      removeModal()
+      trigger("goto_annotate")
     })
   })
 }

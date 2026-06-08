@@ -120,6 +120,14 @@ app_server <- function(input, output, session) {
     trigger("export")
   })
 
+  # Cross-tab navigation: outlier review -> Annotate details modal.
+  # Initialized here (before sub-modules) so listeners in annotate_server /
+  # app_annotate_details exist after the flag is created.
+  init("goto_annotate")
+  on("goto_annotate", {
+    shinyWidgets::updatePickerInput(session, "mode", selected = "Annotate")
+  })
+
   # Sub-modules ----
   pipeline_server("run")
   assemble_server("assemble")
