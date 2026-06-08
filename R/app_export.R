@@ -340,10 +340,7 @@ export_server <- function(id) {
         h4("PCG Annotation Outlier Review", style = "margin-top: 0;"),
         shinyWidgets::prettyCheckbox(
           ns("review_outliers"),
-          export_help_label(
-            "Review PCG annotations for outliers",
-            "After exporting, align each protein-coding gene across samples and flag annotations with start/stop offsets or low identity."
-          ),
+          "Review PCG annotations for outliers",
           value = rv$opt_review,
           status = "primary"
         ),
