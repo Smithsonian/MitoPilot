@@ -77,7 +77,9 @@ export_server <- function(id) {
       outliers = NULL,    # flags tibble from flag_PCG_outliers()
       alns = NULL,        # named list of aligned AAStringSet (by gene)
       review_genes = NULL, # genes still pending review (drives navigation)
-      review_idx = 1L      # cursor into review_genes
+      review_idx = 1L,     # cursor into review_genes
+      resolved = character(0) # "ID|gene" keys the user marked resolved;
+                              # persists across flag/alignment recomputes
     )
 
     # Refresh ----
@@ -593,6 +595,7 @@ export_server <- function(id) {
     output$review_table <- renderReactable({
       df <- current_flags()
       req(nrow(df) > 0)
+      keys <- paste(df$ID, df$gene, sep = "|")
       df <- df |>
         dplyr::transmute(
           Sample = label,
@@ -600,16 +603,22 @@ export_server <- function(id) {
           `Start offset (aa)` = start_offset,
           `Stop offset (aa)` = stop_offset,
           `Identity (%)` = pct_identity,
+          resolved = keys %in% rv$resolved,
           edit = "edit"
         )
       # Show signed offsets with an explicit "+" for positive values
       signed_cell <- htmlwidgets::JS(
         "function(ci){var v=ci.value; if(v===null||v===undefined) return ''; return v>0?('+'+v):(''+v);}"
       )
+      # Dim + strike-through rows the user has marked resolved
+      resolved_row_style <- htmlwidgets::JS(
+        "function(rowInfo){ if(rowInfo && rowInfo.values && rowInfo.values['resolved']) return {opacity:0.5, textDecoration:'line-through'}; }"
+      )
       reactable::reactable(
         df,
         sortable = TRUE,
         highlight = TRUE,
+        rowStyle = resolved_row_style,
         defaultColDef = reactable::colDef(html = TRUE),
         columns = list(
           Sample = reactable::colDef(
@@ -635,6 +644,16 @@ export_server <- function(id) {
               "Mean percent identity of this sample to the rest of the group in the alignment."
             )
           ),
+          resolved = reactable::colDef(
+            name = "Resolved",
+            width = 90,
+            align = "center",
+            cell = rt_bool_bttn(
+              ns("toggle_resolved"),
+              "fas fa-circle-check",
+              "far fa-circle"
+            )
+          ),
           edit = reactable::colDef(
             name = "",
             width = 80,
@@ -643,6 +662,15 @@ export_server <- function(id) {
           )
         )
       )
+    })
+
+    # Toggle a (sample, gene) as resolved; kept in rv$resolved so it survives
+    # alignment/flag recomputes (Back to Review).
+    observeEvent(input$toggle_resolved, {
+      fr <- current_flags()[as.integer(input$toggle_resolved), ]
+      req(nrow(fr) == 1)
+      key <- paste(fr$ID, fr$gene, sep = "|")
+      rv$resolved <- if (key %in% rv$resolved) setdiff(rv$resolved, key) else c(rv$resolved, key)
     })
 
     # Click a sample name -> highlight it (moved to top, marked) in the MSA
