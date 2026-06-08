@@ -355,7 +355,7 @@ export_server <- function(id) {
                 ns("start_aa"),
                 export_help_label(
                   "Flag start offset > (aa):",
-                  "Flag a sample when its start extends past, or falls short of, the alignment core by more than this many residues."
+                  "Flag genes with start position offset by +/- this many amino acids from the core alignment"
                 ),
                 value = rv$opt_start, min = 1, step = 1, width = "100%"
               )
@@ -366,7 +366,7 @@ export_server <- function(id) {
                 ns("stop_aa"),
                 export_help_label(
                   "Flag stop offset > (aa):",
-                  "Flag a sample when its stop extends past, or falls short of, the alignment core by more than this many residues."
+                  "Flag genes with stop position offset by +/- this many amino acids from the core alignment"
                 ),
                 value = rv$opt_stop, min = 1, step = 1, width = "100%"
               )
@@ -377,7 +377,7 @@ export_server <- function(id) {
                 ns("ident_pct"),
                 export_help_label(
                   "Flag sequence identity < (%):",
-                  "Flag a sample when its mean percent identity to the rest of the group falls below this value."
+                  "Mean % identity threshold to flag a gene versus all other genes in alignment group"
                 ),
                 value = rv$opt_ident, min = 1, max = 100, step = 1, width = "100%"
               )
@@ -645,20 +645,20 @@ export_server <- function(id) {
             cell = signed_cell,
             header = export_help_label(
               "Start offset (aa)",
-              "Residues this sample's start extends past (+) or falls short of (-) the alignment's well-aligned core."
+              "Number of amino acids this sample's start extends past (+) or falls short of (-) the core alignment."
             )
           ),
           `Stop offset (aa)` = reactable::colDef(
             cell = signed_cell,
             header = export_help_label(
               "Stop offset (aa)",
-              "Residues this sample's stop extends past (+) or falls short of (-) the alignment's well-aligned core."
+              "Number of amino acids this sample's stop extends past (+) or falls short of (-) the core alignment."
             )
           ),
           `Identity (%)` = reactable::colDef(
             header = export_help_label(
               "Identity (%)",
-              "Mean percent identity of this sample to the rest of the group in the alignment."
+              "Mean percent identity of this sample versus rest of samples in alignment group."
             )
           ),
           resolved = reactable::colDef(
