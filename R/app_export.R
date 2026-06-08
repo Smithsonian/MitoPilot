@@ -14,6 +14,21 @@ EXPORT_COL_GROUP_LOOKUP <- {
   out
 }
 
+# Inline grey "?" help icon matching the tool-help icons (tool_help_icon),
+# but as a plain hover tooltip (native title) rather than a help modal.
+export_help_icon <- function(tip) {
+  shiny::icon(
+    "circle-question",
+    title = tip,
+    style = "color: #888; margin-left: 4px; cursor: help;"
+  )
+}
+
+# Label text followed by the help icon, for input labels and table headers.
+export_help_label <- function(label, tip) {
+  htmltools::tagList(label, export_help_icon(tip))
+}
+
 #' export UI Function
 #'
 #' @description A shiny Module.
@@ -318,7 +333,10 @@ export_server <- function(id) {
         h4("PCG Annotation Outlier Review", style = "margin-top: 0;"),
         shinyWidgets::prettyCheckbox(
           ns("review_outliers"),
-          "Review PCG annotations for outliers",
+          export_help_label(
+            "Review PCG annotations for outliers",
+            "After exporting, align each protein-coding gene across samples and flag annotations with anomalous length or low identity."
+          ),
           value = T,
           status = "primary"
         ),
@@ -331,7 +349,10 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("len_pct"),
-                "Flag length divergence > (%):",
+                export_help_label(
+                  "Flag length divergence > (%):",
+                  "Flag a sample when its amino-acid length differs from the gene's group-median length by more than this percent."
+                ),
                 value = 20, min = 1, step = 1, width = "100%"
               )
             ),
@@ -339,7 +360,10 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("ident_pct"),
-                "Flag sequence identity < (%):",
+                export_help_label(
+                  "Flag sequence identity < (%):",
+                  "Flag a sample when its mean percent identity to the rest of the group falls below this value."
+                ),
                 value = 60, min = 1, max = 100, step = 1, width = "100%"
               )
             )
@@ -383,26 +407,49 @@ export_server <- function(id) {
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
 
+      # Remember params so "Back to Review" can recompute against fresh edits
+      rv$review_group <- input$export_group
+      rv$review_len <- input$len_pct %||% 20
+      rv$review_ident <- input$ident_pct %||% 60
+
       # Surface outlier review (if any flagged genes)
       if (isTRUE(input$review_outliers) && !is.null(review_res)) {
-        rv$outliers <- review_res$flags
-        rv$alns <- review_res$alignments
-        flagged_genes <- unique(review_res$flags$gene)
-        if (length(flagged_genes) > 0) {
-          rv$review_genes <- flagged_genes
-          rv$review_idx <- 1L
-          removeModal()
-          trigger("outlier_modal")
-        } else {
-          shinyWidgets::sendSweetAlert(
-            session = session,
-            title = "Outlier review",
-            text = "No outlier PCG annotations were flagged.",
-            type = "success"
-          )
-        }
+        present_review(review_res)
       }
     }
+
+    # Load a review result into rv and open the modal (or report none found)
+    present_review <- function(res) {
+      rv$outliers <- res$flags
+      rv$alns <- res$alignments
+      flagged_genes <- unique(res$flags$gene)
+      if (length(flagged_genes) > 0) {
+        rv$review_genes <- flagged_genes
+        rv$review_idx <- 1L
+        removeModal()
+        trigger("outlier_modal")
+      } else {
+        shinyWidgets::sendSweetAlert(
+          session = session,
+          title = "Outlier review",
+          text = "No outlier PCG annotations were flagged.",
+          type = "success"
+        )
+      }
+    }
+
+    # Returning from the annotate details modal: recompute against the (now
+    # possibly edited) annotations so resolved flags drop off, then reopen.
+    on("reopen_outlier_review", {
+      req(rv$review_group)
+      res <- flag_PCG_outliers(
+        group = rv$review_group,
+        db = file.path(session$userData$dir, ".sqlite"),
+        len_pct = rv$review_len %||% 20,
+        ident_pct = rv$review_ident %||% 60
+      )
+      present_review(res)
+    })
 
     observeEvent(input$export_data, ignoreInit = T, {
       req(input$export_group)
@@ -440,10 +487,13 @@ export_server <- function(id) {
       g <- current_gene()
       rv$outliers[rv$outliers$gene == g, , drop = FALSE]
     })
+    # Sample (by label) to highlight in the MSA; cleared when the gene changes
+    highlight_label <- reactiveVal(NULL)
 
     init("outlier_modal")
     on("outlier_modal", {
       req(length(rv$review_genes) > 0)
+      highlight_label(NULL)
       modalDialog(
         title = "PCG Annotation Outlier Review",
         size = "l",
@@ -454,7 +504,7 @@ export_server <- function(id) {
         p(
           style = "color: #666; font-size: 0.9em;",
           "Review the alignment below to decide whether the flagged samples are ",
-          "genuinely mis-annotated. Click 'edit' to jump to the annotation editor ",
+          "need to be revised. Click 'edit' to jump to the annotation editor ",
           "for a sample, or skip the gene if the flags look benign."
         ),
         uiOutput(ns("review_aln_ui")),
@@ -494,6 +544,12 @@ export_server <- function(id) {
       g <- current_gene()
       aln <- rv$alns[[g]]
       req(aln)
+      # Move the picked sample to the top and mark it so it stands out
+      hl <- highlight_label()
+      if (!is.null(hl) && hl %in% names(aln)) {
+        aln <- aln[c(which(names(aln) == hl), which(names(aln) != hl))]
+        names(aln)[1] <- paste0("▶ ", names(aln)[1])
+      }
       msaR::msaR(
         aln,
         overviewbox = FALSE,
@@ -513,16 +569,51 @@ export_server <- function(id) {
         dplyr::transmute(
           Sample = label,
           Issue = issue,
-          `Len dev (%)` = pct_len_dev,
+          `Length deviation (%)` = pct_len_dev,
+          `Start offset (aa)` = start_offset,
+          `Stop offset (aa)` = stop_offset,
           `Identity (%)` = pct_identity,
           edit = "edit"
         )
+      # Show signed offsets with an explicit "+" for positive values
+      signed_cell <- htmlwidgets::JS(
+        "function(ci){var v=ci.value; if(v===null||v===undefined) return ''; return v>0?('+'+v):(''+v);}"
+      )
       reactable::reactable(
         df,
         sortable = TRUE,
         highlight = TRUE,
         defaultColDef = reactable::colDef(html = TRUE),
         columns = list(
+          Sample = reactable::colDef(
+            cell = rt_link(ns("review_pick"))
+          ),
+          `Length deviation (%)` = reactable::colDef(
+            header = export_help_label(
+              "Length deviation (%)",
+              "Percent difference between this sample's amino-acid length and the gene's group-median length."
+            )
+          ),
+          `Start offset (aa)` = reactable::colDef(
+            cell = signed_cell,
+            header = export_help_label(
+              "Start offset (aa)",
+              "Residues this sample's start extends past (+) or falls short of (-) the alignment's well-aligned core."
+            )
+          ),
+          `Stop offset (aa)` = reactable::colDef(
+            cell = signed_cell,
+            header = export_help_label(
+              "Stop offset (aa)",
+              "Residues this sample's stop extends past (+) or falls short of (-) the alignment's well-aligned core."
+            )
+          ),
+          `Identity (%)` = reactable::colDef(
+            header = export_help_label(
+              "Identity (%)",
+              "Mean percent identity of this sample to the rest of the group in the alignment."
+            )
+          ),
           edit = reactable::colDef(
             name = "",
             width = 80,
@@ -533,13 +624,24 @@ export_server <- function(id) {
       )
     })
 
+    # Click a sample name -> highlight it (moved to top, marked) in the MSA
+    observeEvent(input$review_pick, {
+      idx <- as.integer(input$review_pick)
+      lbl <- current_flags()$label[idx]
+      req(length(lbl) == 1, !is.na(lbl))
+      highlight_label(lbl)
+    })
+
     observeEvent(input$review_prev, {
+      highlight_label(NULL)
       rv$review_idx <- max(1L, rv$review_idx - 1L)
     })
     observeEvent(input$review_next, {
+      highlight_label(NULL)
       rv$review_idx <- min(length(rv$review_genes), rv$review_idx + 1L)
     })
     observeEvent(input$skip_gene, {
+      highlight_label(NULL)
       g <- current_gene()
       rv$review_genes <- setdiff(rv$review_genes, g)
       if (length(rv$review_genes) == 0) {
@@ -553,7 +655,7 @@ export_server <- function(id) {
     observeEvent(input$goto_annot, {
       fr <- current_flags()[as.integer(input$goto_annot), ]
       req(nrow(fr) == 1)
-      session$userData$goto_annotate <- list(ID = fr$ID, gene = fr$gene)
+      session$userData$goto_annotate_target <- list(ID = fr$ID, gene = fr$gene)
       removeModal()
       trigger("goto_annotate")
     })

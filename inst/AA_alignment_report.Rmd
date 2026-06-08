@@ -82,6 +82,8 @@ if (nrow(outliers) == 0) {
       Gene = toupper(gene),
       Issue = issue,
       `Length deviation (%)` = pct_len_dev,
+      `Start offset (aa)` = start_offset,
+      `Stop offset (aa)` = stop_offset,
       `Identity (%)` = pct_identity
     ) |>
     knitr::kable()

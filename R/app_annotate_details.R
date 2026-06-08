@@ -65,17 +65,23 @@ annotations_details_server <- function(id, rv) {
       # Cross-tab jump from the export outlier review: auto-select the flagged
       # gene's row so the START/STOP editor opens directly on it. Delay lets the
       # reactable widget render before we set its selection.
-      goto <- session$userData$goto_annotate
+      goto <- session$userData$goto_annotate_target
       if (!is.null(goto) && !is.null(goto$gene) &&
           identical(goto$ID, rv$updating$ID)) {
         gidx <- which(rv$annotations$gene == goto$gene)
         if (length(gidx) > 0) {
           gidx <- gidx[[1]]
+          tbl_id <- session$ns("table")
           shinyjs::delay(500, {
             reactable::updateReactable("table", selected = gidx, session = session)
+            # Scroll the (single-page) table so the selected gene is visible
+            shinyjs::runjs(sprintf(
+              "var t=document.getElementById('%s'); if(t){var r=t.querySelectorAll('.rt-tbody .rt-tr'); if(r[%d]){r[%d].scrollIntoView({block:'center', behavior:'smooth'});}}",
+              tbl_id, gidx - 1L, gidx - 1L
+            ))
           })
         }
-        session$userData$goto_annotate <- NULL
+        session$userData$goto_annotate_target <- NULL
       }
     })
 
@@ -366,6 +372,18 @@ annotations_details_server <- function(id, rv) {
       ref_msa_cache$key <- NULL
       trigger("update_annotate_table")
       removeModal()
+      # If we arrived here from the export outlier review, hop back to it
+      if (isTRUE(session$userData$return_to_review)) {
+        session$userData$return_to_review <- FALSE
+        session$userData$in_outlier_review <- FALSE
+        trigger("reopen_outlier_review")
+      }
+    })
+
+    # Return to the export outlier review (saves via the standard close path)
+    observeEvent(input$back_to_review, {
+      session$userData$return_to_review <- TRUE
+      shinyjs::click("close")
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
@@ -2852,6 +2870,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
+      if (isTRUE(session$userData$in_outlier_review)) {
+        actionButton(
+          ns("back_to_review"), "Back to Review",
+          icon = icon("arrow-left"),
+          class = "btn-success",
+          style = "float: left;"
+        )
+      },
       uiOutput(ns("status_toggles"), inline = TRUE),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("lock"), "Lock&Close"),

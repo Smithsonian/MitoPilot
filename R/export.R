@@ -1161,9 +1161,14 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
 
       if (!start_flag && !stop_flag && !identity_flag) next
 
+      # Signed per-end offset (aa) relative to the alignment core:
+      # negative = end placed too short, positive = extends too long.
+      start_offset <- start_long - start_short
+      stop_offset <- stop_long - stop_short
+
       issues <- character(0)
-      if (start_flag) issues <- c(issues, if (start_short >= start_long) "start too short" else "start too long")
-      if (stop_flag) issues <- c(issues, if (stop_short >= stop_long) "stop too short" else "stop too long")
+      if (start_flag) issues <- c(issues, if (start_offset < 0) "start too short" else "start too long")
+      if (stop_flag) issues <- c(issues, if (stop_offset < 0) "stop too short" else "stop too long")
       if (identity_flag) issues <- c(issues, "low identity")
 
       srow <- sub[match(label, sub$ID), ]
@@ -1177,6 +1182,8 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
         median_length = med_len,
         pct_len_dev = round(100 * (aa_len[match(label, names(seqs))] - med_len) / med_len, 1),
         pct_identity = round(ident, 1),
+        start_offset = start_offset,
+        stop_offset = stop_offset,
         start_flag = start_flag,
         stop_flag = stop_flag,
         identity_flag = identity_flag,
@@ -1204,6 +1211,8 @@ flag_PCG_outliers <- function(group, db, len_pct = 20, ident_pct = 60) {
     median_length = numeric(0),
     pct_len_dev = numeric(0),
     pct_identity = numeric(0),
+    start_offset = integer(0),
+    stop_offset = integer(0),
     start_flag = logical(0),
     stop_flag = logical(0),
     identity_flag = logical(0),

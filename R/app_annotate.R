@@ -1085,16 +1085,18 @@ annotate_server <- function(id) {
 
     # Open annotation details ----
     observeEvent(input$details, {
+      session$userData$in_outlier_review <- FALSE
       rv$updating <- filtered_data() |> dplyr::slice(as.numeric(input$details))
       trigger("annotations_modal")
     })
 
     # Open annotation details from the export outlier review (cross-tab jump)
     on("goto_annotate", {
-      target <- session$userData$goto_annotate
+      target <- session$userData$goto_annotate_target
       req(target, target$ID)
       hit <- rv$data |> dplyr::filter(ID == target$ID)
       req(nrow(hit) > 0)
+      session$userData$in_outlier_review <- TRUE
       rv$updating <- hit |> dplyr::slice(1)
       trigger("annotations_modal")
     })

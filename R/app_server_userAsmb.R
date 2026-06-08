@@ -97,6 +97,10 @@ app_server_userAsmb <- function(input, output, session) {
   on("goto_annotate", {
     shinyWidgets::updatePickerInput(session, "mode", selected = "Annotate")
   })
+  init("reopen_outlier_review")
+  on("reopen_outlier_review", {
+    shinyWidgets::updatePickerInput(session, "mode", selected = "Export")
+  })
 
   # Sub-modules ----
   pipeline_server_userAsmb("run")
