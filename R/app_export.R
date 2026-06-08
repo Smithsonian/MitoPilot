@@ -557,8 +557,11 @@ export_server <- function(id) {
         footer = tagList(
           actionButton(ns("review_prev"), "Prev"),
           actionButton(ns("review_next"), "Next"),
-          actionButton(ns("skip_gene"), "Skip this gene"),
-          modalButton("Done")
+          actionButton(ns("skip_gene"), "Mark gene completed", class = "btn-success"),
+          tags$button(
+            type = "button", class = "btn btn-primary",
+            `data-dismiss` = "modal", `data-bs-dismiss` = "modal", "Done"
+          )
         )
       ) |> showModal()
     })
