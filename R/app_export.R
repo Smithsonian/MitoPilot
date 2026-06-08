@@ -547,7 +547,7 @@ export_server <- function(id) {
         ),
         p(
           style = "color: #666; font-size: 0.9em;",
-          "Review the alignment below to decide whether the flagged samples are ",
+          "Review the alignment below to decide whether the flagged samples ",
           "need to be revised. Click 'edit' to jump to the annotation editor ",
           "for a sample, or skip the gene if the flags look benign."
         ),
