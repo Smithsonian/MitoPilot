@@ -676,7 +676,11 @@ export_server <- function(id) {
     observeEvent(input$goto_annot, {
       fr <- current_flags()[as.integer(input$goto_annot), ]
       req(nrow(fr) == 1)
-      session$userData$goto_annotate_target <- list(ID = fr$ID, gene = fr$gene)
+      session$userData$goto_annotate_target <- list(
+        ID = fr$ID, gene = fr$gene, issue = fr$issue,
+        start_offset = fr$start_offset, stop_offset = fr$stop_offset,
+        pct_identity = fr$pct_identity
+      )
       removeModal()
       trigger("goto_annotate")
     })
