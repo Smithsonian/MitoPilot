@@ -307,6 +307,15 @@ export_server <- function(id) {
           value = F,
           status = "primary"
         ),
+        textAreaInput(
+          ns("fasta_header_gene"),
+          "Fasta Header Template for Gene Export (reference columns from your sample data using '{}', gene names will be automatically added):",
+          "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] [location=mitochondrion] {Taxon}",
+          width = "100%"
+        ),
+        # PCG outlier review options, separated from the export options above
+        tags$hr(style = "border-top: 1px solid #ccc; margin: 1em 0 0.75em;"),
+        h4("PCG Annotation Outlier Review", style = "margin-top: 0;"),
         shinyWidgets::prettyCheckbox(
           ns("review_outliers"),
           "Review PCG annotations for outliers",
@@ -335,12 +344,6 @@ export_server <- function(id) {
               )
             )
           )
-        ),
-        textAreaInput(
-          ns("fasta_header_gene"),
-          "Fasta Header Template for Gene Export (reference columns from your sample data using '{}', gene names will be automatically added):",
-          "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] [location=mitochondrion] {Taxon}",
-          width = "100%"
         ),
         div(
           id = ns("output_path"),
@@ -454,7 +457,7 @@ export_server <- function(id) {
           "genuinely mis-annotated. Click 'edit' to jump to the annotation editor ",
           "for a sample, or skip the gene if the flags look benign."
         ),
-        msaR::msaROutput(ns("review_aln"), height = "420px"),
+        uiOutput(ns("review_aln_ui")),
         tags$hr(),
         reactableOutput(ns("review_table")),
         footer = tagList(
@@ -474,6 +477,19 @@ export_server <- function(id) {
       )
     })
 
+    # Size the alignment viewport to the number of sequences so small groups
+    # don't leave a large blank gap below the rows.
+    review_aln_height <- reactive({
+      g <- current_gene()
+      aln <- rv$alns[[g]]
+      req(aln)
+      min(400L, max(120L, as.integer(length(aln) * 18 + 40)))
+    })
+
+    output$review_aln_ui <- renderUI({
+      msaR::msaROutput(ns("review_aln"), height = paste0(review_aln_height() + 10, "px"))
+    })
+
     output$review_aln <- msaR::renderMsaR({
       g <- current_gene()
       aln <- rv$alns[[g]]
@@ -486,7 +502,7 @@ export_server <- function(id) {
         conservation = TRUE,
         labelNameLength = 150,
         colorscheme = "zappo",
-        alignmentHeight = 400
+        alignmentHeight = review_aln_height()
       )
     })
 
