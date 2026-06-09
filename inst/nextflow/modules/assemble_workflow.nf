@@ -1,10 +1,8 @@
 include {assemble} from './assemble.nf'
 
-// run_blast comes from blast_opts via LEFT JOIN so a missing/NULL blast_opts
-// still flows through (treated as run_blast=1 by the default-null coalesce
-// in the multiMap below). This is read by ASSEMBLE so it can finalize
-// state=2 directly for run_blast=0 samples, eliminating the race with
-// BLAST_GENBANK's filtered-out write.
+// LEFT JOIN so a missing/NULL blast_opts still flows through (coalesced to
+// run_blast=1 below). ASSEMBLE uses run_blast to finalize state=2 directly
+// for run_blast=0 samples.
 params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.seeds_db, opts.labels_db, opts.getOrganelle, opts.assembler, ' +
                   'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
@@ -110,7 +108,6 @@ workflow ASSEMBLE {
           .sqlInsert( statement: params.sqlDeleteAssemblies, db: 'sqlite')
 
         // Per-sample summary: count paths, max scaffolds-per-path, lengths, topologies
-        // (replaces the splitFasta + groupTuple aggregation that previously blocked the batch)
         assemble_out[0]
             .filter{ it[1] ==~ /^(?!.*assembly_0\.fasta$).*$/ }    // exclude empty assemblies
             .map { it ->
@@ -151,10 +148,9 @@ workflow ASSEMBLE {
             }
             .set { summarized }
 
-        // Apply user-configured thresholds: split into pass / fail branches
-        // Combine with min_len_summary so the all-short check can fire per-sample,
-        // and with run_blast_lookup so ASSEMBLE can finalize state=2 directly for
-        // run_blast=0 samples (single-writer fix for the BLAST_GENBANK race).
+        // Apply user-configured thresholds: split into pass / fail branches.
+        // Combine with min_len_summary (per-sample all-short check) and
+        // run_blast_lookup (state=2 finalization for run_blast=0 samples).
         summarized
             .combine(min_len_summary, by: 0)
             .combine(run_blast_lookup, by: 0)
@@ -165,9 +161,8 @@ workflow ASSEMBLE {
             .set { branched }
 
         // PASS: classify each sample's status/notes and emit per channel.
-        // Only state=4 outcomes are propagated downstream; state=3 (terminal
-        // failures) and state=2 (run_blast=0 success) do not consume
-        // downstream BLAST/EFetch resources.
+        // Only state=4 propagates downstream; state=3 (failed) and state=2
+        // (run_blast=0 success) are terminal here.
         branched.pass
             .map { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length, run_blast ->
                 def status = '4'
@@ -187,10 +182,8 @@ workflow ASSEMBLE {
                     status = '3'
                     notes  = "All scaffolds below min assembly length (${min_assembly_length} bp)"
                 }
-                // Single-writer finalization for no_blast samples: if assembly
-                // succeeded (status still '4') AND BLAST is not requested,
-                // write state=2 directly so BLAST_GENBANK never has to race
-                // with ASSEMBLE's UPDATE on this row.
+                // no_blast samples: if assembly succeeded (status '4') and BLAST is
+                // not requested, write state=2 directly here.
                 if (status == '4' && (run_blast as Integer) == 0) {
                     status = '2'
                 }
@@ -293,14 +286,10 @@ workflow ASSEMBLE {
 
     emit:
         // Two named channels with different gating:
-        //   cov   — samples with a usable assembly (status 4 OR status 2 from
-        //           run_blast=0). COVERAGE still runs for no_blast samples so
-        //           the per-scaffold depth/gc/errors columns get populated
-        //           and downstream ANNOTATE finds the coverageStats.csv.
-        //   blast — only status=4. State=2 (no_blast) and state=3 (terminal
-        //           assembly failure) are excluded so BLAST_GENBANK never
-        //           races with a finalized row and never wastes a remote
-        //           BLAST call on an unusable assembly.
+        //   cov   — usable assemblies (status 4, or status 2 from run_blast=0).
+        //           COVERAGE runs for no_blast samples too so depth/gc/errors and
+        //           coverageStats.csv get populated for ANNOTATE.
+        //   blast — status=4 only (excludes no_blast and failed assemblies).
         cov   = pass_ch.downstream
                     .filter { raw, status -> status == '4' || status == '2' }
                     .map    { raw, status -> raw }

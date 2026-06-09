@@ -139,10 +139,8 @@ workflow BLAST_GENBANK {
             }
             .set { blast_out }
 
-        // Write state=4 (BLAST done, ref fetch pending) for samples that ran BLAST
-        // successfully; state=2 is written by BLAST_REF_FETCH once the reference fetch
-        // also completes. Redundant updates on the same id are safe (WHERE keyed on
-        // assemble_switch = 4).
+        // Write state=4 (BLAST done, ref fetch pending); BLAST_REF_FETCH writes
+        // state=2 once the ref fetch completes. Redundant per-id updates are safe.
         blast_out.state
             .map { id, result_file -> tuple('4', id) }
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
