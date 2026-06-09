@@ -93,6 +93,8 @@ backwards_compatibility <- function(
       "orf_opts" %in% DBI::dbListTables(con) &&
       orffinder_conf &&
       orf_block_conf &&
+      "assembly_blast" %in% DBI::dbListTables(con) &&
+      "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
       isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
@@ -948,6 +950,32 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "blast_opts"
       )
+  }
+
+  # if edit_positions column doesn't exist in assemblies, add it
+  if (!("edit_positions" %in% DBI::dbListFields(con, "assemblies"))) {
+    message("added 'edit_positions' column to assemblies table")
+    DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
+  }
+
+  # if assembly_blast table doesn't exist, create it (per-path BLAST hits)
+  if (!("assembly_blast" %in% DBI::dbListTables(con))) {
+    message("created assembly_blast table")
+    DBI::dbExecute(con,
+      "CREATE TABLE assembly_blast (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL,
+        blast_opts TEXT,
+        blast_accession TEXT,
+        blast_species TEXT,
+        blast_pident REAL,
+        blast_qcovs REAL,
+        blast_evalue REAL,
+        blast_lineage TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path)
+      );"
+    )
   }
 
   # if .config does not contain "blast_gb" params section, add it

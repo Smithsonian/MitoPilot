@@ -25,16 +25,17 @@ process blast_genbank {
 
 
 
-    tag "${id}"
+    tag "${id}.${path_idx}"
 
     input:
-        tuple val(id), path(assembly), val(opts_id), val(entrez_query), val(extra_opts)
+        tuple val(id), val(path_idx), path(assembly), val(opts_id), val(entrez_query), val(extra_opts)
 
     output:
-        tuple val(id), path("${outDir}/blast_genbank.txt")
+        tuple val(id), val(path_idx), path("${outDir}/${outFile}")
 
     shell:
     outDir = "${id}/assemble/${opts_id}"
+    outFile = "blast_genbank_${path_idx}.txt"
     '''
     mkdir -p !{outDir}
     # Back off on retries to give NCBI BLAST time to recover from rate limits
@@ -53,8 +54,8 @@ process blast_genbank {
         -task megablast \
         -entrez_query "!{entrez_query}" \
         !{extra_opts} \
-        > !{outDir}/blast_genbank.txt
+        > !{outDir}/!{outFile}
     # Fail if output is empty; triggers retry so transient connection failures are retried
-    [ -s !{outDir}/blast_genbank.txt ] || exit 1
+    [ -s !{outDir}/!{outFile} ] || exit 1
     '''
 }
