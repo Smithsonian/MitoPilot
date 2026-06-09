@@ -435,14 +435,21 @@ export_server <- function(id) {
       }
     }
 
-    # Load a review result into rv and open the modal (or report none found)
-    present_review <- function(res) {
+    # Load a review result into rv and open the modal (or report none found).
+    # focus_gene: optional gene name to navigate to (e.g. the gene just reviewed
+    # via "Back to Review"); falls back to the first gene when absent or no longer
+    # flagged.
+    present_review <- function(res, focus_gene = NULL) {
       rv$outliers <- res$flags
       rv$alns <- res$alignments
       flagged_genes <- unique(res$flags$gene)
       if (length(flagged_genes) > 0) {
         rv$review_genes <- flagged_genes
-        rv$review_idx <- 1L
+        rv$review_idx <- if (!is.null(focus_gene) && focus_gene %in% flagged_genes) {
+          which(flagged_genes == focus_gene)[1]
+        } else {
+          1L
+        }
         removeModal()
         trigger("outlier_modal")
       } else {
@@ -455,10 +462,40 @@ export_server <- function(id) {
       }
     }
 
+    # Merge a single-gene recompute into the cached review state. Editing one gene
+    # only changes that gene's alignment, so replace just its flags/alignment and
+    # keep review_genes (and the user's position) stable, then navigate back to
+    # the focal gene and reopen.
+    merge_review <- function(res, gene) {
+      rv$outliers <- dplyr::bind_rows(
+        rv$outliers[rv$outliers$gene != gene, , drop = FALSE],
+        res$flags
+      )
+      # res$alignments has the gene only when it still has a flagged sample
+      rv$alns[[gene]] <- res$alignments[[gene]]
+      # review_genes intentionally unchanged: genes stay in the list and are
+      # marked resolved rather than removed.
+      if (gene %in% rv$review_genes) {
+        rv$review_idx <- which(rv$review_genes == gene)[1]
+      }
+      removeModal()
+      trigger("outlier_modal")
+    }
+
     # Returning from the annotate details modal: recompute against the (now
-    # possibly edited) annotations so resolved flags drop off, then reopen.
+    # possibly edited) annotations so resolved flags drop off, then reopen. The
+    # editing lock guarantees only the focal gene changed, so recompute just that
+    # gene and merge it into the cached results instead of re-aligning every PCG.
     on("reopen_outlier_review", {
       req(rv$review_group)
+      # The (sample, gene) just reviewed in the annotate details modal: mark it
+      # resolved (survives the recompute below) and remember the gene so we can
+      # navigate back to it.
+      rr <- session$userData$resolve_on_return
+      session$userData$resolve_on_return <- NULL
+      if (!is.null(rr)) {
+        rv$resolved <- union(rv$resolved, paste(rr$ID, rr$gene, sep = "|"))
+      }
       # Show the overlay first, then defer the (blocking) recompute one tick so
       # the "hold tight" message actually paints before alignment starts.
       waiter::waiter_show(
@@ -469,17 +506,25 @@ export_server <- function(id) {
         color = "rgba(40,40,40,0.85)"
       )
       shinyjs::delay(100, {
+        focal <- if (!is.null(rr)) rr$gene else NULL
         res <- tryCatch(
           flag_PCG_outliers(
             group = rv$review_group,
             db = file.path(session$userData$dir, ".sqlite"),
             start_aa = rv$review_start %||% 10,
             stop_aa = rv$review_stop %||% 10,
-            ident_pct = rv$review_ident %||% 60
+            ident_pct = rv$review_ident %||% 60,
+            genes = focal
           ),
           finally = waiter::waiter_hide()
         )
-        present_review(res)
+        # Scoped merge when we know the single edited gene and have cached state;
+        # otherwise fall back to a full reload.
+        if (!is.null(focal) && !is.null(rv$outliers)) {
+          merge_review(res, focal)
+        } else {
+          present_review(res, focus_gene = focal)
+        }
       })
     })
 
@@ -557,7 +602,7 @@ export_server <- function(id) {
         footer = tagList(
           actionButton(ns("review_prev"), "Prev"),
           actionButton(ns("review_next"), "Next"),
-          actionButton(ns("skip_gene"), "Mark gene completed", class = "btn-success"),
+          actionButton(ns("skip_gene"), "Mark gene resolved", class = "btn-success"),
           tags$button(
             type = "button", class = "btn btn-primary",
             `data-dismiss` = "modal", `data-bs-dismiss` = "modal", "Done"
@@ -706,14 +751,17 @@ export_server <- function(id) {
       highlight_label(NULL)
       rv$review_idx <- min(length(rv$review_genes), rv$review_idx + 1L)
     })
+    # Mark gene completed: flag every sample for this gene as resolved (kept in
+    # rv$resolved so the rows survive recompute and show struck-through) rather than
+    # removing the gene from the review list. Advance to the next gene if any.
     observeEvent(input$skip_gene, {
       highlight_label(NULL)
-      g <- current_gene()
-      rv$review_genes <- setdiff(rv$review_genes, g)
-      if (length(rv$review_genes) == 0) {
-        removeModal()
-      } else {
-        rv$review_idx <- min(rv$review_idx, length(rv$review_genes))
+      fr <- current_flags()
+      req(nrow(fr) > 0)
+      keys <- paste(fr$ID, fr$gene, sep = "|")
+      rv$resolved <- union(rv$resolved, keys)
+      if (rv$review_idx < length(rv$review_genes)) {
+        rv$review_idx <- rv$review_idx + 1L
       }
     })
 

@@ -4,7 +4,14 @@
 \alias{flag_PCG_outliers}
 \title{Flag outlier PCG annotations in an export group}
 \usage{
-flag_PCG_outliers(group, db, start_aa = 10, stop_aa = 10, ident_pct = 60)
+flag_PCG_outliers(
+  group,
+  db,
+  start_aa = 10,
+  stop_aa = 10,
+  ident_pct = 60,
+  genes = NULL
+)
 }
 \arguments{
 \item{group}{Name of the export group.}
@@ -20,6 +27,11 @@ the stop end. Default 10.}
 
 \item{ident_pct}{Identity threshold (percent). A sample is flagged when its
 mean pairwise identity to the rest of the group is below this. Default 60.}
+
+\item{genes}{Optional character vector of gene names. When supplied, only
+these genes are aligned and flagged (the rest are skipped), e.g. to
+recompute a single gene edited via "Back to Review". Default `NULL` (all
+genes).}
 }
 \value{
 A list with two elements:

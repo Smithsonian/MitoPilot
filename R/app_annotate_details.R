@@ -78,7 +78,8 @@ annotations_details_server <- function(id, rv) {
           ),
           tags$span(
             style = "margin-left:6px;",
-            "- adjust this gene's start/stop position, then use 'Back to Review'."
+            "- only this gene is editable in review mode; adjust its start/stop ",
+            "position, then use 'Back to Review'."
           )
         )
       )
@@ -355,6 +356,31 @@ annotations_details_server <- function(id, rv) {
         if (length(sel) == 0) {
           return(sel)
         }
+        # Review mode: only the focal (flagged) gene is editable. If the user
+        # selects a different row, warn and snap the selection back so only one
+        # gene can change between "Back to Review" recomputes.
+        if (isTRUE(session$userData$in_outlier_review)) {
+          info <- outlier_flag()
+          if (!is.null(info) && !is.null(info$gene)) {
+            focal_idx <- which(rv$annotations$gene == info$gene)
+            if (length(focal_idx) > 0) {
+              focal_idx <- focal_idx[[1]]
+              if (!identical(sel, focal_idx)) {
+                shinyWidgets::sendSweetAlert(
+                  title = "Review mode",
+                  text = paste0(
+                    "Only ", toupper(info$gene),
+                    " can be edited while reviewing this outlier. Use ",
+                    "'Back to Review' to return to the outlier list."
+                  ),
+                  type = "info"
+                )
+                reactable::updateReactable("table", selected = focal_idx)
+                return(focal_idx)
+              }
+            }
+          }
+        }
         if (identical(sel, rv$editing$idx)) {
           return(sel)
         }
@@ -459,6 +485,13 @@ annotations_details_server <- function(id, rv) {
     # Return to the export outlier review (saves via the standard close path)
     observeEvent(input$back_to_review, {
       session$userData$return_to_review <- TRUE
+      # Record the (sample, gene) just reviewed so the review modal can mark it
+      # resolved and navigate back to that gene. goto_annotate_target is cleared
+      # when this modal opens, so read the persisted flag instead.
+      info <- outlier_flag()
+      if (!is.null(info) && !is.null(info$ID) && !is.null(info$gene)) {
+        session$userData$resolve_on_return <- list(ID = info$ID, gene = info$gene)
+      }
       shinyjs::click("close")
     })
     ## Lock and Close ----

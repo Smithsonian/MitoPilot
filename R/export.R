@@ -1087,6 +1087,10 @@ get_export_PCG_annotations <- function(con, group) {
 #'   the stop end. Default 10.
 #' @param ident_pct Identity threshold (percent). A sample is flagged when its
 #'   mean pairwise identity to the rest of the group is below this. Default 60.
+#' @param genes Optional character vector of gene names. When supplied, only
+#'   these genes are aligned and flagged (the rest are skipped), e.g. to
+#'   recompute a single gene edited via "Back to Review". Default `NULL` (all
+#'   genes).
 #'
 #' @return A list with two elements:
 #'   \describe{
@@ -1099,7 +1103,7 @@ get_export_PCG_annotations <- function(con, group) {
 #'   }
 #'
 #' @export
-flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct = 60) {
+flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct = 60, genes = NULL) {
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
   on.exit(DBI::dbDisconnect(con))
 
@@ -1109,11 +1113,14 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
     return(list(flags = .empty_outlier_flags(), alignments = list()))
   }
 
-  genes <- sort(unique(annotations$gene))
+  all_genes <- sort(unique(annotations$gene))
+  # Optionally restrict the (expensive) per-gene alignment loop to a subset, e.g.
+  # recomputing only the single gene edited via "Back to Review".
+  loop_genes <- if (!is.null(genes)) intersect(all_genes, genes) else all_genes
   flag_rows <- list()
   alignments <- list()
 
-  for (g in genes) {
+  for (g in loop_genes) {
     sub <- annotations[annotations$gene == g, , drop = FALSE]
     if (nrow(sub) < 2) next
 
