@@ -27,6 +27,67 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
   return(alignment)
 }
 
+#' Recompute reference-hit stats for one focal sequence (vectorized)
+#'
+#' Computes the same four per-hit metrics as [compare_aa()] /
+#' [count_end_gaps()] - `similarity`, `pctid`, `gap_leading`, `gap_trailing` -
+#' against a vector of `targets`, but aligns each pair only once instead of
+#' four times and runs the pwalign step as a single vectorized call. Used by the
+#' annotate-details save handler, which previously called the per-metric helpers
+#' row-by-row (up to 4 alignments per hit x100 hits).
+#'
+#' Results are identical to the per-metric helpers: pwalign global alignment with
+#' focal as subject for similarity/pctid, and a per-target DECIPHER alignment for
+#' the terminal-gap counts.
+#'
+#' @param focal The focal amino-acid sequence (single string).
+#' @param targets Character vector of target amino-acid sequences.
+#' @param subMx Substitution matrix name (default "BLOSUM80").
+#'
+#' @return A data.frame with columns `similarity`, `pctid`, `gap_leading`,
+#'   `gap_trailing` (one row per target).
+#'
+#' @noRd
+recompute_hit_stats <- function(focal, targets, subMx = "BLOSUM80") {
+  n <- length(targets)
+  if (n == 0) {
+    return(data.frame(
+      similarity = numeric(0), pctid = numeric(0),
+      gap_leading = integer(0), gap_trailing = integer(0)
+    ))
+  }
+  s_focal <- Biostrings::AAString(focal)
+  # One vectorized global alignment: focal (subject) vs every target (pattern).
+  aln <- pwalign::pairwiseAlignment(
+    subject = s_focal,
+    pattern = Biostrings::AAStringSet(targets),
+    substitutionMatrix = subMx
+  )
+  pctid <- 100 * pwalign::nmatch(aln) / nchar(focal)
+  # Self-score of focal under subMx, loaded once (was reloaded per hit).
+  data(list = subMx, package = "pwalign", envir = environment())
+  mx <- get(subMx, envir = environment())
+  focal_chars <- strsplit(focal, NULL)[[1]]
+  max_score <- sum(diag(mx)[match(focal_chars, rownames(mx))])
+  similarity <- 100 * BiocGenerics::score(aln) / max_score
+  # Terminal gap counts: one DECIPHER alignment per target (both ends from it).
+  gap_leading <- integer(n)
+  gap_trailing <- integer(n)
+  for (i in seq_len(n)) {
+    a <- DECIPHER::AlignSeqs(
+      Biostrings::AAStringSet(list(s_focal, Biostrings::AAString(targets[i]))),
+      verbose = FALSE
+    )
+    a1 <- as.character(a[1]); a2 <- as.character(a[2])
+    gap_leading[i]  <- nchar(stringr::str_extract(a1, "^-*")) - nchar(stringr::str_extract(a2, "^-*"))
+    gap_trailing[i] <- nchar(stringr::str_extract(a1, "-*$")) - nchar(stringr::str_extract(a2, "-*$"))
+  }
+  data.frame(
+    similarity = as.numeric(similarity), pctid = as.numeric(pctid),
+    gap_leading = gap_leading, gap_trailing = gap_trailing
+  )
+}
+
 #' Circular-aware interval overlap test
 #'
 #' Returns a logical vector: does the (possibly wrap-around) interval [p1, p2]
