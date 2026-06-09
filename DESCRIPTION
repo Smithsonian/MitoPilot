@@ -37,7 +37,6 @@ Imports:
     listviewer,
     msaR,
     patchwork,
-    plotly,
     processx,
     purrr,
     ragg,

@@ -1,0 +1,105 @@
+CHOOSING AMONG MULTIPLE ASSEMBLY PATHS
+======================================
+
+WHAT IS AN "ASSEMBLY PATH"?
+---------------------------
+When an assembler (GetOrganelle, MitoFinder) builds a mitogenome, it first
+builds an assembly GRAPH: a set of sequence segments connected by their
+overlaps. If that graph is simple, there is one obvious way to walk through it
+and you get a single sequence. If the graph BRANCHES, there is more than one
+valid way to walk through it. Each distinct route is an "assembly PATH". Every
+path is a complete candidate genome; they differ only in the branching regions.
+
+MitoPilot shows each path as a row (Path 0, Path 1, ...). A path can also be
+split into several "scaffolds" if it could not be joined into one piece.
+
+You only need to act when a sample has MORE THAN ONE path (it is flagged "needs
+attention"). Your job is to decide which path is real, or to combine them.
+
+
+WHY DOES A SAMPLE HAVE SEVERAL PATHS?
+-------------------------------------
+There are four common causes. Each leaves a recognizable signature in the
+conflict navigator (depth / error / read-support plots).
+
+1. REPEATS (most common)
+   The control region and other repeats create graph branches the assembler
+   cannot resolve from short reads. Paths differ mostly by INSERTIONS/DELETIONS
+   (length), often in homopolymers or tandem repeats.
+   Signature: indel-type conflict blocks; depth is similar across paths; the
+   paths differ in total length.
+   What to do: prefer the path whose length matches close relatives (the BLAST
+   reference). The differences are about HOW MANY repeat copies, not real
+   biological variants.
+
+2. HETEROPLASMY (real variation)
+   An individual can carry two genuine mtDNA variants. Paths differ by single
+   bases (SNPs), not length.
+   Signature: SNP-only conflict blocks; BOTH alleles have substantial, even
+   read support; low error rate.
+   What to do: either pick the reference-consistent allele, or record BOTH with
+   an IUPAC ambiguity code (e.g. A/G -> R). Use IUPAC only for SNPs, never indels.
+
+3. NUMT / CONTAMINATION (false path)
+   A NUMT is a nuclear copy of mitochondrial DNA; it (or a contaminant) can be
+   mistaken for a path. It is NOT the real mitogenome.
+   Signature: a large divergent block; the path's BLAST hit disagrees with the
+   other paths (different species/lineage); often a depth shift.
+   What to do: IGNORE the divergent path; keep the one matching the expected
+   taxon with even depth.
+
+4. CIRCULARIZATION ARTIFACT (cosmetic)
+   The mitogenome is circular but is stored as a linear string; different paths
+   may "cut" the circle at slightly different places.
+   Signature: differences only at the very start/end of the alignment.
+   What to do: usually safe to trim to consensus or splice either path.
+
+
+HOW TO DECIDE - QUICK CHECKLIST
+-------------------------------
+Work down this list; higher items matter more. MitoPilot scores each path on
+these and badges the best one "Suggested" (a recommendation, not a decision).
+
+  [ ] TOPOLOGY    Prefer circular over linear.
+  [ ] SCAFFOLDS   Prefer a single contig over a fragmented (multi-scaffold) path.
+  [ ] DEPTH       Prefer even coverage with no deep dips; >10x throughout,
+                  ideally much higher.
+  [ ] ERROR RATE  Prefer low per-base error.
+  [ ] LENGTH      Prefer a length consistent with close relatives.
+  [ ] BLAST       Prefer high % identity / coverage to a sensible reference,
+                  and a hit that AGREES with the other paths.
+  [ ] JUNCTION    Treat start/end-only differences as cosmetic.
+
+If one path wins on all counts, keep it and ignore the rest. If paths trade off,
+use the conflict navigator to resolve the genome block by block.
+
+
+WAYS TO RESOLVE (in the coverage window)
+----------------------------------------
+- IGNORE a path        Click the X by a path to drop it. Keep exactly one to lock.
+- TRIM CONSENSUS       Collapse to the longest region all paths agree on
+                       (discards the ends where they disagree).
+- SPLICE               Build one genome by choosing, block by block, which path's
+                       bases to use. Best when different paths win in different
+                       regions.
+- IUPAC CALL           For a SNP-only block, record both alleles as an ambiguity
+                       code. Best for suspected heteroplasmy. (Not for indels.)
+- MAJORITY FILL        Let read support pick the base per position (you confirm).
+- N-MASK               Replace a truly unresolvable block with Ns and flag it.
+
+Splice / IUPAC / Majority / N-mask all produce a new edited "Path 0" that you can
+then lock for annotation. The original paths are kept but marked ignored.
+
+CAUTION - AMBIGUOUS BASES AND ANNOTATION
+----------------------------------------
+The IUPAC and N-mask options introduce ambiguous bases (R/Y/N etc.) into the
+sequence. Downstream annotation does NOT handle these well - in particular, MITOS
+can fail or misannotate genes that contain ambiguous base calls. If you resolve a
+path this way, MitoPilot adds a warning to the assembly notes. Prefer splicing or
+picking a single path when you intend to annotate; reserve IUPAC/N for cases where
+recording the ambiguity is more important than a clean annotation.
+
+A note on the Taxon field: the sample's Taxon label is free text and may not be a
+precise species name, so MitoPilot does NOT compare it to BLAST hits. Instead it
+checks whether the paths AGREE WITH EACH OTHER taxonomically; a path that hits a
+very different organism than its siblings is flagged as a possible NUMT/contaminant.

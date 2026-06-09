@@ -5,17 +5,21 @@ assembly_coverage_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # Local state for consensus review (separate from rv to avoid pollution)
-    lrv <- reactiveValues(consensus_review = NULL)
-
     init("coverage_modal")
+
+    # "How do I choose?" guidance modal (reopens this modal on close).
+    register_tool_help("assembly_paths", input,
+                       reopen = function() trigger("coverage_modal"))
+
     on("coverage_modal", {
       rv$alignment <- NULL
-      lrv$consensus_review <- NULL
+      # Navigation state kept separate from rv$alignment so block changes don't
+      # invalidate (and re-render) the msaR widget, which would reset its scroll.
+      rv$cur_block <- 0L
       rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::select(
-          ignore, ID, path, scaffold, topology, length_raw, length, sequence,
+          ignore, ID, path, scaffold, topology, length_raw, length, sequence, depth,
           dplyr::any_of(c("blast_accession", "blast_species", "blast_pident", "blast_qcovs", "blast_lineage"))
         ) |>
         dplyr::collect() |>
@@ -23,54 +27,61 @@ assembly_coverage_details_server <- function(id, rv) {
           view_coverage = NA_character_
         )
 
-      # Attach per-path BLAST hits (assembly_blast keyed on ID, path). Table may not
-      # exist on very old projects; fall back to empty join in that case.
-      path_blast <- tryCatch(
-        dplyr::tbl(session$userData$con, "assembly_blast") |>
-          dplyr::filter(ID == !!rv$updating$ID) |>
-          dplyr::select(path, blast_accession, blast_species, blast_pident, blast_qcovs) |>
-          dplyr::collect(),
-        error = function(e) data.frame(
-          path = integer(0), blast_accession = character(0),
-          blast_species = character(0),
-          blast_pident = numeric(0), blast_qcovs = numeric(0)
-        )
-      )
-      rv$focal_assembly <- dplyr::left_join(rv$focal_assembly, path_blast, by = "path")
-
-      # TODO - refactor to handle fragmented assemblies
-      if (any(rv$focal_assembly$scaffold > 1)) {
-        shinyWidgets::sendSweetAlert(
-          title = "Fragmented assembly",
-          text = "Interactive mode is not currently supported for fragmented assemblies.",
-          type = "warning"
-        )
-        req(F)
+      # Score paths (recommend-only) ----
+      # Read each path's coverageStats CSV (all scaffolds) to feed depth/error
+      # into the scoring engine, then merge per-path score/flags onto the table.
+      cov_by_path <- {
+        paths <- unique(rv$focal_assembly$path)
+        stats <- lapply(paths, function(p) {
+          f <- file.path(
+            session$userData$dir_out, rv$updating$ID, "assemble",
+            rv$updating$assemble_opts,
+            paste0(rv$updating$ID, "_assembly_", p, "_coverageStats.csv")
+          )
+          if (file.exists(f)) {
+            tryCatch(read.csv(f, stringsAsFactors = FALSE), error = function(e) NULL)
+          } else NULL
+        })
+        stats::setNames(stats, as.character(paths))
       }
-
-      flag_row <- path_discrepancy_flags(session$userData$con) |>
-        dplyr::filter(ID == !!rv$updating$ID)
-      flag <- if (nrow(flag_row) == 0) "none" else flag_row$path_flag[1]
-      reasons <- if (nrow(flag_row) == 0) "" else (flag_row$path_flag_reasons[1] %|NA|% "")
-      flag_color <- c(ok = "#2ca02c", minor = "#ff7f0e", divergent = "#d62728")[flag]
-      if (is.na(flag_color)) flag_color <- "#cccccc"
+      rv$path_scores <- tryCatch(
+        score_assembly_paths(rv$focal_assembly, cov_by_path),
+        error = function(e) data.frame()
+      )
+      if (nrow(rv$path_scores) > 0) {
+        m <- rv$path_scores[match(rv$focal_assembly$path, rv$path_scores$path), ]
+        rv$focal_assembly$path_flags <- m$flags
+      } else {
+        rv$focal_assembly$path_flags <- NA_character_
+      }
+      # Path 0 is the edited/consensus sequence, not a raw assembler path; no flags.
+      rv$focal_assembly$path_flags[rv$focal_assembly$path == 0] <- ""
+      rv$focal_assembly <- dplyr::relocate(
+        rv$focal_assembly, path_flags,
+        .after = scaffold
+      )
 
       modalDialog(
         title = tagList(
-          stringr::str_glue("Assembly details for ID: {rv$updating$ID} "),
-          if (flag != "none")
-            tags$span(
-              style = sprintf(
-                "display:inline-block;margin-left:8px;padding:2px 10px;border-radius:10px;background:%s;color:white;font-size:0.7em;vertical-align:middle;",
-                flag_color
-              ),
-              paste0(flag, if (nzchar(reasons)) paste0(" - ", reasons) else "")
-            )
+          div(stringr::str_glue("Assembly details for ID: {rv$updating$ID}")),
+          div(
+            style = "font-size: 0.85em; font-weight: normal; color: #555; margin-top: 4px;",
+            stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
+          )
         ),
         size = "l",
+        div(
+          style = "margin-bottom: 8px; font-size: 0.9em; color: #555;",
+          "Multiple assembly paths? ",
+          actionLink(
+            ns("help_assembly_paths"),
+            label = "How do I choose?",
+            icon = icon("circle-question")
+          )
+        ),
         reactableOutput(ns("table"), width = "100%"),
+        uiOutput(ns("consensus_admin")),
         uiOutput(ns("msa_div")),
-        uiOutput(ns("consensus_panel")),
         div(
           style = "margin: 10px;",
           textAreaInput(
@@ -85,9 +96,6 @@ assembly_coverage_details_server <- function(id, rv) {
             style = "display: flex; justify-content: right; gap: 0.5em;",
             uiOutput(ns("clip")) |> shinyjs::hidden(),
             actionButton(ns("align"), "Align", icon("align-justify")) |> shinyjs::hidden(),
-            actionButton(ns("build_consensus"), "Build Consensus", icon("dna")) |> shinyjs::hidden(),
-            actionButton(ns("finalize_consensus"), "Finalize Consensus", icon("check"), class = "btn-success") |> shinyjs::hidden(),
-            actionButton(ns("exit_review"), "Exit Review", icon("xmark")) |> shinyjs::hidden(),
             actionButton(ns("close_modal"), "Close")
           )
         )
@@ -108,28 +116,6 @@ assembly_coverage_details_server <- function(id, rv) {
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(align = "center"),
           columns = list(
-            ID = colDef(
-              align = "left", minWidth = 100, html = T, cell = rt_longtext()
-            ),
-            scaffold = colDef(show = FALSE),
-            sequence = colDef(
-              minWidth = 250, maxWidth = 1000, align = "center", html = TRUE,
-              cell = rt_longtext()
-            ),
-            blast_accession = colDef(
-              name = "BLAST Hit", minWidth = 110, html = TRUE,
-              cell = rt_ncbi_link()
-            ),
-            blast_species = colDef(
-              name = "Species", minWidth = 140, html = TRUE,
-              cell = rt_longtext()
-            ),
-            blast_pident = colDef(
-              name = "% Ident", minWidth = 75, align = "center"
-            ),
-            blast_qcovs = colDef(
-              name = "% Cov", minWidth = 75, align = "center"
-            ),
             ignore = colDef(
               width = 60,
               html = TRUE, align = "center",
@@ -144,6 +130,10 @@ assembly_coverage_details_server <- function(id, rv) {
             scaffold = colDef(
               name = "Scaffold", width = 80, align = "center"
             ),
+            path_flags = colDef(
+              name = "Flags", minWidth = 200, resizable = TRUE, align = "left",
+              html = TRUE, cell = rt_longtext()
+            ),
             topology = colDef(
               name = "Topology", width = 90, align = "center"
             ),
@@ -154,6 +144,7 @@ assembly_coverage_details_server <- function(id, rv) {
               name = "Length (trimmed)", width = 130, align = "center"
             ),
             sequence = colDef(show = FALSE),
+            depth = colDef(show = FALSE),
             blast_accession = colDef(
               name = "BLAST Top Hit", minWidth = 120, resizable = TRUE, align = "center", html = TRUE,
               cell = rt_ncbi_link()
@@ -189,16 +180,9 @@ assembly_coverage_details_server <- function(id, rv) {
     # Table selection ----
     selected <- reactive(reactable::getReactableState("table", "selected"))
     observe({
-      in_review <- isTRUE(lrv$consensus_review$active)
-      has_selection <- length(selected()) > 0
-      has_multi <- length(selected()) > 1
-      is_aligned <- !is.null(rv$alignment)
-
-      shinyjs::toggle("clip", condition = has_selection && !in_review)
-      shinyjs::toggle("align", condition = has_multi && !in_review)
-      shinyjs::toggle("build_consensus", condition = is_aligned && !in_review && length(rv$alignment$mismatch_cols) > 0)
-      shinyjs::toggle("finalize_consensus", condition = in_review)
-      shinyjs::toggle("exit_review", condition = in_review)
+      shinyjs::toggle("clip", condition = length(selected()) > 0)
+      shinyjs::toggle("align", condition = length(selected()) > 1)
+      shinyjs::toggle("msa_div", condition = length(selected()) > 1)
     })
 
     # Ignore bttn ----
@@ -336,29 +320,22 @@ assembly_coverage_details_server <- function(id, rv) {
       color = waiter::transparent(.5)
     )
     observeEvent(input$align, {
-      lrv$consensus_review <- NULL
       wait_align$show()
       seqs <- rv$focal_assembly$sequence[selected()] |> Biostrings::DNAStringSet()
-      names(seqs) <- purrr::map_chr(selected(), ~ {
-        paste(
-          rv$updating$ID,
-          rv$focal_assembly$path[.x],
-          rv$focal_assembly$scaffold[.x],
-          sep = "."
-        )
+      path_labels <- purrr::map_chr(selected(), ~ {
+        p <- rv$focal_assembly$path[.x]
+        s <- rv$focal_assembly$scaffold[.x]
+        if (is.na(s) || s == 0) paste0("P", p) else paste0("P", p, ".S", s)
       })
+      names(seqs) <- make.unique(path_labels)
       rv$alignment$seqs <- DECIPHER::AlignSeqs(seqs, verbose = F, processors = NULL)
-
-      dist_mat <- DECIPHER::DistanceMatrix(
+      dists <- DECIPHER::DistanceMatrix(
         rv$alignment$seqs,
         includeTerminalGaps = T,
-        type = "matrix",
+        type = "dist",
         verbose = FALSE
-      )
-      rv$alignment$dist_matrix <- dist_mat
-      dist_off <- dist_mat[upper.tri(dist_mat)]
-      dists <- range(dist_off)
-
+      ) |>
+        range()
       if (dists[1] != dists[2]) {
         rv$alignment$pct_id_range <- stringr::str_glue(
           "Pairwise similarity: {round(100-100*dists[1],4)}% - {round(100-100*dists[2],4)}%"
@@ -369,17 +346,12 @@ assembly_coverage_details_server <- function(id, rv) {
         )
       }
 
-      # Aligned matrix and per-column match indicator
-      seqs_mat <- as.matrix(rv$alignment$seqs)
-      align_pos <- apply(seqs_mat, 2, function(x) length(unique(x)) == 1)
-      rv$alignment$seqs_mat <- seqs_mat
-      rv$alignment$align_pos <- align_pos
-      rv$alignment$mismatch_cols <- which(!align_pos)
-      rv$alignment$n_aln <- length(align_pos)
-      rv$alignment$nav_idx <- if (length(rv$alignment$mismatch_cols) > 0) 1L else 0L
-      rv$alignment$click_pos <- NA_integer_
-
-      # Longest consensus block (existing logic)
+      # Run length encoded aligned positions
+      align_pos <- rv$alignment$seqs |>
+        as.matrix() |>
+        apply(2, function(x) {
+          length(unique(x)) == 1
+        })
       align_rle <- rle(align_pos)
       rv$alignment$consEnd <- sum(align_rle$lengths[1:which.max(align_rle$lengths & align_rle$values)])
       rv$alignment$consStart <- rv$alignment$consEnd - align_rle$lengths[which.max(align_rle$lengths & align_rle$values)] + 1
@@ -412,12 +384,68 @@ assembly_coverage_details_server <- function(id, rv) {
 
       rv$alignment$alignmentHeight <- 5 + (length(selected()) * 20)
 
-      # Per-path coverage with raw→alignment position mapping
-      paths_used <- rv$focal_assembly$path[selected()]
-      rv$alignment$paths_used <- paths_used
+      # Conflict block detection ----
+      # `align_pos` is TRUE where all selected paths agree at that column.
+      # Conflict = mismatch run (any disagreement, includes gaps) of >= min_len.
+      min_block_len <- 1L
+      aln_mat <- rv$alignment$seqs |> as.matrix()
+      aln_len <- ncol(aln_mat)
+      conflict_pos <- !align_pos
+      cf_rle <- rle(conflict_pos)
+      cf_ends <- cumsum(cf_rle$lengths)
+      cf_starts <- c(1L, head(cf_ends, -1L) + 1L)
+      keep <- cf_rle$values & cf_rle$lengths >= min_block_len
+      if (any(keep)) {
+        starts <- cf_starts[keep]
+        ends   <- cf_ends[keep]
+        block_stats <- purrr::map2_dfr(starts, ends, function(s, e) {
+          sub <- aln_mat[, s:e, drop = FALSE]
+          # SNP cols: no gaps, >1 distinct base. Indel cols: any gap.
+          gap_cols <- apply(sub, 2, function(x) any(x == "-"))
+          var_cols <- apply(sub, 2, function(x) length(unique(toupper(x))) > 1)
+          data.frame(
+            aln_start = s,
+            aln_end   = e,
+            len       = e - s + 1L,
+            n_indels  = sum(gap_cols & var_cols),
+            n_snps    = sum(!gap_cols & var_cols)
+          )
+        })
+        block_stats$block_id <- seq_len(nrow(block_stats))
+        rv$alignment$conflicts <- block_stats
+      } else {
+        rv$alignment$conflicts <- data.frame(
+          block_id = integer(), aln_start = integer(), aln_end = integer(),
+          len = integer(), n_indels = integer(), n_snps = integer()
+        )
+      }
+      rv$alignment$aln_mat <- aln_mat
+      rv$alignment$aln_len <- aln_len
 
-      cov_list <- purrr::map(seq_along(paths_used), function(i) {
-        p <- paths_used[i]
+      # Project per-path coverage stats onto MSA columns ----
+      sel_rows <- selected()
+      # Helper: align a per-position vector to MSA columns using gap positions.
+      align_to_msa <- function(vec, i) {
+        if (is.null(vec) || length(vec) == 0L) return(rep(NA_real_, aln_len))
+        aln_chars <- aln_mat[i, ]
+        nongap_cols <- which(aln_chars != "-")
+        out <- rep(NA_real_, aln_len)
+        n <- min(length(vec), length(nongap_cols))
+        out[nongap_cols[seq_len(n)]] <- vec[seq_len(n)]
+        out
+      }
+      stats_per_path <- purrr::map(seq_along(sel_rows), function(i) {
+        idx <- sel_rows[i]
+        # Try DB-stored depth first (single-value-per-position string)
+        depth_raw <- rv$focal_assembly$depth[idx]
+        d_db <- NULL
+        if (!is.na(depth_raw) && nzchar(depth_raw)) {
+          d_db <- suppressWarnings(as.numeric(strsplit(depth_raw, " ")[[1]]))
+          if (length(d_db) < 2L) d_db <- NULL
+        }
+        # Always try to read coverageStats CSV for richer stats (Correct, ErrorRate).
+        p <- rv$focal_assembly$path[idx]
+        s <- rv$focal_assembly$scaffold[idx]
         csv_path <- file.path(
           session$userData$dir_out,
           rv$updating$ID,
@@ -425,216 +453,145 @@ assembly_coverage_details_server <- function(id, rv) {
           rv$updating$assemble_opts,
           paste0(rv$updating$ID, "_assembly_", p, "_coverageStats.csv")
         )
-        if (!file.exists(csv_path)) return(NULL)
-        cov <- tryCatch(read.csv(csv_path), error = function(e) NULL)
-        if (is.null(cov) || nrow(cov) == 0) return(NULL)
-        row_chars <- seqs_mat[i, ]
-        nongap <- which(row_chars != "-")
-        n <- min(nrow(cov), length(nongap))
-        cov <- cov[seq_len(n), , drop = FALSE]
-        cov$align_position <- nongap[seq_len(n)]
-        cov$path <- p
-        cov
-      })
-      cov_list <- cov_list[!vapply(cov_list, is.null, logical(1))]
-      rv$alignment$coverage <- if (length(cov_list) > 0) do.call(rbind, cov_list) else NULL
-    })
-
-    # Mismatch nav ----
-    observeEvent(input$nav_next, {
-      req(rv$alignment, length(rv$alignment$mismatch_cols) > 0)
-      m <- rv$alignment$mismatch_cols
-      in_review <- isTRUE(lrv$consensus_review$active)
-      if (in_review) {
-        cur <- lrv$consensus_review$mismatch_idx %||% 1L
-        lrv$consensus_review$mismatch_idx <- min(cur + 1L, length(m))
-      }
-      cur_nav <- rv$alignment$nav_idx %||% 0L
-      rv$alignment$nav_idx <- min(cur_nav + 1L, length(m))
-      rv$alignment$click_pos <- m[rv$alignment$nav_idx]
-    })
-    observeEvent(input$nav_prev, {
-      req(rv$alignment, length(rv$alignment$mismatch_cols) > 0)
-      m <- rv$alignment$mismatch_cols
-      in_review <- isTRUE(lrv$consensus_review$active)
-      if (in_review) {
-        cur <- lrv$consensus_review$mismatch_idx %||% 1L
-        lrv$consensus_review$mismatch_idx <- max(cur - 1L, 1L)
-      }
-      cur_nav <- rv$alignment$nav_idx %||% 1L
-      rv$alignment$nav_idx <- max(cur_nav - 1L, 1L)
-      rv$alignment$click_pos <- m[rv$alignment$nav_idx]
-    })
-
-    output$nav_pos <- renderText({
-      req(rv$alignment)
-      m <- rv$alignment$mismatch_cols
-      if (length(m) == 0) return("0 mismatches")
-      idx <- rv$alignment$nav_idx %||% 1L
-      sprintf("Mismatch %d / %d  —  column %d", idx, length(m), m[idx])
-    })
-
-    # Plotly: mismatch track ----
-    output$mismatch_track <- plotly::renderPlotly({
-      req(rv$alignment)
-      m <- rv$alignment$mismatch_cols
-      cur <- if (!is.null(rv$alignment$click_pos) && !is.na(rv$alignment$click_pos)) {
-        rv$alignment$click_pos
-      } else if (length(m) > 0) m[rv$alignment$nav_idx %||% 1L] else NA_integer_
-
-      # In review mode, color columns by decision status
-      cr <- lrv$consensus_review
-      decided_cols <- integer(0)
-      undecided_cols <- m
-      if (!is.null(cr) && isTRUE(cr$active)) {
-        decided_mask <- !is.na(cr$decisions)
-        decided_cols <- cr$valid_cols[decided_mask]
-        undecided_cols <- setdiff(m, decided_cols)
-      }
-
-      p <- plotly::plot_ly(source = "mismatch_src") |>
-        plotly::layout(
-          xaxis = list(title = "Alignment column", range = c(1, rv$alignment$n_aln), zeroline = FALSE),
-          yaxis = list(showticklabels = FALSE, zeroline = FALSE, showgrid = FALSE, range = c(0, 1)),
-          margin = list(l = 40, r = 10, t = 5, b = 30),
-          showlegend = FALSE,
-          shapes = if (!is.na(cur)) list(list(
-            type = "line", x0 = cur, x1 = cur, y0 = 0, y1 = 1,
-            line = list(color = "#000", width = 1, dash = "dot")
-          )) else list()
-        )
-      if (length(undecided_cols) > 0) {
-        p <- p |> plotly::add_segments(
-          x = undecided_cols, xend = undecided_cols, y = 0, yend = 1,
-          line = list(color = "#d62728", width = 1),
-          hoverinfo = "x", name = "undecided"
-        )
-      }
-      if (length(decided_cols) > 0) {
-        p <- p |> plotly::add_segments(
-          x = decided_cols, xend = decided_cols, y = 0, yend = 1,
-          line = list(color = "#2ca02c", width = 1),
-          hoverinfo = "x", name = "decided"
-        )
-      }
-      plotly::event_register(p, "plotly_click")
-    })
-
-    # Plotly click → set drilldown / review position ----
-    observe({
-      # Gate on rv$alignment first so event_data (and its source registration
-      # lookup) is only reached once the mismatch_track plot has rendered. Calling
-      # event_data before the plot exists triggers the "source ID ... not
-      # registered" startup warning.
-      req(rv$alignment)
-      ev <- plotly::event_data("plotly_click", source = "mismatch_src")
-      req(ev)
-      pos <- round(ev$x)
-      rv$alignment$click_pos <- pos
-      m <- rv$alignment$mismatch_cols
-      hit <- which(m == pos)
-      if (length(hit) > 0) {
-        rv$alignment$nav_idx <- hit[1]
-        if (isTRUE(lrv$consensus_review$active)) {
-          valid_hit <- which(lrv$consensus_review$valid_cols == pos)
-          if (length(valid_hit) > 0) lrv$consensus_review$mismatch_idx <- valid_hit[1]
+        cov <- NULL
+        if (file.exists(csv_path)) {
+          cov <- tryCatch(read.csv(csv_path, stringsAsFactors = FALSE),
+                          error = function(e) NULL)
+          if (!is.null(cov) && "SeqId" %in% names(cov)) {
+            seq_id <- paste(rv$updating$ID, p, s, sep = ".")
+            cov_path <- cov[cov$SeqId == seq_id, , drop = FALSE]
+            if (nrow(cov_path) > 0) cov <- cov_path
+          }
         }
-      }
-    })
-
-    # Plotly: per-path coverage tracks ----
-    output$coverage_tracks <- plotly::renderPlotly({
-      req(rv$alignment)
-      cov <- rv$alignment$coverage
-      paths <- rv$alignment$paths_used
-      if (is.null(cov) || length(paths) == 0) {
-        return(
-          plotly::plot_ly() |>
-            plotly::layout(
-              annotations = list(list(
-                text = "No coverage CSVs found for selected paths.",
-                xref = "paper", yref = "paper", x = 0.5, y = 0.5, showarrow = FALSE
-              )),
-              xaxis = list(visible = FALSE), yaxis = list(visible = FALSE)
-            )
+        d <- d_db
+        corr <- NULL
+        err <- NULL
+        gc <- NULL
+        if (!is.null(cov) && "Depth" %in% names(cov)) {
+          if (is.null(d)) d <- suppressWarnings(as.numeric(cov$Depth))
+          if ("Correct" %in% names(cov)) {
+            corr <- suppressWarnings(as.numeric(cov$Correct))
+          }
+          if ("ErrorRate" %in% names(cov)) {
+            # ErrorRate is stored as character with '#' prefix when masked.
+            err_chr <- sub("^#", "", as.character(cov$ErrorRate))
+            err <- suppressWarnings(as.numeric(err_chr))
+          }
+          if ("GC" %in% names(cov)) gc <- suppressWarnings(as.numeric(cov$GC))
+        }
+        list(
+          depth   = align_to_msa(d, i),
+          correct = align_to_msa(corr, i),
+          error   = align_to_msa(err, i),
+          gc      = align_to_msa(gc, i)
         )
-      }
-      cur <- if (!is.null(rv$alignment$click_pos) && !is.na(rv$alignment$click_pos)) {
-        rv$alignment$click_pos
-      } else NA_integer_
-      plots <- lapply(paths, function(p) {
-        d <- cov[cov$path == p, ]
-        d <- d[order(d$align_position), ]
-        plotly::plot_ly(d, x = ~align_position, y = ~Depth,
-          type = "scatter", mode = "lines",
-          line = list(color = "#1f77b4"),
-          hovertemplate = paste0("Path ", p, "<br>Col: %{x}<br>Depth: %{y}<extra></extra>")
-        ) |>
-          plotly::layout(
-            yaxis = list(title = paste0("p", p, " depth")),
-            shapes = if (!is.na(cur)) list(list(
-              type = "line", x0 = cur, x1 = cur, y0 = 0, y1 = 1,
-              yref = "paper", line = list(color = "#000", width = 1, dash = "dot")
-            )) else list()
-          )
       })
-      plotly::subplot(plots, nrows = length(plots), shareX = TRUE, titleY = TRUE) |>
-        plotly::layout(
-          xaxis = list(range = c(1, rv$alignment$n_aln), title = "Alignment column"),
-          showlegend = FALSE,
-          margin = list(l = 60, r = 10, t = 5, b = 30)
-        )
-    })
+      nm <- rownames(aln_mat)
+      rv$alignment$depth_aligned   <- setNames(purrr::map(stats_per_path, "depth"),   nm)
+      rv$alignment$correct_aligned <- setNames(purrr::map(stats_per_path, "correct"), nm)
+      rv$alignment$error_aligned   <- setNames(purrr::map(stats_per_path, "error"),   nm)
+      rv$alignment$gc_aligned      <- setNames(purrr::map(stats_per_path, "gc"),      nm)
 
-    # Plotly: pairwise identity heatmap ----
-    output$identity_heatmap <- plotly::renderPlotly({
-      req(rv$alignment, rv$alignment$dist_matrix)
-      d <- rv$alignment$dist_matrix
-      if (nrow(d) < 2) return(plotly::plot_ly())
-      ident <- (1 - d) * 100
-      labs <- rownames(ident)
-      if (is.null(labs)) labs <- as.character(seq_len(nrow(ident)))
-      plotly::plot_ly(
-        x = labs, y = labs, z = ident, type = "heatmap",
-        colorscale = "Viridis", zauto = FALSE,
-        zmin = min(ident, na.rm = TRUE), zmax = 100,
-        hovertemplate = "%{y} vs %{x}<br>%{z:.2f}%<extra></extra>"
-      ) |> plotly::layout(
-        xaxis = list(tickangle = -45),
-        yaxis = list(autorange = "reversed"),
-        margin = list(l = 100, r = 10, t = 10, b = 100)
-      )
-    })
-
-    # Drilldown ----
-    output$drilldown <- renderReactable({
-      req(rv$alignment)
-      pos <- rv$alignment$click_pos
-      if (is.null(pos) || is.na(pos)) return(NULL)
-      seqs_mat <- rv$alignment$seqs_mat
-      if (pos < 1 || pos > ncol(seqs_mat)) return(NULL)
-      d <- data.frame(
-        path = rv$alignment$paths_used,
-        base = seqs_mat[, pos],
-        stringsAsFactors = FALSE
-      )
-      cov <- rv$alignment$coverage
-      if (!is.null(cov)) {
-        sub <- cov[cov$align_position == pos, c("path", "Depth", "ErrorRate", "GC"), drop = FALSE]
-        d <- dplyr::left_join(d, sub, by = "path")
+      # Per-block classification (likely cause + suggested tools) ----
+      cf <- rv$alignment$conflicts
+      if (nrow(cf) > 0) {
+        dl <- rv$alignment$depth_aligned
+        el <- rv$alignment$error_aligned
+        fin <- function(x) x[is.finite(x)]
+        # Do the selected paths disagree taxonomically? (possible NUMT signal)
+        sel_species <- rv$focal_assembly$blast_species[sel_rows]
+        sel_lineage <- if ("blast_lineage" %in% names(rv$focal_assembly)) {
+          rv$focal_assembly$blast_lineage[sel_rows]
+        } else rep(NA_character_, length(sel_rows))
+        key <- ifelse(!is.na(sel_lineage) & nzchar(sel_lineage), sel_lineage, sel_species)
+        tops <- unique(.top_taxon(key[!is.na(key)]))
+        blast_div <- length(tops) > 1L
+        is_circ <- isTRUE(tolower(rv$updating$topology) == "circular")
+        cls <- lapply(seq_len(nrow(cf)), function(i) {
+          b <- cf[i, ]
+          cols <- seq.int(b$aln_start, b$aln_end)
+          min_d <- suppressWarnings(min(unlist(lapply(dl, function(v) fin(v[cols]))), na.rm = TRUE))
+          max_e <- if (!is.null(el)) {
+            suppressWarnings(max(unlist(lapply(el, function(v) fin(v[cols]))), na.rm = TRUE))
+          } else NA_real_
+          if (!is.finite(min_d)) min_d <- NA_real_
+          if (!is.finite(max_e)) max_e <- NA_real_
+          at_junc <- is_circ && (b$aln_start <= 1L || b$aln_end >= rv$alignment$aln_len)
+          classify_conflict_block(
+            list(len = b$len, n_snps = b$n_snps, n_indels = b$n_indels,
+                 min_depth = min_d, max_error = max_e),
+            at_junction = at_junc, blast_divergent = blast_div
+          )
+        })
+        cf$cause <- vapply(cls, function(x) x$cause, character(1))
+        cf$label <- vapply(cls, function(x) x$label, character(1))
+        rv$alignment$conflicts <- cf
+        rv$alignment$block_class <- cls
+      } else {
+        rv$alignment$block_class <- list()
       }
-      reactable(
-        d, compact = TRUE,
-        defaultColDef = colDef(align = "center"),
-        columns = list(
-          path = colDef(name = "Path", width = 60),
-          base = colDef(name = "Base", width = 60)
-        )
-      )
-    })
 
+      # Reset navigator + per-block resolution decisions
+      rv$decisions <- list()
+      # Default base path = the first selected path.
+      rv$base_label <- nm[1]
+      rv$cur_block <- if (nrow(rv$alignment$conflicts) > 0) 1L else 0L
+      # Unique signature for this alignment, used as a plot cache key so that
+      # revisiting a previously rendered block returns the cached image.
+      rv$alignment$sig <- paste(rv$updating$ID, as.numeric(Sys.time()), sep = "-")
+    })
     output$msa_div <- renderUI({
-      req(rv$alignment)
+      # Only render once the alignment is fully built. During the rapid
+      # coverage_modal re-triggers, rv$alignment can briefly exist with some
+      # fields unset; requiring seqs + conflicts avoids length-zero `if`s below.
+      req(rv$alignment, rv$alignment$seqs, rv$alignment$conflicts)
+
+      wait_align$hide()
+
+      # Summary stats ----
+      cf <- rv$alignment$conflicts
+      n_blocks <- if (is.null(cf)) 0L else nrow(cf)
+      aln_len <- rv$alignment$aln_len %||% 0L
+      total_cf <- if (n_blocks > 0) sum(cf$len) else 0L
+      pct_cf <- if (aln_len > 0) round(100 * total_cf / aln_len, 2) else 0
+      longest <- if (n_blocks > 0) max(cf$len) else 0L
+      n_indels <- if (n_blocks > 0) sum(cf$n_indels) else 0L
+      n_snps <- if (n_blocks > 0) sum(cf$n_snps) else 0L
+      summary_txt <- if (n_blocks == 0) {
+        "No conflict blocks detected."
+      } else {
+        sprintf(
+          "Conflicts: %d blocks | %d bp total (%.2f%%) | longest %d bp | %d SNP cols, %d indel cols",
+          n_blocks, total_cf, pct_cf, longest, n_snps, n_indels
+        )
+      }
+
+      navigator <- if (n_blocks > 0) {
+        div(
+          style = "margin-top: 12px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;",
+          div(
+            style = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;",
+            actionButton(ns("prev_block"), "", icon = icon("chevron-left")),
+            actionButton(ns("next_block"), "", icon = icon("chevron-right")),
+            div(style = "font-size: 12px; color: #555;", uiOutput(ns("block_info"), inline = TRUE))
+          ),
+          uiOutput(ns("block_interp")),
+          div(style = "font-size: 11px; color: #555; margin: 6px 0 4px 0;",
+              paste("Overview, full alignment (red = conflict blocks, blue box = zoomed window).",
+                    "Mean depth and mean error rate across paths:")),
+          plotOutput(ns("minimap_plot"), height = "70px"),
+          plotOutput(ns("minimap_error"), height = "70px"),
+          div(style = "font-size: 11px; color: #555; margin: 10px 0 4px 0;",
+              paste("Zoomed, column-aligned: nucleotide alignment, per-path depth, error rate,",
+                    "and read support (green = matches called base, black = mismatch).",
+                    "Black lines bracket the current conflict:")),
+          plotOutput(ns("zoom_plot"), height = paste0(zoom_plot_height(), "px")),
+          div(style = "font-size: 11px; color: #555; margin: 14px 0 4px 0;",
+              "Conflict block summary (click a row to jump to that block):"),
+          reactableOutput(ns("blocks_table")),
+          uiOutput(ns("resolve_ui"))
+        )
+      } else NULL
 
       msa <- msaR::renderMsaR(
         msaR::msaR(
@@ -643,364 +600,747 @@ assembly_coverage_details_server <- function(id, rv) {
           overviewbox = TRUE,
           seqlogo = FALSE,
           menu = FALSE,
+          colorscheme = "nucleotide",
           conservation = TRUE,
           overviewboxHeight = 20
         )
       )
 
-      wait_align$hide()
-
-      n_paths <- length(rv$alignment$paths_used)
-      cov_height <- max(120, 80 * n_paths)
-
       div(
-        style = "margin: 20px 5px 30px 5px;",
-        h5("Mismatches"),
-        div(
-          style = "display:flex; gap:0.5em; align-items:center; margin-bottom:0.3em;",
-          actionButton(ns("nav_prev"), "Prev", icon("angle-left"), class = "btn-sm"),
-          actionButton(ns("nav_next"), "Next", icon("angle-right"), class = "btn-sm"),
-          tags$span(textOutput(ns("nav_pos"), inline = TRUE),
-            style = "margin-left: 0.5em; font-family: monospace;")
-        ),
-        plotly::plotlyOutput(ns("mismatch_track"), height = "70px"),
-        h5("Per-path coverage"),
-        plotly::plotlyOutput(ns("coverage_tracks"), height = sprintf("%dpx", cov_height)),
-        h5("Alignment"),
+        style = "margin: 30px 5px 30px 5px;",
         msa,
         p(rv$alignment$pct_id_range),
         p(rv$alignment$consRegion),
-        h5("Position drilldown"),
-        p(class = "text-muted", style = "font-size: 0.85em;",
-          "Click a mismatch column above or use Prev/Next to inspect per-path base + coverage."),
-        reactableOutput(ns("drilldown")),
-        h5("Pairwise identity"),
-        plotly::plotlyOutput(ns("identity_heatmap"), height = sprintf("%dpx", max(180, 30 * n_paths + 120))),
-        actionButton(ns("trim_consensus"), "Trim Consensus")
+        p(style = "font-weight: bold;", summary_txt),
+        actionButton(ns("trim_consensus"), "Trim to consensus",
+                     class = "btn-primary",
+                     title = paste("Keep only the longest region where all selected paths",
+                                   "agree; discards the conflicting ends. Asks to confirm.")),
+        navigator
       ) |> tagList()
     })
 
-    # ---- Consensus review state machine ----
+    # Navigator handlers ----
+    # Arrows move the TABLE selection only; the selection observer below is the
+    # single writer of current_block. (Writing current_block here and also
+    # syncing the table from current_block creates a feedback loop.)
+    observeEvent(input$prev_block, {
+      req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
+      n <- nrow(rv$alignment$conflicts)
+      cur <- rv$cur_block %||% 1L
+      reactable::updateReactable("blocks_table",
+                                 selected = if (cur <= 1L) n else cur - 1L)
+    })
+    observeEvent(input$next_block, {
+      req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
+      n <- nrow(rv$alignment$conflicts)
+      cur <- rv$cur_block %||% 1L
+      reactable::updateReactable("blocks_table",
+                                 selected = if (cur >= n) 1L else cur + 1L)
+    })
 
-    # Enter review mode
-    observeEvent(input$build_consensus, ignoreInit = TRUE, {
-      req(rv$alignment)
-      m <- rv$alignment$mismatch_cols
-      seqs_mat <- rv$alignment$seqs_mat
-      backbone_row <- 1L
-      # Only review positions where backbone is not a gap (substitutions only)
-      backbone_gaps <- seqs_mat[backbone_row, m] == "-"
-      valid_cols <- m[!backbone_gaps]
-      if (length(valid_cols) == 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "Nothing to review",
-          text = "All mismatch positions are insertions relative to the backbone (gaps). No substitutions to resolve.",
-          type = "info"
+    output$block_info <- renderUI({
+      req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
+      cur <- rv$cur_block %||% 1L
+      b <- rv$alignment$conflicts[cur, ]
+      lbl <- if (!is.null(b$label) && !is.na(b$label)) {
+        sprintf(" &middot; <b>%s</b>", b$label)
+      } else ""
+      HTML(sprintf(
+        "Block <b>%d / %d</b> &middot; aln cols %d&ndash;%d &middot; %d bp &middot; %d SNP, %d indel%s",
+        cur, nrow(rv$alignment$conflicts), b$aln_start, b$aln_end, b$len, b$n_snps, b$n_indels, lbl
+      ))
+    })
+
+    # Center the msaR viewer on the current conflict block ----
+    observe({
+      req(rv$alignment$conflicts, rv$alignment$aln_len)
+      cf <- rv$alignment$conflicts
+      cur <- rv$cur_block %||% 0L
+      req(cur >= 1L, cur <= nrow(cf))
+      b <- cf[cur, ]
+      session$sendCustomMessage("msaScrollToCol", list(
+        col = (b$aln_start + b$aln_end) / 2,
+        alnLen = rv$alignment$aln_len
+      ))
+    })
+
+    # Interpretation strip: plain-language cause + advice for current block ----
+    output$block_interp <- renderUI({
+      req(rv$alignment$block_class, length(rv$alignment$block_class) > 0)
+      cur <- rv$cur_block %||% 1L
+      cl <- rv$alignment$block_class[[cur]]
+      req(!is.null(cl))
+      div(
+        style = paste(
+          "margin: 4px 0 8px 0; padding: 6px 10px; font-size: 12px;",
+          "background: #f7f7f7; border-left: 3px solid #E55330; border-radius: 3px;"
+        ),
+        tags$b(cl$label), ": ", cl$advice
+      )
+    })
+
+    # Shared zoom window (current block ± padding) ----
+    # Padding (bp) shown on either side of the current conflict block in the
+    # zoomed views. Shared so the nucleotide alignment, depth/error bars, and
+    # the minimap marker all cover exactly the same window.
+    ZOOM_PAD <- 20L
+    zoom_win <- reactive({
+      req(rv$alignment$conflicts, rv$alignment$aln_len)
+      cf <- rv$alignment$conflicts
+      cur <- rv$cur_block %||% 0L
+      if (nrow(cf) == 0L || cur < 1L || cur > nrow(cf)) return(NULL)
+      b <- cf[cur, ]
+      c(max(1L, b$aln_start - ZOOM_PAD),
+        min(rv$alignment$aln_len, b$aln_end + ZOOM_PAD))
+    })
+
+    # Pixel height of the combined zoomed plot. Computed in the UI (plotOutput
+    # height) rather than via renderPlot's `height` arg, because bindCache()
+    # does not forward a dynamic height function (the plot would collapse).
+    zoom_plot_height <- function() {
+      n_seq <- if (!is.null(rv$alignment$aln_mat)) nrow(rv$alignment$aln_mat) else 2L
+      n_path <- if (!is.null(rv$alignment$depth_aligned)) {
+        length(rv$alignment$depth_aligned)
+      } else 2L
+      aln_h <- as.integer(20 + n_seq * 11)               # ~half height per path
+      bar_h <- as.integer((40 + n_path * 70) * 0.75)      # 25% shorter bars
+      aln_h + 3L * bar_h + 30L
+    }
+
+    # Zoomed sub-MSA palette. Hex values match the exact shades the msaR widget
+    # renders for the "nucleotide" colorscheme so the zoomed tiles match it.
+    base_color_nt <- function(b) {
+      u <- toupper(b)
+      dplyr::case_when(
+        u == "A" ~ "#a2fa8c",
+        u == "C" ~ "#ffd18c",
+        u == "G" ~ "#f38d8a",
+        u == "T" ~ "#8ab8f5",
+        u == "U" ~ "#8ab8f5",
+        b == "-" ~ "#BBBBBB",
+        TRUE     ~ "#666666"
+      )
+    }
+
+    # Combined zoomed view: nucleotide alignment tiles stacked above per-path
+    # depth and error-rate bar plots, all on the SAME alignment-column x axis.
+    # patchwork aligns the panels so the columns line up exactly; bars are one
+    # per bp position so they register against the tiles above.
+    output$zoom_plot <- renderPlot({
+      req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
+      cur <- rv$cur_block %||% 1L
+      cf <- rv$alignment$conflicts
+      b <- cf[cur, ]
+      aln_mat <- rv$alignment$aln_mat
+      aln_len <- rv$alignment$aln_len
+      win_start <- max(1L, b$aln_start - ZOOM_PAD)
+      win_end   <- min(aln_len, b$aln_end + ZOOM_PAD)
+      cols <- win_start:win_end
+      xlim <- c(win_start - 0.5, win_end + 0.5)
+      path_levels <- names(rv$alignment$depth_aligned) %||% rownames(aln_mat)
+
+      # Shared x scale + conflict-position highlight applied to every sub-plot:
+      # two black vertical lines bracketing the current conflict block.
+      x_scale <- ggplot2::scale_x_continuous(
+        limits = xlim, expand = c(0, 0),
+        minor_breaks = seq(win_start - 0.5, win_end + 0.5, by = 1)
+      )
+      bracket <- ggplot2::geom_vline(
+        xintercept = c(b$aln_start - 0.5, b$aln_end + 0.5),
+        color = "black", linewidth = 0.5
+      )
+      # Light horizontal guide lines for the depth/error/read panels. Zero
+      # vertical panel spacing so the black conflict brackets read as one
+      # continuous line down the whole stack.
+      hguides <- ggplot2::theme(
+        panel.grid.minor.y = ggplot2::element_blank(),
+        panel.grid.minor.x = ggplot2::element_line(color = "grey90", linewidth = 0.2),
+        panel.grid.major.x = ggplot2::element_blank(),
+        panel.grid.major.y = ggplot2::element_line(color = "grey85", linewidth = 0.3),
+        panel.spacing.y = grid::unit(6, "pt")
+      )
+
+      # --- (A) Nucleotide tiles, absolute alignment columns ---
+      sub <- aln_mat[, cols, drop = FALSE]
+      seq_names <- rownames(sub)
+      n_seq <- nrow(sub)
+      dfa <- expand.grid(row = seq_len(n_seq), ci = seq_along(cols),
+                         KEEP.OUT.ATTRS = FALSE)
+      dfa$col <- cols[dfa$ci]
+      dfa$base <- as.vector(sub)
+      dfa$fill <- base_color_nt(dfa$base)
+      dfa$y <- n_seq - dfa$row + 1L
+
+      p_aln <- ggplot2::ggplot(dfa) +
+        ggplot2::geom_tile(ggplot2::aes(x = col, y = y, fill = I(fill)),
+                           color = "white", linewidth = 0.2) +
+        ggplot2::geom_text(ggplot2::aes(x = col, y = y, label = base),
+                           size = 5, color = "#111111", fontface = "bold",
+                           family = "mono") +
+        bracket +
+        ggplot2::scale_y_continuous(breaks = seq_len(n_seq),
+                                    labels = rev(seq_names), expand = c(0, 0)) +
+        # Column-number axis on TOP of the nucleotide panel (bottom panel keeps
+        # the matching axis), so both ends of the stack are labelled.
+        ggplot2::scale_x_continuous(limits = xlim, expand = c(0, 0),
+                                    position = "top") +
+        ggplot2::labs(x = "alignment column", y = NULL) +
+        ggplot2::theme_minimal(base_size = 11, base_family = "sans") +
+        ggplot2::theme(
+          panel.grid = ggplot2::element_blank(),
+          axis.text.y = ggplot2::element_text(size = 10, color = "#333333"),
+          axis.text.x = ggplot2::element_text(size = 9, color = "#555555"),
+          axis.title.x = ggplot2::element_text(size = 10, color = "#333333"),
+          legend.position = "none"
         )
-        return()
+
+      # --- per-path single-value bar plot builder (depth / error) ---
+      bar_panel <- function(aligned, ylab, fill, show_x) {
+        df <- melt_per_path(aligned, "val", aln_len)
+        df <- df[df$col >= win_start & df$col <= win_end, , drop = FALSE]
+        df$path <- factor(df$path, levels = path_levels)
+        if (all(is.na(df$val))) {
+          return(
+            ggplot2::ggplot() +
+              ggplot2::annotate("text", x = mean(xlim), y = 0.5,
+                                label = paste("No", ylab, "data."),
+                                size = 3.5, color = "#888888") +
+              x_scale + ggplot2::labs(x = NULL, y = ylab) +
+              ggplot2::theme_void()
+          )
+        }
+        p <- ggplot2::ggplot(df) +
+          ggplot2::geom_col(ggplot2::aes(x = col, y = val), width = 1,
+                            fill = fill, color = "grey80", linewidth = 0.15,
+                            na.rm = TRUE) +
+          bracket +
+          ggplot2::facet_wrap(~ path, ncol = 1, scales = "fixed",
+                              strip.position = "right") +
+          x_scale +
+          ggplot2::labs(x = if (show_x) "alignment column" else NULL, y = ylab) +
+          ggplot2::theme_minimal(base_size = 11, base_family = "sans") +
+          hguides +
+          ggplot2::theme(
+            legend.position = "none",
+            axis.title = ggplot2::element_text(size = 10, color = "#333333"),
+            axis.text = ggplot2::element_text(size = 9, color = "#555555"),
+            strip.text.y.right = ggplot2::element_text(angle = 0, size = 10,
+                                                       color = "#333333", hjust = 0)
+          )
+        if (!show_x) {
+          p <- p + ggplot2::theme(axis.text.x = ggplot2::element_blank(),
+                                  axis.ticks.x = ggplot2::element_blank())
+        }
+        p
       }
-      lrv$consensus_review <- list(
-        active = TRUE,
-        backbone_row = backbone_row,
-        valid_cols = valid_cols,
-        mismatch_idx = 1L,
-        decisions = setNames(
-          rep(NA_character_, length(valid_cols)),
-          as.character(valid_cols)
+
+      # --- per-path read-support stacked bars (match vs mismatch) ---
+      support_panel <- function(show_x) {
+        df <- purrr::imap_dfr(rv$alignment$depth_aligned, function(d, nm) {
+          corr <- rv$alignment$correct_aligned[[nm]]
+          depth <- d[cols]; depth[is.na(depth)] <- 0
+          if (is.null(corr) || all(is.na(corr))) {
+            correct <- depth
+          } else {
+            correct <- corr[cols]; correct[is.na(correct)] <- 0
+          }
+          mismatch <- pmax(depth - correct, 0)
+          rbind(
+            data.frame(col = cols, path = nm, kind = "match",    n = correct,
+                       stringsAsFactors = FALSE),
+            data.frame(col = cols, path = nm, kind = "mismatch", n = mismatch,
+                       stringsAsFactors = FALSE)
+          )
+        })
+        df$path <- factor(df$path, levels = path_levels)
+        df$kind <- factor(df$kind, levels = c("mismatch", "match"))
+        if (sum(df$n, na.rm = TRUE) == 0) {
+          return(
+            ggplot2::ggplot() +
+              ggplot2::annotate("text", x = mean(xlim), y = 0.5,
+                                label = "No per-base read data.",
+                                size = 3.5, color = "#888888") +
+              x_scale + ggplot2::labs(x = NULL, y = "reads") +
+              ggplot2::theme_void()
+          )
+        }
+        p <- ggplot2::ggplot(df, ggplot2::aes(x = col, y = n, fill = kind)) +
+          ggplot2::geom_col(width = 1, color = "grey80", linewidth = 0.15) +
+          bracket +
+          ggplot2::scale_fill_manual(values = c(match = "#009E73",
+                                                mismatch = "#000000")) +
+          ggplot2::facet_wrap(~ path, ncol = 1, scales = "fixed",
+                              strip.position = "right") +
+          x_scale +
+          ggplot2::labs(x = if (show_x) "alignment column" else NULL,
+                        y = "reads", fill = NULL) +
+          ggplot2::theme_minimal(base_size = 11, base_family = "sans") +
+          hguides +
+          ggplot2::theme(
+            legend.position = "bottom",
+            axis.title = ggplot2::element_text(size = 10, color = "#333333"),
+            axis.text = ggplot2::element_text(size = 9, color = "#555555"),
+            strip.text.y.right = ggplot2::element_text(angle = 0, size = 10,
+                                                       color = "#333333", hjust = 0)
+          )
+        if (!show_x) {
+          p <- p + ggplot2::theme(axis.text.x = ggplot2::element_blank(),
+                                  axis.ticks.x = ggplot2::element_blank())
+        }
+        p
+      }
+
+      p_depth   <- bar_panel(rv$alignment$depth_aligned, "depth", "#337ab7", FALSE)
+      p_error   <- bar_panel(rv$alignment$error_aligned, "error rate", "#C0392B", FALSE)
+      p_support <- support_panel(TRUE)
+
+      n_path <- length(path_levels)
+      patchwork::wrap_plots(
+        p_aln, p_depth, p_error, p_support, ncol = 1,
+        heights = c(max(1, n_seq * 0.5), n_path * 1.5, n_path * 1.5, n_path * 1.5)
+      ) &
+        ggplot2::theme(plot.margin = ggplot2::margin(3, 4, 3, 4))
+    }) |>
+      shiny::bindCache(rv$alignment$sig, rv$cur_block)
+
+    # Helper: build long-format df for a named list of per-path vectors.
+    melt_per_path <- function(lst, value_col, aln_len) {
+      path_levels <- names(lst)
+      df <- purrr::imap_dfr(lst, function(v, nm) {
+        d <- data.frame(col = seq_len(aln_len), val = v, path = nm,
+                        stringsAsFactors = FALSE)
+        d
+      })
+      df$path <- factor(df$path, levels = path_levels)
+      names(df)[names(df) == "val"] <- value_col
+      df
+    }
+
+
+    # Full-length overview: mean of a per-path aligned stat across the whole
+    # alignment, with all conflict blocks shaded, the current zoom window boxed,
+    # and the current conflict block bracketed by black vertical lines.
+    overview_plot <- function(values_list, line_color, ylab) {
+      aln_len <- rv$alignment$aln_len
+      mat <- do.call(rbind, lapply(values_list, function(v) {
+        if (length(v) == aln_len) v else rep(NA_real_, aln_len)
+      }))
+      mean_v <- colMeans(mat, na.rm = TRUE)
+      mean_v[is.nan(mean_v)] <- NA_real_
+      df <- data.frame(col = seq_len(aln_len), val = mean_v)
+
+      cf  <- rv$alignment$conflicts
+      cur <- rv$cur_block %||% 0L
+      win <- zoom_win()
+
+      p <- ggplot2::ggplot()
+      if (!is.null(cf) && nrow(cf) > 0) {
+        p <- p + ggplot2::geom_rect(
+          data = cf,
+          ggplot2::aes(xmin = aln_start - 0.5, xmax = aln_end + 0.5,
+                       ymin = -Inf, ymax = Inf),
+          fill = "#E55330", alpha = 0.30, inherit.aes = FALSE
+        )
+      }
+      if (!is.null(win)) {
+        p <- p + ggplot2::annotate(
+          "rect", xmin = win[1], xmax = win[2],
+          ymin = -Inf, ymax = Inf,
+          fill = "#08306b", alpha = 0.45
+        )
+      }
+      p <- p + ggplot2::geom_line(
+        data = df, ggplot2::aes(x = col, y = val),
+        color = line_color, linewidth = 0.3, na.rm = TRUE
+      )
+      p +
+        ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(1, aln_len)) +
+        ggplot2::labs(x = NULL, y = ylab) +
+        ggplot2::theme_minimal(base_size = 10, base_family = "sans") +
+        ggplot2::theme(
+          panel.grid = ggplot2::element_blank(),
+          axis.text = ggplot2::element_text(size = 8, color = "#777777"),
+          axis.text.y = ggplot2::element_blank(),
+          axis.ticks.y = ggplot2::element_blank(),
+          axis.title.y = ggplot2::element_text(size = 9, color = "#555555"),
+          plot.margin = ggplot2::margin(2, 4, 2, 4)
+        )
+    }
+
+    output$minimap_plot <- renderPlot({
+      req(rv$alignment$depth_aligned, rv$alignment$aln_len)
+      overview_plot(rv$alignment$depth_aligned, "#555555", "depth")
+    }) |>
+      shiny::bindCache(rv$alignment$sig, rv$cur_block)
+    output$minimap_error <- renderPlot({
+      req(rv$alignment$error_aligned, rv$alignment$aln_len)
+      overview_plot(rv$alignment$error_aligned, "#C0392B", "error")
+    }) |>
+      shiny::bindCache(rv$alignment$sig, rv$cur_block)
+
+    # Block summary table (click to navigate) ----
+    output$blocks_table <- renderReactable({
+      req(rv$alignment$conflicts, rv$alignment$depth_aligned)
+      cf <- rv$alignment$conflicts
+      if (nrow(cf) == 0L) return(NULL)
+      dl <- rv$alignment$depth_aligned
+      el <- rv$alignment$error_aligned
+      # Per-block summary stats: min depth, mean depth, max error across paths.
+      finite_only <- function(x) x[is.finite(x)]
+      safe_min  <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else min(x) }
+      safe_mean <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else mean(x) }
+      safe_max  <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else max(x) }
+      summarize_block <- function(b) {
+        cols <- seq.int(b$aln_start, b$aln_end)
+        min_d  <- vapply(dl, function(v) safe_min(v[cols]),  numeric(1))
+        mean_d <- vapply(dl, function(v) safe_mean(v[cols]), numeric(1))
+        max_e  <- if (!is.null(el)) {
+          vapply(el, function(v) safe_max(v[cols]), numeric(1))
+        } else NA_real_
+        data.frame(
+          min_depth  = round(safe_min(min_d),  1),
+          mean_depth = round(safe_mean(mean_d), 1),
+          max_error  = round(safe_max(max_e), 3)
+        )
+      }
+      extras <- purrr::map_dfr(seq_len(nrow(cf)), function(i) summarize_block(cf[i, ]))
+      tbl <- cbind(cf, extras)
+      keep_cols <- c("block_id", "label", "aln_start", "aln_end", "len",
+                     "n_snps", "n_indels", "min_depth", "mean_depth", "max_error")
+      tbl <- tbl[, intersect(keep_cols, names(tbl))]
+      # Read current_block without taking a reactive dependency: the table is
+      # re-rendered only when the alignment/conflicts change, while block
+      # navigation just updates the highlighted row via updateReactable() below.
+      # (A reactive dependency here would re-render the table on every arrow
+      # press and fight the navigation handlers.)
+      cur <- isolate(rv$cur_block) %||% 0L
+      reactable(
+        tbl,
+        compact = TRUE,
+        defaultPageSize = 10,
+        selection = "single",
+        onClick = "select",
+        defaultSelected = if (cur >= 1L && cur <= nrow(tbl)) cur else NULL,
+        defaultColDef = colDef(align = "center"),
+        columns = list(
+          block_id  = colDef(name = "Block", width = 70),
+          label     = colDef(name = "Likely cause", minWidth = 180, align = "left",
+                             html = TRUE, cell = rt_longtext()),
+          aln_start = colDef(name = "Start"),
+          aln_end   = colDef(name = "End"),
+          len       = colDef(name = "Length"),
+          n_snps    = colDef(name = "SNPs"),
+          n_indels  = colDef(name = "Indels"),
+          min_depth  = colDef(name = "Min depth"),
+          mean_depth = colDef(name = "Mean depth"),
+          max_error  = colDef(name = "Max error rate")
         )
       )
-      rv$alignment$nav_idx <- 1L
-      rv$alignment$click_pos <- valid_cols[1]
     })
 
-    # Exit review mode
-    observeEvent(input$exit_review, ignoreInit = TRUE, {
-      lrv$consensus_review <- NULL
-    })
-
-    # Accept decision for current position
-    observeEvent(input$cons_accept, ignoreInit = TRUE, {
-      req(lrv$consensus_review$active)
-      cr <- lrv$consensus_review
-      m <- cr$valid_cols
-      idx <- cr$mismatch_idx
-      if (idx > length(m)) return()
-      pos <- m[idx]
-      lrv$consensus_review$decisions[as.character(pos)] <- input$cons_choice
-      next_idx <- min(idx + 1L, length(m) + 1L)
-      lrv$consensus_review$mismatch_idx <- next_idx
-      if (next_idx <= length(m)) {
-        rv$alignment$nav_idx <- which(rv$alignment$mismatch_cols == m[next_idx])[1]
-        rv$alignment$click_pos <- m[next_idx]
+    # Single writer of current_block: the blocks_table selection (set by a row
+    # click or by the arrow handlers via updateReactable()).
+    observe({
+      sel <- reactable::getReactableState("blocks_table", "selected")
+      req(length(sel) == 1L, !is.na(sel))
+      sel <- as.integer(sel)
+      if (!identical(sel, rv$cur_block)) {
+        rv$cur_block <- sel
       }
     })
 
-    # Skip (keep backbone) at current position
-    observeEvent(input$cons_skip, ignoreInit = TRUE, {
-      req(lrv$consensus_review$active)
-      cr <- lrv$consensus_review
-      m <- cr$valid_cols
-      idx <- cr$mismatch_idx
-      if (idx > length(m)) return()
-      pos <- m[idx]
-      backbone_base <- rv$alignment$seqs_mat[cr$backbone_row, pos]
-      lrv$consensus_review$decisions[as.character(pos)] <- backbone_base
-      next_idx <- min(idx + 1L, length(m) + 1L)
-      lrv$consensus_review$mismatch_idx <- next_idx
-      if (next_idx <= length(m)) {
-        rv$alignment$nav_idx <- which(rv$alignment$mismatch_cols == m[next_idx])[1]
-        rv$alignment$click_pos <- m[next_idx]
-      }
-    })
+    # Resolution toolbox UI (per-block) ----
+    # Human-readable labels for each resolution mode.
+    res_tool_labels <- c(
+      path     = "Use one path's bases (splice)",
+      majority = "Coverage-majority base",
+      iupac    = "IUPAC ambiguity (SNP only)",
+      nmask    = "Mask with N"
+    )
+    output$resolve_ui <- renderUI({
+      req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
+      cur <- rv$cur_block %||% 1L
+      b <- rv$alignment$conflicts[cur, ]
+      labs <- rownames(rv$alignment$aln_mat)
+      cl <- rv$alignment$block_class[[cur]]
 
-    # Consensus review panel (replaces drilldown when active)
-    output$consensus_panel <- renderUI({
-      cr <- lrv$consensus_review
-      if (is.null(cr) || !isTRUE(cr$active)) return(NULL)
+      # Tools available for this block (IUPAC only when no indels).
+      avail <- c("path", "majority", "nmask")
+      if (isTRUE(b$n_indels == 0L)) avail <- c(avail, "iupac")
+      rec <- intersect(cl$tools %||% character(0), avail)
+      ordered <- c(rec, setdiff(avail, rec))
 
-      m <- cr$valid_cols
-      idx <- cr$mismatch_idx
-      n_reviewed <- sum(!is.na(cr$decisions))
+      stored <- rv$decisions[[as.character(cur)]]
+      # Default selection = N-mask (matches the build default for unset blocks).
+      sel_mode <- stored$mode %||% "nmask"
+      sel_path <- if (!is.null(stored$row)) labs[stored$row] else labs[1]
 
-      if (idx > length(m)) {
-        return(div(
-          class = "alert alert-success",
-          style = "margin: 10px 5px;",
-          icon("check-circle"),
-          sprintf(" All %d positions reviewed. Click 'Finalize Consensus' to generate the sequence.", length(m))
-        ))
-      }
-
-      pos <- m[idx]
-      seqs_mat <- rv$alignment$seqs_mat
-      bases <- seqs_mat[, pos]
-      non_gap <- bases[bases != "-"]
-      tbl_counts <- sort(table(non_gap), decreasing = TRUE)
-      majority_base <- names(tbl_counts)[1]
-      majority_count <- as.integer(tbl_counts[1])
-      backbone_base <- seqs_mat[cr$backbone_row, pos]
-      is_tie <- length(tbl_counts) > 1 && tbl_counts[1] == tbl_counts[2]
-      n_paths <- length(bases)
-      iupac <- iupac_code(names(tbl_counts))
-
-      # Build choice list
-      choices <- c()
-      if (!is_tie) {
-        choices <- c(choices, setNames(
-          majority_base,
-          sprintf("Majority: %s  (%d / %d paths)", majority_base, majority_count, n_paths)
-        ))
-      } else {
-        choices <- c(choices, setNames(
-          iupac,
-          sprintf("Tied majority — IUPAC ambiguity code: %s", iupac)
-        ))
-      }
-      if (backbone_base != majority_base && !is_tie) {
-        choices <- c(choices, setNames(
-          backbone_base,
-          sprintf("Keep backbone: %s", backbone_base)
-        ))
-      }
-      if (!is_tie && iupac != majority_base) {
-        choices <- c(choices, setNames(iupac, sprintf("IUPAC ambiguity: %s", iupac)))
-      }
-      choices <- c(choices, "N" = "N  (ambiguous)")
-      for (b in setdiff(names(tbl_counts), c(majority_base, backbone_base))) {
-        choices <- c(choices, setNames(b, sprintf("Minority: %s  (%d path%s)", b, tbl_counts[b], if (tbl_counts[b] > 1) "s" else "")))
-      }
-
-      prev_decision <- cr$decisions[as.character(pos)]
-      selected_choice <- if (!is.na(prev_decision)) prev_decision else if (!is_tie) majority_base else iupac
+      # Summary of decisions explicitly made so far.
+      made <- rv$decisions
+      n_set <- sum(vapply(made, function(d) !is.null(d), logical(1)))
 
       div(
-        style = "border: 1px solid #bee5eb; border-radius: 6px; padding: 14px; margin: 10px 5px; background: #f0f9ff;",
-        div(
-          style = "display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;",
-          tags$h5(style = "margin:0;",
-            sprintf("Consensus Review — Mismatch %d / %d  (column %d)", idx, length(m), pos)
-          ),
-          tags$span(
-            style = sprintf("padding:3px 10px; border-radius:10px; font-size:0.8em; color:white; background:%s;",
-              if (n_reviewed == length(m)) "#2ca02c" else "#6c757d"),
-            sprintf("%d / %d decided", n_reviewed, length(m))
-          )
+        style = paste(
+          "margin-top: 14px; padding: 10px; border: 1px solid #cdd;",
+          "border-radius: 4px; background: #fbfcfd;"
         ),
-        div(
-          style = "display:flex; gap:0.5em; flex-wrap:wrap; margin-bottom:10px;",
-          lapply(seq_along(bases), function(i) {
-            b <- bases[i]
-            bg <- if (b == "-") "#e9ecef" else if (b == majority_base) "#d4edda" else "#f8d7da"
-            tags$span(
-              style = sprintf(
-                "padding:4px 10px; border-radius:4px; font-family:monospace; font-size:1.1em; background:%s; border:1px solid #ccc;",
-                bg
-              ),
-              sprintf("path %s: %s", rv$alignment$paths_used[i], b)
-            )
-          })
+        tags$b("Resolve conflicts into a single assembly (Path 0)"),
+        div(style = "font-size: 11px; color: #777; margin: 2px 0 8px 0;",
+            "Set how to resolve the current block, navigate to others, then build. ",
+            "Blocks left unset use the base path."),
+        radioButtons(
+          ns("res_mode"),
+          label = sprintf("Block %d (%s):", cur, cl$label %||% "conflict"),
+          choices = stats::setNames(ordered, res_tool_labels[ordered]),
+          selected = sel_mode, inline = TRUE
         ),
-        if (is_tie) tags$p(
-          class = "text-warning",
-          style = "margin-bottom:6px; font-size:0.9em;",
-          icon("triangle-exclamation"), " Tied majority — no single base has more votes. IUPAC ambiguity code pre-selected."
-        ),
-        selectInput(
-          ns("cons_choice"),
-          label = "Decision for this position:",
-          choices = choices,
-          selected = selected_choice,
-          width = "100%"
-        ),
-        div(
-          style = "display:flex; gap:0.5em;",
-          actionButton(ns("cons_accept"), "Accept", class = "btn-success btn-sm", icon = icon("check")),
-          actionButton(ns("cons_skip"), "Skip (keep backbone)", class = "btn-secondary btn-sm")
-        )
+        if (sel_mode == "path") {
+          selectInput(ns("res_path"), "Path to use for this block:",
+                      choices = labs, selected = sel_path, width = "260px")
+        },
+        tags$hr(style = "margin: 8px 0;"),
+        selectInput(ns("base_path"),
+                    "Base path (backbone used for any block you don't set):",
+                    choices = labs,
+                    selected = rv$base_label %||% labs[1],
+                    width = "320px"),
+        div(style = "font-size: 11px; color: #777; margin: -4px 0 8px 0;",
+            paste("Provides the sequence for the non-conflicting (agreed) regions.",
+                  "Conflict blocks you don't resolve above are filled with N.")),
+        div(style = "font-size: 11px; color: #777; margin-bottom: 8px;",
+            sprintf("%d of %d conflict block(s) resolved; the rest will be N-masked.",
+                    n_set, nrow(rv$alignment$conflicts))),
+        actionButton(ns("build_resolved"),
+                     "Build resolved assembly (Path 0)",
+                     icon = icon("wand-magic-sparkles"),
+                     class = "btn-primary")
       )
     })
 
-    # Finalize Consensus ----
-    observeEvent(input$finalize_consensus, ignoreInit = TRUE, {
-      req(rv$alignment, lrv$consensus_review$active)
+    # Store the per-block decision when the controls change ----
+    # Guard against writing identical values: resolve_ui re-renders on
+    # decisions changes and re-sets the inputs, so an unconditional write would
+    # invalidate -> re-render -> write -> ... (infinite loop).
+    observeEvent(list(input$res_mode, input$res_path), ignoreInit = TRUE, {
+      cur <- rv$cur_block %||% 0L
+      req(cur >= 1L)
+      row <- match(input$res_path %||% NA_character_, rownames(rv$alignment$aln_mat))
+      new_dec <- list(
+        mode = input$res_mode %||% "base",
+        row  = if (is.na(row)) NULL else as.integer(row)
+      )
+      if (!identical(rv$decisions[[as.character(cur)]], new_dec)) {
+        rv$decisions[[as.character(cur)]] <- new_dec
+      }
+    })
+    observeEvent(input$base_path, ignoreInit = TRUE, {
+      if (!identical(rv$base_label, input$base_path)) {
+        rv$base_label <- input$base_path
+      }
+    })
+
+    # Persist a resolved/edited single sequence as Path 0 (shared writer) ----
+    # Compose assemble notes for an edit: replace any previous edit note (so
+    # repeated consensus generation does not stack them) while leaving other
+    # notes intact. Edit notes are wrapped in [Assembly edited: ...] so they can
+    # be found and removed regardless of internal punctuation.
+    compose_edit_notes <- function(edit_text) {
+      prior <- rv$updating$assemble_notes %|NA|% ""
+      prior <- stringr::str_remove_all(prior, "\\[Assembly edited:[^\\]]*\\]\\s*")
+      prior <- stringr::str_remove(prior, "Unable to resolve single assembly from reads")
+      prior <- stringr::str_trim(prior)
+      stringr::str_trim(paste0("[Assembly edited: ", edit_text, "] ", prior))
+    }
+
+    persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note) {
+      ID <- rv$updating$ID
+      dir <- file.path(session$userData$dir_out, ID, "assemble",
+                       rv$updating$assemble_opts)
+      dna <- Biostrings::DNAStringSet(seq_str)
+      names(dna) <- paste(ID, 0, 0, sep = ".") |> paste("linear")
+      Biostrings::writeXStringSet(dna, file.path(dir, paste0(ID, "_assembly_0.fasta")))
+
+      cov <- data.frame(
+        Position  = seq_along(depth_vec),
+        SeqId     = paste(ID, 0, 0, sep = "."),
+        Depth     = round(depth_vec),
+        GC        = round(gc_vec, 4),
+        Correct   = round(depth_vec),
+        ErrorRate = err_vec,
+        stringsAsFactors = FALSE
+      )
+      readr::write_csv(
+        cov, file.path(dir, paste0(ID, "_assembly_0_coverageStats.csv")),
+        quote = "none", na = ""
+      )
+
+      DBI::dbExecute(
+        session$userData$con,
+        stringr::str_glue("UPDATE assemblies SET ignore = 1 WHERE ID = '{ID}';")
+      )
+      a <- data.frame(
+        ID = ID, path = 0, scaffold = 0, topology = "linear",
+        length = nchar(seq_str), length_raw = nchar(seq_str), sequence = seq_str,
+        depth  = paste(round(depth_vec), collapse = " "),
+        gc     = paste(round(gc_vec, 4), collapse = " "),
+        errors = paste(err_vec, collapse = " "),
+        ignore = 0, edited = 1, time_stamp = as.numeric(Sys.time())
+      )
+      dplyr::tbl(session$userData$con, "assemblies") |>
+        dplyr::rows_upsert(a, by = c("ID", "path", "scaffold"), copy = T, in_place = T)
+
+      update <- data.frame(
+        ID = ID, paths = -abs(rv$updating$paths), assemble_lock = 1,
+        topology = "linear",
+        assemble_notes = compose_edit_notes(note)
+      )
+      rv$data <- rv$data |> dplyr::rows_update(update, by = "ID")
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(update, by = "ID", copy = T, in_place = T,
+                           unmatched = "ignore")
+      rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
+      trigger("coverage_modal")
+    }
+
+    # Delete the edited consensus (Path 0) and revert the sample ----
+    output$consensus_admin <- renderUI({
+      req(rv$focal_assembly)
+      if (!any(rv$focal_assembly$path == 0, na.rm = TRUE)) return(NULL)
+      div(
+        style = "margin: 8px 0;",
+        actionButton(ns("delete_consensus"), "Delete consensus (Path 0)",
+                     icon = icon("trash"), class = "btn-danger"),
+        span(style = "font-size: 11px; color: #777; margin-left: 8px;",
+             paste("Removes the edited Path 0, restores all paths (un-ignored),",
+                   "unlocks the sample, and clears the edit note."))
+      )
+    })
+
+    observeEvent(input$delete_consensus, {
+      shinyWidgets::ask_confirmation(
+        inputId = ns("delete_consensus_confirm"),
+        title = "Delete consensus (Path 0)?",
+        text = paste(
+          "This deletes the edited consensus sequence (Path 0), brings back all the",
+          "original assembly paths (un-ignored), unlocks the sample, and removes the",
+          "edit note. The original paths themselves are not changed."
+        ),
+        type = "warning",
+        btn_labels = c("Cancel", "Delete consensus"),
+        btn_colors = c("#6c757d", "#d9534f")
+      )
+    })
+
+    observeEvent(input$delete_consensus_confirm, {
+      req(isTRUE(input$delete_consensus_confirm))
+      ID <- rv$updating$ID
+
+      # Remove Path 0 from the DB and its files; un-ignore all remaining paths.
+      DBI::dbExecute(
+        session$userData$con,
+        stringr::str_glue("DELETE FROM assemblies WHERE ID = '{ID}' AND path = 0;")
+      )
+      DBI::dbExecute(
+        session$userData$con,
+        stringr::str_glue("UPDATE assemblies SET ignore = 0 WHERE ID = '{ID}';")
+      )
+      dir <- file.path(session$userData$dir_out, ID, "assemble",
+                       rv$updating$assemble_opts)
+      unlink(file.path(dir, c(paste0(ID, "_assembly_0.fasta"),
+                              paste0(ID, "_assembly_0_coverageStats.csv"))))
+
+      # Number of paths/scaffolds remaining (excludes the just-deleted Path 0).
+      n_remaining <- sum(rv$focal_assembly$path != 0, na.rm = TRUE)
+      new_notes <- (rv$updating$assemble_notes %|NA|% "") |>
+        stringr::str_remove_all("\\[Assembly edited:[^\\]]*\\]\\s*") |>
+        stringr::str_trim()
+
+      update <- data.frame(
+        ID = ID,
+        paths = abs(rv$updating$paths),
+        assemble_lock = 0L,
+        assemble_switch = if (n_remaining > 1L) 3L else 2L,
+        assemble_notes = new_notes
+      )
+      rv$data <- rv$data |> dplyr::rows_update(update, by = "ID")
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(update, by = "ID", copy = T, in_place = T,
+                           unmatched = "ignore")
+      rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
+      trigger("coverage_modal")
+    })
+
+    # Build resolved assembly from per-block decisions ----
+    observeEvent(input$build_resolved, {
       if (rv$updating$assemble_lock == 1) {
         shinyWidgets::sendSweetAlert(title = "Assembly Locked!", type = "warning")
         req(F)
       }
+      aln_mat <- rv$alignment$aln_mat
+      labs <- rownames(aln_mat)
+      base_row <- match(rv$base_label %||% labs[1], labs)
+      if (is.na(base_row)) base_row <- 1L
+      cf <- rv$alignment$conflicts
+      # Unset conflict blocks default to N-masking (safe, explicit) rather than
+      # silently inheriting the base path's bases.
+      decisions <- lapply(seq_len(nrow(cf)), function(i) {
+        rv$decisions[[as.character(i)]] %||% list(mode = "nmask")
+      })
+      res <- build_resolved_sequence(
+        aln_mat, cf, decisions, base_row = base_row,
+        support = rv$alignment$correct_aligned
+      )
+      req(nzchar(res$seq))
 
-      cr <- lrv$consensus_review
-      seqs_mat <- rv$alignment$seqs_mat
-      backbone_row <- cr$backbone_row
-      backbone_chars <- seqs_mat[backbone_row, ]
-      nongap <- which(backbone_chars != "-")
-      consensus_chars <- backbone_chars[nongap]
-
-      # Apply decisions; build edit log
-      edit_log <- list()
-      for (pos_str in names(cr$decisions)) {
-        dec <- cr$decisions[[pos_str]]
-        if (is.na(dec)) next
-        pos <- as.integer(pos_str)
-        raw_idx <- which(nongap == pos)
-        if (length(raw_idx) == 0) next
-        old_base <- consensus_chars[raw_idx]
-        if (dec != old_base) {
-          consensus_chars[raw_idx] <- dec
-          edit_log <- c(edit_log, list(list(
-            aln_col = pos,
-            raw_pos = as.integer(raw_idx),
-            from = old_base,
-            to = dec
-          )))
+      # Reconstruct per-base coverage from MSA-aligned vectors. For synthesized
+      # bases (IUPAC/N, src_row = NA) use the mean across paths at that column.
+      dl <- rv$alignment$depth_aligned
+      el <- rv$alignment$error_aligned
+      gl <- rv$alignment$gc_aligned
+      pull <- function(vlist, col, row) {
+        if (!is.na(row)) {
+          v <- vlist[[labs[row]]]
+          if (!is.null(v) && col <= length(v) && is.finite(v[col])) return(v[col])
         }
+        vals <- vapply(vlist, function(v) {
+          if (!is.null(v) && col <= length(v)) v[col] else NA_real_
+        }, numeric(1))
+        if (any(is.finite(vals))) mean(vals[is.finite(vals)]) else NA_real_
       }
+      mp <- res$map
+      depth_vec <- mapply(function(c, r) pull(dl, c, r), mp$aln_col, mp$src_row)
+      err_vec   <- mapply(function(c, r) pull(el, c, r), mp$aln_col, mp$src_row)
+      gc_vec    <- mapply(function(c, r) pull(gl, c, r), mp$aln_col, mp$src_row)
 
-      consensus_seq <- paste(consensus_chars, collapse = "")
-      consensus_bs <- Biostrings::DNAStringSet(consensus_seq)
-      names(consensus_bs) <- paste(rv$updating$ID, 0, 0, sep = ".") |> paste("linear")
-
-      out_fasta <- file.path(
-        session$userData$dir_out, rv$updating$ID, "assemble",
-        rv$updating$assemble_opts,
-        paste0(rv$updating$ID, "_assembly_0.fasta")
-      )
-      Biostrings::writeXStringSet(consensus_bs, out_fasta)
-
-      # Coverage stats from backbone path
-      backbone_path <- rv$alignment$paths_used[backbone_row]
-      cov_in <- file.path(
-        session$userData$dir_out, rv$updating$ID, "assemble",
-        rv$updating$assemble_opts,
-        paste0(rv$updating$ID, "_assembly_", backbone_path, "_coverageStats.csv")
-      )
-      coverage <- tryCatch(read.csv(cov_in), error = function(e) NULL)
-      if (!is.null(coverage)) {
-        coverage <- dplyr::mutate(coverage,
-          Position = dplyr::row_number(),
-          SeqId = stringr::str_replace(SeqId, "[0-9]+\\.[0-9]+$", "0.0")
+      modes <- vapply(decisions, function(d) d$mode %||% "base", character(1))
+      note <- paste0("multi-path resolved per-block (",
+                     paste(sort(unique(modes[modes != "base"])), collapse = "/"), ")")
+      # Warn if the result contains ambiguous bases (IUPAC codes or Ns), which
+      # can break downstream annotation (MITOS does not handle them well).
+      if (any(c("iupac", "nmask") %in% modes) || count_ambiguities(res$seq) > 0) {
+        note <- paste0(
+          note,
+          " WARNING: contains ambiguous bases (IUPAC/N) - may cause problems in ",
+          "annotation; MITOS does not handle ambiguous base calls well."
         )
-        readr::write_csv(
-          coverage,
-          file.path(
-            session$userData$dir_out, rv$updating$ID, "assemble",
-            rv$updating$assemble_opts,
-            paste0(rv$updating$ID, "_assembly_0_coverageStats.csv")
+        shinyWidgets::sendSweetAlert(
+          title = "Ambiguous bases added",
+          text = paste(
+            "This resolved assembly contains ambiguous bases (IUPAC codes or Ns).",
+            "These can cause problems during annotation - MITOS in particular does",
+            "not handle ambiguous base calls well. A warning has been added to the",
+            "assembly notes."
           ),
-          quote = "none", na = ""
+          type = "warning"
         )
       }
-
-      edit_positions_json <- if (length(edit_log) > 0)
-        as.character(jsonlite::toJSON(edit_log, auto_unbox = TRUE))
-      else
-        "[]"
-
-      # Ignore all current assemblies for this ID
-      DBI::dbExecute(
-        session$userData$con,
-        sprintf("UPDATE assemblies SET ignore = 1 WHERE ID = '%s';", rv$updating$ID)
-      )
-
-      # Build insert row
-      new_row <- data.frame(
-        ID = rv$updating$ID,
-        path = 0L,
-        scaffold = 0L,
-        topology = "linear",
-        length = nchar(consensus_seq),
-        sequence = consensus_seq,
-        depth = if (!is.null(coverage)) paste(coverage$Depth, collapse = " ") else NA_character_,
-        gc = if (!is.null(coverage)) paste(coverage$GC, collapse = " ") else NA_character_,
-        errors = if (!is.null(coverage)) paste(coverage$ErrorRate, collapse = " ") else NA_character_,
-        ignore = 0L,
-        edited = 1L,
-        time_stamp = as.numeric(Sys.time()),
-        stringsAsFactors = FALSE
-      )
-      if ("edit_positions" %in% DBI::dbListFields(session$userData$con, "assemblies")) {
-        new_row$edit_positions <- edit_positions_json
-      }
-
-      dplyr::tbl(session$userData$con, "assemblies") |>
-        dplyr::rows_upsert(new_row, by = c("ID", "path", "scaffold"), copy = TRUE, in_place = TRUE)
-
-      # Summary note for assemble table
-      n_edits <- length(edit_log)
-      edit_detail <- if (n_edits > 0) {
-        changes <- paste(
-          vapply(edit_log, function(x) sprintf("col%d:%s→%s", x$aln_col, x$from, x$to), character(1)),
-          collapse = "; "
-        )
-        sprintf(
-          "Consensus built from %d paths (%d edit%s: %s). ",
-          length(rv$alignment$paths_used), n_edits,
-          if (n_edits == 1) "" else "s", changes
-        )
-      } else {
-        sprintf(
-          "Consensus built from %d paths (0 edits — backbone identical at all reviewed positions). ",
-          length(rv$alignment$paths_used)
-        )
-      }
-
-      update <- data.frame(
-        ID = rv$updating$ID,
-        paths = -abs(rv$updating$paths),
-        assemble_lock = 1L,
-        topology = "linear",
-        assemble_notes = paste0(edit_detail, rv$updating$assemble_notes %|NA|% ""),
-        stringsAsFactors = FALSE
-      )
-      rv$data <- rv$data |> dplyr::rows_update(update, by = "ID")
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(update, by = "ID", copy = TRUE, in_place = TRUE, unmatched = "ignore")
-
-      lrv$consensus_review <- NULL
-      rv$updating <- rv$data |> dplyr::filter(ID == !!rv$updating$ID)
-      trigger("coverage_modal")
+      persist_path0(res$seq, depth_vec, gc_vec, err_vec, note)
     })
 
+
     # Trim Consensus ----
+    # Ask for confirmation first - "Trim Consensus" is destructive/ambiguous.
     observeEvent(input$trim_consensus, {
       if (rv$updating$assemble_lock == 1) {
         shinyWidgets::sendSweetAlert(
@@ -1009,6 +1349,23 @@ assembly_coverage_details_server <- function(id, rv) {
         )
         req(F)
       }
+      shinyWidgets::ask_confirmation(
+        inputId = ns("trim_confirm"),
+        title = "Trim to consensus?",
+        text = paste(
+          "This keeps ONLY the single longest region where all selected paths agree and",
+          "discards everything outside it (including the conflicting ends), saving the",
+          "result as a new trimmed Path 0. The original paths are kept but ignored and the",
+          "assembly is locked. Best used only when the disagreements are at the edges."
+        ),
+        type = "warning",
+        btn_labels = c("Cancel", "Trim to consensus"),
+        btn_colors = c("#6c757d", "#E55330")
+      )
+    })
+
+    observeEvent(input$trim_confirm, {
+      req(isTRUE(input$trim_confirm))
 
       # Make new assembly
       trimmed <- purrr::map2_chr(rv$alignment$consStart, rv$alignment$consEnd, ~ {
@@ -1096,11 +1453,9 @@ assembly_coverage_details_server <- function(id, rv) {
         paths = -abs(rv$updating$paths),
         assemble_lock = 1,
         topology = "linear",
-        assemble_notes = paste(
-          "Assembly edited - multi-path getOrganelle output trimmed for consensus. ",
-          rv$updating$assemble_notes
-        ) |>
-          stringr::str_remove("Unable to resolve single assembly from reads")
+        assemble_notes = compose_edit_notes(
+          "multi-path getOrganelle output trimmed for consensus"
+        )
       )
       rv$data <- rv$data |>
         dplyr::rows_update(
@@ -1115,6 +1470,7 @@ assembly_coverage_details_server <- function(id, rv) {
           in_place = T,
           unmatched = "ignore"
         )
+
 
       rv$updating <- rv$data |>
         dplyr::filter(ID == !!rv$updating$ID)
