@@ -2268,46 +2268,49 @@ annotations_details_server <- function(id, rv) {
       # one tick so the "hold tight" message paints before work starts.
       show_edit_waiter("Saving, hold tight...")
       shinyjs::delay(100, {
-        on.exit(waiter::waiter_hide(), add = TRUE)
-        ### Recompute per-hit stats against the edited focal sequence ----
-        # recompute_hit_stats aligns each pair once (vectorized pwalign) instead
-        # of the old row-by-row compare_aa/count_end_gaps (4 alignments per hit).
-        focal <- rv$annotations$translation[selected()]
-        hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
-        stats <- recompute_hit_stats(focal, hits$target)
-        hits <- hits |>
-          dplyr::mutate(
-            similarity = stats$similarity,
-            pctid = stats$pctid,
-            gap_leading = stats$gap_leading,
-            gap_trailing = stats$gap_trailing,
-            .after = "eval"
-          ) |>
-          dplyr::arrange(dplyr::desc(similarity))
-        rv$annotations$refHits[selected()] <- json_string(hits)
+        # finally = waiter_hide() guarantees the overlay clears even if the
+        # recompute/write errors. (on.exit is unreliable inside shinyjs::delay.)
+        tryCatch({
+          ### Recompute per-hit stats against the edited focal sequence ----
+          # recompute_hit_stats aligns each pair once (vectorized pwalign) instead
+          # of the old row-by-row compare_aa/count_end_gaps (4 alignments per hit).
+          focal <- rv$annotations$translation[selected()]
+          hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+          stats <- recompute_hit_stats(focal, hits$target)
+          hits <- hits |>
+            dplyr::mutate(
+              similarity = stats$similarity,
+              pctid = stats$pctid,
+              gap_leading = stats$gap_leading,
+              gap_trailing = stats$gap_trailing,
+              .after = "eval"
+            ) |>
+            dplyr::arrange(dplyr::desc(similarity))
+          rv$annotations$refHits[selected()] <- json_string(hits)
 
-        dplyr::tbl(session$userData$con, "annotations") |>
-          dplyr::rows_delete(
-            dplyr::distinct(rv$annotations[, c("ID")]),
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
-        dplyr::tbl(session$userData$con, "annotations") |>
-          dplyr::rows_insert(
-            rv$annotations |>
-              dplyr::select(-faa, -fas),
-            by = "ID",
-            conflict = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
-        shinyjs::hide("edit_mode_ctrls")
-        shinyjs::hide("discard_edits")
-        shinyjs::hide("save_edits")
-        shinyjs::show("edit_mode")
-        rv$editing <- NULL
+          dplyr::tbl(session$userData$con, "annotations") |>
+            dplyr::rows_delete(
+              dplyr::distinct(rv$annotations[, c("ID")]),
+              by = "ID",
+              unmatched = "ignore",
+              copy = TRUE,
+              in_place = TRUE
+            )
+          dplyr::tbl(session$userData$con, "annotations") |>
+            dplyr::rows_insert(
+              rv$annotations |>
+                dplyr::select(-faa, -fas),
+              by = "ID",
+              conflict = "ignore",
+              copy = TRUE,
+              in_place = TRUE
+            )
+          shinyjs::hide("edit_mode_ctrls")
+          shinyjs::hide("discard_edits")
+          shinyjs::hide("save_edits")
+          shinyjs::show("edit_mode")
+          rv$editing <- NULL
+        }, finally = waiter::waiter_hide())
       })
     })
     # Local Blast ----
