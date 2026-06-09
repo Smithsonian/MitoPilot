@@ -4,7 +4,14 @@
 \alias{make_PCG_alignments}
 \title{Generate HTML report woth PCG alignments}
 \usage{
-make_PCG_alignments(export_group = NULL, db = NULL, out_path = NULL)
+make_PCG_alignments(
+  export_group = NULL,
+  db = NULL,
+  out_path = NULL,
+  start_aa = 10,
+  stop_aa = 10,
+  ident_pct = 60
+)
 }
 \arguments{
 \item{export_group}{Name of the submission group}
@@ -12,6 +19,15 @@ make_PCG_alignments(export_group = NULL, db = NULL, out_path = NULL)
 \item{db}{path for sqlite database}
 
 \item{out_path}{path for output files}
+
+\item{start_aa}{Start-offset threshold (amino acids) for the flagged-outlier
+section of the report. Default 10.}
+
+\item{stop_aa}{Stop-offset threshold (amino acids) for the flagged-outlier
+section of the report. Default 10.}
+
+\item{ident_pct}{Identity threshold (percent) for the flagged-outlier section
+of the report. Default 60.}
 }
 \description{
 Generate HTML report woth PCG alignments

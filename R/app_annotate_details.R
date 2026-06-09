@@ -17,6 +17,38 @@ annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Outlier-review flag for the sample we jumped in to fix (NULL otherwise),
+    # used to render a reminder banner of what to edit.
+    outlier_flag <- reactiveVal(NULL)
+    output$outlier_flag_banner <- renderUI({
+      info <- outlier_flag()
+      if (is.null(info)) return(NULL)
+      div(
+        style = paste(
+          "background:#fff3cd; border:1px solid #ffe69c; color:#664d03;",
+          "border-radius:4px; padding:8px 12px; margin-bottom:8px;",
+          "display:flex; align-items:center; gap:8px;"
+        ),
+        icon("triangle-exclamation"),
+        span(
+          tags$b(stringr::str_glue("Outlier review - {toupper(info$gene)}: ")),
+          info$issue,
+          tags$span(
+            style = "color:#8a6d3b; margin-left:6px;",
+            stringr::str_glue(
+              "(start {sprintf('%+d', info$start_offset)} aa, ",
+              "stop {sprintf('%+d', info$stop_offset)} aa, ",
+              "identity {info$pct_identity}%)"
+            )
+          ),
+          tags$span(
+            style = "margin-left:6px;",
+            "- adjust this gene's start/stop position, then use 'Back to Review'."
+          )
+        )
+      )
+    })
+
     # Prepare modal data ----
     init("annotations_modal")
     on("annotations_modal", {
@@ -61,6 +93,32 @@ annotations_details_server <- function(id, rv) {
 
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
+
+      # Cross-tab jump from the export outlier review: auto-select the flagged
+      # gene's row so the START/STOP editor opens directly on it. Delay lets the
+      # reactable widget render before we set its selection.
+      goto <- session$userData$goto_annotate_target
+      if (!is.null(goto) && !is.null(goto$gene) &&
+          identical(goto$ID, rv$updating$ID)) {
+        # Remember the flag so the banner can remind the user what to edit
+        outlier_flag(goto)
+        gidx <- which(rv$annotations$gene == goto$gene)
+        if (length(gidx) > 0) {
+          gidx <- gidx[[1]]
+          tbl_id <- session$ns("table")
+          shinyjs::delay(500, {
+            reactable::updateReactable("table", selected = gidx, session = session)
+            # Scroll the (single-page) table so the selected gene is visible
+            shinyjs::runjs(sprintf(
+              "var t=document.getElementById('%s'); if(t){var r=t.querySelectorAll('.rt-tbody .rt-tr'); if(r[%d]){r[%d].scrollIntoView({block:'center', behavior:'smooth'});}}",
+              tbl_id, gidx - 1L, gidx - 1L
+            ))
+          })
+        }
+        session$userData$goto_annotate_target <- NULL
+      } else {
+        outlier_flag(NULL)
+      }
     })
 
     # Compact status pill renderer. `state` is one of "yes" / "no" / NA;
@@ -350,6 +408,18 @@ annotations_details_server <- function(id, rv) {
       ref_msa_cache$key <- NULL
       trigger("update_annotate_table")
       removeModal()
+      # If we arrived here from the export outlier review, hop back to it
+      if (isTRUE(session$userData$return_to_review)) {
+        session$userData$return_to_review <- FALSE
+        session$userData$in_outlier_review <- FALSE
+        trigger("reopen_outlier_review")
+      }
+    })
+
+    # Return to the export outlier review (saves via the standard close path)
+    observeEvent(input$back_to_review, {
+      session$userData$return_to_review <- TRUE
+      shinyjs::click("close")
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
@@ -2577,6 +2647,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ),
     size = "l",
     easyClose = F,
+    uiOutput(ns("outlier_flag_banner")),
     tags$details(
       id = ns("annotation_table_details"),
       open = TRUE,
@@ -2836,6 +2907,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
+      if (isTRUE(session$userData$in_outlier_review)) {
+        actionButton(
+          ns("back_to_review"), "Back to Review",
+          icon = icon("arrow-left"),
+          class = "btn-success",
+          style = "float: left;"
+        )
+      },
       uiOutput(ns("status_toggles"), inline = TRUE),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("lock"), "Lock&Close"),

@@ -11,6 +11,9 @@ output:
 params:
   db_path: ""
   group: ""
+  start_aa: 10
+  stop_aa: 10
+  ident_pct: 60
 ---
 
 ```{r setup, include=FALSE, dev="CairoPNG"}
@@ -31,7 +34,7 @@ render_gene_aln <- function(gene) {
     dplyr::pull(translation, ID) |>
     Biostrings::AAStringSet()
   if (length(gene_seqs) < 2) {
-    cat(paste0("_Gene **", gene, "** found in fewer than 2 samples — alignment skipped._\n"))
+    cat(paste0("_Gene **", gene, "** found in fewer than 2 samples, alignment skipped._\n"))
     return(invisible(NULL))
   }
   gene_aln <- DECIPHER::AlignSeqs(gene_seqs, processors = NULL, verbose = FALSE)
@@ -53,140 +56,45 @@ render_gene_aln <- function(gene) {
 ```
 
 ```{r, echo=F, message=T, warning=F}
-
 con <- DBI::dbConnect(RSQLite::SQLite(), dbname = params$db_path)
-
 group <- params$group
 
-annotations <- dplyr::tbl(con, "samples") |>
-  dplyr::filter(export_group == !!group) |>
-  dplyr::select(ID) |>
-  dplyr::left_join(dplyr::tbl(con, "annotations") |>
-                     dplyr::filter(pos1 > 0 & type == "PCG"),
-                   by = "ID") |>
-  dplyr::collect()
+# Collect PCG annotations with multi-exon genes merged (shared with the in-app
+# outlier review; see MitoPilot:::get_export_PCG_annotations).
+annotations <- MitoPilot:::get_export_PCG_annotations(con, group)
+```
 
-# logic to merge exons if present
-IDs <- dplyr::tbl(con, "samples") |>
-  dplyr::filter(export_group == !!group) |>
-  dplyr::pull("ID")
+# Flagged Outliers
 
+```{r flagged, echo=F, message=F, warning=F}
+outliers <- MitoPilot::flag_PCG_outliers(
+  group = group,
+  db = params$db_path,
+  start_aa = params$start_aa,
+  stop_aa = params$stop_aa,
+  ident_pct = params$ident_pct
+)$flags
 
-# Create an empty vector to store the row indices of exons that should be removed after being merged
-rows_to_remove <- integer(0)
-
-for (ID in IDs) {
-  
-  #### TEMP
-  #ID <- IDs[1]
-  
-  # Get curation rules for the current ID
-  curation_opts <- dplyr::tbl(con, "annotate") |>
-    dplyr::filter(ID == !!ID) |>
-    dplyr::pull("curate_opts")
-  
-  curate_rules <- dplyr::tbl(con, "curate_opts") |>
-    dplyr::filter(curate_opts == !!curation_opts) |>
-    dplyr::pull("params") |>
-    jsonlite::fromJSON()
-  
-  # Get sample data
-  dat <- dplyr::tbl(con, "samples") |>
-    dplyr::select(-dplyr::any_of("topology")) |>
-    dplyr::filter(ID == !!ID) |>
-    dplyr::left_join(
-      dplyr::tbl(con, "annotate") |>
-        dplyr::select(ID, topology, path) |>
-        dplyr::distinct(),
-      by = "ID"
+if (nrow(outliers) == 0) {
+  cat("_No outlier PCG annotations were flagged._\n")
+} else {
+  outliers |>
+    dplyr::transmute(
+      Sample = label,
+      Gene = toupper(gene),
+      Issue = issue,
+      `Start offset (aa)` = start_offset,
+      `Stop offset (aa)` = stop_offset,
+      `Identity (%)` = pct_identity
     ) |>
-    dplyr::collect()
-  
-  # Get mitogenome sequence (respecting per-scaffold ignore flag)
-  kept_scaffolds <- dplyr::tbl(con, "assemblies") |>
-    dplyr::filter(ID == !!ID & path == !!dat$path & ignore == 0) |>
-    dplyr::pull("scaffold")
-  seq <- MitoPilot::get_assembly(
-    ID = ID,
-    path = dat$path,
-    scaffold = kept_scaffolds,
-    con = con
-  )
-  if (length(seq) > 1) {
-    stop("Multiple non-ignored scaffolds found. Export not supported for fragmented assemblies. Mark all but one scaffold as ignore to export.")
-  }
-  
-  # Get all unique genes for the current ID to avoid processing the same gene multiple times
-  genes_in_id <- unique(annotations$gene[annotations$ID == ID])
-  
-  # Loop over each unique gene within the current ID
-  for (current_gene in genes_in_id) {
-    
-    # Find all rows (exons) for this specific gene and ID
-    exons_idx <- which(annotations$ID == ID & annotations$gene == current_gene)
-    
-    # Skip if this gene has already been processed (i.e., its exons were marked for removal)
-    if (any(exons_idx %in% rows_to_remove)) next
-    
-    # Proceed only if there is more than one exon for this gene
-    if (length(exons_idx) <= 1) next
-    
-    cur <- annotations[exons_idx[1], ] # Use the first exon as the reference
-    
-    # Get curation rules for the gene (intron, start/stop codons)
-    cur_rules <- curate_rules$rules[[cur$gene]]
-    
-    intron <- cur_rules$intron %||% curate_rules$default_rules$PCG$intron %||% FALSE
-    
-    # If the intron rule is TRUE and we have multiple exons, merge them
-    if (intron) {
-      exons <- annotations[exons_idx, ]
-      exon_seqs <- character(nrow(exons))
-      
-      message(paste("Merged ", length(exon_seqs), " exons for gene ", cur$gene, " (", ID, ")", sep=""))
-      
-      if (all(exons$direction == "+")) {
-        for (i in 1:nrow(exons)) {
-          exon_seqs[i] <- as.character(Biostrings::subseq(seq, start = exons$pos1[i], end = exons$pos2[i]))
-        }
-        merged_sequence <- Biostrings::DNAString(paste(exon_seqs, collapse = ""))
-        
-      } else if (all(exons$direction == "-")) {
-        for (i in 1:nrow(exons)) {
-          exon_seqs[i] <- as.character(Biostrings::subseq(seq, start = exons$pos1[i], end = exons$pos2[i]))
-        }
-        merged_sequence <- Biostrings::DNAString(paste(exon_seqs, collapse = "")) |>
-          Biostrings::reverseComplement()
-        
-      } else {
-        message(crayon::red(paste("Warning: exons on opposite strands for gene", cur$gene)))
-        next # Skip to the next gene if strands are inconsistent
-      }
-      
-      # Translate the merged sequence
-      translation <- Biostrings::translate(
-        merged_sequence,
-        genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))
-      ) |> as.character()
-      translation <- sub("\\*$", "", translation) # remove terminal stop codon
-      
-      # update the translation for the FIRST exon in the main data frame
-      annotations[exons_idx[1], "translation"] <- translation
-      
-      # add an asterisk to the sample name
-      annotations[exons_idx[1], "ID"] <- paste0("*", annotations[exons_idx[1], "ID"]) 
-      
-      # add the indices of the OTHER exons to our list for later removal
-      rows_to_remove <- c(rows_to_remove, exons_idx[-1])
-    }
-  }
-}
-
-# After the loop is completely finished, remove all the marked rows in one single step.
-if (length(rows_to_remove) > 0) {
-  annotations <- annotations[-rows_to_remove, ]
+    knitr::kable()
 }
 ```
+
+Start/stop offset (aa) is the number of residues a sample's end extends past (+) or falls
+short of (-) the alignment's well-aligned core. Flags use a start-offset threshold of
+`r params$start_aa` aa, a stop-offset threshold of `r params$stop_aa` aa, and an identity
+threshold of `r params$ident_pct`%.
 
 # PCG Alignments
 
