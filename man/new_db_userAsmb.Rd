@@ -22,7 +22,7 @@ new_db_userAsmb(
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
-  max_blast_hits = 100,
+  max_blast_hits = 10,
   curate_params = NULL,
   orf_cpus = 4,
   orf_memory = 8,
@@ -67,7 +67,7 @@ for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{curate_target}{Default target database for curation}
 
-\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
+\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 10)}
 
 \item{curate_params}{Default curation parameters}
 

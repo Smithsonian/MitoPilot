@@ -93,14 +93,14 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #'
 #' @param ref_db reference database
 #' @param query query sequences
-#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #'
 #' @export
 #'
 get_top_hits_local <- function(
   ref_db = NULL,
   query = NULL,
-  max_blast_hits = 100
+  max_blast_hits = 10
 ) {
   stringr::str_glue(
     "-db {ref_db}",

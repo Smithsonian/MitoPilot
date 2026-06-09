@@ -587,7 +587,7 @@ backwards_compatibility <- function(
           orffinder_opts = "-s 1 -n true",
           orf_min_len = 300L,
           orf_max_overlap = 0.1,
-          max_blast_hits = 100L,
+          max_blast_hits = 10L,
           ref_db = ref_db_default,
           ref_dir = ref_dir_default
         ),
@@ -621,7 +621,7 @@ backwards_compatibility <- function(
   # if max_blast_hits column doesn't exist, add it
   if(!("max_blast_hits" %in% names(curate_opts_table))){
     message("added 'max_blast_hits' column to annotate_opts table")
-    curate_opts_table$max_blast_hits <- rep(100, nrow(curate_opts_table)) # add ID_verified column
+    curate_opts_table$max_blast_hits <- rep(10, nrow(curate_opts_table)) # add ID_verified column
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE curate_opts

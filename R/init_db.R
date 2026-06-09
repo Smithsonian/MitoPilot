@@ -25,7 +25,7 @@
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
-#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #' @param curate_params Default curation parameters
 #' @param orf_cpus CPUs for the optional ORF-finder step (default = 4)
 #' @param orf_memory Memory (GB) for the optional ORF-finder step (default = 8)
@@ -88,7 +88,7 @@ new_db <- function(
     curate_cpus = 4,
     curate_memory = 8,
     curate_target = "fish_mito",
-    max_blast_hits = 100,
+    max_blast_hits = 10,
     curate_params = NULL,
     # Default ORF-finder options
     orf_cpus = 4,
@@ -514,7 +514,7 @@ new_db <- function(
         cpus = curate_cpus,
         memory = curate_memory,
         target = curate_target,
-        max_blast_hits = 100,
+        max_blast_hits = 10,
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
         params = jsonlite::toJSON(curate_params)

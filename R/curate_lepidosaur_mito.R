@@ -5,7 +5,7 @@
 #' @param coverage_fn Path to the coverage file (csv)
 #' @param genetic_code Genetic code to use (default = 2)
 #' @param out_dir Path to the output directory
-#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
 #' @param ref_dir Path to reference directory for curation
@@ -20,7 +20,7 @@ curate_lepidosaur_mito <- function(
     coverage_fn = NULL,
     genetic_code = 2,
     out_dir = NULL,
-    max_blast_hits = 100,
+    max_blast_hits = 10,
     params = NULL,
     ref_dir = NULL,
     blast_ref_file = NULL,

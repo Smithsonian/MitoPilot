@@ -20,7 +20,7 @@
 #'   of the ORF length, before an ORF is discarded (default: 0.1).
 #' @param ref_dir Path to the curation reference directory (must contain a
 #'   `featureProt/` subdirectory of per-gene protein FASTAs).
-#' @param max_blast_hits Maximum number of BLAST hits to retain per ORF (default: 100).
+#' @param max_blast_hits Maximum number of BLAST hits to retain per ORF (default: 10).
 #' @param blast_condaenv Conda environment containing blastp/makeblastdb (default:
 #'   "base"). Set NULL to use them on the PATH.
 #' @param out_dir Output directory for the ORF annotations TSV.
@@ -36,7 +36,7 @@ orf_finder <- function(
   orf_min_len = 300,
   orf_max_overlap = 0.1,
   ref_dir = ".",
-  max_blast_hits = 100,
+  max_blast_hits = 10,
   blast_condaenv = "base",
   out_dir = NULL
 ) {

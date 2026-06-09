@@ -140,14 +140,14 @@ circ_overlap_len <- function(p1, p2, q1, q2, L) {
 #' @param ref_db reference database
 #' @param query query sequeencs
 #' @param condaenv Conda environment to use for running blastp
-#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #'
 #' @noRd
 #'
 get_top_hits <- function(
     ref_db,
     query,
-    max_blast_hits = 100,
+    max_blast_hits = 10,
     condaenv = "base") {
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
 
@@ -237,7 +237,7 @@ get_top_hits <- function(
 #'
 #' @param ref_db combined reference database (FASTA with a makeblastdb index)
 #' @param query query (amino acid) sequence
-#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #' @param condaenv Conda environment to use for running blastp (NULL = on PATH)
 #'
 #' @noRd
@@ -245,7 +245,7 @@ get_top_hits <- function(
 get_top_hits_orf <- function(
     ref_db,
     query,
-    max_blast_hits = 100,
+    max_blast_hits = 10,
     condaenv = "base") {
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
 
