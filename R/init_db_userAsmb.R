@@ -509,6 +509,28 @@ new_db_userAsmb <- function(
       by = "orf_opts"
     )
 
+  ## Export options ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE export_opts (
+      export_opts TEXT NOT NULL,
+      fasta_header TEXT,
+      fasta_header_gene TEXT,
+      PRIMARY KEY (export_opts)
+    );"
+  )
+  dplyr::tbl(con, "export_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        export_opts = "default",
+        fasta_header = DEFAULT_FASTA_HEADER,
+        fasta_header_gene = DEFAULT_FASTA_HEADER_GENE
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "export_opts"
+    )
+
   # Annotations table
   DBI::dbExecute(
     con,

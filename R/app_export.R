@@ -80,6 +80,8 @@ export_server <- function(id) {
       review_idx = 1L,     # cursor into review_genes
       resolved = character(0), # "ID|gene" keys the user marked resolved;
                               # persists across flag/alignment recomputes
+      # Currently selected header-template name, so the modal reopens with it
+      export_template = "default",
       # Last-used review options, so the modal reopens with them (not defaults)
       opt_review = TRUE,
       opt_start = 10,
@@ -299,6 +301,18 @@ export_server <- function(id) {
       req(nrow(rv$data) > 0)
       choices <- sort(unique(rv$data$export_group))
       req(length(choices) > 0)
+      # Saved templates + the currently selected one's header strings, plus the
+      # columns available to reference
+      con <- session$userData$con
+      tmpl_choices <- list_export_templates(con)
+      sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
+      rv$export_template <- sel_tmpl
+      opts <- get_export_opts(con, sel_tmpl)
+      avail_cols <- paste(sort(names(rv$data)), collapse = ", ")
+      cols_help <- p(
+        style = "color: #666; font-size: 0.8em; margin: 0.25em 0 0.75em;",
+        tags$b("Available columns: "), avail_cols
+      )
       modalDialog(
         title = div(
           style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
@@ -306,15 +320,47 @@ export_server <- function(id) {
           span(id = ns("gears"), class = "gears paused")
         ),
         size = "l",
-        shinyWidgets::pickerInput(
-          ns("export_group"),
-          "Export Group:",
-          choices = choices
+        # Export group + header-template selector share one row at equal width.
+        # The template dropdown: pick a saved set to load, or type a new name to
+        # create one from the current header boxes (like the analysis-opts
+        # parameter-set dropdowns). Edits auto-save to the selected name.
+        div(
+          style = "display: flex; flex-flow: row nowrap; gap: 1em;",
+          div(
+            style = "flex: 1; min-width: 0;",
+            shinyWidgets::pickerInput(
+              ns("export_group"),
+              "Export Group:",
+              choices = choices,
+              width = "100%"
+            )
+          ),
+          div(
+            style = "flex: 1; min-width: 0;",
+            selectizeInput(
+              ns("template_select"),
+              "Header Template:",
+              choices = tmpl_choices,
+              selected = sel_tmpl,
+              width = "100%",
+              options = list(
+                create = TRUE,
+                maxItems = 1,
+                placeholder = "select or type a new template name"
+              )
+            )
+          )
         ),
+        tags$label(
+          class = "control-label",
+          "Mitogenome FASTA Header (reference columns from your sample data using '{}'):"
+        ),
+        cols_help,
+        uiOutput(ns("fasta_header_status")),
         textAreaInput(
           ns("fasta_header"),
-          "Fasta Header Template (reference columns from your sample data using '{}'):",
-          "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] [location=mitochondrion] {Taxon} mitochondrion, complete genome",
+          NULL,
+          opts$fasta_header,
           width = "100%"
         ),
         shinyWidgets::prettyCheckbox(
@@ -329,10 +375,16 @@ export_server <- function(id) {
           value = F,
           status = "primary"
         ),
+        tags$label(
+          class = "control-label",
+          "Gene FASTA Header (reference columns from your sample data using '{}', gene names will be automatically added):"
+        ),
+        cols_help,
+        uiOutput(ns("fasta_header_gene_status")),
         textAreaInput(
           ns("fasta_header_gene"),
-          "Fasta Header Template for Gene Export (reference columns from your sample data using '{}', gene names will be automatically added):",
-          "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] [location=mitochondrion] {Taxon}",
+          NULL,
+          opts$fasta_header_gene,
           width = "100%"
         ),
         # PCG outlier review options, separated from the export options above
@@ -384,22 +436,98 @@ export_server <- function(id) {
             )
           )
         ),
-        div(
-          id = ns("output_path"),
-          h4("Data exported to:"),
-          div(
-            class = "code-block",
-            style = "padding: 0.25em;white-space: normal;",
-            id = ns("out_path"),
-            textOutput(ns("out_path_location")),
-          )
-        ) |> shinyjs::hidden(),
         footer = tagList(
           actionButton(ns("export_data"), "Export"),
           modalButton("Close")
         )
       ) |> showModal()
     })
+
+    # Live header-template validation -----------------------------------------
+    # Debounce so we validate after typing pauses, not on every keystroke.
+    hdr_main <- shiny::debounce(reactive(input$fasta_header), 400)
+    hdr_gene <- shiny::debounce(reactive(input$fasta_header_gene), 400)
+
+    # Render a green/amber/red status line beneath a header textarea.
+    # level: "ok" (green), "warn" (amber, non-blocking), "error" (red, blocks).
+    render_hdr_status <- function(res) {
+      style_for <- switch(
+        res$level %||% if (isTRUE(res$ok)) "ok" else "error",
+        ok    = list(col = "#28a745", ic = "circle-check"),
+        warn  = list(col = "#e0a800", ic = "triangle-exclamation"),
+        error = list(col = "#d9534f", ic = "circle-xmark")
+      )
+      span(
+        style = sprintf("color: %s; font-size: 0.85em;", style_for$col),
+        shiny::icon(style_for$ic), " ", res$message
+      )
+    }
+
+    output$fasta_header_status <- renderUI({
+      render_hdr_status(validate_fasta_header(hdr_main(), rv$data))
+    })
+    output$fasta_header_gene_status <- renderUI({
+      render_hdr_status(validate_fasta_header(hdr_gene(), rv$data))
+    })
+
+    # Template selector ----------------------------------------------------
+    # Like the analysis-opts parameter-set dropdowns: picking an existing name
+    # loads its header strings; typing a new name creates a template from the
+    # current boxes and adds it to the dropdown.
+    observeEvent(input$template_select, {
+      req(input$template_select)
+      name <- input$template_select
+      rv$export_template <- name
+      con <- session$userData$con
+      if (name %in% list_export_templates(con)) {
+        o <- get_export_opts(con, name)
+        updateTextAreaInput(session, "fasta_header", value = o$fasta_header)
+        updateTextAreaInput(session, "fasta_header_gene", value = o$fasta_header_gene)
+      } else if (isTRUE(validate_fasta_header(input$fasta_header, rv$data)$ok) &&
+                 isTRUE(validate_fasta_header(input$fasta_header_gene, rv$data)$ok)) {
+        # New name typed: seed the template from the current (valid) boxes.
+        set_export_opts(con, input$fasta_header, input$fasta_header_gene, name = name)
+        updateSelectizeInput(
+          session, "template_select",
+          choices = list_export_templates(con), selected = name,
+          options = list(create = TRUE, maxItems = 1)
+        )
+      }
+    }, ignoreInit = TRUE)
+
+    # Auto-save header edits to the currently selected template (when both are
+    # valid). Reacts only to box edits, not selection, so loading a template
+    # never clobbers it. Invalid templates are never persisted.
+    observeEvent(list(hdr_main(), hdr_gene()), {
+      name <- input$template_select
+      req(name, name %in% list_export_templates(session$userData$con))
+      if (isTRUE(validate_fasta_header(input$fasta_header, rv$data)$ok) &&
+          isTRUE(validate_fasta_header(input$fasta_header_gene, rv$data)$ok)) {
+        set_export_opts(
+          session$userData$con, input$fasta_header, input$fasta_header_gene,
+          name = name
+        )
+      }
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+    # Validate both header boxes; show an error alert and return FALSE if either
+    # is invalid (so a bad template can never reach export).
+    valid_headers_or_alert <- function() {
+      v_main <- validate_fasta_header(input$fasta_header, rv$data)
+      v_gene <- validate_fasta_header(input$fasta_header_gene, rv$data)
+      if (!isTRUE(v_main$ok) || !isTRUE(v_gene$ok)) {
+        bad <- if (!isTRUE(v_main$ok)) v_main$message else v_gene$message
+        which_t <- if (!isTRUE(v_main$ok)) "mitogenome" else "gene"
+        shinyWidgets::sendSweetAlert(
+          session = session,
+          title = "Invalid FASTA header template",
+          text = stringr::str_glue("The {which_t} header template is invalid: {bad}"),
+          type = "error"
+        )
+        return(FALSE)
+      }
+      TRUE
+    }
 
     run_export <- function() {
       shinyjs::removeClass("gears", "paused")
@@ -416,10 +544,6 @@ export_server <- function(id) {
         stop_aa = input$stop_aa %||% 10,
         ident_pct = input$ident_pct %||% 60
       )
-      shinyjs::show("output_path")
-      output$out_path_location <- renderText({
-        paste0(session$userData$dir_out, "/export/", input$export_group)
-      })
       shinyjs::addClass("gears", "paused")
       shinyjs::enable("export_data")
 
@@ -429,10 +553,69 @@ export_server <- function(id) {
       rv$review_stop <- input$stop_aa %||% 10
       rv$review_ident <- input$ident_pct %||% 60
 
-      # Surface outlier review (if any flagged genes)
+      # Where the files landed; surfaced via a popup once the user is done (after
+      # PCG review, or immediately when review is off / not possible).
+      rv$export_done_path <- file.path(
+        session$userData$dir_out, "export", input$export_group
+      )
+
+      # Surface outlier review when on (present_review opens the modal if any
+      # genes were flagged, otherwise shows the export-complete popup itself).
+      # When review is off or not possible (e.g. single-sample group ->
+      # review_res NULL), show the popup now.
       if (isTRUE(input$review_outliers) && !is.null(review_res)) {
         present_review(review_res)
+      } else {
+        show_export_done_alert()
       }
+    }
+
+    # Popup announcing where files were written. `extra` adds a second line
+    # (e.g. the "no outliers flagged" note when review found nothing).
+    show_export_done_alert <- function(extra = NULL) {
+      path <- rv$export_done_path
+      if (is.null(path)) return(invisible(NULL))
+      # JS-safe single-quoted string for the clipboard onclick
+      path_js <- gsub("'", "\\\\'", gsub("\\\\", "\\\\\\\\", path))
+      shinyWidgets::sendSweetAlert(
+        session = session,
+        title = "Export complete",
+        text = tagList(
+          "Data exported to:",
+          tags$div(
+            style = paste(
+              "display: flex; align-items: stretch; gap: 0.4em;",
+              "margin-top: 0.5em;"
+            ),
+            tags$div(
+              style = paste(
+                "flex: 1; min-width: 0; background: #000; color: #fff;",
+                "font-family: monospace; padding: 0.5em 0.6em; border-radius: 4px;",
+                "white-space: normal; word-break: break-all; text-align: left;"
+              ),
+              path
+            ),
+            tags$button(
+              type = "button",
+              class = "btn btn-secondary",
+              title = "Copy path",
+              onclick = sprintf(
+                paste0(
+                  "navigator.clipboard.writeText('%s');",
+                  "var t=this.querySelector('span');",
+                  "if(t){var o=t.innerText;t.innerText='Copied!';",
+                  "setTimeout(function(){t.innerText=o;},1200);}"
+                ),
+                path_js
+              ),
+              shiny::icon("copy"), tags$span(style = "margin-left: 0.3em;", "Copy")
+            )
+          ),
+          if (!is.null(extra)) tags$p(style = "margin-top: 0.75em;", extra)
+        ),
+        type = "success",
+        html = TRUE
+      )
     }
 
     # Load a review result into rv and open the modal (or report none found).
@@ -453,12 +636,8 @@ export_server <- function(id) {
         removeModal()
         trigger("outlier_modal")
       } else {
-        shinyWidgets::sendSweetAlert(
-          session = session,
-          title = "Outlier review",
-          text = "No outlier PCG annotations were flagged.",
-          type = "success"
-        )
+        # Nothing to review: go straight to the export-complete popup.
+        show_export_done_alert(extra = "No outlier PCG annotations were flagged.")
       }
     }
 
@@ -542,6 +721,8 @@ export_server <- function(id) {
 
     observeEvent(input$export_data, ignoreInit = T, {
       req(input$export_group)
+      # Block export if either header template is invalid (would crash str_glue_data)
+      if (!valid_headers_or_alert()) return()
       export_path <- file.path(session$userData$dir_out, "export", input$export_group)
       if (dir.exists(export_path)) {
         shinyWidgets::confirmSweetAlert(
@@ -634,10 +815,7 @@ export_server <- function(id) {
           actionButton(ns("review_prev"), "Prev"),
           actionButton(ns("review_next"), "Next"),
           actionButton(ns("skip_gene"), "Mark gene resolved", class = "btn-success"),
-          tags$button(
-            type = "button", class = "btn btn-primary",
-            `data-dismiss` = "modal", `data-bs-dismiss` = "modal", "Done"
-          )
+          actionButton(ns("review_done"), "Done", class = "btn-primary")
         )
       ) |> showModal()
     })
@@ -764,6 +942,11 @@ export_server <- function(id) {
     observeEvent(input$review_next, {
       highlight_label(NULL)
       rv$review_idx <- min(length(rv$review_genes), rv$review_idx + 1L)
+    })
+    # Finish review: close the modal and surface the export-complete popup.
+    observeEvent(input$review_done, {
+      removeModal()
+      show_export_done_alert()
     })
     # Mark gene completed: flag every sample for this gene as resolved (kept in
     # rv$resolved so the rows survive recompute and show struck-through) rather than

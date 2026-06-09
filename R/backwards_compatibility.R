@@ -102,7 +102,8 @@ backwards_compatibility <- function(
       isTRUE(tryCatch(
         "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
         error = function(e) FALSE
-      )))
+      )) &&
+      "export_opts" %in% DBI::dbListTables(con))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -976,6 +977,31 @@ backwards_compatibility <- function(
         PRIMARY KEY (ID, path)
       );"
     )
+  }
+
+  # if export_opts table doesn't exist, create it and seed the default templates
+  if (!("export_opts" %in% DBI::dbListTables(con))) {
+    message("created 'export_opts' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE export_opts (
+        export_opts TEXT NOT NULL,
+        fasta_header TEXT,
+        fasta_header_gene TEXT,
+        PRIMARY KEY (export_opts)
+      );"
+    )
+    dplyr::tbl(con, "export_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          export_opts = "default",
+          fasta_header = DEFAULT_FASTA_HEADER,
+          fasta_header_gene = DEFAULT_FASTA_HEADER_GENE
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "export_opts"
+      )
   }
 
   # if .config does not contain "blast_gb" params section, add it
