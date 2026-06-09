@@ -522,8 +522,13 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # Plotly click → set drilldown / review position ----
     observe({
+      # Gate on rv$alignment first so event_data (and its source registration
+      # lookup) is only reached once the mismatch_track plot has rendered. Calling
+      # event_data before the plot exists triggers the "source ID ... not
+      # registered" startup warning.
+      req(rv$alignment)
       ev <- plotly::event_data("plotly_click", source = "mismatch_src")
-      req(ev, rv$alignment)
+      req(ev)
       pos <- round(ev$x)
       rv$alignment$click_pos <- pos
       m <- rv$alignment$mismatch_cols
