@@ -1402,9 +1402,8 @@ annotations_details_server <- function(id, rv) {
           hits$Taxon
         }
         new_alignment$seqs <- setNames(hits$target, hit_labels)
-        # Cache the reference-only MSA across codon edits: the references don't
-        # change while the user walks codons, so reuse the prior MSA and add
-        # the (cheap) focal sequence via profile alignment.
+        # Cache the reference-only MSA: references don't change as the user walks
+        # codons, so reuse it and add the focal sequence via profile alignment.
         ref_key <- paste(selected(), n_hits, paste(new_alignment$seqs, collapse = "|"), sep = "::")
         if (!identical(ref_msa_cache$key, ref_key)) {
           ref_set <- Biostrings::AAStringSet(new_alignment$seqs)
@@ -1435,8 +1434,8 @@ annotations_details_server <- function(id, rv) {
         paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
         ""
       )
-      # Nonce so each edit invalidates: reactiveValues dedupes via identical(),
-      # which misses XStringSet content changes when the codon string repeats.
+      # Nonce so each edit invalidates the render (reactiveValues dedupes
+      # identical values, missing repeat-codon content changes).
       new_alignment$render_nonce <- isolate(rv$alignment$render_nonce %||% 0L) + 1L
       rv$alignment <- new_alignment
     })
@@ -1521,7 +1520,7 @@ annotations_details_server <- function(id, rv) {
           pos2 = 0,
           length = 0,
           time_stamp = as.numeric(Sys.time()),
-          gene = paste0(rv$annotations[selected(), "gene"], "_DELETED_", as.numeric(Sys.time())) # hack to make sure deleted gene has a unique key (ID + path + scaffold + gene + pos1)
+          gene = paste0(rv$annotations[selected(), "gene"], "_DELETED_", as.numeric(Sys.time())) # timestamp suffix keeps the deleted gene's key unique
         )
       note <- stringr::str_glue(
         "DELETED: from {rv$annotations$pos1[selected()]}-{rv$annotations$pos2[selected()]}"
@@ -1704,8 +1703,7 @@ annotations_details_server <- function(id, rv) {
       note <- stringr::str_glue(
         "EDITED: linearized circular assembly after rotating {start-1} bp"
       )
-      # Read the live notes input (rv$updating$annotate_notes is no longer synced on
-      # every keystroke) so notes typed this session are preserved.
+      # Read the live notes input so notes typed this session are preserved.
       cur_notes <- (input$notes %||% rv$updating$annotate_notes) %|NA|% ""
       rv$updating$annotate_notes <- paste(note, cur_notes, sep = "; ")
       updateTextAreaInput(

@@ -145,10 +145,9 @@ workflow BLAST_GENBANK {
             .map { id, result_file -> tuple('4', id) }
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
 
-        // Detect NO HIT failures: IDs that entered BLAST but produced no output after
-        // all retries. The failure message is embedded in params.sqlWriteBlastNoHit
-        // (with [blast] tag) and the UPDATE is guarded WHERE assemble_switch = 4 so it
-        // can never overwrite a terminal state=3 row from ASSEMBLE.
+        // NO HIT failures: IDs that entered BLAST but produced no output after all
+        // retries. UPDATE guarded WHERE assemble_switch = 4 so it can't overwrite a
+        // terminal state=3 row.
         blast_in_split.ids
             .join(blast_out.succeeded, remainder: true)
             .filter { id, blast_flag, success_flag -> success_flag == null }
