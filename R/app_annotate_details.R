@@ -1367,6 +1367,9 @@ annotations_details_server <- function(id, rv) {
       trigger("align_now")
     })
     on("align_now", {
+      # Clear any "hold tight" overlay from a +/- edit once alignment finishes;
+      # on.exit so it also clears if a req() below aborts. No-op when not shown.
+      on.exit(waiter::waiter_hide(), add = TRUE)
       # check if user wants to use fewer reference samples in alignment
       if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
 
@@ -1899,6 +1902,18 @@ annotations_details_server <- function(id, rv) {
       n <- suppressWarnings(as.integer(input[[id]]))
       if (length(n) == 0 || is.na(n) || n < 1L) 1L else min(n, 50L)
     }
+    # "Hold tight" overlay during a start/stop edit + re-alignment, so rapid
+    # repeated +/- clicks don't queue up while the alignment recomputes. Hidden
+    # in the align_now handler once the (slow) alignment finishes.
+    show_edit_waiter <- function() {
+      waiter::waiter_show(
+        html = tagList(
+          waiter::spin_fading_circles(),
+          tags$h4(style = "color:white; margin-top:1em;", "Updating alignment, hold tight...")
+        ),
+        color = "rgba(40,40,40,0.85)"
+      )
+    }
     # Keep the displayed box value inside [1, 50] when the user types directly.
     for (.id in c("start_step_size", "stop_step_size")) {
       local({
@@ -1963,6 +1978,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`start-add`, {
+      show_edit_waiter()
       trigger("start-add-simple")
       shinyjs::delay(50, {
         trigger("re_align")
@@ -2021,6 +2037,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`start-minus`, {
+      show_edit_waiter()
       trigger("start-minus-simple")
       shinyjs::delay(50, {
         trigger("re_align")
@@ -2104,6 +2121,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$stop_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`stop-add`, {
+      show_edit_waiter()
       trigger("stop-add-simple")
       shinyjs::delay(50, {
         trigger("re_align")
@@ -2191,6 +2209,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$stop_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`stop-minus`, {
+      show_edit_waiter()
       trigger("stop-minus-simple")
       shinyjs::delay(50, {
         trigger("re_align")
