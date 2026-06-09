@@ -24,6 +24,11 @@ new_db_userAsmb(
   curate_target = "fish_mito",
   max_blast_hits = 100,
   curate_params = NULL,
+  orf_cpus = 4,
+  orf_memory = 8,
+  orffinder_opts = "-s 1 -n true",
+  orf_min_len = 300,
+  orf_max_overlap = 0.1,
   min_assembly_length = 500
 )
 }
@@ -65,6 +70,17 @@ for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 \item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
 
 \item{curate_params}{Default curation parameters}
+
+\item{orf_cpus}{CPUs for the optional ORF-finder step (default = 4)}
+
+\item{orf_memory}{Memory (GB) for the optional ORF-finder step (default = 8)}
+
+\item{orffinder_opts}{Default NCBI ORFfinder options (default = "-s 1 -n true")}
+
+\item{orf_min_len}{Minimal ORF length in nucleotides (default = 300)}
+
+\item{orf_max_overlap}{Maximum overlap with existing annotations, as a fraction
+of the ORF length, before an ORF is discarded (default = 0.1)}
 
 \item{min_assembly_length}{Minimum scaffold length to include in analysis (default = 500)}
 }

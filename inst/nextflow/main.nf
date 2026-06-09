@@ -14,6 +14,7 @@ include {COVERAGE} from './modules/coverage_workflow.nf'
 include {ANNOTATE} from './modules/annotate_workflow.nf'
 include {CURATE} from './modules/curate_workflow.nf'
 include {VALIDATE} from './modules/validate_workflow.nf'
+include {ORF} from './modules/orf_workflow.nf'
 include {COVERAGE_userAsmb} from './modules/coverage_userAsmb_workflow.nf'
 include {BLAST_GENBANK} from './modules/blast_genbank_workflow.nf'
 include {BLAST_REF_FETCH} from './modules/blast_ref_fetch_workflow.nf'
@@ -49,6 +50,9 @@ workflow WF2 {
    ANNOTATE()
    CURATE(ANNOTATE.out[0])
    VALIDATE(CURATE.out[0])
+   // Optional ORF-finder step: runs after validation on the finalized gene
+   // models and appends any ORFs (in still-unannotated regions) to the db.
+   ORF(VALIDATE.out.annotations, CURATE.out[0])
    BLAST_REF_ALIGN(VALIDATE.out.validated, CURATE.out[0])
 
 }

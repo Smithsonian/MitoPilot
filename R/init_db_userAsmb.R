@@ -20,6 +20,12 @@
 #' @param curate_target Default target database for curation
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
 #' @param curate_params Default curation parameters
+#' @param orf_cpus CPUs for the optional ORF-finder step (default = 4)
+#' @param orf_memory Memory (GB) for the optional ORF-finder step (default = 8)
+#' @param orffinder_opts Default NCBI ORFfinder options (default = "-s 1 -n true")
+#' @param orf_min_len Minimal ORF length in nucleotides (default = 300)
+#' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
+#'   of the ORF length, before an ORF is discarded (default = 0.1)
 #' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
 #' @export
 #'
@@ -44,6 +50,12 @@ new_db_userAsmb <- function(
     curate_target = "fish_mito",
     max_blast_hits = 100,
     curate_params = NULL,
+    # Default ORF-finder options
+    orf_cpus = 4,
+    orf_memory = 8,
+    orffinder_opts = "-s 1 -n true",
+    orf_min_len = 300,
+    orf_max_overlap = 0.1,
     # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
     # set per-scaffold ignore flags; matches the regular pipeline default)
     min_assembly_length = 500) {
@@ -325,6 +337,7 @@ new_db_userAsmb <- function(
       scaffolds INTEGER,
       annotate_opts TEXT,
       curate_opts TEXT,
+      orf_opts TEXT,
       annotate_switch INTEGER,
       annotate_lock INTEGER,
       annotate_notes TEXT,
@@ -349,6 +362,7 @@ new_db_userAsmb <- function(
         ID = mapping$ID,
         annotate_opts = "default",
         curate_opts = "default",
+        orf_opts = "default",
         reviewed = "no",
         problematic = "no",
         ID_verified = "no",
@@ -380,6 +394,7 @@ new_db_userAsmb <- function(
       coverage_trim INTEGER,
       feature_trim INTEGER,
       retain_low_conf_trna INTEGER,
+      use_orffinder INTEGER,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -401,7 +416,8 @@ new_db_userAsmb <- function(
         start_gene = "trnF",
         coverage_trim = 1L,
         feature_trim = 1L,
-        retain_low_conf_trna = 0L
+        retain_low_conf_trna = 0L,
+        use_orffinder = 0L
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -438,6 +454,40 @@ new_db_userAsmb <- function(
       in_place = TRUE,
       copy = TRUE,
       by = "curate_opts"
+    )
+
+  ## ORF-finder options ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE orf_opts (
+      orf_opts TEXT NOT NULL,
+      cpus INTEGER,
+      memory INTEGER,
+      orffinder_opts TEXT,
+      orf_min_len INTEGER,
+      orf_max_overlap REAL,
+      max_blast_hits INTEGER,
+      ref_db TEXT,
+      ref_dir TEXT,
+      PRIMARY KEY (orf_opts)
+    );"
+  )
+  dplyr::tbl(con, "orf_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        orf_opts = "default",
+        cpus = orf_cpus,
+        memory = orf_memory,
+        orffinder_opts = orffinder_opts,
+        orf_min_len = orf_min_len,
+        orf_max_overlap = orf_max_overlap,
+        max_blast_hits = max_blast_hits,
+        ref_db = annotate_ref_db,
+        ref_dir = annotate_ref_dir
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "orf_opts"
     )
 
   # Annotations table

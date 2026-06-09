@@ -144,27 +144,8 @@ annotate <- function(
     Biostrings::width(assembly),
     stringr::str_extract(names(assembly), "\\S+")
   )
-  # Returns a logical vector: does [p1,p2] overlap each of q1_vec/q2_vec?
-  circ_overlap <- function(p1, p2, q1_vec, q2_vec) {
-    if (p1 <= p2) {
-      p1 <= q2_vec & q1_vec <= p2
-    } else {
-      q2_vec >= p1 | q1_vec <= p2
-    }
-  }
-  # Length of a possibly wrap-around interval given assembly length L
-  circ_len <- function(p1, p2, L) {
-    if (p1 <= p2) p2 - p1 + 1L else L - p1 + p2 + 1L
-  }
-  # Overlap length between [p1,p2] (may wrap) and one normal interval [q1,q2]
-  circ_overlap_len <- function(p1, p2, q1, q2, L) {
-    if (p1 <= p2) {
-      max(0L, min(p2, q2) - max(p1, q1) + 1L)
-    } else {
-      max(0L, q2 - max(p1, q1) + 1L) + # [p1, L] ∩ [q1, q2]
-        max(0L, min(p2, q2) - q1 + 1L) # [1, p2] ∩ [q1, q2]
-    }
-  }
+  # Circular-aware overlap helpers (circ_overlap / circ_len / circ_overlap_len)
+  # are defined at package level in annotate_utils.R and shared with orf_finder().
 
   # Drop ARWEN predictions that overlap a tRNAscan prediction of the same gene
   # (position overlap is more robust than anticodon string matching)

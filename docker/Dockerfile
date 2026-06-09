@@ -36,6 +36,13 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
 #    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
 #    mamba install r-remotes
 
+# Install NCBI ORFfinder (not available on bioconda) into its own conda env.
+# orf_finder() invokes it via `conda run -n orffinder ORFfinder`.
+RUN mamba create -y -n orffinder -c conda-forge curl && \
+    curl -sSL https://ftp.ncbi.nlm.nih.gov/genomes/TOOLS/ORFfinder/linux-i64/ORFfinder.gz \
+      | gunzip > /opt/conda/envs/orffinder/bin/ORFfinder && \
+    chmod +x /opt/conda/envs/orffinder/bin/ORFfinder
+
 RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock
 RUN R -e 'renv::restore()'

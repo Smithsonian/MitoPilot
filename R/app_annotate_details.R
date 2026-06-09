@@ -9,9 +9,44 @@ gene_type_fill <- c(
   ctrl = "#FAA34A",
   PCG  = "#60BD68",
   rRNA = "#5DA5DA",
-  tRNA = "#F17CB0"
+  tRNA = "#F17CB0",
+  ORF  = "#B07CF1"
 )
 gene_type_alpha <- 0.5
+
+# Split gene rows that wrap the x-axis boundary into two arrow segments.
+#
+# A feature that crosses the origin of a circular sequence has its start beyond
+# its end, so after mapping to plot coordinates `xmin > xmax`. gggenes can't draw
+# such a feature as one arrow, so split it into `[xmin, x_hi]` and `[x_lo, xmax]`
+# (the two arcs on either side of the boundary). The gene label is kept on the
+# longer piece only to avoid a duplicated label. `df` must already carry numeric
+# `xmin`/`xmax` columns (in the same coordinate space as `x_lo`/`x_hi`).
+split_wrapped_genes <- function(df, x_lo, x_hi) {
+  if (nrow(df) == 0 || !all(c("xmin", "xmax") %in% names(df)) ||
+      !any(df$xmin > df$xmax, na.rm = TRUE)) {
+    return(df)
+  }
+  pieces <- lapply(seq_len(nrow(df)), function(i) {
+    row <- df[i, , drop = FALSE]
+    if (isTRUE(row$xmin > row$xmax)) {
+      seg_hi <- row
+      seg_hi$xmax <- x_hi # [xmin, x_hi]
+      seg_lo <- row
+      seg_lo$xmin <- x_lo # [x_lo, xmax]
+      # keep the label on the longer arc only
+      if ((x_hi - row$xmin) >= (row$xmax - x_lo)) {
+        seg_lo$gene <- ""
+      } else {
+        seg_hi$gene <- ""
+      }
+      dplyr::bind_rows(seg_hi, seg_lo)
+    } else {
+      row
+    }
+  })
+  dplyr::bind_rows(pieces)
+}
 
 annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
@@ -214,6 +249,7 @@ annotations_details_server <- function(id, rv) {
                   PCG   = "#60BD68",
                   rRNA  = "#5DA5DA",
                   tRNA  = "#F17CB0",
+                  ORF   = "#B07CF1",
                   "#888888"
                 )
                 htmltools::span(
@@ -251,6 +287,8 @@ annotations_details_server <- function(id, rv) {
                   "tRNAscan-SE" = "#666666",
                   "ARWEN"       = "#888888",
                   "ARAGORN"     = "#AAAAAA",
+                  "ORFfinder"   = "#B07CF1",
+                  "ORF (assigned)" = "#9A66D9",
                   "#CCCCCC"
                 )
                 htmltools::span(
@@ -306,10 +344,12 @@ annotations_details_server <- function(id, rv) {
       # Check for unsaved edits
       isolate({
         req(rv$annotations)
-        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
+        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] %in% c("PCG", "ORF"))
         is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
+        is_orf <- length(sel) > 0 && rv$annotations$type[sel] == "ORF"
         shinyjs::toggle("annotation_action_btns", condition = length(sel) > 0 && !is_deleted)
         shinyjs::toggle("annotation_restore_btn", condition = is_deleted)
+        shinyjs::toggle("assign_gene_btn", condition = is_orf && !is_deleted)
         # No row selected: skip sel-indexed branches so consumers (e.g. the
         # synteny zoom plot, which also accepts a click anchor) don't break.
         if (length(sel) == 0) {
@@ -471,13 +511,18 @@ annotations_details_server <- function(id, rv) {
     # Coverage Map ----
     output$coverage_map <- renderUI({
       req(rv$coverage, fig_ctx())
-      rv$genes_plot <- rv$annotations |>
+      # Split features that wrap the circular origin (pos1 > pos2) into two arrows.
+      cov_seq_len <- max(rv$coverage$Position)
+      genes_df <- rv$annotations |>
         dplyr::filter(pos1 > 0) |>
         dplyr::mutate(
-          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA"))
+          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
+          xmin = pos1, xmax = pos2
         ) |>
+        split_wrapped_genes(x_lo = 1, x_hi = cov_seq_len)
+      rv$genes_plot <- genes_df |>
         ggplot2::ggplot() +
-        ggplot2::aes(xmin = pos1, xmax = pos2, forward = direction == "+", fill = type, y = scaffold, label = gene) +
+        ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+", fill = type, y = scaffold, label = gene) +
         gggenes::geom_gene_arrow(
           arrow_body_height = ggplot2::unit(6, "mm"),
           arrowhead_height = ggplot2::unit(6, "mm"),
@@ -804,17 +849,21 @@ annotations_details_server <- function(id, rv) {
           r_nongap[idx] / aln_len * 100
         }
 
-        # Gene data frames in alignment coordinates
+        # Gene data frames in alignment coordinates. Features that wrap the
+        # circular origin (or straddle the rotation point in the reference) map
+        # to xmin > xmax; split them into two arcs at the 0/100 boundary.
         sample_df <- sample_genes |>
           dplyr::mutate(
-            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
             xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
-          )
+          ) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_df <- rv$blast_ref |>
           dplyr::mutate(
-            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
             xmin = r_to_pct(pos1), xmax = r_to_pct(pos2)
-          )
+          ) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
 
         # Classify each alignment column
         aln_class <- dplyr::case_when(
@@ -881,22 +930,24 @@ annotations_details_server <- function(id, rv) {
         } else {
           0L
         }
+        # Rotate reference coordinates to the shared anchor gene (per endpoint,
+        # modulo the reference length). A feature that wraps the circular origin
+        # or straddles the rotation point then maps to xmin > xmax and is split
+        # into two arcs at the 0/100 boundary below.
         ref_rotated <- rv$blast_ref |>
           dplyr::mutate(
             pos1_r = as.integer(((as.integer(pos1) - 1L - rotation) %% ref_length) + 1L),
             pos2_r = as.integer(((as.integer(pos2) - 1L - rotation) %% ref_length) + 1L)
           ) |>
-          dplyr::mutate(
-            pos2_r = dplyr::if_else(pos2_r < pos1_r, pos2_r + ref_length, pos2_r),
-            pos1_r = dplyr::if_else(pos2_r > ref_length, 1L, pos1_r)
-          ) |>
-          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
         sample_df  <- sample_genes |>
-          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
         sample_pct <- sample_df |>
-          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100)
+          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_pct    <- ref_rotated |>
-          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100)
+          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         sample_plot <- ggplot2::ggplot(sample_pct) +
           ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
                        fill = type, y = 0, label = gene) + gene_track
@@ -1286,13 +1337,17 @@ annotations_details_server <- function(id, rv) {
       # check if user wants to use fewer reference samples in alignment
       if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
 
-      req(rv$annotations$type[selected()] == "PCG")
+      req(rv$annotations$type[selected()] %in% c("PCG", "ORF"))
+      is_orf <- rv$annotations$type[selected()] == "ORF"
 
       hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE) |>
         dplyr::slice_head(n = n_hits)
 
       focal <- rv$annotations$translation[selected()] |>
-        setNames(paste(rv$annotations$gene[selected()], "(focal)"))
+        setNames(paste(
+          rv$annotations$gene[selected()],
+          if (is_orf) "(ORF, focal)" else "(focal)"
+        ))
 
       new_alignment <- list()
       if(nrow(hits)==0){
@@ -1303,8 +1358,14 @@ annotations_details_server <- function(id, rv) {
           "<b>Max Similarity:</b> n/a"
         )
       }else{
-        new_alignment$seqs <- hits |>
-          dplyr::pull(target, name = Taxon)
+        # For ORFs the gene is unknown, so each hit is labeled with its candidate
+        # gene name (parsed from the curation DB header) alongside the taxon.
+        hit_labels <- if (is_orf && "gene" %in% names(hits)) {
+          paste(hits$gene, "|", hits$Taxon)
+        } else {
+          hits$Taxon
+        }
+        new_alignment$seqs <- setNames(hits$target, hit_labels)
         # Cache the reference-only MSA across codon edits: the references don't
         # change while the user walks codons, so reuse the prior MSA and add
         # the (cheap) focal sequence via profile alignment.
@@ -2445,6 +2506,61 @@ annotations_details_server <- function(id, rv) {
       reactable::updateReactable("table", data = rv$annotations)
     }
 
+    # Assign a gene name to an ORF ----
+    # Relabels the selected ORF with a chosen (or custom) mitochondrial gene
+    # name, sets the corresponding feature type, flags it as edited, and records
+    # a note. Does NOT re-run curation (start/stop trimming, refHit rules).
+    observeEvent(input$assign_gene, {
+      req(length(selected()) > 0)
+      req(rv$annotations$type[selected()] == "ORF")
+      showModal(modalDialog(
+        title = "Assign gene name to ORF",
+        selectizeInput(
+          ns("assign_gene_choice"),
+          label = "Gene name (pick a standard mitochondrial gene or type a custom name):",
+          choices = MITO_GENE_CHOICES,
+          selected = character(0),
+          options = list(create = TRUE, maxItems = 1, placeholder = "e.g. nad6 or a custom name")
+        ),
+        footer = tagList(
+          actionButton(ns("confirm_assign_gene"), "Assign"),
+          modalButton("Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    })
+    observeEvent(input$confirm_assign_gene, {
+      req(length(selected()) > 0)
+      gene <- input$assign_gene_choice
+      req(!is.null(gene), nzchar(gene))
+      idx <- selected()
+      new_type <- mito_gene_type(gene)
+      # Guard against composite-PK collision (same scaffold + gene + pos1)
+      collision <- which(
+        rv$annotations$gene == gene &
+          rv$annotations$pos1 == rv$annotations$pos1[idx] &
+          rv$annotations$scaffold == rv$annotations$scaffold[idx]
+      )
+      collision <- setdiff(collision, idx)
+      if (length(collision) > 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot assign",
+          text = stringr::str_glue("An annotation named '{gene}' already exists at this position.")
+        )
+        req(F)
+      }
+      old_gene <- rv$annotations$gene[idx]
+      rv$annotations$gene[idx] <- gene
+      rv$annotations$type[idx] <- new_type
+      rv$annotations$tool[idx] <- "ORF (assigned)"
+      rv$annotations$product[idx] <- CDS_key[[gene]] %||% NA_character_
+      note <- stringr::str_glue("ORF {old_gene} assigned to {gene}")
+      rv$annotations$notes[idx] <- paste(note, rv$annotations$notes[idx] %|NA|% "", sep = "; ")
+      rv$annotations$edited[idx] <- 1L
+      restore_do_save()
+      removeModal()
+    })
+
     observeEvent(input$restore, {
       req(length(selected()) > 0)
       sel_row <- rv$annotations[selected(), ]
@@ -2670,6 +2786,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           id = ns("annotation_restore_btn"),
           style = "display: flex; gap: 8px; margin: 6px 0;",
           actionButton(ns("restore"), "Restore")
+        )
+      ),
+      shinyjs::hidden(
+        div(
+          id = ns("assign_gene_btn"),
+          style = "display: flex; gap: 8px; margin: 6px 0;",
+          actionButton(ns("assign_gene"), "Assign gene name")
         )
       ),
       shinyjs::hidden(

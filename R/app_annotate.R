@@ -1,7 +1,7 @@
 # Togglable column groups for the Annotate table. Cols not listed here
 # (sticky cols, action buttons) are always shown.
 ANNOTATE_COL_GROUPS <- list(
-  Options  = c("annotate_opts", "curate_opts"),
+  Options  = c("annotate_opts", "curate_opts", "orf_opts"),
   Stats    = c("length_raw", "length", "topology", "scaffolds"),
   BLAST    = c("blast_ref_status", "blast_accession", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
@@ -117,12 +117,15 @@ annotate_server <- function(id) {
     register_tool_help("trnaScan-SE", input, reopen = reopen_annotate)
     register_tool_help("arwen", input, reopen = reopen_annotate)
     register_tool_help("aragorn", input, reopen = reopen_annotate)
+    register_tool_help("orffinder", input, reopen = reopen_annotate)
 
     # Prepare data ----
     rv <- reactiveValues(
       curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
         dplyr::collect(),
       annotate_opts = dplyr::tbl(session$userData$con, "annotate_opts") |>
+        dplyr::collect(),
+      orf_opts = dplyr::tbl(session$userData$con, "orf_opts") |>
         dplyr::collect(),
       data = fetch_annotate_data(),
       updating = NULL
@@ -322,6 +325,13 @@ annotate_server <- function(id) {
             html = TRUE,
             width = 110,
             cell = rt_link(ns("set_curate_opts"))
+          ),
+          orf_opts = colDef(
+            show = TRUE, class = .grp("orf_opts"), headerClass = .grp("orf_opts"),
+            name = "ORF Opts.",
+            html = TRUE,
+            width = 110,
+            cell = rt_link(ns("set_orf_opts"))
           ),
           length_raw = colDef(
             show = TRUE, class = .grp("length_raw"), headerClass = .grp("length_raw"),
@@ -708,51 +718,26 @@ annotate_server <- function(id) {
           inputId = "retain_low_conf_trna",
           value = isTRUE(as.logical(cur$retain_low_conf_trna %||% 0L))
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_orffinder",
+          value = isTRUE(as.logical(cur$use_orffinder %||% 0L))
+        )
         updateSelectizeInput(
           inputId = "start_gene",
-          choices = c(
-            "rrnL",
-            "rrnS",
-            "nad1",
-            "nad2",
-            "cox1",
-            "cox2",
-            "atp8",
-            "atp6",
-            "cox3",
-            "nad3",
-            "nad4l",
-            "nad4",
-            "nad5",
-            "nad6",
-            "cob",
-            "trnA",
-            "trnC",
-            "trnD",
-            "trnE",
-            "trnF",
-            "trnG",
-            "trnH",
-            "trnI",
-            "trnK",
-            "trnL",
-            "trnM",
-            "trnN",
-            "trnP",
-            "trnQ",
-            "trnR",
-            "trnS",
-            "trnT",
-            "trnV",
-            "trnW",
-            "trnY"
-          ), # TODO: get choices from list of genes in curate params rules, tricky
+          choices = MITO_GENE_CHOICES,
           selected = cur$start_gene %||% character(0),
           options = list(
             create = TRUE,
             maxItems = 1
           )
         )
+      }
+    })
+    # Enabling ORF finding auto-disables un-annotated end trimming (feature_trim),
+    # since unannotated contig ends may contain ORFs. The user can re-enable it.
+    observeEvent(input$use_orffinder, ignoreInit = TRUE, {
+      if (isTRUE(input$use_orffinder)) {
+        shinyWidgets::updatePrettyCheckbox(inputId = "feature_trim", value = FALSE)
       }
     })
     observeEvent(input$edit_annotate_opts, ignoreInit = T, {
@@ -770,6 +755,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("retain_low_conf_trna", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_orffinder", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -834,7 +820,8 @@ annotate_server <- function(id) {
               start_gene = req(input$start_gene),
               coverage_trim = as.integer(isTRUE(input$coverage_trim)),
               feature_trim = as.integer(isTRUE(input$feature_trim)),
-              retain_low_conf_trna = as.integer(isTRUE(input$retain_low_conf_trna))
+              retain_low_conf_trna = as.integer(isTRUE(input$retain_low_conf_trna)),
+              use_orffinder = as.integer(isTRUE(input$use_orffinder))
             ),
             in_place = TRUE,
             copy = TRUE,
@@ -1063,6 +1050,131 @@ annotate_server <- function(id) {
           update,
           by = "ID"
         )
+      rv$updating <- rv$updating_indirect <- NULL
+      removeModal()
+      trigger("update_annotate_table")
+    })
+
+    # Set ORF Options ----
+    observeEvent(input$set_orf_opts, {
+      row <- as.numeric(input$set_orf_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      } else {
+        selected <- c(row, selected()) |> unique()
+      }
+      req(all(filtered_data()$annotate_lock[selected] == 0))
+      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      orf_opts_modal(rv)
+    })
+    observeEvent(input$orf_opts, ignoreInit = T, {
+      exists <- input$orf_opts %in% rv$orf_opts$orf_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_orf_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$orf_opts[rv$orf_opts$orf_opts == input$orf_opts, ]
+        updateNumericInput(inputId = "orf_opts_cpus", value = cur$cpus)
+        updateNumericInput(inputId = "orf_opts_memory", value = cur$memory)
+        updateNumericInput(inputId = "orf_max_blast_hits", value = cur$max_blast_hits)
+        updateNumericInput(inputId = "orf_min_len", value = cur$orf_min_len)
+        updateNumericInput(inputId = "orf_max_overlap", value = cur$orf_max_overlap)
+        updateTextInput(inputId = "orffinder_opts", value = cur$orffinder_opts)
+        updateSelectizeInput(
+          inputId = "orf_ref_dir",
+          selected = cur$ref_dir,
+          choices = unique(rv$orf_opts$ref_dir),
+          options = list(create = TRUE, maxItems = 1)
+        )
+        updateSelectizeInput(
+          inputId = "orf_ref_db",
+          selected = cur$ref_db,
+          choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
+          options = list(create = TRUE, maxItems = 1)
+        )
+      }
+    })
+    observeEvent(input$edit_orf_opts, ignoreInit = T, {
+      shinyjs::toggleState("orf_opts_cpus", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_opts_memory", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_max_blast_hits", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_min_len", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_max_overlap", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orffinder_opts", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_ref_dir", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_ref_db", condition = input$edit_orf_opts)
+      # Check if editing opts that apply beyond selection
+      if (input$edit_orf_opts && input$orf_opts %in% filtered_data()$orf_opts) {
+        rv$updating_indirect <- filtered_data() |>
+          dplyr::filter(orf_opts == input$orf_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
+          )
+          shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
+          req(F)
+        }
+        if (nrow(rv$updating_indirect) > 0L) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_orf_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
+          )
+        }
+      } else {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    observeEvent(input$editing_orf_opts_indirect, ignoreInit = T, {
+      if (!input$editing_orf_opts_indirect) {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
+      }
+    })
+    ## Save Changes ----
+    observeEvent(input$update_orf_opts, {
+      if (input$edit_orf_opts) {
+        dplyr::tbl(session$userData$con, "orf_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              orf_opts = req(input$orf_opts),
+              cpus = req(input$orf_opts_cpus),
+              memory = req(input$orf_opts_memory),
+              orffinder_opts = input$orffinder_opts %||% "",
+              orf_min_len = req(input$orf_min_len),
+              orf_max_overlap = req(input$orf_max_overlap),
+              max_blast_hits = req(input$orf_max_blast_hits),
+              ref_dir = req(input$orf_ref_dir),
+              ref_db = req(input$orf_ref_db)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "orf_opts"
+          )
+        rv$orf_opts <- dplyr::tbl(session$userData$con, "orf_opts") |>
+          dplyr::collect()
+      }
+      update <- data.frame(
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
+        orf_opts = input$orf_opts,
+        annotate_switch = 1
+      )
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          update,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- filtered_data() |>
+        dplyr::rows_update(update, by = "ID")
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")

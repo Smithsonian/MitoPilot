@@ -46,6 +46,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       ID_verified,
       annotate_opts,
       curate_opts,
+      orf_opts,
       length_raw,
       length,
       topology,
@@ -296,47 +297,22 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = isTRUE(as.logical(current$retain_low_conf_trna %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
+        shinyWidgets::prettyCheckbox(
+          ns("use_orffinder"),
+          label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
+          value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        helpText(
+          "Enabling ORF finding turns off un-annotated end trimming (feature_trim),",
+          "since unannotated contig ends may contain ORFs. ORF finder parameters",
+          "are set in the separate 'orf_opts' column."
+        ),
         div(
           selectizeInput(
             ns("start_gene"),
             label = "starting gene for circular assemblies",
-            choices = c(
-              "rrnL",
-              "rrnS",
-              "nad1",
-              "nad2",
-              "cox1",
-              "cox2",
-              "atp8",
-              "atp6",
-              "cox3",
-              "nad3",
-              "nad4l",
-              "nad4",
-              "nad5",
-              "nad6",
-              "cob",
-              "trnA",
-              "trnC",
-              "trnD",
-              "trnE",
-              "trnF",
-              "trnG",
-              "trnH",
-              "trnI",
-              "trnK",
-              "trnL",
-              "trnM",
-              "trnN",
-              "trnP",
-              "trnQ",
-              "trnR",
-              "trnS",
-              "trnT",
-              "trnV",
-              "trnW",
-              "trnY"
-            ), # TODO: get choices from list of genes in curate params rules, tricky
+            choices = MITO_GENE_CHOICES,
             selected = current$start_gene %||% character(0),
             width = "100%",
             options = list(
@@ -503,6 +479,160 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   } else {
     shinyWidgets::show_alert(
       title = "Multiple curation parameter sets selected",
+      text = "Cannot edit different parameter sets simultaneously",
+      type = "error",
+      closeOnClickOutside = FALSE,
+    )
+  }
+}
+
+#' Update the ORF-finder options
+#'
+#' @param rv the local reactive vals object
+#' @param session current shiny session
+#'
+#' @noRd
+orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+  req(rv$updating)
+  current <- list()
+
+  if (length(unique(rv$updating$orf_opts)) == 1) {
+    current <- rv$orf_opts[rv$orf_opts$orf_opts == rv$updating$orf_opts[1], ]
+
+    showModal(
+      modalDialog(
+        title = stringr::str_glue("Setting ORF-finder Options for {nrow(rv$updating)} Samples"),
+        helpText(
+          "These options apply only when the 'Run ORF finder step' box is checked",
+          "in the annotation options. The ORF step runs after curation/validation",
+          "and adds ORFs found in regions without an existing annotation."
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          selectizeInput(
+            ns("orf_opts"),
+            label = "Parameter set name:",
+            choices = rv$orf_opts$orf_opts,
+            selected = current$orf_opts,
+            options = list(
+              create = TRUE,
+              maxItems = 1
+            )
+          ),
+          div(
+            class = "form-group shiny-input-container",
+            style = "margin-top: 39px;",
+            shinyWidgets::prettyCheckbox(
+              ns("edit_orf_opts"),
+              label = "Edit",
+              value = FALSE,
+              status = "primary"
+            )
+          )
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("orf_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("orf_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("orf_max_blast_hits"),
+              label = "Max BLAST hits:",
+              value = current$max_blast_hits %||% character(0),
+              min = 1,
+              max = 1000,
+              width = "100%"
+            ) |> shinyjs::disabled()
+          )
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("orf_min_len"),
+              label = "Min ORF length (nt):",
+              value = current$orf_min_len %||% character(0),
+              min = 30,
+              width = "100%"
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("orf_max_overlap"),
+              label = "Max overlap w/ existing annotations (fraction of ORF length):",
+              value = current$orf_max_overlap %||% character(0),
+              min = 0,
+              max = 1,
+              step = 0.05,
+              width = "100%"
+            ) |> shinyjs::disabled()
+          )
+        ),
+        textInput(
+          ns("orffinder_opts"),
+          label = tagList("ORFfinder options:", tool_help_icon("orffinder")),
+          value = current$orffinder_opts %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled(),
+        div(
+          style = "display: flex; align-items: center; gap: 2em",
+          div(
+            style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
+            selectizeInput(
+              ns("orf_ref_dir"),
+              label = "ref_dir (curation featureProt source)",
+              choices = unique(rv$orf_opts$ref_dir),
+              selected = current$ref_dir %||% character(0),
+              width = "100%",
+              options = list(
+                create = TRUE,
+                maxItems = 1
+              )
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            selectizeInput(
+              ns("orf_ref_db"),
+              label = "ref_db",
+              choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
+              selected = current$ref_db %||% character(0),
+              width = "100%",
+              options = list(
+                create = TRUE,
+                maxItems = 1
+              )
+            ) |> shinyjs::disabled()
+          )
+        ),
+        size = "m",
+        footer = tagList(
+          actionButton(ns("update_orf_opts"), "Update"),
+          modalButton("Cancel")
+        )
+      )
+    )
+  } else {
+    shinyWidgets::show_alert(
+      title = "Multiple ORF parameter sets selected",
       text = "Cannot edit different parameter sets simultaneously",
       type = "error",
       closeOnClickOutside = FALSE,
