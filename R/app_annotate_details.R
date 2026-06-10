@@ -2556,6 +2556,14 @@ annotations_details_server <- function(id, rv) {
       reactable::updateReactable("table", data = rv$annotations)
     }
 
+    # Reopen the details modal and force the annotations table to re-render with
+    # current rv$annotations (the render isolates rv$annotations, gated on
+    # render_annotations_table; see the normal open path).
+    reopen_details <- function() {
+      annotate_details_modal(rv) |> showModal()
+      render_annotations_table(Sys.time())
+    }
+
     # Assign a gene name to an ORF ----
     # Relabels the selected ORF with a chosen (or custom) mitochondrial gene
     # name, sets the corresponding feature type, flags it as edited, and records
@@ -2571,8 +2579,8 @@ annotations_details_server <- function(id, rv) {
         title = if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF",
         selectizeInput(
           ns("assign_gene_choice"),
-          label = "Gene name (pick a standard mitochondrial gene or type a custom name):",
-          choices = if (is_assigned) union(MITO_GENE_CHOICES, cur_gene) else MITO_GENE_CHOICES,
+          label = "Gene name (pick a standard mitochondrial PCG or type a custom name):",
+          choices = if (is_assigned) union(MITO_PCG_GENES, cur_gene) else MITO_PCG_GENES,
           selected = if (is_assigned) cur_gene else character(0),
           options = list(create = TRUE, maxItems = 1, placeholder = "e.g. nad6 or a custom name")
         ),
@@ -2613,7 +2621,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$notes[idx] <- if (nzchar(existing)) paste(note, existing, sep = "; ") else note
       rv$annotations$edited[idx] <- 1L
       restore_do_save()
-      annotate_details_modal(rv) |> showModal()
+      reopen_details()
     })
 
     # Remove a gene assignment, reverting the feature to an unassigned ORF.
@@ -2638,12 +2646,12 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$notes[idx] <- if (length(kept)) paste(kept, collapse = "; ") else NA_character_
       rv$annotations$edited[idx] <- 1L
       restore_do_save()
-      annotate_details_modal(rv) |> showModal()
+      reopen_details()
     })
 
     # Cancel: return to the annotation details modal (not the annotate table).
     observeEvent(input$cancel_assign_gene, {
-      annotate_details_modal(rv) |> showModal()
+      reopen_details()
     })
 
     observeEvent(input$restore, {
@@ -2863,6 +2871,12 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
           actionButton(ns("merge"), "Merge PCGs/rRNAs"),
           actionButton(ns("delete"), "Delete"),
+          shinyjs::hidden(
+            div(
+              id = ns("assign_gene_btn"),
+              actionButton(ns("assign_gene"), "Assign gene name")
+            )
+          ),
           uiOutput(ns("synteny_zoom_ctrl"))
         )
       ),
@@ -2871,13 +2885,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           id = ns("annotation_restore_btn"),
           style = "display: flex; gap: 8px; margin: 6px 0;",
           actionButton(ns("restore"), "Restore")
-        )
-      ),
-      shinyjs::hidden(
-        div(
-          id = ns("assign_gene_btn"),
-          style = "display: flex; gap: 8px; margin: 6px 0;",
-          actionButton(ns("assign_gene"), "Assign gene name")
         )
       ),
       shinyjs::hidden(
