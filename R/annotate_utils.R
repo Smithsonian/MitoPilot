@@ -368,3 +368,38 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
     })
   }
 }
+
+#' Guess an ORF's mitochondrial gene from its stored BLAST hits
+#'
+#' Reads the `refHits` JSON of an ORF annotation (as produced by
+#' [get_top_hits_orf()]), restricts candidates to standard PCG genes, and
+#' returns the single best hit by `similarity` if it clears `threshold`.
+#'
+#' @param refHits_json the ORF's `refHits` value (JSON string, may be NA/empty)
+#' @param threshold minimum similarity (%) to return a guess
+#'
+#' @return `list(gene, similarity, taxon)` for the best candidate, or `NULL`
+#'   when there are no usable hits or none clear the threshold.
+#' @noRd
+guess_orf_gene <- function(refHits_json, threshold = ORF_ASSIGN_SIM_THRESHOLD) {
+  hits <- json_parse(refHits_json, TRUE)
+  if (!is.data.frame(hits) || nrow(hits) == 0L) {
+    return(NULL)
+  }
+  if (!all(c("gene", "similarity") %in% names(hits))) {
+    return(NULL)
+  }
+  hits <- hits[hits$gene %in% MITO_PCG_GENES & !is.na(hits$similarity), , drop = FALSE]
+  if (nrow(hits) == 0L) {
+    return(NULL)
+  }
+  best <- hits[which.max(hits$similarity), , drop = FALSE]
+  if (best$similarity < threshold) {
+    return(NULL)
+  }
+  list(
+    gene = best$gene,
+    similarity = as.numeric(best$similarity),
+    taxon = if ("Taxon" %in% names(hits)) best$Taxon else NA_character_
+  )
+}

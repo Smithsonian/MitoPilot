@@ -26,6 +26,10 @@ MITO_TRNA_GENES <- c(
 #' @noRd
 MITO_GENE_CHOICES <- c(MITO_RRNA_GENES, MITO_PCG_GENES, MITO_TRNA_GENES)
 
+#' Minimum BLAST similarity (%) for an auto-suggested ORF gene assignment.
+#' @noRd
+ORF_ASSIGN_SIM_THRESHOLD <- 60
+
 #' Infer the MitoPilot feature `type` for a gene name.
 #'
 #' Returns "rRNA"/"tRNA" for recognized rRNA/tRNA genes, otherwise "PCG"

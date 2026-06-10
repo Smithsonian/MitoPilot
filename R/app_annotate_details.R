@@ -2591,6 +2591,22 @@ annotations_details_server <- function(id, rv) {
       render_annotations_table(Sys.time())
     }
 
+    # Apply an ORF -> gene assignment to one annotation row of rv$annotations:
+    # sets gene/type/product, appends a "{old} assigned to {gene}" note (so the
+    # original ORF.N can be recovered on removal), and flags it edited. Does not
+    # save or refresh. Shared by confirm_assign_gene and the bulk auto-assign.
+    apply_gene_assignment <- function(idx, gene) {
+      old_gene <- rv$annotations$gene[idx]
+      rv$annotations$gene[idx] <- gene
+      rv$annotations$type[idx] <- mito_gene_type(gene)
+      # `[` (not `[[`) so a custom gene absent from CDS_key yields NA.
+      rv$annotations$product[idx] <- unname(CDS_key[gene]) %|NA|% NA_character_
+      note <- stringr::str_glue("{old_gene} assigned to {gene}")
+      existing <- rv$annotations$notes[idx] %|NA|% ""
+      rv$annotations$notes[idx] <- if (nzchar(existing)) paste(note, existing, sep = "; ") else note
+      rv$annotations$edited[idx] <- 1L
+    }
+
     # Lightweight count refresh after an in-modal annotation edit (delete, ORF
     # gene assignment, merge, restore, ...). Recomputes the annotate-table count
     # columns (PCG/tRNA/rRNA/ORF) plus missing/extra from the current
@@ -2676,15 +2692,39 @@ annotations_details_server <- function(id, rv) {
         isTRUE(sel_type != "ORF")
       req(sel_type == "ORF" || is_assigned)
       cur_gene <- rv$annotations$gene[selected()]
+
+      # For an unassigned ORF, suggest a gene from its stored BLAST hits.
+      guess <- if (!is_assigned) {
+        guess_orf_gene(rv$annotations$refHits[selected()])
+      } else NULL
+      choices <- if (is_assigned) {
+        union(MITO_PCG_GENES, cur_gene)
+      } else if (!is.null(guess)) {
+        union(MITO_PCG_GENES, guess$gene)
+      } else {
+        MITO_PCG_GENES
+      }
+      selected_choice <- if (is_assigned) cur_gene else if (!is.null(guess)) guess$gene else character(0)
+      suggestion_ui <- if (is_assigned) {
+        NULL
+      } else if (!is.null(guess)) {
+        txt <- stringr::str_glue("Suggested: {guess$gene} — {round(guess$similarity, 1)}% similarity")
+        if (!is.na(guess$taxon)) txt <- paste0(txt, " to ", guess$taxon)
+        helpText(txt)
+      } else {
+        helpText("No confident BLAST match — pick a gene name manually.")
+      }
+
       showModal(modalDialog(
         title = if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF",
         selectizeInput(
           ns("assign_gene_choice"),
           label = "Gene name (pick a standard mitochondrial PCG or type a custom name):",
-          choices = if (is_assigned) union(MITO_PCG_GENES, cur_gene) else MITO_PCG_GENES,
-          selected = if (is_assigned) cur_gene else character(0),
+          choices = choices,
+          selected = selected_choice,
           options = list(create = TRUE, maxItems = 1, placeholder = "e.g. nad6 or a custom name")
         ),
+        suggestion_ui,
         footer = tagList(
           actionButton(ns("confirm_assign_gene"), "Assign"),
           if (is_assigned) actionButton(ns("remove_assign_gene"), "Remove assignment"),
@@ -2713,7 +2753,6 @@ annotations_details_server <- function(id, rv) {
         req(F)
       }
       idx <- selected()
-      new_type <- mito_gene_type(gene)
       # Guard against composite-PK collision (same scaffold + gene + pos1)
       collision <- which(
         rv$annotations$gene == gene &
@@ -2728,16 +2767,7 @@ annotations_details_server <- function(id, rv) {
         )
         req(F)
       }
-      old_gene <- rv$annotations$gene[idx]
-      rv$annotations$gene[idx] <- gene
-      rv$annotations$type[idx] <- new_type
-      # `[` (not `[[`) so a custom gene name absent from CDS_key yields NA
-      # instead of a "subscript out of bounds" error.
-      rv$annotations$product[idx] <- unname(CDS_key[gene]) %|NA|% NA_character_
-      note <- stringr::str_glue("{old_gene} assigned to {gene}")
-      existing <- rv$annotations$notes[idx] %|NA|% ""
-      rv$annotations$notes[idx] <- if (nzchar(existing)) paste(note, existing, sep = "; ") else note
-      rv$annotations$edited[idx] <- 1L
+      apply_gene_assignment(idx, gene)
       restore_do_save()
       reopen_details()
     })
@@ -2770,6 +2800,59 @@ annotations_details_server <- function(id, rv) {
     # Cancel: return to the annotation details modal (not the annotate table).
     observeEvent(input$cancel_assign_gene, {
       reopen_details()
+    })
+
+    # Bulk auto-assign: confirm, then apply BLAST-based guesses to every
+    # unassigned ORF whose top hit clears the similarity threshold.
+    observeEvent(input$auto_assign_orfs, {
+      req(rv$annotations)
+      orf_idx <- which(
+        rv$annotations$type == "ORF" &
+          !stringr::str_detect(dplyr::coalesce(rv$annotations$gene, ""), "_DELETED_")
+      )
+      if (length(orf_idx) == 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "No ORFs to assign",
+          text = "There are no unassigned ORF annotations in this sample."
+        )
+        return()
+      }
+      shinyWidgets::confirmSweetAlert(
+        inputId = ns("confirm_auto_assign_orfs"),
+        title = "Auto-assign ORF gene names?",
+        text = stringr::str_glue(
+          "Each unassigned ORF with a confident BLAST match (>= {ORF_ASSIGN_SIM_THRESHOLD}% ",
+          "similarity to a standard mitochondrial gene) will be relabeled. ",
+          "Low-confidence ORFs are left unchanged. You can undo any assignment ",
+          "individually via 'Remove assignment'."
+        ),
+        btn_colors = c("#6c757d", "#0056b3")
+      )
+    })
+    observeEvent(input$confirm_auto_assign_orfs, {
+      req(isTRUE(input$confirm_auto_assign_orfs))
+      req(rv$annotations)
+      orf_idx <- which(
+        rv$annotations$type == "ORF" &
+          !stringr::str_detect(dplyr::coalesce(rv$annotations$gene, ""), "_DELETED_")
+      )
+      assigned <- 0L
+      for (idx in orf_idx) {
+        guess <- guess_orf_gene(rv$annotations$refHits[idx])
+        if (is.null(guess)) next
+        apply_gene_assignment(idx, guess$gene)
+        assigned <- assigned + 1L
+      }
+      left <- length(orf_idx) - assigned
+      if (assigned > 0L) {
+        restore_do_save()
+      }
+      reopen_details()
+      shinyWidgets::sendSweetAlert(
+        title = "Auto-assign complete",
+        text = stringr::str_glue("Assigned {assigned} ORF{ifelse(assigned == 1, '', 's')}; {left} left unassigned."),
+        type = if (assigned > 0L) "success" else "info"
+      )
     })
 
     observeEvent(input$restore, {
@@ -2983,6 +3066,15 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ),
     div(
       id = ns("annotation_btns_wrapper"),
+      div(
+        id = ns("auto_assign_orfs_btn"),
+        style = "display: flex; gap: 8px; margin: 6px 0;",
+        actionButton(
+          ns("auto_assign_orfs"),
+          "Auto-assign ORFs",
+          icon = icon("wand-magic-sparkles")
+        )
+      ),
       shinyjs::hidden(
         div(
           id = ns("annotation_action_btns"),
