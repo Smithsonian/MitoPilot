@@ -2696,7 +2696,22 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$confirm_assign_gene, {
       req(length(selected()) > 0)
       gene <- input$assign_gene_choice
-      req(!is.null(gene), nzchar(gene))
+      req(!is.null(gene))
+      gene <- trimws(gene)
+      req(nzchar(gene))
+      # Restrict gene names to characters that are safe in feature tables, GFF
+      # attributes, FASTA headers, and the export's shell/file paths (which embed
+      # the gene name via system("cat ...") and file paths).
+      if (!grepl("^[A-Za-z0-9_.-]+$", gene)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Invalid gene name",
+          text = paste(
+            "Gene names may only contain letters, numbers, underscores, dots,",
+            "and hyphens (no spaces or other special characters)."
+          )
+        )
+        req(F)
+      }
       idx <- selected()
       new_type <- mito_gene_type(gene)
       # Guard against composite-PK collision (same scaffold + gene + pos1)
@@ -2716,7 +2731,9 @@ annotations_details_server <- function(id, rv) {
       old_gene <- rv$annotations$gene[idx]
       rv$annotations$gene[idx] <- gene
       rv$annotations$type[idx] <- new_type
-      rv$annotations$product[idx] <- CDS_key[[gene]] %||% NA_character_
+      # `[` (not `[[`) so a custom gene name absent from CDS_key yields NA
+      # instead of a "subscript out of bounds" error.
+      rv$annotations$product[idx] <- unname(CDS_key[gene]) %|NA|% NA_character_
       note <- stringr::str_glue("{old_gene} assigned to {gene}")
       existing <- rv$annotations$notes[idx] %|NA|% ""
       rv$annotations$notes[idx] <- if (nzchar(existing)) paste(note, existing, sep = "; ") else note
