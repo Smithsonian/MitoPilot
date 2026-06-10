@@ -36,13 +36,6 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
 #    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
 #    mamba install r-remotes
 
-# Install NCBI ORFfinder (not available on bioconda) into its own conda env.
-# orf_finder() invokes it via `conda run -n orffinder ORFfinder`.
-RUN mamba create -y -n orffinder -c conda-forge curl && \
-    curl -sSL https://ftp.ncbi.nlm.nih.gov/genomes/TOOLS/ORFfinder/linux-i64/ORFfinder.gz \
-      | gunzip > /opt/conda/envs/orffinder/bin/ORFfinder && \
-    chmod +x /opt/conda/envs/orffinder/bin/ORFfinder
-
 RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock
 RUN R -e 'renv::restore()'
@@ -59,6 +52,18 @@ RUN gcc -O2 -ffast-math -o /opt/arwen/arwen /opt/arwen/arwen.c -lm
 ENV PATH="/opt/arwen:${PATH}"
 
 RUN ln -s /usr/lib/x86_64-linux-gnu/libidn2.so.0 /usr/lib/x86_64-linux-gnu/libidn.so.11
+
+# Install NCBI ORFfinder (not available on bioconda) into its own conda env.
+# orf_finder() invokes it via `conda run -n orffinder ORFfinder`.
+# libuv (libuv.so.1) and elfutils (libdw.so.1) are runtime deps of the NCBI
+# ORFfinder binary. `conda run` does not add $CONDA_PREFIX/lib to the loader
+# path, so patchelf sets an RPATH ($ORIGIN/../lib) so the binary finds them.
+# Placed after the slow renv/MitoFinder layers so edits here rebuild cheaply.
+RUN mamba create -y -n orffinder -c conda-forge curl libuv elfutils patchelf && \
+    curl -sSL https://ftp.ncbi.nlm.nih.gov/genomes/TOOLS/ORFfinder/linux-i64/ORFfinder.gz \
+      | gunzip > /opt/conda/envs/orffinder/bin/ORFfinder && \
+    chmod +x /opt/conda/envs/orffinder/bin/ORFfinder && \
+    /opt/conda/envs/orffinder/bin/patchelf --set-rpath '$ORIGIN/../lib' /opt/conda/envs/orffinder/bin/ORFfinder
 
 # Install MitoPilot — kept last so R code edits only invalidate this layer
 COPY docker/MitoPilot_*.tar.gz /pkg.tar.gz
