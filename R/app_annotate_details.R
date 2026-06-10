@@ -280,31 +280,8 @@ annotations_details_server <- function(id, rv) {
             tool = colDef(
               show = T,
               name = "tool",
-              align = "center",
-              maxWidth = 100,
-              cell = function(value) {
-                color <- switch(value %||% "",
-                  "MITOS2"      = "#444444",
-                  "tRNAscan-SE" = "#666666",
-                  "ARWEN"       = "#888888",
-                  "ARAGORN"     = "#AAAAAA",
-                  "ORFfinder"   = "#B07CF1",
-                  "ORF (assigned)" = "#9A66D9",
-                  "#CCCCCC"
-                )
-                htmltools::span(
-                  style = paste0(
-                    "background:", color, "30;",
-                    "color:#111111;",
-                    "border:1px solid ", color, ";",
-                    "border-radius:3px;",
-                    "padding:1px 4px;",
-                    "font-size:11px;",
-                    "white-space:nowrap;"
-                  ),
-                  value %||% ""
-                )
-              }
+              align = "left",
+              maxWidth = 100
             ),
             notes = colDef(
               show = T,
@@ -533,13 +510,15 @@ annotations_details_server <- function(id, rv) {
         if (!is.null(fig_ctx())) fig_ctx(NULL)
         return()
       }
+      # Use [[ ]] (not $): rv$updating can transiently lack these columns and
+      # tibble $ warns on missing columns, while [[ returns NULL silently.
       ctx <- list(
-        ID              = u$ID,
-        length          = u$length,
-        topology        = u$topology,
-        blast_accession = u$blast_accession,
-        blast_species   = u$blast_species,
-        poor_blast_ref  = u$poor_blast_ref
+        ID              = u[["ID"]],
+        length          = u[["length"]],
+        topology        = u[["topology"]],
+        blast_accession = u[["blast_accession"]],
+        blast_species   = u[["blast_species"]],
+        poor_blast_ref  = u[["poor_blast_ref"]]
       )
       if (!identical(ctx, fig_ctx())) fig_ctx(ctx)
     })
