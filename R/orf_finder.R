@@ -61,10 +61,11 @@ orf_finder <- function(
       stringr::str_replace(basename(assembly_fn), "\\w+$", "tsv") |>
         stringr::str_replace("assembly", "ORFannotations")
     )
-    # quote = "none" so the JSON refHits field is written raw; default CSV
-    # quoting doubles its inner quotes and nextflow's splitCsv does not
-    # un-escape them, producing invalid JSON in the db (matches validate_*).
-    readr::write_tsv(df, fn, na = "", quote = "none")
+    # quote = "none" AND escape = "none" so the JSON refHits field is written
+    # raw: quote="none" alone still doubles the JSON's inner quotes via readr's
+    # default escape="double", and nextflow's splitCsv does not un-escape them,
+    # producing invalid JSON in the db.
+    readr::write_tsv(df, fn, na = "", quote = "none", escape = "none")
     invisible(df)
   }
 
