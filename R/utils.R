@@ -130,7 +130,12 @@ json_parse <- function(.x, tibble = F) {
       .x
     }
   )
-  if (tibble && !is.null(names(out))) {
+  if (tibble) {
+    # Empty ("{}"), blank, or unparseable JSON -> empty data frame so callers
+    # can rely on nrow()/df ops (instead of a bare character that breaks them).
+    if (length(out) == 0 || is.null(names(out))) {
+      return(data.frame())
+    }
     out <- purrr::map_dfc(out, ~.)
   }
   return(out)
