@@ -498,10 +498,9 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
       modalDialog(
         title = stringr::str_glue("Setting ORF-finder Options for {nrow(rv$updating)} Samples"),
         helpText(
-          "The ORF step runs after curation/validation and adds ORFs found in",
-          "regions without an existing annotation. Enabling it turns off",
-          "un-annotated end trimming (feature_trim) in the annotation options,",
-          "since unannotated contig ends may contain ORFs."
+          "When running the ORF step, turn off un-annotated end trimming",
+          "(feature_trim) in the curation options so unannotated contig ends",
+          "are kept for ORF finding."
         ),
         shinyWidgets::prettyCheckbox(
           ns("use_orffinder"),
@@ -549,17 +548,6 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
               width = "100%",
               value = current$memory %||% numeric(0)
             ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("orf_max_blast_hits"),
-              label = "Max BLAST hits:",
-              value = current$max_blast_hits %||% character(0),
-              min = 1,
-              max = 1000,
-              width = "100%"
-            ) |> shinyjs::disabled()
           )
         ),
         div(
@@ -593,36 +581,9 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           value = current$orffinder_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
-        div(
-          style = "display: flex; align-items: center; gap: 2em",
-          div(
-            style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
-            selectizeInput(
-              ns("orf_ref_dir"),
-              label = "ref_dir (curation featureProt source)",
-              choices = unique(rv$orf_opts$ref_dir),
-              selected = current$ref_dir %||% character(0),
-              width = "100%",
-              options = list(
-                create = TRUE,
-                maxItems = 1
-              )
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            selectizeInput(
-              ns("orf_ref_db"),
-              label = "ref_db",
-              choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
-              selected = current$ref_db %||% character(0),
-              width = "100%",
-              options = list(
-                create = TRUE,
-                maxItems = 1
-              )
-            ) |> shinyjs::disabled()
-          )
+        helpText(
+          "BLAST settings (max hits, ref_db, ref_dir) are shared with the",
+          "sample's curation options."
         ),
         size = "m",
         footer = tagList(

@@ -1069,34 +1069,18 @@ annotate_server <- function(id) {
         )
         updateNumericInput(inputId = "orf_opts_cpus", value = cur$cpus)
         updateNumericInput(inputId = "orf_opts_memory", value = cur$memory)
-        updateNumericInput(inputId = "orf_max_blast_hits", value = cur$max_blast_hits)
         updateNumericInput(inputId = "orf_min_len", value = cur$orf_min_len)
         updateNumericInput(inputId = "orf_max_overlap", value = cur$orf_max_overlap)
         updateTextInput(inputId = "orffinder_opts", value = cur$orffinder_opts)
-        updateSelectizeInput(
-          inputId = "orf_ref_dir",
-          selected = cur$ref_dir,
-          choices = unique(rv$orf_opts$ref_dir),
-          options = list(create = TRUE, maxItems = 1)
-        )
-        updateSelectizeInput(
-          inputId = "orf_ref_db",
-          selected = cur$ref_db,
-          choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
-          options = list(create = TRUE, maxItems = 1)
-        )
       }
     })
     observeEvent(input$edit_orf_opts, ignoreInit = T, {
       shinyjs::toggleState("use_orffinder", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_opts_cpus", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_opts_memory", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_max_blast_hits", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_min_len", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_max_overlap", condition = input$edit_orf_opts)
       shinyjs::toggleState("orffinder_opts", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_ref_dir", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_ref_db", condition = input$edit_orf_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_orf_opts && input$orf_opts %in% filtered_data()$orf_opts) {
         rv$updating_indirect <- filtered_data() |>
@@ -1141,10 +1125,7 @@ annotate_server <- function(id) {
               memory = req(input$orf_opts_memory),
               orffinder_opts = input$orffinder_opts %||% "",
               orf_min_len = req(input$orf_min_len),
-              orf_max_overlap = req(input$orf_max_overlap),
-              max_blast_hits = req(input$orf_max_blast_hits),
-              ref_dir = req(input$orf_ref_dir),
-              ref_db = req(input$orf_ref_db)
+              orf_max_overlap = req(input$orf_max_overlap)
             ),
             in_place = TRUE,
             copy = TRUE,

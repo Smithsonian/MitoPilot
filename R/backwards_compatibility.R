@@ -92,6 +92,10 @@ backwards_compatibility <- function(
         "use_orffinder" %in% DBI::dbListFields(con, "orf_opts"),
         error = function(e) FALSE
       )) &&
+      isTRUE(tryCatch(
+        !any(c("max_blast_hits", "ref_db", "ref_dir") %in% DBI::dbListFields(con, "orf_opts")),
+        error = function(e) FALSE
+      )) &&
       "orf_opts" %in% names(annotate_table) &&
       "orf_opts" %in% DBI::dbListTables(con) &&
       orffinder_conf &&
@@ -545,7 +549,9 @@ backwards_compatibility <- function(
       )
   }
 
-  # if orf_opts table doesn't exist, create it and seed a default row
+  # if orf_opts table doesn't exist, create it and seed a default row.
+  # max_blast_hits, ref_db and ref_dir are shared with curation (curate_opts),
+  # not stored here.
   if (!("orf_opts" %in% DBI::dbListTables(con))) {
     message("created 'orf_opts' table")
     DBI::dbExecute(
@@ -558,27 +564,8 @@ backwards_compatibility <- function(
         orffinder_opts TEXT,
         orf_min_len INTEGER,
         orf_max_overlap REAL,
-        max_blast_hits INTEGER,
-        ref_db TEXT,
-        ref_dir TEXT,
         PRIMARY KEY (orf_opts)
       );"
-    )
-    # reuse the curation reference db/dir (the featureProt source) as the default,
-    # falling back to the annotate ref and finally to the package defaults
-    pick1 <- function(x, fallback) {
-      x <- x[!is.na(x)]
-      if (length(x) == 0) fallback else x[1]
-    }
-    ref_db_default <- pick1(
-      c(curate_opts_table$ref_db[curate_opts_table$curate_opts == "default"],
-        annotate_opts_table$ref_db),
-      "Chordata"
-    )
-    ref_dir_default <- pick1(
-      c(curate_opts_table$ref_dir[curate_opts_table$curate_opts == "default"],
-        annotate_opts_table$ref_dir),
-      "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2"
     )
     dplyr::tbl(con, "orf_opts") |>
       dplyr::rows_upsert(
@@ -589,15 +576,20 @@ backwards_compatibility <- function(
           memory = 8L,
           orffinder_opts = "-s 1 -n true",
           orf_min_len = 300L,
-          orf_max_overlap = 0.1,
-          max_blast_hits = 10L,
-          ref_db = ref_db_default,
-          ref_dir = ref_dir_default
+          orf_max_overlap = 0.1
         ),
         in_place = TRUE,
         copy = TRUE,
         by = "orf_opts"
       )
+  } else {
+    # drop max_blast_hits/ref_db/ref_dir from older orf_opts tables; now sourced
+    # from curate_opts
+    orf_cols <- DBI::dbListFields(con, "orf_opts")
+    for (col_drop in intersect(c("max_blast_hits", "ref_db", "ref_dir"), orf_cols)) {
+      message(paste0("removed '", col_drop, "' column from orf_opts table (now shared with curation)"))
+      DBI::dbExecute(con, paste0("ALTER TABLE orf_opts DROP COLUMN ", col_drop))
+    }
   }
 
   # if start_gene column doesn't exist, add it

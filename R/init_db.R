@@ -533,9 +533,6 @@ new_db <- function(
       orffinder_opts TEXT,
       orf_min_len INTEGER,
       orf_max_overlap REAL,
-      max_blast_hits INTEGER,
-      ref_db TEXT,
-      ref_dir TEXT,
       PRIMARY KEY (orf_opts)
     );"
   )
@@ -548,10 +545,7 @@ new_db <- function(
         memory = orf_memory,
         orffinder_opts = orffinder_opts,
         orf_min_len = orf_min_len,
-        orf_max_overlap = orf_max_overlap,
-        max_blast_hits = max_blast_hits,
-        ref_db = annotate_ref_db,
-        ref_dir = annotate_ref_dir
+        orf_max_overlap = orf_max_overlap
       ),
       in_place = TRUE,
       copy = TRUE,
