@@ -297,17 +297,6 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = isTRUE(as.logical(current$retain_low_conf_trna %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
-        shinyWidgets::prettyCheckbox(
-          ns("use_orffinder"),
-          label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
-          value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
-          status = "primary"
-        ) |> shinyjs::disabled(),
-        helpText(
-          "Enabling ORF finding turns off un-annotated end trimming (feature_trim),",
-          "since unannotated contig ends may contain ORFs. ORF finder parameters",
-          "are set in the separate 'orf_opts' column."
-        ),
         div(
           selectizeInput(
             ns("start_gene"),
@@ -499,15 +488,27 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
 
   if (length(unique(rv$updating$orf_opts)) == 1) {
     current <- rv$orf_opts[rv$orf_opts$orf_opts == rv$updating$orf_opts[1], ]
+    # Fall back to the default parameter set if the sample's orf_opts is unset
+    # or doesn't match a saved set, so the fields are never blank.
+    if (nrow(current) == 0) {
+      current <- rv$orf_opts[rv$orf_opts$orf_opts == "default", ]
+    }
 
     showModal(
       modalDialog(
         title = stringr::str_glue("Setting ORF-finder Options for {nrow(rv$updating)} Samples"),
         helpText(
-          "These options apply only when the 'Run ORF finder step' box is checked",
-          "in the annotation options. The ORF step runs after curation/validation",
-          "and adds ORFs found in regions without an existing annotation."
+          "The ORF step runs after curation/validation and adds ORFs found in",
+          "regions without an existing annotation. Enabling it turns off",
+          "un-annotated end trimming (feature_trim) in the annotation options,",
+          "since unannotated contig ends may contain ORFs."
         ),
+        shinyWidgets::prettyCheckbox(
+          ns("use_orffinder"),
+          label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
+          value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           selectizeInput(

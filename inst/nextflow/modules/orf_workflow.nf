@@ -1,14 +1,13 @@
 include {orf} from './orf.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' +
-                    'e.use_orffinder, ' +
+                    'd.use_orffinder, ' +
                     'd.cpus, d.memory, d.orffinder_opts, d.orf_min_len, d.orf_max_overlap, d.max_blast_hits, ' +
                     'd.ref_dir, d.ref_db ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
                     'JOIN orf_opts d ON c.orf_opts = d.orf_opts ' +
-                    'JOIN annotate_opts e ON c.annotate_opts = e.annotate_opts ' +
                     'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
 
 // Append ORFs to the annotations table (rows produced by the orf process). Uses

@@ -718,10 +718,6 @@ annotate_server <- function(id) {
           inputId = "retain_low_conf_trna",
           value = isTRUE(as.logical(cur$retain_low_conf_trna %||% 0L))
         )
-        shinyWidgets::updatePrettyCheckbox(
-          inputId = "use_orffinder",
-          value = isTRUE(as.logical(cur$use_orffinder %||% 0L))
-        )
         updateSelectizeInput(
           inputId = "start_gene",
           choices = MITO_GENE_CHOICES,
@@ -731,13 +727,6 @@ annotate_server <- function(id) {
             maxItems = 1
           )
         )
-      }
-    })
-    # Enabling ORF finding auto-disables un-annotated end trimming (feature_trim),
-    # since unannotated contig ends may contain ORFs. The user can re-enable it.
-    observeEvent(input$use_orffinder, ignoreInit = TRUE, {
-      if (isTRUE(input$use_orffinder)) {
-        shinyWidgets::updatePrettyCheckbox(inputId = "feature_trim", value = FALSE)
       }
     })
     observeEvent(input$edit_annotate_opts, ignoreInit = T, {
@@ -755,7 +744,6 @@ annotate_server <- function(id) {
       shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("retain_low_conf_trna", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("use_orffinder", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
@@ -820,8 +808,7 @@ annotate_server <- function(id) {
               start_gene = req(input$start_gene),
               coverage_trim = as.integer(isTRUE(input$coverage_trim)),
               feature_trim = as.integer(isTRUE(input$feature_trim)),
-              retain_low_conf_trna = as.integer(isTRUE(input$retain_low_conf_trna)),
-              use_orffinder = as.integer(isTRUE(input$use_orffinder))
+              retain_low_conf_trna = as.integer(isTRUE(input$retain_low_conf_trna))
             ),
             in_place = TRUE,
             copy = TRUE,
@@ -1076,6 +1063,10 @@ annotate_server <- function(id) {
       )
       if (exists) {
         cur <- rv$orf_opts[rv$orf_opts$orf_opts == input$orf_opts, ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_orffinder",
+          value = isTRUE(as.logical(cur$use_orffinder %||% 0L))
+        )
         updateNumericInput(inputId = "orf_opts_cpus", value = cur$cpus)
         updateNumericInput(inputId = "orf_opts_memory", value = cur$memory)
         updateNumericInput(inputId = "orf_max_blast_hits", value = cur$max_blast_hits)
@@ -1097,6 +1088,7 @@ annotate_server <- function(id) {
       }
     })
     observeEvent(input$edit_orf_opts, ignoreInit = T, {
+      shinyjs::toggleState("use_orffinder", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_opts_cpus", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_opts_memory", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_max_blast_hits", condition = input$edit_orf_opts)
@@ -1144,6 +1136,7 @@ annotate_server <- function(id) {
           dplyr::rows_upsert(
             data.frame(
               orf_opts = req(input$orf_opts),
+              use_orffinder = as.integer(isTRUE(input$use_orffinder)),
               cpus = req(input$orf_opts_cpus),
               memory = req(input$orf_opts_memory),
               orffinder_opts = input$orffinder_opts %||% "",

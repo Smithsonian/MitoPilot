@@ -413,7 +413,6 @@ new_db_userAsmb <- function(
       coverage_trim INTEGER,
       feature_trim INTEGER,
       retain_low_conf_trna INTEGER,
-      use_orffinder INTEGER,
       PRIMARY KEY (annotate_opts)
     );"
   )
@@ -435,8 +434,7 @@ new_db_userAsmb <- function(
         start_gene = "trnF",
         coverage_trim = 1L,
         feature_trim = 1L,
-        retain_low_conf_trna = 0L,
-        use_orffinder = 0L
+        retain_low_conf_trna = 0L
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -480,6 +478,7 @@ new_db_userAsmb <- function(
     con,
     "CREATE TABLE orf_opts (
       orf_opts TEXT NOT NULL,
+      use_orffinder INTEGER,
       cpus INTEGER,
       memory INTEGER,
       orffinder_opts TEXT,
@@ -495,6 +494,7 @@ new_db_userAsmb <- function(
     dplyr::rows_upsert(
       data.frame(
         orf_opts = "default",
+        use_orffinder = 0L,
         cpus = orf_cpus,
         memory = orf_memory,
         orffinder_opts = orffinder_opts,

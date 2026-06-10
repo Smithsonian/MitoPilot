@@ -88,7 +88,10 @@ backwards_compatibility <- function(
       "tool" %in% DBI::dbListFields(con, "annotations") &&
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
-      "use_orffinder" %in% names(annotate_opts_table) &&
+      isTRUE(tryCatch(
+        "use_orffinder" %in% DBI::dbListFields(con, "orf_opts"),
+        error = function(e) FALSE
+      )) &&
       "orf_opts" %in% names(annotate_table) &&
       "orf_opts" %in% DBI::dbListTables(con) &&
       orffinder_conf &&
@@ -517,18 +520,15 @@ backwards_compatibility <- function(
       )
   }
 
-  # if use_orffinder column doesn't exist, add it (default off)
-  if (!("use_orffinder" %in% names(annotate_opts_table))) {
-    message("added 'use_orffinder' column to annotate_opts table")
-    annotate_opts_table$use_orffinder <- rep(0L, nrow(annotate_opts_table))
-    DBI::dbExecute(con, "ALTER TABLE annotate_opts ADD COLUMN use_orffinder INTEGER")
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
+  # use_orffinder now lives in orf_opts (was annotate_opts). Add it to an existing
+  # orf_opts table if missing (default off). A stale annotate_opts.use_orffinder
+  # column on older databases is harmless and left in place. The orf_opts table is
+  # created with use_orffinder below for databases that lack the table entirely.
+  if ("orf_opts" %in% DBI::dbListTables(con) &&
+      !("use_orffinder" %in% DBI::dbListFields(con, "orf_opts"))) {
+    message("added 'use_orffinder' column to orf_opts table")
+    DBI::dbExecute(con, "ALTER TABLE orf_opts ADD COLUMN use_orffinder INTEGER")
+    DBI::dbExecute(con, "UPDATE orf_opts SET use_orffinder = 0 WHERE use_orffinder IS NULL")
   }
 
   # if orf_opts column doesn't exist in the annotate table, add it (default set)
@@ -552,6 +552,7 @@ backwards_compatibility <- function(
       con,
       "CREATE TABLE orf_opts (
         orf_opts TEXT NOT NULL,
+        use_orffinder INTEGER,
         cpus INTEGER,
         memory INTEGER,
         orffinder_opts TEXT,
@@ -583,6 +584,7 @@ backwards_compatibility <- function(
       dplyr::rows_upsert(
         data.frame(
           orf_opts = "default",
+          use_orffinder = 0L,
           cpus = 4L,
           memory = 8L,
           orffinder_opts = "-s 1 -n true",
