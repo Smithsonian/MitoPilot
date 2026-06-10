@@ -325,9 +325,18 @@ annotations_details_server <- function(id, rv) {
         shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] %in% c("PCG", "ORF"))
         is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
         is_orf <- length(sel) > 0 && rv$annotations$type[sel] == "ORF"
+        # An assigned ORF keeps tool == "ORFfinder" but a non-ORF type; offer the
+        # button for both so the assignment can be edited or removed.
+        is_assigned_orf <- length(sel) > 0 &&
+          isTRUE(rv$annotations$tool[sel] == "ORFfinder") &&
+          isTRUE(rv$annotations$type[sel] != "ORF")
         shinyjs::toggle("annotation_action_btns", condition = length(sel) > 0 && !is_deleted)
         shinyjs::toggle("annotation_restore_btn", condition = is_deleted)
-        shinyjs::toggle("assign_gene_btn", condition = is_orf && !is_deleted)
+        shinyjs::toggle("assign_gene_btn", condition = (is_orf || is_assigned_orf) && !is_deleted)
+        updateActionButton(
+          inputId = "assign_gene",
+          label = if (is_assigned_orf) "Edit gene assignment" else "Assign gene name"
+        )
         # No row selected: skip sel-indexed branches so consumers (e.g. the
         # synteny zoom plot, which also accepts a click anchor) don't break.
         if (length(sel) == 0) {
@@ -2553,19 +2562,24 @@ annotations_details_server <- function(id, rv) {
     # a note. Does NOT re-run curation (start/stop trimming, refHit rules).
     observeEvent(input$assign_gene, {
       req(length(selected()) > 0)
-      req(rv$annotations$type[selected()] == "ORF")
+      sel_type <- rv$annotations$type[selected()]
+      is_assigned <- isTRUE(rv$annotations$tool[selected()] == "ORFfinder") &&
+        isTRUE(sel_type != "ORF")
+      req(sel_type == "ORF" || is_assigned)
+      cur_gene <- rv$annotations$gene[selected()]
       showModal(modalDialog(
-        title = "Assign gene name to ORF",
+        title = if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF",
         selectizeInput(
           ns("assign_gene_choice"),
           label = "Gene name (pick a standard mitochondrial gene or type a custom name):",
-          choices = MITO_GENE_CHOICES,
-          selected = character(0),
+          choices = if (is_assigned) union(MITO_GENE_CHOICES, cur_gene) else MITO_GENE_CHOICES,
+          selected = if (is_assigned) cur_gene else character(0),
           options = list(create = TRUE, maxItems = 1, placeholder = "e.g. nad6 or a custom name")
         ),
         footer = tagList(
           actionButton(ns("confirm_assign_gene"), "Assign"),
-          modalButton("Cancel")
+          if (is_assigned) actionButton(ns("remove_assign_gene"), "Remove assignment"),
+          actionButton(ns("cancel_assign_gene"), "Cancel")
         ),
         easyClose = TRUE
       ))
@@ -2593,13 +2607,43 @@ annotations_details_server <- function(id, rv) {
       old_gene <- rv$annotations$gene[idx]
       rv$annotations$gene[idx] <- gene
       rv$annotations$type[idx] <- new_type
-      rv$annotations$tool[idx] <- "ORF (assigned)"
       rv$annotations$product[idx] <- CDS_key[[gene]] %||% NA_character_
-      note <- stringr::str_glue("ORF {old_gene} assigned to {gene}")
-      rv$annotations$notes[idx] <- paste(note, rv$annotations$notes[idx] %|NA|% "", sep = "; ")
+      note <- stringr::str_glue("{old_gene} assigned to {gene}")
+      existing <- rv$annotations$notes[idx] %|NA|% ""
+      rv$annotations$notes[idx] <- if (nzchar(existing)) paste(note, existing, sep = "; ") else note
       rv$annotations$edited[idx] <- 1L
       restore_do_save()
-      removeModal()
+      annotate_details_modal(rv) |> showModal()
+    })
+
+    # Remove a gene assignment, reverting the feature to an unassigned ORF.
+    observeEvent(input$remove_assign_gene, {
+      req(length(selected()) > 0)
+      idx <- selected()
+      notes_cur <- rv$annotations$notes[idx] %|NA|% ""
+      # Recover the original ORF.N name recorded in the assignment note.
+      orig <- stringr::str_match(notes_cur, "(ORF\\.\\d+) assigned to")[, 2]
+      if (is.na(orig)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot remove assignment",
+          text = "Could not determine the original ORF name from the annotation notes."
+        )
+        req(F)
+      }
+      kept <- strsplit(notes_cur, "; ", fixed = TRUE)[[1]]
+      kept <- kept[!stringr::str_detect(kept, " assigned to ")]
+      rv$annotations$gene[idx] <- orig
+      rv$annotations$type[idx] <- "ORF"
+      rv$annotations$product[idx] <- NA_character_
+      rv$annotations$notes[idx] <- if (length(kept)) paste(kept, collapse = "; ") else NA_character_
+      rv$annotations$edited[idx] <- 1L
+      restore_do_save()
+      annotate_details_modal(rv) |> showModal()
+    })
+
+    # Cancel: return to the annotation details modal (not the annotate table).
+    observeEvent(input$cancel_assign_gene, {
+      annotate_details_modal(rv) |> showModal()
     })
 
     observeEvent(input$restore, {
