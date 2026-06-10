@@ -22,9 +22,6 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(blast_ref_status = poor_blast_ref)
 
-  flags <- path_discrepancy_flags(db)
-  out <- dplyr::left_join(out, flags, by = "ID")
-
   out |>
     dplyr::relocate(
       assemble_lock,
@@ -41,7 +38,6 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       length,
       paths,
       scaffolds,
-      path_flag,
       blast_accession,
       blast_ref_status,
       blast_species,

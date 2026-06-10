@@ -83,11 +83,6 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(blast_ref_status = poor_blast_ref)
 
-  # Compute per-sample path-level discrepancy flags from assemblies + assembly_blast.
-  # Cheap collect: both tables small relative to UI rendering.
-  flags <- path_discrepancy_flags(db)
-  out <- dplyr::left_join(out, flags, by = "ID")
-
   out |>
     dplyr::relocate(
       assemble_lock,
@@ -104,7 +99,6 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       length,
       paths,
       scaffolds,
-      path_flag,
       blast_accession,
       blast_ref_status,
       blast_species,
@@ -125,94 +119,6 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
         .default = NA_character_
       )
     )
-}
-
-#' Compute per-sample path-discrepancy flags
-#'
-#' Returns one row per ID with `path_flag` (ok|none|minor|divergent) and
-#' `path_flag_reasons` (semicolon-joined human strings). Samples with <= 1
-#' non-ignored path get `none`. `ok` means multiple paths but all agree.
-#'
-#' @noRd
-path_discrepancy_flags <- function(con) {
-  asmblies <- tryCatch(
-    dplyr::tbl(con, "assemblies") |>
-      dplyr::filter(ignore == 0) |>
-      dplyr::select(ID, path, scaffold, length, topology) |>
-      dplyr::collect(),
-    error = function(e) data.frame()
-  )
-  if (nrow(asmblies) == 0) {
-    return(data.frame(
-      ID = character(0),
-      path_flag = character(0),
-      path_flag_reasons = character(0),
-      stringsAsFactors = FALSE
-    ))
-  }
-
-  per_path <- asmblies |>
-    dplyr::group_by(ID, path) |>
-    dplyr::summarise(
-      path_length = sum(length, na.rm = TRUE),
-      topologies = paste(sort(unique(topology)), collapse = ","),
-      .groups = "drop"
-    )
-
-  blast <- tryCatch(
-    dplyr::tbl(con, "assembly_blast") |>
-      dplyr::select(ID, path, blast_species, blast_pident, blast_qcovs) |>
-      dplyr::collect(),
-    error = function(e) data.frame(
-      ID = character(0), path = integer(0),
-      blast_species = character(0),
-      blast_pident = numeric(0), blast_qcovs = numeric(0)
-    )
-  )
-
-  joined <- dplyr::left_join(per_path, blast, by = c("ID", "path"))
-
-  joined |>
-    dplyr::group_by(ID) |>
-    dplyr::summarise(
-      n_kept = dplyr::n(),
-      n_topo = dplyr::n_distinct(topologies),
-      len_max = max(path_length, na.rm = TRUE),
-      len_min = min(path_length, na.rm = TRUE),
-      n_species = dplyr::n_distinct(blast_species[!is.na(blast_species) &
-        blast_species != "NO HIT"]),
-      pident_max = suppressWarnings(max(blast_pident, na.rm = TRUE)),
-      pident_min = suppressWarnings(min(blast_pident, na.rm = TRUE)),
-      .groups = "drop"
-    ) |>
-    dplyr::mutate(
-      length_cv = ifelse(len_max > 0, (len_max - len_min) / len_max, 0),
-      pident_gap = ifelse(is.finite(pident_max) & is.finite(pident_min),
-        pident_max - pident_min, 0),
-      reasons = purrr::pmap_chr(
-        list(n_topo, length_cv, n_species, pident_gap),
-        function(nt, lcv, ns, pg) {
-          r <- c()
-          if (!is.na(nt) && nt > 1) r <- c(r, "topology")
-          if (!is.na(lcv) && lcv > 0.05) {
-            r <- c(r, sprintf("length Δ%.0f%%", lcv * 100))
-          }
-          if (!is.na(ns) && ns > 1) r <- c(r, "BLAST species")
-          if (!is.na(pg) && pg > 1) {
-            r <- c(r, sprintf("pident Δ%.1f", pg))
-          }
-          paste(r, collapse = "; ")
-        }
-      ),
-      path_flag = dplyr::case_when(
-        n_kept <= 1 ~ "none",
-        n_topo > 1 | n_species > 1 ~ "divergent",
-        length_cv > 0.05 | pident_gap > 1 ~ "minor",
-        TRUE ~ "ok"
-      ),
-      path_flag_reasons = reasons
-    ) |>
-    dplyr::select(ID, path_flag, path_flag_reasons)
 }
 
 #' Update the preprocessing options
