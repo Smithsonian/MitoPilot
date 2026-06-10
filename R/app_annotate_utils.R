@@ -498,9 +498,8 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
       modalDialog(
         title = stringr::str_glue("Setting ORF-finder Options for {nrow(rv$updating)} Samples"),
         helpText(
-          "When running the ORF step, turn off un-annotated end trimming",
-          "(feature_trim) in the curation options so unannotated contig ends",
-          "are kept for ORF finding."
+          "When running the ORF step, consider disabling un-annotated end trimming",
+          "in the annotation options"
         ),
         shinyWidgets::prettyCheckbox(
           ns("use_orffinder"),
@@ -582,8 +581,9 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           width = "100%"
         ) |> shinyjs::disabled(),
         helpText(
-          "BLAST settings (max hits, ref_db, ref_dir) are shared with the",
-          "sample's curation options."
+          "The genetic code (-g) and minimum length (-ml) are set automatically",
+          "from the project genetic code and the Min ORF length above; do not set",
+          "them here."
         ),
         size = "m",
         footer = tagList(
