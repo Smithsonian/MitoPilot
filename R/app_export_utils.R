@@ -103,10 +103,10 @@ brace_snippet <- function(chars, pos) {
 
 #' Find the first unmatched brace in a template
 #'
-#' Treats every `{` and `}` literally (no glue escape special-casing) and
-#' requires them to balance: each `}` matches the most recent open `{`. Reports
-#' the first brace that has no match: a `}` with no open `{` before it, or, if
-#' all close, the first `{` left open at the end.
+#' Treats every open and close brace literally (no glue escape special-casing)
+#' and requires them to balance: each close brace matches the most recent open
+#' brace. Reports the first brace that has no match: a close brace with no open
+#' brace before it, or, if all close, the first open brace left at the end.
 #'
 #' @param template header template string
 #'
