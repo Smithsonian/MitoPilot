@@ -249,28 +249,19 @@ annotations_details_server <- function(id, rv) {
             type = colDef(
               show = T,
               align = "left",
-              cell = function(value) {
-                color <- switch(value %||% "",
-                  ctrl  = "#FAA34A",
-                  PCG   = "#60BD68",
-                  rRNA  = "#5DA5DA",
-                  tRNA  = "#F17CB0",
-                  ORF   = "#B07CF1",
-                  "#888888"
-                )
-                htmltools::span(
-                  style = paste0(
-                    "background:", color, "30;",
-                    "color:#111111;",
-                    "border:1px solid ", color, ";",
-                    "border-radius:3px;",
-                    "padding:1px 4px;",
-                    "font-size:11px;",
-                    "white-space:nowrap;"
-                  ),
-                  value %||% ""
-                )
-              }
+              html = TRUE,
+              # JS (not R) cell renderer so the badge re-renders client-side on
+              # updateReactable() after an edit; an R cell function is only run
+              # at full render, leaving stale badges when rows are re-sorted.
+              cell = htmlwidgets::JS("
+                function(cellInfo) {
+                  var colors = {ctrl:'#FAA34A', PCG:'#60BD68', rRNA:'#5DA5DA', tRNA:'#F17CB0', ORF:'#B07CF1'};
+                  var v = cellInfo.value || '';
+                  var c = colors[v] || '#888888';
+                  return '<span style=\"background:' + c + '30;color:#111111;border:1px solid ' + c +
+                    ';border-radius:3px;padding:1px 4px;font-size:11px;white-space:nowrap;\">' + v + '</span>';
+                }
+              ")
             ),
             gene = colDef(show = T,
                           align = "left",
