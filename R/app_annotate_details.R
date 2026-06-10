@@ -10,7 +10,7 @@ gene_type_fill <- c(
   PCG  = "#60BD68",
   rRNA = "#5DA5DA",
   tRNA = "#F17CB0",
-  ORF  = "#B07CF1"
+  ORF  = "#4D4D4D"
 )
 gene_type_alpha <- 0.5
 
@@ -255,7 +255,7 @@ annotations_details_server <- function(id, rv) {
               # at full render, leaving stale badges when rows are re-sorted.
               cell = htmlwidgets::JS("
                 function(cellInfo) {
-                  var colors = {ctrl:'#FAA34A', PCG:'#60BD68', rRNA:'#5DA5DA', tRNA:'#F17CB0', ORF:'#B07CF1'};
+                  var colors = {ctrl:'#FAA34A', PCG:'#60BD68', rRNA:'#5DA5DA', tRNA:'#F17CB0', ORF:'#4D4D4D'};
                   var v = cellInfo.value || '';
                   var c = colors[v] || '#888888';
                   return '<span style=\"background:' + c + '30;color:#111111;border:1px solid ' + c +
