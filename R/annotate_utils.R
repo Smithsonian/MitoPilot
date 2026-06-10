@@ -323,7 +323,13 @@ get_top_hits_orf <- function(
     dplyr::ungroup() |>
     dplyr::select(-seqid) |>
     dplyr::arrange(dplyr::desc(similarity)) |>
-    dplyr::slice_head(n = as.numeric(max_blast_hits))
+    # Keep the top hits per candidate gene (not just overall) so a later ORF
+    # gene assignment can restrict the alignment to the assigned gene's hits
+    # without re-running BLAST. The single combined-DB search thus covers every
+    # per-gene DB at once.
+    dplyr::group_by(gene) |>
+    dplyr::slice_head(n = as.numeric(max_blast_hits)) |>
+    dplyr::ungroup()
 }
 
 #' Count end gaps in a pairwise alignment

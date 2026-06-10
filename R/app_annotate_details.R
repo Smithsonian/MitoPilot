@@ -1366,9 +1366,29 @@ annotations_details_server <- function(id, rv) {
 
       req(rv$annotations$type[selected()] %in% c("PCG", "ORF"))
       is_orf <- rv$annotations$type[selected()] == "ORF"
+      # An ORF assigned a gene keeps tool == "ORFfinder" but a non-ORF type.
+      feat_gene <- rv$annotations$gene[selected()]
+      is_assigned_orf <- isTRUE(rv$annotations$tool[selected()] == "ORFfinder") && !is_orf
 
-      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE) |>
-        dplyr::slice_head(n = n_hits)
+      using_local <- !is.null(rv$local_hits)
+      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+      # For an ORF assigned a gene, the combined-DB hits already cover every
+      # per-gene reference set (top hits per gene). Decide what to show:
+      #   - gene present in hits  -> restrict to that gene (gene-specific align)
+      #   - standard PCG, absent  -> no hits to that gene's DB (show message)
+      #   - custom name           -> keep all hits (full-DB align + gene prefix)
+      # Skipped for local BLAST (no per-gene structure in those hits).
+      gene_filtered <- FALSE
+      no_gene_db_hits <- FALSE
+      if (is_assigned_orf && !using_local) {
+        if (is.data.frame(hits) && "gene" %in% names(hits) && feat_gene %in% hits$gene) {
+          hits <- hits[hits$gene == feat_gene, , drop = FALSE]
+          gene_filtered <- TRUE
+        } else if (feat_gene %in% MITO_PCG_GENES) {
+          no_gene_db_hits <- TRUE
+        }
+      }
+      hits <- hits |> dplyr::slice_head(n = n_hits)
 
       focal <- rv$annotations$translation[selected()] |>
         setNames(paste(
@@ -1377,7 +1397,14 @@ annotations_details_server <- function(id, rv) {
         ))
 
       new_alignment <- list()
-      if(nrow(hits)==0){
+      if (no_gene_db_hits) {
+        new_alignment$seqs <- character(0)
+        new_alignment$aln <- Biostrings::AAStringSet(focal)
+        new_alignment$alignmentHeight <- 40
+        new_alignment$id <- stringr::str_glue(
+          "<b>No BLAST hits against the {feat_gene} reference database.</b>"
+        )
+      }else if(nrow(hits)==0){
         new_alignment$seqs <- character(0)
         new_alignment$aln <- Biostrings::AAStringSet(focal)
         new_alignment$alignmentHeight <- 40
@@ -1385,9 +1412,13 @@ annotations_details_server <- function(id, rv) {
           "<b>Max Similarity:</b> n/a"
         )
       }else{
-        # For ORFs the gene is unknown, so each hit is labeled with its candidate
-        # gene name (parsed from the curation DB header) alongside the taxon.
-        hit_labels <- if (is_orf && "gene" %in% names(hits)) {
+        # Label hits with their candidate gene (alongside the taxon) for any ORF
+        # whose hits are not restricted to a single assigned gene: unassigned
+        # ORFs and custom-name assignments (all-gene hits kept). A standard
+        # assignment (filtered above) and real PCGs drop the redundant prefix.
+        show_gene_prefix <- (is_orf || (is_assigned_orf && !gene_filtered)) &&
+          "gene" %in% names(hits)
+        hit_labels <- if (show_gene_prefix) {
           paste(hits$gene, "|", hits$Taxon)
         } else {
           hits$Taxon
