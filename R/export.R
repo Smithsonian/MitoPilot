@@ -219,6 +219,10 @@ export_files <- function(
       }
 
       if (cur$type == "PCG") {
+        # default product for custom-named ORFs / CDS without a standard product
+        if (length(cur$product) == 0 || is.na(cur$product) || !nzchar(trimws(cur$product))) {
+          cur$product <- "hypothetical protein"
+        }
         # get start and stop codons from the ruleset
         cur_rules <- curate_rules$rules[[cur$gene]]
         if("stop_codons" %in% names(cur_rules)){
@@ -857,6 +861,61 @@ export_files <- function(
           paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
             cat(file = gff_fn, sep = "\n", append = TRUE)
         }
+
+        return()
+      }
+
+      if (cur$type == "ORF") {
+        # Unassigned ORFs: export as a hypothetical-protein CDS. ORFs have NA
+        # start/stop codons, so none of the PCG codon logic (partial markers,
+        # transl_except, codon membership checks) applies.
+        product <- "hypothetical protein"
+        note <- "open reading frame predicted by ORFfinder"
+
+        # write to .tbl
+        paste(c(pos, "gene"), collapse = "\t") |>
+          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        paste0("\t\t\tgene\t", cur$gene) |>
+          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        paste(c(pos, "CDS"), collapse = "\t") |>
+          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        paste("\t\t\tproduct\t", product) |>
+          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        paste("\t\t\ttransl_table\t", dat$genetic_code) |>
+          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        paste("\t\t\tcodon_start\t", 1) |>
+          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        paste0("\t\t\tnote\t", note) |>
+          cat(file = tbl_fn, sep = "\n", append = TRUE)
+
+        # write to GFF
+        # gene feature
+        f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
+
+        # CDS feature
+        f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",product,";transl_table=",dat$genetic_code,";Note=",note)
+        # logic to deal with annotations that wrap around the end of a circular assembly
+        if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
+          pos2_fix <- asmb_len + cur$pos2
+          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        } else {
+          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
+            cat(file = gff_fn, sep = "\n", append = TRUE)
+        }
+
+        # Per-gene FASTA/tbl export is intentionally skipped for ORFs: ORF.N
+        # numbering is per-sample and not orthologous across samples, so the
+        # gene-grouped files must not mix ORFs from different samples.
 
         return()
       }
