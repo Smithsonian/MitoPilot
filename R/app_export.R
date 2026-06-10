@@ -54,8 +54,7 @@ export_ui <- function(id) {
         `deselect-all-text`    = "None",
         `selected-text-format` = "count > 0",
         width                  = "150px"
-      ),
-      inline = TRUE
+      )
     ),
     reactableOutput(ns("table"))
   )

@@ -44,7 +44,7 @@ annotate_ui <- function(id) {
     tagList(
       uiOutput(ns("col_css")),
       div(
-        style = "display: flex; align-items: center; gap: 20px; flex-wrap: wrap;",
+        style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
         shinyWidgets::pickerInput(
           inputId  = ns("lock_filter"),
           label    = "Lock:",
@@ -57,8 +57,7 @@ annotate_ui <- function(id) {
             `deselect-all-text`    = "None",
             `selected-text-format` = "count > 0",
             width                  = "140px"
-          ),
-          inline = TRUE
+          )
         ),
         shinyWidgets::pickerInput(
           inputId  = ns("state_filter"),
@@ -72,8 +71,7 @@ annotate_ui <- function(id) {
             `deselect-all-text`    = "None",
             `selected-text-format` = "count > 0",
             width                  = "140px"
-          ),
-          inline = TRUE
+          )
         ),
         shinyWidgets::pickerInput(
           inputId  = ns("col_groups"),
@@ -87,8 +85,7 @@ annotate_ui <- function(id) {
             `deselect-all-text`    = "None",
             `selected-text-format` = "count > 0",
             width                  = "150px"
-          ),
-          inline = TRUE
+          )
         ),
         uiOutput(ns("warnings_select"))
       ),
@@ -164,8 +161,7 @@ annotate_server <- function(id) {
         options = list(
           `actions-box` = TRUE, # Display checkboxes in dropdown
           `selected-text-format` = "count > 0" # Show the number of selected items when more than 0 are selected
-        ),
-        inline = TRUE # Optional: puts it on the same line
+        )
       )
     })
 
