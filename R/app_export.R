@@ -608,7 +608,13 @@ export_server <- function(id) {
                 ),
                 path_js
               ),
-              shiny::icon("copy"), tags$span(style = "margin-left: 0.3em;", "Copy")
+              shiny::icon("copy"),
+              tags$span(
+                # Fixed width sized for "Copied!" so the button does not resize
+                # when the label changes on click.
+                style = "margin-left: 0.3em; display: inline-block; min-width: 4.5em; text-align: center;",
+                "Copy"
+              )
             )
           ),
           if (!is.null(extra)) tags$p(style = "margin-top: 0.75em;", extra)
