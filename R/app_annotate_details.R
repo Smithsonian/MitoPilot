@@ -52,6 +52,10 @@ annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Skips the count recompute on the initial annotation load (validated counts
+    # already in the db); set TRUE right before each load, see update_counts().
+    skip_count_update <- FALSE
+
     # Outlier-review flag for the sample we jumped in to fix (NULL otherwise),
     # used to render a reminder banner of what to edit.
     outlier_flag <- reactiveVal(NULL)
@@ -92,6 +96,7 @@ annotations_details_server <- function(id, rv) {
       rv$align_refSeq <- TRUE
 
       ## Load annotations ----
+      skip_count_update <<- TRUE  # this load carries validated counts; don't recompute
       rv$annotations <- dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::arrange(pos1) |>
@@ -2594,6 +2599,80 @@ annotations_details_server <- function(id, rv) {
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
     }
+
+    # Lightweight count refresh after an in-modal annotation edit (delete, ORF
+    # gene assignment, merge, restore, ...). Recomputes the annotate-table count
+    # columns (PCG/tRNA/rRNA/ORF) plus missing/extra from the current
+    # annotations, persists them, and propagates to the annotate and export
+    # tables. Deliberately NOT a full re-validation.
+    update_counts <- function() {
+      con <- session$userData$con
+      id <- rv$updating$ID
+      req(length(id) == 1)
+      retained <- rv$annotations |>
+        dplyr::filter(!stringr::str_detect(gene, "_DELETED_"))
+      pcg  <- sum(retained$type == "PCG",  na.rm = TRUE)
+      trna <- sum(retained$type == "tRNA", na.rm = TRUE)
+      rrna <- sum(retained$type == "rRNA", na.rm = TRUE)
+      # missing/extra from the sample's curation count rules
+      me <- tryCatch({
+        co <- dplyr::tbl(con, "annotate") |>
+          dplyr::filter(ID == !!id) |> dplyr::pull(curate_opts)
+        pj <- dplyr::tbl(con, "curate_opts") |>
+          dplyr::filter(curate_opts == !!co) |> dplyr::pull(params)
+        params <- jsonlite::fromJSON(pj)
+        compute_missing_extra(retained, params$rules, params$default_rules)
+      }, error = function(e) list(missing = NA_character_, extra = NA_character_))
+      # ORF count is derived in the table; keep blank when ORF finding is off
+      orf_blank <- "ORFCount" %in% names(rv$data) &&
+        isTRUE(is.na(rv$data$ORFCount[match(id, rv$data$ID)]))
+      orf <- if (orf_blank) NA_integer_ else as.integer(sum(retained$type == "ORF", na.rm = TRUE))
+      # Short-circuit if nothing the count/missing/extra columns track changed
+      # (e.g. position-only codon edits) to avoid needless writes/refreshes.
+      same <- function(a, b) (is.na(a) && is.na(b)) || (!is.na(a) && !is.na(b) && a == b)
+      i <- match(id, rv$data$ID)
+      if (!is.na(i) &&
+          identical(as.integer(rv$data$PCGCount[i]), as.integer(pcg)) &&
+          identical(as.integer(rv$data$tRNACount[i]), as.integer(trna)) &&
+          identical(as.integer(rv$data$rRNACount[i]), as.integer(rrna)) &&
+          same(rv$data$ORFCount[i], orf) &&
+          same(rv$data$missing[i], me$missing %||% NA_character_) &&
+          same(rv$data$extra[i], me$extra %||% NA_character_)) {
+        return(invisible(NULL))
+      }
+      # Persist the stored count columns to the annotate table
+      upd <- data.frame(
+        ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+        missing = me$missing %||% NA_character_, extra = me$extra %||% NA_character_,
+        stringsAsFactors = FALSE
+      )
+      dplyr::tbl(con, "annotate") |>
+        dplyr::rows_update(upd, by = "ID", unmatched = "ignore",
+                           in_place = TRUE, copy = TRUE)
+      # Keep rv$updating in sync (the close handler reads these counts)
+      rv$updating$PCGCount  <- pcg
+      rv$updating$tRNACount <- trna
+      rv$updating$rRNACount <- rrna
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          data.frame(ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+                     ORFCount = orf, missing = upd$missing, extra = upd$extra,
+                     stringsAsFactors = FALSE),
+          by = "ID"
+        )
+      trigger("update_annotate_table")
+      trigger("refresh_export")
+    }
+
+    # Recompute counts whenever the annotations change from an edit. The initial
+    # load already carries validated counts, so skip that first set.
+    observeEvent(rv$annotations, {
+      if (skip_count_update) {
+        skip_count_update <<- FALSE
+        return()
+      }
+      update_counts()
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
 
     # Assign a gene name to an ORF ----
     # Relabels the selected ORF with a chosen (or custom) mitochondrial gene
