@@ -60,6 +60,7 @@ process annotate {
         ignore_scaffolds = '!{opts.ignore_scaffolds}', \
         coverage_trim = !{opts.coverage_trim == 1 ? "TRUE" : "FALSE"}, \
         retain_low_conf_trna = !{opts.retain_low_conf_trna == 1 ? "TRUE" : "FALSE"}, \
+        disable_mitos_pcg = !{params.disable_mitos_pcg ? "TRUE" : "FALSE"}, \
         out_dir = '!{dir}'
     )"
     ### work dir info for troubleshooting ####

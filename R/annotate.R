@@ -54,6 +54,11 @@ annotate <- function(
   coverage_trim = TRUE,
   retain_low_conf_trna = FALSE,
   ignore_scaffolds = NULL,
+  # ===== TEMP (ORF-finder testing): REMOVE LATER ============================
+  # When TRUE, drop MITOS2 PCG annotations so ORF finding has unannotated
+  # regions to act on. Wired through annotate.nf + main.nf params.
+  disable_mitos_pcg = FALSE,
+  # ===== END TEMP ==========================================================
   out_dir = NULL
 ) {
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
@@ -224,6 +229,13 @@ annotate <- function(
     mitos_opts = effective_mitos_opts,
     condaenv = mitos_condaenv
   )
+
+  # ===== TEMP (ORF-finder testing): REMOVE LATER ============================
+  if (isTRUE(disable_mitos_pcg)) {
+    message("[TEMP] disable_mitos_pcg=TRUE: dropping MITOS2 PCG annotations")
+    annotations_mitos <- dplyr::filter(annotations_mitos, type != "PCG")
+  }
+  # ===== END TEMP ==========================================================
 
   # Combine annotations ----
   # Priority: tRNAscan > ARWEN > ARAGORN > MITOS2

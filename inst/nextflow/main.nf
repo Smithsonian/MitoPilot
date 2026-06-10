@@ -7,6 +7,12 @@ import java.time.Instant
 // Time stamp
 params.ts = workflow.start.toInstant().getEpochSecond().toString()
 
+// ===== TEMP (ORF-finder testing): REMOVE LATER ==============================
+// Default off. Set `disable_mitos_pcg = true` in the project .config params
+// block to drop MITOS2 PCG annotations (frees regions for ORF finding).
+params.disable_mitos_pcg = false
+// ===== END TEMP =============================================================
+
 // Modules
 include {PREPROCESS} from './modules/preprocess_workflow.nf'
 include {ASSEMBLE} from './modules/assemble_workflow.nf'
