@@ -198,6 +198,18 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
   samples <- dplyr::tbl(db, "samples") |>
     dplyr::select(-dplyr::any_of("topology"))
 
+  # ORF count per sample, blanked when ORF finding is disabled
+  orf_counts <- dplyr::tbl(db, "annotations") |>
+    dplyr::select(ID, type) |>
+    dplyr::collect() |>
+    dplyr::group_by(ID) |>
+    dplyr::summarise(ORFCount = sum(type == "ORF"))
+  orf_enabled <- dplyr::tbl(db, "annotate") |>
+    dplyr::select(ID, orf_opts) |>
+    dplyr::left_join(dplyr::tbl(db, "orf_opts"), by = "orf_opts") |>
+    dplyr::select(ID, use_orffinder) |>
+    dplyr::collect()
+
   dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, blast_accession, blast_species, blast_lineage,
@@ -213,10 +225,19 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
     dplyr::collect() |>
+    dplyr::left_join(orf_counts, by = "ID") |>
+    dplyr::left_join(orf_enabled, by = "ID") |>
     dplyr::mutate(
       blast_ref_status = poor_blast_ref,
       structure = stringr::str_replace_all(structure, "trn[A-Z]", "\u2022"),
-      export_group = as.character(export_group)
+      export_group = as.character(export_group),
+      ORFCount = dplyr::if_else(
+        is.na(use_orffinder) | use_orffinder != 1L,
+        NA_integer_,
+        as.integer(ORFCount)
+      )
     ) |>
+    dplyr::select(-use_orffinder) |>
+    dplyr::relocate(ORFCount, .after = rRNACount) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession)
 }

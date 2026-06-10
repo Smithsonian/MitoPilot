@@ -5,7 +5,7 @@ ANNOTATE_COL_GROUPS <- list(
   Stats    = c("length_raw", "length", "topology", "scaffolds"),
   BLAST    = c("blast_ref_status", "blast_accession", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Counts   = c("PCGCount", "tRNACount", "rRNACount", "missing", "extra"),
+  Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
   Review   = c("ID_verified", "reviewed", "problematic", "warnings"),
   Metadata = c("time_stamp", "annotate_notes")
 )
@@ -399,6 +399,7 @@ annotate_server <- function(id) {
           PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = "# PCGs", align = "center"),
           tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = "# tRNAs", align = "center"),
           rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = "# rRNAs", align = "center"),
+          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = "# ORFs", align = "center"),
           missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"), name = "Missing", align = "center", html = TRUE, cell = rt_longtext()),
           extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"), name = "Extra", align = "center", html = TRUE, cell = rt_longtext()),
           warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"), name = "Warnings", align = "center"),

@@ -18,13 +18,21 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID, Taxon)
 
   annotations <- dplyr::tbl(db, "annotations") |>
-    dplyr::select(ID, warnings) |>
+    dplyr::select(ID, type, warnings) |>
     dplyr::collect() |>
     dplyr::group_by(ID) |>
     dplyr::summarise(
       warnings_details = warnings[warnings != ""] |>
-        paste(collapse = "; ")
+        paste(collapse = "; "),
+      ORFCount = sum(type == "ORF")
     )
+
+  # use_orffinder per sample, to blank the ORF count when ORF finding is off
+  orf_enabled <- dplyr::tbl(db, "annotate") |>
+    dplyr::select(ID, orf_opts) |>
+    dplyr::left_join(dplyr::tbl(db, "orf_opts"), by = "orf_opts") |>
+    dplyr::select(ID, use_orffinder) |>
+    dplyr::collect()
 
   assemblies_length <- dplyr::tbl(db, "assemblies") |>
     dplyr::filter(ignore != 1) |>
@@ -37,6 +45,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::left_join(annotations, by = "ID") |>
+    dplyr::left_join(orf_enabled, by = "ID") |>
     dplyr::left_join(assemblies_length, by = c("ID", "path")) |>
     dplyr::select(
       annotate_lock,
@@ -60,6 +69,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       PCGCount,
       tRNACount,
       rRNACount,
+      ORFCount,
       missing,
       extra,
       warnings,
@@ -68,8 +78,18 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       time_stamp,
       annotate_notes,
       warnings_details,
+      use_orffinder,
       dplyr::any_of("poor_blast_ref")
     ) |>
+    # Blank the ORF count when ORF finding is disabled for the sample
+    dplyr::mutate(
+      ORFCount = dplyr::if_else(
+        is.na(use_orffinder) | use_orffinder != 1L,
+        NA_integer_,
+        as.integer(ORFCount)
+      )
+    ) |>
+    dplyr::select(-use_orffinder) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession) |>

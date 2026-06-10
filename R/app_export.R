@@ -187,6 +187,7 @@ export_server <- function(id) {
             show = T, class = .grp("structure"), headerClass = .grp("structure"),
             name = "Structure"
           ),
+          ORFCount = colDef(name = "# ORFs", align = "center"),
           export_group = colDef(name = "Group", sticky = "right")
         )
       )
