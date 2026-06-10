@@ -1076,6 +1076,10 @@ annotate_server <- function(id) {
         updateTextInput(inputId = "orffinder_opts", value = cur$orffinder_opts)
       }
     })
+    # Hide the per-run ORF parameters when ORF finding is turned off.
+    observeEvent(input$use_orffinder, ignoreInit = F, {
+      shinyjs::toggle("orf_param_opts", condition = isTRUE(input$use_orffinder))
+    })
     observeEvent(input$edit_orf_opts, ignoreInit = T, {
       shinyjs::toggleState("use_orffinder", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_opts_cpus", condition = input$edit_orf_opts)

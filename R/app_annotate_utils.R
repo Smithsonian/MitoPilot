@@ -514,6 +514,69 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
       current <- rv$orf_opts[rv$orf_opts$orf_opts == "default", ]
     }
 
+    # The per-run parameters are only relevant when ORF finding is enabled, so
+    # they live in one div that is hidden while "Run ORF finder step" is off.
+    orf_on <- isTRUE(as.logical(current$use_orffinder %||% 0L))
+    orf_param_opts <- div(
+      id = ns("orf_param_opts"),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_opts_cpus"), "CPUs:",
+            width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_opts_memory"), "Memory (GB):",
+            width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_min_len"),
+            label = "Min ORF length (nt):",
+            value = current$orf_min_len %||% character(0),
+            min = 30,
+            width = "100%"
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_max_overlap"),
+            label = "Max overlap w/ existing annotations (fraction of ORF length):",
+            value = current$orf_max_overlap %||% character(0),
+            min = 0,
+            max = 1,
+            step = 0.05,
+            width = "100%"
+          ) |> shinyjs::disabled()
+        )
+      ),
+      textInput(
+        ns("orffinder_opts"),
+        label = tagList("ORFfinder options:", tool_help_icon("orffinder")),
+        value = current$orffinder_opts %||% character(0),
+        width = "100%"
+      ) |> shinyjs::disabled(),
+      helpText(
+        "The genetic code (-g) and minimum length (-ml) are set automatically",
+        "from the project genetic code and the Min ORF length above; do not set",
+        "them here."
+      )
+    )
+    if (!orf_on) orf_param_opts <- shinyjs::hidden(orf_param_opts)
+
     showModal(
       modalDialog(
         title = stringr::str_glue("Setting ORF-finder Options for {nrow(rv$updating)} Samples"),
@@ -550,61 +613,7 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("orf_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("orf_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        ),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("orf_min_len"),
-              label = "Min ORF length (nt):",
-              value = current$orf_min_len %||% character(0),
-              min = 30,
-              width = "100%"
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("orf_max_overlap"),
-              label = "Max overlap w/ existing annotations (fraction of ORF length):",
-              value = current$orf_max_overlap %||% character(0),
-              min = 0,
-              max = 1,
-              step = 0.05,
-              width = "100%"
-            ) |> shinyjs::disabled()
-          )
-        ),
-        textInput(
-          ns("orffinder_opts"),
-          label = tagList("ORFfinder options:", tool_help_icon("orffinder")),
-          value = current$orffinder_opts %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
-        helpText(
-          "The genetic code (-g) and minimum length (-ml) are set automatically",
-          "from the project genetic code and the Min ORF length above; do not set",
-          "them here."
-        ),
+        orf_param_opts,
         size = "m",
         footer = tagList(
           actionButton(ns("update_orf_opts"), "Update"),
