@@ -57,12 +57,12 @@ ruleset_browser <- function(output_file = tempfile(fileext = ".html"),
     ascidiacea_mito      = list(label = "Sea squirts",     ncbi = "Ascidiacea",       taxid = "7713"),
     bivalvia_mito        = list(label = "Bivalves",        ncbi = "Bivalvia",         taxid = "6544"),
     bryozoa_mito         = list(label = "Bryozoans",       ncbi = "Bryozoa",          taxid = "10205"),
-    crinoidea_mito       = list(label = "Crinoids",        ncbi = "Crinoidea",        taxid = "7589"),
+    crinoidea_mito       = list(label = "Crinoids",        ncbi = "Crinoidea",        taxid = "35069"),
     demospongiae_mito    = list(label = "Demosponges",     ncbi = "Demospongiae",     taxid = "6042"),
     echinoidea_mito      = list(label = "Sea urchins",     ncbi = "Echinoidea",       taxid = "7625"),
     gastropoda_mito      = list(label = "Gastropods",      ncbi = "Gastropoda",       taxid = "6448"),
     holothuroidea_mito   = list(label = "Sea cucumbers",   ncbi = "Holothuroidea",    taxid = "7705"),
-    homoscleromorpha_mito = list(label = "Homoscleromorph sponges", ncbi = "Homoscleromorpha", taxid = "1417783"),
+    homoscleromorpha_mito = list(label = "Homoscleromorph sponges", ncbi = "Homoscleromorpha", taxid = "80999"),
     malacostraca_mito    = list(label = "Malacostracans",  ncbi = "Malacostraca",     taxid = "6681"),
     hydrozoa_mito        = list(label = "Hydrozoans",      ncbi = "Hydrozoa",         taxid = "6074"),
     nemertea_mito        = list(label = "Ribbon worms",    ncbi = "Nemertea",         taxid = "6217"),
@@ -70,9 +70,9 @@ ruleset_browser <- function(output_file = tempfile(fileext = ".html"),
     platyhelminthes_mito = list(label = "Flatworms",       ncbi = "Platyhelminthes",  taxid = "6157"),
     polychaeta_mito      = list(label = "Polychaetes",     ncbi = "Polychaeta",       taxid = "6341"),
     pycnogonida_mito     = list(label = "Sea spiders",     ncbi = "Pycnogonida",      taxid = "57294"),
-    sipuncula_mito       = list(label = "Peanut worms",    ncbi = "Sipuncula",        taxid = "6519"),
-    thaliacea_mito       = list(label = "Salps",           ncbi = "Thaliacea",        taxid = "7166"),
-    thecostraca_mito     = list(label = "Barnacles",       ncbi = "Thecostraca",      taxid = "72809")
+    sipuncula_mito       = list(label = "Peanut worms",    ncbi = "Sipuncula",        taxid = "6433"),
+    thaliacea_mito       = list(label = "Salps",           ncbi = "Thaliacea",        taxid = "30304"),
+    thecostraca_mito     = list(label = "Barnacles",       ncbi = "Thecostraca",      taxid = "116172")
   )
 
   if (!is.null(targets)) {
