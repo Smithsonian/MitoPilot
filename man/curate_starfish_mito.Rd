@@ -2,7 +2,7 @@
 % Please edit documentation in R/curate_starfish_mito.R
 \name{curate_starfish_mito}
 \alias{curate_starfish_mito}
-\title{Annotation curation for starfish mitogenomes}
+\title{Annotation curation for sea star mitogenomes}
 \usage{
 curate_starfish_mito(
   annotations_fn = NULL,
@@ -40,5 +40,6 @@ base64 encoded json string.}
 \item{feature_trim}{Trim feature coordinates to assembly boundaries (default = TRUE)}
 }
 \description{
-Annotation curation for starfish mitogenomes
+Thin wrapper around the shared curation core with the sea star genetic code.
+See `curate_mito_core()` for the full argument list and behavior.
 }

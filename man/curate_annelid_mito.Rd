@@ -40,5 +40,6 @@ base64 encoded json string.}
 \item{feature_trim}{Trim feature coordinates to assembly boundaries (default = TRUE)}
 }
 \description{
-Annotation curation for annelid mitogenomes
+Thin wrapper around the shared curation core with the annelid genetic code.
+See `curate_mito_core()` for the full argument list and behavior.
 }
