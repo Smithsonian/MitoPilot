@@ -456,7 +456,10 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           selectizeInput(
             ns("target"),
             label = "Target:",
-            choices = sort(c("fish_mito",
+            # Values keep the "_mito" suffix (used for params_/curate_/validate_
+            # dispatch); labels strip it for cleaner display.
+            choices = local({
+              tg <- sort(c("fish_mito",
                         "lepidosaur_mito",
                         "turtle_mito",
                         "mammal_mito",
@@ -487,7 +490,9 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                         "sipuncula_mito",
                         "thaliacea_mito",
                         "thecostraca_mito"
-                      )),
+                      ))
+              stats::setNames(tg, sub("_mito$", "", tg))
+            }),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(
