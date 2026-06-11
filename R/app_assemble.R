@@ -45,6 +45,7 @@ assemble_ui <- function(id) {
       style = "display: flex; flex-flow: row wrap; gap: 1em; align-items: flex-end;",
       shinyWidgets::pickerInput(
         inputId  = ns("lock_filter"),
+        width    = "140px",
         label    = "Lock:",
         choices  = ASSEMBLE_LOCK_CHOICES,
         selected = ASSEMBLE_LOCK_CHOICES,
@@ -59,6 +60,7 @@ assemble_ui <- function(id) {
       ),
       shinyWidgets::pickerInput(
         inputId  = ns("state_filter"),
+        width    = "140px",
         label    = "State:",
         choices  = ASSEMBLE_STATE_CHOICES,
         selected = ASSEMBLE_STATE_CHOICES,
@@ -73,6 +75,7 @@ assemble_ui <- function(id) {
       ),
       shinyWidgets::pickerInput(
         inputId  = ns("col_groups"),
+        width    = "150px",
         label    = "Show columns:",
         choices  = names(ASSEMBLE_COL_GROUPS),
         selected = names(ASSEMBLE_COL_GROUPS),

@@ -44,6 +44,7 @@ export_ui <- function(id) {
     uiOutput(ns("col_css")),
     shinyWidgets::pickerInput(
       inputId  = ns("col_groups"),
+      width    = "150px",
       label    = "Show columns:",
       choices  = names(EXPORT_COL_GROUPS),
       selected = names(EXPORT_COL_GROUPS),

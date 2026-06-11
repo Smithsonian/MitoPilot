@@ -47,6 +47,7 @@ annotate_ui <- function(id) {
         style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
         shinyWidgets::pickerInput(
           inputId  = ns("lock_filter"),
+          width    = "140px",
           label    = "Lock:",
           choices  = ANNOTATE_LOCK_CHOICES,
           selected = ANNOTATE_LOCK_CHOICES,
@@ -61,6 +62,7 @@ annotate_ui <- function(id) {
         ),
         shinyWidgets::pickerInput(
           inputId  = ns("state_filter"),
+          width    = "140px",
           label    = "State:",
           choices  = ANNOTATE_STATE_CHOICES,
           selected = ANNOTATE_STATE_CHOICES,
@@ -75,6 +77,7 @@ annotate_ui <- function(id) {
         ),
         shinyWidgets::pickerInput(
           inputId  = ns("col_groups"),
+          width    = "150px",
           label    = "Show columns:",
           choices  = names(ANNOTATE_COL_GROUPS),
           selected = names(ANNOTATE_COL_GROUPS),
@@ -154,6 +157,7 @@ annotate_server <- function(id) {
       # Use pickerInput to create a dropdown with checkboxes
       shinyWidgets::pickerInput(
         inputId = ns("warning_filters"),
+        width = "220px",
         label = "Warnings column includes:",
         choices = warn_vals,
         selected = isolate(input$warning_filters) %||% warn_vals, # default to all selected
