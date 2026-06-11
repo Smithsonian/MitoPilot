@@ -109,7 +109,7 @@ coverage <- function(
   # Reform circular assembly ---
   if (circular && length(seq_ids) == 1) {
     to_move <- coverage$Position > assembly_len
-    coverage$Position[to_move] <- seq_len(sum(to_move))
+    coverage$Position[to_move] <- coverage$Position[to_move] - assembly_len
     coverage <- coverage |>
       dplyr::summarise(
         Call = Call[1],

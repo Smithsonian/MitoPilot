@@ -284,7 +284,7 @@ annotate <- function(
     dplyr::mutate(annotations_mitos,    tool = "MITOS2")
   ) |>
     dplyr::select(-dplyr::any_of("tRNA_ID")) |> # remove temporary tRNA_ID column
-    dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnS1|tnrS2", "trnS")) |> # Rename trnS1 and trnS2 to trnS
+    dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnS1|trnS2", "trnS")) |> # Rename trnS1 and trnS2 to trnS
     dplyr::mutate(dplyr::across("gene", stringr::str_replace, "trnL1|trnL2", "trnL")) # Rename trnL1 and trnL2 to trnL
   # Drop low-confidence "NNN"-anticodon tRNAs from the final output unless the user
   # chose to retain them.
