@@ -210,6 +210,12 @@ curate_mito_core <- function(
       ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
         stringr::str_glue()
 
+      # No reference DB for this gene (e.g. a novel ORF without a built
+      # featureProt FASTA): skip BLAST so curation does not error.
+      if (!file.exists(as.character(ref_db))) {
+        return('{}')
+      }
+
       out <- get_top_hits(ref_db, translation, max_blast_hits) |>
         json_string()
       out %||% '{}'

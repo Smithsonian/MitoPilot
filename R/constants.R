@@ -14,17 +14,28 @@ MITO_PCG_GENES <- c(
 MITO_RRNA_GENES <- c("rrnL", "rrnS")
 
 #' Standard mitochondrial tRNA genes
+#'
+#' `trnX` is an "undetermined tRNA" placeholder used by some invertebrate
+#' rulesets (e.g. bivalves) for tRNAs whose identity cannot be resolved.
 #' @noRd
 MITO_TRNA_GENES <- c(
   "trnA", "trnC", "trnD", "trnE", "trnF", "trnG", "trnH", "trnI", "trnK",
   "trnL", "trnM", "trnN", "trnP", "trnQ", "trnR", "trnS", "trnT", "trnV",
-  "trnW", "trnY"
+  "trnW", "trnY", "trnX"
+)
+
+#' Additional protein-coding genes used by some clade rulesets beyond the
+#' standard 13 (extra mitochondrial ORFs / accessory genes found in
+#' invertebrate and sponge mitogenomes).
+#' @noRd
+MITO_EXTRA_PCG_GENES <- c(
+  "atp9", "mttb", "msh1", "dpo", "lagli", "rvt", "dnaB", "im"
 )
 
 #' Flat list of canonical mitochondrial gene names (rRNA, PCG, tRNA), ordered for
 #' use as selectInput choices.
 #' @noRd
-MITO_GENE_CHOICES <- c(MITO_RRNA_GENES, MITO_PCG_GENES, MITO_TRNA_GENES)
+MITO_GENE_CHOICES <- c(MITO_RRNA_GENES, MITO_PCG_GENES, MITO_EXTRA_PCG_GENES, MITO_TRNA_GENES)
 
 #' Minimum BLAST similarity (%) for an auto-suggested ORF gene assignment.
 #' @noRd
