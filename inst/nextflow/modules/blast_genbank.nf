@@ -46,7 +46,7 @@ process blast_genbank {
     export NCBI_API_KEY='!{params.ncbi_api_key ?: ""}'
     blastn \
         -remote \
-        -db nt \
+        -db core_nt \
         -query !{assembly} \
         -outfmt "6 qseqid saccver stitle pident qcovs evalue" \
         -max_target_seqs 1 \
