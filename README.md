@@ -68,9 +68,11 @@ However, MitoPilot has been developed with modularity and extensibility
 in mind to facilitate broader application in the future.
 
 MitoPilot allows the user to provide custom reference databases for
-assembly with GetOrganelle or MitoFinder. We have provided some
+assembly with GetOrganelle or MitoFinder. The
+`MitoPilot::custom_assembly_db()` function can build these databases for
+you from a clade name, with no external tools required. See our
 [documentation](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html)
-to help you build a custom reference database.
+for details.
 
 For annotation with MITOS2, we have provided reference databases for
 [chordates](https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Chordata)
