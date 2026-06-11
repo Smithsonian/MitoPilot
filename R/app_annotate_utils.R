@@ -456,42 +456,12 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           selectizeInput(
             ns("target"),
             label = "Target:",
-            # Values keep the "_mito" suffix (used for params_/curate_/validate_
-            # dispatch); labels strip it for cleaner display.
+            # Values = full keys (dispatch); labels = "Scientific (common)".
             choices = local({
-              tg <- sort(c("fish_mito",
-                        "lepidosaur_mito",
-                        "turtle_mito",
-                        "mammal_mito",
-                        "starfish_mito",
-                        "diptera_mito",
-                        "copepod_mito",
-                        "octocoral_mito",
-                        "hexacoral_mito",
-                        "ctenophore_mito",
-                        "bird_mito",
-                        "annelid_mito",
-                        "ascidiacea_mito",
-                        "bivalvia_mito",
-                        "bryozoa_mito",
-                        "crinoidea_mito",
-                        "demospongiae_mito",
-                        "echinoidea_mito",
-                        "gastropoda_mito",
-                        "holothuroidea_mito",
-                        "homoscleromorpha_mito",
-                        "malacostraca_mito",
-                        "hydrozoa_mito",
-                        "nemertea_mito",
-                        "ophiuroidea_mito",
-                        "platyhelminthes_mito",
-                        "polychaeta_mito",
-                        "pycnogonida_mito",
-                        "sipuncula_mito",
-                        "thaliacea_mito",
-                        "thecostraca_mito"
-                      ))
-              stats::setNames(tg, sub("_mito$", "", tg))
+              tg <- sort(names(RULESET_MAP))
+              stats::setNames(tg, vapply(tg, function(k)
+                paste0(RULESET_MAP[[k]]$ncbi, " (", RULESET_MAP[[k]]$label, ")"),
+                character(1)))
             }),
             selected = current$target %||% character(0),
             width = "100%",

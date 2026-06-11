@@ -33,47 +33,49 @@
 #' }
 #'
 #' @export
+## Mapping: ruleset target -> human label + NCBI anchor clade
+## NCBI taxids avoid name collisions (e.g. "Ctenophora" is also a diatom genus).
+## @noRd
+RULESET_MAP <- list(
+  fish_mito       = list(label = "Fishes",       ncbi = "Actinopterygii", taxid = "7898"),
+  bird_mito       = list(label = "Birds",        ncbi = "Aves",           taxid = "8782"),
+  turtle_mito     = list(label = "Turtles",      ncbi = "Testudines",     taxid = "8459"),
+  mammal_mito     = list(label = "Mammals",      ncbi = "Mammalia",       taxid = "40674"),
+  lepidosaur_mito = list(label = "Lepidosaurs",  ncbi = "Lepidosauria",   taxid = "8504"),
+  starfish_mito   = list(label = "Sea stars",    ncbi = "Asteroidea",     taxid = "7588"),
+  diptera_mito    = list(label = "True flies",   ncbi = "Diptera",        taxid = "7147"),
+  copepod_mito    = list(label = "Copepods",     ncbi = "Copepoda",       taxid = "6830"),
+  octocoral_mito  = list(label = "Octocorals",   ncbi = "Octocorallia",   taxid = "6132"),
+  hexacoral_mito  = list(label = "Hexacorals",   ncbi = "Hexacorallia",   taxid = "6102"),
+  ctenophore_mito = list(label = "Ctenophores",  ncbi = "Ctenophora",     taxid = "10197"),
+  annelid_mito    = list(label = "Annelids",     ncbi = "Annelida",       taxid = "6340"),
+  ascidiacea_mito      = list(label = "Sea squirts",     ncbi = "Ascidiacea",       taxid = "7713"),
+  bivalvia_mito        = list(label = "Bivalves",        ncbi = "Bivalvia",         taxid = "6544"),
+  bryozoa_mito         = list(label = "Bryozoans",       ncbi = "Bryozoa",          taxid = "10205"),
+  crinoidea_mito       = list(label = "Crinoids",        ncbi = "Crinoidea",        taxid = "35069"),
+  demospongiae_mito    = list(label = "Demosponges",     ncbi = "Demospongiae",     taxid = "6042"),
+  echinoidea_mito      = list(label = "Sea urchins",     ncbi = "Echinoidea",       taxid = "7625"),
+  gastropoda_mito      = list(label = "Gastropods",      ncbi = "Gastropoda",       taxid = "6448"),
+  holothuroidea_mito   = list(label = "Sea cucumbers",   ncbi = "Holothuroidea",    taxid = "7705"),
+  homoscleromorpha_mito = list(label = "Homoscleromorph sponges", ncbi = "Homoscleromorpha", taxid = "80999"),
+  malacostraca_mito    = list(label = "Malacostracans",  ncbi = "Malacostraca",     taxid = "6681"),
+  hydrozoa_mito        = list(label = "Hydrozoans",      ncbi = "Hydrozoa",         taxid = "6074"),
+  nemertea_mito        = list(label = "Ribbon worms",    ncbi = "Nemertea",         taxid = "6217"),
+  ophiuroidea_mito     = list(label = "Brittle stars",   ncbi = "Ophiuroidea",      taxid = "7618"),
+  platyhelminthes_mito = list(label = "Flatworms",       ncbi = "Platyhelminthes",  taxid = "6157"),
+  polychaeta_mito      = list(label = "Polychaetes",     ncbi = "Polychaeta",       taxid = "6341"),
+  pycnogonida_mito     = list(label = "Sea spiders",     ncbi = "Pycnogonida",      taxid = "57294"),
+  sipuncula_mito       = list(label = "Peanut worms",    ncbi = "Sipuncula",        taxid = "6433"),
+  thaliacea_mito       = list(label = "Salps",           ncbi = "Thaliacea",        taxid = "30304"),
+  thecostraca_mito     = list(label = "Barnacles",       ncbi = "Thecostraca",      taxid = "116172")
+)
+
 ruleset_browser <- function(output_file = tempfile(fileext = ".html"),
                             open = interactive(),
                             refresh_cache = FALSE,
                             targets = NULL) {
 
-  # Mapping: ruleset target -> human label + NCBI anchor clade ----
-  # NCBI taxids are used (rather than names) to avoid taxonomic name collisions,
-  # e.g. "Ctenophora" is also a genus of diatoms and a genus of crane flies.
-  ruleset_map <- list(
-    fish_mito       = list(label = "Fishes",       ncbi = "Actinopterygii", taxid = "7898"),
-    bird_mito       = list(label = "Birds",        ncbi = "Aves",           taxid = "8782"),
-    turtle_mito     = list(label = "Turtles",      ncbi = "Testudines",     taxid = "8459"),
-    mammal_mito     = list(label = "Mammals",      ncbi = "Mammalia",       taxid = "40674"),
-    lepidosaur_mito = list(label = "Lepidosaurs",  ncbi = "Lepidosauria",   taxid = "8504"),
-    starfish_mito   = list(label = "Sea stars",    ncbi = "Asteroidea",     taxid = "7588"),
-    diptera_mito    = list(label = "True flies",   ncbi = "Diptera",        taxid = "7147"),
-    copepod_mito    = list(label = "Copepods",     ncbi = "Copepoda",       taxid = "6830"),
-    octocoral_mito  = list(label = "Octocorals",   ncbi = "Octocorallia",   taxid = "6132"),
-    hexacoral_mito  = list(label = "Hexacorals",   ncbi = "Hexacorallia",   taxid = "6102"),
-    ctenophore_mito = list(label = "Ctenophores",  ncbi = "Ctenophora",     taxid = "10197"),
-    annelid_mito    = list(label = "Annelids",     ncbi = "Annelida",       taxid = "6340"),
-    ascidiacea_mito      = list(label = "Sea squirts",     ncbi = "Ascidiacea",       taxid = "7713"),
-    bivalvia_mito        = list(label = "Bivalves",        ncbi = "Bivalvia",         taxid = "6544"),
-    bryozoa_mito         = list(label = "Bryozoans",       ncbi = "Bryozoa",          taxid = "10205"),
-    crinoidea_mito       = list(label = "Crinoids",        ncbi = "Crinoidea",        taxid = "35069"),
-    demospongiae_mito    = list(label = "Demosponges",     ncbi = "Demospongiae",     taxid = "6042"),
-    echinoidea_mito      = list(label = "Sea urchins",     ncbi = "Echinoidea",       taxid = "7625"),
-    gastropoda_mito      = list(label = "Gastropods",      ncbi = "Gastropoda",       taxid = "6448"),
-    holothuroidea_mito   = list(label = "Sea cucumbers",   ncbi = "Holothuroidea",    taxid = "7705"),
-    homoscleromorpha_mito = list(label = "Homoscleromorph sponges", ncbi = "Homoscleromorpha", taxid = "80999"),
-    malacostraca_mito    = list(label = "Malacostracans",  ncbi = "Malacostraca",     taxid = "6681"),
-    hydrozoa_mito        = list(label = "Hydrozoans",      ncbi = "Hydrozoa",         taxid = "6074"),
-    nemertea_mito        = list(label = "Ribbon worms",    ncbi = "Nemertea",         taxid = "6217"),
-    ophiuroidea_mito     = list(label = "Brittle stars",   ncbi = "Ophiuroidea",      taxid = "7618"),
-    platyhelminthes_mito = list(label = "Flatworms",       ncbi = "Platyhelminthes",  taxid = "6157"),
-    polychaeta_mito      = list(label = "Polychaetes",     ncbi = "Polychaeta",       taxid = "6341"),
-    pycnogonida_mito     = list(label = "Sea spiders",     ncbi = "Pycnogonida",      taxid = "57294"),
-    sipuncula_mito       = list(label = "Peanut worms",    ncbi = "Sipuncula",        taxid = "6433"),
-    thaliacea_mito       = list(label = "Salps",           ncbi = "Thaliacea",        taxid = "30304"),
-    thecostraca_mito     = list(label = "Barnacles",       ncbi = "Thecostraca",      taxid = "116172")
-  )
+  ruleset_map <- RULESET_MAP
 
   if (!is.null(targets)) {
     bad <- setdiff(targets, names(ruleset_map))
