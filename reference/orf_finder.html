@@ -100,7 +100,7 @@ annotations named `ORF.1`, `ORF.2`, ... with `type = "ORF"`.</p>
 
 <dt id="arg-orffinder-opts">orffinder_opts<a class="anchor" aria-label="anchor" href="#arg-orffinder-opts"></a></dt>
 <dd><p>Extra ORFfinder command-line options (default:
-"-s 1 -n true"). `-g` and `-ml` are supplied from `genetic_code`/`orf_min_len`.</p></dd>
+"-s 1"). `-g`, `-ml`, and `-n` are set automatically; do not include them here.</p></dd>
 
 
 <dt id="arg-orffinder-condaenv">orffinder_condaenv<a class="anchor" aria-label="anchor" href="#arg-orffinder-condaenv"></a></dt>
@@ -115,6 +115,10 @@ annotations named `ORF.1`, `ORF.2`, ... with `type = "ORF"`.</p>
 <dt id="arg-orf-max-overlap">orf_max_overlap<a class="anchor" aria-label="anchor" href="#arg-orf-max-overlap"></a></dt>
 <dd><p>Maximum overlap with existing annotations, as a fraction
 of the ORF length, before an ORF is discarded (default: 0.1).</p></dd>
+
+
+<dt id="arg-orf-nested">orf_nested<a class="anchor" aria-label="anchor" href="#arg-orf-nested"></a></dt>
+<dd><p>Logical; if TRUE pass <code>-n false</code> to ORFfinder so nested/overlapping ORFs are reported (default: FALSE).</p></dd>
 
 
 <dt id="arg-ref-dir">ref_dir<a class="anchor" aria-label="anchor" href="#arg-ref-dir"></a></dt>

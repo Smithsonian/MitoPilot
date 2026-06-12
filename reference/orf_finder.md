@@ -44,8 +44,8 @@ orf_finder(
 
 - orffinder_opts:
 
-  Extra ORFfinder command-line options (default: "-s 1 -n true"). \`-g\`
-  and \`-ml\` are supplied from \`genetic_code\`/\`orf_min_len\`.
+  Extra ORFfinder command-line options (default: "-s 1"). \`-g\`,
+  \`-ml\`, and \`-n\` are set automatically; do not include them here.
 
 - orffinder_condaenv:
 
@@ -60,6 +60,11 @@ orf_finder(
 
   Maximum overlap with existing annotations, as a fraction of the ORF
   length, before an ORF is discarded (default: 0.1).
+
+- orf_nested:
+
+  Logical; if TRUE pass `-n false` to ORFfinder so nested/overlapping
+  ORFs are reported (default: FALSE).
 
 - ref_dir:
 

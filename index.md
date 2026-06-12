@@ -308,10 +308,10 @@ function.
 
 ### Initializing a Project with User Assemblies
 
-MitoPilot can also initialize a project with user-supplied mitogenome
+MitoPilot can initialize a project with user-supplied mitogenome
 assemblies. This may be helpful if you have existing assemblies and only
 wish to utilize the annotation and curation features of MitoPilot.
-Alternatively, you could use this approach to “re-import” assemblies
+Alternatively, you can use this approach to “re-import” assemblies
 produced by MitoPilot that required manual editing with an external
 tool.
 
