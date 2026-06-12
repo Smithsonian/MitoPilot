@@ -27,6 +27,17 @@ assembly_coverage_details_server <- function(id, rv) {
           view_coverage = NA_character_
         )
 
+      # Too-complex guard: multiple raw paths AND at least one fragmented path
+      # (>1 scaffold). The alignment/consensus tools assume one scaffold per
+      # path, so disable them here and point the user to the assembly outputs.
+      raw_asmb <- rv$focal_assembly |> dplyr::filter(path > 0)
+      rv$asmb_complex <- dplyr::n_distinct(raw_asmb$path) > 1 &&
+        nrow(raw_asmb) > 0 && max(table(raw_asmb$path)) > 1
+      rv$asmb_dir <- file.path(
+        session$userData$dir_out, rv$updating$ID, "assemble",
+        rv$updating$assemble_opts
+      )
+
       # Score paths (recommend-only) ----
       # Read each path's coverageStats CSV (all scaffolds) to feed depth/error
       # into the scoring engine, then merge per-path score/flags onto the table.
@@ -70,6 +81,20 @@ assembly_coverage_details_server <- function(id, rv) {
           )
         ),
         size = "l",
+        if (isTRUE(rv$asmb_complex)) {
+          div(
+            style = paste("margin-bottom: 12px; padding: 10px; border: 1px solid #E55330;",
+                          "border-radius: 4px; background: #fdf3f0; font-size: 0.9em;"),
+            tags$b("This assembly is too complex for guided review."),
+            div(style = "margin-top: 6px;",
+                paste("The sample has multiple assembly paths and at least one path",
+                      "split across multiple scaffolds. The alignment and consensus",
+                      "tools are disabled for this case. Please inspect the assembly",
+                      "outputs manually:")),
+            tags$code(style = "display: block; margin-top: 6px; word-break: break-all;",
+                      rv$asmb_dir)
+          )
+        },
         div(
           style = "margin-bottom: 8px; font-size: 0.9em; color: #555;",
           "Multiple assembly paths? ",
@@ -181,8 +206,8 @@ assembly_coverage_details_server <- function(id, rv) {
     selected <- reactive(reactable::getReactableState("table", "selected"))
     observe({
       shinyjs::toggle("clip", condition = length(selected()) > 0)
-      shinyjs::toggle("align", condition = length(selected()) > 1)
-      shinyjs::toggle("msa_div", condition = length(selected()) > 1)
+      shinyjs::toggle("align", condition = !isTRUE(rv$asmb_complex) && length(selected()) > 1)
+      shinyjs::toggle("msa_div", condition = !isTRUE(rv$asmb_complex) && length(selected()) > 1)
     })
 
     # Ignore bttn ----
@@ -710,7 +735,7 @@ assembly_coverage_details_server <- function(id, rv) {
       )
     })
 
-    # Shared zoom window (current block ± padding) ----
+    # Shared zoom window (current block +/- padding) ----
     # Padding (bp) shown on either side of the current conflict block in the
     # zoomed views. Shared so the nucleotide alignment, depth/error bars, and
     # the minimap marker all cover exactly the same window.
