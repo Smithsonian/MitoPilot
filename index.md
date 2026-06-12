@@ -99,7 +99,7 @@ groups of organisms:
   progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
 - [Mammalia - Mammals
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
-- [Lepidosauria - Lepidosaurs
+- [Lepidosauria - Lizards and snakes
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
 - [Aves - Birds
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
