@@ -70,7 +70,7 @@ annotate <- function(
     }
   }
 
-  # Load coverage stats (always, when available — used for trimming and output)
+  # Load coverage stats (always, when available - used for trimming and output)
   if (length(coverage_fn) == 1L && file.exists(coverage_fn)) {
     coverage <- read.csv(coverage_fn) |>
       dplyr::arrange(SeqId, Position) |>

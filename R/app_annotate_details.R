@@ -2708,11 +2708,11 @@ annotations_details_server <- function(id, rv) {
       suggestion_ui <- if (is_assigned) {
         NULL
       } else if (!is.null(guess)) {
-        txt <- stringr::str_glue("Suggested: {guess$gene} — {round(guess$similarity, 1)}% similarity")
+        txt <- stringr::str_glue("Suggested: {guess$gene} - {round(guess$similarity, 1)}% similarity")
         if (!is.na(guess$taxon)) txt <- paste0(txt, " to ", guess$taxon)
         helpText(txt)
       } else {
-        helpText("No confident BLAST match — pick a gene name manually.")
+        helpText("No confident BLAST match - pick a gene name manually.")
       }
 
       showModal(modalDialog(

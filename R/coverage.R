@@ -176,7 +176,7 @@ coverage <- function(
     ) |>
     dplyr::filter(Val == 1)
 
-  # Coverage plot — one PDF per scaffold ----
+  # Coverage plot - one PDF per scaffold ----
   for (seq_id in unique(stats_long$SeqId)) {
     scaffold_num <- stringr::str_extract(seq_id, "[0-9]+$")
 

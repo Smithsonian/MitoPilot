@@ -59,7 +59,7 @@ annotate_arwen <- function(
 
   for (line in raw) {
     if (startsWith(line, ">")) {
-      # Header is ">seq_name [topology]" — take only the sequence name
+      # Header is ">seq_name [topology]" - take only the sequence name
       current_seq <- stringr::str_extract(line, "(?<=>)\\S+")
       next
     }

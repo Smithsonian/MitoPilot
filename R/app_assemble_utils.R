@@ -19,9 +19,9 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(assemble_opts, min_assembly_length)
 
   # Per-sample BLAST display rule (n_total = rows in assemblies for this ID):
-  #   n_total NA               → keep sample-level value (assembly not yet run)
-  #   n_kept == 1              → show kept scaffold's BLAST
-  #   n_kept != 1 (incl. 0)    → blank
+  #   n_total NA               -> keep sample-level value (assembly not yet run)
+  #   n_kept == 1              -> show kept scaffold's BLAST
+  #   n_kept != 1 (incl. 0)    -> blank
   blast_cols <- c("blast_accession", "blast_species", "blast_pident",
                   "blast_qcovs", "blast_evalue", "blast_lineage")
 
