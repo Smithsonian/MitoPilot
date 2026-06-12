@@ -72,7 +72,7 @@ in mind to facilitate broader application in the future.
 MitoPilot allows the user to provide custom reference databases for
 assembly with GetOrganelle or MitoFinder. The
 `MitoPilot::custom_assembly_db()` function can build these databases for
-you from a clade name, with no external tools required. See our
+a clade automatically, no external tools required. See our
 [documentation](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html)
 for details.
 
@@ -172,6 +172,8 @@ Curation reference databases can be specified independently of the
 annotation reference databases. We have provided curation databases for
 chordates and metazoans (RefSeq 89 or RefSeq 231). Users can also
 provide custom databases to improve the automatic curation step.
+Additionally, MitoPilot will automatically incorporate the assembly
+BLAST results into the curation databases.
 
 # Installation
 
