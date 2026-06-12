@@ -79,68 +79,68 @@ the future.
 Currently, MitoPilot has curation/validation rulesets for the following
 groups of organisms:
 
-- [Actinopterygii
-  (fishes)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
-- [Asteroidea (sea
-  stars)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
-- [Octocorallia
-  (octocorals)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
-- [Hexacorallia
-  (hexacorals)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
-- [Diptera (true
-  flies)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
-- [Testudines
-  (turtles)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
-- [Copepoda (copepods, testing in
+- [Actinopterygii - Ray-finned
+  fishes](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
+- [Asteroidea - Sea
+  stars](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
+- [Octocorallia -
+  Octocorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
+- [Hexacorallia -
+  Hexacorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
+- [Diptera - True
+  flies](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
+- [Testudines -
+  Turtles](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
+- [Copepoda - Copepods (testing in
   progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
-- [Ctenophora (ctenophores, testing in
+- [Ctenophora - Ctenophores (testing in
   progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
-- [Annelida (annelids, testing in
+- [Annelida - Annelids (testing in
   progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
-- [Mammalia (mammals,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
-- [Lepidosauria (lepidosaurs,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
-- [Aves (birds,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
-- [Ascidiacea (sea squirts,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
-- [Bivalvia (bivalves,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
-- [Bryozoa (bryozoans,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
-- [Crinoidea (crinoids,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
-- [Demospongiae (demosponges,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
-- [Echinoidea (sea urchins,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
-- [Gastropoda (gastropods,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
-- [Holothuroidea (sea cucumbers,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
-- [Homoscleromorpha (homoscleromorph sponges,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
-- [Malacostraca (malacostracans,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
-- [Hydrozoa (hydrozoans,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
-- [Nemertea (ribbon worms,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
-- [Ophiuroidea (brittle stars,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
-- [Platyhelminthes (flatworms,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/)
-- [Polychaeta (polychaetes,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
-- [Pycnogonida (sea spiders,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
-- [Sipuncula (peanut worms,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
-- [Thaliacea (salps,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
-- [Thecostraca (barnacles,
-  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/)
+- [Mammalia - Mammals
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
+- [Lepidosauria - Lepidosaurs
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
+- [Aves - Birds
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
+- [Ascidiacea - Sea squirts
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
+- [Bivalvia - Bivalves
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
+- [Bryozoa - Bryozoans
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
+- [Crinoidea - Crinoids
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
+- [Demospongiae - Demosponges
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
+- [Echinoidea - Sea urchins
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
+- [Gastropoda - Gastropods
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
+- [Holothuroidea - Sea cucumbers
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
+- [Homoscleromorpha - Homoscleromorph sponges
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
+- [Malacostraca - Malacostracans
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
+- [Hydrozoa - Hydrozoans
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
+- [Nemertea - Ribbon worms
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
+- [Ophiuroidea - Brittle stars
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
+- [Platyhelminthes - Flatworms
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/)
+- [Polychaeta - Polychaetes
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
+- [Pycnogonida - Sea spiders
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
+- [Sipuncula - Peanut worms
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
+- [Thaliacea - Salps
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
+- [Thecostraca - Barnacles
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/)
 
 See the [curation ruleset
 browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)

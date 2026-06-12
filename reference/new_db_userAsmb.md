@@ -27,7 +27,7 @@ new_db_userAsmb(
   curate_params = NULL,
   orf_cpus = 4,
   orf_memory = 8,
-  orffinder_opts = "-s 1 -n true",
+  orffinder_opts = "-s 1",
   orf_min_len = 300,
   orf_max_overlap = 0.1,
   min_assembly_length = 500
@@ -121,7 +121,7 @@ new_db_userAsmb(
 
 - orffinder_opts:
 
-  Default NCBI ORFfinder options (default = "-s 1 -n true")
+  Default NCBI ORFfinder options (default = "-s 1")
 
 - orf_min_len:
 
