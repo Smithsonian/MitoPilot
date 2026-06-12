@@ -87,37 +87,68 @@ the future.
 Currently, MitoPilot has curation/validation rulesets for the following
 groups of organisms:
 
-- [Actinopterygii - Ray-finned fishes](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
-- [Asteroidea - Sea stars](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
-- [Octocorallia - Octocorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
-- [Hexacorallia - Hexacorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
-- [Diptera - True flies](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
-- [Testudines - Turtles](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
-- [Copepoda - Copepods (testing in progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
-- [Ctenophora - Ctenophores (testing in progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
-- [Annelida - Annelids (testing in progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
-- [Mammalia - Mammals (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
-- [Lepidosauria - Lepidosaurs (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
-- [Aves - Birds (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
-- [Ascidiacea - Sea squirts (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
-- [Bivalvia - Bivalves (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
-- [Bryozoa - Bryozoans (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
-- [Crinoidea - Crinoids (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
-- [Demospongiae - Demosponges (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
-- [Echinoidea - Sea urchins (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
-- [Gastropoda - Gastropods (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
-- [Holothuroidea - Sea cucumbers (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
-- [Homoscleromorpha - Homoscleromorph sponges (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
-- [Malacostraca - Malacostracans (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
-- [Hydrozoa - Hydrozoans (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
-- [Nemertea - Ribbon worms (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
-- [Ophiuroidea - Brittle stars (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
-- [Platyhelminthes - Flatworms (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/)
-- [Polychaeta - Polychaetes (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
-- [Pycnogonida - Sea spiders (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
-- [Sipuncula - Peanut worms (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
-- [Thaliacea - Salps (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
-- [Thecostraca - Barnacles (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/)
+- [Actinopterygii - Ray-finned
+  fishes](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
+- [Asteroidea - Sea
+  stars](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
+- [Octocorallia -
+  Octocorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
+- [Hexacorallia -
+  Hexacorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
+- [Diptera - True
+  flies](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
+- [Testudines -
+  Turtles](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
+- [Copepoda - Copepods (testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
+- [Ctenophora - Ctenophores (testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
+- [Annelida - Annelids (testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
+- [Mammalia - Mammals
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
+- [Lepidosauria - Lepidosaurs
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
+- [Aves - Birds
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
+- [Ascidiacea - Sea squirts
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
+- [Bivalvia - Bivalves
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
+- [Bryozoa - Bryozoans
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
+- [Crinoidea - Crinoids
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
+- [Demospongiae - Demosponges
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
+- [Echinoidea - Sea urchins
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
+- [Gastropoda - Gastropods
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
+- [Holothuroidea - Sea cucumbers
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
+- [Homoscleromorpha - Homoscleromorph sponges
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
+- [Malacostraca - Malacostracans
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
+- [Hydrozoa - Hydrozoans
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
+- [Nemertea - Ribbon worms
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
+- [Ophiuroidea - Brittle stars
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
+- [Platyhelminthes - Flatworms
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/)
+- [Polychaeta - Polychaetes
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
+- [Pycnogonida - Sea spiders
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
+- [Sipuncula - Peanut worms
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
+- [Thaliacea - Salps
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
+- [Thecostraca - Barnacles
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/)
 
 See the [curation ruleset
 browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
@@ -274,10 +305,10 @@ cluster, you likely need to specify `Rproj = FALSE` when calling the
 
 ### Initializing a Project with User Assemblies
 
-MitoPilot can also initialize a project with user-supplied mitogenome
+MitoPilot can initialize a project with user-supplied mitogenome
 assemblies. This may be helpful if you have existing assemblies and only
 wish to utilize the annotation and curation features of MitoPilot.
-Alternatively, you could use this approach to “re-import” assemblies
+Alternatively, you can use this approach to “re-import” assemblies
 produced by MitoPilot that required manual editing with an external
 tool.
 

@@ -178,7 +178,7 @@ MitoPilot::new_project(
 
 ### Initializing a Project with User Assemblies
 
-MitoPilot can also initialize a project with user-supplied mitogenome assemblies. This may be helpful if you have existing assemblies and only wish to utilize the annotation and curation features of MitoPilot. Alternatively, you could use this approach to "re-import" assemblies produced by MitoPilot that required manual editing with an external tool.
+MitoPilot can initialize a project with user-supplied mitogenome assemblies. This may be helpful if you have existing assemblies and only wish to utilize the annotation and curation features of MitoPilot. Alternatively, you can use this approach to "re-import" assemblies produced by MitoPilot that required manual editing with an external tool.
 
 To use your own mitogenome assemblies, you will need a mapping file with two additional columns: 
 
