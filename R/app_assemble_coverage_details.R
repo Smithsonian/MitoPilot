@@ -27,12 +27,11 @@ assembly_coverage_details_server <- function(id, rv) {
           view_coverage = NA_character_
         )
 
-      # Too-complex guard: multiple raw paths AND at least one fragmented path
-      # (>1 scaffold). The alignment/consensus tools assume one scaffold per
-      # path, so disable them here and point the user to the assembly outputs.
+      # Multi-scaffold guard: any raw path fragmented into >1 scaffold. The
+      # alignment/consensus tools only compare complete single-scaffold paths,
+      # so disable them here and tell the user how to proceed.
       raw_asmb <- rv$focal_assembly |> dplyr::filter(path > 0)
-      rv$asmb_complex <- dplyr::n_distinct(raw_asmb$path) > 1 &&
-        nrow(raw_asmb) > 0 && max(table(raw_asmb$path)) > 1
+      rv$asmb_multiscaffold <- nrow(raw_asmb) > 0 && max(table(raw_asmb$path)) > 1
       rv$asmb_dir <- file.path(
         session$userData$dir_out, rv$updating$ID, "assemble",
         rv$updating$assemble_opts
@@ -81,16 +80,20 @@ assembly_coverage_details_server <- function(id, rv) {
           )
         ),
         size = "l",
-        if (isTRUE(rv$asmb_complex)) {
+        if (isTRUE(rv$asmb_multiscaffold)) {
           div(
             style = paste("margin-bottom: 12px; padding: 10px; border: 1px solid #E55330;",
                           "border-radius: 4px; background: #fdf3f0; font-size: 0.9em;"),
-            tags$b("This assembly is too complex for guided review."),
+            tags$b("This assembly is fragmented into multiple scaffolds."),
             div(style = "margin-top: 6px;",
-                paste("The sample has multiple assembly paths and at least one path",
-                      "split across multiple scaffolds. The alignment and consensus",
-                      "tools are disabled for this case. Please inspect the assembly",
-                      "outputs manually:")),
+                paste("The alignment and conflict-review tools only support comparing",
+                      "complete single-scaffold assembly paths; joining multiple scaffolds",
+                      "is not yet supported in the app.")),
+            div(style = "margin-top: 6px;",
+                paste("To annotate this sample, ignore all but one scaffold using the",
+                      "ignore buttons in the table below; the single remaining scaffold",
+                      "becomes the assembly used for annotation. Otherwise inspect the",
+                      "assembly outputs manually:")),
             tags$code(style = "display: block; margin-top: 6px; word-break: break-all;",
                       rv$asmb_dir)
           )
@@ -206,8 +209,8 @@ assembly_coverage_details_server <- function(id, rv) {
     selected <- reactive(reactable::getReactableState("table", "selected"))
     observe({
       shinyjs::toggle("clip", condition = length(selected()) > 0)
-      shinyjs::toggle("align", condition = !isTRUE(rv$asmb_complex) && length(selected()) > 1)
-      shinyjs::toggle("msa_div", condition = !isTRUE(rv$asmb_complex) && length(selected()) > 1)
+      shinyjs::toggle("align", condition = !isTRUE(rv$asmb_multiscaffold) && length(selected()) > 1)
+      shinyjs::toggle("msa_div", condition = !isTRUE(rv$asmb_multiscaffold) && length(selected()) > 1)
     })
 
     # Ignore bttn ----
