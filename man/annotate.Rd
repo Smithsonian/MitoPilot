@@ -25,7 +25,6 @@ annotate(
   coverage_trim = TRUE,
   retain_low_conf_trna = FALSE,
   ignore_scaffolds = NULL,
-  disable_mitos_pcg = FALSE,
   out_dir = NULL
 )
 }
