@@ -130,8 +130,8 @@ circ_overlap_len <- function(p1, p2, q1, q2, L) {
   if (p1 <= p2) {
     max(0L, min(p2, q2) - max(p1, q1) + 1L)
   } else {
-    max(0L, q2 - max(p1, q1) + 1L) + # [p1, L] ∩ [q1, q2]
-      max(0L, min(p2, q2) - q1 + 1L) # [1, p2] ∩ [q1, q2]
+    max(0L, q2 - max(p1, q1) + 1L) + # [p1, L] intersect [q1, q2]
+      max(0L, min(p2, q2) - q1 + 1L) # [1, p2] intersect [q1, q2]
   }
 }
 
