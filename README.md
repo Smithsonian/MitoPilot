@@ -42,11 +42,13 @@ raw input and performs the following steps.
       annotation (optional)
     - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA annotation
       (optional)
+    - [ORFfinder](https://www.ncbi.nlm.nih.gov/orffinder/) identify
+      additional open reading frames (ORFs) (optional)
     - Custom scripts for gene boundary refinement and annotation file
       formatting
     - Validation to flag possible issues or known errors that would be
       rejected by NCBI GenBank
-    - Manual curation of annotations using the integrated Shiny App.
+    - Manual curation of annotations using the integrated Shiny App
 3.  Data export
     - Custom scripts to export data in a format suitable for submission
       to NCBI GenBank
