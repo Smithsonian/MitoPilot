@@ -12,12 +12,13 @@
 #' @param assembly_fn Path to the curated assembly FASTA.
 #' @param genetic_code NCBI translation table number (default: "2").
 #' @param orffinder_opts Extra ORFfinder command-line options (default:
-#'   "-s 1 -n true"). `-g` and `-ml` are supplied from `genetic_code`/`orf_min_len`.
+#'   "-s 1"). `-g`, `-ml`, and `-n` are set automatically; do not include them here.
 #' @param orffinder_condaenv Conda environment containing ORFfinder (default:
 #'   "orffinder"). Set NULL to use ORFfinder on the PATH.
 #' @param orf_min_len Minimal ORF length in nucleotides (default: 300).
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default: 0.1).
+#' @param orf_nested Logical; if TRUE pass \code{-n false} to ORFfinder so nested/overlapping ORFs are reported (default: FALSE).
 #' @param ref_dir Path to the curation reference directory (must contain a
 #'   `featureProt/` subdirectory of per-gene protein FASTAs).
 #' @param max_blast_hits Maximum number of BLAST hits to retain per ORF (default: 10).

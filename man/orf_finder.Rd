@@ -27,7 +27,7 @@ orf_finder(
 \item{genetic_code}{NCBI translation table number (default: "2").}
 
 \item{orffinder_opts}{Extra ORFfinder command-line options (default:
-"-s 1 -n true"). `-g` and `-ml` are supplied from `genetic_code`/`orf_min_len`.}
+"-s 1"). `-g`, `-ml`, and `-n` are set automatically; do not include them here.}
 
 \item{orffinder_condaenv}{Conda environment containing ORFfinder (default:
 "orffinder"). Set NULL to use ORFfinder on the PATH.}
@@ -36,6 +36,8 @@ orf_finder(
 
 \item{orf_max_overlap}{Maximum overlap with existing annotations, as a fraction
 of the ORF length, before an ORF is discarded (default: 0.1).}
+
+\item{orf_nested}{Logical; if TRUE pass \code{-n false} to ORFfinder so nested/overlapping ORFs are reported (default: FALSE).}
 
 \item{ref_dir}{Path to the curation reference directory (must contain a
 `featureProt/` subdirectory of per-gene protein FASTAs).}
