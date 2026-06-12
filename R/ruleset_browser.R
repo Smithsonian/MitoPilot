@@ -1,7 +1,7 @@
 ## Mapping: ruleset target -> human label + NCBI anchor clade
 ## NCBI taxids avoid name collisions (e.g. "Ctenophora" is also a diatom genus).
 RULESET_MAP <- list(
-  fish_mito       = list(label = "Fishes",       ncbi = "Actinopterygii", taxid = "7898"),
+  fish_mito       = list(label = "Ray-finned fishes", ncbi = "Actinopterygii", taxid = "7898"),
   bird_mito       = list(label = "Birds",        ncbi = "Aves",           taxid = "8782"),
   turtle_mito     = list(label = "Turtles",      ncbi = "Testudines",     taxid = "8459"),
   mammal_mito     = list(label = "Mammals",      ncbi = "Mammalia",       taxid = "40674"),
@@ -94,7 +94,7 @@ ruleset_browser <- function(output_file = tempfile(fileext = ".html"),
         as.integer(eval(formals(get(paste0("curate_", tgt), mode = "function"))$genetic_code)),
         error = function(e) NA_integer_
       )
-      build_ruleset_display(params, ruleset_map[[tgt]]$label, ruleset_map[[tgt]]$ncbi, gcode)
+      build_ruleset_display(params, ruleset_map[[tgt]]$label, ruleset_map[[tgt]]$ncbi, gcode, ruleset_map[[tgt]]$taxid)
     }),
     names(ruleset_map)
   )
@@ -333,7 +333,7 @@ genetic_code_name <- function(code) {
 
 #' Format a MitoPilot params list into a display-ready structure
 #' @noRd
-build_ruleset_display <- function(params, label, ncbi, genetic_code = NA_integer_) {
+build_ruleset_display <- function(params, label, ncbi, genetic_code = NA_integer_, taxid = NULL) {
   field_order <- c("count", "min_len", "max_len", "overlap",
                    "start_codons", "stop_codons", "intron")
 
@@ -410,6 +410,7 @@ build_ruleset_display <- function(params, label, ncbi, genetic_code = NA_integer
   list(
     label = label,
     ncbi = ncbi,
+    taxid = taxid,
     genetic_code = list(
       code = genetic_code,
       name = genetic_code_name(genetic_code),
@@ -522,9 +523,13 @@ ruleset_html_template <- function() {
   .pane-tree {
     width: 420px; min-width: 220px; max-width: 70%; height: 100%;
     overflow: auto;
-    border-right: 1px solid var(--border); background: #fff; padding: 10px 6px;
-    resize: horizontal;
+    background: #fff; padding: 10px 6px; flex: none;
   }
+  .pane-divider {
+    width: 5px; cursor: col-resize; flex: none;
+    background: var(--border); transition: background 0.15s;
+  }
+  .pane-divider:hover, .pane-divider.dragging { background: var(--accent); }
   ul.tree { min-width: max-content; }
   .pane-detail { flex: 1; overflow: auto; padding: 22px 28px; }
   .toolbar { display: flex; gap: 6px; padding: 4px 8px 10px; align-items: center; flex-wrap: wrap; }
@@ -612,7 +617,7 @@ ruleset_html_template <- function() {
   <span class="sub">Taxonomy backbone from NCBI. Select a highlighted clade to view its rules.</span>
 </header>
 <div class="layout">
-  <div class="pane-tree">
+  <div class="pane-tree" id="pane-tree">
     <div class="toolbar">
       <input id="search" type="text" placeholder="Filter taxa...">
       <button id="expand-all">Expand all</button>
@@ -620,6 +625,7 @@ ruleset_html_template <- function() {
     </div>
     <ul class="tree" id="tree"></ul>
   </div>
+  <div class="pane-divider" id="pane-divider"></div>
   <div class="pane-detail" id="detail">
     <div class="placeholder">
       <h2 class="detail-title">Welcome</h2>
@@ -744,7 +750,14 @@ function selectRuleset(target, row) {
   d.innerHTML = "";
 
   d.appendChild(el("h2", "detail-title", data.label));
-  d.appendChild(el("p", "detail-sub", "Ruleset: " + target + "  @MIDDOT@  NCBI anchor: " + data.ncbi));
+  var sub = el("p", "detail-sub", "Ruleset: " + target + "  @MIDDOT@  NCBI anchor: ");
+  var ncbiLink = document.createElement("a");
+  ncbiLink.href = "https://www.ncbi.nlm.nih.gov/datasets/taxonomy/" + data.taxid + "/";
+  ncbiLink.target = "_blank";
+  ncbiLink.rel = "noopener";
+  ncbiLink.textContent = data.ncbi;
+  sub.appendChild(ncbiLink);
+  d.appendChild(sub);
 
   if (data.genetic_code && data.genetic_code.code != null) {
     var gc = el("div", "gcode");
@@ -831,6 +844,31 @@ buildTree();
 document.getElementById("expand-all").addEventListener("click", function () { setCollapsedAll(false); });
 document.getElementById("collapse-all").addEventListener("click", function () { setCollapsedAll(true); });
 document.getElementById("search").addEventListener("input", function (e) { runSearch(e.target.value); });
+
+(function () {
+  var divider = document.getElementById("pane-divider");
+  var pane = document.getElementById("pane-tree");
+  var dragging = false, startX, startW;
+  divider.addEventListener("mousedown", function (e) {
+    dragging = true; startX = e.clientX; startW = pane.offsetWidth;
+    divider.classList.add("dragging");
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", function (e) {
+    if (!dragging) return;
+    var w = Math.max(220, Math.min(startW + e.clientX - startX, window.innerWidth * 0.7));
+    pane.style.width = w + "px";
+  });
+  document.addEventListener("mouseup", function () {
+    if (!dragging) return;
+    dragging = false;
+    divider.classList.remove("dragging");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  });
+})();
 </script>
 </body>
 </html>

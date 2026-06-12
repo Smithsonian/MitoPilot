@@ -3067,27 +3067,26 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     div(
       id = ns("annotation_btns_wrapper"),
       div(
-        id = ns("auto_assign_orfs_btn"),
-        style = "display: flex; gap: 8px; margin: 6px 0;",
+        style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
         actionButton(
           ns("auto_assign_orfs"),
           "Auto-assign ORFs",
           icon = icon("wand-magic-sparkles")
-        )
-      ),
-      shinyjs::hidden(
-        div(
-          id = ns("annotation_action_btns"),
-          style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
-          actionButton(ns("merge"), "Merge PCGs/rRNAs"),
-          actionButton(ns("delete"), "Delete"),
-          shinyjs::hidden(
-            div(
-              id = ns("assign_gene_btn"),
-              actionButton(ns("assign_gene"), "Assign gene name")
-            )
-          ),
-          uiOutput(ns("synteny_zoom_ctrl"))
+        ),
+        shinyjs::hidden(
+          div(
+            id = ns("annotation_action_btns"),
+            style = "display: contents;",
+            actionButton(ns("merge"), "Merge PCGs/rRNAs"),
+            actionButton(ns("delete"), "Delete"),
+            shinyjs::hidden(
+              div(
+                id = ns("assign_gene_btn"),
+                actionButton(ns("assign_gene"), "Assign gene name")
+              )
+            ),
+            uiOutput(ns("synteny_zoom_ctrl"))
+          )
         )
       ),
       shinyjs::hidden(

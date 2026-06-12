@@ -1086,6 +1086,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("orf_opts_memory", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_min_len", condition = input$edit_orf_opts)
       shinyjs::toggleState("orf_max_overlap", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_nested", condition = input$edit_orf_opts)
       shinyjs::toggleState("orffinder_opts", condition = input$edit_orf_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_orf_opts && input$orf_opts %in% filtered_data()$orf_opts) {
@@ -1131,7 +1132,8 @@ annotate_server <- function(id) {
               memory = req(input$orf_opts_memory),
               orffinder_opts = input$orffinder_opts %||% "",
               orf_min_len = req(input$orf_min_len),
-              orf_max_overlap = req(input$orf_max_overlap)
+              orf_max_overlap = req(input$orf_max_overlap),
+              orf_nested = as.integer(isTRUE(input$orf_nested))
             ),
             in_place = TRUE,
             copy = TRUE,

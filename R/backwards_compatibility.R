@@ -535,6 +535,13 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "UPDATE orf_opts SET use_orffinder = 0 WHERE use_orffinder IS NULL")
   }
 
+  if ("orf_opts" %in% DBI::dbListTables(con) &&
+      !("orf_nested" %in% DBI::dbListFields(con, "orf_opts"))) {
+    message("added 'orf_nested' column to orf_opts table")
+    DBI::dbExecute(con, "ALTER TABLE orf_opts ADD COLUMN orf_nested INTEGER")
+    DBI::dbExecute(con, "UPDATE orf_opts SET orf_nested = 0 WHERE orf_nested IS NULL")
+  }
+
   # if orf_opts column doesn't exist in the annotate table, add it (default set)
   if (!("orf_opts" %in% names(annotate_table))) {
     message("added 'orf_opts' column to annotate table")

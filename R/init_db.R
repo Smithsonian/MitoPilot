@@ -29,7 +29,7 @@
 #' @param curate_params Default curation parameters
 #' @param orf_cpus CPUs for the optional ORF-finder step (default = 4)
 #' @param orf_memory Memory (GB) for the optional ORF-finder step (default = 8)
-#' @param orffinder_opts Default NCBI ORFfinder options (default = "-s 1 -n true")
+#' @param orffinder_opts Default NCBI ORFfinder options (default = "-s 1")
 #' @param orf_min_len Minimal ORF length in nucleotides (default = 300)
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
@@ -93,7 +93,7 @@ new_db <- function(
     # Default ORF-finder options
     orf_cpus = 4,
     orf_memory = 8,
-    orffinder_opts = "-s 1 -n true",
+    orffinder_opts = "-s 1",
     orf_min_len = 300,
     orf_max_overlap = 0.1) {
   # Read mapping file
@@ -533,6 +533,7 @@ new_db <- function(
       orffinder_opts TEXT,
       orf_min_len INTEGER,
       orf_max_overlap REAL,
+      orf_nested INTEGER,
       PRIMARY KEY (orf_opts)
     );"
   )
@@ -545,7 +546,8 @@ new_db <- function(
         memory = orf_memory,
         orffinder_opts = orffinder_opts,
         orf_min_len = orf_min_len,
-        orf_max_overlap = orf_max_overlap
+        orf_max_overlap = orf_max_overlap,
+        orf_nested = 0L
       ),
       in_place = TRUE,
       copy = TRUE,

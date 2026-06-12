@@ -557,6 +557,12 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           ) |> shinyjs::disabled()
         )
       ),
+      shinyWidgets::prettyCheckbox(
+        ns("orf_nested"),
+        label = "Include nested/overlapping ORFs",
+        value = isTRUE(as.logical(current$orf_nested %||% 0L)),
+        status = "primary"
+      ) |> shinyjs::disabled(),
       textInput(
         ns("orffinder_opts"),
         label = tagList("ORFfinder options:", tool_help_icon("orffinder")),
@@ -578,12 +584,6 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           "When running the ORF step, consider disabling un-annotated end trimming",
           "in the annotation options"
         ),
-        shinyWidgets::prettyCheckbox(
-          ns("use_orffinder"),
-          label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
-          value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
-          status = "primary"
-        ) |> shinyjs::disabled(),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           selectizeInput(
@@ -607,6 +607,12 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
+        shinyWidgets::prettyCheckbox(
+          ns("use_orffinder"),
+          label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
+          value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
         orf_param_opts,
         size = "m",
         footer = tagList(

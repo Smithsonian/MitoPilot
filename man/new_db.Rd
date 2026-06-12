@@ -41,7 +41,7 @@ new_db(
   curate_params = NULL,
   orf_cpus = 4,
   orf_memory = 8,
-  orffinder_opts = "-s 1 -n true",
+  orffinder_opts = "-s 1",
   orf_min_len = 300,
   orf_max_overlap = 0.1
 )
@@ -121,7 +121,7 @@ but flagged as ignored (default = 500).}
 
 \item{orf_memory}{Memory (GB) for the optional ORF-finder step (default = 8)}
 
-\item{orffinder_opts}{Default NCBI ORFfinder options (default = "-s 1 -n true")}
+\item{orffinder_opts}{Default NCBI ORFfinder options (default = "-s 1")}
 
 \item{orf_min_len}{Minimal ORF length in nucleotides (default = 300)}
 

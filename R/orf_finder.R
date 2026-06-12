@@ -31,10 +31,11 @@ orf_finder <- function(
   annotations_fn = NULL,
   assembly_fn = NULL,
   genetic_code = "2",
-  orffinder_opts = "-s 1 -n true",
+  orffinder_opts = "-s 1",
   orffinder_condaenv = "orffinder",
   orf_min_len = 300,
   orf_max_overlap = 0.1,
+  orf_nested = FALSE,
   ref_dir = ".",
   max_blast_hits = 10,
   blast_condaenv = "base",
@@ -42,6 +43,7 @@ orf_finder <- function(
 ) {
   orf_min_len <- as.integer(orf_min_len)
   orf_max_overlap <- as.numeric(orf_max_overlap)
+  orf_nested <- isTRUE(as.logical(orf_nested))
 
   # Output column order must match what VALIDATE writes to the annotations table.
   out_cols <- c(
@@ -82,11 +84,15 @@ orf_finder <- function(
   out <- tempfile(fileext = ".faa")
 
   message("starting ORFfinder")
+  # Strip any -n flag from free-text opts; controlled by orf_nested parameter.
+  orffinder_opts_clean <- stringr::str_remove(orffinder_opts, "-n\\s+\\S+") |>
+    stringr::str_squish()
   orf_args <- c(
     "-in", fasta,
     "-g", as.character(genetic_code),
     "-ml", as.character(orf_min_len),
-    strsplit(orffinder_opts, "\\s+")[[1]],
+    if (nzchar(orffinder_opts_clean)) strsplit(orffinder_opts_clean, "\\s+")[[1]],
+    "-n", if (orf_nested) "false" else "true",
     "-outfmt", "0",
     "-out", out
   )

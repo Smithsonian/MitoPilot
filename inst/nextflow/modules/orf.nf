@@ -48,6 +48,7 @@ process orf {
         orffinder_condaenv = '!{params.orffinder_condaenv}', \
         orf_min_len = !{opts.orf_min_len}, \
         orf_max_overlap = !{opts.orf_max_overlap}, \
+        orf_nested = !{opts.orf_nested ? "TRUE" : "FALSE"}, \
         ref_dir = '!{ref_db_clean}', \
         max_blast_hits = '!{opts.max_blast_hits}', \
         out_dir = '!{dir}' \
