@@ -67,7 +67,7 @@ Currently, MitoPilot has curation/validation rulesets for the following groups o
 - [Ctenophora - Ctenophores (testing in progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
 - [Annelida - Annelids (testing in progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
 - [Mammalia - Mammals (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
-- [Lepidosauria - Lepidosaurs (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
+- [Lepidosauria - Lizards and snakes  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
 - [Aves - Birds (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
 - [Ascidiacea - Sea squirts (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
 - [Bivalvia - Bivalves (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
