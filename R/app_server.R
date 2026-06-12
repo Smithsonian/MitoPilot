@@ -74,6 +74,9 @@ app_server <- function(input, output, session) {
   # View mode ----
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
+    # Reload the destination tab's data so changes made in another tab (e.g. a
+    # newly locked consensus in Assemble) appear without a manual refresh.
+    trigger(paste0("refresh_", tolower(input$mode)))
     if(input$mode == "Export"){
       shinyjs::toggle("export_ctrls", condition = TRUE)
       shinyjs::toggle("asmb_ctrls", condition = FALSE)

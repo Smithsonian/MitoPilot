@@ -574,9 +574,9 @@ assembly_coverage_details_server <- function(id, rv) {
           style = "margin-top: 12px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;",
           div(
             style = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;",
-            actionButton(ns("prev_block"), "", icon = icon("chevron-left"),
+            actionButton(ns("prev_block"), icon("chevron-left"),
                          style = nav_btn_style),
-            actionButton(ns("next_block"), "", icon = icon("chevron-right"),
+            actionButton(ns("next_block"), icon("chevron-right"),
                          style = nav_btn_style),
             div(style = "font-size: 12px; color: #555;", uiOutput(ns("block_info"), inline = TRUE))
           ),
@@ -597,9 +597,9 @@ assembly_coverage_details_server <- function(id, rv) {
           uiOutput(ns("resolve_ui")),
           div(
             style = "display: flex; align-items: center; gap: 8px; margin-top: 10px;",
-            actionButton(ns("prev_block_btm"), "", icon = icon("chevron-left"),
+            actionButton(ns("prev_block_btm"), icon("chevron-left"),
                          style = nav_btn_style),
-            actionButton(ns("next_block_btm"), "", icon = icon("chevron-right"),
+            actionButton(ns("next_block_btm"), icon("chevron-right"),
                          style = nav_btn_style)
           )
         )
@@ -624,11 +624,24 @@ assembly_coverage_details_server <- function(id, rv) {
         p(rv$alignment$pct_id_range),
         p(rv$alignment$consRegion),
         p(style = "font-weight: bold;", summary_txt),
-        actionButton(ns("trim_consensus"), "Trim to consensus",
-                     class = "btn-primary",
-                     title = paste("Keep only the longest region where all selected paths",
-                                   "agree; discards the conflicting ends. Asks to confirm.")),
-        navigator
+        navigator,
+        div(
+          style = "display: flex; gap: 8px; margin-top: 10px;",
+          actionButton(ns("trim_consensus"), "Trim to consensus",
+                       icon = icon("scissors"),
+                       class = "btn-primary",
+                       title = paste("Keep only the longest region where all selected paths",
+                                     "agree; discards the conflicting ends. Asks to confirm.")),
+          if (n_blocks > 0) {
+            actionButton(ns("build_resolved"),
+                         "Build resolved assembly",
+                         icon = icon("wand-magic-sparkles"),
+                         class = "btn-primary",
+                         title = paste("Combine the per-block resolution choices and the base",
+                                       "path into a single consensus (Path 0). Blocks left unset",
+                                       "are N-masked. Confirms topology first."))
+          }
+        )
       ) |> tagList()
     })
 
@@ -1105,7 +1118,7 @@ assembly_coverage_details_server <- function(id, rv) {
         tags$b("Resolve conflicts into a single assembly (Path 0)"),
         div(style = "font-size: 11px; color: #777; margin: 2px 0 8px 0;",
             "Set how to resolve the current block, navigate to others, then build. ",
-            "Blocks left unset use the base path."),
+            "Blocks left unset are N-masked."),
         radioButtons(
           ns("res_mode"),
           label = sprintf("Block %d (%s):", cur, cl$label %||% "conflict"),
@@ -1118,7 +1131,7 @@ assembly_coverage_details_server <- function(id, rv) {
         },
         tags$hr(style = "margin: 8px 0;"),
         selectInput(ns("base_path"),
-                    "Base path (backbone used for any block you don't set):",
+                    "Base path (backbone for the non-conflicting regions):",
                     choices = labs,
                     selected = rv$base_label %||% labs[1],
                     width = "320px"),
@@ -1127,11 +1140,7 @@ assembly_coverage_details_server <- function(id, rv) {
                   "Conflict blocks you don't resolve above are filled with N.")),
         div(style = "font-size: 11px; color: #777; margin-bottom: 8px;",
             sprintf("%d of %d conflict block(s) resolved; the rest will be N-masked.",
-                    n_set, nrow(rv$alignment$conflicts))),
-        actionButton(ns("build_resolved"),
-                     "Build resolved assembly (Path 0)",
-                     icon = icon("wand-magic-sparkles"),
-                     class = "btn-primary")
+                    n_set, nrow(rv$alignment$conflicts)))
       )
     })
 
@@ -1231,12 +1240,71 @@ assembly_coverage_details_server <- function(id, rv) {
       fin(cand[idx, , drop = FALSE])
     })
 
-    persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note, blast_row = NULL) {
+    # Resolve the consensus topology, then run finalize(topology). The default is
+    # inherited from the contributing paths: "circular" only when every source
+    # path is circular, else "linear". The user confirms/overrides because manual
+    # editing or trimming can break a circular molecule.
+    resolve_topology_then <- function(paths, finalize) {
+      topo <- rv$focal_assembly |>
+        dplyr::filter(path %in% !!paths) |>
+        dplyr::distinct(path, topology)
+      inherited <- if (nrow(topo) > 0 &&
+                       all(tolower(topo$topology) == "circular", na.rm = TRUE)) {
+        "circular"
+      } else {
+        "linear"
+      }
+      path_lines <- topo |>
+        dplyr::arrange(path) |>
+        dplyr::mutate(line = sprintf("Path %s: %s", path, ifelse(is.na(topology), "NA", topology))) |>
+        dplyr::pull(line)
+      rv$consensus_topology_finalize <- finalize
+      showModal(modalDialog(
+        title = "Confirm consensus topology",
+        div(
+          style = "font-size: 0.9em; color: #555; margin-bottom: 8px;",
+          "Source path topologies:",
+          tags$ul(lapply(path_lines, tags$li))
+        ),
+        radioButtons(ns("consensus_topology_choice"),
+                     "Topology to assign to the consensus assembly:",
+                     choices = c("linear", "circular"), selected = inherited),
+        footer = tagList(modalButton("Cancel"),
+                         actionButton(ns("consensus_topology_confirm"), "Confirm topology")),
+        easyClose = FALSE
+      ))
+    }
+
+    observeEvent(input$consensus_topology_confirm, {
+      removeModal()
+      fin <- rv$consensus_topology_finalize
+      topology <- input$consensus_topology_choice
+      rv$consensus_topology_finalize <- NULL
+      req(!is.null(fin), topology %in% c("linear", "circular"))
+      fin(topology)
+    })
+
+    # Mirror the consensus (Path 0) assembly metadata into the annotate row so the
+    # Annotate table shows path/length/topology/scaffolds immediately. Normally these
+    # are only set later by the curate step (curate_workflow.nf), leaving a freshly
+    # built consensus blank in the Annotate table.
+    sync_consensus_annotate <- function(ID, length, topology = "linear") {
+      ann <- data.frame(
+        ID = ID, path = "0", scaffolds = 1L, topology = topology,
+        length = as.integer(length), time_stamp = as.numeric(Sys.time())
+      )
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(ann, by = "ID", unmatched = "ignore",
+                           in_place = TRUE, copy = TRUE)
+    }
+
+    persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note, blast_row = NULL,
+                              topology = "linear") {
       ID <- rv$updating$ID
       dir <- file.path(session$userData$dir_out, ID, "assemble",
                        rv$updating$assemble_opts)
       dna <- Biostrings::DNAStringSet(seq_str)
-      names(dna) <- paste(ID, 0, 0, sep = ".") |> paste("linear")
+      names(dna) <- paste(ID, 0, 0, sep = ".") |> paste(topology)
       Biostrings::writeXStringSet(dna, file.path(dir, paste0(ID, "_assembly_0.fasta")))
 
       # Write coverage stats in the same layout coverage() produces (Call +
@@ -1267,7 +1335,7 @@ assembly_coverage_details_server <- function(id, rv) {
       )
       bl <- blast_cols(blast_row)
       a <- data.frame(
-        ID = ID, path = 0, scaffold = 0, topology = "linear",
+        ID = ID, path = 0, scaffold = 0, topology = topology,
         length = nchar(seq_str), length_raw = nchar(seq_str), sequence = seq_str,
         depth  = paste(round(depth_vec), collapse = " "),
         gc     = paste(round(gc_vec, 4), collapse = " "),
@@ -1280,7 +1348,7 @@ assembly_coverage_details_server <- function(id, rv) {
 
       update <- data.frame(
         ID = ID, paths = -abs(rv$updating$paths), assemble_lock = 1,
-        topology = "linear",
+        topology = topology,
         assemble_notes = compose_edit_notes(note)
       )
       if (!is.null(bl)) update <- cbind(update, bl)
@@ -1288,6 +1356,7 @@ assembly_coverage_details_server <- function(id, rv) {
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(update, by = "ID", copy = T, in_place = T,
                            unmatched = "ignore")
+      sync_consensus_annotate(ID, nchar(seq_str), topology)
       rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
       trigger("coverage_modal")
     }
@@ -1424,10 +1493,13 @@ assembly_coverage_details_server <- function(id, rv) {
           type = "warning"
         )
       }
-      # Inherit a BLAST hit from the contributing paths (prompt if >1 distinct)
+      # Inherit a BLAST hit from the contributing paths (prompt if >1 distinct),
+      # then confirm topology (inherited from the same paths) before writing.
       cand_paths <- rv$focal_assembly$path[rv$focal_assembly$path > 0]
-      resolve_blast_then(cand_paths, function(blast_row) {
-        persist_path0(res$seq, depth_vec, gc_vec, err_vec, note, blast_row)
+      resolve_topology_then(cand_paths, function(topology) {
+        resolve_blast_then(cand_paths, function(blast_row) {
+          persist_path0(res$seq, depth_vec, gc_vec, err_vec, note, blast_row, topology)
+        })
       })
     })
 
@@ -1463,7 +1535,7 @@ assembly_coverage_details_server <- function(id, rv) {
       sel <- selected()
       # Inherit a BLAST hit from the selected paths (prompt if >1 distinct),
       # then write everything. Deferred so a cancelled picker writes nothing.
-      finalize_trim <- function(blast_row) {
+      finalize_trim <- function(blast_row, topology = "linear") {
         bl <- blast_cols(blast_row)
 
       # Make new assembly
@@ -1476,7 +1548,7 @@ assembly_coverage_details_server <- function(id, rv) {
         rv$updating$ID,
         0, 0,
         sep = "."
-      ) |> paste("linear")
+      ) |> paste(topology)
       Biostrings::writeXStringSet(
         trimmed,
         file.path(
@@ -1528,7 +1600,7 @@ assembly_coverage_details_server <- function(id, rv) {
         ID = rv$updating$ID,
         path = 0,
         scaffold = 0,
-        topology = "linear",
+        topology = topology,
         length = trimmed@ranges@width,
         length_raw = trimmed@ranges@width,
         sequence = unname(as.character(trimmed)),
@@ -1552,7 +1624,7 @@ assembly_coverage_details_server <- function(id, rv) {
         ID = rv$updating$ID,
         paths = -abs(rv$updating$paths),
         assemble_lock = 1,
-        topology = "linear",
+        topology = topology,
         assemble_notes = compose_edit_notes(
           "multi-path getOrganelle output trimmed for consensus"
         )
@@ -1571,7 +1643,7 @@ assembly_coverage_details_server <- function(id, rv) {
           in_place = T,
           unmatched = "ignore"
         )
-
+      sync_consensus_annotate(rv$updating$ID, trimmed@ranges@width, topology)
 
       rv$updating <- rv$data |>
         dplyr::filter(ID == !!rv$updating$ID)
@@ -1580,7 +1652,11 @@ assembly_coverage_details_server <- function(id, rv) {
       } # end finalize_trim
 
       cand_paths <- rv$focal_assembly$path[sel]
-      resolve_blast_then(cand_paths, finalize_trim)
+      resolve_topology_then(cand_paths, function(topology) {
+        resolve_blast_then(cand_paths, function(blast_row) {
+          finalize_trim(blast_row, topology)
+        })
+      })
     })
   })
 }
