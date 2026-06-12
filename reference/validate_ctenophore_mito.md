@@ -1,6 +1,7 @@
-# Title
+# Annotation validation for ctenophore mitogenomes
 
-Title
+Thin wrapper around the shared validation core. See
+\`validate_mito_core()\` for details.
 
 ## Usage
 

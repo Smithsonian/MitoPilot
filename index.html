@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -96,9 +96,11 @@
 <a href="https://doi.org/10.1093/bioinformatics/btm573" class="external-link">ARWEN</a> for tRNA annotation (optional)</li>
 <li>
 <a href="https://doi.org/10.1093/nar/gkh152" class="external-link">ARAGORN</a> for tRNA annotation (optional)</li>
+<li>
+<a href="https://www.ncbi.nlm.nih.gov/orffinder/" class="external-link">ORFfinder</a> identify additional open reading frames (ORFs) (optional)</li>
 <li>Custom scripts for gene boundary refinement and annotation file formatting</li>
 <li>Validation to flag possible issues or known errors that would be rejected by NCBI GenBank</li>
-<li>Manual curation of annotations using the integrated Shiny App.</li>
+<li>Manual curation of annotations using the integrated Shiny App</li>
 </ul>
 </li>
 <li>Data export
@@ -114,27 +116,46 @@
 <h1 id="taxonomic-scope">Taxonomic Scope<a class="anchor" aria-label="anchor" href="#taxonomic-scope"></a>
 </h1>
 <p>MitoPilot was initially built for fish mitogenome assembly. By default, MitoPilot uses included fish reference databases for <a href="https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/getOrganelle" class="external-link">GetOrganelle</a> and <a href="https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/MitoFinder" class="external-link">MitoFinder</a>. However, MitoPilot has been developed with modularity and extensibility in mind to facilitate broader application in the future.</p>
-<p>MitoPilot allows the user to provide custom reference databases for assembly with GetOrganelle or MitoFinder. We have provided some <a href="https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html">documentation</a> to help you build a custom reference database.</p>
+<p>MitoPilot allows the user to provide custom reference databases for assembly with GetOrganelle or MitoFinder. The <code><a href="reference/custom_assembly_db.html">MitoPilot::custom_assembly_db()</a></code> function can build these databases for a clade automatically, no external tools required. See our <a href="https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html">documentation</a> for details.</p>
 <p>For annotation with MITOS2, we have provided reference databases for <a href="https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Chordata" class="external-link">chordates</a> and <a href="https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Metazoa" class="external-link">metazoans</a>. You can toggle between these databases in <code>Annotate Opts.</code> window in the MitoPilot GUI. We will add more annotation reference database options in the future.</p>
 <p>Currently, MitoPilot has curation/validation rulesets for the following groups of organisms:</p>
 <ul>
-<li>fishes</li>
-<li>starfish</li>
-<li>octocorals</li>
-<li>hexacorals</li>
-<li>dipterans</li>
-<li>turtles</li>
-<li>copepods (testing in progress)</li>
-<li>ctenophores (testing in progress)</li>
-<li>annelids (testing in progress)</li>
-<li>mammals (untested)</li>
-<li>lepidosaurs (untested)</li>
-<li>birds (untested)</li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/" class="external-link">Actinopterygii (fishes)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/" class="external-link">Asteroidea (sea stars)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/" class="external-link">Octocorallia (octocorals)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/" class="external-link">Hexacorallia (hexacorals)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/" class="external-link">Diptera (true flies)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/" class="external-link">Testudines (turtles)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/" class="external-link">Copepoda (copepods, testing in progress)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/" class="external-link">Ctenophora (ctenophores, testing in progress)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/" class="external-link">Annelida (annelids, testing in progress)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/" class="external-link">Mammalia (mammals, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/" class="external-link">Lepidosauria (lepidosaurs, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/" class="external-link">Aves (birds, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/" class="external-link">Ascidiacea (sea squirts, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/" class="external-link">Bivalvia (bivalves, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/" class="external-link">Bryozoa (bryozoans, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/" class="external-link">Crinoidea (crinoids, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/" class="external-link">Demospongiae (demosponges, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/" class="external-link">Echinoidea (sea urchins, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/" class="external-link">Gastropoda (gastropods, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/" class="external-link">Holothuroidea (sea cucumbers, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/" class="external-link">Homoscleromorpha (homoscleromorph sponges, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/" class="external-link">Malacostraca (malacostracans, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/" class="external-link">Hydrozoa (hydrozoans, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/" class="external-link">Nemertea (ribbon worms, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/" class="external-link">Ophiuroidea (brittle stars, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/" class="external-link">Platyhelminthes (flatworms, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/" class="external-link">Polychaeta (polychaetes, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/" class="external-link">Pycnogonida (sea spiders, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/" class="external-link">Sipuncula (peanut worms, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/" class="external-link">Thaliacea (salps, untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/" class="external-link">Thecostraca (barnacles, untested)</a></li>
 </ul>
 <p>See the <a href="https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html">curation ruleset browser</a> for a detailed description of each curation ruleset.</p>
 <p>The custom logic in the annotation curation and validation scripts needs to be tweaked for optimal performance with other taxonomic groups. All of the curation rulesets are contained in the underlying Docker image (currently hosted at <a href="https://hub.docker.com/repository/docker/macguigand/mitopilot" class="external-link">macguigand/MitoPilot</a>). Adding rulesets for new taxa will involve updating the Docker image appropriately and specifying the new image in the Nextflow configuration file.</p>
 <p>If you have a group of organisms that you would like to try with MitoPilot, feel free to post an <a href="https://github.com/Smithsonian/MitoPilot/issues" class="external-link">issue</a> or reach out to Dan MacGuigan directly at <a href="mailto:daniel.macguigan@noaa.gov" class="email">daniel.macguigan@noaa.gov</a>.</p>
-<p>Curation reference databases can be specified independently of the annotation reference databases. We have provided curation databases for chordates and metazoans (RefSeq 89 or RefSeq 231). Users can also provide custom databases to improve the automatic curation step.</p>
+<p>Curation reference databases can be specified independently of the annotation reference databases. We have provided curation databases for chordates and metazoans (RefSeq 89 or RefSeq 231). Users can also provide custom databases to improve the automatic curation step. Additionally, MitoPilot will automatically incorporate the assembly BLAST results into the curation databases.</p>
 </div>
 <div class="section level1">
 <h1 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>

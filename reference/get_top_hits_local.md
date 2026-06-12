@@ -6,7 +6,7 @@ options("MitoPilot.blastp" = "/path/to/blastp/executable")
 ## Usage
 
 ``` r
-get_top_hits_local(ref_db = NULL, query = NULL, max_blast_hits = 100)
+get_top_hits_local(ref_db = NULL, query = NULL, max_blast_hits = 10)
 ```
 
 ## Arguments
@@ -21,4 +21,4 @@ get_top_hits_local(ref_db = NULL, query = NULL, max_blast_hits = 100)
 
 - max_blast_hits:
 
-  Maximum number of top BLAST hits to retain (default = 100)
+  Maximum number of top BLAST hits to retain (default = 10)

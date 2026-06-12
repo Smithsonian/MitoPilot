@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,11 @@
 <span>    <span class="st">"[location=mitochondrion] {Taxon}"</span><span class="op">)</span>,</span>
 <span>  out_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  generateAAalignments <span class="op">=</span> <span class="cn">T</span>,</span>
-<span>  gene_export <span class="op">=</span> <span class="cn">F</span></span>
+<span>  gene_export <span class="op">=</span> <span class="cn">F</span>,</span>
+<span>  review <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  start_aa <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  stop_aa <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  ident_pct <span class="op">=</span> <span class="fl">60</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -98,7 +102,32 @@ the export group will be exported</p></dd>
 <dd><p>Export FASTAs and feature tables for individual genes?
 (default: FALSE)</p></dd>
 
+
+<dt id="arg-review">review<a class="anchor" aria-label="anchor" href="#arg-review"></a></dt>
+<dd><p>Run the PCG annotation outlier review after writing files and
+return the flagged results? (default: TRUE)</p></dd>
+
+
+<dt id="arg-start-aa">start_aa<a class="anchor" aria-label="anchor" href="#arg-start-aa"></a></dt>
+<dd><p>Start-offset threshold (amino acids) passed to
+[flag_PCG_outliers()]. Default 10.</p></dd>
+
+
+<dt id="arg-stop-aa">stop_aa<a class="anchor" aria-label="anchor" href="#arg-stop-aa"></a></dt>
+<dd><p>Stop-offset threshold (amino acids) passed to
+[flag_PCG_outliers()]. Default 10.</p></dd>
+
+
+<dt id="arg-ident-pct">ident_pct<a class="anchor" aria-label="anchor" href="#arg-ident-pct"></a></dt>
+<dd><p>Identity threshold (percent) passed to
+[flag_PCG_outliers()]. Default 60.</p></dd>
+
 </dl></div>
+    <div class="section level2">
+    <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
+    <p>Invisibly, the list returned by [flag_PCG_outliers()] when `review`
+  is TRUE (and a group of &gt;1 sample is exported), otherwise `NULL`.</p>
+    </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -115,15 +115,92 @@ genomes</li>
 <li>A “label” database containing individual mitochondrial gene
 sequences</li>
 </ul>
-<p>There are many different ways to build the GetOrganelle databases. We
-have provided the following script to assist with this process.</p>
 <div class="section level3">
-<h3 id="genbankdownloadutil-sh">
-<a href="https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh" class="external-link">GenBankDownloadUtil.sh</a><a class="anchor" aria-label="anchor" href="#genbankdownloadutil-sh"></a>
+<h3 id="recommended-mitopilotcustom_assembly_db">Recommended: <code>MitoPilot::custom_assembly_db()</code><a class="anchor" aria-label="anchor" href="#recommended-mitopilotcustom_assembly_db"></a>
 </h3>
-<p>This script will perform a GenBank query for all mitochondrial
-records matching your search criteria, download those sequences, and
-sort them into GetOrganlle “seed” and “label” databases.</p>
+<p>The easiest way to build custom assembly databases is the
+<code><a href="../reference/custom_assembly_db.html">MitoPilot::custom_assembly_db()</a></code> function. It queries NCBI
+GenBank for all mitochondrial records in your clade, downloads them, and
+builds the GetOrganelle “seed” and “label” databases (and/or a
+MitoFinder database) for you.</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Build both GetOrganelle and MitoFinder databases for starfish,</span></span>
+<span><span class="co"># using all GenBank mitogenomes (not just RefSeq).</span></span>
+<span><span class="fu"><a href="../reference/custom_assembly_db.html">custom_assembly_db</a></span><span class="op">(</span></span>
+<span>  clade <span class="op">=</span> <span class="st">"Asteroidea"</span>,</span>
+<span>  db_path <span class="op">=</span> <span class="st">"~/MitoPilot_reference_dbs"</span>, <span class="co"># store outside your project directories for reuse</span></span>
+<span>  db_type <span class="op">=</span> <span class="st">"both"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Key arguments:</p>
+<ul>
+<li>
+<code>clade</code> - taxon name; validated against NCBI taxonomy (an
+invalid name returns an error).</li>
+<li>
+<code>db_path</code> - directory for the databases. Use a location
+<strong>outside</strong> your MitoPilot project directories so the
+databases can be reused across projects.</li>
+<li>
+<code>db_type</code> - <code>"getorganelle"</code>,
+<code>"mitofinder"</code>, or <code>"both"</code> (default).</li>
+<li>
+<code>refseq_only</code> - set <code>TRUE</code> to restrict to
+RefSeq mitogenomes (default <code>FALSE</code> = all mitogenomes).</li>
+<li>
+<code>search_terms</code> - optional extra <a href="https://www.ncbi.nlm.nih.gov/nuccore/advanced" class="external-link">advanced GenBank
+query</a> terms, combined with the clade via <code>AND</code>,
+e.g. <code>'"PRJNA720393"[BioProject]'</code>. These are validated
+before any download.</li>
+<li>
+<code>retain_genbank</code> - keep the raw <code>genbank.gb</code>
+file for GetOrganelle-only builds.</li>
+</ul>
+<p>Databases are written to a dated, clade-named sub-directory of
+<code>db_path</code>, for example
+<code>Asteroidea_all_2026-06-11/</code>, containing:</p>
+<ul>
+<li>
+<code>getorganelle_seed.fasta</code> - the GetOrganelle seed
+database</li>
+<li>
+<code>getorganelle_label.fasta</code> - the GetOrganelle label
+database</li>
+<li>
+<code>mitofinder_&lt;clade&gt;_&lt;source&gt;_&lt;date&gt;.gb</code>
+- the MitoFinder database (if requested)</li>
+<li>
+<code>README.txt</code> and <code>manifest.json</code> - the full
+query, NCBI taxid, record counts, and the date/time GenBank was
+accessed</li>
+</ul>
+<p>When finished, the function will print instructions for how to use
+the new database with MitoPilot,</p>
+<p>You can provide the path to your GetOrganelle databases with the
+<code>custom_seeds_db</code> and <code>custom_labels_db</code> arguments
+of <code><a href="../reference/new_project.html">MitoPilot::new_project</a></code> function when initializing a
+project. Alternatively, you can specify the GetOrganelle database in the
+assembly options section of the MitoPilot GUI.</p>
+<div class="alert alert-note">
+<p><strong>Note on un-annotated sequences:</strong> Some mitochondrial
+records have no annotated genes (e.g. D-loop or poorly annotated
+sequences). Rather than requiring manual review,
+<code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code> automatically adds such a sequence to
+the seed database if it is long enough to likely be a near-complete
+mitogenome (by default, at least 0.8x the median length of the complete
+mitogenomes in the download). Tune this with <code>include_nogene</code>
+and <code>nogene_min_frac</code>.</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="legacy-approach-genbankdownloadutil-sh">Legacy approach: <code>GenBankDownloadUtil.sh</code><a class="anchor" aria-label="anchor" href="#legacy-approach-genbankdownloadutil-sh"></a>
+</h3>
+<p>The original shell/python workflow remains available for advanced
+users who want full manual control. It performs a GenBank query for all
+mitochondrial records matching your search criteria, downloads those
+sequences, and sorts them into GetOrganelle “seed” and “label”
+databases.</p>
 <p>Before proceeding, you will need the following dependencies:</p>
 <ul>
 <li>
@@ -273,8 +350,11 @@ GetOrganelle label database in a similar manner.</p>
 documentation</a> has instructions on how to build a reference
 database.</p>
 <p>The MitoFinder reference database is simple: a GenBank formatted file
-(<code>.gb</code>) containing one or more annotated mitogenomes. This
-file can be downloaded from a GenBank query in a web browser.</p>
+(<code>.gb</code>) containing one or more annotated mitogenomes. The
+easiest way to build one is <code><a href="../reference/custom_assembly_db.html">MitoPilot::custom_assembly_db()</a></code>
+with <code>db_type = "mitofinder"</code> (see <a href="#recommended-mitopilotcustom_assembly_db">above</a>).
+Alternatively, this file can be downloaded from a GenBank query in a web
+browser.</p>
 <p>You can provide the path to your MitoFinder database with the
 <code>mitofinder_db</code> argument of
 <code><a href="../reference/new_project.html">MitoPilot::new_project</a></code> function when initializing a

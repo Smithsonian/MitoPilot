@@ -1,6 +1,8 @@
-# Annotation curation for dipteran mitogenomes
+# Annotation curation for true fly mitogenomes
 
-Annotation curation for dipteran mitogenomes
+Thin wrapper around the shared curation core with the true fly genetic
+code. See \`curate_mito_core()\` for the full argument list and
+behavior.
 
 ## Usage
 
@@ -11,7 +13,7 @@ curate_diptera_mito(
   coverage_fn = NULL,
   genetic_code = 5,
   out_dir = NULL,
-  max_blast_hits = 100,
+  max_blast_hits = 10,
   params = NULL,
   ref_dir = NULL,
   blast_ref_file = NULL,
@@ -43,7 +45,7 @@ curate_diptera_mito(
 
 - max_blast_hits:
 
-  Maximum number of top BLAST hits to retain (default = 100)
+  Maximum number of top BLAST hits to retain (default = 10)
 
 - params:
 

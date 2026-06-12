@@ -1,6 +1,7 @@
-# Title
+# Annotation validation for bird mitogenomes
 
-Title
+Thin wrapper around the shared validation core. See
+\`validate_mito_core()\` for details.
 
 ## Usage
 

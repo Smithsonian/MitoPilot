@@ -38,8 +38,13 @@ new_db(
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
-  max_blast_hits = 100,
-  curate_params = NULL
+  max_blast_hits = 10,
+  curate_params = NULL,
+  orf_cpus = 4,
+  orf_memory = 8,
+  orffinder_opts = "-s 1 -n true",
+  orf_min_len = 300,
+  orf_max_overlap = 0.1
 )
 ```
 
@@ -173,8 +178,29 @@ new_db(
 
 - max_blast_hits:
 
-  Maximum number of top BLAST hits to retain (default = 100)
+  Maximum number of top BLAST hits to retain (default = 10)
 
 - curate_params:
 
   Default curation parameters
+
+- orf_cpus:
+
+  CPUs for the optional ORF-finder step (default = 4)
+
+- orf_memory:
+
+  Memory (GB) for the optional ORF-finder step (default = 8)
+
+- orffinder_opts:
+
+  Default NCBI ORFfinder options (default = "-s 1 -n true")
+
+- orf_min_len:
+
+  Minimal ORF length in nucleotides (default = 300)
+
+- orf_max_overlap:
+
+  Maximum overlap with existing annotations, as a fraction of the ORF
+  length, before an ORF is discarded (default = 0.1)

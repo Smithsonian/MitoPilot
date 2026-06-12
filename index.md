@@ -32,11 +32,13 @@ raw input and performs the following steps.
       annotation (optional)
     - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA annotation
       (optional)
+    - [ORFfinder](https://www.ncbi.nlm.nih.gov/orffinder/) identify
+      additional open reading frames (ORFs) (optional)
     - Custom scripts for gene boundary refinement and annotation file
       formatting
     - Validation to flag possible issues or known errors that would be
       rejected by NCBI GenBank
-    - Manual curation of annotations using the integrated Shiny App.
+    - Manual curation of annotations using the integrated Shiny App
 3.  Data export
     - Custom scripts to export data in a format suitable for submission
       to NCBI GenBank
@@ -59,9 +61,12 @@ However, MitoPilot has been developed with modularity and extensibility
 in mind to facilitate broader application in the future.
 
 MitoPilot allows the user to provide custom reference databases for
-assembly with GetOrganelle or MitoFinder. We have provided some
+assembly with GetOrganelle or MitoFinder. The
+[`MitoPilot::custom_assembly_db()`](https://smithsonian.github.io/MitoPilot/reference/custom_assembly_db.md)
+function can build these databases for a clade automatically, no
+external tools required. See our
 [documentation](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html)
-to help you build a custom reference database.
+for details.
 
 For annotation with MITOS2, we have provided reference databases for
 [chordates](https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Chordata)
@@ -74,18 +79,68 @@ the future.
 Currently, MitoPilot has curation/validation rulesets for the following
 groups of organisms:
 
-- fishes
-- starfish
-- octocorals
-- hexacorals
-- dipterans
-- turtles
-- copepods (testing in progress)
-- ctenophores (testing in progress)
-- annelids (testing in progress)
-- mammals (untested)
-- lepidosaurs (untested)
-- birds (untested)
+- [Actinopterygii
+  (fishes)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
+- [Asteroidea (sea
+  stars)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
+- [Octocorallia
+  (octocorals)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
+- [Hexacorallia
+  (hexacorals)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
+- [Diptera (true
+  flies)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
+- [Testudines
+  (turtles)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
+- [Copepoda (copepods, testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
+- [Ctenophora (ctenophores, testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
+- [Annelida (annelids, testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
+- [Mammalia (mammals,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
+- [Lepidosauria (lepidosaurs,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
+- [Aves (birds,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
+- [Ascidiacea (sea squirts,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
+- [Bivalvia (bivalves,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
+- [Bryozoa (bryozoans,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
+- [Crinoidea (crinoids,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
+- [Demospongiae (demosponges,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
+- [Echinoidea (sea urchins,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
+- [Gastropoda (gastropods,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
+- [Holothuroidea (sea cucumbers,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
+- [Homoscleromorpha (homoscleromorph sponges,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
+- [Malacostraca (malacostracans,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
+- [Hydrozoa (hydrozoans,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
+- [Nemertea (ribbon worms,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
+- [Ophiuroidea (brittle stars,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
+- [Platyhelminthes (flatworms,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/)
+- [Polychaeta (polychaetes,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
+- [Pycnogonida (sea spiders,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
+- [Sipuncula (peanut worms,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
+- [Thaliacea (salps,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
+- [Thecostraca (barnacles,
+  untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/)
 
 See the [curation ruleset
 browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
@@ -109,6 +164,8 @@ Curation reference databases can be specified independently of the
 annotation reference databases. We have provided curation databases for
 chordates and metazoans (RefSeq 89 or RefSeq 231). Users can also
 provide custom databases to improve the automatic curation step.
+Additionally, MitoPilot will automatically incorporate the assembly
+BLAST results into the curation databases.
 
 # Installation
 

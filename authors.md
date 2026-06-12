@@ -12,13 +12,13 @@ Source:
 [`DESCRIPTION`](https://github.com/Smithsonian/MitoPilot/blob/main/DESCRIPTION)
 
 Leopold D, MacGuigan D (2026). *MitoPilot: Mitogenome assembly,
-annotation, and curation*. R package version 1.4.5,
+annotation, and curation*. R package version 1.4.6,
 <https://github.com/Smithsonian/MitoPilot>.
 
     @Manual{,
       title = {MitoPilot: Mitogenome assembly, annotation, and curation},
       author = {Devin Leopold and Dan MacGuigan},
       year = {2026},
-      note = {R package version 1.4.5},
+      note = {R package version 1.4.6},
       url = {https://github.com/Smithsonian/MitoPilot},
     }

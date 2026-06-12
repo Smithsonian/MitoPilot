@@ -15,7 +15,11 @@ export_files(
     "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
   generateAAalignments = T,
-  gene_export = F
+  gene_export = F,
+  review = TRUE,
+  start_aa = 10,
+  stop_aa = 10,
+  ident_pct = 60
 )
 ```
 
@@ -52,3 +56,28 @@ export_files(
 
   Export FASTAs and feature tables for individual genes? (default:
   FALSE)
+
+- review:
+
+  Run the PCG annotation outlier review after writing files and return
+  the flagged results? (default: TRUE)
+
+- start_aa:
+
+  Start-offset threshold (amino acids) passed to
+  \[flag_PCG_outliers()\]. Default 10.
+
+- stop_aa:
+
+  Stop-offset threshold (amino acids) passed to \[flag_PCG_outliers()\].
+  Default 10.
+
+- ident_pct:
+
+  Identity threshold (percent) passed to \[flag_PCG_outliers()\].
+  Default 60.
+
+## Value
+
+Invisibly, the list returned by \[flag_PCG_outliers()\] when \`review\`
+is TRUE (and a group of \>1 sample is exported), otherwise \`NULL\`.
