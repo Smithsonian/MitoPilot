@@ -85,18 +85,37 @@ the future.
 Currently, MitoPilot has curation/validation rulesets for the following
 groups of organisms:
 
-- fishes
-- starfish
-- octocorals
-- hexacorals
-- dipterans
-- turtles
-- copepods (testing in progress)
-- ctenophores (testing in progress)
-- annelids (testing in progress)
-- mammals (untested)
-- lepidosaurs (untested)
-- birds (untested)
+- *Actinopterygii* (fishes)
+- *Asteroidea* (sea stars)
+- *Octocorallia* (octocorals)
+- *Hexacorallia* (hexacorals)
+- *Diptera* (true flies)
+- *Testudines* (turtles)
+- *Copepoda* (copepods, testing in progress)
+- *Ctenophora* (ctenophores, testing in progress)
+- *Annelida* (annelids, testing in progress)
+- *Mammalia* (mammals, untested)
+- *Lepidosauria* (lepidosaurs, untested)
+- *Aves* (birds, untested)
+- *Ascidiacea* (sea squirts, untested)
+- *Bivalvia* (bivalves, untested)
+- *Bryozoa* (bryozoans, untested)
+- *Crinoidea* (crinoids, untested)
+- *Demospongiae* (demosponges, untested)
+- *Echinoidea* (sea urchins, untested)
+- *Gastropoda* (gastropods, untested)
+- *Holothuroidea* (sea cucumbers, untested)
+- *Homoscleromorpha* (homoscleromorph sponges, untested)
+- *Malacostraca* (malacostracans, untested)
+- *Hydrozoa* (hydrozoans, untested)
+- *Nemertea* (ribbon worms, untested)
+- *Ophiuroidea* (brittle stars, untested)
+- *Platyhelminthes* (flatworms, untested)
+- *Polychaeta* (polychaetes, untested)
+- *Pycnogonida* (sea spiders, untested)
+- *Sipuncula* (peanut worms, untested)
+- *Thaliacea* (salps, untested)
+- *Thecostraca* (barnacles, untested)
 
 See the [curation ruleset
 browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
