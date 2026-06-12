@@ -9,6 +9,8 @@ custom_assembly_db(
   db_path,
   db_type = c("both", "getorganelle", "mitofinder"),
   refseq_only = FALSE,
+  mito_only = TRUE,
+  genomic_only = TRUE,
   search_terms = NULL,
   include_nogene = TRUE,
   nogene_min_frac = 0.8,
@@ -28,6 +30,13 @@ your MitoPilot project directories so databases can be reused across projects.}
 \item{db_type}{Which database(s) to build: "both" (default), "getorganelle", or "mitofinder".}
 
 \item{refseq_only}{If TRUE, restrict to RefSeq mitogenomes. Default FALSE (all mitogenomes).}
+
+\item{mito_only}{If TRUE (default), restrict to records flagged as mitochondrial in origin
+(NCBI `mitochondrion[filter]`). Excludes nuclear records that merely mention "mitochondrial"
+(e.g. nuclear-encoded mito genes, NUMTs). Set FALSE to broaden recall.}
+
+\item{genomic_only}{If TRUE (default), restrict to genomic DNA (NCBI `biomol_genomic[PROP]`),
+excluding mRNA/rRNA/tRNA/cRNA records. Set FALSE to broaden recall.}
 
 \item{search_terms}{Optional additional NCBI advanced-query term(s) combined with the
 clade via AND, e.g. \code{'"PRJNA720393"[BioProject]'}. Validated before download.}

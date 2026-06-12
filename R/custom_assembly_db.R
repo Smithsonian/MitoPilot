@@ -28,6 +28,11 @@
 #'   your MitoPilot project directories so databases can be reused across projects.
 #' @param db_type Which database(s) to build: "both" (default), "getorganelle", or "mitofinder".
 #' @param refseq_only If TRUE, restrict to RefSeq mitogenomes. Default FALSE (all mitogenomes).
+#' @param mito_only If TRUE (default), restrict to records flagged as mitochondrial in origin
+#'   (NCBI `mitochondrion[filter]`). Excludes nuclear records that merely mention "mitochondrial"
+#'   (e.g. nuclear-encoded mito genes, NUMTs). Set FALSE to broaden recall.
+#' @param genomic_only If TRUE (default), restrict to genomic DNA (NCBI `biomol_genomic[PROP]`),
+#'   excluding mRNA/rRNA/tRNA/cRNA records. Set FALSE to broaden recall.
 #' @param search_terms Optional additional NCBI advanced-query term(s) combined with the
 #'   clade via AND, e.g. \code{'"PRJNA720393"[BioProject]'}. Validated before download.
 #' @param include_nogene If TRUE (default), add unannotated mitochondrial sequences to the
@@ -51,6 +56,8 @@ custom_assembly_db <- function(clade,
                                db_path,
                                db_type = c("both", "getorganelle", "mitofinder"),
                                refseq_only = FALSE,
+                               mito_only = TRUE,
+                               genomic_only = TRUE,
                                search_terms = NULL,
                                include_nogene = TRUE,
                                nogene_min_frac = 0.8,
@@ -84,7 +91,7 @@ custom_assembly_db <- function(clade,
   message("Validated clade '", clade, "' (NCBI taxid: ", taxid, ").")
 
   # ---- 2. build + validate the GenBank query ----
-  query <- .cadb_build_query(clade, search_terms, refseq_only)
+  query <- .cadb_build_query(clade, search_terms, refseq_only, mito_only, genomic_only)
   se <- .cadb_esearch(query, api_key, delay)
 
   if (length(se$warnings) > 0) {
@@ -266,14 +273,20 @@ custom_assembly_db <- function(clade,
 
 #' Build the GenBank nucleotide query string
 #' @noRd
-.cadb_build_query <- function(clade, search_terms, refseq_only) {
+.cadb_build_query <- function(clade, search_terms, refseq_only,
+                              mito_only = TRUE, genomic_only = TRUE) {
   q <- paste0('("mitochondrion"[All Fields] OR "mitochondrial"[All Fields])',
               ' AND "', clade, '"[Organism]')
   if (!is.null(search_terms) && nzchar(trimws(search_terms))) {
     q <- paste0(q, " AND ", trimws(search_terms))
   }
-  # efilter equivalents: -location mitochondrion -molecule genomic [-source refseq]
-  q <- paste0(q, " AND mitochondrion[filter] AND biomol_genomic[PROP]")
+  # optional specificity filters (mirror the original efilter -location/-molecule)
+  if (isTRUE(mito_only)) {
+    q <- paste0(q, " AND mitochondrion[filter]")
+  }
+  if (isTRUE(genomic_only)) {
+    q <- paste0(q, " AND biomol_genomic[PROP]")
+  }
   if (isTRUE(refseq_only)) {
     q <- paste0(q, " AND refseq[filter]")
   }
