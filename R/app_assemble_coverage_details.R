@@ -20,7 +20,7 @@ assembly_coverage_details_server <- function(id, rv) {
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::select(
           ignore, ID, path, scaffold, topology, length_raw, length, sequence, depth,
-          dplyr::any_of(c("blast_accession", "blast_species", "blast_pident", "blast_qcovs", "blast_lineage"))
+          dplyr::any_of(c("blast_accession", "blast_species", "blast_pident", "blast_qcovs", "blast_evalue", "blast_lineage"))
         ) |>
         dplyr::collect() |>
         dplyr::mutate(
@@ -566,13 +566,18 @@ assembly_coverage_details_server <- function(id, rv) {
         )
       }
 
+      # center the chevron within each nav button (default render looks left-justified)
+      nav_btn_style <- "display: inline-flex; align-items: center; justify-content: center; width: 40px;"
+
       navigator <- if (n_blocks > 0) {
         div(
           style = "margin-top: 12px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;",
           div(
             style = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;",
-            actionButton(ns("prev_block"), "", icon = icon("chevron-left")),
-            actionButton(ns("next_block"), "", icon = icon("chevron-right")),
+            actionButton(ns("prev_block"), "", icon = icon("chevron-left"),
+                         style = nav_btn_style),
+            actionButton(ns("next_block"), "", icon = icon("chevron-right"),
+                         style = nav_btn_style),
             div(style = "font-size: 12px; color: #555;", uiOutput(ns("block_info"), inline = TRUE))
           ),
           uiOutput(ns("block_interp")),
@@ -589,7 +594,14 @@ assembly_coverage_details_server <- function(id, rv) {
           div(style = "font-size: 11px; color: #555; margin: 14px 0 4px 0;",
               "Conflict block summary (click a row to jump to that block):"),
           reactableOutput(ns("blocks_table")),
-          uiOutput(ns("resolve_ui"))
+          uiOutput(ns("resolve_ui")),
+          div(
+            style = "display: flex; align-items: center; gap: 8px; margin-top: 10px;",
+            actionButton(ns("prev_block_btm"), "", icon = icon("chevron-left"),
+                         style = nav_btn_style),
+            actionButton(ns("next_block_btm"), "", icon = icon("chevron-right"),
+                         style = nav_btn_style)
+          )
         )
       } else NULL
 
@@ -624,20 +636,25 @@ assembly_coverage_details_server <- function(id, rv) {
     # Arrows move the TABLE selection only; the selection observer below is the
     # single writer of current_block. (Writing current_block here and also
     # syncing the table from current_block creates a feedback loop.)
-    observeEvent(input$prev_block, {
+    go_prev_block <- function() {
       req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
       n <- nrow(rv$alignment$conflicts)
       cur <- rv$cur_block %||% 1L
       reactable::updateReactable("blocks_table",
                                  selected = if (cur <= 1L) n else cur - 1L)
-    })
-    observeEvent(input$next_block, {
+    }
+    go_next_block <- function() {
       req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
       n <- nrow(rv$alignment$conflicts)
       cur <- rv$cur_block %||% 1L
       reactable::updateReactable("blocks_table",
                                  selected = if (cur >= n) 1L else cur + 1L)
-    })
+    }
+    # top and bottom navigation arrows drive the same table selection
+    observeEvent(input$prev_block, go_prev_block())
+    observeEvent(input$next_block, go_next_block())
+    observeEvent(input$prev_block_btm, go_prev_block())
+    observeEvent(input$next_block_btm, go_next_block())
 
     output$block_info <- renderUI({
       req(rv$alignment$conflicts, nrow(rv$alignment$conflicts) > 0)
@@ -1153,7 +1170,68 @@ assembly_coverage_details_server <- function(id, rv) {
       stringr::str_trim(paste0("[Assembly edited: ", edit_text, "] ", prior))
     }
 
-    persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note) {
+    # --- BLAST hit inheritance for the consensus (Path 0) -------------------
+    blast_cols_names <- c("blast_accession", "blast_species", "blast_pident",
+                          "blast_qcovs", "blast_evalue", "blast_lineage")
+
+    # Pull the blast columns out of a chosen candidate row (or NULL)
+    blast_cols <- function(blast_row) {
+      if (is.null(blast_row) || nrow(blast_row) == 0) return(NULL)
+      keep <- intersect(blast_cols_names, names(blast_row))
+      if (length(keep) == 0) return(NULL)
+      blast_row[1, keep, drop = FALSE]
+    }
+
+    # Distinct BLAST hits among the given (non-consensus) paths
+    consensus_blast_candidates <- function(paths) {
+      fa <- rv$focal_assembly
+      if (is.null(fa) || !"blast_accession" %in% names(fa)) return(NULL)
+      sub <- fa[fa$path %in% paths & fa$path > 0 &
+                  !is.na(fa$blast_accession) & nzchar(fa$blast_accession), , drop = FALSE]
+      if (nrow(sub) == 0) return(NULL)
+      keep <- intersect(blast_cols_names, names(sub))
+      unique(sub[, keep, drop = FALSE])
+    }
+
+    # Resolve which BLAST hit to inherit, then run finalize(blast_row). If the
+    # contributing paths carry more than one distinct hit, ask the user first.
+    resolve_blast_then <- function(paths, finalize) {
+      cand <- consensus_blast_candidates(paths)
+      if (is.null(cand) || nrow(cand) == 0) return(finalize(NULL))
+      if (nrow(cand) == 1) return(finalize(cand))
+      sp <- if ("blast_species" %in% names(cand)) cand$blast_species else rep(NA, nrow(cand))
+      labels <- sprintf(
+        "%s (%s%s%s)",
+        ifelse(is.na(sp) | !nzchar(sp), "unknown sp.", sp),
+        cand$blast_accession,
+        if ("blast_pident" %in% names(cand)) paste0(", pident ", cand$blast_pident, "%") else "",
+        if ("blast_qcovs" %in% names(cand)) paste0(", qcov ", cand$blast_qcovs, "%") else ""
+      )
+      rv$consensus_finalize <- finalize
+      rv$consensus_blast_choices <- cand
+      showModal(modalDialog(
+        title = "Multiple BLAST hits among paths",
+        radioButtons(ns("consensus_blast_choice"),
+                     "Choose a BLAST hit to assign to the consensus assembly:",
+                     choiceNames = labels, choiceValues = as.character(seq_len(nrow(cand)))),
+        footer = tagList(modalButton("Cancel"),
+                         actionButton(ns("consensus_blast_confirm"), "Assign hit")),
+        easyClose = FALSE
+      ))
+    }
+
+    observeEvent(input$consensus_blast_confirm, {
+      removeModal()
+      fin <- rv$consensus_finalize
+      cand <- rv$consensus_blast_choices
+      idx <- suppressWarnings(as.integer(input$consensus_blast_choice))
+      rv$consensus_finalize <- NULL
+      rv$consensus_blast_choices <- NULL
+      req(!is.null(fin), !is.null(cand), !is.na(idx))
+      fin(cand[idx, , drop = FALSE])
+    })
+
+    persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note, blast_row = NULL) {
       ID <- rv$updating$ID
       dir <- file.path(session$userData$dir_out, ID, "assemble",
                        rv$updating$assemble_opts)
@@ -1161,15 +1239,23 @@ assembly_coverage_details_server <- function(id, rv) {
       names(dna) <- paste(ID, 0, 0, sep = ".") |> paste("linear")
       Biostrings::writeXStringSet(dna, file.path(dir, paste0(ID, "_assembly_0.fasta")))
 
-      cov <- data.frame(
-        Position  = seq_along(depth_vec),
+      # Write coverage stats in the same layout coverage() produces (Call +
+      # rolling MeanDepth with #-masking), so annotate() can read it. Synthesized
+      # positions may have NA depth/error -> treat as 0 before rolling.
+      depth_i <- round(depth_vec)
+      depth_i[is.na(depth_i)] <- 0
+      err_i <- err_vec
+      err_i[is.na(err_i)] <- 0
+      cov_in <- data.frame(
         SeqId     = paste(ID, 0, 0, sep = "."),
-        Depth     = round(depth_vec),
-        GC        = round(gc_vec, 4),
-        Correct   = round(depth_vec),
-        ErrorRate = err_vec,
+        Position  = seq_along(depth_vec),
+        Call      = strsplit(seq_str, "", fixed = TRUE)[[1]],
+        Depth     = depth_i,
+        Correct   = depth_i,
+        ErrorRate = err_i,
         stringsAsFactors = FALSE
       )
+      cov <- .coverage_stats_to_output(.coverage_rolling_stats(cov_in))
       readr::write_csv(
         cov, file.path(dir, paste0(ID, "_assembly_0_coverageStats.csv")),
         quote = "none", na = ""
@@ -1179,6 +1265,7 @@ assembly_coverage_details_server <- function(id, rv) {
         session$userData$con,
         stringr::str_glue("UPDATE assemblies SET ignore = 1 WHERE ID = '{ID}';")
       )
+      bl <- blast_cols(blast_row)
       a <- data.frame(
         ID = ID, path = 0, scaffold = 0, topology = "linear",
         length = nchar(seq_str), length_raw = nchar(seq_str), sequence = seq_str,
@@ -1187,6 +1274,7 @@ assembly_coverage_details_server <- function(id, rv) {
         errors = paste(err_vec, collapse = " "),
         ignore = 0, edited = 1, time_stamp = as.numeric(Sys.time())
       )
+      if (!is.null(bl)) a <- cbind(a, bl)
       dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::rows_upsert(a, by = c("ID", "path", "scaffold"), copy = T, in_place = T)
 
@@ -1195,6 +1283,7 @@ assembly_coverage_details_server <- function(id, rv) {
         topology = "linear",
         assemble_notes = compose_edit_notes(note)
       )
+      if (!is.null(bl)) update <- cbind(update, bl)
       rv$data <- rv$data |> dplyr::rows_update(update, by = "ID")
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(update, by = "ID", copy = T, in_place = T,
@@ -1335,7 +1424,11 @@ assembly_coverage_details_server <- function(id, rv) {
           type = "warning"
         )
       }
-      persist_path0(res$seq, depth_vec, gc_vec, err_vec, note)
+      # Inherit a BLAST hit from the contributing paths (prompt if >1 distinct)
+      cand_paths <- rv$focal_assembly$path[rv$focal_assembly$path > 0]
+      resolve_blast_then(cand_paths, function(blast_row) {
+        persist_path0(res$seq, depth_vec, gc_vec, err_vec, note, blast_row)
+      })
     })
 
 
@@ -1367,6 +1460,12 @@ assembly_coverage_details_server <- function(id, rv) {
     observeEvent(input$trim_confirm, {
       req(isTRUE(input$trim_confirm))
 
+      sel <- selected()
+      # Inherit a BLAST hit from the selected paths (prompt if >1 distinct),
+      # then write everything. Deferred so a cancelled picker writes nothing.
+      finalize_trim <- function(blast_row) {
+        bl <- blast_cols(blast_row)
+
       # Make new assembly
       trimmed <- purrr::map2_chr(rv$alignment$consStart, rv$alignment$consEnd, ~ {
         Biostrings::subseq(rv$alignment$seqs[1], .x, .y) |> as.character()
@@ -1395,7 +1494,7 @@ assembly_coverage_details_server <- function(id, rv) {
         rv$updating$ID,
         "assemble",
         rv$updating$assemble_opts,
-        paste0(rv$updating$ID, "_assembly_", rv$focal_assembly$path[selected()[1]], "_coverageStats.csv")
+        paste0(rv$updating$ID, "_assembly_", rv$focal_assembly$path[sel[1]], "_coverageStats.csv")
       ) |> read.csv()
 
       start_offset <- (stringr::str_extract(as.character(rv$alignment$seqs[1]), "^-+") |> nchar()) %|NA|% 0
@@ -1440,6 +1539,7 @@ assembly_coverage_details_server <- function(id, rv) {
         edited = 1,
         time_stamp = as.numeric(Sys.time())
       )
+      if (!is.null(bl)) trimmed_assembly <- cbind(trimmed_assembly, bl)
       dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::rows_upsert(
           trimmed_assembly,
@@ -1457,6 +1557,7 @@ assembly_coverage_details_server <- function(id, rv) {
           "multi-path getOrganelle output trimmed for consensus"
         )
       )
+      if (!is.null(bl)) update <- cbind(update, bl)
       rv$data <- rv$data |>
         dplyr::rows_update(
           update,
@@ -1476,6 +1577,10 @@ assembly_coverage_details_server <- function(id, rv) {
         dplyr::filter(ID == !!rv$updating$ID)
 
       trigger("coverage_modal")
+      } # end finalize_trim
+
+      cand_paths <- rv$focal_assembly$path[sel]
+      resolve_blast_then(cand_paths, finalize_trim)
     })
   })
 }
