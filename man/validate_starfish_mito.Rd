@@ -2,7 +2,7 @@
 % Please edit documentation in R/validate_starfish_mito.R
 \name{validate_starfish_mito}
 \alias{validate_starfish_mito}
-\title{Title}
+\title{Annotation validation for sea star mitogenomes}
 \usage{
 validate_starfish_mito(
   annotations_fn = NULL,
@@ -22,5 +22,6 @@ provided as a base64 encoded JSON string.}
 \item{out_dir}{output directory}
 }
 \description{
-Title
+Thin wrapper around the shared validation core. See `validate_mito_core()`
+for details.
 }

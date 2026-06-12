@@ -9,13 +9,85 @@ gene_type_fill <- c(
   ctrl = "#FAA34A",
   PCG  = "#60BD68",
   rRNA = "#5DA5DA",
-  tRNA = "#F17CB0"
+  tRNA = "#F17CB0",
+  ORF  = "#4D4D4D"
 )
 gene_type_alpha <- 0.5
+
+# Split gene rows that wrap the x-axis boundary into two arrow segments.
+#
+# A feature that crosses the origin of a circular sequence has its start beyond
+# its end, so after mapping to plot coordinates `xmin > xmax`. gggenes can't draw
+# such a feature as one arrow, so split it into `[xmin, x_hi]` and `[x_lo, xmax]`
+# (the two arcs on either side of the boundary). The gene label is kept on the
+# longer piece only to avoid a duplicated label. `df` must already carry numeric
+# `xmin`/`xmax` columns (in the same coordinate space as `x_lo`/`x_hi`).
+split_wrapped_genes <- function(df, x_lo, x_hi) {
+  if (nrow(df) == 0 || !all(c("xmin", "xmax") %in% names(df)) ||
+      !any(df$xmin > df$xmax, na.rm = TRUE)) {
+    return(df)
+  }
+  pieces <- lapply(seq_len(nrow(df)), function(i) {
+    row <- df[i, , drop = FALSE]
+    if (isTRUE(row$xmin > row$xmax)) {
+      seg_hi <- row
+      seg_hi$xmax <- x_hi # [xmin, x_hi]
+      seg_lo <- row
+      seg_lo$xmin <- x_lo # [x_lo, xmax]
+      # keep the label on the longer arc only
+      if ((x_hi - row$xmin) >= (row$xmax - x_lo)) {
+        seg_lo$gene <- ""
+      } else {
+        seg_hi$gene <- ""
+      }
+      dplyr::bind_rows(seg_hi, seg_lo)
+    } else {
+      row
+    }
+  })
+  dplyr::bind_rows(pieces)
+}
 
 annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # Skips the count recompute on the initial annotation load (validated counts
+    # already in the db); set TRUE right before each load, see update_counts().
+    skip_count_update <- FALSE
+
+    # Outlier-review flag for the sample we jumped in to fix (NULL otherwise),
+    # used to render a reminder banner of what to edit.
+    outlier_flag <- reactiveVal(NULL)
+    output$outlier_flag_banner <- renderUI({
+      info <- outlier_flag()
+      if (is.null(info)) return(NULL)
+      div(
+        style = paste(
+          "background:#fff3cd; border:1px solid #ffe69c; color:#664d03;",
+          "border-radius:4px; padding:8px 12px; margin-bottom:8px;",
+          "display:flex; align-items:center; gap:8px;"
+        ),
+        icon("triangle-exclamation"),
+        span(
+          tags$b(stringr::str_glue("Outlier review - {toupper(info$gene)}: ")),
+          info$issue,
+          tags$span(
+            style = "color:#8a6d3b; margin-left:6px;",
+            stringr::str_glue(
+              "(start {sprintf('%+d', info$start_offset)} aa, ",
+              "stop {sprintf('%+d', info$stop_offset)} aa, ",
+              "identity {info$pct_identity}%)"
+            )
+          ),
+          tags$span(
+            style = "margin-left:6px;",
+            "- only this gene is editable in review mode; adjust its start/stop ",
+            "position, then use 'Back to Review'."
+          )
+        )
+      )
+    })
 
     # Prepare modal data ----
     init("annotations_modal")
@@ -24,6 +96,7 @@ annotations_details_server <- function(id, rv) {
       rv$align_refSeq <- TRUE
 
       ## Load annotations ----
+      skip_count_update <<- TRUE  # this load carries validated counts; don't recompute
       rv$annotations <- dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::arrange(pos1) |>
@@ -61,6 +134,32 @@ annotations_details_server <- function(id, rv) {
 
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
+
+      # Cross-tab jump from the export outlier review: auto-select the flagged
+      # gene's row so the START/STOP editor opens directly on it. Delay lets the
+      # reactable widget render before we set its selection.
+      goto <- session$userData$goto_annotate_target
+      if (!is.null(goto) && !is.null(goto$gene) &&
+          identical(goto$ID, rv$updating$ID)) {
+        # Remember the flag so the banner can remind the user what to edit
+        outlier_flag(goto)
+        gidx <- which(rv$annotations$gene == goto$gene)
+        if (length(gidx) > 0) {
+          gidx <- gidx[[1]]
+          tbl_id <- session$ns("table")
+          shinyjs::delay(500, {
+            reactable::updateReactable("table", selected = gidx, session = session)
+            # Scroll the (single-page) table so the selected gene is visible
+            shinyjs::runjs(sprintf(
+              "var t=document.getElementById('%s'); if(t){var r=t.querySelectorAll('.rt-tbody .rt-tr'); if(r[%d]){r[%d].scrollIntoView({block:'center', behavior:'smooth'});}}",
+              tbl_id, gidx - 1L, gidx - 1L
+            ))
+          })
+        }
+        session$userData$goto_annotate_target <- NULL
+      } else {
+        outlier_flag(NULL)
+      }
     })
 
     # Compact status pill renderer. `state` is one of "yes" / "no" / NA;
@@ -150,27 +249,19 @@ annotations_details_server <- function(id, rv) {
             type = colDef(
               show = T,
               align = "left",
-              cell = function(value) {
-                color <- switch(value %||% "",
-                  ctrl  = "#FAA34A",
-                  PCG   = "#60BD68",
-                  rRNA  = "#5DA5DA",
-                  tRNA  = "#F17CB0",
-                  "#888888"
-                )
-                htmltools::span(
-                  style = paste0(
-                    "background:", color, "30;",
-                    "color:#111111;",
-                    "border:1px solid ", color, ";",
-                    "border-radius:3px;",
-                    "padding:1px 4px;",
-                    "font-size:11px;",
-                    "white-space:nowrap;"
-                  ),
-                  value %||% ""
-                )
-              }
+              html = TRUE,
+              # JS (not R) cell renderer so the badge re-renders client-side on
+              # updateReactable() after an edit; an R cell function is only run
+              # at full render, leaving stale badges when rows are re-sorted.
+              cell = htmlwidgets::JS("
+                function(cellInfo) {
+                  var colors = {ctrl:'#FAA34A', PCG:'#60BD68', rRNA:'#5DA5DA', tRNA:'#F17CB0', ORF:'#4D4D4D'};
+                  var v = cellInfo.value || '';
+                  var c = colors[v] || '#888888';
+                  return '<span style=\"background:' + c + '30;color:#111111;border:1px solid ' + c +
+                    ';border-radius:3px;padding:1px 4px;font-size:11px;white-space:nowrap;\">' + v + '</span>';
+                }
+              ")
             ),
             gene = colDef(show = T,
                           align = "left",
@@ -185,29 +276,8 @@ annotations_details_server <- function(id, rv) {
             tool = colDef(
               show = T,
               name = "tool",
-              align = "center",
-              maxWidth = 100,
-              cell = function(value) {
-                color <- switch(value %||% "",
-                  "MITOS2"      = "#444444",
-                  "tRNAscan-SE" = "#666666",
-                  "ARWEN"       = "#888888",
-                  "ARAGORN"     = "#AAAAAA",
-                  "#CCCCCC"
-                )
-                htmltools::span(
-                  style = paste0(
-                    "background:", color, "30;",
-                    "color:#111111;",
-                    "border:1px solid ", color, ";",
-                    "border-radius:3px;",
-                    "padding:1px 4px;",
-                    "font-size:11px;",
-                    "white-space:nowrap;"
-                  ),
-                  value %||% ""
-                )
-              }
+              align = "left",
+              maxWidth = 100
             ),
             notes = colDef(
               show = T,
@@ -248,14 +318,50 @@ annotations_details_server <- function(id, rv) {
       # Check for unsaved edits
       isolate({
         req(rv$annotations)
-        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] == "PCG")
+        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] %in% c("PCG", "ORF"))
         is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
+        is_orf <- length(sel) > 0 && rv$annotations$type[sel] == "ORF"
+        # An assigned ORF keeps tool == "ORFfinder" but a non-ORF type; offer the
+        # button for both so the assignment can be edited or removed.
+        is_assigned_orf <- length(sel) > 0 &&
+          isTRUE(rv$annotations$tool[sel] == "ORFfinder") &&
+          isTRUE(rv$annotations$type[sel] != "ORF")
         shinyjs::toggle("annotation_action_btns", condition = length(sel) > 0 && !is_deleted)
         shinyjs::toggle("annotation_restore_btn", condition = is_deleted)
+        shinyjs::toggle("assign_gene_btn", condition = (is_orf || is_assigned_orf) && !is_deleted)
+        updateActionButton(
+          inputId = "assign_gene",
+          label = if (is_assigned_orf) "Edit gene assignment" else "Assign gene name"
+        )
         # No row selected: skip sel-indexed branches so consumers (e.g. the
         # synteny zoom plot, which also accepts a click anchor) don't break.
         if (length(sel) == 0) {
           return(sel)
+        }
+        # Review mode: only the focal (flagged) gene is editable. If the user
+        # selects a different row, warn and snap the selection back so only one
+        # gene can change between "Back to Review" recomputes.
+        if (isTRUE(session$userData$in_outlier_review)) {
+          info <- outlier_flag()
+          if (!is.null(info) && !is.null(info$gene)) {
+            focal_idx <- which(rv$annotations$gene == info$gene)
+            if (length(focal_idx) > 0) {
+              focal_idx <- focal_idx[[1]]
+              if (!identical(sel, focal_idx)) {
+                shinyWidgets::sendSweetAlert(
+                  title = "Review mode",
+                  text = paste0(
+                    "Only ", toupper(info$gene),
+                    " can be edited while reviewing this outlier. Use ",
+                    "'Back to Review' to return to the outlier list."
+                  ),
+                  type = "info"
+                )
+                reactable::updateReactable("table", selected = focal_idx)
+                return(focal_idx)
+              }
+            }
+          }
         }
         if (identical(sel, rv$editing$idx)) {
           return(sel)
@@ -317,6 +423,9 @@ annotations_details_server <- function(id, rv) {
 
     # Close Modal ----
     observeEvent(input$close, {
+      # Nothing to do if the modal state is already cleared (e.g. a second/spurious
+      # close after rv$annotations was nulled below) - avoids filter() on NULL.
+      req(!is.null(rv$annotations))
       if (!is.null(rv$editing) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
@@ -350,6 +459,25 @@ annotations_details_server <- function(id, rv) {
       ref_msa_cache$key <- NULL
       trigger("update_annotate_table")
       removeModal()
+      # If we arrived here from the export outlier review, hop back to it
+      if (isTRUE(session$userData$return_to_review)) {
+        session$userData$return_to_review <- FALSE
+        session$userData$in_outlier_review <- FALSE
+        trigger("reopen_outlier_review")
+      }
+    })
+
+    # Return to the export outlier review (saves via the standard close path)
+    observeEvent(input$back_to_review, {
+      session$userData$return_to_review <- TRUE
+      # Record the (sample, gene) just reviewed so the review modal can mark it
+      # resolved and navigate back to that gene. goto_annotate_target is cleared
+      # when this modal opens, so read the persisted flag instead.
+      info <- outlier_flag()
+      if (!is.null(info) && !is.null(info$ID) && !is.null(info$gene)) {
+        session$userData$resolve_on_return <- list(ID = info$ID, gene = info$gene)
+      }
+      shinyjs::click("close")
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
@@ -387,13 +515,15 @@ annotations_details_server <- function(id, rv) {
         if (!is.null(fig_ctx())) fig_ctx(NULL)
         return()
       }
+      # Use [[ ]] (not $): rv$updating can transiently lack these columns and
+      # tibble $ warns on missing columns, while [[ returns NULL silently.
       ctx <- list(
-        ID              = u$ID,
-        length          = u$length,
-        topology        = u$topology,
-        blast_accession = u$blast_accession,
-        blast_species   = u$blast_species,
-        poor_blast_ref  = u$poor_blast_ref
+        ID              = u[["ID"]],
+        length          = u[["length"]],
+        topology        = u[["topology"]],
+        blast_accession = u[["blast_accession"]],
+        blast_species   = u[["blast_species"]],
+        poor_blast_ref  = u[["poor_blast_ref"]]
       )
       if (!identical(ctx, fig_ctx())) fig_ctx(ctx)
     })
@@ -401,13 +531,18 @@ annotations_details_server <- function(id, rv) {
     # Coverage Map ----
     output$coverage_map <- renderUI({
       req(rv$coverage, fig_ctx())
-      rv$genes_plot <- rv$annotations |>
+      # Split features that wrap the circular origin (pos1 > pos2) into two arrows.
+      cov_seq_len <- max(rv$coverage$Position)
+      genes_df <- rv$annotations |>
         dplyr::filter(pos1 > 0) |>
         dplyr::mutate(
-          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA"))
+          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
+          xmin = pos1, xmax = pos2
         ) |>
+        split_wrapped_genes(x_lo = 1, x_hi = cov_seq_len)
+      rv$genes_plot <- genes_df |>
         ggplot2::ggplot() +
-        ggplot2::aes(xmin = pos1, xmax = pos2, forward = direction == "+", fill = type, y = scaffold, label = gene) +
+        ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+", fill = type, y = scaffold, label = gene) +
         gggenes::geom_gene_arrow(
           arrow_body_height = ggplot2::unit(6, "mm"),
           arrowhead_height = ggplot2::unit(6, "mm"),
@@ -734,17 +869,21 @@ annotations_details_server <- function(id, rv) {
           r_nongap[idx] / aln_len * 100
         }
 
-        # Gene data frames in alignment coordinates
+        # Gene data frames in alignment coordinates. Features that wrap the
+        # circular origin (or straddle the rotation point in the reference) map
+        # to xmin > xmax; split them into two arcs at the 0/100 boundary.
         sample_df <- sample_genes |>
           dplyr::mutate(
-            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
             xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
-          )
+          ) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_df <- rv$blast_ref |>
           dplyr::mutate(
-            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")),
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
             xmin = r_to_pct(pos1), xmax = r_to_pct(pos2)
-          )
+          ) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
 
         # Classify each alignment column
         aln_class <- dplyr::case_when(
@@ -811,22 +950,24 @@ annotations_details_server <- function(id, rv) {
         } else {
           0L
         }
+        # Rotate reference coordinates to the shared anchor gene (per endpoint,
+        # modulo the reference length). A feature that wraps the circular origin
+        # or straddles the rotation point then maps to xmin > xmax and is split
+        # into two arcs at the 0/100 boundary below.
         ref_rotated <- rv$blast_ref |>
           dplyr::mutate(
             pos1_r = as.integer(((as.integer(pos1) - 1L - rotation) %% ref_length) + 1L),
             pos2_r = as.integer(((as.integer(pos2) - 1L - rotation) %% ref_length) + 1L)
           ) |>
-          dplyr::mutate(
-            pos2_r = dplyr::if_else(pos2_r < pos1_r, pos2_r + ref_length, pos2_r),
-            pos1_r = dplyr::if_else(pos2_r > ref_length, 1L, pos1_r)
-          ) |>
-          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
         sample_df  <- sample_genes |>
-          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA")))
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
         sample_pct <- sample_df |>
-          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100)
+          dplyr::mutate(xmin = pos1 / sample_len * 100, xmax = pos2 / sample_len * 100) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_pct    <- ref_rotated |>
-          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100)
+          dplyr::mutate(xmin = pos1_r / ref_length * 100, xmax = pos2_r / ref_length * 100) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
         sample_plot <- ggplot2::ggplot(sample_pct) +
           ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
                        fill = type, y = 0, label = gene) + gene_track
@@ -1213,19 +1354,53 @@ annotations_details_server <- function(id, rv) {
       trigger("align_now")
     })
     on("align_now", {
+      # Clear any "hold tight" overlay from a +/- edit once alignment finishes;
+      # on.exit so it also clears if a req() below aborts. No-op when not shown.
+      on.exit(waiter::waiter_hide(), add = TRUE)
       # check if user wants to use fewer reference samples in alignment
       if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
 
-      req(rv$annotations$type[selected()] == "PCG")
+      req(rv$annotations$type[selected()] %in% c("PCG", "ORF"))
+      is_orf <- rv$annotations$type[selected()] == "ORF"
+      # An ORF assigned a gene keeps tool == "ORFfinder" but a non-ORF type.
+      feat_gene <- rv$annotations$gene[selected()]
+      is_assigned_orf <- isTRUE(rv$annotations$tool[selected()] == "ORFfinder") && !is_orf
 
-      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE) |>
-        dplyr::slice_head(n = n_hits)
+      using_local <- !is.null(rv$local_hits)
+      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+      # For an ORF assigned a gene, the combined-DB hits already cover every
+      # per-gene reference set (top hits per gene). Decide what to show:
+      #   - gene present in hits  -> restrict to that gene (gene-specific align)
+      #   - standard PCG, absent  -> no hits to that gene's DB (show message)
+      #   - custom name           -> keep all hits (full-DB align + gene prefix)
+      # Skipped for local BLAST (no per-gene structure in those hits).
+      gene_filtered <- FALSE
+      no_gene_db_hits <- FALSE
+      if (is_assigned_orf && !using_local) {
+        if (is.data.frame(hits) && "gene" %in% names(hits) && feat_gene %in% hits$gene) {
+          hits <- hits[hits$gene == feat_gene, , drop = FALSE]
+          gene_filtered <- TRUE
+        } else if (feat_gene %in% MITO_PCG_GENES) {
+          no_gene_db_hits <- TRUE
+        }
+      }
+      hits <- hits |> dplyr::slice_head(n = n_hits)
 
       focal <- rv$annotations$translation[selected()] |>
-        setNames(paste(rv$annotations$gene[selected()], "(focal)"))
+        setNames(paste(
+          rv$annotations$gene[selected()],
+          if (is_orf) "(ORF, focal)" else "(focal)"
+        ))
 
       new_alignment <- list()
-      if(nrow(hits)==0){
+      if (no_gene_db_hits) {
+        new_alignment$seqs <- character(0)
+        new_alignment$aln <- Biostrings::AAStringSet(focal)
+        new_alignment$alignmentHeight <- 40
+        new_alignment$id <- stringr::str_glue(
+          "<b>No BLAST hits against the {feat_gene} reference database.</b>"
+        )
+      }else if(nrow(hits)==0){
         new_alignment$seqs <- character(0)
         new_alignment$aln <- Biostrings::AAStringSet(focal)
         new_alignment$alignmentHeight <- 40
@@ -1233,11 +1408,20 @@ annotations_details_server <- function(id, rv) {
           "<b>Max Similarity:</b> n/a"
         )
       }else{
-        new_alignment$seqs <- hits |>
-          dplyr::pull(target, name = Taxon)
-        # Cache the reference-only MSA across codon edits: the references don't
-        # change while the user walks codons, so reuse the prior MSA and add
-        # the (cheap) focal sequence via profile alignment.
+        # Label hits with their candidate gene (alongside the taxon) for any ORF
+        # whose hits are not restricted to a single assigned gene: unassigned
+        # ORFs and custom-name assignments (all-gene hits kept). A standard
+        # assignment (filtered above) and real PCGs drop the redundant prefix.
+        show_gene_prefix <- (is_orf || (is_assigned_orf && !gene_filtered)) &&
+          "gene" %in% names(hits)
+        hit_labels <- if (show_gene_prefix) {
+          paste(hits$gene, "|", hits$Taxon)
+        } else {
+          hits$Taxon
+        }
+        new_alignment$seqs <- setNames(hits$target, hit_labels)
+        # Cache the reference-only MSA: references don't change as the user walks
+        # codons, so reuse it and add the focal sequence via profile alignment.
         ref_key <- paste(selected(), n_hits, paste(new_alignment$seqs, collapse = "|"), sep = "::")
         if (!identical(ref_msa_cache$key, ref_key)) {
           ref_set <- Biostrings::AAStringSet(new_alignment$seqs)
@@ -1268,8 +1452,8 @@ annotations_details_server <- function(id, rv) {
         paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
         ""
       )
-      # Nonce so each edit invalidates: reactiveValues dedupes via identical(),
-      # which misses XStringSet content changes when the codon string repeats.
+      # Nonce so each edit invalidates the render (reactiveValues dedupes
+      # identical values, missing repeat-codon content changes).
       new_alignment$render_nonce <- isolate(rv$alignment$render_nonce %||% 0L) + 1L
       rv$alignment <- new_alignment
     })
@@ -1354,7 +1538,7 @@ annotations_details_server <- function(id, rv) {
           pos2 = 0,
           length = 0,
           time_stamp = as.numeric(Sys.time()),
-          gene = paste0(rv$annotations[selected(), "gene"], "_DELETED_", as.numeric(Sys.time())) # hack to make sure deleted gene has a unique key (ID + path + scaffold + gene + pos1)
+          gene = paste0(rv$annotations[selected(), "gene"], "_DELETED_", as.numeric(Sys.time())) # timestamp suffix keeps the deleted gene's key unique
         )
       note <- stringr::str_glue(
         "DELETED: from {rv$annotations$pos1[selected()]}-{rv$annotations$pos2[selected()]}"
@@ -1537,8 +1721,7 @@ annotations_details_server <- function(id, rv) {
       note <- stringr::str_glue(
         "EDITED: linearized circular assembly after rotating {start-1} bp"
       )
-      # Read the live notes input (rv$updating$annotate_notes is no longer synced on
-      # every keystroke) so notes typed this session are preserved.
+      # Read the live notes input so notes typed this session are preserved.
       cur_notes <- (input$notes %||% rv$updating$annotate_notes) %|NA|% ""
       rv$updating$annotate_notes <- paste(note, cur_notes, sep = "; ")
       updateTextAreaInput(
@@ -1735,6 +1918,18 @@ annotations_details_server <- function(id, rv) {
       n <- suppressWarnings(as.integer(input[[id]]))
       if (length(n) == 0 || is.na(n) || n < 1L) 1L else min(n, 50L)
     }
+    # "Hold tight" overlay during a start/stop edit + re-alignment, so rapid
+    # repeated +/- clicks don't queue up while the alignment recomputes. Hidden
+    # in the align_now handler once the (slow) alignment finishes.
+    show_edit_waiter <- function(message = "Updating alignment, hold tight...") {
+      waiter::waiter_show(
+        html = tagList(
+          waiter::spin_fading_circles(),
+          tags$h4(style = "color:white; margin-top:1em;", message)
+        ),
+        color = "rgba(40,40,40,0.85)"
+      )
+    }
     # Keep the displayed box value inside [1, 50] when the user types directly.
     for (.id in c("start_step_size", "stop_step_size")) {
       local({
@@ -1799,6 +1994,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`start-add`, {
+      show_edit_waiter()
       trigger("start-add-simple")
       shinyjs::delay(50, {
         trigger("re_align")
@@ -1857,6 +2053,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$start_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`start-minus`, {
+      show_edit_waiter()
       trigger("start-minus-simple")
       shinyjs::delay(50, {
         trigger("re_align")
@@ -1940,6 +2137,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$stop_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`stop-add`, {
+      show_edit_waiter()
       trigger("stop-add-simple")
       shinyjs::delay(50, {
         trigger("re_align")
@@ -2027,6 +2225,7 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$stop_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`stop-minus`, {
+      show_edit_waiter()
       trigger("stop-minus-simple")
       shinyjs::delay(50, {
         trigger("re_align")
@@ -2080,45 +2279,54 @@ annotations_details_server <- function(id, rv) {
 
     # Save edits ----
     observeEvent(input$save_edits, {
-      ### Calculate new stats for all reference seqs ----
-      focal <- rv$annotations$translation[selected()]
-      hits <-
-        {
-          rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
-        } |>
-        dplyr::mutate(
-          similarity = compare_aa(focal, target, "similarity"),
-          pctid = compare_aa(focal, target, "pctId"),
-          gap_leading = count_end_gaps(focal, target, "leading"),
-          gap_trailing = count_end_gaps(focal, target, "trailing"),
-          .after = "eval",
-          .by = dplyr::everything()
-        ) |>
-        dplyr::arrange(dplyr::desc(similarity))
-      rv$annotations$refHits[selected()] <- json_string(hits)
+      # Show overlay first, then defer the (blocking) stat recompute + DB writes
+      # one tick so the "hold tight" message paints before work starts.
+      show_edit_waiter("Saving, hold tight...")
+      shinyjs::delay(100, {
+        # finally = waiter_hide() guarantees the overlay clears even if the
+        # recompute/write errors. (on.exit is unreliable inside shinyjs::delay.)
+        tryCatch({
+          ### Recompute per-hit stats against the edited focal sequence ----
+          # recompute_hit_stats aligns each pair once (vectorized pwalign) instead
+          # of the old row-by-row compare_aa/count_end_gaps (4 alignments per hit).
+          focal <- rv$annotations$translation[selected()]
+          hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+          stats <- recompute_hit_stats(focal, hits$target)
+          hits <- hits |>
+            dplyr::mutate(
+              similarity = stats$similarity,
+              pctid = stats$pctid,
+              gap_leading = stats$gap_leading,
+              gap_trailing = stats$gap_trailing,
+              .after = "eval"
+            ) |>
+            dplyr::arrange(dplyr::desc(similarity))
+          rv$annotations$refHits[selected()] <- json_string(hits)
 
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          dplyr::distinct(rv$annotations[, c("ID")]),
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |>
-            dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      shinyjs::hide("edit_mode_ctrls")
-      shinyjs::hide("discard_edits")
-      shinyjs::hide("save_edits")
-      shinyjs::show("edit_mode")
-      rv$editing <- NULL
+          dplyr::tbl(session$userData$con, "annotations") |>
+            dplyr::rows_delete(
+              dplyr::distinct(rv$annotations[, c("ID")]),
+              by = "ID",
+              unmatched = "ignore",
+              copy = TRUE,
+              in_place = TRUE
+            )
+          dplyr::tbl(session$userData$con, "annotations") |>
+            dplyr::rows_insert(
+              rv$annotations |>
+                dplyr::select(-faa, -fas),
+              by = "ID",
+              conflict = "ignore",
+              copy = TRUE,
+              in_place = TRUE
+            )
+          shinyjs::hide("edit_mode_ctrls")
+          shinyjs::hide("discard_edits")
+          shinyjs::hide("save_edits")
+          shinyjs::show("edit_mode")
+          rv$editing <- NULL
+        }, finally = waiter::waiter_hide())
+      })
     })
     # Local Blast ----
     observeEvent(input$local_blast, ignoreInit = T, {
@@ -2375,6 +2583,278 @@ annotations_details_server <- function(id, rv) {
       reactable::updateReactable("table", data = rv$annotations)
     }
 
+    # Reopen the details modal and force the annotations table to re-render with
+    # current rv$annotations (the render isolates rv$annotations, gated on
+    # render_annotations_table; see the normal open path).
+    reopen_details <- function() {
+      annotate_details_modal(rv) |> showModal()
+      render_annotations_table(Sys.time())
+    }
+
+    # Apply an ORF -> gene assignment to one annotation row of rv$annotations:
+    # sets gene/type/product, appends a "{old} assigned to {gene}" note (so the
+    # original ORF.N can be recovered on removal), and flags it edited. Does not
+    # save or refresh. Shared by confirm_assign_gene and the bulk auto-assign.
+    apply_gene_assignment <- function(idx, gene) {
+      old_gene <- rv$annotations$gene[idx]
+      rv$annotations$gene[idx] <- gene
+      rv$annotations$type[idx] <- mito_gene_type(gene)
+      # `[` (not `[[`) so a custom gene absent from CDS_key yields NA.
+      rv$annotations$product[idx] <- unname(CDS_key[gene]) %|NA|% NA_character_
+      note <- stringr::str_glue("{old_gene} assigned to {gene}")
+      existing <- rv$annotations$notes[idx] %|NA|% ""
+      rv$annotations$notes[idx] <- if (nzchar(existing)) paste(note, existing, sep = "; ") else note
+      rv$annotations$edited[idx] <- 1L
+    }
+
+    # Lightweight count refresh after an in-modal annotation edit (delete, ORF
+    # gene assignment, merge, restore, ...). Recomputes the annotate-table count
+    # columns (PCG/tRNA/rRNA/ORF) plus missing/extra from the current
+    # annotations, persists them, and propagates to the annotate and export
+    # tables. Deliberately NOT a full re-validation.
+    update_counts <- function() {
+      con <- session$userData$con
+      id <- rv$updating$ID
+      req(length(id) == 1)
+      retained <- rv$annotations |>
+        dplyr::filter(!stringr::str_detect(gene, "_DELETED_"))
+      pcg  <- sum(retained$type == "PCG",  na.rm = TRUE)
+      trna <- sum(retained$type == "tRNA", na.rm = TRUE)
+      rrna <- sum(retained$type == "rRNA", na.rm = TRUE)
+      # missing/extra from the sample's curation count rules
+      me <- tryCatch({
+        co <- dplyr::tbl(con, "annotate") |>
+          dplyr::filter(ID == !!id) |> dplyr::pull(curate_opts)
+        pj <- dplyr::tbl(con, "curate_opts") |>
+          dplyr::filter(curate_opts == !!co) |> dplyr::pull(params)
+        params <- jsonlite::fromJSON(pj)
+        compute_missing_extra(retained, params$rules, params$default_rules)
+      }, error = function(e) list(missing = NA_character_, extra = NA_character_))
+      # ORF count is derived in the table; keep blank when ORF finding is off
+      orf_blank <- "ORFCount" %in% names(rv$data) &&
+        isTRUE(is.na(rv$data$ORFCount[match(id, rv$data$ID)]))
+      orf <- if (orf_blank) NA_integer_ else as.integer(sum(retained$type == "ORF", na.rm = TRUE))
+      # Short-circuit if nothing the count/missing/extra columns track changed
+      # (e.g. position-only codon edits) to avoid needless writes/refreshes.
+      same <- function(a, b) (is.na(a) && is.na(b)) || (!is.na(a) && !is.na(b) && a == b)
+      i <- match(id, rv$data$ID)
+      if (!is.na(i) &&
+          identical(as.integer(rv$data$PCGCount[i]), as.integer(pcg)) &&
+          identical(as.integer(rv$data$tRNACount[i]), as.integer(trna)) &&
+          identical(as.integer(rv$data$rRNACount[i]), as.integer(rrna)) &&
+          same(rv$data$ORFCount[i], orf) &&
+          same(rv$data$missing[i], me$missing %||% NA_character_) &&
+          same(rv$data$extra[i], me$extra %||% NA_character_)) {
+        return(invisible(NULL))
+      }
+      # Persist the stored count columns to the annotate table
+      upd <- data.frame(
+        ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+        missing = me$missing %||% NA_character_, extra = me$extra %||% NA_character_,
+        stringsAsFactors = FALSE
+      )
+      dplyr::tbl(con, "annotate") |>
+        dplyr::rows_update(upd, by = "ID", unmatched = "ignore",
+                           in_place = TRUE, copy = TRUE)
+      # Keep rv$updating in sync (the close handler reads these counts)
+      rv$updating$PCGCount  <- pcg
+      rv$updating$tRNACount <- trna
+      rv$updating$rRNACount <- rrna
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          data.frame(ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+                     ORFCount = orf, missing = upd$missing, extra = upd$extra,
+                     stringsAsFactors = FALSE),
+          by = "ID"
+        )
+      trigger("update_annotate_table")
+      trigger("refresh_export")
+    }
+
+    # Recompute counts whenever the annotations change from an edit. The initial
+    # load already carries validated counts, so skip that first set.
+    observeEvent(rv$annotations, {
+      if (skip_count_update) {
+        skip_count_update <<- FALSE
+        return()
+      }
+      update_counts()
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+    # Assign a gene name to an ORF ----
+    # Relabels the selected ORF with a chosen (or custom) mitochondrial gene
+    # name, sets the corresponding feature type, flags it as edited, and records
+    # a note. Does NOT re-run curation (start/stop trimming, refHit rules).
+    observeEvent(input$assign_gene, {
+      req(length(selected()) > 0)
+      sel_type <- rv$annotations$type[selected()]
+      is_assigned <- isTRUE(rv$annotations$tool[selected()] == "ORFfinder") &&
+        isTRUE(sel_type != "ORF")
+      req(sel_type == "ORF" || is_assigned)
+      cur_gene <- rv$annotations$gene[selected()]
+
+      # For an unassigned ORF, suggest a gene from its stored BLAST hits.
+      guess <- if (!is_assigned) {
+        guess_orf_gene(rv$annotations$refHits[selected()])
+      } else NULL
+      choices <- if (is_assigned) {
+        union(MITO_PCG_GENES, cur_gene)
+      } else if (!is.null(guess)) {
+        union(MITO_PCG_GENES, guess$gene)
+      } else {
+        MITO_PCG_GENES
+      }
+      selected_choice <- if (is_assigned) cur_gene else if (!is.null(guess)) guess$gene else character(0)
+      suggestion_ui <- if (is_assigned) {
+        NULL
+      } else if (!is.null(guess)) {
+        txt <- stringr::str_glue("Suggested: {guess$gene} - {round(guess$similarity, 1)}% similarity")
+        if (!is.na(guess$taxon)) txt <- paste0(txt, " to ", guess$taxon)
+        helpText(txt)
+      } else {
+        helpText("No confident BLAST match - pick a gene name manually.")
+      }
+
+      showModal(modalDialog(
+        title = if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF",
+        selectizeInput(
+          ns("assign_gene_choice"),
+          label = "Gene name (pick a standard mitochondrial PCG or type a custom name):",
+          choices = choices,
+          selected = selected_choice,
+          options = list(create = TRUE, maxItems = 1, placeholder = "e.g. nad6 or a custom name")
+        ),
+        suggestion_ui,
+        footer = tagList(
+          actionButton(ns("confirm_assign_gene"), "Assign"),
+          if (is_assigned) actionButton(ns("remove_assign_gene"), "Remove assignment"),
+          actionButton(ns("cancel_assign_gene"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    })
+    observeEvent(input$confirm_assign_gene, {
+      req(length(selected()) > 0)
+      gene <- input$assign_gene_choice
+      req(!is.null(gene))
+      gene <- trimws(gene)
+      req(nzchar(gene))
+      # Restrict gene names to characters that are safe in feature tables, GFF
+      # attributes, FASTA headers, and the export's shell/file paths (which embed
+      # the gene name via system("cat ...") and file paths).
+      if (!grepl("^[A-Za-z0-9_.-]+$", gene)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Invalid gene name",
+          text = paste(
+            "Gene names may only contain letters, numbers, underscores, dots,",
+            "and hyphens (no spaces or other special characters)."
+          )
+        )
+        req(F)
+      }
+      idx <- selected()
+      # Guard against composite-PK collision (same scaffold + gene + pos1)
+      collision <- which(
+        rv$annotations$gene == gene &
+          rv$annotations$pos1 == rv$annotations$pos1[idx] &
+          rv$annotations$scaffold == rv$annotations$scaffold[idx]
+      )
+      collision <- setdiff(collision, idx)
+      if (length(collision) > 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot assign",
+          text = stringr::str_glue("An annotation named '{gene}' already exists at this position.")
+        )
+        req(F)
+      }
+      apply_gene_assignment(idx, gene)
+      restore_do_save()
+      reopen_details()
+    })
+
+    # Remove a gene assignment, reverting the feature to an unassigned ORF.
+    observeEvent(input$remove_assign_gene, {
+      req(length(selected()) > 0)
+      idx <- selected()
+      notes_cur <- rv$annotations$notes[idx] %|NA|% ""
+      # Recover the original ORF.N name recorded in the assignment note.
+      orig <- stringr::str_match(notes_cur, "(ORF\\.\\d+) assigned to")[, 2]
+      if (is.na(orig)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot remove assignment",
+          text = "Could not determine the original ORF name from the annotation notes."
+        )
+        req(F)
+      }
+      kept <- strsplit(notes_cur, "; ", fixed = TRUE)[[1]]
+      kept <- kept[!stringr::str_detect(kept, " assigned to ")]
+      rv$annotations$gene[idx] <- orig
+      rv$annotations$type[idx] <- "ORF"
+      rv$annotations$product[idx] <- NA_character_
+      rv$annotations$notes[idx] <- if (length(kept)) paste(kept, collapse = "; ") else NA_character_
+      rv$annotations$edited[idx] <- 1L
+      restore_do_save()
+      reopen_details()
+    })
+
+    # Cancel: return to the annotation details modal (not the annotate table).
+    observeEvent(input$cancel_assign_gene, {
+      reopen_details()
+    })
+
+    # Bulk auto-assign: confirm, then apply BLAST-based guesses to every
+    # unassigned ORF whose top hit clears the similarity threshold.
+    observeEvent(input$auto_assign_orfs, {
+      req(rv$annotations)
+      orf_idx <- which(
+        rv$annotations$type == "ORF" &
+          !stringr::str_detect(dplyr::coalesce(rv$annotations$gene, ""), "_DELETED_")
+      )
+      if (length(orf_idx) == 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "No ORFs to assign",
+          text = "There are no unassigned ORF annotations in this sample."
+        )
+        return()
+      }
+      shinyWidgets::confirmSweetAlert(
+        inputId = ns("confirm_auto_assign_orfs"),
+        title = "Auto-assign ORF gene names?",
+        text = stringr::str_glue(
+          "Each unassigned ORF with a confident BLAST match (>= {ORF_ASSIGN_SIM_THRESHOLD}% ",
+          "similarity to a standard mitochondrial gene) will be relabeled. ",
+          "Low-confidence ORFs are left unchanged. You can undo any assignment ",
+          "individually via 'Remove assignment'."
+        ),
+        btn_colors = c("#6c757d", "#0056b3")
+      )
+    })
+    observeEvent(input$confirm_auto_assign_orfs, {
+      req(isTRUE(input$confirm_auto_assign_orfs))
+      req(rv$annotations)
+      orf_idx <- which(
+        rv$annotations$type == "ORF" &
+          !stringr::str_detect(dplyr::coalesce(rv$annotations$gene, ""), "_DELETED_")
+      )
+      assigned <- 0L
+      for (idx in orf_idx) {
+        guess <- guess_orf_gene(rv$annotations$refHits[idx])
+        if (is.null(guess)) next
+        apply_gene_assignment(idx, guess$gene)
+        assigned <- assigned + 1L
+      }
+      left <- length(orf_idx) - assigned
+      if (assigned > 0L) {
+        restore_do_save()
+      }
+      reopen_details()
+      shinyWidgets::sendSweetAlert(
+        title = "Auto-assign complete",
+        text = stringr::str_glue("Assigned {assigned} ORF{ifelse(assigned == 1, '', 's')}; {left} left unassigned."),
+        type = if (assigned > 0L) "success" else "info"
+      )
+    })
+
     observeEvent(input$restore, {
       req(length(selected()) > 0)
       sel_row <- rv$annotations[selected(), ]
@@ -2577,6 +3057,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ),
     size = "l",
     easyClose = F,
+    uiOutput(ns("outlier_flag_banner")),
     tags$details(
       id = ns("annotation_table_details"),
       open = TRUE,
@@ -2585,12 +3066,27 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ),
     div(
       id = ns("annotation_btns_wrapper"),
+      div(
+        id = ns("auto_assign_orfs_btn"),
+        style = "display: flex; gap: 8px; margin: 6px 0;",
+        actionButton(
+          ns("auto_assign_orfs"),
+          "Auto-assign ORFs",
+          icon = icon("wand-magic-sparkles")
+        )
+      ),
       shinyjs::hidden(
         div(
           id = ns("annotation_action_btns"),
           style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
           actionButton(ns("merge"), "Merge PCGs/rRNAs"),
           actionButton(ns("delete"), "Delete"),
+          shinyjs::hidden(
+            div(
+              id = ns("assign_gene_btn"),
+              actionButton(ns("assign_gene"), "Assign gene name")
+            )
+          ),
           uiOutput(ns("synteny_zoom_ctrl"))
         )
       ),
@@ -2836,6 +3332,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       )
     ),
     footer = tagList(
+      if (isTRUE(session$userData$in_outlier_review)) {
+        actionButton(
+          ns("back_to_review"), "Back to Review",
+          icon = icon("arrow-left"),
+          class = "btn-success",
+          style = "float: left;"
+        )
+      },
       uiOutput(ns("status_toggles"), inline = TRUE),
       actionButton(ns("linearize"), "Linearize"),
       actionButton(ns("lock"), "Lock&Close"),

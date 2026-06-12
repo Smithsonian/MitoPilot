@@ -206,6 +206,7 @@ add_samples <- function(
         ID = mapping$ID,
         annotate_opts = "default",
         curate_opts = "default",
+        orf_opts = "default",
         annotate_switch = 1,
         annotate_lock = 0
       ),

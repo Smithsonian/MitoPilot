@@ -1,30 +1,40 @@
-#' Annotation curation for octocoral mitogenomes
+#' Shared annotation-curation core for all clade rulesets
+#'
+#' Holds the curation logic shared by every `curate_<clade>_mito()` function.
+#' The per-clade wrappers differ only in their `genetic_code` default and, for
+#' diptera, whether minus-strand rRNAs are reverse-complemented (see
+#' `flip_rRNA_minus_strand`).
 #'
 #' @param annotations_fn Path to the annotations file (csv)
 #' @param assembly_fn Path to the assembly file (fasta)
 #' @param coverage_fn Path to the coverage file (csv)
-#' @param genetic_code Genetic code to use (default = 4)
+#' @param genetic_code Genetic code to use
 #' @param out_dir Path to the output directory
-#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #' @param params Nested list of curation parameters. Can also provided as a
 #'   base64 encoded json string.
 #' @param ref_dir Path to reference directory for curation
 #' @param blast_ref_file Path to a JSON file of remote BLAST reference hits to inject into the local curation database (default = NULL)
 #' @param feature_trim Trim feature coordinates to assembly boundaries (default = TRUE)
+#' @param flip_rRNA_minus_strand Reverse-complement contigs whose rRNAs are all
+#'   on the minus strand so annotations are reported on the plus strand
+#'   (default = TRUE). Diptera mitogenomes legitimately carry minus-strand
+#'   rRNAs, so the diptera wrapper passes FALSE.
 #'
-#' @export
+#' @noRd
 #'
-curate_octocoral_mito <- function(
+curate_mito_core <- function(
     annotations_fn = NULL,
     assembly_fn = NULL,
     coverage_fn = NULL,
-    genetic_code = 4,
+    genetic_code = 2,
     out_dir = NULL,
-    max_blast_hits = 100,
+    max_blast_hits = 10,
     params = NULL,
     ref_dir = NULL,
     blast_ref_file = NULL,
-    feature_trim = TRUE) {
+    feature_trim = TRUE,
+    flip_rRNA_minus_strand = TRUE) {
   # Prepare environment ----
 
   ## load annotations ----
@@ -103,48 +113,50 @@ curate_octocoral_mito <- function(
 
   # rRNA ----
   ## enforce + strand ----
-  rRNA_rev <- annotations |>
-    dplyr::filter(type == "rRNA") |>
-    dplyr::filter(all(direction == "-"), .by = "contig") |>
-    dplyr::pull(contig) |>
-    unique()
-  for (seqid in rRNA_rev) {
-    wdth <- assembly[contig_key[seqid]]@ranges@width
-    annotations_updated <- annotations |>
-      dplyr::filter(contig == !!seqid) |>
-      dplyr::mutate(
-        pos1_old = pos1,
-        pos2_old = pos2,
-        pos1 = wdth - pos2_old + 1,
-        pos2 = wdth - pos1_old + 1,
-        direction = dplyr::case_match(
-          direction, "+" ~ "-", "-" ~ "+"
-        )
-      ) |>
-      dplyr::select(-pos1_old, -pos2_old)
-
-    annotations <- annotations |>
-      dplyr::filter(contig != seqid) |>
-      dplyr::bind_rows(
-        annotations_updated
-      ) |>
-      dplyr::arrange(contig, pos1)
-
-    assembly[contig_key[seqid]] <- assembly[contig_key[seqid]] |>
-      Biostrings::reverseComplement()
-
-    if (!is.null(coverage)) {
-      coverage_flip <- coverage |>
-        dplyr::filter(SeqId == !!seqid) |>
-        dplyr::arrange(desc(Position)) |>
+  if (isTRUE(flip_rRNA_minus_strand)) {
+    rRNA_rev <- annotations |>
+      dplyr::filter(type == "rRNA") |>
+      dplyr::filter(all(direction == "-"), .by = "contig") |>
+      dplyr::pull(contig) |>
+      unique()
+    for (seqid in rRNA_rev) {
+      wdth <- assembly[contig_key[seqid]]@ranges@width
+      annotations_updated <- annotations |>
+        dplyr::filter(contig == !!seqid) |>
         dplyr::mutate(
-          Position = dplyr::row_number(),
-          Call = as.character(assembly) |> stringr::str_split("") |> unlist()
+          pos1_old = pos1,
+          pos2_old = pos2,
+          pos1 = wdth - pos2_old + 1,
+          pos2 = wdth - pos1_old + 1,
+          direction = dplyr::case_match(
+            direction, "+" ~ "-", "-" ~ "+"
+          )
+        ) |>
+        dplyr::select(-pos1_old, -pos2_old)
+
+      annotations <- annotations |>
+        dplyr::filter(contig != seqid) |>
+        dplyr::bind_rows(
+          annotations_updated
+        ) |>
+        dplyr::arrange(contig, pos1)
+
+      assembly[contig_key[seqid]] <- assembly[contig_key[seqid]] |>
+        Biostrings::reverseComplement()
+
+      if (!is.null(coverage)) {
+        coverage_flip <- coverage |>
+          dplyr::filter(SeqId == !!seqid) |>
+          dplyr::arrange(desc(Position)) |>
+          dplyr::mutate(
+            Position = dplyr::row_number(),
+            Call = as.character(assembly) |> stringr::str_split("") |> unlist()
+          )
+        coverage <- dplyr::bind_rows(
+          coverage |> dplyr::filter(SeqId != seqid),
+          coverage_flip
         )
-      coverage <- dplyr::bind_rows(
-        coverage |> dplyr::filter(SeqId != seqid),
-        coverage_flip
-      )
+      }
     }
   }
 
@@ -197,6 +209,12 @@ curate_octocoral_mito <- function(
       ## Gene ref database ----
       ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
         stringr::str_glue()
+
+      # No reference DB for this gene (e.g. a novel ORF without a built
+      # featureProt FASTA): skip BLAST so curation does not error.
+      if (!file.exists(as.character(ref_db))) {
+        return('{}')
+      }
 
       out <- get_top_hits(ref_db, translation, max_blast_hits) |>
         json_string()

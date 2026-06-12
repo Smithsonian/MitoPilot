@@ -2,7 +2,7 @@
 % Please edit documentation in R/curate_diptera_mito.R
 \name{curate_diptera_mito}
 \alias{curate_diptera_mito}
-\title{Annotation curation for dipteran mitogenomes}
+\title{Annotation curation for true fly mitogenomes}
 \usage{
 curate_diptera_mito(
   annotations_fn = NULL,
@@ -10,7 +10,7 @@ curate_diptera_mito(
   coverage_fn = NULL,
   genetic_code = 5,
   out_dir = NULL,
-  max_blast_hits = 100,
+  max_blast_hits = 10,
   params = NULL,
   ref_dir = NULL,
   blast_ref_file = NULL,
@@ -28,7 +28,7 @@ curate_diptera_mito(
 
 \item{out_dir}{Path to the output directory}
 
-\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 100)}
+\item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 10)}
 
 \item{params}{Nested list of curation parameters. Can also provided as a
 base64 encoded json string.}
@@ -40,5 +40,6 @@ base64 encoded json string.}
 \item{feature_trim}{Trim feature coordinates to assembly boundaries (default = TRUE)}
 }
 \description{
-Annotation curation for dipteran mitogenomes
+Thin wrapper around the shared curation core with the true fly genetic code.
+See `curate_mito_core()` for the full argument list and behavior.
 }

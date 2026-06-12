@@ -109,7 +109,7 @@ coverage <- function(
   # Reform circular assembly ---
   if (circular && length(seq_ids) == 1) {
     to_move <- coverage$Position > assembly_len
-    coverage$Position[to_move] <- seq_len(sum(to_move))
+    coverage$Position[to_move] <- coverage$Position[to_move] - assembly_len
     coverage <- coverage |>
       dplyr::summarise(
         Call = Call[1],
@@ -145,43 +145,7 @@ coverage <- function(
   readr::write_csv(coverage, file = coverage_fn, quote = "none", na = "")
 
   # Calculate rolling window stats ----
-  stats <- coverage |>
-    dplyr::mutate(
-      MeanDepth = zoo::rollapply(
-        Depth,
-        width = 5,
-        partial = T, align = "center",
-        FUN = function(x) {
-          mean(x) |> round(2)
-        }
-      ),
-      MeanDepth_mask = abs(Depth - median(Depth)) > mad(Depth, constant = 8),
-      ErrorRate = zoo::rollapply(
-        ErrorRate,
-        width = 5,
-        partial = T, align = "center",
-        FUN = function(x) {
-          mean(x) |> round(2)
-        }
-      ),
-      ErrorRate_mask = zoo::rollapply(
-        ErrorRate,
-        width = 5,
-        partial = T, align = "center",
-        FUN = function(x) {
-          any(x > 0.05)
-        }
-      ),
-      GC = zoo::rollapply(
-        Call,
-        width = 200,
-        fill = NA, align = "center",
-        FUN = function(x) {
-          (sum(x %in% c("G", "C")) / length(x)) |> round(2)
-        }
-      ),
-      .by = SeqId
-    )
+  stats <- .coverage_rolling_stats(coverage)
 
   stats_long <- stats |>
     tidyr::pivot_longer(
@@ -212,7 +176,7 @@ coverage <- function(
     ) |>
     dplyr::filter(Val == 1)
 
-  # Coverage plot — one PDF per scaffold ----
+  # Coverage plot - one PDF per scaffold ----
   for (seq_id in unique(stats_long$SeqId)) {
     scaffold_num <- stringr::str_extract(seq_id, "[0-9]+$")
 
@@ -249,7 +213,66 @@ coverage <- function(
   }
 
   # Save output ----
-  stats_out <- stats |>
+  stats_out <- .coverage_stats_to_output(stats)
+  readr::write_csv(
+    stats_out,
+    file = file.path(outDir, paste0(basename_prefix, "_coverageStats.csv")),
+    quote = "none", na = ""
+  )
+
+  return(invisible(stats_out))
+}
+
+#' Rolling-window coverage stats (MeanDepth/ErrorRate/GC + outlier masks)
+#'
+#' Shared by [coverage()] and the multi-path consensus writer so both produce
+#' an identical `*_coverageStats.csv` layout. Input `df` must contain columns
+#' `SeqId, Position, Call, Depth, Correct, ErrorRate`.
+#' @noRd
+.coverage_rolling_stats <- function(df) {
+  df |>
+    dplyr::mutate(
+      MeanDepth = zoo::rollapply(
+        Depth,
+        width = 5,
+        partial = T, align = "center",
+        FUN = function(x) {
+          mean(x) |> round(2)
+        }
+      ),
+      MeanDepth_mask = abs(Depth - median(Depth)) > mad(Depth, constant = 8),
+      ErrorRate = zoo::rollapply(
+        ErrorRate,
+        width = 5,
+        partial = T, align = "center",
+        FUN = function(x) {
+          mean(x) |> round(2)
+        }
+      ),
+      ErrorRate_mask = zoo::rollapply(
+        ErrorRate,
+        width = 5,
+        partial = T, align = "center",
+        FUN = function(x) {
+          any(x > 0.05)
+        }
+      ),
+      GC = zoo::rollapply(
+        Call,
+        width = 200,
+        fill = NA, align = "center",
+        FUN = function(x) {
+          (sum(x %in% c("G", "C")) / length(x)) |> round(2)
+        }
+      ),
+      .by = SeqId
+    )
+}
+
+#' Apply outlier masks (`#` prefix) and drop mask columns for CSV output
+#' @noRd
+.coverage_stats_to_output <- function(stats) {
+  stats |>
     dplyr::mutate(
       MeanDepth = dplyr::case_when(
         MeanDepth_mask == TRUE ~ paste0("#", MeanDepth),
@@ -260,11 +283,5 @@ coverage <- function(
         .default = as.character(ErrorRate)
       )
     ) |>
-    dplyr::select(!dplyr::ends_with("_mask")) |>
-    readr::write_csv(
-      file = file.path(outDir, paste0(basename_prefix, "_coverageStats.csv")),
-      quote = "none", na = ""
-    )
-
-  return(invisible(stats_out))
+    dplyr::select(!dplyr::ends_with("_mask"))
 }

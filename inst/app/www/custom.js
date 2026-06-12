@@ -34,6 +34,31 @@ $( document ).ready(function(){
   });
 });
 
+// Center the MSA viewer on a given alignment column (conflict-block navigation)
+// Scrolls the same horizontally-overflowing element the rightScroll handler
+// uses (.biojs_msa_rheader); the seqblock is a fixed-size canvas and does not
+// itself overflow, so scrolling it has no effect.
+$( document ).ready(function(){
+  Shiny.addCustomMessageHandler("msaScrollToCol", function(params) {
+    var attempts = 0;
+    function tryScroll() {
+      var el = document.getElementsByClassName('biojs_msa_rheader')[0]
+            || document.getElementsByClassName('biojs_msa_seqblock')[0];
+      if (!el || !el.scrollWidth || el.scrollWidth <= el.clientWidth) {
+        if (attempts++ < 20) { setTimeout(tryScroll, 150); }
+        return;
+      }
+      var colWidth = el.scrollWidth / params.alnLen;
+      var target = (params.col - 0.5) * colWidth - el.clientWidth / 2;
+      var maxScroll = el.scrollWidth - el.clientWidth;
+      target = Math.max(0, Math.min(target, maxScroll));
+      el.scrollLeft = target;
+      el.dispatchEvent(new Event('scroll'));
+    }
+    tryScroll();
+  });
+});
+
 // auto scrolling of progress box
 $( document ).ready(function(){
   Shiny.addCustomMessageHandler("scrollProgress", function(params) {

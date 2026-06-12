@@ -2,7 +2,7 @@
 % Please edit documentation in R/validate_lepidosaur_mito.R
 \name{validate_lepidosaur_mito}
 \alias{validate_lepidosaur_mito}
-\title{Title}
+\title{Annotation validation for lepidosaur mitogenomes}
 \usage{
 validate_lepidosaur_mito(
   annotations_fn = NULL,
@@ -22,5 +22,6 @@ provided as a base64 encoded JSON string.}
 \item{out_dir}{output directory}
 }
 \description{
-Title
+Thin wrapper around the shared validation core. See `validate_mito_core()`
+for details.
 }

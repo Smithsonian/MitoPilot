@@ -16,11 +16,13 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon, topology, assembly)
 
-  dplyr::left_join(assemble, preprocess, by = "ID") |>
+  out <- dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
-    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref)
+
+  out |>
     dplyr::relocate(
       assemble_lock,
       assemble_switch,

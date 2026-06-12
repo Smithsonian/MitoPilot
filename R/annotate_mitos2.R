@@ -262,7 +262,7 @@ annotate_mitos2 <- function(
                 type == "PCG" & direction == "+" & pos1 < pos2,
                 suppressWarnings({
                   Biostrings::subseq(assembly[contig], pos1, pos2 - nchar(stop_codon)) |>
-                    Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code)) |>
+                    Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
                     as.character()
                 }),
                 ifelse(
@@ -274,7 +274,7 @@ annotate_mitos2 <- function(
                       Biostrings::subseq(assembly[contig], pos1, contig_len),
                       Biostrings::subseq(assembly[contig], 1, pos2 - nchar(stop_codon))
                     ) |>
-                      Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code)) |>
+                      Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
                       as.character()
                   }),
                   ifelse(
@@ -282,7 +282,7 @@ annotate_mitos2 <- function(
                     suppressWarnings({
                       Biostrings::subseq(assembly[contig], pos1 + nchar(stop_codon), pos2) |>
                         Biostrings::reverseComplement() |>
-                        Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code)) |>
+                        Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
                         as.character()
                     }),
                     ifelse(
@@ -295,7 +295,7 @@ annotate_mitos2 <- function(
                           Biostrings::subseq(assembly[contig], 1, pos2)
                         ) |>
                           Biostrings::reverseComplement() |>
-                          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code)) |>
+                          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
                           as.character()
                       }),
                       NA_character_

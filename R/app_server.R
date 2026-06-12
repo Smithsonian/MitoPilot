@@ -51,6 +51,10 @@ app_server <- function(input, output, session) {
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_evalue REAL")
   if (!"blast_lineage" %in% asmb_fields)
     DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN blast_lineage TEXT")
+  # Migrate: add edit_positions column to assemblies table for pre-existing databases
+  if (!"edit_positions" %in% asmb_fields)
+    DBI::dbExecute(session$userData$con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
+
 
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>
@@ -70,6 +74,9 @@ app_server <- function(input, output, session) {
   # View mode ----
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
+    # Reload the destination tab's data so changes made in another tab (e.g. a
+    # newly locked consensus in Assemble) appear without a manual refresh.
+    trigger(paste0("refresh_", tolower(input$mode)))
     if(input$mode == "Export"){
       shinyjs::toggle("export_ctrls", condition = TRUE)
       shinyjs::toggle("asmb_ctrls", condition = FALSE)
@@ -118,6 +125,18 @@ app_server <- function(input, output, session) {
   })
   observeEvent(input$export, {
     trigger("export")
+  })
+
+  # Cross-tab navigation: outlier review -> Annotate details modal.
+  # Initialized here (before sub-modules) so listeners in annotate_server /
+  # app_annotate_details exist after the flag is created.
+  init("goto_annotate")
+  on("goto_annotate", {
+    shinyWidgets::updatePickerInput(session, "mode", selected = "Annotate")
+  })
+  init("reopen_outlier_review")
+  on("reopen_outlier_review", {
+    shinyWidgets::updatePickerInput(session, "mode", selected = "Export")
   })
 
   # Sub-modules ----

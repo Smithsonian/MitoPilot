@@ -1,11 +1,11 @@
 # Togglable column groups for the Annotate table. Cols not listed here
 # (sticky cols, action buttons) are always shown.
 ANNOTATE_COL_GROUPS <- list(
-  Options  = c("annotate_opts", "curate_opts"),
+  Options  = c("annotate_opts", "curate_opts", "orf_opts"),
   Stats    = c("length_raw", "length", "topology", "scaffolds"),
   BLAST    = c("blast_ref_status", "blast_accession", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Counts   = c("PCGCount", "tRNACount", "rRNACount", "missing", "extra"),
+  Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
   Review   = c("ID_verified", "reviewed", "problematic", "warnings"),
   Metadata = c("time_stamp", "annotate_notes")
 )
@@ -44,9 +44,10 @@ annotate_ui <- function(id) {
     tagList(
       uiOutput(ns("col_css")),
       div(
-        style = "display: flex; align-items: center; gap: 20px; flex-wrap: wrap;",
+        style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
         shinyWidgets::pickerInput(
           inputId  = ns("lock_filter"),
+          width    = "140px",
           label    = "Lock:",
           choices  = ANNOTATE_LOCK_CHOICES,
           selected = ANNOTATE_LOCK_CHOICES,
@@ -57,11 +58,11 @@ annotate_ui <- function(id) {
             `deselect-all-text`    = "None",
             `selected-text-format` = "count > 0",
             width                  = "140px"
-          ),
-          inline = TRUE
+          )
         ),
         shinyWidgets::pickerInput(
           inputId  = ns("state_filter"),
+          width    = "140px",
           label    = "State:",
           choices  = ANNOTATE_STATE_CHOICES,
           selected = ANNOTATE_STATE_CHOICES,
@@ -72,11 +73,11 @@ annotate_ui <- function(id) {
             `deselect-all-text`    = "None",
             `selected-text-format` = "count > 0",
             width                  = "140px"
-          ),
-          inline = TRUE
+          )
         ),
         shinyWidgets::pickerInput(
           inputId  = ns("col_groups"),
+          width    = "150px",
           label    = "Show columns:",
           choices  = names(ANNOTATE_COL_GROUPS),
           selected = names(ANNOTATE_COL_GROUPS),
@@ -87,8 +88,7 @@ annotate_ui <- function(id) {
             `deselect-all-text`    = "None",
             `selected-text-format` = "count > 0",
             width                  = "150px"
-          ),
-          inline = TRUE
+          )
         ),
         uiOutput(ns("warnings_select"))
       ),
@@ -113,16 +113,20 @@ annotate_server <- function(id) {
 
     # Help-doc icons (one observer per tool, registered once at module init).
     reopen_annotate <- function() annotate_opts_modal(rv)
+    reopen_orf <- function() orf_opts_modal(rv)
     register_tool_help("mitos", input, reopen = reopen_annotate)
     register_tool_help("trnaScan-SE", input, reopen = reopen_annotate)
     register_tool_help("arwen", input, reopen = reopen_annotate)
     register_tool_help("aragorn", input, reopen = reopen_annotate)
+    register_tool_help("orffinder", input, reopen = reopen_orf)
 
     # Prepare data ----
     rv <- reactiveValues(
       curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
         dplyr::collect(),
       annotate_opts = dplyr::tbl(session$userData$con, "annotate_opts") |>
+        dplyr::collect(),
+      orf_opts = dplyr::tbl(session$userData$con, "orf_opts") |>
         dplyr::collect(),
       data = fetch_annotate_data(),
       updating = NULL
@@ -153,6 +157,7 @@ annotate_server <- function(id) {
       # Use pickerInput to create a dropdown with checkboxes
       shinyWidgets::pickerInput(
         inputId = ns("warning_filters"),
+        width = "220px",
         label = "Warnings column includes:",
         choices = warn_vals,
         selected = isolate(input$warning_filters) %||% warn_vals, # default to all selected
@@ -160,8 +165,7 @@ annotate_server <- function(id) {
         options = list(
           `actions-box` = TRUE, # Display checkboxes in dropdown
           `selected-text-format` = "count > 0" # Show the number of selected items when more than 0 are selected
-        ),
-        inline = TRUE # Optional: puts it on the same line
+        )
       )
     })
 
@@ -323,6 +327,13 @@ annotate_server <- function(id) {
             width = 110,
             cell = rt_link(ns("set_curate_opts"))
           ),
+          orf_opts = colDef(
+            show = TRUE, class = .grp("orf_opts"), headerClass = .grp("orf_opts"),
+            name = "ORF Opts.",
+            html = TRUE,
+            width = 110,
+            cell = rt_link(ns("set_orf_opts"))
+          ),
           length_raw = colDef(
             show = TRUE, class = .grp("length_raw"), headerClass = .grp("length_raw"),
             name = "Asmb. Length (raw)",
@@ -388,6 +399,7 @@ annotate_server <- function(id) {
           PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = "# PCGs", align = "center"),
           tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = "# tRNAs", align = "center"),
           rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = "# rRNAs", align = "center"),
+          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = "# ORFs", align = "center"),
           missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"), name = "Missing", align = "center", html = TRUE, cell = rt_longtext()),
           extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"), name = "Extra", align = "center", html = TRUE, cell = rt_longtext()),
           warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"), name = "Warnings", align = "center"),
@@ -710,43 +722,7 @@ annotate_server <- function(id) {
         )
         updateSelectizeInput(
           inputId = "start_gene",
-          choices = c(
-            "rrnL",
-            "rrnS",
-            "nad1",
-            "nad2",
-            "cox1",
-            "cox2",
-            "atp8",
-            "atp6",
-            "cox3",
-            "nad3",
-            "nad4l",
-            "nad4",
-            "nad5",
-            "nad6",
-            "cob",
-            "trnA",
-            "trnC",
-            "trnD",
-            "trnE",
-            "trnF",
-            "trnG",
-            "trnH",
-            "trnI",
-            "trnK",
-            "trnL",
-            "trnM",
-            "trnN",
-            "trnP",
-            "trnQ",
-            "trnR",
-            "trnS",
-            "trnT",
-            "trnV",
-            "trnW",
-            "trnY"
-          ), # TODO: get choices from list of genes in curate params rules, tricky
+          choices = MITO_GENE_CHOICES,
           selected = cur$start_gene %||% character(0),
           options = list(
             create = TRUE,
@@ -1067,6 +1043,122 @@ annotate_server <- function(id) {
       removeModal()
       trigger("update_annotate_table")
     })
+
+    # Set ORF Options ----
+    observeEvent(input$set_orf_opts, {
+      row <- as.numeric(input$set_orf_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      } else {
+        selected <- c(row, selected()) |> unique()
+      }
+      req(all(filtered_data()$annotate_lock[selected] == 0))
+      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      orf_opts_modal(rv)
+    })
+    observeEvent(input$orf_opts, ignoreInit = T, {
+      exists <- input$orf_opts %in% rv$orf_opts$orf_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_orf_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$orf_opts[rv$orf_opts$orf_opts == input$orf_opts, ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_orffinder",
+          value = isTRUE(as.logical(cur$use_orffinder %||% 0L))
+        )
+        updateNumericInput(inputId = "orf_opts_cpus", value = cur$cpus)
+        updateNumericInput(inputId = "orf_opts_memory", value = cur$memory)
+        updateNumericInput(inputId = "orf_min_len", value = cur$orf_min_len)
+        updateNumericInput(inputId = "orf_max_overlap", value = cur$orf_max_overlap)
+        updateTextInput(inputId = "orffinder_opts", value = cur$orffinder_opts)
+      }
+    })
+    # Hide the per-run ORF parameters when ORF finding is turned off.
+    observeEvent(input$use_orffinder, ignoreInit = F, {
+      shinyjs::toggle("orf_param_opts", condition = isTRUE(input$use_orffinder))
+    })
+    observeEvent(input$edit_orf_opts, ignoreInit = T, {
+      shinyjs::toggleState("use_orffinder", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_opts_cpus", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_opts_memory", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_min_len", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orf_max_overlap", condition = input$edit_orf_opts)
+      shinyjs::toggleState("orffinder_opts", condition = input$edit_orf_opts)
+      # Check if editing opts that apply beyond selection
+      if (input$edit_orf_opts && input$orf_opts %in% filtered_data()$orf_opts) {
+        rv$updating_indirect <- filtered_data() |>
+          dplyr::filter(orf_opts == input$orf_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
+          )
+          shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
+          req(F)
+        }
+        if (nrow(rv$updating_indirect) > 0L) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_orf_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
+          )
+        }
+      } else {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    observeEvent(input$editing_orf_opts_indirect, ignoreInit = T, {
+      if (!input$editing_orf_opts_indirect) {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
+      }
+    })
+    ## Save Changes ----
+    observeEvent(input$update_orf_opts, {
+      if (input$edit_orf_opts) {
+        dplyr::tbl(session$userData$con, "orf_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              orf_opts = req(input$orf_opts),
+              use_orffinder = as.integer(isTRUE(input$use_orffinder)),
+              cpus = req(input$orf_opts_cpus),
+              memory = req(input$orf_opts_memory),
+              orffinder_opts = input$orffinder_opts %||% "",
+              orf_min_len = req(input$orf_min_len),
+              orf_max_overlap = req(input$orf_max_overlap)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "orf_opts"
+          )
+        rv$orf_opts <- dplyr::tbl(session$userData$con, "orf_opts") |>
+          dplyr::collect()
+      }
+      update <- data.frame(
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
+        orf_opts = input$orf_opts,
+        annotate_switch = 1
+      )
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          update,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- filtered_data() |>
+        dplyr::rows_update(update, by = "ID")
+      rv$updating <- rv$updating_indirect <- NULL
+      removeModal()
+      trigger("update_annotate_table")
+    })
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {
       pth <- file.path(
@@ -1085,9 +1177,22 @@ annotate_server <- function(id) {
 
     # Open annotation details ----
     observeEvent(input$details, {
+      session$userData$in_outlier_review <- FALSE
       rv$updating <- filtered_data() |> dplyr::slice(as.numeric(input$details))
       trigger("annotations_modal")
     })
+
+    # Open annotation details from the export outlier review (cross-tab jump)
+    on("goto_annotate", {
+      target <- session$userData$goto_annotate_target
+      req(target, target$ID)
+      hit <- rv$data |> dplyr::filter(ID == target$ID)
+      req(nrow(hit) > 0)
+      session$userData$in_outlier_review <- TRUE
+      rv$updating <- hit |> dplyr::slice(1)
+      trigger("annotations_modal")
+    })
+
     annotations_details_server(ns("annotations"), rv)
 
     # CSV Export ----

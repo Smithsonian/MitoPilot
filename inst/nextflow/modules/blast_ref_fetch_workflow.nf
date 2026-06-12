@@ -40,10 +40,8 @@ params.refFetchFailedMsg = 'BLAST reference fetch timed out after all retries. R
 
 params.sqlWriteBlastLineage = 'UPDATE assemble SET blast_lineage = ? WHERE ID = ?'
 // Per-scaffold lineage: matched on accession so each scaffold row inherits the
-// lineage of whichever ref was fetched for its BLAST hit. Relies on the
-// blast_records writer in BLAST_GENBANK having already populated
-// assemblies.blast_accession; with SQLite sqlInsert being synchronous and
-// remote NCBI EFetch dominating wall time, this ordering is reliable in practice.
+// lineage of the ref fetched for its BLAST hit. Requires
+// assemblies.blast_accession to be populated by BLAST_GENBANK first.
 params.sqlWriteBlastLineageScaffold = 'UPDATE assemblies SET blast_lineage = ? WHERE ID = ? AND blast_accession = ?'
 
 params.sqlWriteBlastRef = '''INSERT OR REPLACE INTO blast_ref_annotations
@@ -54,21 +52,18 @@ params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
     (accession, sequence, ref_length, genetic_code, time_stamp)
     VALUES (?, ?, ?, ?, ?)'''
 
-// Written when the top-hit ref fetch fails after all retries (NCBI timeout / transient error).
-// blast_ref_fetch uses errorStrategy 'ignore' so the pipeline keeps running for other samples.
-// 'ignore' does NOT cache the failure as a successful task, so -resume will retry the step.
-// Guarded WHERE assemble_switch = 4 so terminal state=3 rows cannot be touched.
-// The [ref] message is embedded; the UPDATE strips any prior [ref] segment then appends.
+// Written when the top-hit ref fetch fails after all retries. Guarded WHERE
+// assemble_switch = 4 so terminal state=3 rows are untouched. Strips any prior
+// [ref] note segment then appends the new one. (-resume retries the fetch.)
 params.sqlWriteBlastRefFetchFailed = "UPDATE assemble SET " +
     "assemble_switch = 3, " +
     "assemble_notes = ${appendTaggedNoteSql('[ref]', params.refFetchFailedMsg)}, " +
     "poor_blast_ref = 'failed' " +
     "WHERE ID = ? AND assemble_switch = 4"
 
-// Mark state=2 (WF1 complete) and poor_blast_ref = 'good' when the top-hit ref fetch + parse succeeds.
-// Strips any [blast]/[ref] stale failure segments from prior -resume attempts; preserves
-// assembly-stage warnings (e.g. 'Output contains disconnected contigs').
-// Guarded WHERE assemble_switch = 4 so terminal state=3 rows cannot be touched.
+// Mark state=2 (WF1 complete), poor_blast_ref='good' on top-hit ref fetch success.
+// Strips stale [blast]/[ref] failure note segments but preserves assembly warnings
+// (e.g. 'Output contains disconnected contigs'). Guarded WHERE assemble_switch = 4.
 params.sqlWriteBlastRefGood = "UPDATE assemble SET " +
     "assemble_switch = 2, " +
     "poor_blast_ref = 'good', " +

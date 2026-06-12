@@ -19,9 +19,9 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(assemble_opts, min_assembly_length)
 
   # Per-sample BLAST display rule (n_total = rows in assemblies for this ID):
-  #   n_total NA               → keep sample-level value (assembly not yet run)
-  #   n_kept == 1              → show kept scaffold's BLAST
-  #   n_kept != 1 (incl. 0)    → blank
+  #   n_total NA               -> keep sample-level value (assembly not yet run)
+  #   n_kept == 1              -> show kept scaffold's BLAST
+  #   n_kept != 1 (incl. 0)    -> blank
   blast_cols <- c("blast_accession", "blast_species", "blast_pident",
                   "blast_qcovs", "blast_evalue", "blast_lineage")
 
@@ -66,7 +66,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     df
   }
 
-  dplyr::left_join(assemble, preprocess, by = "ID") |>
+  out <- dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::left_join(assemble_opts_tbl, by = "assemble_opts") |>
     dplyr::collect() |>
@@ -81,7 +81,9 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(-n_total, -n_kept, -length_per_scaffold,
                   -dplyr::any_of(paste0(blast_cols, "_kept"))) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
-    dplyr::mutate(blast_ref_status = poor_blast_ref) |>
+    dplyr::mutate(blast_ref_status = poor_blast_ref)
+
+  out |>
     dplyr::relocate(
       assemble_lock,
       assemble_switch,

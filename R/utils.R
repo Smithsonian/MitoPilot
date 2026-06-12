@@ -52,6 +52,39 @@ semicolon_paste <- function(cur, new) {
   paste(c(cur, new), collapse = "; ")
 }
 
+#' Lightweight missing/extra gene tally from curation count rules
+#'
+#' Mirrors only the per-gene count checks in validate_* (a gene with fewer than
+#' its minimum expected count is "missing"; more than its maximum is "extra").
+#' Does not re-run validation. Used to keep the annotate/export count columns
+#' current after in-app annotation edits.
+#'
+#' @param annotations data frame of (non-deleted) annotations
+#' @param rules named list of per-gene rules (from curation params)
+#' @param default_rules per-type default rules (from curation params)
+#'
+#' @return list(missing, extra), each a "; "-joined string or NA
+#' @noRd
+compute_missing_extra <- function(annotations, rules, default_rules) {
+  if (length(rules) == 0L) {
+    return(list(missing = NA_character_, extra = NA_character_))
+  }
+  eff <- rules |>
+    purrr::map(~ utils::modifyList(default_rules[[.x$type]] %||% list(), .x))
+  missing <- NA_character_
+  extra <- NA_character_
+  for (g in names(eff)) {
+    n <- sum(annotations$gene == g, na.rm = TRUE)
+    cnt <- eff[[g]]$count %||% 1
+    if (n < min(cnt)) {
+      missing <- semicolon_paste(missing, g)
+    } else if (n > max(cnt)) {
+      extra <- semicolon_paste(extra, g)
+    }
+  }
+  list(missing = missing, extra = extra)
+}
+
 #' toJSON wrapper
 #'
 #' @param x a data.frame or tibble
@@ -97,7 +130,12 @@ json_parse <- function(.x, tibble = F) {
       .x
     }
   )
-  if (tibble && !is.null(names(out))) {
+  if (tibble) {
+    # Empty ("{}"), blank, or unparseable JSON -> empty data frame so callers
+    # can rely on nrow()/df ops (instead of a bare character that breaks them).
+    if (length(out) == 0 || is.null(names(out))) {
+      return(data.frame())
+    }
     out <- purrr::map_dfc(out, ~.)
   }
   return(out)

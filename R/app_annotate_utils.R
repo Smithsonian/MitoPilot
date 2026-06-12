@@ -18,13 +18,21 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID, Taxon)
 
   annotations <- dplyr::tbl(db, "annotations") |>
-    dplyr::select(ID, warnings) |>
+    dplyr::select(ID, type, warnings) |>
     dplyr::collect() |>
     dplyr::group_by(ID) |>
     dplyr::summarise(
       warnings_details = warnings[warnings != ""] |>
-        paste(collapse = "; ")
+        paste(collapse = "; "),
+      ORFCount = sum(type == "ORF")
     )
+
+  # use_orffinder per sample, to blank the ORF count when ORF finding is off
+  orf_enabled <- dplyr::tbl(db, "annotate") |>
+    dplyr::select(ID, orf_opts) |>
+    dplyr::left_join(dplyr::tbl(db, "orf_opts"), by = "orf_opts") |>
+    dplyr::select(ID, use_orffinder) |>
+    dplyr::collect()
 
   assemblies_length <- dplyr::tbl(db, "assemblies") |>
     dplyr::filter(ignore != 1) |>
@@ -37,6 +45,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::left_join(annotations, by = "ID") |>
+    dplyr::left_join(orf_enabled, by = "ID") |>
     dplyr::left_join(assemblies_length, by = c("ID", "path")) |>
     dplyr::select(
       annotate_lock,
@@ -46,6 +55,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       ID_verified,
       annotate_opts,
       curate_opts,
+      orf_opts,
       length_raw,
       length,
       topology,
@@ -59,6 +69,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       PCGCount,
       tRNACount,
       rRNACount,
+      ORFCount,
       missing,
       extra,
       warnings,
@@ -67,8 +78,18 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       time_stamp,
       annotate_notes,
       warnings_details,
+      use_orffinder,
       dplyr::any_of("poor_blast_ref")
     ) |>
+    # Blank the ORF count when ORF finding is disabled for the sample
+    dplyr::mutate(
+      ORFCount = dplyr::if_else(
+        is.na(use_orffinder) | use_orffinder != 1L,
+        NA_integer_,
+        as.integer(ORFCount)
+      )
+    ) |>
+    dplyr::select(-use_orffinder) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession) |>
@@ -92,14 +113,14 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
 #'
 #' @param ref_db reference database
 #' @param query query sequences
-#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 100)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #'
 #' @export
 #'
 get_top_hits_local <- function(
   ref_db = NULL,
   query = NULL,
-  max_blast_hits = 100
+  max_blast_hits = 10
 ) {
   stringr::str_glue(
     "-db {ref_db}",
@@ -300,43 +321,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           selectizeInput(
             ns("start_gene"),
             label = "starting gene for circular assemblies",
-            choices = c(
-              "rrnL",
-              "rrnS",
-              "nad1",
-              "nad2",
-              "cox1",
-              "cox2",
-              "atp8",
-              "atp6",
-              "cox3",
-              "nad3",
-              "nad4l",
-              "nad4",
-              "nad5",
-              "nad6",
-              "cob",
-              "trnA",
-              "trnC",
-              "trnD",
-              "trnE",
-              "trnF",
-              "trnG",
-              "trnH",
-              "trnI",
-              "trnK",
-              "trnL",
-              "trnM",
-              "trnN",
-              "trnP",
-              "trnQ",
-              "trnR",
-              "trnS",
-              "trnT",
-              "trnV",
-              "trnW",
-              "trnY"
-            ), # TODO: get choices from list of genes in curate params rules, tricky
+            choices = MITO_GENE_CHOICES,
             selected = current$start_gene %||% character(0),
             width = "100%",
             options = list(
@@ -471,19 +456,13 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           selectizeInput(
             ns("target"),
             label = "Target:",
-            choices = sort(c("fish_mito",
-                        "lepidosaur_mito",
-                        "turtle_mito",
-                        "mammal_mito",
-                        "starfish_mito",
-                        "diptera_mito",
-                        "copepod_mito",
-                        "octocoral_mito",
-                        "hexacoral_mito",
-                        "ctenophore_mito",
-                        "bird_mito",
-                        "annelid_mito"
-                      )),
+            # Values = full keys (dispatch); labels = "Scientific (common)".
+            choices = local({
+              tg <- sort(names(RULESET_MAP))
+              stats::setNames(tg, vapply(tg, function(k)
+                paste0(RULESET_MAP[[k]]$ncbi, " (", RULESET_MAP[[k]]$label, ")"),
+                character(1)))
+            }),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(
@@ -503,6 +482,142 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   } else {
     shinyWidgets::show_alert(
       title = "Multiple curation parameter sets selected",
+      text = "Cannot edit different parameter sets simultaneously",
+      type = "error",
+      closeOnClickOutside = FALSE,
+    )
+  }
+}
+
+#' Update the ORF-finder options
+#'
+#' @param rv the local reactive vals object
+#' @param session current shiny session
+#'
+#' @noRd
+orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+  req(rv$updating)
+  current <- list()
+
+  if (length(unique(rv$updating$orf_opts)) == 1) {
+    current <- rv$orf_opts[rv$orf_opts$orf_opts == rv$updating$orf_opts[1], ]
+    # Fall back to the default parameter set if the sample's orf_opts is unset
+    # or doesn't match a saved set, so the fields are never blank.
+    if (nrow(current) == 0) {
+      current <- rv$orf_opts[rv$orf_opts$orf_opts == "default", ]
+    }
+
+    # The per-run parameters are only relevant when ORF finding is enabled, so
+    # they live in one div that is hidden while "Run ORF finder step" is off.
+    orf_on <- isTRUE(as.logical(current$use_orffinder %||% 0L))
+    orf_param_opts <- div(
+      id = ns("orf_param_opts"),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_opts_cpus"), "CPUs:",
+            width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_opts_memory"), "Memory (GB):",
+            width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_min_len"),
+            label = "Min ORF length (nt):",
+            value = current$orf_min_len %||% character(0),
+            min = 30,
+            width = "100%"
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_max_overlap"),
+            label = "Max overlap w/ existing annotations (fraction of ORF length):",
+            value = current$orf_max_overlap %||% character(0),
+            min = 0,
+            max = 1,
+            step = 0.05,
+            width = "100%"
+          ) |> shinyjs::disabled()
+        )
+      ),
+      textInput(
+        ns("orffinder_opts"),
+        label = tagList("ORFfinder options:", tool_help_icon("orffinder")),
+        value = current$orffinder_opts %||% character(0),
+        width = "100%"
+      ) |> shinyjs::disabled(),
+      helpText(
+        "The genetic code (-g) and minimum length (-ml) are set automatically",
+        "from the project genetic code and the Min ORF length above; do not set",
+        "them here."
+      )
+    )
+    if (!orf_on) orf_param_opts <- shinyjs::hidden(orf_param_opts)
+
+    showModal(
+      modalDialog(
+        title = stringr::str_glue("Setting ORF-finder Options for {nrow(rv$updating)} Samples"),
+        helpText(
+          "When running the ORF step, consider disabling un-annotated end trimming",
+          "in the annotation options"
+        ),
+        shinyWidgets::prettyCheckbox(
+          ns("use_orffinder"),
+          label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
+          value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          selectizeInput(
+            ns("orf_opts"),
+            label = "Parameter set name:",
+            choices = rv$orf_opts$orf_opts,
+            selected = current$orf_opts,
+            options = list(
+              create = TRUE,
+              maxItems = 1
+            )
+          ),
+          div(
+            class = "form-group shiny-input-container",
+            style = "margin-top: 39px;",
+            shinyWidgets::prettyCheckbox(
+              ns("edit_orf_opts"),
+              label = "Edit",
+              value = FALSE,
+              status = "primary"
+            )
+          )
+        ),
+        orf_param_opts,
+        size = "m",
+        footer = tagList(
+          actionButton(ns("update_orf_opts"), "Update"),
+          modalButton("Cancel")
+        )
+      )
+    )
+  } else {
+    shinyWidgets::show_alert(
+      title = "Multiple ORF parameter sets selected",
       text = "Cannot edit different parameter sets simultaneously",
       type = "error",
       closeOnClickOutside = FALSE,

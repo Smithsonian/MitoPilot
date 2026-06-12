@@ -48,6 +48,8 @@ backwards_compatibility <- function(
   })
   failOnIgnore <- any(grep("failOnIgnore = true", conf))
   blast_gb_conf <- any(grepl("blast_gb", conf))
+  orffinder_conf <- any(grepl("orffinder_condaenv", conf))
+  orf_block_conf <- any(grepl("^\\s*orf \\{", conf))
 
   # check if .config file contains latest container version
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
@@ -87,13 +89,28 @@ backwards_compatibility <- function(
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
+        "use_orffinder" %in% DBI::dbListFields(con, "orf_opts"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        !any(c("max_blast_hits", "ref_db", "ref_dir") %in% DBI::dbListFields(con, "orf_opts")),
+        error = function(e) FALSE
+      )) &&
+      "orf_opts" %in% names(annotate_table) &&
+      "orf_opts" %in% DBI::dbListTables(con) &&
+      orffinder_conf &&
+      orf_block_conf &&
+      "assembly_blast" %in% DBI::dbListTables(con) &&
+      "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
+      isTRUE(tryCatch(
         "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
         error = function(e) FALSE
       )) &&
       isTRUE(tryCatch(
         "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
         error = function(e) FALSE
-      )))
+      )) &&
+      "export_opts" %in% DBI::dbListTables(con))
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -188,6 +205,55 @@ backwards_compatibility <- function(
                "}")
     conf <- append(conf, lines)
     writeLines(conf, file.path(path, ".config"))
+  }
+
+  # if .config does not contain "orffinder_condaenv" param, add it. Anchor after
+  # the last *_condaenv line if present, otherwise just inside the params block.
+  if(!(orffinder_conf)){
+    conf <- readLines(file.path(path, ".config"))
+    anchor <- grep("_condaenv", conf)
+    anchor <- if (length(anchor) > 0) max(anchor) else grep("^\\s*params \\{", conf)[1]
+    if (length(anchor) == 1 && !is.na(anchor)) {
+      conf <- append(conf, "    orffinder_condaenv = 'orffinder'", after = anchor)
+      message("added \"orffinder_condaenv = 'orffinder'\" to nextflow .config file")
+      writeLines(conf, file.path(path, ".config"))
+    }
+  }
+
+  # if .config does not contain an "orf { }" process block, add one. Mirror the
+  # curate block when present (to inherit clusterOptions); otherwise insert a
+  # minimal block inside the params section.
+  if(!(orf_block_conf)){
+    conf <- readLines(file.path(path, ".config"))
+    cur_start <- grep("^\\s*curate \\{", conf)
+    if (length(cur_start) >= 1) {
+      cur_start <- cur_start[1]
+      cur_end <- cur_start
+      for (j in (cur_start + 1):length(conf)) {
+        if (grepl("^\\s*\\}", conf[j])) {
+          cur_end <- j
+          break
+        }
+      }
+      block <- conf[cur_start:cur_end]
+      block[1] <- sub("curate", "orf", block[1])
+      conf <- append(conf, block, after = cur_end)
+      message("added \"orf { }\" process block to nextflow .config file")
+      writeLines(conf, file.path(path, ".config"))
+    } else {
+      params_line <- grep("^\\s*params \\{", conf)[1]
+      if (!is.na(params_line)) {
+        block <- c(
+          "    orf {",
+          "        container = process.container",
+          "        executor = process.executor",
+          "    }"
+        )
+        conf <- append(conf, block, after = params_line)
+        message("added \"orf { }\" process block to nextflow .config file")
+        writeLines(conf, file.path(path, ".config"))
+      }
+    }
   }
 
   # if genetic_code column doesn't exist, add it
@@ -458,6 +524,74 @@ backwards_compatibility <- function(
       )
   }
 
+  # use_orffinder now lives in orf_opts (was annotate_opts). Add it to an existing
+  # orf_opts table if missing (default off). A stale annotate_opts.use_orffinder
+  # column on older databases is harmless and left in place. The orf_opts table is
+  # created with use_orffinder below for databases that lack the table entirely.
+  if ("orf_opts" %in% DBI::dbListTables(con) &&
+      !("use_orffinder" %in% DBI::dbListFields(con, "orf_opts"))) {
+    message("added 'use_orffinder' column to orf_opts table")
+    DBI::dbExecute(con, "ALTER TABLE orf_opts ADD COLUMN use_orffinder INTEGER")
+    DBI::dbExecute(con, "UPDATE orf_opts SET use_orffinder = 0 WHERE use_orffinder IS NULL")
+  }
+
+  # if orf_opts column doesn't exist in the annotate table, add it (default set)
+  if (!("orf_opts" %in% names(annotate_table))) {
+    message("added 'orf_opts' column to annotate table")
+    annotate_table$orf_opts <- rep("default", nrow(annotate_table))
+    DBI::dbExecute(con, "ALTER TABLE annotate ADD COLUMN orf_opts TEXT")
+    dplyr::tbl(con, "annotate") |>
+      dplyr::rows_upsert(
+        annotate_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+  }
+
+  # if orf_opts table doesn't exist, create it and seed a default row.
+  # max_blast_hits, ref_db and ref_dir are shared with curation (curate_opts),
+  # not stored here.
+  if (!("orf_opts" %in% DBI::dbListTables(con))) {
+    message("created 'orf_opts' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE orf_opts (
+        orf_opts TEXT NOT NULL,
+        use_orffinder INTEGER,
+        cpus INTEGER,
+        memory INTEGER,
+        orffinder_opts TEXT,
+        orf_min_len INTEGER,
+        orf_max_overlap REAL,
+        PRIMARY KEY (orf_opts)
+      );"
+    )
+    dplyr::tbl(con, "orf_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          orf_opts = "default",
+          use_orffinder = 0L,
+          cpus = 4L,
+          memory = 8L,
+          orffinder_opts = "-s 1 -n true",
+          orf_min_len = 300L,
+          orf_max_overlap = 0.1
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "orf_opts"
+      )
+  } else {
+    # drop max_blast_hits/ref_db/ref_dir from older orf_opts tables; now sourced
+    # from curate_opts
+    orf_cols <- DBI::dbListFields(con, "orf_opts")
+    for (col_drop in intersect(c("max_blast_hits", "ref_db", "ref_dir"), orf_cols)) {
+      message(paste0("removed '", col_drop, "' column from orf_opts table (now shared with curation)"))
+      DBI::dbExecute(con, paste0("ALTER TABLE orf_opts DROP COLUMN ", col_drop))
+    }
+  }
+
   # if start_gene column doesn't exist, add it
   if(!("start_gene" %in% names(annotate_opts_table))){
     message("added 'start_gene' column to annotate_opts table")
@@ -482,7 +616,7 @@ backwards_compatibility <- function(
   # if max_blast_hits column doesn't exist, add it
   if(!("max_blast_hits" %in% names(curate_opts_table))){
     message("added 'max_blast_hits' column to annotate_opts table")
-    curate_opts_table$max_blast_hits <- rep(100, nrow(curate_opts_table)) # add ID_verified column
+    curate_opts_table$max_blast_hits <- rep(10, nrow(curate_opts_table)) # add ID_verified column
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE curate_opts
@@ -810,6 +944,57 @@ backwards_compatibility <- function(
         in_place = TRUE,
         copy = TRUE,
         by = "blast_opts"
+      )
+  }
+
+  # if edit_positions column doesn't exist in assemblies, add it
+  if (!("edit_positions" %in% DBI::dbListFields(con, "assemblies"))) {
+    message("added 'edit_positions' column to assemblies table")
+    DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
+  }
+
+  # if assembly_blast table doesn't exist, create it (per-path BLAST hits)
+  if (!("assembly_blast" %in% DBI::dbListTables(con))) {
+    message("created assembly_blast table")
+    DBI::dbExecute(con,
+      "CREATE TABLE assembly_blast (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL,
+        blast_opts TEXT,
+        blast_accession TEXT,
+        blast_species TEXT,
+        blast_pident REAL,
+        blast_qcovs REAL,
+        blast_evalue REAL,
+        blast_lineage TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path)
+      );"
+    )
+  }
+
+  # if export_opts table doesn't exist, create it and seed the default templates
+  if (!("export_opts" %in% DBI::dbListTables(con))) {
+    message("created 'export_opts' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE export_opts (
+        export_opts TEXT NOT NULL,
+        fasta_header TEXT,
+        fasta_header_gene TEXT,
+        PRIMARY KEY (export_opts)
+      );"
+    )
+    dplyr::tbl(con, "export_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          export_opts = "default",
+          fasta_header = DEFAULT_FASTA_HEADER,
+          fasta_header_gene = DEFAULT_FASTA_HEADER_GENE
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "export_opts"
       )
   }
 

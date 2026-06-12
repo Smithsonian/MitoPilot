@@ -30,8 +30,7 @@ workflow COVERAGE {
             .flatten()
             .filter{ it =~ /(.*coverageStats.csv)$/ }
             .splitCsv(header: true, sep: ',')
-            .take(2)
-            .map { it -> 
+            .map { it ->
                 tuple(
                     it.SeqId,
                     it.MeanDepth,

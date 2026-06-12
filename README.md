@@ -68,9 +68,11 @@ However, MitoPilot has been developed with modularity and extensibility
 in mind to facilitate broader application in the future.
 
 MitoPilot allows the user to provide custom reference databases for
-assembly with GetOrganelle or MitoFinder. We have provided some
+assembly with GetOrganelle or MitoFinder. The
+`MitoPilot::custom_assembly_db()` function can build these databases for
+you from a clade name, with no external tools required. See our
 [documentation](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html)
-to help you build a custom reference database.
+for details.
 
 For annotation with MITOS2, we have provided reference databases for
 [chordates](https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Chordata)
@@ -83,18 +85,37 @@ the future.
 Currently, MitoPilot has curation/validation rulesets for the following
 groups of organisms:
 
-- fishes
-- starfish
-- octocorals
-- hexacorals
-- dipterans
-- turtles
-- copepods (testing in progress)
-- ctenophores (testing in progress)
-- annelids (testing in progress)
-- mammals (untested)
-- lepidosaurs (untested)
-- birds (untested)
+- *Actinopterygii* (fishes)
+- *Asteroidea* (sea stars)
+- *Octocorallia* (octocorals)
+- *Hexacorallia* (hexacorals)
+- *Diptera* (true flies)
+- *Testudines* (turtles)
+- *Copepoda* (copepods, testing in progress)
+- *Ctenophora* (ctenophores, testing in progress)
+- *Annelida* (annelids, testing in progress)
+- *Mammalia* (mammals, untested)
+- *Lepidosauria* (lepidosaurs, untested)
+- *Aves* (birds, untested)
+- *Ascidiacea* (sea squirts, untested)
+- *Bivalvia* (bivalves, untested)
+- *Bryozoa* (bryozoans, untested)
+- *Crinoidea* (crinoids, untested)
+- *Demospongiae* (demosponges, untested)
+- *Echinoidea* (sea urchins, untested)
+- *Gastropoda* (gastropods, untested)
+- *Holothuroidea* (sea cucumbers, untested)
+- *Homoscleromorpha* (homoscleromorph sponges, untested)
+- *Malacostraca* (malacostracans, untested)
+- *Hydrozoa* (hydrozoans, untested)
+- *Nemertea* (ribbon worms, untested)
+- *Ophiuroidea* (brittle stars, untested)
+- *Platyhelminthes* (flatworms, untested)
+- *Polychaeta* (polychaetes, untested)
+- *Pycnogonida* (sea spiders, untested)
+- *Sipuncula* (peanut worms, untested)
+- *Thaliacea* (salps, untested)
+- *Thecostraca* (barnacles, untested)
 
 See the [curation ruleset
 browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)

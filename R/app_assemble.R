@@ -41,50 +41,53 @@ assemble_ui <- function(id) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("col_css")),
-    shinyWidgets::pickerInput(
-      inputId  = ns("lock_filter"),
-      label    = "Lock:",
-      choices  = ASSEMBLE_LOCK_CHOICES,
-      selected = ASSEMBLE_LOCK_CHOICES,
-      multiple = TRUE,
-      options  = list(
-        `actions-box`          = TRUE,
-        `select-all-text`      = "All",
-        `deselect-all-text`    = "None",
-        `selected-text-format` = "count > 0",
-        width                  = "140px"
+    div(
+      style = "display: flex; flex-flow: row wrap; gap: 1em; align-items: flex-end;",
+      shinyWidgets::pickerInput(
+        inputId  = ns("lock_filter"),
+        width    = "140px",
+        label    = "Lock:",
+        choices  = ASSEMBLE_LOCK_CHOICES,
+        selected = ASSEMBLE_LOCK_CHOICES,
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "140px"
+        )
       ),
-      inline = TRUE
-    ),
-    shinyWidgets::pickerInput(
-      inputId  = ns("state_filter"),
-      label    = "State:",
-      choices  = ASSEMBLE_STATE_CHOICES,
-      selected = ASSEMBLE_STATE_CHOICES,
-      multiple = TRUE,
-      options  = list(
-        `actions-box`          = TRUE,
-        `select-all-text`      = "All",
-        `deselect-all-text`    = "None",
-        `selected-text-format` = "count > 0",
-        width                  = "140px"
+      shinyWidgets::pickerInput(
+        inputId  = ns("state_filter"),
+        width    = "140px",
+        label    = "State:",
+        choices  = ASSEMBLE_STATE_CHOICES,
+        selected = ASSEMBLE_STATE_CHOICES,
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "140px"
+        )
       ),
-      inline = TRUE
-    ),
-    shinyWidgets::pickerInput(
-      inputId  = ns("col_groups"),
-      label    = "Show columns:",
-      choices  = names(ASSEMBLE_COL_GROUPS),
-      selected = names(ASSEMBLE_COL_GROUPS),
-      multiple = TRUE,
-      options  = list(
-        `actions-box`          = TRUE,
-        `select-all-text`      = "All",
-        `deselect-all-text`    = "None",
-        `selected-text-format` = "count > 0",
-        width                  = "150px"
-      ),
-      inline = TRUE
+      shinyWidgets::pickerInput(
+        inputId  = ns("col_groups"),
+        width    = "150px",
+        label    = "Show columns:",
+        choices  = names(ASSEMBLE_COL_GROUPS),
+        selected = names(ASSEMBLE_COL_GROUPS),
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "150px"
+        )
+      )
     ),
     reactableOutput(ns("table")),
     div(
@@ -315,7 +318,7 @@ assemble_server <- function(id) {
             min_assembly_length = colDef(show = FALSE),
             ignore_flags = colDef(show = FALSE),
             paths = colDef(
-              show = TRUE, class = .grp("paths"), headerClass = .grp("paths"), width = 100, name = "# Paths", align = "center",
+              show = TRUE, width = 100, name = "# Paths", align = "center",
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),

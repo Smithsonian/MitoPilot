@@ -2,7 +2,7 @@
 % Please edit documentation in R/validate_annelid_mito.R
 \name{validate_annelid_mito}
 \alias{validate_annelid_mito}
-\title{Title}
+\title{Annotation validation for annelid mitogenomes}
 \usage{
 validate_annelid_mito(
   annotations_fn = NULL,
@@ -22,5 +22,6 @@ provided as a base64 encoded JSON string.}
 \item{out_dir}{output directory}
 }
 \description{
-Title
+Thin wrapper around the shared validation core. See `validate_mito_core()`
+for details.
 }
