@@ -255,7 +255,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             style = "margin-top: 24px;",
             shinyWidgets::prettyCheckbox(
               ns("use_mitos_best"),
-              label = "Use --best flag",
+              label = "Keep only best of overlapping predictions (--best)",
               value = isTRUE(as.logical(current$use_mitos_best %||% 1L)),
               status = "primary"
             ) |> shinyjs::disabled()
