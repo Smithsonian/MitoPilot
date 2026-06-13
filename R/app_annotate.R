@@ -803,6 +803,26 @@ annotate_server <- function(id) {
           value = cur$aragorn_opts
         )
         shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_mitofinder",
+          value = isTRUE(as.logical(cur$use_mitofinder %||% 0L))
+        )
+        updateTextInput(
+          inputId = "mitofinder_db",
+          value = cur$mitofinder_db %||% ""
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "mitofinder_new_genes",
+          value = isTRUE(as.logical(cur$mitofinder_new_genes %||% 0L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "mitofinder_allow_introns",
+          value = isTRUE(as.logical(cur$mitofinder_allow_introns %||% 0L))
+        )
+        updateTextInput(
+          inputId = "mitofinder_opts",
+          value = cur$mitofinder_opts %||% ""
+        )
+        shinyWidgets::updatePrettyCheckbox(
           inputId = "coverage_trim",
           value = isTRUE(as.logical(cur$coverage_trim %||% 1L))
         )
@@ -837,6 +857,11 @@ annotate_server <- function(id) {
       shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_aragorn", condition = input$edit_annotate_opts)
       shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_mitofinder", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_db", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_new_genes", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_allow_introns", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("retain_low_conf_trna", condition = input$edit_annotate_opts)
@@ -901,6 +926,11 @@ annotate_server <- function(id) {
               use_arwen = as.integer(isTRUE(input$use_arwen)),
               aragorn_opts = req(input$aragorn_opts),
               use_aragorn = as.integer(isTRUE(input$use_aragorn)),
+              use_mitofinder = as.integer(isTRUE(input$use_mitofinder)),
+              mitofinder_db = if (nzchar(input$mitofinder_db %||% "")) input$mitofinder_db else NA_character_,
+              mitofinder_new_genes = as.integer(isTRUE(input$mitofinder_new_genes)),
+              mitofinder_allow_introns = as.integer(isTRUE(input$mitofinder_allow_introns)),
+              mitofinder_opts = input$mitofinder_opts %||% "",
               start_gene = req(input$start_gene),
               coverage_trim = as.integer(isTRUE(input$coverage_trim)),
               feature_trim = as.integer(isTRUE(input$feature_trim)),

@@ -215,12 +215,26 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               width = "100%",
               value = current$memory %||% numeric(0)
             ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            selectizeInput(
+              ns("start_gene"),
+              label = "starting gene for circular assemblies",
+              choices = MITO_GENE_CHOICES,
+              selected = current$start_gene %||% character(0),
+              width = "100%",
+              options = list(
+                create = TRUE,
+                maxItems = 1
+              )
+            ) |> shinyjs::disabled()
           )
         ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
-            style = "flex: 1",
+            style = "flex: 2",
             textInput(
               ns("mitos_opts"),
               label = tagList("Mitos2 options:", tool_help_icon("mitos")),
@@ -277,6 +291,48 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           width = "100%"
         ) |> shinyjs::disabled(),
         shinyWidgets::prettyCheckbox(
+          ns("use_mitofinder"),
+          label = "Also use MitoFinder for annotation",
+          value = isTRUE(as.logical(current$use_mitofinder %||% 0L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        textInput(
+          ns("mitofinder_db"),
+          label = "MitoFinder reference database (.gb format)",
+          value = current$mitofinder_db %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled(),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 2",
+            textInput(
+              ns("mitofinder_opts"),
+              label = tagList("MitoFinder options:", tool_help_icon("mitofinder")),
+              value = current$mitofinder_opts %||% character(0),
+              width = "100%"
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "margin-top: 24px;",
+            shinyWidgets::prettyCheckbox(
+              ns("mitofinder_new_genes"),
+              label = "Annotate non-standard genes (--new-genes)",
+              value = isTRUE(as.logical(current$mitofinder_new_genes %||% 0L)),
+              status = "primary"
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "margin-top: 24px;",
+            shinyWidgets::prettyCheckbox(
+              ns("mitofinder_allow_introns"),
+              label = "Search for genes with introns (--allow-intron)",
+              value = isTRUE(as.logical(current$mitofinder_allow_introns %||% 0L)),
+              status = "primary"
+            ) |> shinyjs::disabled()
+          )
+        ),
+        shinyWidgets::prettyCheckbox(
           ns("use_arwen"),
           label = "Also use ARWEN for tRNA prediction",
           value = isTRUE(as.logical(current$use_arwen)),
@@ -318,19 +374,6 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = isTRUE(as.logical(current$retain_low_conf_trna %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
-        div(
-          selectizeInput(
-            ns("start_gene"),
-            label = "starting gene for circular assemblies",
-            choices = MITO_GENE_CHOICES,
-            selected = current$start_gene %||% character(0),
-            width = "100%",
-            options = list(
-              create = TRUE,
-              maxItems = 1
-            )
-          ) |> shinyjs::disabled()
-        ),
         size = "m",
         footer = tagList(
           actionButton(ns("update_annotate_opts"), "Update"),
