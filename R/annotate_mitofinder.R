@@ -28,7 +28,9 @@
 #'
 #' @return a data frame with the common annotation columns
 #'   (`contig, type, gene, product, pos1, pos2, length, direction, tRNA_ID,
-#'   anticodon`). Empty (correctly typed) when MitoFinder is off or finds nothing.
+#'   anticodon, start_codon, stop_codon, translation`). The codon/translation
+#'   fields are populated for PCGs (mirroring `annotate_mitos2()`). Empty
+#'   (correctly typed) when MitoFinder is off or finds nothing.
 #'
 #' @export
 #'
@@ -47,7 +49,9 @@ annotate_mitofinder <- function(
     contig = character(), type = character(), gene = character(),
     product = character(), pos1 = integer(), pos2 = integer(),
     length = integer(), direction = character(),
-    tRNA_ID = character(), anticodon = character()
+    tRNA_ID = character(), anticodon = character(),
+    start_codon = character(), stop_codon = character(),
+    translation = character()
   )
 
   if (is.null(assembly) || length(assembly) == 0L) {
@@ -133,7 +137,9 @@ annotate_mitofinder <- function(
     contig = character(), type = character(), gene = character(),
     product = character(), pos1 = integer(), pos2 = integer(),
     length = integer(), direction = character(),
-    tRNA_ID = character(), anticodon = character()
+    tRNA_ID = character(), anticodon = character(),
+    start_codon = character(), stop_codon = character(),
+    translation = character()
   )
 
   gff_files <- list.files(
@@ -231,9 +237,41 @@ annotate_mitofinder <- function(
       tRNA_ID = dplyr::if_else(
         type == "tRNA", paste0(product, "-", dplyr::coalesce(anticodon, "NNN")), NA_character_
       )
+    )
+
+  # Compute start/stop codons and translation for PCGs, mirroring annotate_mitos2()
+  # output so downstream curation has the same fields. MitoFinder coordinates are
+  # always pos1 <= pos2 (no circular wrap), so only the forward/reverse cases apply.
+  gc <- Biostrings::getGeneticCode(as.character(genetic_code))
+  annotations <- annotations |>
+    dplyr::rowwise() |>
+    dplyr::mutate(
+      # coding-strand sequence for this feature (reverse-complemented when on "-")
+      .cds = if (type == "PCG") {
+        suppressWarnings({
+          s <- Biostrings::subseq(assembly[contig], pos1, pos2)
+          if (direction == "-") s <- Biostrings::reverseComplement(s)
+          unname(as.character(s))
+        })
+      } else NA_character_,
+      start_codon = if (type == "PCG" && !is.na(.cds)) substr(.cds, 1L, 3L) else NA_character_,
+      stop_codon = if (type == "PCG" && !is.na(.cds)) {
+        n <- nchar(.cds)
+        len <- if (n %% 3L == 0L) 3L else n %% 3L
+        substr(.cds, n - len + 1L, n)
+      } else NA_character_,
+      translation = if (type == "PCG" && !is.na(.cds)) {
+        suppressWarnings(
+          Biostrings::DNAString(substr(.cds, 1L, nchar(.cds) - nchar(stop_codon))) |>
+            Biostrings::translate(genetic.code = gc, if.fuzzy.codon = "solve") |>
+            as.character()
+        )
+      } else NA_character_
     ) |>
+    dplyr::ungroup() |>
     dplyr::select(
-      contig, type, gene, product, pos1, pos2, length, direction, tRNA_ID, anticodon
+      contig, type, gene, product, pos1, pos2, length, direction, tRNA_ID,
+      anticodon, start_codon, stop_codon, translation
     ) |>
     dplyr::arrange(contig, pos1)
 

@@ -42,7 +42,9 @@ PATH (default: NULL, mirroring the WF1 assembler call).}
 \value{
 a data frame with the common annotation columns
   (`contig, type, gene, product, pos1, pos2, length, direction, tRNA_ID,
-  anticodon`). Empty (correctly typed) when MitoFinder is off or finds nothing.
+  anticodon, start_codon, stop_codon, translation`). The codon/translation
+  fields are populated for PCGs (mirroring `annotate_mitos2()`). Empty
+  (correctly typed) when MitoFinder is off or finds nothing.
 }
 \description{
 Runs MitoFinder in annotation-only mode (`-a`) on an existing assembly,

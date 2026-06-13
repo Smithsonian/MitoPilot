@@ -53,6 +53,32 @@ test_that(".parse_mitofinder_gff returns one row per exon and normalized fields"
   expect_equal(res$gene[res$type == "rRNA"], "rrnL")
 })
 
+test_that(".parse_mitofinder_gff computes PCG start/stop codons and translation", {
+  wd <- tempfile("mf_pcg_")
+  dir.create(file.path(wd, "x_Final_Results"), recursive = TRUE)
+  # + strand ORF at 4-12: ATG AAA TAA  ;  - strand ORF at 15-23 (revcomp = ATGAAATAA)
+  seq <- paste0("AAA", "ATGAAATAA", "GG", "TTATTTCAT", "AAA")
+  gff <- c(
+    "##gff-version 3",
+    "ctg1\tMitoFinder\tCDS\t4\t12\t.\t+\t0\tName=ND1",
+    "ctg1\tMitoFinder\tCDS\t15\t23\t.\t-\t0\tName=ND2"
+  )
+  writeLines(gff, file.path(wd, "x_Final_Results", "x.gff"))
+  asm <- Biostrings::DNAStringSet(seq)
+  names(asm) <- "ctg1"
+
+  res <- .parse_mitofinder_gff(wd, asm, "2")
+
+  fwd <- res[res$gene == "nad1", ]
+  rev <- res[res$gene == "nad2", ]
+  expect_equal(fwd$start_codon, "ATG")
+  expect_equal(fwd$stop_codon, "TAA")
+  expect_equal(fwd$translation, "MK")
+  expect_equal(rev$start_codon, "ATG")
+  expect_equal(rev$stop_codon, "TAA")
+  expect_equal(rev$translation, "MK")
+})
+
 test_that("annotate_mitofinder returns typed empty frame when db missing", {
   asm <- Biostrings::DNAStringSet("ACGT")
   names(asm) <- "ctg1"
