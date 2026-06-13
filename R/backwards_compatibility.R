@@ -477,6 +477,46 @@ backwards_compatibility <- function(
       )
   }
 
+  # if use_mitos column doesn't exist, add it (default on, matching prior behaviour)
+  if(!("use_mitos" %in% names(annotate_opts_table))){
+    message("added 'use_mitos' column to annotate_opts table")
+    annotate_opts_table$use_mitos <- rep(1L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_mitos INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if use_trnaScan column doesn't exist, add it (default on, matching prior behaviour)
+  if(!("use_trnaScan" %in% names(annotate_opts_table))){
+    message("added 'use_trnaScan' column to annotate_opts table")
+    annotate_opts_table$use_trnaScan <- rep(1L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_trnaScan INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
   # if use_aragorn column doesn't exist, add it (default off)
   if(!("use_aragorn" %in% names(annotate_opts_table))){
     message("added 'use_aragorn' column to annotate_opts table")
