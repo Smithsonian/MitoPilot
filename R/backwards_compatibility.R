@@ -517,6 +517,106 @@ backwards_compatibility <- function(
       )
   }
 
+  # if use_mitofinder column doesn't exist, add it (default off)
+  if(!("use_mitofinder" %in% names(annotate_opts_table))){
+    message("added 'use_mitofinder' column to annotate_opts table")
+    annotate_opts_table$use_mitofinder <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN use_mitofinder INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if mitofinder_db column doesn't exist, add it
+  if(!("mitofinder_db" %in% names(annotate_opts_table))){
+    message("added 'mitofinder_db' column to annotate_opts table")
+    annotate_opts_table$mitofinder_db <- rep(NA_character_, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN mitofinder_db TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if mitofinder_new_genes column doesn't exist, add it (default off)
+  if(!("mitofinder_new_genes" %in% names(annotate_opts_table))){
+    message("added 'mitofinder_new_genes' column to annotate_opts table")
+    annotate_opts_table$mitofinder_new_genes <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN mitofinder_new_genes INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if mitofinder_allow_introns column doesn't exist, add it (default off)
+  if(!("mitofinder_allow_introns" %in% names(annotate_opts_table))){
+    message("added 'mitofinder_allow_introns' column to annotate_opts table")
+    annotate_opts_table$mitofinder_allow_introns <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN mitofinder_allow_introns INTEGER",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if mitofinder_opts column doesn't exist, add it
+  if(!("mitofinder_opts" %in% names(annotate_opts_table))){
+    message("added 'mitofinder_opts' column to annotate_opts table")
+    annotate_opts_table$mitofinder_opts <- rep("", nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN mitofinder_opts TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
   # if coverage_trim column doesn't exist, add it (default on)
   if (!("coverage_trim" %in% names(annotate_opts_table))) {
     message("added 'coverage_trim' column to annotate_opts table")

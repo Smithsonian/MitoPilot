@@ -21,6 +21,12 @@ annotate(
   aragorn_condaenv = "aragorn",
   use_aragorn = FALSE,
   use_mitos_best = TRUE,
+  use_mitofinder = FALSE,
+  mitofinder_db = NULL,
+  mitofinder_new_genes = FALSE,
+  mitofinder_allow_introns = FALSE,
+  mitofinder_opts = "",
+  mitofinder_condaenv = NULL,
   start_gene = "trnF",
   coverage_trim = TRUE,
   retain_low_conf_trna = FALSE,
@@ -62,6 +68,18 @@ annotate(
 \item{use_aragorn}{logical; whether to run ARAGORN tRNA prediction (default: FALSE).}
 
 \item{use_mitos_best}{logical; whether to pass --best to MITOS2 (default: FALSE).}
+
+\item{use_mitofinder}{logical; whether to run MitoFinder annotation (lowest priority; default: FALSE).}
+
+\item{mitofinder_db}{path to a MitoFinder reference database (GenBank .gb).}
+
+\item{mitofinder_new_genes}{logical; pass --new-genes to MitoFinder (default: FALSE).}
+
+\item{mitofinder_allow_introns}{logical; pass --allow-intron to MitoFinder (default: FALSE).}
+
+\item{mitofinder_opts}{additional command line options for MitoFinder.}
+
+\item{mitofinder_condaenv}{conda environment containing MitoFinder, or NULL for PATH (default: NULL).}
 
 \item{start_gene}{name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")}
 

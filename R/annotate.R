@@ -20,6 +20,12 @@
 #' @param aragorn_opts Additional command line options for ARAGORN (default: "-m -gcstd").
 #' @param aragorn_condaenv Conda environment containing ARAGORN (default: "aragorn").
 #' @param use_mitos_best logical; whether to pass --best to MITOS2 (default: FALSE).
+#' @param use_mitofinder logical; whether to run MitoFinder annotation (lowest priority; default: FALSE).
+#' @param mitofinder_db path to a MitoFinder reference database (GenBank .gb).
+#' @param mitofinder_new_genes logical; pass --new-genes to MitoFinder (default: FALSE).
+#' @param mitofinder_allow_introns logical; pass --allow-intron to MitoFinder (default: FALSE).
+#' @param mitofinder_opts additional command line options for MitoFinder.
+#' @param mitofinder_condaenv conda environment containing MitoFinder, or NULL for PATH (default: NULL).
 #' @param start_gene name of gene (PCG, rRNA, or tRNA) to start circular assembly (default = "trnF")
 #' @param coverage_trim logical; whether to trim low-coverage ends of linear assemblies (default: TRUE).
 #' @param retain_low_conf_trna logical; whether to keep low-confidence tRNAs with an
@@ -50,6 +56,12 @@ annotate <- function(
   aragorn_condaenv = "aragorn",
   use_aragorn = FALSE,
   use_mitos_best = TRUE,
+  use_mitofinder = FALSE,
+  mitofinder_db = NULL,
+  mitofinder_new_genes = FALSE,
+  mitofinder_allow_introns = FALSE,
+  mitofinder_opts = "",
+  mitofinder_condaenv = NULL,
   start_gene = "trnF",
   coverage_trim = TRUE,
   retain_low_conf_trna = FALSE,
@@ -282,6 +294,52 @@ annotate <- function(
   }
   annotations <- annotations |>
     dplyr::arrange(contig, pos1)
+
+  # MitoFinder (lowest priority) ----
+  # Runs only if requested; fills gaps the higher-priority tools left. Each
+  # MitoFinder call is dropped when >10% of its length overlaps any existing
+  # annotation (same circular-aware logic used for ARWEN/ARAGORN/MITOS above).
+  if (isTRUE(use_mitofinder)) {
+    annotations_mitofinder <- annotate_mitofinder(
+      assembly = assembly,
+      mitofinder_db = mitofinder_db,
+      genetic_code = genetic_code,
+      new_genes = mitofinder_new_genes,
+      allow_introns = mitofinder_allow_introns,
+      mitofinder_opts = mitofinder_opts,
+      cpus = cpus,
+      condaenv = mitofinder_condaenv
+    ) |>
+      dplyr::select(-dplyr::any_of("tRNA_ID"))
+
+    if (nrow(annotations_mitofinder) > 0L) {
+      annotations_mitofinder <- annotations_mitofinder |>
+        dplyr::filter(!purrr::pmap_lgl(
+          list(contig, pos1, pos2),
+          \(ctg, p1, p2) {
+            L <- contig_lens[ctg]
+            mf_len <- circ_len(p1, p2, L)
+            hits <- annotations[
+              annotations$contig == ctg &
+                circ_overlap(p1, p2, annotations$pos1, annotations$pos2),
+            ]
+            if (nrow(hits) == 0L) {
+              return(FALSE)
+            }
+            total_overlap <- sum(purrr::map2_int(
+              hits$pos1, hits$pos2, \(q1, q2) circ_overlap_len(p1, p2, q1, q2, L)
+            ))
+            total_overlap / mf_len > 0.10
+          }
+        ))
+
+      annotations <- dplyr::bind_rows(
+        annotations,
+        dplyr::mutate(annotations_mitofinder, tool = "MitoFinder")
+      ) |>
+        dplyr::arrange(contig, pos1)
+    }
+  }
 
 
   # Rotate assembly and annotation if circular
