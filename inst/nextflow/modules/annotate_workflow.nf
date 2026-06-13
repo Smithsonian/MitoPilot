@@ -4,13 +4,13 @@ params.sqlRead =    'SELECT a.ID, a.path, b.assemble_opts, ' +
                         'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, ' +
                         'd.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, ' +
                         "GROUP_CONCAT(CASE WHEN a.ignore = 1 THEN a.scaffold END, ',') AS ignore_scaffolds, " +
-                        'd.coverage_trim, d.retain_low_conf_trna ' +
+                        'd.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
                     'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
                     'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 ' +
-                    'GROUP BY a.ID, a.path, b.assemble_opts, d.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, d.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, d.coverage_trim, d.retain_low_conf_trna ' +
+                    'GROUP BY a.ID, a.path, b.assemble_opts, d.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, d.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, d.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan ' +
                     'HAVING SUM(CASE WHEN a.ignore = 0 THEN 1 ELSE 0 END) > 0'
 
 workflow ANNOTATE {
@@ -57,7 +57,9 @@ workflow ANNOTATE {
                     mitofinder_opts: it[19] ?: '',                     // free-form MitoFinder options
                     ignore_scaffolds: it[20] ?: '',                    // comma-separated scaffold numbers to drop
                     coverage_trim: it[21] != null ? it[21] as Integer : 1,  // coverage trimming toggle (default on)
-                    retain_low_conf_trna: it[22] != null ? it[22] as Integer : 0  // retain low-conf (NNN) tRNAs (default off)
+                    retain_low_conf_trna: it[22] != null ? it[22] as Integer : 0,  // retain low-conf (NNN) tRNAs (default off)
+                    use_mitos: it[23] != null ? it[23] as Integer : 1,      // use_mitos toggle (default on)
+                    use_trnaScan: it[24] != null ? it[24] as Integer : 1    // use_trnaScan toggle (default on)
                 ],
                 file(it[6] + "/" + it[5]),                              // curation ref dir + clade
                 it[5].replaceFirst(/\.tar\.gz$/, ''),               // ref_db without ".tar.gz"

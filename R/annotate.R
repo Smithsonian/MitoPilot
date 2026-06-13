@@ -9,8 +9,10 @@
 #' @param ref_db Reference Mitos2 database to use for annotation (default:
 #'   "Chordata").
 #' @param ref_dir Path to the Mitos2 reference database.
+#' @param use_mitos logical; whether to run MITOS2 annotation (default: TRUE).
 #' @param mitos_opts Additional command line options for MITOS2.
 #' @param mitos_condaenv Conda environment to run MITOS2 (default: "mitos").
+#' @param use_trnaScan logical; whether to run tRNAscan-SE annotation (default: TRUE).
 #' @param trnaScan_opts Additional command line options for tRNAscan-SE.
 #' @param trnaScan_condaenv Conda environment to run tRNAscan-SE (default:
 #'   "base").
@@ -46,8 +48,10 @@ annotate <- function(
   genetic_code = "2",
   ref_db = "Chordata",
   ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
+  use_mitos = TRUE,
   mitos_opts = "--intron 0 --oril 0",
   mitos_condaenv = "mitos",
+  use_trnaScan = TRUE,
   trnaScan_opts = "-M vert -X 20",
   trnaScan_condaenv = "base",
   arwen_opts = "-mtx",
@@ -107,15 +111,24 @@ annotate <- function(
   }
 
   # tRNA annotation ----
-  trnaScan_out <- annotate_trnaScan(
-    assembly = assembly,
-    rotate = stringr::str_detect(names(assembly), "circular"),
-    trnaScan_opts = trnaScan_opts,
-    cpus = cpus,
-    condaenv = trnaScan_condaenv
-  )
-  assembly <- trnaScan_out$assembly
-  annotations_trnaScan <- trnaScan_out$annotations
+  if (isTRUE(use_trnaScan)) {
+    trnaScan_out <- annotate_trnaScan(
+      assembly = assembly,
+      rotate = stringr::str_detect(names(assembly), "circular"),
+      trnaScan_opts = trnaScan_opts,
+      cpus = cpus,
+      condaenv = trnaScan_condaenv
+    )
+    assembly <- trnaScan_out$assembly
+    annotations_trnaScan <- trnaScan_out$annotations
+  } else {
+    annotations_trnaScan <- data.frame(
+      contig = character(), type = character(), gene = character(),
+      product = character(), pos1 = integer(), pos2 = integer(),
+      length = integer(), direction = character(),
+      tRNA_ID = character(), anticodon = character()
+    )
+  }
 
   # ARWEN tRNA annotation ----
   annotations_arwen <- if (use_arwen) {
@@ -223,19 +236,28 @@ annotate <- function(
     ))
 
   # Mitos2 annotation ----
-  effective_mitos_opts <- if (isTRUE(use_mitos_best)) {
-    paste("--best", mitos_opts)
+  if (isTRUE(use_mitos)) {
+    effective_mitos_opts <- if (isTRUE(use_mitos_best)) {
+      paste("--best", mitos_opts)
+    } else {
+      mitos_opts
+    }
+    annotations_mitos <- annotate_mitos2(
+      assembly = assembly,
+      topology = ifelse(all(stringr::str_detect(names(assembly), "circular")), "circular", "linear"),
+      genetic_code = genetic_code,
+      ref_db = ref_db,
+      mitos_opts = effective_mitos_opts,
+      condaenv = mitos_condaenv
+    )
   } else {
-    mitos_opts
+    annotations_mitos <- data.frame(
+      contig = character(), type = character(), gene = character(),
+      product = character(), pos1 = integer(), pos2 = integer(),
+      length = integer(), direction = character(),
+      tRNA_ID = character(), anticodon = character()
+    )
   }
-  annotations_mitos <- annotate_mitos2(
-    assembly = assembly,
-    topology = ifelse(all(stringr::str_detect(names(assembly), "circular")), "circular", "linear"),
-    genetic_code = genetic_code,
-    ref_db = ref_db,
-    mitos_opts = effective_mitos_opts,
-    condaenv = mitos_condaenv
-  )
 
   # Combine annotations ----
   # Priority: tRNAscan > ARWEN > ARAGORN > MITOS2
@@ -413,6 +435,17 @@ annotate <- function(
     annotations$length[idx] <- abs(annotations$pos2[idx] - annotations$pos1[idx]) + 1
     annotations$gene[idx] <- "ctrl"
   }
+
+  # Ensure PCG codon/translation columns exist even when MITOS2 is off (only
+  # MITOS2 emits them); downstream curation selects these columns by name.
+  annotations <- add_cols(
+    annotations,
+    list(
+      start_codon = NA_character_,
+      stop_codon = NA_character_,
+      translation = NA_character_
+    )
+  )
 
   # Write outputs
   file.path(

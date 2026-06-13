@@ -245,6 +245,15 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           div(
             style = "margin-top: 24px;",
             shinyWidgets::prettyCheckbox(
+              ns("use_mitos"),
+              label = "Use MITOS2",
+              value = isTRUE(as.logical(current$use_mitos %||% 1L)),
+              status = "primary"
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "margin-top: 24px;",
+            shinyWidgets::prettyCheckbox(
               ns("use_mitos_best"),
               label = "Use --best flag",
               value = isTRUE(as.logical(current$use_mitos_best %||% 1L)),
@@ -284,12 +293,27 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
-        textInput(
-          ns("trnaScan_opts"),
-          label = tagList("trnAScan-SE options:", tool_help_icon("trnaScan-SE")),
-          value = current$trnaScan_opts %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 2",
+            textInput(
+              ns("trnaScan_opts"),
+              label = tagList("trnAScan-SE options:", tool_help_icon("trnaScan-SE")),
+              value = current$trnaScan_opts %||% character(0),
+              width = "100%"
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "margin-top: 24px;",
+            shinyWidgets::prettyCheckbox(
+              ns("use_trnaScan"),
+              label = "Use tRNAscan-SE",
+              value = isTRUE(as.logical(current$use_trnaScan %||% 1L)),
+              status = "primary"
+            ) |> shinyjs::disabled()
+          )
+        ),
         shinyWidgets::prettyCheckbox(
           ns("use_mitofinder"),
           label = "Also use MitoFinder for annotation",

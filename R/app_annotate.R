@@ -788,6 +788,14 @@ annotate_server <- function(id) {
           value = cur$trnaScan_opts
         )
         shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_mitos",
+          value = isTRUE(as.logical(cur$use_mitos %||% 1L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_trnaScan",
+          value = isTRUE(as.logical(cur$use_trnaScan %||% 1L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
           inputId = "use_mitos_best",
           value = isTRUE(as.logical(cur$use_mitos_best %||% 1L))
         )
@@ -853,10 +861,12 @@ annotate_server <- function(id) {
     observeEvent(input$edit_annotate_opts, ignoreInit = T, {
       shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_mitos", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_mitos_best", condition = input$edit_annotate_opts)
       # shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_trnaScan", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_arwen", condition = input$edit_annotate_opts)
       shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
@@ -922,10 +932,12 @@ annotate_server <- function(id) {
               annotate_opts = req(input$annotate_opts),
               cpus = req(input$annotate_opts_cpus),
               memory = req(input$annotate_opts_memory),
+              use_mitos = as.integer(isTRUE(input$use_mitos)),
               mitos_opts = req(input$mitos_opts),
               use_mitos_best = as.integer(isTRUE(input$use_mitos_best)),
               ref_dir = req(input$mitos_ref_dir),
               ref_db = req(input$mitos_ref_db),
+              use_trnaScan = as.integer(isTRUE(input$use_trnaScan)),
               trnaScan_opts = req(input$trnaScan_opts),
               arwen_opts = req(input$arwen_opts),
               use_arwen = as.integer(isTRUE(input$use_arwen)),

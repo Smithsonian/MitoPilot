@@ -61,9 +61,11 @@ process annotate {
         genetic_code = '!{params.genetic_code}', \
         ref_db = '!{ref_db_clean}', \
         ref_dir = '.', \
+        use_mitos = !{opts.use_mitos == 1 ? "TRUE" : "FALSE"}, \
         mitos_opts = '!{opts.mitos}', \
         use_mitos_best = !{opts.use_mitos_best == 1 ? "TRUE" : "FALSE"}, \
         mitos_condaenv = '!{params.mitos_condaenv}', \
+        use_trnaScan = !{opts.use_trnaScan == 1 ? "TRUE" : "FALSE"}, \
         trnaScan_opts = '!{opts.trnaScan}', \
         trnaScan_condaenv = '!{params.trnaScan_condaenv}', \
         arwen_opts = '!{opts.arwen}', \

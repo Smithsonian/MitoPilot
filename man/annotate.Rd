@@ -11,8 +11,10 @@ annotate(
   genetic_code = "2",
   ref_db = "Chordata",
   ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
+  use_mitos = TRUE,
   mitos_opts = "--intron 0 --oril 0",
   mitos_condaenv = "mitos",
+  use_trnaScan = TRUE,
   trnaScan_opts = "-M vert -X 20",
   trnaScan_condaenv = "base",
   arwen_opts = "-mtx",
@@ -48,9 +50,13 @@ annotate(
 
 \item{ref_dir}{Path to the Mitos2 reference database.}
 
+\item{use_mitos}{logical; whether to run MITOS2 annotation (default: TRUE).}
+
 \item{mitos_opts}{Additional command line options for MITOS2.}
 
 \item{mitos_condaenv}{Conda environment to run MITOS2 (default: "mitos").}
+
+\item{use_trnaScan}{logical; whether to run tRNAscan-SE annotation (default: TRUE).}
 
 \item{trnaScan_opts}{Additional command line options for tRNAscan-SE.}
 
