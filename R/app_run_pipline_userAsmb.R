@@ -21,17 +21,24 @@ pipeline_server_userAsmb <- function(id) {
       file.path(headless_work_dir(), paste0(headless_base(), ".log"))
     }
 
-    # Rebuild the editable submission script (e.g. after toggling -resume)
+    # Sync the editable script with the -resume toggle. Swap just the nextflow
+    # command line so the user's other edits are preserved; full rebuild only if
+    # that line is missing (e.g. first call or user removed it).
     refresh_headless_script <- function() {
-      wd <- headless_work_dir()
-      nfc <- paste(c("nextflow", nf_cmd()), collapse = " ")
-      headless_nf(nfc)
-      script <- build_submit_script(
-        wd, headless_exec(), headless_queue(),
-        nfc, headless_base(), headless_log_file()
-      )
-      shiny::updateTextAreaInput(session, "submit_script",
-                                 value = paste(script, collapse = "\n"))
+      old_nfc <- headless_nf()
+      new_nfc <- paste(c("nextflow", nf_cmd()), collapse = " ")
+      headless_nf(new_nfc)
+      current <- input$submit_script
+      if (!is.null(current) && nzchar(current) &&
+          !is.null(old_nfc) && grepl(old_nfc, current, fixed = TRUE)) {
+        updated <- sub(old_nfc, new_nfc, current, fixed = TRUE)
+      } else {
+        updated <- paste(build_submit_script(
+          headless_work_dir(), headless_exec(), headless_queue(),
+          new_nfc, headless_base(), headless_log_file()
+        ), collapse = "\n")
+      }
+      shiny::updateTextAreaInput(session, "submit_script", value = updated)
     }
 
     on("run_modal", {

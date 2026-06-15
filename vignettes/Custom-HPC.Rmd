@@ -93,6 +93,89 @@ or submit it as a batch job using your cluster's normal submission tools (e.g.
 [NMNH Hydra](NMNH-Hydra.html) and [NOAA SEDNA](NOAA-SEDNA.html) vignettes for
 batch submission examples you can adapt.
 
+## Run everything from the MitoPilot container (recommended)
+
+You do not need to install R, or any of the bioinformatics tools, on the
+cluster. The MitoPilot Docker image is a single self-contained "box" that
+already includes R, MitoPilot, and every tool the pipeline uses. You can use the
+R *inside* that box to create projects, configure your cluster, and run the
+headless GUI.
+
+A quick vocabulary primer if containers are new to you:
+
+- **Docker image**: the prebuilt box. MitoPilot publishes one on Docker Hub.
+- **Singularity / Apptainer**: the container runtime that nearly every HPC
+  cluster provides (Docker itself is usually not permitted on shared clusters).
+  It can run a Docker image directly. The two names are interchangeable here.
+- **`.sif` file**: Singularity's single-file copy of the image. You build it
+  once, then reuse it.
+
+### 1. Pull the image once
+
+From an interactive session or compute node (not the login node):
+
+```{bash eval=FALSE}
+# match the tag to your installed MitoPilot version
+singularity pull mitopilot.sif docker://macguigand/mitopilot:1.4.6
+```
+
+You may see many lines like `... ignoring (usually) harmless EPERM on setxattr
+...`. These are harmless rootless-conversion warnings; the `.sif` still builds.
+
+### 2. Understand directory binding
+
+By default a Singularity container can only see your **home directory**.
+Anything under home is available automatically. If your project, raw data, or
+scratch space lives somewhere else (for example `/scratch` or `/pool`), you must
+**bind** those paths with `--bind` so the container can read and write them:
+
+```{bash eval=FALSE}
+singularity exec --bind /scratch,/pool mitopilot.sif R
+```
+
+> **Saved cluster configs need no extra binding.** `generate_config()` writes
+> its profiles to `~/.config/R/MitoPilot` inside your home directory, and
+> Singularity mounts your home automatically. A profile you save once therefore
+> persists and is found by `new_project()` on every later run, with no `--bind`
+> needed. (This only breaks if you deliberately launch with `--contain` or
+> `--no-home`, which detach the home directory.)
+
+### 3. Create and configure a project with the bundled R
+
+Use **absolute paths** and pin the working directory with `--pwd`. Singularity
+sets the in-container working directory to your home by default, so a relative
+path would create the project in the wrong place.
+
+```{bash eval=FALSE}
+cd /scratch/$USER/my_runs
+singularity exec --bind /scratch --pwd $PWD mitopilot.sif R
+```
+
+```{r eval=FALSE}
+library(MitoPilot)
+
+# one-time: save a profile for your cluster (skip if using a built-in executor)
+generate_config(name = "my_cluster", scheduler = "slurm", queue = "general")
+
+new_project(
+  path       = "/scratch/me/my_runs/project01",   # absolute path
+  mapping_fn = "/scratch/me/my_runs/mapping.csv",
+  data_path  = "/scratch/me/my_runs/raw_data",
+  executor   = "my_cluster",                       # or a built-in, e.g. "NMNH_Hydra"
+  container  = "macguigand/mitopilot:1.4.6"        # pipeline steps use the same image
+)
+```
+
+### 4. Launch the headless GUI from the container
+
+```{bash eval=FALSE}
+proj=/scratch/$USER/my_runs/project01
+singularity exec --bind /scratch --pwd "$proj" mitopilot.sif \
+  R -e "setwd('$proj'); MitoPilot::MitoPilot(host='0.0.0.0', port=7591, launch.browser=FALSE)"
+```
+
+Then follow the SSH tunnel steps below to reach the GUI from your laptop.
+
 ## Headless GUI over an SSH tunnel
 
 The MitoPilot GUI is just a Shiny web server over the project's SQLite database
@@ -140,3 +223,33 @@ the GUI.
 (the "Open output folder" button, the HTML annotation report, and the ruleset
 browser) will not work headless, since they try to open on the cluster rather
 than your laptop. The main assemble / annotate / curate GUI is unaffected.
+
+## Submitting the pipeline in headless mode
+
+When MitoPilot runs headless it will **not** run Nextflow on the node hosting
+the GUI, since that would tie up an interactive node or the login node. The
+"Run from App" button is therefore disabled. Instead, when you start a workflow,
+the update modal shows a ready-to-edit **cluster submission script**:
+
+- It is pre-filled with the correct scheduler directives (`#SBATCH`, `#$`,
+  `#PBS`, or `#BSUB`) for your project's executor.
+- Edit the resources, and add your environment setup where indicated (for
+  example `module load java`, `mamba activate ...`, or
+  `export NXF_SINGULARITY_CACHEDIR=...`). Those lines are pre-filled as
+  commented examples.
+- Click **"Submit to Cluster"** to submit it with your scheduler's command
+  (`sbatch` / `qsub` / `bsub`), or **"Save Script Only"** to write the script
+  and submit it yourself.
+- Your edits to the resource block are remembered per project (saved to
+  `.mitopilot_submit.template`), so the next run pre-fills them. The "Resume
+  previous run?" checkbox still adds or removes `-resume` without disturbing
+  your edits.
+
+> **Submitting from inside the container.** "Submit to Cluster" calls
+> `sbatch` / `qsub` / `bsub` directly, and those commands are usually **not**
+> available inside a Singularity container. If you launched the GUI from the
+> container (the recommended setup above), use **"Save Script Only"** and then
+> submit the written `.sh` from a normal cluster shell. The submitted job runs
+> on a scheduler node (not inside the container) and calls Nextflow, which in
+> turn uses Singularity for each pipeline step, so make sure `java` and
+> `nextflow` are available via the script's environment-setup lines.
