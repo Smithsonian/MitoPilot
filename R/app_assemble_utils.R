@@ -300,7 +300,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           width = "100%"
         ) |> shinyjs::disabled(),
         opts_help("Extra command-line flags passed to MitoFinder.",
-                  href = "https://github.com/RemiAllio/MitoFinder"),
+                  href = "https://github.com/RemiAllio/MitoFinder",
+                  id = ns("help_mitofinder")),
         textInput(
           ns("mf_db"),
           label = "MitoFinder Database:",
@@ -309,7 +310,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         opts_help("Path to the MitoFinder reference database (GenBank .gb format) ",
                   "used to seed the assembly.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+                  id = ns("help_mf_db")),
         textInput(
           ns("getOrganelle"),
           label = tagList("getOrganelle options", tool_help_icon("getOrganelle")),
@@ -317,7 +319,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           width = "100%"
         ) |> shinyjs::disabled(),
         opts_help("Extra command-line flags passed to GetOrganelle.",
-                  href = "https://github.com/Kinggerm/GetOrganelle/wiki"),
+                  href = "https://github.com/Kinggerm/GetOrganelle/wiki",
+                  id = ns("help_getOrganelle")),
         textInput(
           ns("seeds_db"),
           label = "getOrganelle Seeds:",
@@ -326,7 +329,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         opts_help("Seed database: reference sequences GetOrganelle uses to start ",
                   "recruiting mitochondrial reads.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+                  id = ns("help_seeds_db")),
         textInput(
           ns("labels_db"),
           label = "getOrganelle Labels:",
@@ -335,7 +339,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         opts_help("Label database: reference genes GetOrganelle uses to identify ",
                   "and extend mitochondrial contigs.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+                  id = ns("help_labels_db")),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -409,11 +414,16 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
 
     if(current$assembler == "GetOrganelle"){
       shinyjs::hide(id = "mitofinder")
+      shinyjs::hide(id = "help_mitofinder")
       shinyjs::hide(id = "mf_db")
+      shinyjs::hide(id = "help_mf_db")
     } else if(current$assembler == "MitoFinder"){
       shinyjs::hide(id = "getOrganelle")
+      shinyjs::hide(id = "help_getOrganelle")
       shinyjs::hide(id = "seeds_db")
+      shinyjs::hide(id = "help_seeds_db")
       shinyjs::hide(id = "labels_db")
+      shinyjs::hide(id = "help_labels_db")
     }
   } else {
     shinyWidgets::show_alert(

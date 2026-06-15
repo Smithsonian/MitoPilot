@@ -769,16 +769,26 @@ assemble_server <- function(id) {
         )
         if (cur$assembler == "GetOrganelle") {
           shinyjs::hide(id = "mitofinder")
+          shinyjs::hide(id = "help_mitofinder")
           shinyjs::hide(id = "mf_db")
+          shinyjs::hide(id = "help_mf_db")
           shinyjs::show(id = "getOrganelle")
+          shinyjs::show(id = "help_getOrganelle")
           shinyjs::show(id = "seeds_db")
+          shinyjs::show(id = "help_seeds_db")
           shinyjs::show(id = "labels_db")
+          shinyjs::show(id = "help_labels_db")
         } else if (cur$assembler == "MitoFinder") {
           shinyjs::show(id = "mitofinder")
+          shinyjs::show(id = "help_mitofinder")
           shinyjs::show(id = "mf_db")
+          shinyjs::show(id = "help_mf_db")
           shinyjs::hide(id = "getOrganelle")
+          shinyjs::hide(id = "help_getOrganelle")
           shinyjs::hide(id = "seeds_db")
+          shinyjs::hide(id = "help_seeds_db")
           shinyjs::hide(id = "labels_db")
+          shinyjs::hide(id = "help_labels_db")
         }
       }
     })
