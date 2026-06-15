@@ -10,6 +10,30 @@ pipeline_server_userAsmb <- function(id) {
     process_out <- reactiveVal()
     job_submitting <- reactiveVal(FALSE)
 
+    # Headless submission state (set when the run modal opens in headless mode)
+    headless_base <- reactiveVal()   # job name / file stem
+    headless_nf <- reactiveVal()     # full "nextflow ..." command string
+    headless_exec <- reactiveVal()   # scheduler executor from .config
+    headless_queue <- reactiveVal()  # queue from .config
+
+    headless_work_dir <- function() dirname(getOption("MitoPilot.db") %||% ".")
+    headless_log_file <- function() {
+      file.path(headless_work_dir(), paste0(headless_base(), ".log"))
+    }
+
+    # Rebuild the editable submission script (e.g. after toggling -resume)
+    refresh_headless_script <- function() {
+      wd <- headless_work_dir()
+      nfc <- paste(c("nextflow", nf_cmd()), collapse = " ")
+      headless_nf(nfc)
+      script <- build_submit_script(
+        wd, headless_exec(), headless_queue(),
+        nfc, headless_base(), headless_log_file()
+      )
+      shiny::updateTextAreaInput(session, "submit_script",
+                                 value = paste(script, collapse = "\n"))
+    }
+
     on("run_modal", {
       job_submitting(FALSE)
       # Generate Nextflow params ----
@@ -54,6 +78,30 @@ pipeline_server_userAsmb <- function(id) {
         req(F)
       }
 
+      # Headless: prepare an editable submission script for the modal
+      headless <- isTRUE(getOption("MitoPilot.headless"))
+      headless_ui <- NULL
+      if (headless) {
+        wd <- headless_work_dir()
+        cfg <- read_config_executor(file.path(wd, ".config"))
+        headless_exec(cfg$executor)
+        headless_queue(cfg$queue)
+        headless_base(paste(tolower(session$userData$mode),
+                            format(Sys.time(), "%Y-%m-%d_%H-%M-%S"), sep = "_"))
+        nfc <- paste(c("nextflow", nf_cmd()), collapse = " ")
+        headless_nf(nfc)
+        script_init <- paste(
+          build_submit_script(wd, cfg$executor, cfg$queue, nfc,
+                              headless_base(), headless_log_file()),
+          collapse = "\n"
+        )
+        headless_ui <- div(
+          h5("Cluster submission script (edit as needed, then submit):"),
+          shiny::textAreaInput(ns("submit_script"), label = NULL,
+                               value = script_init, width = "100%", height = "320px")
+        )
+      }
+
       modalDialog(
         title = div(
           style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
@@ -71,12 +119,13 @@ pipeline_server_userAsmb <- function(id) {
           )
         ),
         size = "l",
-        h5("Nextflow Command:"),
-        div(
+        if (!headless) h5("Nextflow Command:"),
+        if (!headless) div(
           style = "display: flex; justify-content: space-between; align-items: left;",
           class = "code-block",
           textOutput(ns("nf_code_block"))
         ),
+        headless_ui,
         div(
           id = ns("progress_div"),
           h5("Progress:"),
@@ -108,11 +157,18 @@ pipeline_server_userAsmb <- function(id) {
     })
 
     output$start_button_ui <- renderUI({
-      # Headless: never run Nextflow from the app; only write a submission script.
+      # Headless: never run Nextflow from the app; edit + submit a job script.
       if (isTRUE(getOption("MitoPilot.headless"))) {
+        cmd <- submit_command(headless_exec())
+        submit_btn <- if (is.null(cmd)) {
+          shinyjs::disabled(actionButton(ns("submit_headless"), "Submit to Cluster"))
+        } else {
+          actionButton(ns("submit_headless"),
+                       paste0("Submit to Cluster (", cmd, ")"), class = "btn-success")
+        }
         return(tagList(
-          shinyjs::disabled(actionButton(ns("start"), "Run from App")),
-          actionButton(ns("write_script"), "Write Submission Script", class = "btn-success")
+          submit_btn,
+          actionButton(ns("save_script"), "Save Script Only")
         ))
       }
 
@@ -154,6 +210,10 @@ pipeline_server_userAsmb <- function(id) {
       output$nf_code_block <- shiny::renderText({
         paste(c("nextflow", nf_cmd()), collapse = " ")
       })
+      # Headless: keep the editable script in sync with the -resume toggle
+      if (isTRUE(getOption("MitoPilot.headless")) && !is.null(headless_base())) {
+        refresh_headless_script()
+      }
     })
 
     # The logic for starting the process is moved into its own function.
@@ -193,42 +253,60 @@ pipeline_server_userAsmb <- function(id) {
       start_nf_process()
     })
 
-    # Headless: write a cluster submission script (never submit it)
-    observeEvent(input$write_script, {
+    # Headless: write the (edited) script + remember its resource block for reuse
+    write_headless_script <- function() {
+      work_dir <- headless_work_dir()
+      base <- headless_base()
+      full_nf_cmd <- headless_nf()
+      log_file_path <- headless_log_file()
+      script_path <- file.path(work_dir, paste0(base, ".sh"))
+      text <- input$submit_script %||% ""
+      writeLines(strsplit(text, "\n", fixed = TRUE)[[1]], script_path)
+      save_submit_template(text, work_dir, full_nf_cmd, base, log_file_path)
+      script_path
+    }
+
+    # Headless: write the script only (user submits it manually)
+    observeEvent(input$save_script, {
       tryCatch({
-        work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
-        full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
-
-        timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
-        base_filename <- paste(tolower(session$userData$mode), timestamp, sep = "_")
-        log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
-        script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
-
-        cfg <- read_config_executor(file.path(work_dir, ".config"))
-        script_content <- submission_script(
-          executor = cfg$executor,
-          queue = cfg$queue,
-          full_nf_cmd = full_nf_cmd,
-          job_name = base_filename,
-          log_file = log_file_path
-        )
-        writeLines(script_content, script_path)
-
+        script_path <- write_headless_script()
         shinyWidgets::sendSweetAlert(
-          title = "Submission script written",
+          title = "Submission script saved",
           text = paste0(
-            "Wrote ", basename(script_path), " (executor: ", cfg$executor,
-            ") to your project directory. Review/edit the environment setup, ",
-            "then submit it yourself (e.g. sbatch / qsub / bsub)."
+            "Wrote ", basename(script_path), " to your project directory and ",
+            "saved your resource settings for next time. Submit it yourself ",
+            "(e.g. sbatch / qsub / bsub)."
           ),
           type = "success"
         )
         removeModal()
       }, error = function(e) {
         shinyWidgets::sendSweetAlert(
-          title = "Failed to write submission script:",
-          text = e$message,
-          type = "error"
+          title = "Failed to save submission script:",
+          text = e$message, type = "error"
+        )
+      })
+    })
+
+    # Headless: write the script, remember it, and submit to the scheduler
+    observeEvent(input$submit_headless, {
+      tryCatch({
+        script_path <- write_headless_script()
+        res <- run_submit(script_path, headless_exec(), headless_work_dir())
+        if (!isTRUE(res$success)) {
+          stop(res$output)
+        }
+        shinyWidgets::sendSweetAlert(
+          title = "Job submitted",
+          text = paste0(res$command, ": ", res$output,
+                        "\nLog: ", basename(headless_log_file())),
+          type = "success"
+        )
+        removeModal()
+      }, error = function(e) {
+        shinyWidgets::sendSweetAlert(
+          title = "Failed to submit job:",
+          text = e$message, type = "error"
         )
       })
     })

@@ -149,3 +149,113 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file) 
     'echo "--- MitoPilot job done: `date` ---"'
   )
 }
+
+#' Cluster submit command for an executor
+#'
+#' @param executor Scheduler name.
+#' @return The submit binary ("sbatch", "qsub", "bsub") or `NULL` if unknown.
+#' @noRd
+submit_command <- function(executor) {
+  switch(tolower(executor %||% ""),
+    slurm = "sbatch",
+    sge = "qsub",
+    pbs = "qsub",
+    pbspro = "qsub",
+    lsf = "bsub",
+    NULL
+  )
+}
+
+#' Path to a project's saved submission-script template
+#'
+#' @param work_dir Project directory.
+#' @noRd
+submit_template_path <- function(work_dir) {
+  file.path(work_dir, ".mitopilot_submit.template")
+}
+
+#' Replace run-specific values in a script with reusable tokens (and back)
+#'
+#' Lets a user's edited submission script (resource directives, module loads,
+#' etc.) be saved and reused while the job name, log path, and Nextflow command
+#' are regenerated each run. `log_file` is substituted before `job_name` because
+#' the log path contains the job name as a substring.
+#'
+#' @param lines Character vector of script lines.
+#' @param full_nf_cmd,job_name,log_file Run-specific values.
+#' @noRd
+tokenize_submit_script <- function(lines, full_nf_cmd, job_name, log_file) {
+  lines <- gsub(log_file, "<<LOG_FILE>>", lines, fixed = TRUE)
+  lines <- gsub(job_name, "<<JOB_NAME>>", lines, fixed = TRUE)
+  gsub(full_nf_cmd, "<<NEXTFLOW_CMD>>", lines, fixed = TRUE)
+}
+
+#' @rdname tokenize_submit_script
+#' @noRd
+fill_submit_template <- function(lines, full_nf_cmd, job_name, log_file) {
+  lines <- gsub("<<LOG_FILE>>", log_file, lines, fixed = TRUE)
+  lines <- gsub("<<JOB_NAME>>", job_name, lines, fixed = TRUE)
+  gsub("<<NEXTFLOW_CMD>>", full_nf_cmd, lines, fixed = TRUE)
+}
+
+#' Build a submission script, reusing a saved per-project template if present
+#'
+#' @param work_dir Project directory (also where the template lives).
+#' @param executor,queue Scheduler info (from [read_config_executor()]).
+#' @param full_nf_cmd,job_name,log_file Run-specific values.
+#' @return Character vector of script lines.
+#' @noRd
+build_submit_script <- function(work_dir, executor, queue, full_nf_cmd, job_name, log_file) {
+  tmpl <- submit_template_path(work_dir)
+  if (file.exists(tmpl)) {
+    return(fill_submit_template(readLines(tmpl), full_nf_cmd, job_name, log_file))
+  }
+  submission_script(executor, queue, full_nf_cmd, job_name, log_file)
+}
+
+#' Save a user-edited submission script as a reusable project template
+#'
+#' @param text The (possibly edited) script, as a single string or a vector.
+#' @param work_dir Project directory.
+#' @param full_nf_cmd,job_name,log_file Run-specific values to tokenize out.
+#' @noRd
+save_submit_template <- function(text, work_dir, full_nf_cmd, job_name, log_file) {
+  lines <- if (length(text) == 1) strsplit(text, "\n", fixed = TRUE)[[1]] else text
+  lines <- tokenize_submit_script(lines, full_nf_cmd, job_name, log_file)
+  writeLines(lines, submit_template_path(work_dir))
+}
+
+#' Submit a script to the cluster scheduler
+#'
+#' Runs the executor's submit command from `work_dir` so the job's working
+#' directory matches the project.
+#'
+#' @param script_path Path to the script to submit.
+#' @param executor Scheduler name (selects the submit command).
+#' @param work_dir Directory to submit from.
+#' @return List with `success` (logical), `command` (the binary, or `NULL`), and
+#'   `output` (combined stdout/stderr).
+#' @noRd
+run_submit <- function(script_path, executor, work_dir) {
+  cmd <- submit_command(executor)
+  if (is.null(cmd)) {
+    return(list(
+      success = FALSE,
+      command = NULL,
+      output = paste0("No known submit command for executor '", executor, "'.")
+    ))
+  }
+  old <- getwd()
+  on.exit(setwd(old), add = TRUE)
+  setwd(work_dir)
+  out <- tryCatch(
+    system2(cmd, args = shQuote(script_path), stdout = TRUE, stderr = TRUE),
+    error = function(e) structure(conditionMessage(e), status = 1L)
+  )
+  status <- attr(out, "status")
+  list(
+    success = is.null(status) || status == 0,
+    command = cmd,
+    output = paste(out, collapse = "\n")
+  )
+}

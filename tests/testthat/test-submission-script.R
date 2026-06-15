@@ -80,6 +80,52 @@ test_that("submission_script omits queue directive when queue is NULL", {
   expect_false(any(grepl("#SBATCH -p", lines, fixed = TRUE)))
 })
 
+test_that("submit_command maps executors to schedulers", {
+  expect_equal(submit_command("slurm"), "sbatch")
+  expect_equal(submit_command("sge"), "qsub")
+  expect_equal(submit_command("pbspro"), "qsub")
+  expect_equal(submit_command("lsf"), "bsub")
+  expect_null(submit_command("local"))
+})
+
+test_that("submit template round-trips resource edits, regenerating dynamic bits", {
+  wd <- tempfile()
+  dir.create(wd)
+
+  nf1 <- "nextflow run x -entry WF1 -resume"
+  job1 <- "assemble_2026-01-01_00-00-00"
+  log1 <- file.path(wd, paste0(job1, ".log"))
+
+  # default script, then user edits the resource block + adds a module load
+  script <- submission_script("slurm", "general", nf1, job1, log1)
+  script <- sub("#SBATCH --mem=16G", "#SBATCH --mem=64G", script, fixed = TRUE)
+  script <- c(script, "module load my/custom")
+
+  save_submit_template(paste(script, collapse = "\n"), wd, nf1, job1, log1)
+  expect_true(file.exists(submit_template_path(wd)))
+
+  # next run: different workflow / job name / log, same saved resources
+  nf2 <- "nextflow run x -entry WF2"
+  job2 <- "annotate_2026-02-02_11-11-11"
+  log2 <- file.path(wd, paste0(job2, ".log"))
+  rebuilt <- build_submit_script(wd, "slurm", "general", nf2, job2, log2)
+
+  expect_true(any(grepl("#SBATCH --mem=64G", rebuilt, fixed = TRUE)))
+  expect_true(any(grepl("module load my/custom", rebuilt, fixed = TRUE)))
+  expect_true(any(grepl(nf2, rebuilt, fixed = TRUE)))
+  expect_true(any(grepl(job2, rebuilt, fixed = TRUE)))
+  expect_false(any(grepl(job1, rebuilt, fixed = TRUE)))
+  expect_false(any(grepl("-entry WF1", rebuilt, fixed = TRUE)))
+})
+
+test_that("build_submit_script falls back to default when no template saved", {
+  wd <- tempfile()
+  dir.create(wd)
+  out <- build_submit_script(wd, "sge", NULL, "nextflow run x", "j", "/tmp/j.log")
+  expect_equal(out[1], "#!/bin/sh")
+  expect_true(any(grepl("#\\$ -N", out)))
+})
+
 test_that("submission_script falls back to a comment for unknown executors", {
   lines <- submission_script(
     executor = "local",
