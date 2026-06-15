@@ -459,6 +459,9 @@ export_server <- function(id) {
             )
           )
         ),
+        opts_help("Export Group bundles samples into one output set; Header Template ",
+                  "is a reusable, named set of the FASTA header patterns below (type a ",
+                  "new name to save one)."),
         tags$label(
           class = "control-label",
           "Mitogenome FASTA Header (reference columns from your sample data using '{}'):"

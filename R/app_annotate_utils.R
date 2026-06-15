@@ -198,6 +198,8 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             )
           )
         ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -231,6 +233,8 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
+        opts_help("Circular mitogenomes are rotated to begin at this gene, giving a ",
+                  "consistent start position across samples (e.g. tRNA-Phe in vertebrates)."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -261,6 +265,10 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
+        opts_help("MITOS2 is the primary annotator (genes, tRNAs, rRNAs); ",
+                  "the options box takes extra MITOS2 flags and '--best' keeps only ",
+                  "the top-scoring of overlapping predictions.",
+                  href = "http://mitos2.bioinf.uni-leipzig.de/index.py"),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -293,6 +301,9 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
+        opts_help("Location (ref_dir) and name (ref_db) of the MITOS2 reference ",
+                  "database used for annotation; pick a clade closest to your samples.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -314,18 +325,26 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
+        opts_help("Predict tRNA genes with tRNAscan-SE (mito mode); the options box ",
+                  "takes extra flags.",
+                  href = "http://lowelab.ucsc.edu/tRNAscan-SE/"),
         shinyWidgets::prettyCheckbox(
           ns("use_mitofinder"),
           label = "Also use MitoFinder for annotation",
           value = isTRUE(as.logical(current$use_mitofinder %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
+        opts_help("Run MitoFinder as a second annotator and merge its gene models ",
+                  "with the MITOS2 results.",
+                  href = "https://github.com/RemiAllio/MitoFinder"),
         textInput(
           ns("mitofinder_db"),
           label = "MitoFinder reference database (.gb format)",
           value = current$mitofinder_db %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("GenBank-format (.gb) reference used by MitoFinder to identify genes.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -356,6 +375,9 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
+        opts_help("Extra MitoFinder flags. '--new-genes' lets it report genes absent ",
+                  "from the reference; '--allow-intron' searches for intron-containing genes.",
+                  href = "https://github.com/RemiAllio/MitoFinder"),
         shinyWidgets::prettyCheckbox(
           ns("use_arwen"),
           label = "Also use ARWEN for tRNA prediction",
@@ -368,6 +390,9 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = current$arwen_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Run ARWEN as an additional tRNA predictor; the options box takes ",
+                  "extra flags.",
+                  href = "https://www.acgt.me/arwen"),
         shinyWidgets::prettyCheckbox(
           ns("use_aragorn"),
           label = "Also use ARAGORN for tRNA prediction",
@@ -380,24 +405,33 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = current$aragorn_opts %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Run ARAGORN as an additional tRNA predictor; the options box takes ",
+                  "extra flags.",
+                  href = "https://www.ansikte.se/ARAGORN/"),
         shinyWidgets::prettyCheckbox(
           ns("coverage_trim"),
           label = "Trim low-coverage ends of linear assemblies",
           value = isTRUE(as.logical(current$coverage_trim %||% 1L)),
           status = "primary"
         ) |> shinyjs::disabled(),
+        opts_help("Remove poorly supported bases at the ends of linear contigs based ",
+                  "on read depth."),
         shinyWidgets::prettyCheckbox(
           ns("feature_trim"),
           label = "Trim un-annotated ends of linear contigs (by gene features)",
           value = isTRUE(as.logical(current$feature_trim %||% 1L)),
           status = "primary"
         ) |> shinyjs::disabled(),
+        opts_help("Trim linear contig ends that extend past the outermost annotated ",
+                  "gene features."),
         shinyWidgets::prettyCheckbox(
           ns("retain_low_conf_trna"),
           label = "Retain low-confidence (NNN anticodon) tRNAs",
           value = isTRUE(as.logical(current$retain_low_conf_trna %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
+        opts_help("Keep predicted tRNAs whose anticodon could not be confidently ",
+                  "determined (reported with an NNN anticodon)."),
         size = "m",
         footer = tagList(
           actionButton(ns("update_annotate_opts"), "Update"),
@@ -457,6 +491,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -487,6 +523,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             ) |> shinyjs::disabled()
           )
         ),
+        opts_help("Maximum number of reference BLAST hits per gene used when ",
+                  "validating and curating annotations."),
         div(
           style = "display: flex; align-items: center; gap: 2em",
           div(
@@ -519,6 +557,9 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             ) |> shinyjs::disabled()
           )
         ),
+        opts_help("Location (ref_dir) and name (ref_db) of the reference database ",
+                  "used to validate gene boundaries during curation.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
         div(
           style = "flex: 1",
           selectizeInput(
@@ -539,6 +580,9 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           ) |> shinyjs::disabled()
         ),
+        opts_help("Taxonomic ruleset of expected genes and naming conventions used ",
+                  "to curate annotations; pick the clade closest to your samples.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html"),
         div(
           class = "form-group shiny-input-container",
           shinyWidgets::prettyCheckbox(
@@ -548,6 +592,9 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             status = "primary"
           ) |> shinyjs::disabled()
         ),
+        opts_help("Per-gene curation rules (expected length, start/stop codons, etc.) ",
+                  "for the selected target; edit values directly in the tree below.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.html"),
         listviewer::reactjsonOutput(ns("params")),
         size = "m",
         footer = tagList(
@@ -640,12 +687,16 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         value = isTRUE(as.logical(current$orf_nested %||% 0L)),
         status = "primary"
       ) |> shinyjs::disabled(),
+      opts_help("Also report ORFs that fall inside or overlap another ORF, rather ",
+                "than only the longest one per region."),
       textInput(
         ns("orffinder_opts"),
         label = tagList("ORFfinder options:", tool_help_icon("orffinder")),
         value = current$orffinder_opts %||% character(0),
         width = "100%"
       ) |> shinyjs::disabled(),
+      opts_help("Extra command-line flags passed to NCBI ORFfinder.",
+                href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
       helpText(
         "The genetic code (-g) and minimum length (-ml) are set automatically",
         "from the project genetic code and the Min ORF length above; do not set",
@@ -684,12 +735,17 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         shinyWidgets::prettyCheckbox(
           ns("use_orffinder"),
           label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
           value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
+        opts_help("Optional step that scans still-unannotated regions for open ",
+                  "reading frames using NCBI ORFfinder.",
+                  href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
         orf_param_opts,
         size = "m",
         footer = tagList(
