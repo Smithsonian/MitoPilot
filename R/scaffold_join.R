@@ -975,10 +975,12 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   # fetched ref FASTA if it wasn't in the cache, so the mapping precompute always
   # covers at least the reference the join will use.
   acc <- if (!is.null(sc)) choose_reference(sc) else NA_character_
-  if (!is.na(acc) && is.null(ref_seqs[[acc]]) && nzchar(ref_fasta_seq)) {
+  # `ref_seqs` is an atomic named vector, so index by name membership (x[["miss"]]
+  # errors on atomics, unlike lists).
+  if (!is.na(acc) && !(acc %in% names(ref_seqs)) && nzchar(ref_fasta_seq)) {
     ref_seqs[[acc]] <- ref_fasta_seq
   }
-  ref_seq <- if (!is.na(acc) && !is.null(ref_seqs[[acc]])) ref_seqs[[acc]] else ref_fasta_seq
+  ref_seq <- if (!is.na(acc) && acc %in% names(ref_seqs)) ref_seqs[[acc]] else ref_fasta_seq
 
   # Precompute scaffold->reference mappings for ALL candidate references so the
   # in-app manual editor can build layouts with no minimap2 dependency.
