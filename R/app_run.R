@@ -49,7 +49,11 @@ run_app <- function(
   if (is.null(launch.browser)) {
     launch.browser <- interactive()
   }
-  options[["shiny.launch.browser"]] <- launch.browser
+  # shinyApp(options=) expects the key "launch.browser" (not the global R option
+  # name). Set the global option too so shiny's interactive() default is also
+  # overridden when this list is bypassed.
+  options[["launch.browser"]] <- launch.browser
+  options(shiny.launch.browser = launch.browser)
 
   # Headless = browser not launched. Gates "Run from App" in the run modal.
   options(MitoPilot.headless = !isTRUE(launch.browser))
