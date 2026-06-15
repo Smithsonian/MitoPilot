@@ -1,5 +1,5 @@
 ---
-title: "Custom HPC Setup"
+title: "HPC Cluster Support"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Custom HPC Setup}
@@ -13,7 +13,7 @@ MitoPilot ships built-in executor templates for `local`, `awsbatch`, the
 Smithsonian Hydra cluster (`NMNH_Hydra`), and the NOAA SEDNA cluster
 (`NOAA_SEDNA`). For any other cluster, MitoPilot includes **generic templates**
 for the four most common schedulers, plus a helper function to build a Nextflow 
-config for your cluster once and reuse it for every project.
+config for your cluster once and reuse it for every project. See below for details.
 
 | Scheduler | `scheduler =` | Nextflow executor |
 |-----------|---------------|-------------------|
@@ -22,20 +22,20 @@ config for your cluster once and reuse it for every project.
 | PBS Pro / OpenPBS / Torque | `"pbs"` | `pbspro` (edit to `pbs` for Torque/OpenPBS) |
 | IBM Spectrum LSF | `"lsf"` | `lsf` |
 
-## Get an R session on the cluster
+## Launch an R session on the cluster
 
 Everything that follows (saving a cluster config, creating projects, launching
 the app) runs from an **R session on the cluster**. You have two ways to get one.
 
 ### Option A: the MitoPilot container (recommended, no installation)
 
-You do not need to install R or any other tools on the cluster. The MitoPilot
-Docker image is a single self-contained "box" that already includes R,
-MitoPilot, and every tool the pipeline uses. You run the R *inside* that box.
+The MitoPilot Docker image is a single self-contained "box" that already includes R,
+MitoPilot, and every tool the pipeline uses. You run the R *inside* that box. 
+You do not need to install R, the MitoPilot package, or any other tools on the cluster. 
 
 A quick vocabulary primer if containers are new to you:
 
-- **Docker image**: the prebuilt box. MitoPilot publishes one on Docker Hub.
+- **Docker image**: the prebuilt box of software. MitoPilot publishes one on [Docker Hub](https://hub.docker.com/r/macguigand/mitopilot).
 - **Singularity / Apptainer**: the container runtime that nearly every HPC
   cluster provides (Docker itself is usually not permitted on shared clusters).
   It can run a Docker image directly. The two names are interchangeable here.
@@ -46,12 +46,9 @@ A quick vocabulary primer if containers are new to you:
 login node):
 
 ```{bash eval=FALSE}
-# match the tag to your installed MitoPilot version
+# match the tag to the latest MitoPilot version
 singularity pull mitopilot.sif docker://macguigand/mitopilot:1.4.6
 ```
-
-You may see many lines like `... ignoring (usually) harmless EPERM on setxattr
-...`. These are harmless rootless-conversion warnings; the `.sif` still builds.
 
 **2. Start an R session.** By default a Singularity container can only see your
 **home directory**. Bind any other locations your projects or data live in (for
@@ -64,22 +61,13 @@ cd /scratch/$USER/my_runs
 singularity exec --bind /scratch,/pool --pwd $PWD mitopilot.sif R
 ```
 
-> **Saved cluster configs need no extra binding.** `generate_config()` writes
-> its profiles to `~/.config/R/MitoPilot` inside your home directory, and
-> Singularity mounts your home automatically. A profile you save once therefore
-> persists and is found by `new_project()` on every later run, with no `--bind`
-> needed. (This only breaks if you deliberately launch with `--contain` or
-> `--no-home`, which detach the home directory.)
-
 ### Option B: RStudio Server or a local R install
 
 If your cluster offers **RStudio Server**, or you already have R with the
 MitoPilot package installed on the cluster, you can run every step below in that
 R session instead of the container. Open RStudio in your browser (or start R as
-usual) and run the same commands. In that case you can launch the app normally
-(it opens in your browser) and skip the SSH-tunnel section. The pipeline still
-runs inside the container image you set on the project (`container = ...`), so
-the only difference is where the GUI and the setup commands run.
+usual) and run the same commands. If using RStudio Server, you can launch the app normally
+and skip the SSH-tunnel section.
 
 The rest of this guide works the same in either R session.
 
@@ -106,17 +94,19 @@ generate_config(
 This writes `config.my_cluster` to your config directory. Prefer to be prompted
 interactively? Pass `interactive = TRUE` and leave the cluster values unset.
 
+<div class="alert alert-note">
+  <strong>Note:</strong> Saved cluster configs need no extra binding if running R with Docker/Singularity. The `generate_config()` writes its profiles to `~/.config/R/MitoPilot` inside your home directory, and Singularity mounts your home automatically. A profile you save once therefor persists and is found by `new_project()` on every later run, with no `--bind` needed. (This only breaks if you deliberately launch with `--contain` or `--no-home`, which detach the home directory.)
+</div>
+
 ## Reuse your cluster config for every project
 
 Once saved, the profile name behaves like any built-in executor:
 
 ```{r eval=FALSE}
 new_project(
-  path       = "/scratch/me/my_runs/project01",   # use absolute paths in the container
-  mapping_fn = "/scratch/me/my_runs/mapping.csv",
-  data_path  = "/scratch/me/my_runs/raw_data",
-  executor   = "my_cluster",                       # or a built-in, e.g. "NMNH_Hydra"
-  container  = "macguigand/mitopilot:1.4.6"        # pipeline steps use the same image
+  ...
+  executor   = "my_cluster",
+  ...
 )
 ```
 
@@ -142,20 +132,12 @@ from the project database and can be set directly in the MitoPilot app.
 
 ## Validate before running
 
-If `nextflow` is on your `PATH`, you can sanity-check the generated config:
+If `nextflow` is on your `PATH`, you can sanity-check the generated config by running the following commands in a terminal:
 
 ```{bash eval=FALSE}
 cd path/to/project
-cp .config nextflow.config
-nextflow config .          # prints the resolved config, or a parse error
-rm nextflow.config
+nextflow config .config          # prints the resolved config, or a parse error
 ```
-
-After reviewing the `.config` file, launch the pipeline from the MitoPilot app
-or submit it as a batch job using your cluster's normal submission tools (e.g.
-`sbatch`, `qsub`, `bsub`) wrapping the `nextflow run` command. See the
-[NMNH Hydra](NMNH-Hydra.html) and [NOAA SEDNA](NOAA-SEDNA.html) vignettes for
-batch submission examples you can adapt.
 
 ## Accessing the MitoPilot app over an SSH tunnel
 
@@ -166,9 +148,8 @@ cluster node with a fixed host and port, then reach it from your local computer
 over an SSH tunnel. (If you are using RStudio Server instead, skip this section:
 just call `MitoPilot()` and it opens in your browser.)
 
-**1. On the cluster**, launch MitoPilot from your project directory bound to all
-interfaces on a port of your choice, and tell it not to open a browser. From the
-container in one line:
+**1. On the cluster**, launch MitoPilot from your project directory 
+and tell it not to open a browser. From the container in one line:
 
 ```{bash eval=FALSE}
 proj=/scratch/$USER/my_runs/project01
@@ -191,15 +172,14 @@ ssh -N -L 7591:NODE:7591 <user>@<cluster>
 ```
 
 **2. On your local computer**, open the tunnel (substitute your username and login
-host; if MitoPilot is running on a compute node reached via `srun --pty`, the
-printed `NODE` is that compute node and you may need an SSH jump through the
-login node, `ssh -N -J <user>@<cluster> -L 7591:NODE:7591 <user>@NODE`):
+host. If MitoPilot is running on a compute node reached via `srun --pty`, the
+printed `NODE` should be that compute node.
 
 ```{bash eval=FALSE}
 ssh -N -L 7591:NODE:7591 <user>@<cluster>
 ```
 
-**3. In your browser**, open:
+**3. In your web browser**, open:
 
 ```
 http://localhost:7591
@@ -211,15 +191,14 @@ the app.
 
 **Caveat:** in-app features that open a file or browser on the server side
 (the "Open output folder" button, the HTML annotation report, and the ruleset
-browser) will not work headless, since they try to open on the cluster rather
+browser) will not work here, since they try to open on the cluster rather
 than your local computer. The main assemble / annotate / curate app is unaffected.
 
-## Submitting the pipeline in headless mode
+## Running the pipeline
 
-When MitoPilot runs headless it will **not** run Nextflow on the node hosting
-the GUI, since that would tie up an interactive node or the login node. The
-"Run from App" button is therefore disabled. Instead, when you start a workflow,
-the update modal shows a ready-to-edit **cluster submission script**:
+When running MitoPilot via a ssh tunnel, it will **not** run Nextflow on the node hosting
+the app, since that would tie up an interactive node or the login node. Instead, when you start a workflow,
+the update window shows a ready-to-edit **cluster submission script**:
 
 - It is pre-filled with the correct scheduler directives (`#SBATCH`, `#$`,
   `#PBS`, or `#BSUB`) for your project's executor.
@@ -235,11 +214,14 @@ the update modal shows a ready-to-edit **cluster submission script**:
   previous run?" checkbox still adds or removes `-resume` without disturbing
   your edits.
 
-> **Submitting from inside the container.** "Submit to Cluster" calls
-> `sbatch` / `qsub` / `bsub` directly, and those commands are usually **not**
-> available inside a Singularity container. If you launched the app from the
-> container (the recommended setup above), use **"Save Script Only"** and then
-> submit the written `.sh` from a normal cluster shell. The submitted job runs
-> on a scheduler node (not inside the container) and calls Nextflow, which in
-> turn uses Singularity for each pipeline step, so make sure `java` and
-> `nextflow` are available via the script's environment-setup lines.
+<div class="alert alert-note">
+  <strong>Note:</strong> "Submit to Cluster" calls
+`sbatch` / `qsub` / `bsub` directly, and those commands are usually **not**
+available inside a Singularity container. If you launched the app from the
+container (the recommended setup above), use **"Save Script Only"** and then
+submit the written `.sh` from a normal cluster shell. The submitted job runs
+on a scheduler node (not inside the container) and calls Nextflow, which in
+turn uses Singularity for each pipeline step, so make sure `java` and
+`nextflow` are available via the script's environment-setup lines.
+</div>
+
