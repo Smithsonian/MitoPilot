@@ -7,9 +7,11 @@
 #' @param ... help text (character/﻿tags), one short sentence.
 #' @param href optional URL to link out to.
 #' @param link_text label for the trailing link (default "learn more").
+#' @param id optional element id (namespace via `ns()`) so the help can be
+#'   shown/hidden together with the field it describes.
 #' @return a `tags$p` element.
 #' @noRd
-opts_help <- function(..., href = NULL, link_text = "learn more") {
+opts_help <- function(..., href = NULL, link_text = "learn more", id = NULL) {
   inner <- list(...)
   if (!is.null(href)) {
     inner <- c(inner, list(
@@ -19,6 +21,7 @@ opts_help <- function(..., href = NULL, link_text = "learn more") {
     ))
   }
   shiny::tags$p(
+    id = id,
     class = "text-muted",
     style = "margin-top: -6px; margin-bottom: 14px; font-size: 0.85em;",
     inner
