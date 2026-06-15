@@ -13,7 +13,8 @@ run_scaffold_join(
   gap_len = 100,
   circular = FALSE,
   db = NULL,
-  auto_join = TRUE
+  auto_join = TRUE,
+  scaffold_hits = NULL
 )
 }
 \arguments{
@@ -36,6 +37,11 @@ run_scaffold_join(
 the joined Path 0. When FALSE (toggle off) or the hits disagree, only the
 precomputed scaffold->reference mappings are written, leaving the sample
 fragmented for manual review in the app.}
+
+\item{scaffold_hits}{optional ';'-separated string of per-scaffold BLAST hits
+("scaffold|accession|pident") passed from the workflow. Preferred over a DB
+read of `assemblies.blast_accession`, which is written by an async UPDATE
+with no happens-before relative to this step (so it can still be NULL here).}
 }
 \description{
 Reads the per-scaffold assembly FASTA + coverage CSVs + the reference FASTA,

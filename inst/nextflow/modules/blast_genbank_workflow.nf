@@ -298,10 +298,26 @@ workflow BLAST_GENBANK {
             }
             .set { scaffold_accession }
 
+        // Per-id list of "scaffold|accession|pident" for the assembled scaffolds,
+        // passed to SCAFFOLD_JOIN so the reference choice / multi-ref mapping /
+        // conflicting-hit check use reliably-available channel data rather than a
+        // racy read of the per-scaffold assemblies.blast_accession (written above
+        // by an async sqlInsert with no happens-before vs scaffold_join).
+        blast_records
+            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'scaffold' }
+            .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, "${scaffold}|${accession}|${pident == null ? '' : pident}")
+            }
+            .groupTuple()
+            .map { id, items -> tuple(id, items.join(';')) }
+            .set { scaffold_hits_ch }
+
     emit:
         // Downstream BLAST_REF_FETCH consumes this; filtered to real hits only.
         ref_input = ref_fetch_input
             .filter{ id, accession, species, evalue, opts_id, is_top -> accession != 'NO HIT' && accession != null }
         // (id, path, scaffold, accession) for per-scaffold lineage assignment.
         scaffold_map = scaffold_accession
+        // Consumed by SCAFFOLD_JOIN (per-scaffold hits as a ';'-joined string).
+        scaffold_hits = scaffold_hits_ch
 }

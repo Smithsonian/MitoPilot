@@ -39,6 +39,7 @@ workflow WF1 {
     ASSEMBLE.out.join_eligible
         .join(COVERAGE.out.cov_files)
         .join(BLAST_REF_FETCH.out.ref_seq)
+        .join(BLAST_GENBANK.out.scaffold_hits)
         .set { scaffold_join_in }
     SCAFFOLD_JOIN(scaffold_join_in)
 

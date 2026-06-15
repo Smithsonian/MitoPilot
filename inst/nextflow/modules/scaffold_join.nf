@@ -21,7 +21,7 @@ process scaffold_join {
     tag "${id}"
 
     input:
-        tuple val(id), path(assembly), val(opts), val(auto_join), path(cov_csvs), path(ref_seq)
+        tuple val(id), path(assembly), val(opts), val(auto_join), path(cov_csvs), path(ref_seq), val(scaffold_hits)
 
     output:
         // Joined Path 0 outputs are produced only when auto-join builds it
@@ -50,6 +50,6 @@ process scaffold_join {
         cat "!{ref_seq}" >> ref.fa
     fi
 
-    Rscript -e "MitoPilot::run_scaffold_join('!{assembly}', c(!{cov_list}), 'ref.fa', '!{id}', '!{dir}', db='!{launchDir}/.sqlite', auto_join=!{auto})"
+    Rscript -e "MitoPilot::run_scaffold_join('!{assembly}', c(!{cov_list}), 'ref.fa', '!{id}', '!{dir}', db='!{launchDir}/.sqlite', auto_join=!{auto}, scaffold_hits='!{scaffold_hits}')"
     '''
 }
