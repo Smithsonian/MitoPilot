@@ -183,4 +183,11 @@ workflow BLAST_REF_FETCH {
             .filter { id, all_flag, success_flag -> success_flag == null }
             .map    { id, all_flag, success_flag -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastRefFetchFailed, db: 'sqlite')
+
+    emit:
+        // Per-ID top-hit reference sequence file, for reference-guided scaffold join.
+        ref_seq = ref_out
+            .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
+            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file ->
+                        tuple(id, seq_file) }
 }

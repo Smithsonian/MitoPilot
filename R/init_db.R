@@ -307,6 +307,7 @@ new_db <- function(
       max_paths INTEGER,
       max_scaffolds INTEGER,
       min_assembly_length INTEGER,
+      join_scaffolds INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -324,7 +325,8 @@ new_db <- function(
         mitofinder = mitofinder,
         max_paths = max_paths,
         max_scaffolds = max_scaffolds,
-        min_assembly_length = min_assembly_length
+        min_assembly_length = min_assembly_length,
+        join_scaffolds = 0L
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -398,6 +400,26 @@ new_db <- function(
       blast_lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID, path)
+    );"
+  )
+
+  ## Precomputed scaffold->reference mappings (one row per ID/scaffold/ref) ----
+  ## Written by the Nextflow scaffold-join so the in-app manual join editor can
+  ## build layouts with no minimap2 dependency.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE scaffold_mappings (
+      ID TEXT NOT NULL,
+      ref_accession TEXT NOT NULL,
+      scaffold INTEGER NOT NULL,
+      ref_start INTEGER,
+      ref_end INTEGER,
+      strand TEXT,
+      nmatch INTEGER,
+      qcov REAL,
+      qstart INTEGER,
+      mapped INTEGER,
+      PRIMARY KEY (ID, ref_accession, scaffold)
     );"
   )
 

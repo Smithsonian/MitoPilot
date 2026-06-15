@@ -7,7 +7,7 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.seeds_db, opts.labels_db, opts.getOrganelle, opts.assembler, ' +
                   'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
                   'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length, ' +
-                  'b.run_blast ' +
+                  'b.run_blast, opts.join_scaffolds ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
@@ -57,6 +57,7 @@ workflow ASSEMBLE {
                 min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
                 run_blast_lookup:  tuple(it[0], it[14] == null ? 1 : (it[14] as Integer))   // ID, run_blast (NULL → 1, i.e. BLAST by default)
+                join_lookup:       tuple(it[0], it[15] == null ? 0 : (it[15] as Integer))   // ID, join_scaffolds toggle (NULL → 0, off)
             }
             .set { query_ch }
 
@@ -64,6 +65,7 @@ workflow ASSEMBLE {
         query_ch.min_len_scaffolds.set { min_len_lookup }
         query_ch.min_len_summary.set { min_len_summary }
         query_ch.run_blast_lookup.set { run_blast_lookup }
+        query_ch.join_lookup.set { join_lookup }
 
         // Assemble Input Channel
         input
@@ -193,6 +195,7 @@ workflow ASSEMBLE {
                 db_write:   tuple(n_paths, n_scaffolds, length_str, topo_str, status, notes, params.ts, id)
                 fasta:      tuple(id, raw[1])
                 downstream: tuple(raw, status)
+                join_meta:  tuple(id, n_paths, n_scaffolds, status, raw[1], raw[4])
             }
             .set { pass_ch }
 
@@ -305,5 +308,15 @@ workflow ASSEMBLE {
         blast = pass_ch.downstream
                     .filter { raw, status -> status == '4' }
                     .map    { raw, status -> raw }
+        // Single-path multi-scaffold samples eligible for scaffold joining. The
+        // mapping precompute runs for ALL eligible samples; the join_scaffolds
+        // toggle (joined in here) only gates the automatic Path 0 BUILD downstream.
+        // tuple(id, assembly_fasta, opts_id, join_scaffolds)
+        join_eligible = pass_ch.join_meta
+                    .filter { id, n_paths, n_scaffolds, status, fasta, opts ->
+                        (status == '4' || status == '2') && n_paths == 1 && n_scaffolds > 1 }
+                    .map    { id, n_paths, n_scaffolds, status, fasta, opts ->
+                        tuple(id, fasta, opts) }
+                    .join(join_lookup)
 
 }

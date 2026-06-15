@@ -19,7 +19,7 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$focal_assembly <- dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::filter(ID == !!rv$updating$ID) |>
         dplyr::select(
-          ignore, ID, path, scaffold, topology, length_raw, length, sequence, depth,
+          ignore, ID, path, scaffold, topology, length_raw, length, sequence, depth, gc, errors,
           dplyr::any_of(c("blast_accession", "blast_species", "blast_pident", "blast_qcovs", "blast_evalue", "blast_lineage"))
         ) |>
         dplyr::collect() |>
@@ -27,11 +27,23 @@ assembly_coverage_details_server <- function(id, rv) {
           view_coverage = NA_character_
         )
 
-      # Multi-scaffold guard: any raw path fragmented into >1 scaffold. The
-      # alignment/consensus tools only compare complete single-scaffold paths,
-      # so disable them here and tell the user how to proceed.
+      # Multi-scaffold guard. A single fragmented path is "join eligible" (the
+      # scaffold-join tools handle it); multiple competing fragmented paths stay
+      # blocked (ambiguous which path's scaffolds to join). Both still disable the
+      # MSA/consensus Align tools, which only compare complete single-scaffold paths.
       raw_asmb <- rv$focal_assembly |> dplyr::filter(path > 0)
-      rv$asmb_multiscaffold <- nrow(raw_asmb) > 0 && max(table(raw_asmb$path)) > 1
+      rv$asmb_join_eligible <- scaffold_join_eligible(raw_asmb)
+      rv$asmb_multiscaffold_blocked <-
+        nrow(raw_asmb) > 0 && max(table(raw_asmb$path)) > 1 && !rv$asmb_join_eligible
+      rv$asmb_multiscaffold <- rv$asmb_join_eligible || rv$asmb_multiscaffold_blocked
+      rv$join_layout <- NULL
+      rv$join_ref_len <- NULL
+      rv$join_zoom_anchor <- NULL
+      # Auto-run reference-guided mapping on open so the layout + mapping plot show
+      # without an extra click; the Auto-layout button re-runs after edits.
+      if (isTRUE(rv$asmb_join_eligible)) {
+        compute_join_layout(choose_reference(raw_asmb), notify = FALSE)
+      }
       rv$asmb_dir <- file.path(
         session$userData$dir_out, rv$updating$ID, "assemble",
         rv$updating$assemble_opts
@@ -80,15 +92,15 @@ assembly_coverage_details_server <- function(id, rv) {
           )
         ),
         size = "l",
-        if (isTRUE(rv$asmb_multiscaffold)) {
+        if (isTRUE(rv$asmb_multiscaffold_blocked)) {
           div(
             style = paste("margin-bottom: 12px; padding: 10px; border: 1px solid #E55330;",
                           "border-radius: 4px; background: #fdf3f0; font-size: 0.9em;"),
-            tags$b("This assembly is fragmented into multiple scaffolds."),
+            tags$b("This assembly has multiple competing paths, each fragmented into multiple scaffolds."),
             div(style = "margin-top: 6px;",
-                paste("The alignment and conflict-review tools only support comparing",
-                      "complete single-scaffold assembly paths; joining multiple scaffolds",
-                      "is not yet supported in the app.")),
+                paste("Automatic scaffold joining is only supported for a single fragmented",
+                      "path. The alignment and conflict-review tools only compare complete",
+                      "single-scaffold paths, so neither tool applies here.")),
             div(style = "margin-top: 6px;",
                 paste("To annotate this sample, ignore all but one scaffold using the",
                       "ignore buttons in the table below; the single remaining scaffold",
@@ -109,6 +121,7 @@ assembly_coverage_details_server <- function(id, rv) {
         ),
         reactableOutput(ns("table"), width = "100%"),
         uiOutput(ns("consensus_admin")),
+        uiOutput(ns("scaffold_join_div")),
         uiOutput(ns("msa_div")),
         div(
           style = "margin: 10px;",
@@ -173,6 +186,8 @@ assembly_coverage_details_server <- function(id, rv) {
             ),
             sequence = colDef(show = FALSE),
             depth = colDef(show = FALSE),
+            gc = colDef(show = FALSE),
+            errors = colDef(show = FALSE),
             blast_accession = colDef(
               name = "BLAST Top Hit", minWidth = 120, resizable = TRUE, align = "center", html = TRUE,
               cell = rt_ncbi_link()
@@ -1331,45 +1346,16 @@ assembly_coverage_details_server <- function(id, rv) {
       ID <- rv$updating$ID
       dir <- file.path(session$userData$dir_out, ID, "assemble",
                        rv$updating$assemble_opts)
-      dna <- Biostrings::DNAStringSet(seq_str)
-      names(dna) <- paste(ID, 0, 0, sep = ".") |> paste(topology)
-      Biostrings::writeXStringSet(dna, file.path(dir, paste0(ID, "_assembly_0.fasta")))
-
-      # Write coverage stats in the same layout coverage() produces (Call +
-      # rolling MeanDepth with #-masking), so annotate() can read it. Synthesized
-      # positions may have NA depth/error -> treat as 0 before rolling.
-      depth_i <- round(depth_vec)
-      depth_i[is.na(depth_i)] <- 0
-      err_i <- err_vec
-      err_i[is.na(err_i)] <- 0
-      cov_in <- data.frame(
-        SeqId     = paste(ID, 0, 0, sep = "."),
-        Position  = seq_along(depth_vec),
-        Call      = strsplit(seq_str, "", fixed = TRUE)[[1]],
-        Depth     = depth_i,
-        Correct   = depth_i,
-        ErrorRate = err_i,
-        stringsAsFactors = FALSE
-      )
-      cov <- .coverage_stats_to_output(.coverage_rolling_stats(cov_in))
-      readr::write_csv(
-        cov, file.path(dir, paste0(ID, "_assembly_0_coverageStats.csv")),
-        quote = "none", na = ""
-      )
+      # Shared with the Nextflow auto-join: writes {ID}_assembly_0.fasta and the
+      # matching _coverageStats.csv in the layout annotate() reads.
+      write_joined_files(dir, ID, seq_str, depth_vec, gc_vec, err_vec, topology)
 
       DBI::dbExecute(
         session$userData$con,
         stringr::str_glue("UPDATE assemblies SET ignore = 1 WHERE ID = '{ID}';")
       )
       bl <- blast_cols(blast_row)
-      a <- data.frame(
-        ID = ID, path = 0, scaffold = 0, topology = topology,
-        length = nchar(seq_str), length_raw = nchar(seq_str), sequence = seq_str,
-        depth  = paste(round(depth_vec), collapse = " "),
-        gc     = paste(round(gc_vec, 4), collapse = " "),
-        errors = paste(err_vec, collapse = " "),
-        ignore = 0, edited = 1, time_stamp = as.numeric(Sys.time())
-      )
+      a <- joined_assemblies_row(ID, seq_str, depth_vec, gc_vec, err_vec, topology)
       if (!is.null(bl)) a <- cbind(a, bl)
       dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::rows_upsert(a, by = c("ID", "path", "scaffold"), copy = T, in_place = T)
@@ -1388,6 +1374,285 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
       trigger("coverage_modal")
     }
+
+    # Multi-scaffold join editor (single-path fragmented assemblies) ----
+    # Raw scaffold rows for the (single) fragmented path.
+    join_scaffold_rows <- function() {
+      fa <- rv$focal_assembly
+      if (is.null(fa)) return(NULL)
+      fa[!is.na(fa$path) & fa$path > 0, , drop = FALSE]
+    }
+
+    # BLAST row for the joined Path 0: the reference used for the join, with
+    # %ident/%cov/evalue blanked (no longer valid for the joined assembly).
+    join_reference_blast_row <- function(accession, rows) {
+      if (is.null(accession) || is.na(accession) || !nzchar(accession)) return(NULL)
+      sub <- rows[!is.na(rows$blast_accession) & rows$blast_accession == accession, , drop = FALSE]
+      get1 <- function(col) if (nrow(sub) && col %in% names(sub)) sub[[col]][1] else NA_character_
+      data.frame(
+        blast_accession = accession,
+        blast_species = get1("blast_species"),
+        blast_pident = NA_real_, blast_qcovs = NA_real_, blast_evalue = NA_real_,
+        blast_lineage = get1("blast_lineage"),
+        stringsAsFactors = FALSE
+      )
+    }
+
+    # Load the precomputed reference mapping for the given accession and store the
+    # layout (+ ref length) so the editor controls and mapping plot populate.
+    # Mappings are computed once by the Nextflow scaffold-join and read here, so
+    # the app needs no minimap2. notify=TRUE warns when mappings/reference are
+    # missing (manual button); notify=FALSE stays silent on automatic modal open.
+    compute_join_layout <- function(accession, notify = TRUE) {
+      rows <- join_scaffold_rows()
+      if (is.null(rows) || nrow(rows) <= 1) return(invisible(FALSE))
+      ref_seq <- join_reference_seq(accession)
+      if (is.na(ref_seq)) {
+        if (notify) shinyWidgets::sendSweetAlert(
+          title = "No reference sequence",
+          text = "The chosen reference has no cached sequence. Run BLAST/ref-fetch first.",
+          type = "warning")
+        return(invisible(FALSE))
+      }
+      mappings <- load_scaffold_mappings(session$userData$con, rv$updating$ID, accession)
+      if (is.null(mappings)) {
+        if (notify) shinyWidgets::sendSweetAlert(
+          title = "No precomputed mapping",
+          text = paste("No scaffold->reference mapping is cached for this reference.",
+                       "Re-run the assembly workflow (WF1) to compute it."),
+          type = "warning")
+        return(invisible(FALSE))
+      }
+      seqs <- stats::setNames(rows$sequence, as.character(rows$scaffold))
+      rv$join_ref_len <- nchar(ref_seq)
+      lay <- derive_scaffold_layout(mappings, nchar(ref_seq), isTRUE(input$join_circular))
+      rv$join_layout <- lay
+      # Store reference + oriented included scaffolds for the base-pair zoom view.
+      rv$join_ref_seq <- ref_seq
+      inc <- lay[lay$include, , drop = FALSE]
+      rv$join_oriented <- stats::setNames(
+        lapply(seq_len(nrow(inc)), function(i) {
+          sq <- seqs[[as.character(inc$scaffold[i])]]
+          if (isTRUE(inc$rc[i])) rc_seq(sq) else sq
+        }), as.character(inc$scaffold))
+      rv$join_zoom_anchor <- NULL
+      invisible(TRUE)
+    }
+
+    # Reference sequence for an accession from the blast_ref_sequences cache.
+    join_reference_seq <- function(accession) {
+      if (is.null(accession) || is.na(accession) || !nzchar(accession)) return(NA_character_)
+      out <- tryCatch(
+        dplyr::tbl(session$userData$con, "blast_ref_sequences") |>
+          dplyr::filter(accession == !!accession) |>
+          dplyr::pull(sequence),
+        error = function(e) character(0)
+      )
+      if (length(out) == 0) NA_character_ else out[[1]]
+    }
+
+    output$scaffold_join_div <- renderUI({
+      req(isTRUE(rv$asmb_join_eligible))
+      rows <- join_scaffold_rows()
+      req(!is.null(rows), nrow(rows) > 1)
+      accs <- unique(rows$blast_accession[!is.na(rows$blast_accession) & nzchar(rows$blast_accession)])
+      default_ref <- choose_reference(rows)
+      disagree <- scaffold_hits_disagree(rows)
+      div(
+        style = paste("margin: 8px 0; padding: 10px; border: 1px solid #b9c6d6;",
+                      "border-radius: 4px; background: #f4f8fc; font-size: 0.9em;"),
+        tags$b("Join scaffolds into one assembly"),
+        div(style = "margin-top: 4px; color: #555;",
+            paste("This path is fragmented into multiple scaffolds. Reference-guided",
+                  "layout orders and orients them; you can override order/orientation",
+                  "below, then build the joined Path 0.")),
+        if (disagree) div(
+          style = paste("margin-top: 8px; padding: 8px; border: 1px solid #d9534f;",
+                        "border-radius: 4px; background: #fdf3f2; color: #a0241c;"),
+          tags$b("Warning: scaffolds map to different references."),
+          div(style = "margin-top: 4px;",
+              paste("These scaffolds carry different BLAST hits, so joining them may",
+                    "produce poor overlaps and an unreliable assembly. Review the",
+                    "mapping below before joining.")),
+          checkboxInput(ns("join_override_diff"),
+                        "I understand the risk; allow joining anyway", value = FALSE)
+        ),
+        div(style = "display: flex; gap: 12px; align-items: flex-end; margin-top: 8px; flex-wrap: wrap;",
+            selectInput(ns("join_reference"), "Reference",
+                        choices = accs, selected = default_ref, width = "200px"),
+            div(style = "padding-bottom: 6px;",
+                checkboxInput(ns("join_circular"), "Circular", value = FALSE)),
+            actionButton(ns("join_autolayout"), "Re-map to reference",
+                         icon = icon("wand-magic-sparkles")) |>
+              (\(b) if (length(accs) == 0) shinyjs::disabled(b) else b)()
+        ),
+        uiOutput(ns("join_layout_ui")),
+        uiOutput(ns("join_map_div")),
+        div(style = "margin-top: 8px;",
+            actionButton(ns("join_build"), "Build joined assembly (Path 0)",
+                         icon = icon("compress"), class = "btn-primary"))
+      )
+    })
+
+    # Reference-mapping visualization (shown once Auto-layout has run).
+    output$join_map_div <- renderUI({
+      req(isTRUE(rv$asmb_join_eligible), !is.null(rv$join_layout))
+      tagList(
+        div(style = "font-size: 11px; color: #888; text-align: center; margin-top: 6px;",
+            "click the plot to zoom to a base-pair alignment"),
+        plotOutput(ns("join_map_plot"), height = "220px",
+                   click = ns("join_map_click")),
+        uiOutput(ns("join_zoom_ui"))
+      )
+    })
+    output$join_map_plot <- renderPlot({
+      req(!is.null(rv$join_layout), !is.null(rv$join_ref_len))
+      rows <- join_scaffold_rows()
+      slen <- if (!is.null(rows)) stats::setNames(rows$length, as.character(rows$scaffold)) else NULL
+      plot_scaffold_mapping(rv$join_layout, rv$join_ref_len, slen)
+    })
+
+    # Click the overview -> anchor the base-pair zoom at that reference position.
+    observeEvent(input$join_map_click, {
+      x <- input$join_map_click$x
+      req(!is.null(x), !is.null(rv$join_ref_len))
+      rv$join_zoom_anchor <- max(1L, min(as.integer(rv$join_ref_len), as.integer(round(x))))
+    })
+
+    zoom_win_rv <- reactiveVal(60L)
+    observeEvent(input$join_zoom_window, ignoreInit = TRUE, {
+      v <- input$join_zoom_window
+      if (is.null(v) || is.na(v)) return()
+      clamped <- max(20L, min(400L, as.integer(v)))
+      if (clamped != v) updateNumericInput(session, "join_zoom_window", value = clamped)
+      if (clamped != zoom_win_rv()) zoom_win_rv(clamped)
+    })
+
+    output$join_zoom_ui <- renderUI({
+      req(!is.null(rv$join_zoom_anchor))
+      win <- zoom_win_rv()
+      plot_w <- as.integer(win * 15L)
+      div(
+        style = "margin-top: 10px; border-top: 1px solid #ddd; padding-top: 8px;",
+        div(style = "font-size: 11px; color: #555; margin-bottom: 4px;",
+            sprintf("Base-pair alignment to reference | center ~%d bp | %d bp window",
+                    rv$join_zoom_anchor, win)),
+        div(style = "overflow-x: auto;",
+            plotOutput(ns("join_zoom_plot"), width = paste0(plot_w, "px"),
+                       height = "160px")),
+        numericInput(ns("join_zoom_window"), "window size (bp)",
+                     value = isolate(input$join_zoom_window) %||% 60L,
+                     min = 20L, max = 400L, step = 20L, width = "140px")
+      )
+    })
+
+    output$join_zoom_plot <- renderPlot({
+      req(!is.null(rv$join_zoom_anchor), !is.null(rv$join_ref_seq),
+          !is.null(rv$join_oriented), !is.null(rv$join_layout))
+      win <- zoom_win_rv()
+      anchor <- rv$join_zoom_anchor
+      ws <- max(1L, anchor - win %/% 2L)
+      we <- min(nchar(rv$join_ref_seq), ws + win - 1L)
+      lay <- rv$join_layout
+      inc <- lay[lay$include, , drop = FALSE]
+      bm <- zoom_window_base_maps(rv$join_ref_seq, inc, rv$join_oriented, ws, we)
+      plot_scaffold_zoom(rv$join_ref_seq, bm, inc$scaffold, ws, we)
+    })
+
+    # Per-scaffold order + orientation controls, seeded from the current layout.
+    output$join_layout_ui <- renderUI({
+      req(isTRUE(rv$asmb_join_eligible))
+      rows <- join_scaffold_rows()
+      req(!is.null(rows), nrow(rows) > 1)
+      lay <- rv$join_layout
+      scaffolds <- if (!is.null(lay)) lay$scaffold else as.character(rows$scaffold)
+      order_seed <- if (!is.null(lay)) lay$order else seq_along(scaffolds)
+      rc_seed <- if (!is.null(lay)) lay$rc else rep(FALSE, length(scaffolds))
+      inc_seed <- if (!is.null(lay) && "include" %in% names(lay)) lay$include else rep(TRUE, length(scaffolds))
+      qcov <- if (!is.null(lay) && "qcov" %in% names(lay)) lay$qcov else rep(NA_real_, length(scaffolds))
+      tagList(
+        div(style = "margin-top: 8px; font-weight: bold; color: #555;",
+            "Scaffold layout (only included scaffolds go into Path 0)"),
+        lapply(seq_along(scaffolds), function(i) {
+          s <- scaffolds[i]
+          qc <- if (!is.na(qcov[i])) sprintf(" (%.0f%% mapped)", 100 * qcov[i]) else ""
+          div(style = "display: flex; gap: 12px; align-items: center; margin-top: 4px;",
+              checkboxInput(ns(paste0("join_inc_", s)), NULL, value = isTRUE(inc_seed[i]),
+                            width = "30px"),
+              span(style = "width: 150px;", sprintf("Scaffold %s%s", s, qc)),
+              numericInput(ns(paste0("join_order_", s)), NULL,
+                           value = order_seed[i], min = 1, width = "80px"),
+              checkboxInput(ns(paste0("join_rc_", s)), "reverse-comp",
+                            value = isTRUE(rc_seed[i])))
+        })
+      )
+    })
+
+    observeEvent(input$join_autolayout, {
+      compute_join_layout(input$join_reference, notify = TRUE)
+    })
+
+    observeEvent(input$join_build, {
+      rows <- join_scaffold_rows()
+      req(!is.null(rows), nrow(rows) > 1)
+      # Conflicting BLAST hits: block the join until the user explicitly overrides.
+      if (scaffold_hits_disagree(rows) && !isTRUE(input$join_override_diff)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Scaffolds map to different references",
+          text = paste("Joining scaffolds with different BLAST hits is risky.",
+                       "Check 'allow joining anyway' to override."),
+          type = "warning")
+        req(FALSE)
+      }
+      scaffolds <- as.character(rows$scaffold)
+      ord <- vapply(scaffolds, function(s) {
+        v <- input[[paste0("join_order_", s)]]
+        if (is.null(v) || is.na(v)) NA_real_ else as.numeric(v)
+      }, numeric(1))
+      rc <- vapply(scaffolds, function(s) isTRUE(input[[paste0("join_rc_", s)]]), logical(1))
+      inc <- vapply(scaffolds, function(s) {
+        v <- input[[paste0("join_inc_", s)]]
+        if (is.null(v)) TRUE else isTRUE(v)
+      }, logical(1))
+      if (!any(inc)) {
+        shinyWidgets::sendSweetAlert(
+          title = "No scaffolds selected",
+          text = "Include at least one scaffold to build the joined assembly.",
+          type = "warning")
+        req(FALSE)
+      }
+      ord[is.na(ord)] <- seq_along(ord)[is.na(ord)]
+      o <- order(ord)
+      layout <- data.frame(
+        scaffold = scaffolds[o], order = seq_along(o), rc = rc[o],
+        gap_before = NA_real_, mapped = TRUE, include = inc[o], stringsAsFactors = FALSE)
+      # Reuse reference-derived gaps only when the manual order matches auto.
+      lay <- rv$join_layout
+      if (!is.null(lay) && identical(layout$scaffold, lay$scaffold)) {
+        layout$gap_before <- lay$gap_before
+      }
+      scaffolds_df <- data.frame(
+        scaffold = scaffolds, sequence = rows$sequence,
+        depth = rows$depth, gc = rows$gc, errors = rows$errors,
+        stringsAsFactors = FALSE)
+      # 100 N is the standard "gap of unknown length" convention; not user-tunable.
+      # ref_seq omitted so circular rotation (minimap-based) is skipped in the app;
+      # the molecule still circularizes (end-overlap trim) when applicable.
+      res <- assemble_from_layout(scaffolds_df, layout, gap_len = 100L,
+                                  circular = isTRUE(input$join_circular),
+                                  ref_seq = NULL)
+      if (count_ambiguities(res$seq) > 0) {
+        res$note <- paste0(res$note,
+                           " WARNING: contains ambiguous bases (IUPAC/N) - may cause ",
+                           "problems in annotation; MITOS does not handle them well.")
+      }
+      # Inherit the BLAST hit from the reference used for the join (accession +
+      # species + lineage), but blank %ident / %cov / evalue: those described a
+      # single scaffold's hit and are meaningless for the joined assembly.
+      blast_row <- join_reference_blast_row(input$join_reference, rows)
+      persist_path0(res$seq, res$depth, res$gc, res$errors, res$note,
+                    blast_row, res$topology)
+    })
 
     # Delete the edited consensus (Path 0) and revert the sample ----
     output$consensus_admin <- renderUI({
