@@ -352,6 +352,24 @@ new_db_userAsmb <- function(
     );"
   )
 
+  ## Precomputed scaffold->reference mappings (see init_db) ----
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE scaffold_mappings (
+      ID TEXT NOT NULL,
+      ref_accession TEXT NOT NULL,
+      scaffold INTEGER NOT NULL,
+      ref_start INTEGER,
+      ref_end INTEGER,
+      strand TEXT,
+      nmatch INTEGER,
+      qcov REAL,
+      qstart INTEGER,
+      mapped INTEGER,
+      PRIMARY KEY (ID, ref_accession, scaffold)
+    );"
+  )
+
   # Add Annotate table ----
   DBI::dbExecute(
     con,

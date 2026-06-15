@@ -322,6 +322,34 @@ backwards_compatibility <- function(
      END"
   )
 
+  # if join_scaffolds toggle column doesn't exist on assemble_opts, add it (default off)
+  if (!("join_scaffolds" %in% names(assemble_opts_table))) {
+    message("added 'join_scaffolds' column to assemble_opts table")
+    DBI::dbExecute(con, "ALTER TABLE assemble_opts ADD COLUMN join_scaffolds INTEGER")
+    DBI::dbExecute(con, "UPDATE assemble_opts SET join_scaffolds = 0 WHERE join_scaffolds IS NULL")
+  }
+
+  # precomputed scaffold->reference mappings table (for the in-app join editor)
+  if (!DBI::dbExistsTable(con, "scaffold_mappings")) {
+    message("added 'scaffold_mappings' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE scaffold_mappings (
+        ID TEXT NOT NULL,
+        ref_accession TEXT NOT NULL,
+        scaffold INTEGER NOT NULL,
+        ref_start INTEGER,
+        ref_end INTEGER,
+        strand TEXT,
+        nmatch INTEGER,
+        qcov REAL,
+        qstart INTEGER,
+        mapped INTEGER,
+        PRIMARY KEY (ID, ref_accession, scaffold)
+      );"
+    )
+  }
+
   # if reviewed column doesn't exist, add it
   if(!("reviewed" %in% names(annotate_table))){
     message("added 'reviewed' column to annotate table")

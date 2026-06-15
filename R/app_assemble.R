@@ -734,6 +734,11 @@ assemble_server <- function(id) {
           inputId = "min_assembly_length",
           value = cur$min_assembly_length %||% 500
         )
+        shinyWidgets::updatePrettyCheckbox(
+          session = session,
+          inputId = "join_scaffolds",
+          value = as.logical(cur$join_scaffolds %||% 0)
+        )
         updateTextAreaInput(
           inputId = "getOrganelle",
           value = cur$getOrganelle
@@ -789,6 +794,7 @@ assemble_server <- function(id) {
       shinyjs::toggleState("max_paths", condition = input$edit_assemble_opts)
       shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
       shinyjs::toggleState("min_assembly_length", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("join_scaffolds", condition = input$edit_assemble_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
@@ -864,7 +870,8 @@ assemble_server <- function(id) {
               mitofinder = req(input$mitofinder),
               max_paths = as.integer(req(input$max_paths)),
               max_scaffolds = as.integer(req(input$max_scaffolds)),
-              min_assembly_length = as.integer(req(input$min_assembly_length))
+              min_assembly_length = as.integer(req(input$min_assembly_length)),
+              join_scaffolds = as.integer(isTRUE(input$join_scaffolds))
             ),
             in_place = TRUE,
             copy = TRUE,
