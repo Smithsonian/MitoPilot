@@ -108,6 +108,14 @@ pipeline_server_userAsmb <- function(id) {
     })
 
     output$start_button_ui <- renderUI({
+      # Headless: never run Nextflow from the app; only write a submission script.
+      if (isTRUE(getOption("MitoPilot.headless"))) {
+        return(tagList(
+          shinyjs::disabled(actionButton(ns("start"), "Run from App")),
+          actionButton(ns("write_script"), "Write Submission Script", class = "btn-success")
+        ))
+      }
+
       is_hydra_cluster <- FALSE
 
       # Use a try block to gracefully handle errors if the command fails
@@ -183,6 +191,46 @@ pipeline_server_userAsmb <- function(id) {
     # The "Start Nextflow" button calls the shared function.
     observeEvent(input$start, {
       start_nf_process()
+    })
+
+    # Headless: write a cluster submission script (never submit it)
+    observeEvent(input$write_script, {
+      tryCatch({
+        work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
+        full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
+
+        timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+        base_filename <- paste(tolower(session$userData$mode), timestamp, sep = "_")
+        log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
+        script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
+
+        cfg <- read_config_executor(file.path(work_dir, ".config"))
+        script_content <- submission_script(
+          executor = cfg$executor,
+          queue = cfg$queue,
+          full_nf_cmd = full_nf_cmd,
+          job_name = base_filename,
+          log_file = log_file_path
+        )
+        writeLines(script_content, script_path)
+
+        shinyWidgets::sendSweetAlert(
+          title = "Submission script written",
+          text = paste0(
+            "Wrote ", basename(script_path), " (executor: ", cfg$executor,
+            ") to your project directory. Review/edit the environment setup, ",
+            "then submit it yourself (e.g. sbatch / qsub / bsub)."
+          ),
+          type = "success"
+        )
+        removeModal()
+      }, error = function(e) {
+        shinyWidgets::sendSweetAlert(
+          title = "Failed to write submission script:",
+          text = e$message,
+          type = "error"
+        )
+      })
     })
 
     # create Hydra job script and submit

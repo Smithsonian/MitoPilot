@@ -50,6 +50,10 @@ run_app <- function(
     launch.browser <- interactive()
   }
   options[["shiny.launch.browser"]] <- launch.browser
+
+  # Headless = browser not launched. Gates "Run from App" in the run modal.
+  options(MitoPilot.headless = !isTRUE(launch.browser))
+
   if (!is.null(host)) {
     options[["host"]] <- host
   }
