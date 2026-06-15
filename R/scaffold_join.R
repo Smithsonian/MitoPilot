@@ -59,6 +59,35 @@ choose_reference <- function(scaffolds_df) {
   agg$blast_accession[1]
 }
 
+#' Parse the workflow's per-scaffold BLAST-hit string
+#'
+#' @param s ';'-separated records of "scaffold|accession|pident" (as emitted by
+#'   BLAST_GENBANK). "NO HIT" / empty accessions become NA.
+#' @param scaf_len named numeric of scaffold lengths (names = scaffold ids), used
+#'   to fill the `length` column that [choose_reference()] weights by.
+#' @return data.frame(scaffold, length, blast_accession, blast_pident), or NULL
+#'   when `s` is empty (caller falls back to the DB).
+#' @noRd
+parse_scaffold_hits <- function(s, scaf_len = NULL) {
+  if (is.null(s) || length(s) != 1 || is.na(s) || !nzchar(s)) return(NULL)
+  recs <- strsplit(s, ";", fixed = TRUE)[[1]]
+  recs <- recs[nzchar(recs)]
+  if (length(recs) == 0) return(NULL)
+  parts <- strsplit(recs, "|", fixed = TRUE)
+  scaffold <- vapply(parts, function(p) if (length(p) >= 1) p[1] else NA_character_, character(1))
+  acc      <- vapply(parts, function(p) if (length(p) >= 2) p[2] else NA_character_, character(1))
+  pid      <- vapply(parts, function(p) if (length(p) >= 3) p[3] else NA_character_, character(1))
+  acc[acc %in% c("", "NO HIT", "NA", "null")] <- NA_character_
+  len <- if (!is.null(scaf_len)) unname(scaf_len[scaffold]) else rep(NA_real_, length(scaffold))
+  data.frame(
+    scaffold = scaffold,
+    length = as.numeric(len),
+    blast_accession = acc,
+    blast_pident = suppressWarnings(as.numeric(pid)),
+    stringsAsFactors = FALSE
+  )
+}
+
 #' Do a sample's scaffolds carry conflicting BLAST hits?
 #'
 #' Joining scaffolds that hit different references is risky (poor overlap, bad
@@ -867,10 +896,14 @@ joined_assemblies_row <- function(ID, seq, depth_vec, gc_vec, err_vec,
 #'   the joined Path 0. When FALSE (toggle off) or the hits disagree, only the
 #'   precomputed scaffold->reference mappings are written, leaving the sample
 #'   fragmented for manual review in the app.
+#' @param scaffold_hits optional ';'-separated string of per-scaffold BLAST hits
+#'   ("scaffold|accession|pident") passed from the workflow. Preferred over a DB
+#'   read of `assemblies.blast_accession`, which is written by an async UPDATE
+#'   with no happens-before relative to this step (so it can still be NULL here).
 #' @export
 run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
                               out_dir, gap_len = 100, circular = FALSE, db = NULL,
-                              auto_join = TRUE) {
+                              auto_join = TRUE, scaffold_hits = NULL) {
   asm <- Biostrings::readDNAStringSet(assembly_fasta)
   ids <- sub("\\s.*$", "", names(asm))
   scaffolds <- vapply(strsplit(ids, ".", fixed = TRUE),
@@ -905,20 +938,29 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
     stringsAsFactors = FALSE
   )
 
-  # Pull the scaffolds' BLAST hits to (a) detect conflicting hits and (b) gather
-  # every candidate reference sequence for the mapping precompute. Falls back to
-  # the passed ref_fasta when no DB / no cached sequences.
+  # Per-scaffold BLAST hits drive (a) the conflicting-hit check and (b) the set of
+  # candidate references to map against. Prefer the workflow-supplied scaffold_hits
+  # string (reliable) over a DB read of assemblies.blast_accession (racy).
   named_seqs <- stats::setNames(scaffolds_df$sequence, as.character(scaffolds_df$scaffold))
   ref_fasta_seq <- paste(as.character(Biostrings::readDNAStringSet(ref_fasta)), collapse = "")
-  sc <- NULL
+  scaf_len <- stats::setNames(nchar(named_seqs), names(named_seqs))
+  sc <- parse_scaffold_hits(scaffold_hits, scaf_len)
+  if (is.null(sc) && !is.null(db) && nzchar(db) && file.exists(db)) {
+    sc <- tryCatch({
+      con <- DBI::dbConnect(RSQLite::SQLite(), db, flags = RSQLite::SQLITE_RO)
+      on.exit(DBI::dbDisconnect(con), add = TRUE)
+      DBI::dbGetQuery(con, sprintf(
+        "SELECT scaffold, length, blast_accession, blast_pident FROM assemblies WHERE ID='%s' AND path>0", ID))
+    }, error = function(e) NULL)
+  }
+
+  # Gather a candidate reference sequence per distinct accession from the cache.
   ref_seqs <- character(0)        # named accession -> sequence (candidate refs)
-  if (!is.null(db) && nzchar(db) && file.exists(db)) {
+  accs <- if (!is.null(sc)) unique(sc$blast_accession[!is.na(sc$blast_accession) & nzchar(sc$blast_accession)]) else character(0)
+  if (length(accs) && !is.null(db) && nzchar(db) && file.exists(db)) {
     tryCatch({
       con <- DBI::dbConnect(RSQLite::SQLite(), db, flags = RSQLite::SQLITE_RO)
       on.exit(DBI::dbDisconnect(con), add = TRUE)
-      sc <- DBI::dbGetQuery(con, sprintf(
-        "SELECT scaffold, length, blast_accession, blast_pident FROM assemblies WHERE ID='%s' AND path>0", ID))
-      accs <- unique(sc$blast_accession[!is.na(sc$blast_accession) & nzchar(sc$blast_accession)])
       for (acc in accs) {
         rs <- DBI::dbGetQuery(con, sprintf(
           "SELECT sequence FROM blast_ref_sequences WHERE accession='%s'", acc))$sequence
@@ -927,6 +969,17 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
     }, error = function(e) NULL)
   }
 
+  # Reference selection for the auto-build: prefer the length x %identity weighted
+  # choice across the scaffolds' BLAST hits (choose_reference) over the per-ID top
+  # hit the ref-fetch passes in. Seed the chosen accession's sequence from the
+  # fetched ref FASTA if it wasn't in the cache, so the mapping precompute always
+  # covers at least the reference the join will use.
+  acc <- if (!is.null(sc)) choose_reference(sc) else NA_character_
+  if (!is.na(acc) && is.null(ref_seqs[[acc]]) && nzchar(ref_fasta_seq)) {
+    ref_seqs[[acc]] <- ref_fasta_seq
+  }
+  ref_seq <- if (!is.na(acc) && !is.null(ref_seqs[[acc]])) ref_seqs[[acc]] else ref_fasta_seq
+
   # Precompute scaffold->reference mappings for ALL candidate references so the
   # in-app manual editor can build layouts with no minimap2 dependency.
   mappings <- compute_scaffold_mappings(named_seqs, ref_seqs)
@@ -934,15 +987,6 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   if (nrow(mappings) > 0) mappings <- cbind(ID = ID, mappings, stringsAsFactors = FALSE)
   readr::write_csv(mappings, file.path(out_dir, paste0(ID, "_scaffold_mappings.csv")),
                    quote = "none", na = "")
-
-  # Reference selection for the auto-build: prefer the length x %identity weighted
-  # choice across the scaffolds' BLAST hits (choose_reference) over the per-ID top
-  # hit the ref-fetch passes in.
-  ref_seq <- ref_fasta_seq
-  if (!is.null(sc)) {
-    acc <- choose_reference(sc)
-    if (!is.na(acc) && !is.null(ref_seqs[[acc]])) ref_seq <- ref_seqs[[acc]]
-  }
 
   # Gate the automatic Path 0: only when enabled AND the scaffolds' BLAST hits
   # agree. Otherwise emit mappings only and leave the sample fragmented.

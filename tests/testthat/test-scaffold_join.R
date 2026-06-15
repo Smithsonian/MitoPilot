@@ -276,6 +276,19 @@ test_that("parse_cov_string handles empty + space-separated", {
   expect_equal(length(parse_cov_string("")), 0)
 })
 
+test_that("parse_scaffold_hits parses workflow string + maps NO HIT to NA", {
+  s <- "1|PZ291823.1|91.52;2|PZ285099.1|99.75;3|NO HIT|"
+  sl <- c("1" = 723, "2" = 17444, "3" = 1200)
+  df <- parse_scaffold_hits(s, sl)
+  expect_equal(nrow(df), 3)
+  expect_equal(df$blast_accession, c("PZ291823.1", "PZ285099.1", NA))
+  expect_equal(df$length, c(723, 17444, 1200))
+  expect_equal(df$blast_pident[2], 99.75)
+  expect_true(scaffold_hits_disagree(df))      # two distinct real accessions
+  expect_null(parse_scaffold_hits("", sl))
+  expect_null(parse_scaffold_hits(NA, sl))
+})
+
 test_that("scaffold_hits_disagree flags conflicting BLAST accessions", {
   same <- data.frame(blast_accession = c("NC_1", "NC_1", NA), stringsAsFactors = FALSE)
   diff <- data.frame(blast_accession = c("NC_1", "NC_2"), stringsAsFactors = FALSE)
