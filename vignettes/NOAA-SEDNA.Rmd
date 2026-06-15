@@ -67,6 +67,12 @@ We also recommend clearing your Singularity cache with `singularity cache clean`
 
 ## Setting up RStudio server
 
+> **Note:** If you only need the MitoPilot GUI (not a full RStudio session),
+> you can skip RStudio Server entirely and run the GUI headless over an SSH
+> tunnel. See [Headless GUI over an SSH
+> tunnel](Custom-HPC.html#headless-gui-over-an-ssh-tunnel) in the Custom HPC
+> vignette.
+
 Next we need to set up RStudio server. The version of RStudio server must match the R version in your `MitoPilot_deps` mamba environment. You should be able to see the R version by running `mamba activate MitoPilot_deps;mamba list`.
 
 In a SEDNA terminal, run the following. It may take a few minutes to download and set up the Singularity image file.

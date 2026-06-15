@@ -1,13 +1,30 @@
 #' Open The MitoPilot GUI
 #'
+#' @param host character. Address to bind the Shiny server to. Use
+#'   `"0.0.0.0"` to allow connections over an SSH tunnel from a remote
+#'   machine. Default `NULL` lets Shiny choose (loopback).
+#' @param port integer. Port for the Shiny server to listen on. Default
+#'   `NULL` lets Shiny pick a random port.
+#' @param launch.browser logical. Whether to open a local browser when the
+#'   server starts. Default `NULL` resolves to `interactive()`, so desktop
+#'   sessions auto-open but headless/remote sessions do not.
+#' @param ... additional arguments passed to `run_app()`.
+#'
 #' @export
 #'
-MitoPilot <- function() {
-  run_app()
+MitoPilot <- function(host = NULL, port = NULL, launch.browser = NULL, ...) {
+  run_app(host = host, port = port, launch.browser = launch.browser, ...)
 }
 
 #' Run the Shiny Application
 #'
+#' @param host character. Address to bind the Shiny server to. Use
+#'   `"0.0.0.0"` to allow connections over an SSH tunnel from a remote
+#'   machine. Default `NULL` lets Shiny choose (loopback).
+#' @param port integer. Port for the Shiny server to listen on. Default
+#'   `NULL` lets Shiny pick a random port.
+#' @param launch.browser logical. Whether to open a local browser when the
+#'   server starts. Default `NULL` resolves to `interactive()`.
 #' @param ... arguments to pass to golem_opts.
 #' See `?golem::get_golem_options` for more details.
 #' @inheritParams shiny::shinyApp
@@ -17,10 +34,33 @@ MitoPilot <- function() {
 #' @importFrom golem with_golem_options
 run_app <- function(
     onStart = NULL,
-    options = list(shiny.launch.browser = T),
+    options = NULL,
     enableBookmarking = NULL,
     uiPattern = "/",
+    host = NULL,
+    port = NULL,
+    launch.browser = NULL,
     ...) {
+
+  # assemble Shiny options from headless-friendly args
+  if (is.null(options)) {
+    options <- list()
+  }
+  if (is.null(launch.browser)) {
+    launch.browser <- interactive()
+  }
+  options[["shiny.launch.browser"]] <- launch.browser
+  if (!is.null(host)) {
+    options[["host"]] <- host
+  }
+  if (!is.null(port)) {
+    options[["port"]] <- port
+  }
+
+  # headless remote launch: print the SSH tunnel command to copy
+  if (!isTRUE(launch.browser) && !is.null(host) && !is.null(port)) {
+    tunnel_instructions(port)
+  }
 
   # check if user has provided an assembly directory
   conf <- tryCatch({
@@ -61,4 +101,28 @@ run_app <- function(
 
 
 
+}
+
+#' Print SSH tunnel instructions for a headless GUI session
+#'
+#' Prints, ready to copy, the `ssh -L` command that forwards a local port to
+#' the cluster node running the MitoPilot Shiny server, plus the URL to open
+#' in a local browser. The node hostname is read from the live session; the
+#' login host is unknown to R and emitted as a `<cluster>` placeholder.
+#'
+#' @param port integer. The port the Shiny server is listening on.
+#'
+#' @export
+tunnel_instructions <- function(port) {
+  node <- Sys.info()[["nodename"]]
+  message(
+    "\n",
+    "MitoPilot GUI running headless on node: ", node, "\n",
+    "To reach it from your laptop, open a tunnel (substitute <cluster> with\n",
+    "your login host and <user> with your username):\n\n",
+    "  ssh -N -L ", port, ":", node, ":", port, " <user>@<cluster>\n\n",
+    "Then open in your browser:\n\n",
+    "  http://localhost:", port, "\n"
+  )
+  invisible(NULL)
 }

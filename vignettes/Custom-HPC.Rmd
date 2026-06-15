@@ -92,3 +92,51 @@ or submit it as a batch job using your cluster's normal submission tools (e.g.
 `sbatch`, `qsub`, `bsub`) wrapping the `nextflow run` command. See the
 [NMNH Hydra](NMNH-Hydra.html) and [NOAA SEDNA](NOAA-SEDNA.html) vignettes for
 batch submission examples you can adapt.
+
+## Headless GUI over an SSH tunnel
+
+The MitoPilot GUI is just a Shiny web server over the project's SQLite database
+and Nextflow. It needs **no browser and no X11 on the cluster**, so you do not
+need RStudio Server just to use the GUI. Instead, run the server headless on a
+cluster node with a fixed host and port, then reach it from your laptop browser
+over an SSH tunnel.
+
+**1. On the cluster**, from inside your project directory, launch MitoPilot
+bound to all interfaces on a port of your choice and tell it not to open a
+browser:
+
+```{r eval=FALSE}
+library(MitoPilot)
+MitoPilot(host = "0.0.0.0", port = 7591, launch.browser = FALSE)
+```
+
+As the server starts it prints the exact tunnel command using the live node
+hostname, for example:
+
+```
+ssh -N -L 7591:NODE:7591 <user>@<cluster>
+```
+
+**2. On your laptop**, open the tunnel (substitute your username and login
+host; if MitoPilot is running on a compute node reached via `srun --pty`, the
+printed `NODE` is that compute node and you may need an SSH jump through the
+login node, `ssh -N -J <user>@<cluster> -L 7591:NODE:7591 <user>@NODE`):
+
+```{bash eval=FALSE}
+ssh -N -L 7591:NODE:7591 <user>@<cluster>
+```
+
+**3. In your browser**, open:
+
+```
+http://localhost:7591
+```
+
+Leave both the cluster R session and the local `ssh` session open while you use
+the GUI. This replaces the RStudio Server requirement for users who only need
+the GUI.
+
+**Caveat:** in-app features that open a browser on the server side (IGV launch,
+the HTML annotation report, and the ruleset browser) will not work headless,
+since they try to open on the cluster. The main assemble / annotate / curate
+GUI is unaffected.
