@@ -1,3 +1,30 @@
+#' Brief inline help text shown directly under an options-modal field
+#'
+#' Renders a small muted paragraph (the existing `text-muted` convention) to sit
+#' immediately below an input. Optionally appends a "(learn more)" link to the
+#' MitoPilot documentation or an external tool page.
+#'
+#' @param ... help text (character/﻿tags), one short sentence.
+#' @param href optional URL to link out to.
+#' @param link_text label for the trailing link (default "learn more").
+#' @return a `tags$p` element.
+#' @noRd
+opts_help <- function(..., href = NULL, link_text = "learn more") {
+  inner <- list(...)
+  if (!is.null(href)) {
+    inner <- c(inner, list(
+      " (",
+      shiny::tags$a(href = href, target = "_blank", rel = "noopener", link_text),
+      ")"
+    ))
+  }
+  shiny::tags$p(
+    class = "text-muted",
+    style = "margin-top: -6px; margin-bottom: 14px; font-size: 0.85em;",
+    inner
+  )
+}
+
 #' Read a bundled tool help text file
 #'
 #' @param tool short name (matches `inst/tool_help/<tool>.txt`)
