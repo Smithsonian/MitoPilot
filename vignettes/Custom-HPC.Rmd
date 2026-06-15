@@ -136,7 +136,7 @@ Leave both the cluster R session and the local `ssh` session open while you use
 the GUI. This replaces the RStudio Server requirement for users who only need
 the GUI.
 
-**Caveat:** in-app features that open a browser on the server side (IGV launch,
-the HTML annotation report, and the ruleset browser) will not work headless,
-since they try to open on the cluster. The main assemble / annotate / curate
-GUI is unaffected.
+**Caveat:** in-app features that open a file or browser on the server side
+(the "Open output folder" button, the HTML annotation report, and the ruleset
+browser) will not work headless, since they try to open on the cluster rather
+than your laptop. The main assemble / annotate / curate GUI is unaffected.
