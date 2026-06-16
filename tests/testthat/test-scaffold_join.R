@@ -249,6 +249,150 @@ test_that("join_scaffolds applies coverage consensus across a confirmed overlap"
   expect_match(res$junctions[1], "resolved by coverage")
 })
 
+test_that("collapse_scaffold_blocks unions colinear blocks per scaffold", {
+  # scaffold 'a' maps in two + blocks (e.g. across a duplication); placement must
+  # span both, not just the higher-nmatch block. 'b' is single-block.
+  rows <- data.frame(
+    scaffold  = c("a", "a", "b"),
+    qlen      = c(1000L, 1000L, 500L),
+    qstart    = c(0L, 600L, 0L),
+    qend      = c(400L, 1000L, 500L),
+    strand    = c("+", "+", "-"),
+    ref_start = c(100L, 800L, 50L),
+    ref_end   = c(500L, 1200L, 550L),
+    nmatch    = c(380L, 360L, 480L),
+    cigar     = NA_character_,
+    stringsAsFactors = FALSE
+  )
+  out <- collapse_scaffold_blocks(rows)
+  a <- out[out$scaffold == "a", ]
+  expect_equal(a$ref_start, 100L)        # union min
+  expect_equal(a$ref_end, 1200L)         # union max (not 500 from best block)
+  expect_equal(a$nmatch, 740L)           # summed over blocks
+  expect_equal(a$qstart, 0L)             # anchored at min ref_start block
+  expect_equal(out[out$scaffold == "b", ]$strand, "-")
+})
+
+test_that("collapse_scaffold_blocks picks dominant strand by matched residues", {
+  rows <- data.frame(
+    scaffold = c("a", "a"), qlen = c(1000L, 1000L),
+    qstart = c(0L, 500L), qend = c(450L, 600L),
+    strand = c("+", "-"), ref_start = c(0L, 700L), ref_end = c(450L, 800L),
+    nmatch = c(440L, 90L), cigar = NA_character_, stringsAsFactors = FALSE)
+  out <- collapse_scaffold_blocks(rows)
+  expect_equal(out$strand, "+")          # + carries more matches
+  expect_equal(out$ref_end, 450L)        # minor - block excluded from extent
+})
+
+test_that("join_scaffolds discovers an overlap the reference did not predict", {
+  # Reference shows a butt join (gb == 0) but the scaffolds truly share 40 bp;
+  # without an end probe this would duplicate the shared region.
+  ov_seq <- paste(sample(c("A","C","G","T"), 40, replace = TRUE), collapse = "")
+  a <- paste0(strrep("A", 60), ov_seq)
+  b <- paste0(ov_seq, strrep("C", 60))
+  seqs <- c(a = a, b = b)
+  lay <- data.frame(scaffold = c("a", "b"), order = 1:2, rc = c(FALSE, FALSE),
+                    gap_before = c(NA, 0), mapped = TRUE, include = TRUE,
+                    stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  expect_equal(nchar(res$seq), 160)                 # 60 + 40 + 60, not 200
+  expect_equal(res$junction_info$type[1], "overlap_confirmed")
+  expect_match(res$junctions[1], "confirmed")
+})
+
+test_that("join_scaffolds discovers an overlap under a positively-biased gap", {
+  # minimap inset bias: reference says a 30 bp gap, but the ends really overlap.
+  ov_seq <- paste(sample(c("A","C","G","T"), 50, replace = TRUE), collapse = "")
+  a <- paste0(strrep("A", 60), ov_seq)
+  b <- paste0(ov_seq, strrep("C", 60))
+  seqs <- c(a = a, b = b)
+  lay <- data.frame(scaffold = c("a", "b"), order = 1:2, rc = c(FALSE, FALSE),
+                    gap_before = c(NA, 30), mapped = TRUE, include = TRUE,
+                    stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  expect_equal(res$junction_info$type[1], "overlap_confirmed")
+  expect_false(grepl("N", res$seq))                 # no spurious N spacer
+})
+
+test_that("join_scaffolds keeps a true large gap (no spurious merge)", {
+  # Large predicted gap beyond the probe window: trust the reference, insert Ns,
+  # even if the ends share a short motif by chance.
+  a <- paste0(strrep("A", 80), "ACGTACGTAC")
+  b <- paste0("ACGTACGTAC", strrep("T", 80))
+  seqs <- c(a = a, b = b)
+  lay <- data.frame(scaffold = c("a", "b"), order = 1:2, rc = c(FALSE, FALSE),
+                    gap_before = c(NA, 2000), mapped = TRUE, include = TRUE,
+                    stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  expect_equal(res$junction_info$type[1], "gap")
+  expect_equal(res$junction_info$gap_bases[1], 2000L)
+})
+
+test_that("join_scaffolds emits one junction_info row per junction", {
+  seqs <- c(a = "AAAACCCC", b = "GGGGTTTT", c = "ACGTACGT")
+  lay <- data.frame(
+    scaffold = c("a", "b", "c"), order = 1:3, rc = c(FALSE, FALSE, FALSE),
+    gap_before = c(NA, 10, 0), mapped = TRUE, include = TRUE,
+    stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  expect_equal(nrow(res$junction_info), 2)            # n_scaffolds - 1
+  expect_equal(res$junction_info$type, c("gap", "butt"))
+  expect_equal(res$junction_info$gap_bases, c(10L, 0L))
+})
+
+test_that("summarize_join_quality flags a gappy join + counts spacer N only", {
+  # scaffold b carries an internal N (assembly gap) that must NOT inflate gap_bases
+  seqs <- c(a = "AAAACCCC", b = "GGNGTTTT")
+  lay <- data.frame(
+    scaffold = c("a", "b"), order = 1:2, rc = c(FALSE, FALSE),
+    gap_before = c(NA, 12), mapped = TRUE, include = TRUE,
+    stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  q <- summarize_join_quality(res, lay)
+  expect_equal(q$continuity, "gappy")
+  expect_equal(q$gap_bases, 12L)                       # spacer only, not the internal N
+  expect_equal(q$n_gap_junctions, 1L)
+  expect_true(is.na(q$min_overlap_identity))
+})
+
+test_that("summarize_join_quality flags a continuous join with overlap identity", {
+  ov_seq <- paste(sample(c("A","C","G","T"), 30, replace = TRUE), collapse = "")
+  a <- paste0(strrep("A", 50), ov_seq)
+  b <- paste0(ov_seq, strrep("C", 50))
+  seqs <- c(a = a, b = b)
+  lay <- data.frame(
+    scaffold = c("a", "b"), order = 1:2, rc = c(FALSE, FALSE),
+    gap_before = c(NA, -30), mapped = TRUE, include = TRUE,
+    stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  q <- summarize_join_quality(res, lay)
+  expect_equal(q$continuity, "continuous")
+  expect_equal(q$gap_bases, 0L)
+  expect_equal(q$n_overlap_junctions, 1L)
+  expect_gt(q$min_overlap_identity, 0.95)
+})
+
+test_that("summarize_join_quality reports a single scaffold", {
+  seqs <- c(a = "AAAACCCC")
+  lay <- data.frame(scaffold = "a", order = 1L, rc = FALSE, gap_before = NA_real_,
+                    mapped = TRUE, include = TRUE, stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  q <- summarize_join_quality(res, lay)
+  expect_equal(q$continuity, "single")
+  expect_equal(q$n_junctions, 0L)
+})
+
+test_that("compose_join_note uses spacer gap_bases, not raw N count", {
+  seqs <- c(a = "AANACCCC", b = "GGGGTTNT")   # one internal N each
+  lay <- data.frame(scaffold = c("a", "b"), order = 1:2, rc = FALSE,
+                    gap_before = c(NA, 5), mapped = TRUE, include = TRUE,
+                    stringsAsFactors = FALSE)
+  res <- join_scaffolds(seqs, lay)
+  note <- compose_join_note(lay, res$seq, 100L, res$junctions,
+                            gap_bases = sum(is.na(res$src_scaffold)))
+  expect_match(note, "5 N gap bases")          # spacer only; internal Ns excluded
+})
+
 test_that("circularize_sequence detects + trims a redundant end overlap", {
   core <- paste(sample(c("A","C","G","T"), 400, replace = TRUE), collapse = "")
   wrap <- substring(core, 1, 60)              # redundant copy of the 5' start
