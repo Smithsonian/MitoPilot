@@ -166,6 +166,37 @@ is_hydra_cluster <- function() {
     any(grepl("hydra", motd_output, ignore.case = TRUE))
 }
 
+#' Configure the R session environment for the NMNH Hydra cluster
+#'
+#' RStudio Server sessions on Hydra start with a stripped `PATH` that omits the
+#' Univa Grid Engine, Java, and user `~/bin` directories, so Nextflow cannot find
+#' `qsub` and job submission fails. Call this once per session, before launching
+#' the MitoPilot app, to prepend those directories to `PATH`. Has no effect (and
+#' warns) when not running on Hydra.
+#'
+#' @return Invisibly, `TRUE` if the Hydra environment was applied, otherwise
+#'   `FALSE`.
+#' @export
+hydra_setup <- function() {
+  if (!is_hydra_cluster()) {
+    warning("Not running on the NMNH Hydra cluster; environment unchanged.")
+    return(invisible(FALSE))
+  }
+
+  hydra_bins <- c(
+    file.path(Sys.getenv("HOME"), "bin"),
+    "/share/apps/tools/java/21.0.2/bin",
+    "/cm/shared/apps/uge/8.8.1/bin/lx-amd64"
+  )
+  cur <- strsplit(Sys.getenv("PATH"), .Platform$path.sep, fixed = TRUE)[[1]]
+  add <- hydra_bins[!hydra_bins %in% cur]
+  if (length(add) > 0) {
+    Sys.setenv(PATH = paste(c(add, cur), collapse = .Platform$path.sep))
+  }
+
+  invisible(TRUE)
+}
+
 #' Hydra-specific submission script
 #'
 #' Reproduces the script format used by the non-headless "Submit as Job" handler
