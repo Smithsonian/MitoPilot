@@ -81,6 +81,12 @@ Singularity image.
 
 ### Setting up RStudio server
 
+> **Note:** If you only need the MitoPilot GUI (not a full RStudio
+> session), you can skip RStudio Server entirely and run the GUI
+> headless over an SSH tunnel. See [Headless GUI over an SSH
+> tunnel](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html#headless-gui-over-an-ssh-tunnel)
+> in the Custom HPC vignette.
+
 Next we need to set up RStudio server. The version of RStudio server
 must match the R version in your `MitoPilot_deps` mamba environment. You
 should be able to see the R version by running

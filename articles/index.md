@@ -7,8 +7,8 @@
 
 ### Nextflow Executors
 
-- [Custom HPC
-  Setup](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md):
+- [HPC Cluster
+  Support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md):
 - [NMNH Hydra
   Setup](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.md):
 - [NOAA SEDNA

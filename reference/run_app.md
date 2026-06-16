@@ -7,9 +7,12 @@ Run the Shiny Application
 ``` r
 run_app(
   onStart = NULL,
-  options = list(shiny.launch.browser = T),
+  options = NULL,
   enableBookmarking = NULL,
   uiPattern = "/",
+  host = NULL,
+  port = NULL,
+  launch.browser = NULL,
   ...
 )
 ```
@@ -45,6 +48,22 @@ run_app(
   determine whether the `ui` should be used to handle the request. Note
   that the entire request path must match the regular expression in
   order for the match to be considered successful.
+
+- host:
+
+  character. Address to bind the Shiny server to. Use \`"0.0.0.0"\` to
+  allow connections over an SSH tunnel from a remote machine. Default
+  \`NULL\` lets Shiny choose (loopback).
+
+- port:
+
+  integer. Port for the Shiny server to listen on. Default \`NULL\` lets
+  Shiny pick a random port.
+
+- launch.browser:
+
+  logical. Whether to open a local browser when the server starts.
+  Default \`NULL\` resolves to \`interactive()\`.
 
 - ...:
 

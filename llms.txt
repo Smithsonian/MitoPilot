@@ -822,6 +822,9 @@ submission script for a computing cluster.
 - [`tbl_to_gff3()`](https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.md)
   : Convert a GenBank 5-column feature table to GFF3 format.
 
+- [`tunnel_instructions()`](https://smithsonian.github.io/MitoPilot/reference/tunnel_instructions.md)
+  : Print SSH tunnel instructions for a headless GUI session
+
 - [`update_sample_metadata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.md)
   : Update project database metadata.
 
@@ -930,8 +933,8 @@ submission script for a computing cluster.
 
 ### Nextflow Executors
 
-- [Custom HPC
-  Setup](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md):
+- [HPC Cluster
+  Support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md):
 - [NMNH Hydra
   Setup](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.md):
 - [NOAA SEDNA

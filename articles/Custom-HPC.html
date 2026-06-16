@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Custom HPC Setup • MitoPilot</title>
+<title>HPC Cluster Support • MitoPilot</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Custom HPC Setup">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="HPC Cluster Support">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,7 +35,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
-    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">Custom HPC Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
@@ -61,7 +61,7 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-      <img src="../logo.png" class="logo" alt=""><h1>Custom HPC Setup</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>HPC Cluster Support</h1>
             
       
       <small class="dont-index">Source: <a href="https://github.com/Smithsonian/MitoPilot/blob/main/vignettes/Custom-HPC.Rmd" class="external-link"><code>vignettes/Custom-HPC.Rmd</code></a></small>
@@ -79,7 +79,7 @@
 (<code>NOAA_SEDNA</code>). For any other cluster, MitoPilot includes
 <strong>generic templates</strong> for the four most common schedulers,
 plus a helper function to build a Nextflow config for your cluster once
-and reuse it for every project.</p>
+and reuse it for every project. See below for details.</p>
 <table class="table">
 <colgroup>
 <col width="24%">
@@ -117,13 +117,67 @@ Torque/OpenPBS)</td>
 </tbody>
 </table>
 <div class="section level3">
+<h3 id="launch-an-r-session-on-the-cluster">Launch an R session on the cluster<a class="anchor" aria-label="anchor" href="#launch-an-r-session-on-the-cluster"></a>
+</h3>
+<p>Everything that follows (saving a cluster config, creating projects,
+launching the app) runs from an <strong>R session on the
+cluster</strong>. You have two ways to get one.</p>
+<div class="section level4">
+<h4 id="option-a-the-mitopilot-container-recommended-no-installation">Option A: the MitoPilot container (recommended, no
+installation)<a class="anchor" aria-label="anchor" href="#option-a-the-mitopilot-container-recommended-no-installation"></a>
+</h4>
+<p>The MitoPilot Docker image is a single self-contained “box” that
+already includes R, MitoPilot, and every tool the pipeline uses. You run
+the R <em>inside</em> that box. You do not need to install R, the
+MitoPilot package, or any other tools on the cluster.</p>
+<p>A quick vocabulary primer if containers are new to you:</p>
+<ul>
+<li>
+<strong>Docker image</strong>: the prebuilt box of software.
+MitoPilot publishes one on <a href="https://hub.docker.com/r/macguigand/mitopilot" class="external-link">Docker
+Hub</a>.</li>
+<li>
+<strong>Singularity / Apptainer</strong>: the container runtime that
+nearly every HPC cluster provides (Docker itself is usually not
+permitted on shared clusters). It can run a Docker image directly. The
+two names are interchangeable here.</li>
+<li>
+<strong><code>.sif</code> file</strong>: Singularity’s single-file
+copy of the image. You build it once, then reuse it.</li>
+</ul>
+<p><strong>1. Pull the image once.</strong> From an interactive session
+or compute node (not the login node):</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># match the tag to the latest MitoPilot version</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">singularity</span> pull mitopilot.sif docker://macguigand/mitopilot:1.4.6</span></code></pre></div>
+<p><strong>2. Start an R session.</strong> By default a Singularity
+container can only see your <strong>home directory</strong>. Bind any
+other locations your projects or data live in (for example
+<code>/scratch</code> or <code>/pool</code>) with <code>--bind</code>,
+and pin the working directory with <code>--pwd</code> (the container
+otherwise starts in your home, so use absolute paths in R):</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="bu">cd</span> /scratch/<span class="va">$USER</span>/my_runs</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="ex">singularity</span> exec <span class="at">--bind</span> /scratch,/pool <span class="at">--pwd</span> <span class="va">$PWD</span> mitopilot.sif R</span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="option-b-rstudio-server-or-a-local-r-install">Option B: RStudio Server or a local R install<a class="anchor" aria-label="anchor" href="#option-b-rstudio-server-or-a-local-r-install"></a>
+</h4>
+<p>If your cluster offers <strong>RStudio Server</strong>, or you
+already have R with the MitoPilot package installed on the cluster, you
+can run every step below in that R session instead of the container.
+Open RStudio in your browser (or start R as usual) and run the same
+commands. If using RStudio Server, you can launch the app normally and
+skip the SSH-tunnel section.</p>
+<p>The rest of this guide works the same in either R session.</p>
+</div>
+</div>
+<div class="section level3">
 <h3 id="configure-mitopilot-for-your-cluster">Configure MitoPilot for your cluster<a class="anchor" aria-label="anchor" href="#configure-mitopilot-for-your-cluster"></a>
 </h3>
 <p><code><a href="../reference/generate_config.html">generate_config()</a></code> builds a Nextflow config from a
 generic template, fills in your cluster-specific settings, and saves it
 as a <strong>named profile</strong> in your persistent MitoPilot config
 directory (see <code><a href="../reference/mitopilot_config_dir.html">mitopilot_config_dir()</a></code>).</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/generate_config.html">generate_config</a></span><span class="op">(</span></span>
@@ -138,25 +192,36 @@ directory (see <code><a href="../reference/mitopilot_config_dir.html">mitopilot_
 <p>This writes <code>config.my_cluster</code> to your config directory.
 Prefer to be prompted interactively? Pass
 <code>interactive = TRUE</code> and leave the cluster values unset.</p>
+<div class="alert alert-note">
+<p><strong>Note:</strong> Saved cluster configs need no extra binding if
+running R with Docker/Singularity. The <code><a href="../reference/generate_config.html">generate_config()</a></code>
+writes its profiles to <code>~/.config/R/MitoPilot</code> inside your
+home directory, and Singularity mounts your home automatically. A
+profile you save once therefor persists and is found by
+<code><a href="../reference/new_project.html">new_project()</a></code> on every later run, with no
+<code>--bind</code> needed. (This only breaks if you deliberately launch
+with <code>--contain</code> or <code>--no-home</code>, which detach the
+home directory.)</p>
+</div>
 </div>
 <div class="section level3">
 <h3 id="reuse-your-cluster-config-for-every-project">Reuse your cluster config for every project<a class="anchor" aria-label="anchor" href="#reuse-your-cluster-config-for-every-project"></a>
 </h3>
 <p>Once saved, the profile name behaves like any built-in executor:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
-<span>  path       <span class="op">=</span> <span class="st">"path/to/project"</span>,</span>
-<span>  mapping_fn <span class="op">=</span> <span class="st">"path/to/mapping.csv"</span>,</span>
-<span>  data_path  <span class="op">=</span> <span class="st">"path/to/raw_data"</span>,</span>
-<span>  executor   <span class="op">=</span> <span class="st">"my_cluster"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">new_project</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  ...</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">executor   =</span> <span class="st">"my_cluster"</span>,</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  ...</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>)</span></code></pre></div>
 <p><code><a href="../reference/new_project.html">new_project()</a></code> resolves the saved profile and fills in
 the per-project values (raw data directory, container image, genetic
 code, etc.), leaving a ready-to-run <code>.config</code> in the project
-directory.</p>
+directory. When running from the container, use <strong>absolute
+paths</strong> so the project lands where you expect (the container
+starts in your home directory).</p>
 <p>List everything available (built-in templates plus your saved
 profiles):</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/list_configs.html">list_configs</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -174,17 +239,88 @@ in the MitoPilot app.</p>
 <h3 id="validate-before-running">Validate before running<a class="anchor" aria-label="anchor" href="#validate-before-running"></a>
 </h3>
 <p>If <code>nextflow</code> is on your <code>PATH</code>, you can
-sanity-check the generated config:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="bu">cd</span> path/to/project</span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">cp</span> .config nextflow.config</span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="ex">nextflow</span> config .          <span class="co"># prints the resolved config, or a parse error</span></span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">rm</span> nextflow.config</span></code></pre></div>
-<p>After reviewing the <code>.config</code> file, launch the pipeline
-from the MitoPilot app or submit it as a batch job using your cluster’s
-normal submission tools (e.g. <code>sbatch</code>, <code>qsub</code>,
-<code>bsub</code>) wrapping the <code>nextflow run</code> command. See
-the <a href="NMNH-Hydra.html">NMNH Hydra</a> and <a href="NOAA-SEDNA.html">NOAA SEDNA</a> vignettes for batch submission
-examples you can adapt.</p>
+sanity-check the generated config by running the following commands in a
+terminal:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="bu">cd</span> path/to/project</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="ex">nextflow</span> config .config          <span class="co"># prints the resolved config, or a parse error</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="accessing-the-mitopilot-app-over-an-ssh-tunnel">Accessing the MitoPilot app over an SSH tunnel<a class="anchor" aria-label="anchor" href="#accessing-the-mitopilot-app-over-an-ssh-tunnel"></a>
+</h3>
+<p>The MitoPilot app is just a Shiny web server over the project’s
+SQLite database and Nextflow. It needs <strong>no browser and no X11 on
+the cluster</strong>, so you do not need RStudio Server just to use the
+app. Instead, run the server on a cluster node with a fixed host and
+port, then reach it from your local computer over an SSH tunnel. (If you
+are using RStudio Server instead, skip this section: just call
+<code><a href="../reference/MitoPilot.html">MitoPilot()</a></code> and it opens in your browser.)</p>
+<p><strong>1. On the cluster</strong>, launch MitoPilot from your
+project directory and tell it not to open a browser. From the container
+in one line:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="va">proj</span><span class="op">=</span>/scratch/<span class="va">$USER</span>/my_runs/project01</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="ex">singularity</span> exec <span class="at">--bind</span> /scratch <span class="at">--pwd</span> <span class="st">"</span><span class="va">$proj</span><span class="st">"</span> mitopilot.sif <span class="dt">\</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  R <span class="at">-e</span> <span class="st">"setwd('</span><span class="va">$proj</span><span class="st">'); MitoPilot::MitoPilot(host='0.0.0.0', port=7591, launch.browser=FALSE)"</span></span></code></pre></div>
+<p>or from an R session already in the project directory:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/MitoPilot.html">MitoPilot</a></span><span class="op">(</span>host <span class="op">=</span> <span class="st">"0.0.0.0"</span>, port <span class="op">=</span> <span class="fl">7591</span>, launch.browser <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p>As the server starts it prints the exact tunnel command using the
+live node hostname, for example:</p>
+<pre><code>ssh -N -L 7591:NODE:7591 &lt;user&gt;@&lt;cluster&gt;</code></pre>
+<p><strong>2. On your local computer</strong>, open the tunnel
+(substitute your username and login host. If MitoPilot is running on a
+compute node reached via <code>srun --pty</code>, the printed
+<code>NODE</code> should be that compute node.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">ssh</span> <span class="at">-N</span> <span class="at">-L</span> 7591:NODE:7591 <span class="op">&lt;</span>user<span class="op">&gt;</span>@<span class="op">&lt;</span>cluster<span class="op">&gt;</span></span></code></pre></div>
+<p><strong>3. In your web browser</strong>, open:</p>
+<pre><code>http://localhost:7591</code></pre>
+<p>Leave both the cluster R session and the local <code>ssh</code>
+session open while you use the app. This replaces the RStudio Server
+requirement for users who only need the app.</p>
+<p><strong>Caveat:</strong> in-app features that open a file or browser
+on the server side (the “Open output folder” button, the HTML annotation
+report, and the ruleset browser) will not work here, since they try to
+open on the cluster rather than your local computer. The main assemble /
+annotate / curate app is unaffected.</p>
+</div>
+<div class="section level3">
+<h3 id="running-the-pipeline">Running the pipeline<a class="anchor" aria-label="anchor" href="#running-the-pipeline"></a>
+</h3>
+<p>When running MitoPilot via a ssh tunnel, it will <strong>not</strong>
+run Nextflow on the node hosting the app, since that would tie up an
+interactive node or the login node. Instead, when you start a workflow,
+the update window shows a ready-to-edit <strong>cluster submission
+script</strong>:</p>
+<ul>
+<li>It is pre-filled with the correct scheduler directives
+(<code>#SBATCH</code>, <code>#$</code>, <code>#PBS</code>, or
+<code>#BSUB</code>) for your project’s executor.</li>
+<li>Edit the resources, and add your environment setup where indicated
+(for example <code>module load java</code>,
+<code>mamba activate ...</code>, or
+<code>export NXF_SINGULARITY_CACHEDIR=...</code>). Those lines are
+pre-filled as commented examples.</li>
+<li>Click <strong>“Submit to Cluster”</strong> to submit it with your
+scheduler’s command (<code>sbatch</code> / <code>qsub</code> /
+<code>bsub</code>), or <strong>“Save Script Only”</strong> to write the
+script and submit it yourself.</li>
+<li>Your edits to the resource block are remembered per project (saved
+to <code>.mitopilot_submit.template</code>), so the next run pre-fills
+them. The “Resume previous run?” checkbox still adds or removes
+<code>-resume</code> without disturbing your edits.</li>
+</ul>
+<div class="alert alert-note">
+<p><strong>Note:</strong> “Submit to Cluster” calls <code>sbatch</code>
+/ <code>qsub</code> / <code>bsub</code> directly, and those commands are
+usually <strong>not</strong> available inside a Singularity container.
+If you launched the app from the container (the recommended setup
+above), use <strong>“Save Script Only”</strong> and then submit the
+written <code>.sh</code> from a normal cluster shell. The submitted job
+runs on a scheduler node (not inside the container) and calls Nextflow,
+which in turn uses Singularity for each pipeline step, so make sure
+<code>java</code> and <code>nextflow</code> are available via the
+script’s environment-setup lines.</p>
+</div>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

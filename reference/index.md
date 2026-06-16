@@ -321,6 +321,9 @@
 - [`tbl_to_gff3()`](https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.md)
   : Convert a GenBank 5-column feature table to GFF3 format.
 
+- [`tunnel_instructions()`](https://smithsonian.github.io/MitoPilot/reference/tunnel_instructions.md)
+  : Print SSH tunnel instructions for a headless GUI session
+
 - [`update_sample_metadata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.md)
   : Update project database metadata.
 

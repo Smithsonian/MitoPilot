@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,7 +35,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
-    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">Custom HPC Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
@@ -136,6 +136,12 @@ MitoPilot Singularity image.</p>
 <div class="section level3">
 <h3 id="setting-up-rstudio-server">Setting up RStudio server<a class="anchor" aria-label="anchor" href="#setting-up-rstudio-server"></a>
 </h3>
+<blockquote>
+<p><strong>Note:</strong> If you only need the MitoPilot GUI (not a full
+RStudio session), you can skip RStudio Server entirely and run the GUI
+headless over an SSH tunnel. See <a href="Custom-HPC.html#headless-gui-over-an-ssh-tunnel">Headless GUI over
+an SSH tunnel</a> in the Custom HPC vignette.</p>
+</blockquote>
 <p>Next we need to set up RStudio server. The version of RStudio server
 must match the R version in your <code>MitoPilot_deps</code> mamba
 environment. You should be able to see the R version by running

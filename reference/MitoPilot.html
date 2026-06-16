@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -20,7 +20,7 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
-    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">Custom HPC Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
@@ -48,11 +48,37 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">MitoPilot</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">MitoPilot</span><span class="op">(</span>host <span class="op">=</span> <span class="cn">NULL</span>, port <span class="op">=</span> <span class="cn">NULL</span>, launch.browser <span class="op">=</span> <span class="cn">NULL</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
-  </main></div>
+
+<dl><dt id="arg-host">host<a class="anchor" aria-label="anchor" href="#arg-host"></a></dt>
+<dd><p>character. Address to bind the Shiny server to. Use
+`"0.0.0.0"` to allow connections over an SSH tunnel from a remote
+machine. Default `NULL` lets Shiny choose (loopback).</p></dd>
+
+
+<dt id="arg-port">port<a class="anchor" aria-label="anchor" href="#arg-port"></a></dt>
+<dd><p>integer. Port for the Shiny server to listen on. Default
+`NULL` lets Shiny pick a random port.</p></dd>
+
+
+<dt id="arg-launch-browser">launch.browser<a class="anchor" aria-label="anchor" href="#arg-launch-browser"></a></dt>
+<dd><p>logical. Whether to open a local browser when the
+server starts. Default `NULL` resolves to `interactive()`, so desktop
+sessions auto-open but headless/remote sessions do not.</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>additional arguments passed to `run_app()`.</p></dd>
+
+</dl></div>
+
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
