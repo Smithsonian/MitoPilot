@@ -1,5 +1,23 @@
 include {blast_ref_align} from './blast_ref_align.nf'
 
+// SQL fragment: assemble_notes with any segment starting at `tag` stripped (and a
+// preceding '; '). Mirrors the helpers in the blast_* workflows; duplicated here so
+// this module is self-contained.
+def stripTagSql(String tag) {
+    def lit = tag.replace("'", "''")
+    return "RTRIM(" +
+        "CASE WHEN INSTR(COALESCE(assemble_notes,''), '${lit}') > 0 " +
+            "THEN SUBSTR(COALESCE(assemble_notes,''), 1, INSTR(COALESCE(assemble_notes,''), '${lit}') - 1) " +
+            "ELSE COALESCE(assemble_notes,'') END" +
+    ", '; ')"
+}
+
+def appendTaggedNoteSql(String tag, String msg) {
+    def stripped = stripTagSql(tag)
+    def tagged = (tag + ' ' + msg).replace("'", "''")
+    return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
+}
+
 // Reference sequence and rotation for newly-curated samples (gated on curate_out).
 // Assembly sequence comes from the curate output FASTA (already rotated to start_gene).
 params.sqlReadRef =
@@ -37,9 +55,17 @@ params.sqlWriteAlignment = '''INSERT OR REPLACE INTO blast_ref_alignment
     (ID, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
     VALUES (?, ?, ?, ?, ?, ?)'''
 
-// Mark poor_blast_ref = 'failed' when blast_ref_align fails for a sample
-// (errorStrategy 'ignore' suppresses task failure; we detect missing output downstream).
-params.sqlWriteBlastRefAlignFailed = "UPDATE assemble SET poor_blast_ref = 'failed' WHERE ID = ?"
+// Mark the 'BLAST Ref Align' field (poor_blast_ref) = 'failed' and add an [align]
+// note when blast_ref_align fails for a sample (errorStrategy 'ignore' suppresses
+// task failure; we detect missing output downstream). This is a WF2 step that runs
+// after the sample is already complete/locked in WF1, so the assemble_switch state
+// is intentionally left unchanged: the assembly and annotation are unaffected, only
+// the whole-genome alignment view is unavailable.
+params.refAlignFailedMsg = "Whole-genome BLAST reference alignment failed. Annotation and curation are unaffected; the alignment view in the Assemble details will be unavailable."
+params.sqlWriteBlastRefAlignFailed = "UPDATE assemble SET " +
+    "poor_blast_ref = 'failed', " +
+    "assemble_notes = ${appendTaggedNoteSql('[align]', params.refAlignFailedMsg)} " +
+    "WHERE ID = ?"
 
 workflow BLAST_REF_ALIGN {
     take:
