@@ -44,7 +44,12 @@ process blast_genbank {
     fi
     # Optional NCBI API key raises remote BLAST rate limit. BLAST+ honors NCBI_API_KEY env var.
     export NCBI_API_KEY='!{params.ncbi_api_key ?: ""}'
-    blastn \
+    # Distinguish a genuine zero-hit result from a connection/tool failure:
+    #   - blastn non-zero exit  -> connection/tool error; exit 1 so Nextflow retries.
+    #   - blastn exit 0, empty  -> genuine "no significant hits"; retrying is pointless,
+    #                              so write a sentinel and succeed. The workflow flags it
+    #                              with a distinct note (vs the no-output connection path).
+    if blastn \
         -remote \
         -db core_nt \
         -query !{assembly} \
@@ -54,8 +59,12 @@ process blast_genbank {
         -task megablast \
         -entrez_query "!{entrez_query}" \
         !{extra_opts} \
-        > !{outDir}/!{outFile}
-    # Fail if output is empty; triggers retry so transient connection failures are retried
-    [ -s !{outDir}/!{outFile} ] || exit 1
+        > !{outDir}/!{outFile}; then
+        if [ ! -s !{outDir}/!{outFile} ]; then
+            echo "NO_SIGNIFICANT_HITS" > !{outDir}/!{outFile}
+        fi
+    else
+        exit 1
+    fi
     '''
 }
