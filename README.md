@@ -415,6 +415,19 @@ in a new browser window and is primarily comprised of an interactive
 table, with 3 modules (Assemble, Annotate, Export), where each row
 represents a sample in the project.
 
+If you are working on an HPC cluster without RStudio Server, you can run
+the app headless. “Headless” means the app runs as a plain web server on
+a cluster node, with no browser or graphical desktop on the cluster
+itself. Launch it on a cluster node with
+`MitoPilot(host = "0.0.0.0", port = 7591, launch.browser = FALSE)`, then
+open an SSH tunnel from your local computer (the app prints the exact
+`ssh` command on startup) and use the full interface in your local
+browser at `http://localhost:7591`. The computation still runs on the
+cluster; only the interface is forwarded to you. See [Running MitoPilot
+headless over an SSH
+tunnel](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html#accessing-the-mitopilot-app-over-an-ssh-tunnel)
+for the full walkthrough.
+
 ## Sample Status
 
 In the Assemble and Annotate modules the icon at the start of each row
@@ -467,6 +480,13 @@ and run in a terminal from the project directory. This can be useful if
 you would like to specify additional command line options or override
 input parameters. Or you can paste the Nextflow command into a job
 submission script for a computing cluster.
+
+When running the app headless over an SSH tunnel (see above), the
+pipeline is not launched with “Run from App”. Instead, MitoPilot
+generates an editable cluster submission script, pre-filled with the
+correct scheduler directives for your project’s executor, that you can
+submit to your scheduler directly from the app or save and submit
+yourself.
 
 # Development Notes
 
