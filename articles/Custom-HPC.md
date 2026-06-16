@@ -2,27 +2,19 @@
 
 ## Running MitoPilot on your own HPC cluster
 
-MitoPilot ships built-in executor templates for `local`, `awsbatch`, the
-Smithsonian Hydra cluster (`NMNH_Hydra`), and the NOAA SEDNA cluster
-(`NOAA_SEDNA`). For any other cluster, MitoPilot includes **generic
-templates** for the four most common schedulers, plus a helper function
-to build a Nextflow config for your cluster once and reuse it for every
-project. See below for details.
-
-| Scheduler | `scheduler =` | Nextflow executor |
-|----|----|----|
-| SLURM | `"slurm"` | `slurm` |
-| SGE / UGE | `"sge"` | `sge` |
-| PBS Pro / OpenPBS / Torque | `"pbs"` | `pbspro` (edit to `pbs` for Torque/OpenPBS) |
-| IBM Spectrum LSF | `"lsf"` | `lsf` |
+The following steps will help you get started running MitoPilot on a HPC
+cluster. We have specific instructions for the [Smithsonian Hydra
+cluster](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
+and the [NOAA SEDNA
+cluster](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html).
 
 ### Launch an R session on the cluster
 
-Everything that follows (saving a cluster config, creating projects,
-launching the app) runs from an **R session on the cluster**. You have
-two ways to get one.
+Everything that follows (creating a cluster config, initializing
+projects, launching the app) runs from an **R session on the cluster**.
+You have two ways to get one.
 
-#### Option A: the MitoPilot container (recommended, no installation)
+#### Option A: the MitoPilot container
 
 The MitoPilot Docker image is a single self-contained “box” that already
 includes R, MitoPilot, and every tool the pipeline uses. You run the R
@@ -71,6 +63,20 @@ section.
 The rest of this guide works the same in either R session.
 
 ### Configure MitoPilot for your cluster
+
+MitoPilot ships built-in executor templates for `local`, `awsbatch`, the
+Smithsonian Hydra cluster (`NMNH_Hydra`), and the NOAA SEDNA cluster
+(`NOAA_SEDNA`). For any other cluster, MitoPilot includes **generic
+templates** for the four most common schedulers, plus a helper function
+to build a Nextflow config for your cluster once and reuse it for every
+project. See below for details.
+
+| Scheduler | `scheduler =` | Nextflow executor |
+|----|----|----|
+| SLURM | `"slurm"` | `slurm` |
+| SGE / UGE | `"sge"` | `sge` |
+| PBS Pro / OpenPBS / Torque | `"pbs"` | `pbspro` (edit to `pbs` for Torque/OpenPBS) |
+| IBM Spectrum LSF | `"lsf"` | `lsf` |
 
 [`generate_config()`](https://smithsonian.github.io/MitoPilot/reference/generate_config.md)
 builds a Nextflow config from a generic template, fills in your
@@ -231,9 +237,8 @@ shows a ready-to-edit **cluster submission script**:
 
 **Note:** “Submit to Cluster” calls `sbatch` / `qsub` / `bsub` directly,
 and those commands are usually **not** available inside a Singularity
-container. If you launched the app from the container (the recommended
-setup above), use **“Save Script Only”** and then submit the written
-`.sh` from a normal cluster shell. The submitted job runs on a scheduler
-node (not inside the container) and calls Nextflow, which in turn uses
-Singularity for each pipeline step, so make sure `java` and `nextflow`
-are available via the script’s environment-setup lines.
+container. If you launched the MitoPilot app from a container, use
+**“Save Script Only”** and then submit the written `.sh` from a normal
+cluster shell. The submitted job runs on a compute node and calls
+Nextflow, so make sure `java` and `nextflow` are available via the
+script’s environment-setup lines.
