@@ -311,6 +311,7 @@
 <h1 id="running-the-pipeline">Running The Pipeline<a class="anchor" aria-label="anchor" href="#running-the-pipeline"></a>
 </h1>
 <p>Once a project is initialized, the pipeline status can be viewed using the MitoPilot GUI. The GUI can be launched by running the <code><a href="reference/MitoPilot.html">MitoPilot()</a></code> command in the R console from the project directory. The GUI will open in a new browser window and is primarily comprised of an interactive table, with 3 modules (Assemble, Annotate, Export), where each row represents a sample in the project.</p>
+<p>If you are working on an HPC cluster without RStudio Server, you can run the app headless. “Headless” means the app runs as a plain web server on a cluster node, with no browser or graphical desktop on the cluster itself. Launch it on a cluster node with <code>MitoPilot(host = "0.0.0.0", port = 7591, launch.browser = FALSE)</code>, then open an SSH tunnel from your local computer (the app prints the exact <code>ssh</code> command on startup) and use the full interface in your local browser at <code>http://localhost:7591</code>. The computation still runs on the cluster; only the interface is forwarded to you. See <a href="https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html#accessing-the-mitopilot-app-over-an-ssh-tunnel">Running MitoPilot headless over an SSH tunnel</a> for the full walkthrough.</p>
 <div class="section level2">
 <h2 id="sample-status">Sample Status<a class="anchor" aria-label="anchor" href="#sample-status"></a>
 </h2>
@@ -334,6 +335,7 @@
 </h2>
 <p>When one or more samples are in the “Ready to Run” state, the Nextflow pipeline can be run by clicking the “UPDATE” button at the top of the interface. This will open a popup where the <code>Run from App</code> button can be pressed and output from the pipeline can be viewed to track progress.</p>
 <p>Alternatively, the Nextflow command displayed in the popup can be copied and run in a terminal from the project directory. This can be useful if you would like to specify additional command line options or override input parameters. Or you can paste the Nextflow command into a job submission script for a computing cluster.</p>
+<p>When running the app headless over an SSH tunnel (see above), the pipeline is not launched with “Run from App”. Instead, MitoPilot generates an editable cluster submission script, pre-filled with the correct scheduler directives for your project’s executor, that you can submit to your scheduler directly from the app or save and submit yourself.</p>
 </div>
 </div>
 <div class="section level1">
