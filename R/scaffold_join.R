@@ -140,15 +140,7 @@ map_scaffolds_to_reference <- function(scaffold_seqs, ref_seq,
   rows <- run_minimap2_paf(scaffold_seqs, ref_seq, minimap2)
   if (nrow(rows) == 0) return(empty)
 
-  # Per scaffold: query coverage = total scaffold span aligned (union of query
-  # intervals across all alignments / scaffold length); orientation + reference
-  # coordinates taken from the single best alignment by residue matches. `qstart`
-  # (0-based) lets the zoom view map reference positions back to scaffold bases.
-  best <- do.call(rbind, lapply(split(rows, rows$scaffold), function(g) {
-    b <- g[which.max(g$nmatch), , drop = FALSE]
-    b$qcov <- union_len(g$qstart, g$qend) / g$qlen[1]
-    b[, c("scaffold", "ref_start", "ref_end", "strand", "nmatch", "qcov", "qstart")]
-  }))
+  best <- collapse_scaffold_blocks(rows)
   out <- merge(empty[, "scaffold", drop = FALSE], best, by = "scaffold", all.x = TRUE)
   out$qcov[is.na(out$qcov)] <- 0
   out$mapped <- !is.na(out$ref_start)
@@ -293,6 +285,39 @@ parse_paf <- function(paf_lines) {
   )
 }
 
+#' Collapse a scaffold's PAF alignment blocks to one placement row
+#'
+#' A scaffold crossing a duplication/rearrangement maps to the reference in
+#' several colinear blocks; a single best block underplaces its order and gaps.
+#' Orientation = the strand carrying the most matched residues; reference
+#' placement = the UNION extent (`min(ref_start)`..`max(ref_end)`) of that
+#' strand's blocks. `qstart`/`ref_start` are kept as a colinear pair (the block
+#' at min `ref_start`) so the zoom view can still map reference positions back to
+#' scaffold bases. `qcov` is the union of query intervals across ALL blocks.
+#'
+#' @param rows parsed PAF rows (see [parse_paf()]) for one or more scaffolds.
+#' @return one row per scaffold: `scaffold, ref_start, ref_end, strand, nmatch,
+#'   qcov, qstart`.
+#' @noRd
+collapse_scaffold_blocks <- function(rows) {
+  do.call(rbind, lapply(split(rows, rows$scaffold), function(g) {
+    by_strand <- tapply(g$nmatch, g$strand, sum)
+    dom <- names(by_strand)[which.max(by_strand)]
+    gs <- g[g$strand == dom, , drop = FALSE]
+    anchor <- gs[which.min(gs$ref_start), , drop = FALSE]
+    data.frame(
+      scaffold  = g$scaffold[1],
+      ref_start = min(gs$ref_start),
+      ref_end   = max(gs$ref_end),
+      strand    = dom,
+      nmatch    = sum(gs$nmatch),
+      qcov      = union_len(g$qstart, g$qend) / g$qlen[1],
+      qstart    = anchor$qstart,
+      stringsAsFactors = FALSE
+    )
+  }))
+}
+
 #' Per-reference-position scaffold bases for ONE reference window (lazy)
 #'
 #' For the base-pair zoom: aligns just the small scaffold sub-region that maps to
@@ -425,12 +450,17 @@ rc_seq <- function(seq) {
 #' the true boundary rather than a coordinate estimate.
 #'
 #' @param a_seq,b_seq oriented (RC-applied) sequences of the two scaffolds.
-#' @param est_overlap reference-estimated overlap (bp, > 0).
+#' @param est_overlap reference-estimated overlap (bp, > 0). Also sizes the probe
+#'   window, so pass a discovery window when the reference does NOT predict an
+#'   overlap (see [join_scaffolds()]).
 #' @param min_identity minimum overlap identity to "confirm" the overlap.
+#' @param min_overlap minimum aligned length to "confirm" the overlap; raise it
+#'   for overlaps not predicted by the reference to suppress spurious short hits.
 #' @return list(reliable, trim_b, identity, overlap_len): `trim_b` = bases to drop
 #'   from the start of `b_seq` (the confirmed overlap length when reliable).
 #' @noRd
-refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7) {
+refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7,
+                           min_overlap = 10L) {
   est <- max(as.integer(round(est_overlap)), 1L)
   slack <- max(50L, as.integer(round(est)))
   L <- min(nchar(a_seq), nchar(b_seq), est + slack)
@@ -448,7 +478,7 @@ refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7) {
     error = function(e) NULL)
   if (is.null(aln)) return(out)
   alen <- pwalign::nchar(aln)
-  if (alen < 10L) return(out)
+  if (alen < max(min_overlap, 1L)) return(out)
   ident <- pwalign::nmatch(aln) / alen
   # Overlap = a's suffix vs b's prefix, so the aligned subject (b_head) region
   # should start at base 1; trim b by where that aligned region ends.
@@ -517,10 +547,12 @@ overlap_consensus <- function(a_ch, b_ch, a_dep, b_dep,
 #' @param scaffold_depth optional named list of per-scaffold depth vectors
 #'   (ORIGINAL orientation); enables coverage-majority consensus across confirmed
 #'   overlaps instead of keeping the first scaffold wholesale.
-#' @return list(seq, src_scaffold, src_pos, junctions) where the two `src_*`
-#'   vectors are per joined base: the contributing scaffold id and the 1-based
-#'   index into that scaffold's ORIENTED (RC-applied) sequence, or NA over gap
-#'   spacers; `junctions` is a character vector describing overlap resolutions.
+#' @return list(seq, src_scaffold, src_pos, junctions, junction_info) where the
+#'   two `src_*` vectors are per joined base: the contributing scaffold id and the
+#'   1-based index into that scaffold's ORIENTED (RC-applied) sequence, or NA over
+#'   gap spacers; `junctions` is a character vector describing overlap resolutions;
+#'   `junction_info` is a data.frame (one row per junction: from, to, type,
+#'   gap_bases, overlap_len, identity) backing [summarize_join_quality()].
 #' @noRd
 join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
                            circular = FALSE, scaffold_depth = NULL) {
@@ -536,6 +568,7 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
   src_scaffold <- character(0)
   src_pos <- integer(0)
   junctions <- character(0)
+  junc_rec <- list()                         # one structured record per junction
   prev_oriented <- NULL
   prev_scaf <- NULL
   prev_depth <- NULL
@@ -550,46 +583,70 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
     consensus <- NULL
     if (i > 1) {
       gb <- layout$gap_before[i]
-      if (is.na(gb)) {
-        ngap <- gap_len_default
-      } else if (gb > 0) {
-        ngap <- as.integer(round(gb))        # disjoint on reference -> N gap
-      } else if (gb == 0) {
-        ngap <- 0L                           # adjacent -> butt join
-      } else {
-        # Reference indicates overlap: confirm it against the actual ends so a
-        # divergent (non-identical) "overlap" is not silently merged.
-        est <- abs(as.integer(round(gb)))
-        ngap <- 0L
-        ov <- refine_overlap(prev_oriented, seq, est)
-        if (isTRUE(ov$reliable)) {
-          trim <- ov$trim_b
-          jmsg <- sprintf("%s|%s overlap %d bp confirmed (%.0f%% identity), merged",
-                          prev_scaf, s, ov$overlap_len, 100 * ov$identity)
-          # Coverage-majority consensus across the overlap (replaces A's tail).
-          if (!is.null(prev_depth) && !is.null(dep) && trim >= 1L) {
-            k <- min(trim, nchar(prev_oriented))
-            pl <- nchar(prev_oriented)
-            a_ch <- strsplit(substring(prev_oriented, pl - k + 1L), "", fixed = TRUE)[[1]]
-            b_ch <- strsplit(substring(seq, 1L, k), "", fixed = TRUE)[[1]]
-            cc <- overlap_consensus(
-              a_ch, b_ch, utils::tail(prev_depth, k), utils::head(dep, k))
-            consensus <- cc
-            if (cc$n_mismatch > 0) jmsg <- sprintf(
-              "%s; %d mismatches resolved by coverage (%d IUPAC, %d N)",
-              jmsg, cc$n_mismatch, cc$n_iupac, cc$n_n)
-          }
-          junctions <- c(junctions, jmsg)
-        } else {
-          # Not confirmed: trim by the reference estimate to avoid duplicating
-          # the region, but flag the junction as unverified for review.
-          trim <- min(est, nchar(seq))
-          junctions <- c(junctions, sprintf(
-            "%s|%s reference overlap %d bp NOT confirmed by alignment%s; trimmed by estimate (review)",
-            prev_scaf, s, est,
-            if (!is.na(ov$identity)) sprintf(" (best %.0f%% identity)", 100 * ov$identity) else ""))
+      # Structured junction descriptor (type + measured overlap quality), kept
+      # alongside the prose `junctions` for the join-quality summary.
+      jtype <- NA_character_; j_ov_len <- 0L; j_ident <- NA_real_
+      ngap <- 0L
+
+      # Probe the ACTUAL scaffold ends for an overlap at every adjacency, not just
+      # when the reference predicts one. On divergent cross-species references
+      # minimap2 alignments are usually inset from the true scaffold ends, so the
+      # reference gap estimate is biased positive: scaffolds that truly abut or
+      # overlap show gb >= 0 and would otherwise be N-padded or butt-joined
+      # (duplicating the shared bases). Stringency: lenient when the reference
+      # predicts the overlap (gb < 0), strict when discovering one it did not
+      # (gb >= 0), and skip entirely for a large predicted gap (trust it) or an
+      # unmapped/unknown junction (gb is NA).
+      probe_win <- as.integer(getOption("MitoPilot.scaffold_overlap_probe", 300L))
+      ref_overlap <- !is.na(gb) && gb < 0
+      do_probe <- !is.na(gb) && gb <= probe_win
+      est <- if (ref_overlap) abs(as.integer(round(gb))) else probe_win
+      ov <- if (do_probe) refine_overlap(
+        prev_oriented, seq, est,
+        min_identity = if (ref_overlap) 0.7 else 0.9,
+        min_overlap  = if (ref_overlap) 10L else 20L) else NULL
+
+      if (!is.null(ov) && isTRUE(ov$reliable)) {
+        trim <- ov$trim_b
+        jtype <- "overlap_confirmed"; j_ov_len <- ov$overlap_len; j_ident <- ov$identity
+        jmsg <- sprintf("%s|%s overlap %d bp confirmed (%.0f%% identity), merged",
+                        prev_scaf, s, ov$overlap_len, 100 * ov$identity)
+        # Coverage-majority consensus across the overlap (replaces A's tail).
+        if (!is.null(prev_depth) && !is.null(dep) && trim >= 1L) {
+          k <- min(trim, nchar(prev_oriented))
+          pl <- nchar(prev_oriented)
+          a_ch <- strsplit(substring(prev_oriented, pl - k + 1L), "", fixed = TRUE)[[1]]
+          b_ch <- strsplit(substring(seq, 1L, k), "", fixed = TRUE)[[1]]
+          cc <- overlap_consensus(
+            a_ch, b_ch, utils::tail(prev_depth, k), utils::head(dep, k))
+          consensus <- cc
+          if (cc$n_mismatch > 0) jmsg <- sprintf(
+            "%s; %d mismatches resolved by coverage (%d IUPAC, %d N)",
+            jmsg, cc$n_mismatch, cc$n_iupac, cc$n_n)
         }
+        junctions <- c(junctions, jmsg)
+      } else if (ref_overlap) {
+        # Reference predicted an overlap but the ends did not confirm it: trim by
+        # the estimate to avoid duplicating the region, flag for review.
+        est <- abs(as.integer(round(gb)))
+        trim <- min(est, nchar(seq))
+        jtype <- "overlap_unconfirmed"; j_ident <- if (!is.null(ov)) ov$identity else NA_real_
+        junctions <- c(junctions, sprintf(
+          "%s|%s reference overlap %d bp NOT confirmed by alignment%s; trimmed by estimate (review)",
+          prev_scaf, s, est,
+          if (!is.null(ov) && !is.na(ov$identity)) sprintf(" (best %.0f%% identity)", 100 * ov$identity) else ""))
+      } else if (is.na(gb)) {
+        ngap <- gap_len_default; jtype <- "gap"   # unmapped/unknown junction
+      } else if (gb > 0) {
+        ngap <- as.integer(round(gb)); jtype <- "gap"   # disjoint on reference
+      } else {
+        jtype <- "butt"                            # gb == 0, no overlap found
       }
+      junc_rec[[length(junc_rec) + 1L]] <- data.frame(
+        from = prev_scaf, to = s, type = jtype,
+        gap_bases = if (ngap > 0) as.integer(ngap) else 0L,
+        overlap_len = as.integer(j_ov_len), identity = as.numeric(j_ident),
+        stringsAsFactors = FALSE)
       if (ngap > 0) {
         pieces <- c(pieces, strrep("N", ngap))
         src_scaffold <- c(src_scaffold, rep(NA_character_, ngap))
@@ -624,8 +681,13 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
     prev_depth <- if (is.null(dep)) NULL else if (trim > 0) dep[-(seq_len(trim))] else dep
   }
 
+  junction_info <- if (length(junc_rec) > 0) do.call(rbind, junc_rec) else
+    data.frame(from = character(0), to = character(0), type = character(0),
+               gap_bases = integer(0), overlap_len = integer(0),
+               identity = numeric(0), stringsAsFactors = FALSE)
   list(seq = paste0(pieces, collapse = ""),
-       src_scaffold = src_scaffold, src_pos = src_pos, junctions = junctions)
+       src_scaffold = src_scaffold, src_pos = src_pos, junctions = junctions,
+       junction_info = junction_info)
 }
 
 #' Stitch per-scaffold coverage vectors to match a joined sequence
@@ -680,7 +742,8 @@ parse_cov_string <- function(x) {
 #' @param gap_len default N-gap length for unknown junctions.
 #' @param circular whether the joined molecule is circular.
 #' @param minimap2 minimap2 binary path.
-#' @return list(seq, depth, gc, errors, layout, note, topology).
+#' @return list(seq, depth, gc, errors, layout, note, topology, join_quality)
+#'   (`join_quality` from [summarize_join_quality()]).
 #' @noRd
 build_joined_assembly <- function(scaffolds_df, ref_seq, gap_len = 100L,
                                    circular = FALSE,
@@ -772,7 +835,8 @@ rotate_to_reference <- function(seq, depth, gc, errors, ref_seq,
 #'   [derive_scaffold_layout()] or edited by the user.
 #' @param gap_len default N-gap length.
 #' @param circular whether the joined molecule is circular.
-#' @return list(seq, depth, gc, errors, layout, note, topology).
+#' @return list(seq, depth, gc, errors, layout, note, topology, join_quality)
+#'   (`join_quality` from [summarize_join_quality()]).
 #' @noRd
 assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
                                  circular = FALSE, ref_seq = NULL,
@@ -814,11 +878,15 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
   }
 
   topology <- if (is_circular) "circular" else "linear"
-  note <- compose_join_note(layout, seq, gap_len, joined$junctions)
+  join_quality <- summarize_join_quality(joined, layout)
+  note <- compose_join_note(layout, seq, gap_len, joined$junctions,
+                            gap_bases = join_quality$gap_bases)
+  note <- paste(note, format_join_quality(join_quality))
   if (length(circ_note) > 0) note <- paste0(note, " (", paste(circ_note, collapse = "; "), ").")
 
   list(seq = seq, depth = depth, gc = gc, errors = errors,
-       layout = layout, note = note, topology = topology)
+       layout = layout, note = note, topology = topology,
+       join_quality = join_quality)
 }
 
 #' Write the joined Path 0 FASTA + coverageStats CSV
@@ -1203,9 +1271,83 @@ plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_
   invisible(NULL)
 }
 
-#' Human-readable note describing a join layout
+#' Summarise the continuity + overlap quality of a scaffold join
+#'
+#' A compact "report value" for the user: is the joined Path 0 gappy (N-spacers
+#' between disjoint scaffolds) or continuous (scaffolds abut or overlap), and for
+#' the continuous parts, how good the confirmed overlaps are (alignment identity).
+#'
+#' @param joined list from [join_scaffolds()] (needs `src_scaffold` and
+#'   `junction_info`).
+#' @param layout layout data.frame (for the included-scaffold count).
+#' @return list:
+#'   `continuity` - "single" (one scaffold, no joins), "continuous" (no N-gap
+#'     junctions), or "gappy" (>= 1 N-gap junction);
+#'   `n_scaffolds`, `n_junctions`;
+#'   `n_gap_junctions`, `n_butt_junctions`, `n_overlap_junctions`,
+#'     `n_unconfirmed_overlaps` (junction-type counts);
+#'   `gap_bases` (inserted N-spacer bases), `gap_fraction` (of joined length);
+#'   `min_overlap_identity`, `mean_overlap_identity` (over confirmed overlaps; NA
+#'     when none).
 #' @noRd
-compose_join_note <- function(layout, seq, gap_len, junctions = character(0)) {
+summarize_join_quality <- function(joined, layout) {
+  inc <- if ("include" %in% names(layout)) layout[layout$include, , drop = FALSE] else layout
+  ji <- joined$junction_info
+  if (is.null(ji)) ji <- data.frame(type = character(0), identity = numeric(0),
+                                    stringsAsFactors = FALSE)
+  n_inc <- nrow(inc)
+  seq_n <- length(joined$src_scaffold)
+  gap_bases <- sum(is.na(joined$src_scaffold))
+  n_gap_j   <- sum(ji$type == "gap")
+  n_butt    <- sum(ji$type == "butt")
+  n_ov_conf <- sum(ji$type == "overlap_confirmed")
+  n_ov_unc  <- sum(ji$type == "overlap_unconfirmed")
+  ov_id <- ji$identity[ji$type == "overlap_confirmed" & !is.na(ji$identity)]
+  continuity <- if (n_inc <= 1) "single" else if (n_gap_j > 0) "gappy" else "continuous"
+  list(
+    continuity = continuity,
+    n_scaffolds = n_inc,
+    n_junctions = max(n_inc - 1L, 0L),
+    n_gap_junctions = n_gap_j,
+    n_butt_junctions = n_butt,
+    n_overlap_junctions = n_ov_conf,
+    n_unconfirmed_overlaps = n_ov_unc,
+    gap_bases = as.integer(gap_bases),
+    gap_fraction = if (seq_n > 0) gap_bases / seq_n else 0,
+    min_overlap_identity = if (length(ov_id)) min(ov_id) else NA_real_,
+    mean_overlap_identity = if (length(ov_id)) mean(ov_id) else NA_real_
+  )
+}
+
+#' One-line user-facing summary string from [summarize_join_quality()]
+#' @noRd
+format_join_quality <- function(q) {
+  if (q$continuity == "single") return("Single scaffold; no junctions.")
+  base <- if (q$continuity == "continuous") {
+    sprintf("Continuous join: %d junction(s), no N gaps", q$n_junctions)
+  } else {
+    sprintf("Gappy join: %d of %d junction(s) are N gaps (%d N bases, %.1f%% of length)",
+            q$n_gap_junctions, q$n_junctions, q$gap_bases, 100 * q$gap_fraction)
+  }
+  if (q$n_overlap_junctions > 0 && !is.na(q$min_overlap_identity)) {
+    base <- sprintf("%s; %d confirmed overlap(s), identity min %.0f%% / mean %.0f%%",
+                    base, q$n_overlap_junctions,
+                    100 * q$min_overlap_identity, 100 * q$mean_overlap_identity)
+  }
+  if (q$n_unconfirmed_overlaps > 0) {
+    base <- sprintf("%s; %d unconfirmed overlap(s) (review)", base, q$n_unconfirmed_overlaps)
+  }
+  paste0(base, ".")
+}
+
+#' Human-readable note describing a join layout
+#'
+#' @param gap_bases number of inserted junction N-spacer bases (NOT the raw N
+#'   count of `seq`, which also includes assembly gaps internal to scaffolds).
+#'   Supplied by the caller from `sum(is.na(joined$src_scaffold))`.
+#' @noRd
+compose_join_note <- function(layout, seq, gap_len, junctions = character(0),
+                              gap_bases = NULL) {
   inc <- if ("include" %in% names(layout)) layout[layout$include, , drop = FALSE] else layout
   exc <- if ("include" %in% names(layout)) layout[!layout$include, , drop = FALSE] else layout[0, ]
   order_str <- paste(
@@ -1214,7 +1356,8 @@ compose_join_note <- function(layout, seq, gap_len, junctions = character(0)) {
     }, character(1)),
     collapse = " -> "
   )
-  n_gaps <- sum(strsplit(seq, "", fixed = TRUE)[[1]] == "N")
+  n_gaps <- if (!is.null(gap_bases)) as.integer(gap_bases) else
+    sum(strsplit(seq, "", fixed = TRUE)[[1]] == "N")
   note <- sprintf("Joined %d scaffolds: %s; %d N gap bases.",
                   nrow(inc), order_str, n_gaps)
   if (nrow(exc) > 0) {
