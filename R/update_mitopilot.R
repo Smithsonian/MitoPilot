@@ -150,6 +150,60 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file) 
   )
 }
 
+#' Detect whether we are running on the NMNH Hydra cluster
+#'
+#' Mirrors the check used by the non-headless "Submit as Job" handler: greps
+#' `/etc/hosts` for "hydra".
+#'
+#' @return `TRUE` if running on Hydra, otherwise `FALSE`.
+#' @noRd
+is_hydra_cluster <- function() {
+  motd_output <- try(
+    system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE),
+    silent = TRUE
+  )
+  !inherits(motd_output, "try-error") &&
+    any(grepl("hydra", motd_output, ignore.case = TRUE))
+}
+
+#' Hydra-specific submission script
+#'
+#' Reproduces the script format used by the non-headless "Submit as Job" handler
+#' on NMNH Hydra (SGE directives, java module load, NXF_OPTS).
+#'
+#' @param full_nf_cmd The full `nextflow ...` command string to run.
+#' @param job_name Job name for the scheduler.
+#' @param log_file Path to the combined stdout/stderr log file.
+#' @return Character vector of script lines.
+#' @noRd
+hydra_submission_script <- function(full_nf_cmd, job_name, log_file) {
+  c(
+    "#!/bin/sh",
+    paste0("#$ -N ", job_name),
+    paste0("#$ -o ", log_file),
+    "#$ -cwd -j y",
+    "#$ -q lTWFM.sq",
+    "#$ -l wfmq",
+    "#$ -l mres=24G,h_data=24G,h_vmem=64G",
+    "#$ -pe mthread 1",
+    "#$ -S /bin/sh",
+    "",
+    'echo "---"',
+    'echo "+ `date` job $JOB_NAME started in $QUEUE with jobID=$JOB_ID on $HOSTNAME"',
+    'echo "---"',
+    "",
+    "source ~/.bashrc",
+    "module load tools/java/21.0.2",
+    "",
+    "export NXF_OPTS=\"-Xms512m -Xmx20g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
+    full_nf_cmd,
+    "",
+    'echo "---"',
+    'echo "= `date` job $JOB_NAME done"',
+    'echo "---"'
+  )
+}
+
 #' Cluster submit command for an executor
 #'
 #' @param executor Scheduler name.
@@ -209,6 +263,9 @@ build_submit_script <- function(work_dir, executor, queue, full_nf_cmd, job_name
   tmpl <- submit_template_path(work_dir)
   if (file.exists(tmpl)) {
     return(fill_submit_template(readLines(tmpl), full_nf_cmd, job_name, log_file))
+  }
+  if (is_hydra_cluster()) {
+    return(hydra_submission_script(full_nf_cmd, job_name, log_file))
   }
   submission_script(executor, queue, full_nf_cmd, job_name, log_file)
 }

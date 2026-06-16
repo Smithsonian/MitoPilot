@@ -339,31 +339,7 @@ pipeline_server_userAsmb <- function(id) {
         log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
         script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
 
-        script_content <- c(
-          "#!/bin/sh",
-          paste0("#$ -N ", job_name),        # Use the new dynamic job name
-          paste0("#$ -o ", log_file_path),  # Use the new dynamic log file path
-          "#$ -cwd -j y",
-          "#$ -q lTWFM.sq",
-          "#$ -l wfmq",
-          "#$ -l mres=24G,h_data=24G,h_vmem=64G",
-          "#$ -pe mthread 1",
-          "#$ -S /bin/sh",
-          "",
-          'echo "---"',
-          'echo "+ `date` job $JOB_NAME started in $QUEUE with jobID=$JOB_ID on $HOSTNAME"',
-          'echo "---"',
-          "",
-          "source ~/.bashrc",
-          "module load tools/java/21.0.2",
-          "",
-          "export NXF_OPTS=\"-Xms512m -Xmx20g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
-          full_nf_cmd,
-          "",
-          'echo "---"',
-          'echo "= `date` job $JOB_NAME done"',
-          'echo "---"'
-        )
+        script_content <- hydra_submission_script(full_nf_cmd, job_name, log_file_path)
 
         # Write the script to the unique, timestamped file path.
         writeLines(script_content, script_path)
