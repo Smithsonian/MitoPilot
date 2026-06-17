@@ -338,6 +338,37 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
 }
 
 
+#' Re-stamp per-sample BLAST hit metadata onto a cached reference JSON
+#'
+#' The BLAST reference JSON produced by [fetch_blast_ref()] is cached and shared
+#' across all samples whose top hit is the same accession (see the
+#' \code{blast_ref_fetch} Nextflow process). Every field is accession-derived
+#' except the per-sample BLAST hit metadata, so after a sample copies the cached
+#' JSON this rewrites \code{blast_species} and \code{blast_evalue} for that
+#' sample. No-op if the file is missing or unreadable.
+#'
+#' @param json_file path to the JSON file to patch in place
+#' @param blast_species BLAST hit species/title for this sample
+#' @param blast_evalue BLAST hit e-value for this sample
+#'
+#' @export
+patch_blast_ref_meta <- function(json_file, blast_species = NULL,
+                                 blast_evalue = NULL) {
+  if (is.null(json_file) || !file.exists(json_file)) return(invisible(NULL))
+  ref <- tryCatch(
+    jsonlite::fromJSON(json_file, simplifyDataFrame = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(ref) || length(ref) == 0) return(invisible(NULL))
+  if (!is.null(blast_species) && nzchar(blast_species)) {
+    ref$blast_species <- blast_species
+  }
+  if (!is.null(blast_evalue)) ref$blast_evalue <- blast_evalue
+  jsonlite::write_json(ref, json_file, auto_unbox = TRUE, null = "null")
+  invisible(NULL)
+}
+
+
 #' Prepend remote BLAST top-hit translations to per-gene refHits in annotations
 #'
 #' Called in each \code{curate_*_mito()} function after the initial
