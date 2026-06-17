@@ -20,6 +20,7 @@ app_server <- function(input, output, session) {
     message("Session ended. Closing DB connection.")
     DBI::dbDisconnect(session$userData$con)
   })
+  register_app_lifecycle(session)
   message(paste("Database attached:", db))
 
   # Migrate: add BLAST result columns to assemble table for pre-existing databases

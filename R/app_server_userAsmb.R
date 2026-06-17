@@ -20,6 +20,7 @@ app_server_userAsmb <- function(input, output, session) {
     message("Session ended. Closing DB connection.")
     DBI::dbDisconnect(session$userData$con)
   })
+  register_app_lifecycle(session)
   message(paste("Database attached:", db))
 
   # Publish / output directory ----
