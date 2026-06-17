@@ -24,9 +24,11 @@ def appendTaggedNoteSql(String tag, String msg) {
 params.blastNoHitMsg = 'BLAST returned no hits after all retries. Possible connection failure. Use -resume to retry.'
 
 params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
+// blast_lineage is NOT set here: ref fetch hasn't run yet so the subquery would
+// resolve to NULL, and this deferred commit could clobber the lineage written
+// later by BLAST_REF_FETCH. Lineage is handled solely in blast_ref_fetch_workflow.nf.
 params.sqlWriteBlastHitScaffold = '''UPDATE assemblies
-    SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ?,
-        blast_lineage = (SELECT blast_lineage FROM assemble WHERE assemble.ID = assemblies.ID)
+    SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ?
     WHERE assemblies.ID = ? AND path = ? AND scaffold = ?'''
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
 params.sqlWriteBlastNoHit = "UPDATE assemble SET " +

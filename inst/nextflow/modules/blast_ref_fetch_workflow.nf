@@ -39,10 +39,11 @@ def stripBlastAndRefTagsSql() {
 params.refFetchFailedMsg = 'BLAST reference fetch timed out after all retries. Rerun pipeline with -resume to retry.'
 
 params.sqlWriteBlastLineage = 'UPDATE assemble SET blast_lineage = ? WHERE ID = ?'
-// Per-scaffold lineage: matched on accession so each scaffold row inherits the
-// lineage of the ref fetched for its BLAST hit. Requires
-// assemblies.blast_accession to be populated by BLAST_GENBANK first.
-params.sqlWriteBlastLineageScaffold = 'UPDATE assemblies SET blast_lineage = ? WHERE ID = ? AND blast_accession = ?'
+// Per-scaffold lineage: matched on ID only (not blast_accession). The accession
+// is written by BLAST_GENBANK on a separate nf-sqldb actor thread whose commit
+// is deferred, so matching on it can see uncommitted NULL and silently no-op.
+// Matching on ID (like the assemble-table write above) removes that dependency.
+params.sqlWriteBlastLineageScaffold = 'UPDATE assemblies SET blast_lineage = ? WHERE ID = ?'
 
 params.sqlWriteBlastRef = '''INSERT OR REPLACE INTO blast_ref_annotations
     (ID, gene, type, pos1, pos2, direction, ref_length, time_stamp)
@@ -149,7 +150,8 @@ workflow BLAST_REF_FETCH {
             .sqlInsert(statement: params.sqlWriteBlastLineage, db: 'sqlite')
 
         lineage_records
-            .map { id, accession, is_top, lineage -> tuple(lineage, id, accession) }
+            .filter { id, accession, is_top, lineage -> is_top }
+            .map    { id, accession, is_top, lineage -> tuple(lineage, id) }
             .sqlInsert(statement: params.sqlWriteBlastLineageScaffold, db: 'sqlite')
 
         // Detect top-hit fetch failures: IDs that entered but produced no output after all retries

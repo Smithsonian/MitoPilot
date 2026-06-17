@@ -59,8 +59,9 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     if (!col %in% names(df) || !kept_col %in% names(df)) return(df)
     na_val <- if (is.numeric(df[[col]])) NA_real_ else NA_character_
     df[[col]] <- dplyr::case_when(
-      is.na(df$n_total) ~ df[[col]],
-      df$n_kept == 1L   ~ df[[kept_col]],
+      is.na(df$n_total)                        ~ df[[col]],
+      df$n_kept == 1L & !is.na(df[[kept_col]]) ~ df[[kept_col]],
+      df$n_kept == 1L                          ~ df[[col]],  # fall back to assemble-level value
       .default = na_val
     )
     df
