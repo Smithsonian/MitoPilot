@@ -20,6 +20,9 @@
 #'   [flag_PCG_outliers()]. Default 10.
 #' @param ident_pct Identity threshold (percent) passed to
 #'   [flag_PCG_outliers()]. Default 60.
+#' @param summary_csv Write a per-sample summary CSV (organism, topology,
+#'   completeness, gene counts, reference, etc.) into the export directory?
+#'   (default: TRUE)
 #'
 #' @return Invisibly, the list returned by [flag_PCG_outliers()] when `review`
 #'   is TRUE (and a group of >1 sample is exported), otherwise `NULL`.
@@ -43,7 +46,8 @@ export_files <- function(
     review = TRUE,
     start_aa = 10,
     stop_aa = 10,
-    ident_pct = 60) {
+    ident_pct = 60,
+    summary_csv = TRUE) {
 
 
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(dirname(out_dir), ".sqlite"))
@@ -941,6 +945,25 @@ export_files <- function(
       ) |> system()
     }
   })
+
+  # Per-sample summary CSV, dropped into the export directory
+  if (isTRUE(summary_csv)) {
+    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts")
+    core <- c("ID", "Taxon", "topology", "completeness", "partial", "length",
+              "structure", "PCGCount", "tRNACount", "rRNACount", "ORFCount",
+              "missing", "extra", "warnings", "blast_accession", "blast_species",
+              "blast_lineage", "export_group")
+    summary_df <- fetch_export_data(con = con) |>
+      dplyr::filter(ID %in% !!IDs) |>
+      dplyr::select(-dplyr::any_of(drop)) |>
+      dplyr::relocate(dplyr::any_of(core))
+    summary_fn <- if (length(group) == 1) {
+      file.path(group_pth, paste0(group, "_sample_info.csv"))
+    } else {
+      file.path(out_dir, paste0("sample_info_", Sys.Date(), ".csv"))
+    }
+    utils::write.csv(summary_df, summary_fn, row.names = FALSE)
+  }
 
   db_path <- file.path(dirname(out_dir), ".sqlite")
 

@@ -57,7 +57,14 @@ export_ui <- function(id) {
         width                  = "150px"
       )
     ),
-    reactableOutput(ns("table"))
+    reactableOutput(ns("table")),
+    div(
+      style = "margin-top: 12px; display: flex; gap: 8px;",
+      downloadButton(ns("export_selected"), "Export Selected to CSV",
+                     class = "btn-sm btn-default"),
+      downloadButton(ns("export_all"), "Export All to CSV",
+                     class = "btn-sm btn-default")
+    )
   )
 }
 
@@ -150,6 +157,7 @@ export_server <- function(id) {
           poor_blast_ref = colDef(show = FALSE),
           partial = colDef(show = FALSE),
           completeness = colDef(show = FALSE),
+          length = colDef(show = FALSE),
           blast_ref_status = colDef(
             show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
             name = "BLAST Ref Align",
@@ -208,6 +216,33 @@ export_server <- function(id) {
 
     # table selection ----
     selected <- reactive(reactable::getReactableState("table", "selected"))
+
+    # CSV Export ----
+    .export_cols_drop <- c("poor_blast_ref")
+
+    observe({
+      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
+    })
+
+    output$export_selected <- downloadHandler(
+      filename = function() paste0("export_selected_", Sys.Date(), ".csv"),
+      content = function(file) {
+        req(length(selected()) > 0)
+        rv$data |>
+          dplyr::slice(selected()) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
+
+    output$export_all <- downloadHandler(
+      filename = function() paste0("export_all_", Sys.Date(), ".csv"),
+      content = function(file) {
+        rv$data |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
 
     # Group ----
     init("group")

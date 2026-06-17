@@ -192,8 +192,8 @@ validate_fasta_header <- function(template, data = NULL) {
 #' @param session reactive session
 #'
 #' @noRd
-fetch_export_data <- function(session = getDefaultReactiveDomain()) {
-  db <- session$userData$con
+fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) {
+  db <- con %||% session$userData$con
 
   samples <- dplyr::tbl(db, "samples") |>
     dplyr::select(-dplyr::any_of("topology"))
@@ -218,7 +218,7 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(
       ID, blast_accession, blast_species, blast_lineage, curate_opts, topology,
-      structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
+      length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
       dplyr::any_of(c("poor_blast_ref", "partial"))
     ) |>
     dplyr::left_join(samples, by = "ID") |>
