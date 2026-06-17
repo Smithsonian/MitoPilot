@@ -2,7 +2,7 @@
 # export_opts DB row and as the fallback when no custom template is stored.
 DEFAULT_FASTA_HEADER <- paste0(
   "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
-  "[location=mitochondrion] {Taxon} mitochondrion, complete genome"
+  "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"
 )
 DEFAULT_FASTA_HEADER_GENE <- paste0(
   "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
@@ -219,7 +219,7 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(
       ID, blast_accession, blast_species, blast_lineage, curate_opts, topology,
       structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
-      dplyr::any_of("poor_blast_ref")
+      dplyr::any_of(c("poor_blast_ref", "partial"))
     ) |>
     dplyr::left_join(samples, by = "ID") |>
     dplyr::select(-R1, -R2) |>
@@ -229,6 +229,9 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(orf_enabled, by = "ID") |>
     dplyr::mutate(
       blast_ref_status = poor_blast_ref,
+      completeness = dplyr::if_else(
+        !is.na(partial) & partial == "yes", "partial genome", "complete genome"
+      ),
       structure = stringr::str_replace_all(structure, "trn[A-Z]", "\u2022"),
       export_group = as.character(export_group),
       ORFCount = dplyr::if_else(

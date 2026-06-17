@@ -195,7 +195,8 @@ annotations_details_server <- function(id, rv) {
       tagList(
         status_badge("ID verified", rv$updating$ID_verified),
         status_badge("Reviewed",    rv$updating$reviewed),
-        status_badge("Problematic", rv$updating$problematic, invert = TRUE)
+        status_badge("Problematic", rv$updating$problematic, invert = TRUE),
+        status_badge("Partial",     rv$updating$partial, invert = TRUE)
       )
     })
 
@@ -225,6 +226,8 @@ annotations_details_server <- function(id, rv) {
         toggle_btn(ns("ID_verified"), "ID verified", rv$updating$ID_verified),
         toggle_btn(ns("reviewed"),    "Reviewed",    rv$updating$reviewed),
         toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
+                   invert = TRUE),
+        toggle_btn(ns("partial"),     "Partial",     rv$updating$partial,
                    invert = TRUE)
       )
     })
@@ -1847,6 +1850,51 @@ annotations_details_server <- function(id, rv) {
           dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
       }
     }) # END PROBLEMATIC
+
+    # Mark as partial ----
+    apply_partial <- function(value) {
+      updateActionButton(session, "partial")
+      rv$updating$partial <- value
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating[, c("ID", "partial")],
+          by = "ID",
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(rv$updating[, c("ID", "partial")], by = "ID")
+    }
+    observeEvent(input$partial, {
+      if (is.na(rv$updating$partial)) {
+        # turning partial on: warn first if the assembly is circular
+        if (isTRUE(rv$updating$topology == "circular")) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = ns("partial_circular_confirm"),
+            title = "Mark circular assembly as partial?",
+            text = paste(
+              "This assembly is circular. A closed circle represents the whole",
+              "molecule, so flagging it 'partial' is contradictory. Use the",
+              "Linearize button to break the circle before submission, or mark",
+              "it partial anyway."
+            ),
+            type = "warning",
+            btn_labels = c("Cancel", "Mark partial anyway"),
+            btn_colors = c("#6c757d", "#0056b3")
+          )
+          req(F)
+        }
+        apply_partial("yes")
+      } else {
+        apply_partial(NA_character_)
+      }
+    })
+    observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
+      if (isTRUE(input$partial_circular_confirm)) {
+        apply_partial("yes")
+      }
+    }) # END PARTIAL
 
     # Poor BLAST reference toggle ----
     observeEvent(input$poor_blast_ref_toggle, ignoreInit = TRUE, {

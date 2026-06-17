@@ -75,6 +75,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       warnings,
       reviewed,
       problematic,
+      partial,
       time_stamp,
       annotate_notes,
       warnings_details,

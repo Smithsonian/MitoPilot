@@ -58,6 +58,16 @@ backwards_compatibility <- function(
   # check if annotate_opts or curate_params contains the ref_dir path
   old_ref_str = ("/ref_dbs/Mitos2" %in% annotate_opts_table || any(grep("/ref_dbs/Mitos2", curate_opts_table$params)))
 
+  # the pre-{completeness} default export header, for detecting unmodified templates
+  old_export_default <- sub("{completeness}", "complete genome",
+                            DEFAULT_FASTA_HEADER, fixed = TRUE)
+  export_default_current <- tryCatch(
+    !("export_opts" %in% DBI::dbListTables(con)) ||
+      !any(DBI::dbReadTable(con, "export_opts")$fasta_header == old_export_default,
+           na.rm = TRUE),
+    error = function(e) TRUE
+  )
+
   if (asmbDir &&
       failOnIgnore &&
       blast_gb_conf &&
@@ -73,6 +83,7 @@ backwards_compatibility <- function(
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
       "problematic" %in% names(annotate_table) &&
+      "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
       "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
@@ -110,7 +121,8 @@ backwards_compatibility <- function(
         "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
         error = function(e) FALSE
       )) &&
-      "export_opts" %in% DBI::dbListTables(con))
+      "export_opts" %in% DBI::dbListTables(con) &&
+      export_default_current)
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -355,6 +367,25 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate
        ADD COLUMN problematic TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate") |> # update SQL database
+      dplyr::rows_upsert(
+        annotate_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+  }
+  # if partial column doesn't exist, add it
+  if(!("partial" %in% names(annotate_table))){
+    message("added 'partial' column to annotate table")
+    annotate_table$partial <- rep(NA_character_, nrow(annotate_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate
+       ADD COLUMN partial TEXT",
       col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
@@ -1003,6 +1034,14 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "export_opts"
       )
+  } else if (!export_default_current) {
+    # migrate an unmodified default export template to use {completeness}
+    message("updated default export template to use {completeness}")
+    DBI::dbExecute(
+      con,
+      "UPDATE export_opts SET fasta_header = ? WHERE fasta_header = ?",
+      params = list(DEFAULT_FASTA_HEADER, old_export_default)
+    )
   }
 
   # if .config does not contain "blast_gb" params section, add it

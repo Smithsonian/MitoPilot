@@ -148,6 +148,8 @@ export_server <- function(id) {
             width = 110
           ),
           poor_blast_ref = colDef(show = FALSE),
+          partial = colDef(show = FALSE),
+          completeness = colDef(show = FALSE),
           blast_ref_status = colDef(
             show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
             name = "BLAST Ref Align",

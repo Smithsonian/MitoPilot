@@ -31,7 +31,7 @@ export_files <- function(
     IDs = NULL,
     fasta_header = paste(
       "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
-      "[location=mitochondrion] {Taxon} mitochondrion, complete genome"
+      "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"
     ),
     fasta_header_gene = paste(
       "{ID} [organism={Taxon}] [mgcode={genetic_code}]",
@@ -111,7 +111,7 @@ export_files <- function(
       dplyr::filter(ID == !!.x) |>
       dplyr::left_join(
         dplyr::tbl(con, "annotate") |>
-          dplyr::select(ID, topology, path) |>
+          dplyr::select(ID, topology, path, dplyr::any_of("partial")) |>
           dplyr::distinct(),
         by = "ID"
       ) |>
@@ -152,7 +152,15 @@ export_files <- function(
     } else {
       ""
     }
-    names(seq) <- paste0(stringr::str_glue_data(dat, fasta_header), blast_note)
+    # Genome-level completeness for the {completeness} header field
+    is_partial <- "partial" %in% names(dat) && isTRUE(dat$partial[1] == "yes")
+    dat$completeness <- if (is_partial) "partial genome" else "complete genome"
+    header <- stringr::str_glue_data(dat, fasta_header)
+    # Safety net for saved templates that hardcode "complete genome"
+    if (is_partial) {
+      header <- stringr::str_replace(header, "complete genome$", "partial genome")
+    }
+    names(seq) <- paste0(header, blast_note)
 
     # sequence name, to be used as first column in GFF
     seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)

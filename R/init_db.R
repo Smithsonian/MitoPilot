@@ -417,6 +417,7 @@ new_db <- function(
       warnings INTEGER,
       reviewed TEXT,
       problematic TEXT,
+      partial TEXT,
       structure TEXT,
       length INTEGER,
       topology TEXT,
@@ -433,6 +434,7 @@ new_db <- function(
         orf_opts = "default",
         reviewed = "no",
         problematic = "no",
+        partial = "no",
         ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0

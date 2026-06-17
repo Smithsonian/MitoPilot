@@ -83,6 +83,10 @@ app_server_userAsmb <- function(input, output, session) {
   observeEvent(input$problematic_top, {
     trigger("problematic_top")
   })
+  # mark partial
+  observeEvent(input$partial_top, {
+    trigger("partial_top")
+  })
   # Export
   observeEvent(input$group, {
     trigger("group")
