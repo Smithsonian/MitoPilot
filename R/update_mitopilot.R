@@ -189,10 +189,10 @@ hydra_setup <- function() {
     "/cm/shared/apps/uge/8.8.1/bin/lx-amd64"
   )
   cur <- strsplit(Sys.getenv("PATH"), .Platform$path.sep, fixed = TRUE)[[1]]
-  add <- hydra_bins[!hydra_bins %in% cur]
-  if (length(add) > 0) {
-    Sys.setenv(PATH = paste(c(add, cur), collapse = .Platform$path.sep))
-  }
+  # Force hydra bins to the front (drop any existing low-priority copies) so the
+  # UGE qsub and Java 21 always win, matching the legacy PATH setup.
+  cur <- cur[!cur %in% hydra_bins]
+  Sys.setenv(PATH = paste(c(hydra_bins, cur), collapse = .Platform$path.sep))
 
   invisible(TRUE)
 }
