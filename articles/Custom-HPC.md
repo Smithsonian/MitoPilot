@@ -36,8 +36,8 @@ A quick vocabulary primer if containers are new to you:
 (not the login node):
 
 ``` bash
-# match the tag to the latest MitoPilot version
-singularity pull mitopilot.sif docker://macguigand/mitopilot:1.4.6
+# NOTE: match the tag to the latest MitoPilot version
+singularity pull mitopilot.sif docker://macguigand/mitopilot:1.4.7
 ```
 
 **2. Start an R session.** By default a Singularity container can only

@@ -107,8 +107,8 @@ copy of the image. You build it once, then reuse it.</li>
 </ul>
 <p><strong>1. Pull the image once.</strong> From an interactive session
 or compute node (not the login node):</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># match the tag to the latest MitoPilot version</span></span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">singularity</span> pull mitopilot.sif docker://macguigand/mitopilot:1.4.6</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># </span><span class="al">NOTE</span><span class="co">: match the tag to the latest MitoPilot version</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">singularity</span> pull mitopilot.sif docker://macguigand/mitopilot:1.4.7</span></code></pre></div>
 <p><strong>2. Start an R session.</strong> By default a Singularity
 container can only see your <strong>home directory</strong>. Bind any
 other locations your projects or data live in (for example

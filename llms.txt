@@ -687,6 +687,9 @@ yourself.
 - [`get_top_hits_local()`](https://smithsonian.github.io/MitoPilot/reference/get_top_hits_local.md)
   : Get top BLASTP hits
 
+- [`hydra_setup()`](https://smithsonian.github.io/MitoPilot/reference/hydra_setup.md)
+  : Configure the R session environment for the NMNH Hydra cluster
+
 - [`list_configs()`](https://smithsonian.github.io/MitoPilot/reference/list_configs.md)
   : List available executor configs
 
