@@ -285,8 +285,23 @@ workflow BLAST_GENBANK {
             }
             .set { ref_fetch_input }
 
+        // Per-scaffold (id, path, scaffold) -> accession map for real hits. Lets
+        // BLAST_REF_FETCH write each scaffold its own ref lineage keyed on the same
+        // (ID, path, scaffold) tuple used for the accession write above, without
+        // depending on the deferred commit of assemblies.blast_accession.
+        blast_records
+            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
+                kind == 'scaffold' && accession != 'NO HIT' && accession != null
+            }
+            .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, path as Integer, scaffold as Integer, accession)
+            }
+            .set { scaffold_accession }
+
     emit:
         // Downstream BLAST_REF_FETCH consumes this; filtered to real hits only.
         ref_input = ref_fetch_input
             .filter{ id, accession, species, evalue, opts_id, is_top -> accession != 'NO HIT' && accession != null }
+        // (id, path, scaffold, accession) for per-scaffold lineage assignment.
+        scaffold_map = scaffold_accession
 }
