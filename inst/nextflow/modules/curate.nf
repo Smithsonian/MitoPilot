@@ -58,3 +58,38 @@ process curate {
     echo "$PWD" >> !{dir}/NF_work_dir_curate.txt
     '''
 }
+
+// Verified, committed write of the curated assembly sequence to the assemblies
+// table. Native (exec) process: runs in the Nextflow driver on the head node
+// (never containerized) and shells out to the host R, so it can reach the
+// project .sqlite directly. maxForks 1 makes it the single DB writer at any
+// instant, avoiding sqlite lock contention (incl. over NFS). Replaces the old
+// fire-and-forget nf-sqldb operator whose deferred commit could be lost while
+// annotations still committed, leaving the two tables in different frames.
+process write_assembly {
+
+    executor 'local'
+    maxForks 1
+    errorStrategy 'ignore'
+    tag "${id}"
+
+    input:
+    tuple val(id), val(path), path(coverage)
+
+    output:
+    tuple val(id), val(path)
+
+    exec:
+    def cmd = [
+        'Rscript', '-e',
+        "MitoPilot::write_curated_assembly(" +
+            "db_path = '${launchDir}/.sqlite', " +
+            "coverage_fn = '${coverage}', " +
+            "time_stamp = '${params.ts}')"
+    ]
+    def proc = cmd.execute()
+    proc.waitForProcessOutput(System.out, System.err)
+    if (proc.exitValue() != 0) {
+        throw new RuntimeException("write_curated_assembly failed for ${id} (see log above)")
+    }
+}

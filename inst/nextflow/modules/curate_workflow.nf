@@ -1,5 +1,6 @@
 import java.util.Base64
 include {curate} from './curate.nf'
+include {write_assembly} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
@@ -10,9 +11,6 @@ params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opt
                     'JOIN curate_opts d ON c.curate_opts = d.curate_opts ' +
                     'JOIN annotate_opts e ON c.annotate_opts = e.annotate_opts ' +
                     'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
-
-params.sqlWriteAssemblies =  'UPDATE assemblies SET sequence = ?, length = ?, depth = ?, gc = ?, errors = ?, time_stamp = ? ' +
-                            'WHERE ID=? and path=? and scaffold=?'
 
 params.sqlWriteAnnotate =   'UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, time_stamp = ? WHERE ID = ?'
 
@@ -69,37 +67,21 @@ workflow CURATE {
 
         curate(curate_in).set { curate_out }
 
-        // Update assemblies table
+        // Verified, serialized write of the curated assembly sequence (id, path,
+        // coverageStats). Only samples whose write commits flow downstream, so
+        // VALIDATE never writes annotations against an uncommitted sequence.
         curate_out
-            .flatten()
-            .filter{ it =~ /(.*_coverageStats_.*.csv)$/ }
-            .splitCsv(header: true, sep: ',')
-            .map { it ->
-                tuple(
-                    it.SeqId,
-                    it.Call,
-                    it.MeanDepth,
-                    it.GC,
-                    it.ErrorRate
-                )
-            }
-            .groupTuple()
-            .map { it ->
-                def sequence = it[1].join('')
-                tuple(
-                    sequence,                           // Assembly sequence
-                    sequence.size(),                    // sequence length
-                    it[2].join(' '),                    // mean depth
-                    it[3].join(' '),                    // gc
-                    it[4].join(' '),                    // error rate
-                    params.ts,                          // timestamp
-                    it[0].split('\\.')                  // id, path, scaffold
-                ).flatten()
-            }
-            .sqlInsert(statement: params.sqlWriteAssemblies, db: 'sqlite')
+            .map { tuple(it[0], it[1], it[4]) }
+            .set { write_in }
 
-        // Update assemble table
+        write_assembly(write_in).set { write_done }
+
         curate_out
+            .join(write_done, by: [0, 1])
+            .set { curate_gated }
+
+        // Update annotate table (only for samples whose assembly write committed)
+        curate_gated
             .map { it ->
                 def ID = it[0]
                 def path = it[1]
@@ -119,6 +101,6 @@ workflow CURATE {
             .sqlInsert(statement: params.sqlWriteAnnotate, db: 'sqlite')
 
     emit:
-           ch = curate_out[0]
+           ch = curate_gated
 
 }
