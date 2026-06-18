@@ -278,6 +278,9 @@ export_files <- function(
             # set new start and stop codons
             cur$start_codon <- exons[1,]$start_codon
             cur$stop_codon <- exons[nrow(exons),]$stop_codon
+            # carry manual partial flags from the 5' / 3' exons
+            cur$partial_start <- exons[1,]$partial_start
+            cur$partial_stop <- exons[nrow(exons),]$partial_stop
             # set new start and stop pos for gene
             pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character()
             cur$pos1 <- exons[1,]$pos1
@@ -300,6 +303,9 @@ export_files <- function(
             # set new start and stop codons
             cur$start_codon <- exons[nrow(exons),]$start_codon
             cur$stop_codon <- exons[1]$stop_codon
+            # carry manual partial flags from the 5' / 3' exons
+            cur$partial_start <- exons[nrow(exons),]$partial_start
+            cur$partial_stop <- exons[1,]$partial_stop
             # set new start and stop pos for gene
             pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character() |> rev()
             cur$pos1 <- exons[nrow(exons),]$pos2
@@ -319,13 +325,10 @@ export_files <- function(
           if (cur$stop_codon %nin% stop_codons) {
             message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
           }
-          if (cur$start_codon %nin% start_codons) {
+          if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
             message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
-            if (cur$direction == "+") {
-              pos[1] <- paste0("<", pos[1])
-            } else {
-              pos[2] <- paste0(pos[2], ">")
-            }
+            # 5' partial: '<' prepends the start coordinate (first column, both strands)
+            pos[1] <- paste0("<", pos[1])
             note <- "start codon not determined"
           }
           if (nchar(cur$stop_codon) < 3) {
@@ -344,6 +347,11 @@ export_files <- function(
             } else {
               transl_except <- paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
             }
+          } else if (isTRUE(as.integer(cur$partial_stop) == 1L)) {
+            # 3' partial (undetermined), not poly-A: '>' prepends the stop
+            # coordinate (second column, both strands)
+            pos[2] <- paste0(">", pos[2])
+            note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
 
           # write to .tbl
@@ -461,6 +469,15 @@ export_files <- function(
             # fix the start and stop position
             pos1_new = 1
             pos2_new = length(gene[[1]])
+            # extracted gene is 5'->3': mark partial ends on the start/stop coords
+            gene_p1 <- as.character(pos1_new)
+            gene_p2 <- as.character(pos2_new)
+            if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
+              gene_p1 <- paste0("<", gene_p1)
+            }
+            if (nchar(cur$stop_codon) >= 3 && isTRUE(as.integer(cur$partial_stop) == 1L)) {
+              gene_p2 <- paste0(">", gene_p2)
+            }
 
             # write gene feature table
             gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene, ".tbl"))
@@ -468,11 +485,11 @@ export_files <- function(
               file.remove(gene_tbl_fn)
             }
             cat(paste0(">Feature ", .x, "_", cur$gene), file = gene_tbl_fn, sep = "\n")
-            paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste0("\t\t\tgene\t", cur$gene) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste(c(pos1_new, pos2_new, "CDS"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "CDS"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste("\t\t\tproduct\t", cur$product) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
@@ -489,7 +506,7 @@ export_files <- function(
               paste0("\t\t\ttransl_except\t", gene_transl_except) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (!cur$start_codon %in% start_codons) {
+            if (!cur$start_codon %in% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
@@ -528,13 +545,10 @@ export_files <- function(
           if (cur$stop_codon %nin% stop_codons) {
             message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
           }
-          if (cur$start_codon %nin% start_codons) {
+          if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
             message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
-            if (cur$direction == "+") {
-              pos[1] <- paste0("<", pos[1])
-            } else {
-              pos[2] <- paste0(pos[2], ">")
-            }
+            # 5' partial: '<' prepends the start coordinate (first column, both strands)
+            pos[1] <- paste0("<", pos[1])
             note <- "start codon not determined"
           }
           if (nchar(cur$stop_codon) < 3) {
@@ -553,6 +567,11 @@ export_files <- function(
             } else {
               transl_except <- paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
             }
+          } else if (isTRUE(as.integer(cur$partial_stop) == 1L)) {
+            # 3' partial (undetermined), not poly-A: '>' prepends the stop
+            # coordinate (second column, both strands)
+            pos[2] <- paste0(">", pos[2])
+            note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
 
           # write to .tbl
@@ -635,6 +654,15 @@ export_files <- function(
             # fix the start and stop position
             pos1_new = 1
             pos2_new = length(gene[[1]])
+            # extracted gene is 5'->3': mark partial ends on the start/stop coords
+            gene_p1 <- as.character(pos1_new)
+            gene_p2 <- as.character(pos2_new)
+            if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
+              gene_p1 <- paste0("<", gene_p1)
+            }
+            if (nchar(cur$stop_codon) >= 3 && isTRUE(as.integer(cur$partial_stop) == 1L)) {
+              gene_p2 <- paste0(">", gene_p2)
+            }
 
             # write gene feature table
             gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".tbl"))
@@ -642,11 +670,11 @@ export_files <- function(
               file.remove(gene_tbl_fn)
             }
             cat(paste0(">Feature ", .x, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
-            paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste0("\t\t\tgene\t", cur$gene_uniq) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste(c(pos1_new, pos2_new, "CDS"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "CDS"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste("\t\t\tproduct\t", cur$product) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
@@ -663,7 +691,7 @@ export_files <- function(
               paste0("\t\t\ttransl_except\t", gene_transl_except) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (!cur$start_codon %in% start_codons) {
+            if (!cur$start_codon %in% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }

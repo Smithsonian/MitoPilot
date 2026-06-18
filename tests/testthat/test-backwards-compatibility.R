@@ -212,7 +212,7 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
   expect_cols(con, "curate_opts", c("max_blast_hits", "ref_db", "ref_dir"))
 
   # annotations
-  expect_cols(con, "annotations", "tool")
+  expect_cols(con, "annotations", c("tool", "partial_start", "partial_stop"))
 
   # new tables
   tables <- DBI::dbListTables(con)
@@ -264,7 +264,7 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   expect_cols(con, "assemble_opts", c("max_paths", "max_scaffolds"))
 
   # annotations
-  expect_cols(con, "annotations", "tool")
+  expect_cols(con, "annotations", c("tool", "partial_start", "partial_stop"))
 
   # new tables
   tables <- DBI::dbListTables(con)

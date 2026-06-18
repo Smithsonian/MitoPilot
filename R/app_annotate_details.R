@@ -108,6 +108,16 @@ annotations_details_server <- function(id, rv) {
             .default = NA_character_
           )
         )
+      # Coerce manual partial flags (NULL -> 0). Columns are absent on old
+      # projects until backwards_compatibility() runs; leave them absent so the
+      # save path (which re-inserts every column) matches the DB schema and the
+      # partial UI stays hidden.
+      if ("partial_start" %in% names(rv$annotations)) {
+        rv$annotations$partial_start <- tidyr::replace_na(as.integer(rv$annotations$partial_start), 0L)
+      }
+      if ("partial_stop" %in% names(rv$annotations)) {
+        rv$annotations$partial_stop <- tidyr::replace_na(as.integer(rv$annotations$partial_stop), 0L)
+      }
 
       ## Load coverage ----
       # TODO - get from db (need to fix NA="" issue)
@@ -220,6 +230,16 @@ annotations_details_server <- function(id, rv) {
         shiny::icon("question")
       }
       actionButton(id, label, icon = ico, class = cls)
+    }
+
+    # HTML label summarizing the manual partial flags for annotation row `idx`.
+    partial_label <- function(idx) {
+      if (!all(c("partial_start", "partial_stop") %in% names(rv$annotations))) return("")
+      tags <- c(
+        if (isTRUE(as.integer(rv$annotations$partial_start[idx]) == 1L)) "5' partial",
+        if (isTRUE(as.integer(rv$annotations$partial_stop[idx]) == 1L)) "3' partial"
+      )
+      if (length(tags) > 0) paste0("<b>Partial:</b> ", paste(tags, collapse = ", ")) else ""
     }
     output$status_toggles <- shiny::renderUI({
       tagList(
@@ -1450,6 +1470,7 @@ annotations_details_server <- function(id, rv) {
       new_alignment$start <- stringr::str_glue(
         "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
       )
+      new_alignment$partial <- partial_label(selected())
       new_alignment$internal_stop <- ifelse(
         stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
         paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
@@ -1466,6 +1487,7 @@ annotations_details_server <- function(id, rv) {
         p(HTML(rv$alignment$id)),
         p(HTML(rv$alignment$start)),
         p(HTML(rv$alignment$stop)),
+        p(HTML(rv$alignment$partial)),
         p(HTML(rv$alignment$internal_stop))
       )
     })
@@ -2275,6 +2297,91 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$`stop-minus`, {
       show_edit_waiter()
       trigger("stop-minus-simple")
+      shinyjs::delay(50, {
+        trigger("re_align")
+      })
+    })
+
+    ## Manual partial flags + poly-A stop ----
+    # Reactive controls shown in edit mode for PCGs: flag the 5'/3' end as
+    # partial (honored by export as < / > location markers) and trim the stop
+    # to a 1-2 bp partial (T / TA) completed by a 3' poly-A tail.
+    output$partial_ctrls <- renderUI({
+      req(rv$editing)
+      req(all(c("partial_start", "partial_stop") %in% names(rv$annotations)))
+      sel <- selected()
+      req(length(sel) == 1)
+      req(rv$annotations$type[sel] == "PCG")
+      ps <- isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L)
+      pe <- isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L)
+      tagList(
+        tags$span(style = "font-weight: bold;", "PARTIAL"),
+        actionButton(
+          ns("toggle_partial_start"), "5'",
+          class = if (ps) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
+        ),
+        actionButton(
+          ns("toggle_partial_stop"), "3'",
+          class = if (pe) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
+        ),
+        actionButton(
+          ns("polyA_stop"), "poly-A stop",
+          icon = icon("scissors"),
+          class = "btn btn-default btn-sm"
+        )
+      )
+    })
+
+    observeEvent(input$toggle_partial_start, {
+      req(rv$editing, length(selected()) == 1)
+      cur <- as.integer(rv$annotations$partial_start[selected()]) %|NA|% 0L
+      rv$annotations$partial_start[selected()] <- if (isTRUE(cur == 1L)) 0L else 1L
+      if (!is.null(rv$alignment)) {
+        rv$alignment$partial <- partial_label(selected())
+      }
+    })
+    observeEvent(input$toggle_partial_stop, {
+      req(rv$editing, length(selected()) == 1)
+      cur <- as.integer(rv$annotations$partial_stop[selected()]) %|NA|% 0L
+      rv$annotations$partial_stop[selected()] <- if (isTRUE(cur == 1L)) 0L else 1L
+      if (!is.null(rv$alignment)) {
+        rv$alignment$partial <- partial_label(selected())
+      }
+    })
+
+    # Trim the stop codon by one terminal base (TAA -> TA -> T), shrinking the
+    # CDS by 1 bp so it no longer overlaps a downstream feature. The removed
+    # base(s) are completed by the mRNA poly-A tail; export marks this via
+    # transl_except when nchar(stop_codon) < 3.
+    observeEvent(input$polyA_stop, {
+      req(rv$editing, length(selected()) == 1)
+      req(rv$annotations$type[selected()] == "PCG")
+      stop_codon <- rv$annotations$stop_codon[selected()]
+      if (is.na(stop_codon) || nchar(stop_codon) <= 1) {
+        shinyWidgets::sendSweetAlert(
+          session, title = "Stop already minimal",
+          text = "Stop codon is already a single base (T).", type = "info"
+        )
+        req(FALSE)
+      }
+      new_stop <- stringr::str_sub(stop_codon, 1, nchar(stop_codon) - 1)
+      if (new_stop %nin% rv$editing$params$stop_codons) {
+        shinyWidgets::sendSweetAlert(
+          session, title = "Invalid partial stop",
+          text = paste0("'", new_stop, "' is not an allowed stop for this gene."),
+          type = "warning"
+        )
+        req(FALSE)
+      }
+      # Drop one base from the 3' end (last base of the stop codon).
+      if (rv$annotations$direction[selected()] == "+") {
+        rv$annotations$pos2[selected()] <- rv$annotations$pos2[selected()] - 1L
+      } else {
+        rv$annotations$pos1[selected()] <- rv$annotations$pos1[selected()] + 1L
+      }
+      rv$annotations$length[selected()] <- rv$annotations$length[selected()] - 1L
+      rv$annotations$stop_codon[selected()] <- new_stop
+      show_edit_waiter()
       shinyjs::delay(50, {
         trigger("re_align")
       })
@@ -3332,7 +3439,10 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                 )
               ),
               "single codon"
-            )
+            ),
+            # Manual partial-end flags + poly-A stop trim (PCG only). Rendered
+            # reactively so button state reflects the selected gene.
+            uiOutput(ns("partial_ctrls"), inline = TRUE)
           ) |> shinyjs::hidden()
         ),
         div(

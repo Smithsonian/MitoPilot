@@ -97,6 +97,8 @@ backwards_compatibility <- function(
       "max_paths" %in% names(assemble_opts_table) &&
       "max_scaffolds" %in% names(assemble_opts_table) &&
       "tool" %in% DBI::dbListFields(con, "annotations") &&
+      "partial_start" %in% DBI::dbListFields(con, "annotations") &&
+      "partial_stop" %in% DBI::dbListFields(con, "annotations") &&
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
@@ -397,6 +399,16 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "ID"
       )
+  }
+  # if partial_start / partial_stop columns don't exist on annotations, add them
+  annotations_fields <- DBI::dbListFields(con, "annotations")
+  if(!("partial_start" %in% annotations_fields)){
+    message("added 'partial_start' column to annotations table")
+    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN partial_start INTEGER")
+  }
+  if(!("partial_stop" %in% annotations_fields)){
+    message("added 'partial_stop' column to annotations table")
+    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN partial_stop INTEGER")
   }
   # if use_arwen column doesn't exist, add it (default off)
   if(!("use_arwen" %in% names(annotate_opts_table))){

@@ -547,6 +547,8 @@ new_db_userAsmb <- function(
       tool TEXT,
       start_codon TEXT,
       stop_codon TEXT,
+      partial_start INTEGER,
+      partial_stop INTEGER,
       translation TEXT,
       notes TEXT,
       warnings TEXT,
