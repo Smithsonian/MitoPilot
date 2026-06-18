@@ -210,7 +210,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(ID, use_orffinder) |>
     dplyr::collect()
 
-  dplyr::tbl(db, "assemble") |>
+  out <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, blast_accession, blast_species, blast_lineage,
                   dplyr::any_of("poor_blast_ref")) |>
@@ -221,16 +221,32 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
       dplyr::any_of(c("poor_blast_ref", "partial"))
     ) |>
+    dplyr::left_join(
+      dplyr::tbl(db, "curate_opts") |>
+        dplyr::select(curate_opts, dplyr::any_of("linear_complete")),
+      by = "curate_opts"
+    ) |>
     dplyr::left_join(samples, by = "ID") |>
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
     dplyr::collect() |>
     dplyr::left_join(orf_counts, by = "ID") |>
-    dplyr::left_join(orf_enabled, by = "ID") |>
+    dplyr::left_join(orf_enabled, by = "ID")
+
+  # these columns are absent on un-migrated DBs
+  if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_
+  if (!"partial" %in% names(out)) out$partial <- NA_character_
+
+  out |>
     dplyr::mutate(
       blast_ref_status = poor_blast_ref,
-      completeness = dplyr::if_else(
-        !is.na(partial) & partial == "yes", "partial genome", "complete genome"
+      # Auto-derive completeness from topology; per-sample "partial" forces
+      # partial; project-level linear_complete forces linear -> complete.
+      completeness = dplyr::case_when(
+        !is.na(partial) & partial == "yes" ~ "partial genome",
+        topology == "circular" ~ "complete genome",
+        !is.na(linear_complete) & linear_complete == 1L ~ "complete genome",
+        TRUE ~ "partial genome"
       ),
       structure = stringr::str_replace_all(structure, "trn[A-Z]", "\u2022"),
       export_group = as.character(export_group),
@@ -240,7 +256,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
         as.integer(ORFCount)
       )
     ) |>
-    dplyr::select(-use_orffinder) |>
+    dplyr::select(-use_orffinder, -dplyr::any_of("linear_complete")) |>
     dplyr::relocate(ORFCount, .after = rRNACount) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession)
 }

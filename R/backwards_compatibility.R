@@ -79,6 +79,7 @@ backwards_compatibility <- function(
       "max_blast_hits" %in% names(curate_opts_table) &&
       "ref_db" %in% names(curate_opts_table) &&
       "ref_dir" %in% names(curate_opts_table) &&
+      "linear_complete" %in% names(curate_opts_table) &&
       "assembler" %in% names(assemble_opts_table) &&
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
@@ -409,6 +410,12 @@ backwards_compatibility <- function(
   if(!("partial_stop" %in% annotations_fields)){
     message("added 'partial_stop' column to annotations table")
     DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN partial_stop INTEGER")
+  }
+  # if linear_complete column doesn't exist on curate_opts, add it (default 0)
+  if(!("linear_complete" %in% DBI::dbListFields(con, "curate_opts"))){
+    message("added 'linear_complete' column to curate_opts table")
+    DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN linear_complete INTEGER")
+    DBI::dbExecute(con, "UPDATE curate_opts SET linear_complete = 0")
   }
   # if use_arwen column doesn't exist, add it (default off)
   if(!("use_arwen" %in% names(annotate_opts_table))){

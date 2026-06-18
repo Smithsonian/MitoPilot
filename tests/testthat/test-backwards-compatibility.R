@@ -209,7 +209,7 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
                 "use_aragorn", "aragorn_opts", "start_gene"))
 
   # curate_opts
-  expect_cols(con, "curate_opts", c("max_blast_hits", "ref_db", "ref_dir"))
+  expect_cols(con, "curate_opts", c("max_blast_hits", "ref_db", "ref_dir", "linear_complete"))
 
   # annotations
   expect_cols(con, "annotations", c("tool", "partial_start", "partial_stop"))

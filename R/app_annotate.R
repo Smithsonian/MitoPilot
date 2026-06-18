@@ -967,6 +967,10 @@ annotate_server <- function(id) {
             maxItems = 1
           )
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "linear_complete",
+          value = isTRUE(as.integer(cur$linear_complete %||% 0L) == 1L)
+        )
         rv$params <- cur$params |> jsonlite::fromJSON()
       }
     })
@@ -994,6 +998,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("curate_ref_db", condition = input$edit_curate_opts)
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
+      shinyjs::toggleState("linear_complete", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_curate_opts && input$curate_opts %in% filtered_data()$curate_opts) {
         rv$updating_indirect <- filtered_data() |>
@@ -1070,7 +1075,8 @@ annotate_server <- function(id) {
               max_blast_hits = req(input$max_blast_hits),
               ref_dir = req(input$curate_ref_dir),
               ref_db = req(input$curate_ref_db),
-              target = req(input$target)
+              target = req(input$target),
+              linear_complete = as.integer(isTRUE(input$linear_complete))
             ),
             in_place = TRUE,
             copy = TRUE,

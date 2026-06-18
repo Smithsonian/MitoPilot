@@ -26,6 +26,11 @@
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
+#' @param linear_complete Treat linear assemblies as complete genomes for the
+#'   export "completeness" field? By default only circular assemblies are
+#'   labeled "complete genome" and linear assemblies "partial genome". Set TRUE
+#'   for taxa whose complete mitogenome is genuinely linear (default = FALSE).
+#'   Editable later in the curation-options modal.
 #' @param curate_params Default curation parameters
 #' @param orf_cpus CPUs for the optional ORF-finder step (default = 4)
 #' @param orf_memory Memory (GB) for the optional ORF-finder step (default = 8)
@@ -89,6 +94,7 @@ new_db <- function(
     curate_memory = 8,
     curate_target = "fish_mito",
     max_blast_hits = 10,
+    linear_complete = FALSE,
     curate_params = NULL,
     # Default ORF-finder options
     orf_cpus = 4,
@@ -503,6 +509,7 @@ new_db <- function(
       max_blast_hits INTEGER,
       ref_db TEXT,
       ref_dir TEXT,
+      linear_complete INTEGER,
       params JSON,
       PRIMARY KEY (curate_opts)
     );"
@@ -517,6 +524,7 @@ new_db <- function(
         max_blast_hits = 10,
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
+        linear_complete = as.integer(isTRUE(linear_complete)),
         params = jsonlite::toJSON(curate_params)
       ),
       in_place = TRUE,

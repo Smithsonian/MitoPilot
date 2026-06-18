@@ -472,6 +472,15 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           ) |> shinyjs::disabled()
         ),
+        div(
+          class = "form-group shiny-input-container",
+          shinyWidgets::prettyCheckbox(
+            ns("linear_complete"),
+            label = "Complete mitogenomes are linear (label linear assemblies as 'complete genome' on export)",
+            value = isTRUE(as.integer(current$linear_complete %||% 0L) == 1L),
+            status = "primary"
+          ) |> shinyjs::disabled()
+        ),
         listviewer::reactjsonOutput(ns("params")),
         size = "m",
         footer = tagList(

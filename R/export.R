@@ -107,6 +107,16 @@ export_files <- function(
       dplyr::pull("params") |>
       jsonlite::fromJSON()
 
+    # Project-level setting (per curation-options profile): treat linear
+    # assemblies as complete genomes? Absent on un-migrated DBs -> FALSE.
+    linear_complete <- tryCatch(
+      dplyr::tbl(con, "curate_opts") |>
+        dplyr::filter(curate_opts == !!curation_opts) |>
+        dplyr::pull(dplyr::any_of("linear_complete")),
+      error = function(e) integer(0)
+    )
+    linear_complete <- isTRUE(as.integer(linear_complete[1]) == 1L)
+
     # check for duplicate gene names in annotations and rename
     annotations$gene_uniq <- make.unique(annotations$gene)
 
@@ -156,8 +166,19 @@ export_files <- function(
     } else {
       ""
     }
-    # Genome-level completeness for the {completeness} header field
-    is_partial <- "partial" %in% names(dat) && isTRUE(dat$partial[1] == "yes")
+    # Genome-level completeness for the {completeness} header field.
+    # Auto-derived from topology: circular -> complete, linear -> partial.
+    # The per-sample "partial" flag forces partial; the project-level
+    # linear_complete setting forces linear assemblies to complete.
+    forced_partial <- "partial" %in% names(dat) && isTRUE(dat$partial[1] == "yes")
+    is_circular <- isTRUE(dat$topology[1] == "circular")
+    is_partial <- if (forced_partial) {
+      TRUE
+    } else if (is_circular || linear_complete) {
+      FALSE
+    } else {
+      TRUE
+    }
     dat$completeness <- if (is_partial) "partial genome" else "complete genome"
     header <- stringr::str_glue_data(dat, fasta_header)
     # Safety net for saved templates that hardcode "complete genome"
