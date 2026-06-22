@@ -280,9 +280,18 @@ workflow ASSEMBLE {
             )
           }
           .set { update_ids }
-        channel.fromQuery('SELECT ID, annotate_opts, curate_opts, orf_opts FROM annotate;', db: 'sqlite')
+        // Seed topology + partial from the assembly so linear assemblies show
+        // partial = "yes" on first arrival (matches validate.nf's rule:
+        // circular or linear_complete -> "no", else "yes"). VALIDATE later
+        // recomputes both from the selected path.
+        channel.fromQuery(
+                'SELECT a.ID, a.annotate_opts, a.curate_opts, a.orf_opts, asm.topology, ' +
+                "CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1 THEN 'no' ELSE 'yes' END " +
+                'FROM annotate a ' +
+                'JOIN assemble asm ON a.ID = asm.ID ' +
+                'LEFT JOIN curate_opts co ON a.curate_opts = co.curate_opts;', db: 'sqlite')
             .join(update_ids)
-            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, orf_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, ?, 1, 0, "no")', db: 'sqlite')
+            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, orf_opts, topology, partial, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, ?, ?, ?, 1, 0, "no")', db: 'sqlite')
 
     emit:
         // Two named channels with different gating:
