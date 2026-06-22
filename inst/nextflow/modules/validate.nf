@@ -161,10 +161,26 @@ process write_curated_result {
         def sr = sumLines[1].split(',', -1)
         def g = { c -> si.containsKey(c) ? sr[si[c]] : null }
 
+        // Auto-set the partial flag from topology: linear -> "yes",
+        // circular -> "no", unless the curation "complete mitogenomes are
+        // linear" option (curate_opts.linear_complete) is set, which makes
+        // linear assemblies complete ("no").
+        def linComplete = false
+        try {
+            def lq = conn.prepareStatement(
+                "SELECT d.linear_complete FROM annotate c " +
+                "JOIN curate_opts d ON c.curate_opts = d.curate_opts WHERE c.ID = ?")
+            lq.setString(1, id.toString())
+            def lrs = lq.executeQuery()
+            if (lrs.next()) linComplete = (lrs.getInt(1) == 1)
+            lrs.close(); lq.close()
+        } catch (Exception ignored) {}
+        def partial = (topology == 'circular' || linComplete) ? 'no' : 'yes'
+
         def updAnn = conn.prepareStatement(
             "UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, structure = ?, " +
             "PCGCount = ?, tRNACount = ?, rRNACount = ?, missing = ?, extra = ?, warnings = ?, " +
-            "annotate_switch = 2, time_stamp = ? WHERE ID = ?")
+            "partial = ?, annotate_switch = 2, time_stamp = ? WHERE ID = ?")
         updAnn.setInt(1, path as int)
         updAnn.setInt(2, scaffolds)
         setStr(updAnn, 3, topology)
@@ -176,8 +192,9 @@ process write_curated_result {
         setStr(updAnn, 9, g('missing'))
         setStr(updAnn, 10, g('extra'))
         setStr(updAnn, 11, g('warnings'))
-        updAnn.setString(12, ts)
-        updAnn.setString(13, id.toString())
+        updAnn.setString(12, partial)
+        updAnn.setString(13, ts)
+        updAnn.setString(14, id.toString())
         def na = updAnn.executeUpdate()
         if (na != 1) throw new RuntimeException("annotate UPDATE matched ${na} rows (expected 1) for ID '${id}'")
         updAnn.close()
