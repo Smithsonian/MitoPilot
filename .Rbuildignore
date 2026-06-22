@@ -17,7 +17,7 @@ $run_dev.*
 ^\.github$
 ^doc$
 ^Meta$
-.sqlite
+\.sqlite$
 ^LICENSE\.md$
 ^\.positai$
 ^\.claude$
