@@ -56,6 +56,10 @@ process validate {
 // loaded from lib/ ("No suitable driver found").
 process write_curated_result {
 
+    // Native (exec) task: writes the .sqlite driver-side via JDBC. Pin to the
+    // local executor so it isn't routed to sge/slurm (which can't run native
+    // tasks and emits a "cannot be executed by ... Using 'local' instead" warn).
+    executor 'local'
     maxForks 1
     errorStrategy 'ignore'
     tag "${id}"
