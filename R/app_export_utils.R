@@ -148,13 +148,16 @@ find_unmatched_brace <- function(template) {
 #' @param template header template string
 #' @param data data frame whose columns the template may reference (e.g. rv$data).
 #'   When empty, the template is still parsed for brace balance.
+#' @param require_completeness when TRUE, an otherwise-valid template that does
+#'   not end with `{completeness}` returns a non-blocking warning (ok = TRUE,
+#'   level = "warn") so the user can still save/export.
 #'
-#' @return list(ok = logical, level = "ok"|"error", message = character).
+#' @return list(ok = logical, level = "ok"|"warn"|"error", message = character).
 #'   Blocking errors (unbalanced braces, unknown column, empty) return
 #'   `ok = FALSE`.
 #'
 #' @noRd
-validate_fasta_header <- function(template, data = NULL) {
+validate_fasta_header <- function(template, data = NULL, require_completeness = FALSE) {
   err <- function(msg) list(ok = FALSE, level = "error", message = msg)
   if (is.null(template) || !nzchar(trimws(template))) {
     return(err("Template is empty."))
@@ -172,6 +175,15 @@ validate_fasta_header <- function(template, data = NULL) {
   row <- if (!is.null(data) && nrow(data) > 0) data[1, , drop = FALSE] else data.frame()
   tryCatch({
     stringr::str_glue_data(row, template)
+    if (require_completeness && !grepl("\\{completeness\\}\\s*$", template)) {
+      return(list(
+        ok = TRUE, level = "warn",
+        message = paste(
+          "Header does not end with {completeness}; GenBank submissions may not",
+          "reflect partial vs complete genome status. You can export anyway."
+        )
+      ))
+    }
     list(ok = TRUE, level = "ok", message = "Valid template.")
   }, error = function(e) {
     raw <- conditionMessage(e)

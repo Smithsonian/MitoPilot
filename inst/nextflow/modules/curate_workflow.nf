@@ -1,6 +1,5 @@
 import java.util.Base64
 include {curate} from './curate.nf'
-include {write_assembly} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
@@ -11,8 +10,6 @@ params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opt
                     'JOIN curate_opts d ON c.curate_opts = d.curate_opts ' +
                     'JOIN annotate_opts e ON c.annotate_opts = e.annotate_opts ' +
                     'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
-
-params.sqlWriteAnnotate =   'UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, time_stamp = ? WHERE ID = ?'
 
 workflow CURATE {
     take:
@@ -67,40 +64,13 @@ workflow CURATE {
 
         curate(curate_in).set { curate_out }
 
-        // Verified, serialized write of the curated assembly sequence (id, path,
-        // coverageStats). Only samples whose write commits flow downstream, so
-        // VALIDATE never writes annotations against an uncommitted sequence.
-        curate_out
-            .map { tuple(it[0], it[1], it[4]) }
-            .set { write_in }
-
-        write_assembly(write_in).set { write_done }
-
-        curate_out
-            .join(write_done, by: [0, 1])
-            .set { curate_gated }
-
-        // Update annotate table (only for samples whose assembly write committed)
-        curate_gated
-            .map { it ->
-                def ID = it[0]
-                def path = it[1]
-                def seqs = file(it[3]).splitFasta(record: [seqString: true, desc: true])
-                def scaffolds = seqs.size()
-                def length = seqs.collect { record -> record.seqString.size() }.sum()
-                def topology = seqs.collect { record -> record.desc }.join(';')
-                tuple(
-                    path,
-                    scaffolds,
-                    topology,
-                    length,
-                    time_stamp = params.ts,
-                    ID
-                )
-            }
-            .sqlInsert(statement: params.sqlWriteAnnotate, db: 'sqlite')
+        // No DB writes here: the curated assembly sequence and the annotation
+        // coordinates are committed together (with the validate summary) in a
+        // single atomic transaction at the end of VALIDATE
+        // (write_curated_result). curate_out carries the files VALIDATE needs:
+        // (id, path, annotations.csv, assembly.fasta, coverageStats.csv, workdir).
 
     emit:
-           ch = curate_gated
+           ch = curate_out
 
 }

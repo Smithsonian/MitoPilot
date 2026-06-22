@@ -309,16 +309,11 @@ export_server <- function(id) {
     })
 
     # Make Group ----
-    observeEvent(input$make_group, {
-      rv$updating$export_group <- req(input$group_name)
-      if(any(!(grepl("^[a-zA-Z0-9_-]+$", input$group_name)))){
-        shinyWidgets::sendSweetAlert(
-          title = "Invalid group name",
-          text = "Group names must contain only alphanumeric characters, dashes, or underscores",
-          type = "error"
-        )
-        return()
-      }
+    # Persist an export_group assignment for the current selection (rv$updating)
+    # and refresh the table. `groups` is a character vector aligned to the rows
+    # of rv$updating.
+    assign_export_group <- function(groups) {
+      rv$updating$export_group <- groups
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating[, c("ID", "export_group")], by = "ID")
       dplyr::tbl(session$userData$con, "samples") |>
@@ -331,6 +326,68 @@ export_server <- function(id) {
         )
       trigger("update_export_table")
       removeModal()
+    }
+
+    observeEvent(input$make_group, {
+      name <- req(input$group_name)
+      if (any(!(grepl("^[a-zA-Z0-9_-]+$", name)))) {
+        shinyWidgets::sendSweetAlert(
+          title = "Invalid group name",
+          text = "Group names must contain only alphanumeric characters, dashes, or underscores",
+          type = "error"
+        )
+        return()
+      }
+      # GenBank submissions may contain only complete OR only partial
+      # mitogenomes, never both. Warn on a mixed selection and offer to split it
+      # into "<name>-complete" and "<name>-partial".
+      n_complete <- sum(rv$updating$completeness == "complete genome", na.rm = TRUE)
+      n_partial  <- sum(rv$updating$completeness == "partial genome", na.rm = TRUE)
+      if (n_complete > 0 && n_partial > 0) {
+        rv$pending_group_name <- name
+        modalDialog(
+          title = "Mixed complete and partial mitogenomes",
+          size = "m",
+          easyClose = FALSE,
+          HTML(stringr::str_glue(
+            "A GenBank submission may contain only complete <i>or</i> only ",
+            "partial mitogenomes, not both. This selection has {n_complete} ",
+            "complete and {n_partial} partial. Split into two groups, ",
+            "'{name}-complete' and '{name}-partial', or keep them as one group?"
+          )),
+          footer = tagList(
+            actionButton(ns("group_split"), "Split into two groups", class = "btn-primary"),
+            actionButton(ns("group_keep_one"), "Keep as one mixed group"),
+            actionButton(ns("group_back"), "Cancel")
+          )
+        ) |> showModal()
+        return()
+      }
+      assign_export_group(rep(name, nrow(rv$updating)))
+    })
+
+    # Mixed-group warning actions.
+    # Split into separate complete / partial export groups.
+    observeEvent(input$group_split, {
+      name <- req(rv$pending_group_name)
+      groups <- ifelse(
+        rv$updating$completeness == "complete genome",
+        paste0(name, "-complete"),
+        paste0(name, "-partial")
+      )
+      assign_export_group(groups)
+      rv$pending_group_name <- NULL
+    })
+    # Override: keep the mixed selection as a single group.
+    observeEvent(input$group_keep_one, {
+      name <- req(rv$pending_group_name)
+      assign_export_group(rep(name, nrow(rv$updating)))
+      rv$pending_group_name <- NULL
+    })
+    # Cancel: return to the group-name modal so the selection can be adjusted.
+    observeEvent(input$group_back, {
+      rv$pending_group_name <- NULL
+      trigger("group_modal")
     })
 
     # Export data ----
@@ -350,6 +407,16 @@ export_server <- function(id) {
       cols_help <- p(
         style = "color: #666; font-size: 0.8em; margin: 0.25em 0 0.75em;",
         tags$b("Available columns: "), avail_cols
+      )
+      completeness_help <- p(
+        style = "color: #666; font-size: 0.8em; margin: 0.25em 0 0.75em;",
+        tags$b("{completeness}"),
+        " expands to \"complete genome\" or \"partial genome\", auto-derived from ",
+        "each assembly's topology (circular = complete, linear = partial), unless ",
+        "overridden by the per-sample Partial flag (forces partial) or the ",
+        "curation \"linear complete\" setting (forces linear assemblies to ",
+        "complete). For correct GenBank submission, place {completeness} at the ",
+        "end of the header."
       )
       modalDialog(
         title = div(
@@ -394,6 +461,7 @@ export_server <- function(id) {
           "Mitogenome FASTA Header (reference columns from your sample data using '{}'):"
         ),
         cols_help,
+        completeness_help,
         uiOutput(ns("fasta_header_status")),
         textAreaInput(
           ns("fasta_header"),
@@ -502,7 +570,7 @@ export_server <- function(id) {
     }
 
     output$fasta_header_status <- renderUI({
-      render_hdr_status(validate_fasta_header(hdr_main(), rv$data))
+      render_hdr_status(validate_fasta_header(hdr_main(), rv$data, require_completeness = TRUE))
     })
     output$fasta_header_gene_status <- renderUI({
       render_hdr_status(validate_fasta_header(hdr_gene(), rv$data))
