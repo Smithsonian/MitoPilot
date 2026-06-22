@@ -116,9 +116,13 @@ app_server <- function(input, output, session) {
   observeEvent(input$id_verified_top, {
     trigger("id_verified_top")
   })
-  # mark problematic 
+  # mark problematic
   observeEvent(input$problematic_top, {
     trigger("problematic_top")
+  })
+  # mark partial
+  observeEvent(input$partial_top, {
+    trigger("partial_top")
   })
   # Export
   observeEvent(input$group, {

@@ -20,6 +20,9 @@
 #'   [flag_PCG_outliers()]. Default 10.
 #' @param ident_pct Identity threshold (percent) passed to
 #'   [flag_PCG_outliers()]. Default 60.
+#' @param summary_csv Write a per-sample summary CSV (organism, topology,
+#'   completeness, gene counts, reference, etc.) into the export directory?
+#'   (default: TRUE)
 #'
 #' @return Invisibly, the list returned by [flag_PCG_outliers()] when `review`
 #'   is TRUE (and a group of >1 sample is exported), otherwise `NULL`.
@@ -31,7 +34,7 @@ export_files <- function(
     IDs = NULL,
     fasta_header = paste(
       "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
-      "[location=mitochondrion] {Taxon} mitochondrion, complete genome"
+      "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"
     ),
     fasta_header_gene = paste(
       "{ID} [organism={Taxon}] [mgcode={genetic_code}]",
@@ -43,7 +46,8 @@ export_files <- function(
     review = TRUE,
     start_aa = 10,
     stop_aa = 10,
-    ident_pct = 60) {
+    ident_pct = 60,
+    summary_csv = TRUE) {
 
 
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(dirname(out_dir), ".sqlite"))
@@ -103,6 +107,16 @@ export_files <- function(
       dplyr::pull("params") |>
       jsonlite::fromJSON()
 
+    # Project-level setting (per curation-options profile): treat linear
+    # assemblies as complete genomes? Absent on un-migrated DBs -> FALSE.
+    linear_complete <- tryCatch(
+      dplyr::tbl(con, "curate_opts") |>
+        dplyr::filter(curate_opts == !!curation_opts) |>
+        dplyr::pull(dplyr::any_of("linear_complete")),
+      error = function(e) integer(0)
+    )
+    linear_complete <- isTRUE(as.integer(linear_complete[1]) == 1L)
+
     # check for duplicate gene names in annotations and rename
     annotations$gene_uniq <- make.unique(annotations$gene)
 
@@ -111,7 +125,7 @@ export_files <- function(
       dplyr::filter(ID == !!.x) |>
       dplyr::left_join(
         dplyr::tbl(con, "annotate") |>
-          dplyr::select(ID, topology, path) |>
+          dplyr::select(ID, topology, path, dplyr::any_of("partial")) |>
           dplyr::distinct(),
         by = "ID"
       ) |>
@@ -152,7 +166,26 @@ export_files <- function(
     } else {
       ""
     }
-    names(seq) <- paste0(stringr::str_glue_data(dat, fasta_header), blast_note)
+    # Genome-level completeness for the {completeness} header field.
+    # Auto-derived from topology: circular -> complete, linear -> partial.
+    # The per-sample "partial" flag forces partial; the project-level
+    # linear_complete setting forces linear assemblies to complete.
+    forced_partial <- "partial" %in% names(dat) && isTRUE(dat$partial[1] == "yes")
+    is_circular <- isTRUE(dat$topology[1] == "circular")
+    is_partial <- if (forced_partial) {
+      TRUE
+    } else if (is_circular || linear_complete) {
+      FALSE
+    } else {
+      TRUE
+    }
+    dat$completeness <- if (is_partial) "partial genome" else "complete genome"
+    header <- stringr::str_glue_data(dat, fasta_header)
+    # Safety net for saved templates that hardcode "complete genome"
+    if (is_partial) {
+      header <- stringr::str_replace(header, "complete genome$", "partial genome")
+    }
+    names(seq) <- paste0(header, blast_note)
 
     # sequence name, to be used as first column in GFF
     seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)
@@ -266,6 +299,9 @@ export_files <- function(
             # set new start and stop codons
             cur$start_codon <- exons[1,]$start_codon
             cur$stop_codon <- exons[nrow(exons),]$stop_codon
+            # carry manual partial flags from the 5' / 3' exons
+            cur$partial_start <- exons[1,]$partial_start
+            cur$partial_stop <- exons[nrow(exons),]$partial_stop
             # set new start and stop pos for gene
             pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character()
             cur$pos1 <- exons[1,]$pos1
@@ -288,6 +324,9 @@ export_files <- function(
             # set new start and stop codons
             cur$start_codon <- exons[nrow(exons),]$start_codon
             cur$stop_codon <- exons[1]$stop_codon
+            # carry manual partial flags from the 5' / 3' exons
+            cur$partial_start <- exons[nrow(exons),]$partial_start
+            cur$partial_stop <- exons[1,]$partial_stop
             # set new start and stop pos for gene
             pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character() |> rev()
             cur$pos1 <- exons[nrow(exons),]$pos2
@@ -307,13 +346,10 @@ export_files <- function(
           if (cur$stop_codon %nin% stop_codons) {
             message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
           }
-          if (cur$start_codon %nin% start_codons) {
+          if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
             message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
-            if (cur$direction == "+") {
-              pos[1] <- paste0("<", pos[1])
-            } else {
-              pos[2] <- paste0(pos[2], ">")
-            }
+            # 5' partial: '<' prepends the start coordinate (first column, both strands)
+            pos[1] <- paste0("<", pos[1])
             note <- "start codon not determined"
           }
           if (nchar(cur$stop_codon) < 3) {
@@ -332,6 +368,11 @@ export_files <- function(
             } else {
               transl_except <- paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
             }
+          } else if (isTRUE(as.integer(cur$partial_stop) == 1L)) {
+            # 3' partial (undetermined), not poly-A: '>' prepends the stop
+            # coordinate (second column, both strands)
+            pos[2] <- paste0(">", pos[2])
+            note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
 
           # write to .tbl
@@ -449,6 +490,15 @@ export_files <- function(
             # fix the start and stop position
             pos1_new = 1
             pos2_new = length(gene[[1]])
+            # extracted gene is 5'->3': mark partial ends on the start/stop coords
+            gene_p1 <- as.character(pos1_new)
+            gene_p2 <- as.character(pos2_new)
+            if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
+              gene_p1 <- paste0("<", gene_p1)
+            }
+            if (nchar(cur$stop_codon) >= 3 && isTRUE(as.integer(cur$partial_stop) == 1L)) {
+              gene_p2 <- paste0(">", gene_p2)
+            }
 
             # write gene feature table
             gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene, ".tbl"))
@@ -456,11 +506,11 @@ export_files <- function(
               file.remove(gene_tbl_fn)
             }
             cat(paste0(">Feature ", .x, "_", cur$gene), file = gene_tbl_fn, sep = "\n")
-            paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste0("\t\t\tgene\t", cur$gene) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste(c(pos1_new, pos2_new, "CDS"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "CDS"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste("\t\t\tproduct\t", cur$product) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
@@ -477,7 +527,7 @@ export_files <- function(
               paste0("\t\t\ttransl_except\t", gene_transl_except) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (!cur$start_codon %in% start_codons) {
+            if (!cur$start_codon %in% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
@@ -516,13 +566,10 @@ export_files <- function(
           if (cur$stop_codon %nin% stop_codons) {
             message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
           }
-          if (cur$start_codon %nin% start_codons) {
+          if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
             message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
-            if (cur$direction == "+") {
-              pos[1] <- paste0("<", pos[1])
-            } else {
-              pos[2] <- paste0(pos[2], ">")
-            }
+            # 5' partial: '<' prepends the start coordinate (first column, both strands)
+            pos[1] <- paste0("<", pos[1])
             note <- "start codon not determined"
           }
           if (nchar(cur$stop_codon) < 3) {
@@ -541,6 +588,11 @@ export_files <- function(
             } else {
               transl_except <- paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
             }
+          } else if (isTRUE(as.integer(cur$partial_stop) == 1L)) {
+            # 3' partial (undetermined), not poly-A: '>' prepends the stop
+            # coordinate (second column, both strands)
+            pos[2] <- paste0(">", pos[2])
+            note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
 
           # write to .tbl
@@ -623,6 +675,15 @@ export_files <- function(
             # fix the start and stop position
             pos1_new = 1
             pos2_new = length(gene[[1]])
+            # extracted gene is 5'->3': mark partial ends on the start/stop coords
+            gene_p1 <- as.character(pos1_new)
+            gene_p2 <- as.character(pos2_new)
+            if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
+              gene_p1 <- paste0("<", gene_p1)
+            }
+            if (nchar(cur$stop_codon) >= 3 && isTRUE(as.integer(cur$partial_stop) == 1L)) {
+              gene_p2 <- paste0(">", gene_p2)
+            }
 
             # write gene feature table
             gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".tbl"))
@@ -630,11 +691,11 @@ export_files <- function(
               file.remove(gene_tbl_fn)
             }
             cat(paste0(">Feature ", .x, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
-            paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste0("\t\t\tgene\t", cur$gene_uniq) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste(c(pos1_new, pos2_new, "CDS"), collapse = "\t") |>
+            paste(c(gene_p1, gene_p2, "CDS"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste("\t\t\tproduct\t", cur$product) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
@@ -651,7 +712,7 @@ export_files <- function(
               paste0("\t\t\ttransl_except\t", gene_transl_except) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (!cur$start_codon %in% start_codons) {
+            if (!cur$start_codon %in% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
@@ -933,6 +994,25 @@ export_files <- function(
       ) |> system()
     }
   })
+
+  # Per-sample summary CSV, dropped into the export directory
+  if (isTRUE(summary_csv)) {
+    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts")
+    core <- c("ID", "Taxon", "topology", "completeness", "partial", "length",
+              "structure", "PCGCount", "tRNACount", "rRNACount", "ORFCount",
+              "missing", "extra", "warnings", "blast_accession", "blast_species",
+              "blast_lineage", "export_group")
+    summary_df <- fetch_export_data(con = con) |>
+      dplyr::filter(ID %in% !!IDs) |>
+      dplyr::select(-dplyr::any_of(drop)) |>
+      dplyr::relocate(dplyr::any_of(core))
+    summary_fn <- if (length(group) == 1) {
+      file.path(group_pth, paste0(group, "_sample_info.csv"))
+    } else {
+      file.path(out_dir, paste0("sample_info_", Sys.Date(), ".csv"))
+    }
+    utils::write.csv(summary_df, summary_fn, row.names = FALSE)
+  }
 
   db_path <- file.path(dirname(out_dir), ".sqlite")
 

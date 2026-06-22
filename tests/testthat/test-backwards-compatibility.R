@@ -191,7 +191,7 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
   expect_cols(con, "samples", "genetic_code")
 
   # annotate
-  expect_cols(con, "annotate", c("reviewed", "ID_verified", "problematic"))
+  expect_cols(con, "annotate", c("reviewed", "ID_verified", "problematic", "partial"))
 
   # assemble
   expect_cols(con, "assemble",
@@ -209,10 +209,10 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
                 "use_aragorn", "aragorn_opts", "start_gene"))
 
   # curate_opts
-  expect_cols(con, "curate_opts", c("max_blast_hits", "ref_db", "ref_dir"))
+  expect_cols(con, "curate_opts", c("max_blast_hits", "ref_db", "ref_dir", "linear_complete"))
 
   # annotations
-  expect_cols(con, "annotations", "tool")
+  expect_cols(con, "annotations", c("tool", "partial_start", "partial_stop"))
 
   # new tables
   tables <- DBI::dbListTables(con)
@@ -264,7 +264,7 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   expect_cols(con, "assemble_opts", c("max_paths", "max_scaffolds"))
 
   # annotations
-  expect_cols(con, "annotations", "tool")
+  expect_cols(con, "annotations", c("tool", "partial_start", "partial_stop"))
 
   # new tables
   tables <- DBI::dbListTables(con)
@@ -280,6 +280,47 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   expect_true(any(grepl("blast_gb", conf)))
   current_ver <- as.character(utils::packageVersion("MitoPilot"))
   expect_true(any(grepl(current_ver, conf, fixed = TRUE)))
+})
+
+
+test_that("backwards_compatibility migrates an unmodified default export template to {completeness}", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  # Bring a v1.0.0 DB up to current (this seeds export_opts with the new default)
+  create_v100_db(td)
+  make_config(td, version = "1.0.0")
+  suppressMessages(MitoPilot::backwards_compatibility(path = td))
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  # Fresh seed should already use {completeness}
+  expect_match(
+    DBI::dbReadTable(con, "export_opts")$fasta_header,
+    "{completeness}", fixed = TRUE, all = FALSE
+  )
+
+  # Simulate a pre-change project: stomp the default back to the old hardcoded
+  # string, plus add a user-customized template that must be left untouched.
+  old_default <- "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] [location=mitochondrion] {Taxon} mitochondrion, complete genome"
+  custom <- "{ID} {Taxon} my custom complete genome layout"
+  DBI::dbExecute(con, "UPDATE export_opts SET fasta_header = ? WHERE export_opts = 'default'",
+                 params = list(old_default))
+  DBI::dbExecute(con, "INSERT INTO export_opts (export_opts, fasta_header, fasta_header_gene) VALUES ('mine', ?, 'x')",
+                 params = list(custom))
+
+  expect_message(
+    suppressWarnings(MitoPilot::backwards_compatibility(path = td)),
+    regexp = "export template"
+  )
+
+  eo <- DBI::dbReadTable(con, "export_opts")
+  # default migrated to {completeness}
+  expect_match(eo$fasta_header[eo$export_opts == "default"], "{completeness}", fixed = TRUE)
+  # customized template untouched
+  expect_equal(eo$fasta_header[eo$export_opts == "mine"], custom)
 })
 
 

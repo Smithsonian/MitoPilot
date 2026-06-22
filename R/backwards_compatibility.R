@@ -58,6 +58,16 @@ backwards_compatibility <- function(
   # check if annotate_opts or curate_params contains the ref_dir path
   old_ref_str = ("/ref_dbs/Mitos2" %in% annotate_opts_table || any(grep("/ref_dbs/Mitos2", curate_opts_table$params)))
 
+  # the pre-{completeness} default export header, for detecting unmodified templates
+  old_export_default <- sub("{completeness}", "complete genome",
+                            DEFAULT_FASTA_HEADER, fixed = TRUE)
+  export_default_current <- tryCatch(
+    !("export_opts" %in% DBI::dbListTables(con)) ||
+      !any(DBI::dbReadTable(con, "export_opts")$fasta_header == old_export_default,
+           na.rm = TRUE),
+    error = function(e) TRUE
+  )
+
   if (asmbDir &&
       failOnIgnore &&
       blast_gb_conf &&
@@ -69,10 +79,12 @@ backwards_compatibility <- function(
       "max_blast_hits" %in% names(curate_opts_table) &&
       "ref_db" %in% names(curate_opts_table) &&
       "ref_dir" %in% names(curate_opts_table) &&
+      "linear_complete" %in% names(curate_opts_table) &&
       "assembler" %in% names(assemble_opts_table) &&
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
       "problematic" %in% names(annotate_table) &&
+      "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
       "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
@@ -86,6 +98,8 @@ backwards_compatibility <- function(
       "max_paths" %in% names(assemble_opts_table) &&
       "max_scaffolds" %in% names(assemble_opts_table) &&
       "tool" %in% DBI::dbListFields(con, "annotations") &&
+      "partial_start" %in% DBI::dbListFields(con, "annotations") &&
+      "partial_stop" %in% DBI::dbListFields(con, "annotations") &&
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
@@ -110,7 +124,8 @@ backwards_compatibility <- function(
         "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
         error = function(e) FALSE
       )) &&
-      "export_opts" %in% DBI::dbListTables(con))
+      "export_opts" %in% DBI::dbListTables(con) &&
+      export_default_current)
   {
     message("nothing to update")
     return(invisible(NULL))
@@ -366,6 +381,41 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "ID"
       )
+  }
+  # if partial column doesn't exist, add it
+  if(!("partial" %in% names(annotate_table))){
+    message("added 'partial' column to annotate table")
+    annotate_table$partial <- rep(NA_character_, nrow(annotate_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate
+       ADD COLUMN partial TEXT",
+      col = col,
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate") |> # update SQL database
+      dplyr::rows_upsert(
+        annotate_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+  }
+  # if partial_start / partial_stop columns don't exist on annotations, add them
+  annotations_fields <- DBI::dbListFields(con, "annotations")
+  if(!("partial_start" %in% annotations_fields)){
+    message("added 'partial_start' column to annotations table")
+    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN partial_start INTEGER")
+  }
+  if(!("partial_stop" %in% annotations_fields)){
+    message("added 'partial_stop' column to annotations table")
+    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN partial_stop INTEGER")
+  }
+  # if linear_complete column doesn't exist on curate_opts, add it (default 0)
+  if(!("linear_complete" %in% DBI::dbListFields(con, "curate_opts"))){
+    message("added 'linear_complete' column to curate_opts table")
+    DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN linear_complete INTEGER")
+    DBI::dbExecute(con, "UPDATE curate_opts SET linear_complete = 0")
   }
   # if use_arwen column doesn't exist, add it (default off)
   if(!("use_arwen" %in% names(annotate_opts_table))){
@@ -1003,6 +1053,14 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "export_opts"
       )
+  } else if (!export_default_current) {
+    # migrate an unmodified default export template to use {completeness}
+    message("updated default export template to use {completeness}")
+    DBI::dbExecute(
+      con,
+      "UPDATE export_opts SET fasta_header = ? WHERE fasta_header = ?",
+      params = list(DEFAULT_FASTA_HEADER, old_export_default)
+    )
   }
 
   # if .config does not contain "blast_gb" params section, add it

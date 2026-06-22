@@ -2,7 +2,7 @@
 # export_opts DB row and as the fallback when no custom template is stored.
 DEFAULT_FASTA_HEADER <- paste0(
   "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
-  "[location=mitochondrion] {Taxon} mitochondrion, complete genome"
+  "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"
 )
 DEFAULT_FASTA_HEADER_GENE <- paste0(
   "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
@@ -148,13 +148,16 @@ find_unmatched_brace <- function(template) {
 #' @param template header template string
 #' @param data data frame whose columns the template may reference (e.g. rv$data).
 #'   When empty, the template is still parsed for brace balance.
+#' @param require_completeness when TRUE, an otherwise-valid template that does
+#'   not end with `{completeness}` returns a non-blocking warning (ok = TRUE,
+#'   level = "warn") so the user can still save/export.
 #'
-#' @return list(ok = logical, level = "ok"|"error", message = character).
+#' @return list(ok = logical, level = "ok"|"warn"|"error", message = character).
 #'   Blocking errors (unbalanced braces, unknown column, empty) return
 #'   `ok = FALSE`.
 #'
 #' @noRd
-validate_fasta_header <- function(template, data = NULL) {
+validate_fasta_header <- function(template, data = NULL, require_completeness = FALSE) {
   err <- function(msg) list(ok = FALSE, level = "error", message = msg)
   if (is.null(template) || !nzchar(trimws(template))) {
     return(err("Template is empty."))
@@ -172,6 +175,15 @@ validate_fasta_header <- function(template, data = NULL) {
   row <- if (!is.null(data) && nrow(data) > 0) data[1, , drop = FALSE] else data.frame()
   tryCatch({
     stringr::str_glue_data(row, template)
+    if (require_completeness && !grepl("\\{completeness\\}\\s*$", template)) {
+      return(list(
+        ok = TRUE, level = "warn",
+        message = paste(
+          "Header does not end with {completeness}; GenBank submissions may not",
+          "reflect partial vs complete genome status. You can export anyway."
+        )
+      ))
+    }
     list(ok = TRUE, level = "ok", message = "Valid template.")
   }, error = function(e) {
     raw <- conditionMessage(e)
@@ -192,8 +204,8 @@ validate_fasta_header <- function(template, data = NULL) {
 #' @param session reactive session
 #'
 #' @noRd
-fetch_export_data <- function(session = getDefaultReactiveDomain()) {
-  db <- session$userData$con
+fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) {
+  db <- con %||% session$userData$con
 
   samples <- dplyr::tbl(db, "samples") |>
     dplyr::select(-dplyr::any_of("topology"))
@@ -210,7 +222,7 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID, use_orffinder) |>
     dplyr::collect()
 
-  dplyr::tbl(db, "assemble") |>
+  out <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, blast_accession, blast_species, blast_lineage,
                   dplyr::any_of("poor_blast_ref")) |>
@@ -218,17 +230,36 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(
       ID, blast_accession, blast_species, blast_lineage, curate_opts, topology,
-      structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
-      dplyr::any_of("poor_blast_ref")
+      length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
+      dplyr::any_of(c("poor_blast_ref", "partial"))
+    ) |>
+    dplyr::left_join(
+      dplyr::tbl(db, "curate_opts") |>
+        dplyr::select(curate_opts, dplyr::any_of("linear_complete")),
+      by = "curate_opts"
     ) |>
     dplyr::left_join(samples, by = "ID") |>
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
     dplyr::collect() |>
     dplyr::left_join(orf_counts, by = "ID") |>
-    dplyr::left_join(orf_enabled, by = "ID") |>
+    dplyr::left_join(orf_enabled, by = "ID")
+
+  # these columns are absent on un-migrated DBs
+  if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_
+  if (!"partial" %in% names(out)) out$partial <- NA_character_
+
+  out |>
     dplyr::mutate(
       blast_ref_status = poor_blast_ref,
+      # Auto-derive completeness from topology; per-sample "partial" forces
+      # partial; project-level linear_complete forces linear -> complete.
+      completeness = dplyr::case_when(
+        !is.na(partial) & partial == "yes" ~ "partial genome",
+        topology == "circular" ~ "complete genome",
+        !is.na(linear_complete) & linear_complete == 1L ~ "complete genome",
+        TRUE ~ "partial genome"
+      ),
       structure = stringr::str_replace_all(structure, "trn[A-Z]", "\u2022"),
       export_group = as.character(export_group),
       ORFCount = dplyr::if_else(
@@ -237,7 +268,7 @@ fetch_export_data <- function(session = getDefaultReactiveDomain()) {
         as.integer(ORFCount)
       )
     ) |>
-    dplyr::select(-use_orffinder) |>
+    dplyr::select(-use_orffinder, -dplyr::any_of("linear_complete")) |>
     dplyr::relocate(ORFCount, .after = rRNACount) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession)
 }

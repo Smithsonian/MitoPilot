@@ -77,6 +77,12 @@ app_ui <- function(request) {
               size = "sm"
             ),
             shinyWidgets::actionBttn(
+              "partial_top",
+              label = "Mark Partial",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
               "run_modal",
               label = "Update",
               icon = icon("circle-play"),

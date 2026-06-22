@@ -108,6 +108,16 @@ annotations_details_server <- function(id, rv) {
             .default = NA_character_
           )
         )
+      # Coerce manual partial flags (NULL -> 0). Columns are absent on old
+      # projects until backwards_compatibility() runs; leave them absent so the
+      # save path (which re-inserts every column) matches the DB schema and the
+      # partial UI stays hidden.
+      if ("partial_start" %in% names(rv$annotations)) {
+        rv$annotations$partial_start <- tidyr::replace_na(as.integer(rv$annotations$partial_start), 0L)
+      }
+      if ("partial_stop" %in% names(rv$annotations)) {
+        rv$annotations$partial_stop <- tidyr::replace_na(as.integer(rv$annotations$partial_stop), 0L)
+      }
 
       ## Load coverage ----
       # TODO - get from db (need to fix NA="" issue)
@@ -164,18 +174,24 @@ annotations_details_server <- function(id, rv) {
 
     # Compact status pill renderer. `state` is one of "yes" / "no" / NA;
     # `invert = TRUE` flips the color mapping so "yes" reads as warning.
-    status_badge <- function(label, state, invert = FALSE) {
+    # neutral_no: render a "no" value with the neutral (grey) styling rather than
+    # a coloured one. Used for the Partial badge, where "no" means a complete
+    # assembly and a green "good" colour is misleading.
+    status_badge <- function(label, state, invert = FALSE, neutral_no = FALSE) {
       val <- if (is.na(state)) "na" else as.character(state)
-      bg <- if (val == "yes") {
+      # Colour decision separate from the displayed text so "no" can read NO but
+      # render neutral.
+      color_val <- if (neutral_no && val == "no") "na" else val
+      bg <- if (color_val == "yes") {
         if (invert) "#fde8d0" else "#d4edda"
-      } else if (val == "no") {
+      } else if (color_val == "no") {
         if (invert) "#d4edda" else "#fde8d0"
       } else {
         "#e9ecef"
       }
-      fg <- if (val == "yes") {
+      fg <- if (color_val == "yes") {
         if (invert) "#7d4a1e" else "#2d6a4f"
-      } else if (val == "no") {
+      } else if (color_val == "no") {
         if (invert) "#2d6a4f" else "#7d4a1e"
       } else {
         "#6c757d"
@@ -195,18 +211,22 @@ annotations_details_server <- function(id, rv) {
       tagList(
         status_badge("ID verified", rv$updating$ID_verified),
         status_badge("Reviewed",    rv$updating$reviewed),
-        status_badge("Problematic", rv$updating$problematic, invert = TRUE)
+        status_badge("Problematic", rv$updating$problematic, invert = TRUE),
+        status_badge("Partial Mito",     rv$updating$partial, invert = TRUE, neutral_no = TRUE)
       )
     })
 
     # Footer toggle buttons: clicking still drives the same input$ID_verified /
     # input$reviewed / input$problematic observers below; visual state reflects
     # the current value so the user sees what each click will flip.
-    toggle_btn <- function(id, label, state, invert = FALSE) {
+    # neutral_no: style a "no" value as the neutral default button rather than a
+    # coloured one (for Partial, where "no" = complete and green is misleading).
+    toggle_btn <- function(id, label, state, invert = FALSE, neutral_no = FALSE) {
       val <- if (is.na(state)) "na" else as.character(state)
-      cls <- if (val == "yes") {
+      cls_val <- if (neutral_no && val == "no") "na" else val
+      cls <- if (cls_val == "yes") {
         if (invert) "btn btn-warning" else "btn btn-success"
-      } else if (val == "no") {
+      } else if (cls_val == "no") {
         if (invert) "btn btn-success" else "btn btn-default"
       } else {
         "btn btn-default"
@@ -220,12 +240,24 @@ annotations_details_server <- function(id, rv) {
       }
       actionButton(id, label, icon = ico, class = cls)
     }
+
+    # HTML label summarizing the manual partial flags for annotation row `idx`.
+    partial_label <- function(idx) {
+      if (!all(c("partial_start", "partial_stop") %in% names(rv$annotations))) return("")
+      tags <- c(
+        if (isTRUE(as.integer(rv$annotations$partial_start[idx]) == 1L)) "5' partial",
+        if (isTRUE(as.integer(rv$annotations$partial_stop[idx]) == 1L)) "3' partial"
+      )
+      if (length(tags) > 0) paste0("<b>Partial:</b> ", paste(tags, collapse = ", ")) else ""
+    }
     output$status_toggles <- shiny::renderUI({
       tagList(
         toggle_btn(ns("ID_verified"), "ID verified", rv$updating$ID_verified),
         toggle_btn(ns("reviewed"),    "Reviewed",    rv$updating$reviewed),
         toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
-                   invert = TRUE)
+                   invert = TRUE),
+        toggle_btn(ns("partial"),     "Partial",     rv$updating$partial,
+                   invert = TRUE, neutral_no = TRUE)
       )
     })
 
@@ -421,15 +453,36 @@ annotations_details_server <- function(id, rv) {
       )
     })
 
+    # TRUE when the annotation being edited has changes not yet saved. Checks the
+    # raw fields, not just the translation: the manual partial 5'/3' flags and the
+    # poly-A stop trim change partial_start/partial_stop/stop_codon/positions
+    # without altering the translation, so a translation-only test would let the
+    # user close/lock and silently drop those edits.
+    editing_unsaved <- function() {
+      if (is.null(rv$editing) || is.null(rv$editing$backup)) return(FALSE)
+      sel <- selected()
+      if (length(sel) != 1) return(FALSE)
+      bak <- rv$editing$backup
+      changed <- function(f) {
+        a <- if (f %in% names(rv$annotations)) rv$annotations[[f]][sel] else NA
+        b <- if (f %in% names(bak)) bak[[f]] else NA
+        !isTRUE(a == b) && !(is.na(a) && is.na(b))
+      }
+      any(vapply(
+        c("translation", "pos1", "pos2", "stop_codon", "partial_start", "partial_stop"),
+        changed, logical(1)
+      ))
+    }
+
     # Close Modal ----
     observeEvent(input$close, {
       # Nothing to do if the modal state is already cleared (e.g. a second/spurious
       # close after rv$annotations was nulled below) - avoids filter() on NULL.
       req(!is.null(rv$annotations))
-      if (!is.null(rv$editing) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
+      if (editing_unsaved()) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
-          text = "Discard or save edits before selecting a new annotation"
+          text = "Discard or save edits before closing"
         )
         req(F)
       }
@@ -481,10 +534,10 @@ annotations_details_server <- function(id, rv) {
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
-      if (!is.null(rv$editing) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
+      if (editing_unsaved()) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
-          text = "Discard or save edits before selecting a new annotation"
+          text = "Discard or save edits before locking"
         )
         req(F)
       }
@@ -1447,6 +1500,7 @@ annotations_details_server <- function(id, rv) {
       new_alignment$start <- stringr::str_glue(
         "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
       )
+      new_alignment$partial <- partial_label(selected())
       new_alignment$internal_stop <- ifelse(
         stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
         paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
@@ -1463,6 +1517,7 @@ annotations_details_server <- function(id, rv) {
         p(HTML(rv$alignment$id)),
         p(HTML(rv$alignment$start)),
         p(HTML(rv$alignment$stop)),
+        p(HTML(rv$alignment$partial)),
         p(HTML(rv$alignment$internal_stop))
       )
     })
@@ -1848,6 +1903,51 @@ annotations_details_server <- function(id, rv) {
       }
     }) # END PROBLEMATIC
 
+    # Mark as partial ----
+    apply_partial <- function(value) {
+      updateActionButton(session, "partial")
+      rv$updating$partial <- value
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating[, c("ID", "partial")],
+          by = "ID",
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(rv$updating[, c("ID", "partial")], by = "ID")
+    }
+    observeEvent(input$partial, {
+      if (!isTRUE(rv$updating$partial == "yes")) {
+        # turning partial on: warn first if the assembly is circular
+        if (isTRUE(rv$updating$topology == "circular")) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = ns("partial_circular_confirm"),
+            title = "Mark circular assembly as partial?",
+            text = paste(
+              "This assembly is circular. A closed circle represents the whole",
+              "molecule, so flagging it 'partial' is contradictory. Use the",
+              "Linearize button to break the circle before submission, or mark",
+              "it partial anyway."
+            ),
+            type = "warning",
+            btn_labels = c("Cancel", "Mark partial anyway"),
+            btn_colors = c("#6c757d", "#0056b3")
+          )
+          req(F)
+        }
+        apply_partial("yes")
+      } else {
+        apply_partial("no")
+      }
+    })
+    observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
+      if (isTRUE(input$partial_circular_confirm)) {
+        apply_partial("yes")
+      }
+    }) # END PARTIAL
+
     # Poor BLAST reference toggle ----
     observeEvent(input$poor_blast_ref_toggle, ignoreInit = TRUE, {
       val <- if (isTRUE(input$poor_blast_ref_toggle)) "poor" else "good"
@@ -2227,6 +2327,107 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$`stop-minus`, {
       show_edit_waiter()
       trigger("stop-minus-simple")
+      shinyjs::delay(50, {
+        trigger("re_align")
+      })
+    })
+
+    ## Manual partial flags + poly-A stop ----
+    # Reactive controls shown in edit mode for PCGs: flag the 5'/3' end as
+    # partial (honored by export as < / > location markers) and trim the stop
+    # to a 1-2 bp partial (T / TA) completed by a 3' poly-A tail.
+    # TRUE when the terminal codon is not in the gene-specific allowed list from
+    # the curation params (an undetermined / partial end). Empty allowed list ->
+    # no check.
+    start_codon_invalid <- function(sel) {
+      allowed <- rv$editing$params$start_codons
+      sc <- rv$annotations$start_codon[sel]
+      !is.null(allowed) && length(allowed) > 0 && isTRUE(nzchar(sc)) && sc %nin% allowed
+    }
+    stop_codon_invalid <- function(sel) {
+      allowed <- rv$editing$params$stop_codons
+      ec <- rv$annotations$stop_codon[sel]
+      !is.null(allowed) && length(allowed) > 0 && isTRUE(nzchar(ec)) && ec %nin% allowed
+    }
+
+    output$partial_ctrls <- renderUI({
+      req(rv$editing)
+      req(all(c("partial_start", "partial_stop") %in% names(rv$annotations)))
+      sel <- selected()
+      req(length(sel) == 1)
+      req(rv$annotations$type[sel] == "PCG")
+      # Highlight a partial end when the flag is set OR the terminal codon is not
+      # an allowed gene codon.
+      ps <- isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L) || start_codon_invalid(sel)
+      pe <- isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L) || stop_codon_invalid(sel)
+      tagList(
+        actionButton(
+          ns("polyA_stop"), "poly-A stop",
+          icon = icon("scissors"),
+          class = "btn btn-default btn-sm"
+        ),
+        tags$span(style = "font-weight: bold; margin-left: 1em;", "PARTIAL"),
+        actionButton(
+          ns("toggle_partial_start"), "5'",
+          class = if (ps) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
+        ),
+        actionButton(
+          ns("toggle_partial_stop"), "3'",
+          class = if (pe) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
+        )
+      )
+    })
+
+    observeEvent(input$toggle_partial_start, {
+      req(rv$editing, length(selected()) == 1)
+      cur <- as.integer(rv$annotations$partial_start[selected()]) %|NA|% 0L
+      rv$annotations$partial_start[selected()] <- if (isTRUE(cur == 1L)) 0L else 1L
+      if (!is.null(rv$alignment)) {
+        rv$alignment$partial <- partial_label(selected())
+      }
+    })
+    observeEvent(input$toggle_partial_stop, {
+      req(rv$editing, length(selected()) == 1)
+      cur <- as.integer(rv$annotations$partial_stop[selected()]) %|NA|% 0L
+      rv$annotations$partial_stop[selected()] <- if (isTRUE(cur == 1L)) 0L else 1L
+      if (!is.null(rv$alignment)) {
+        rv$alignment$partial <- partial_label(selected())
+      }
+    })
+
+    # Trim the stop codon by one terminal base (TAA -> TA -> T), shrinking the
+    # CDS by 1 bp so it no longer overlaps a downstream feature. The removed
+    # base(s) are completed by the mRNA poly-A tail; export marks this via
+    # transl_except when nchar(stop_codon) < 3.
+    observeEvent(input$polyA_stop, {
+      req(rv$editing, length(selected()) == 1)
+      req(rv$annotations$type[selected()] == "PCG")
+      stop_codon <- rv$annotations$stop_codon[selected()]
+      if (is.na(stop_codon) || nchar(stop_codon) <= 1) {
+        shinyWidgets::sendSweetAlert(
+          session, title = "Stop already minimal",
+          text = "Stop codon is already a single base (T).", type = "info"
+        )
+        req(FALSE)
+      }
+      new_stop <- stringr::str_sub(stop_codon, 1, nchar(stop_codon) - 1)
+      if (new_stop %nin% rv$editing$params$stop_codons) {
+        shinyWidgets::sendSweetAlert(
+          session, title = "Invalid partial stop",
+          text = paste0("'", new_stop, "' is not an allowed stop for this gene."),
+          type = "warning"
+        )
+        req(FALSE)
+      }
+      # Drop one base from the 3' end (last base of the stop codon).
+      if (rv$annotations$direction[selected()] == "+") {
+        rv$annotations$pos2[selected()] <- rv$annotations$pos2[selected()] - 1L
+      } else {
+        rv$annotations$pos1[selected()] <- rv$annotations$pos1[selected()] + 1L
+      }
+      rv$annotations$length[selected()] <- rv$annotations$length[selected()] - 1L
+      rv$annotations$stop_codon[selected()] <- new_stop
+      show_edit_waiter()
       shinyjs::delay(50, {
         trigger("re_align")
       })
@@ -3244,6 +3445,20 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                 )
               )
             ),
+            tags$label(
+              style = paste(
+                "display: flex; align-items: center; gap: 4px;",
+                "margin: 0; font-weight: normal; cursor: pointer;"
+              ),
+              tags$input(
+                type = "checkbox",
+                style = "margin: 0; vertical-align: middle;",
+                onchange = stringr::str_glue(
+                  "Shiny.setInputValue('{ns('single_codon')}', this.checked, {{priority: 'event'}})"
+                )
+              ),
+              "single codon"
+            ),
             div(
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "STOP"),
@@ -3271,20 +3486,9 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                 )
               )
             ),
-            tags$label(
-              style = paste(
-                "display: flex; align-items: center; gap: 4px;",
-                "margin: 0; font-weight: normal; cursor: pointer;"
-              ),
-              tags$input(
-                type = "checkbox",
-                style = "margin: 0; vertical-align: middle;",
-                onchange = stringr::str_glue(
-                  "Shiny.setInputValue('{ns('single_codon')}', this.checked, {{priority: 'event'}})"
-                )
-              ),
-              "single codon"
-            )
+            # Manual partial-end flags + poly-A stop trim (PCG only). Rendered
+            # reactively so button state reflects the selected gene.
+            uiOutput(ns("partial_ctrls"), inline = TRUE)
           ) |> shinyjs::hidden()
         ),
         div(
@@ -3341,7 +3545,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       },
       uiOutput(ns("status_toggles"), inline = TRUE),
       actionButton(ns("linearize"), "Linearize"),
-      actionButton(ns("lock"), "Lock&Close"),
+      actionButton(ns("lock"), "Lock & Close"),
       actionButton(ns("close"), "Close")
     )
   )

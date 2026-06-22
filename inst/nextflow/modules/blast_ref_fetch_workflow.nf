@@ -39,11 +39,12 @@ def stripBlastAndRefTagsSql() {
 params.refFetchFailedMsg = 'BLAST reference fetch timed out after all retries. Rerun pipeline with -resume to retry.'
 
 params.sqlWriteBlastLineage = 'UPDATE assemble SET blast_lineage = ? WHERE ID = ?'
-// Per-scaffold lineage: matched on ID only (not blast_accession). The accession
-// is written by BLAST_GENBANK on a separate nf-sqldb actor thread whose commit
-// is deferred, so matching on it can see uncommitted NULL and silently no-op.
-// Matching on ID (like the assemble-table write above) removes that dependency.
-params.sqlWriteBlastLineageScaffold = 'UPDATE assemblies SET blast_lineage = ? WHERE ID = ?'
+// Per-scaffold lineage: keyed on (ID, path, scaffold). The scaffold->accession
+// map comes from BLAST_GENBANK in-memory, so we don't read the deferred-commit
+// assemblies.blast_accession column. Each scaffold gets the lineage of the ref
+// fetched for ITS OWN accession (not the sample top hit), so multi-scaffold
+// samples with hits to different taxa keep distinct per-scaffold lineages.
+params.sqlWriteBlastLineageScaffold = 'UPDATE assemblies SET blast_lineage = ? WHERE ID = ? AND path = ? AND scaffold = ?'
 
 params.sqlWriteBlastRef = '''INSERT OR REPLACE INTO blast_ref_annotations
     (ID, gene, type, pos1, pos2, direction, ref_length, time_stamp)
@@ -75,6 +76,8 @@ workflow BLAST_REF_FETCH {
     take:
         // input: tuple(id, blast_accession, blast_species, blast_evalue, opts_id, is_top)
         input
+        // scaffold_map: tuple(id, path, scaffold, accession) for every real scaffold hit
+        scaffold_map
 
     main:
         // Track top-hit IDs entering the workflow so failures can be detected below
@@ -132,9 +135,9 @@ workflow BLAST_REF_FETCH {
             .sqlInsert(statement: params.sqlWriteRefSeq, db: 'sqlite')
 
         // Lineage: assemble (per-ID) row gets the top-hit lineage; assemblies
-        // (per-scaffold) rows get lineage matched on accession so every scaffold
-        // hit inherits the right lineage even when multiple accessions are fetched
-        // per sample.
+        // (per-scaffold) rows get the lineage of their OWN accession via an
+        // in-memory join with scaffold_map, so multi-scaffold samples whose
+        // scaffolds hit different taxa keep distinct per-scaffold lineages.
         ref_out
             .map { id, accession, is_top, csv_file, seq_file, gc_file, json_file ->
                 def json = new JsonSlurper().parse(json_file)
@@ -149,9 +152,16 @@ workflow BLAST_REF_FETCH {
             .map    { id, accession, is_top, lineage -> tuple(lineage, id) }
             .sqlInsert(statement: params.sqlWriteBlastLineage, db: 'sqlite')
 
+        // Per-scaffold: join each accession's lineage to every scaffold that hit it
+        // (top AND dup), keyed on (id, accession). combine(by:0) fans the single
+        // lineage out across all matching scaffolds.
         lineage_records
-            .filter { id, accession, is_top, lineage -> is_top }
-            .map    { id, accession, is_top, lineage -> tuple(lineage, id) }
+            .map { id, accession, is_top, lineage -> tuple(tuple(id, accession), lineage) }
+            .combine(
+                scaffold_map.map { id, path, scaffold, accession -> tuple(tuple(id, accession), path, scaffold) },
+                by: 0
+            )
+            .map { key, lineage, path, scaffold -> tuple(lineage, key[0], path, scaffold) }
             .sqlInsert(statement: params.sqlWriteBlastLineageScaffold, db: 'sqlite')
 
         // Detect top-hit fetch failures: IDs that entered but produced no output after all retries

@@ -6,7 +6,7 @@ ANNOTATE_COL_GROUPS <- list(
   BLAST    = c("blast_ref_status", "blast_accession", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
-  Review   = c("ID_verified", "reviewed", "problematic", "warnings"),
+  Review   = c("ID_verified", "reviewed", "problematic", "partial", "warnings"),
   Metadata = c("time_stamp", "annotate_notes")
 )
 ANNOTATE_COL_GROUP_LOOKUP <- {
@@ -419,6 +419,14 @@ annotate_server <- function(id) {
             width = 100,
             cell = rt_bool_badge(invert = TRUE, hide_no = TRUE)
           ),
+          partial = colDef(
+            show = TRUE, class = .grp("partial"), headerClass = .grp("partial"),
+            name = "Partial",
+            html = TRUE,
+            align = "center",
+            width = 100,
+            cell = rt_bool_badge(invert = TRUE, hide_no = FALSE)
+          ),
           time_stamp = colDef(
             show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
             name = "Last Updated",
@@ -627,6 +635,63 @@ annotate_server <- function(id) {
       rv$data <- filtered_data() |>
         dplyr::rows_update(rv$updating, by = "ID")
       trigger("update_annotate_table")
+    })
+
+    # Toggle partial
+    apply_partial_update <- function(upd) {
+      rv$updating <- upd |> dplyr::select(ID, partial)
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- filtered_data() |>
+        dplyr::rows_update(rv$updating, by = "ID")
+      trigger("update_annotate_table")
+    }
+    init("partial_top")
+    on("partial_top", {
+      req(session$userData$mode == "Annotate")
+      req(selected())
+      upd <- filtered_data() |>
+        dplyr::select(ID, partial, topology) |>
+        dplyr::slice(selected())
+      is_on <- any(upd$partial == "yes", na.rm = TRUE)
+      if (!is_on) {
+        # turning partial on: warn if any selected assembly is circular
+        if (any(upd$topology == "circular", na.rm = TRUE)) {
+          rv$partial_pending <- upd
+          shinyWidgets::confirmSweetAlert(
+            inputId = "partial_circular_confirm",
+            title = "Mark circular assembly as partial?",
+            text = paste(
+              "One or more selected assemblies is circular. A closed circle",
+              "represents the whole molecule, so flagging it 'partial' is",
+              "contradictory. Consider using the Linearize button (in the",
+              "annotation details view) to break the circle before submission."
+            ),
+            type = "warning",
+            btn_labels = c("Cancel", "Mark partial anyway"),
+            btn_colors = c("#6c757d", "#0056b3")
+          )
+          req(F)
+        }
+        upd$partial <- "yes"
+      } else {
+        upd$partial <- "no"
+      }
+      apply_partial_update(upd)
+    })
+    observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
+      if (isTRUE(input$partial_circular_confirm) && !is.null(rv$partial_pending)) {
+        upd <- rv$partial_pending
+        upd$partial <- "yes"
+        apply_partial_update(upd)
+      }
+      rv$partial_pending <- NULL
     })
 
     # Set Annotate Options ----
@@ -902,6 +967,10 @@ annotate_server <- function(id) {
             maxItems = 1
           )
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "linear_complete",
+          value = isTRUE(as.integer(cur$linear_complete %||% 0L) == 1L)
+        )
         rv$params <- cur$params |> jsonlite::fromJSON()
       }
     })
@@ -929,6 +998,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("curate_ref_db", condition = input$edit_curate_opts)
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
+      shinyjs::toggleState("linear_complete", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_curate_opts && input$curate_opts %in% filtered_data()$curate_opts) {
         rv$updating_indirect <- filtered_data() |>
@@ -1005,7 +1075,8 @@ annotate_server <- function(id) {
               max_blast_hits = req(input$max_blast_hits),
               ref_dir = req(input$curate_ref_dir),
               ref_db = req(input$curate_ref_db),
-              target = req(input$target)
+              target = req(input$target),
+              linear_complete = as.integer(isTRUE(input$linear_complete))
             ),
             in_place = TRUE,
             copy = TRUE,

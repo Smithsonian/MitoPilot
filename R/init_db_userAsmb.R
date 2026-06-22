@@ -19,6 +19,11 @@
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
+#' @param linear_complete Treat linear assemblies as complete genomes for the
+#'   export "completeness" field? By default only circular assemblies are
+#'   labeled "complete genome" and linear assemblies "partial genome". Set TRUE
+#'   for taxa whose complete mitogenome is genuinely linear (default = FALSE).
+#'   Editable later in the curation-options modal.
 #' @param curate_params Default curation parameters
 #' @param orf_cpus CPUs for the optional ORF-finder step (default = 4)
 #' @param orf_memory Memory (GB) for the optional ORF-finder step (default = 8)
@@ -49,6 +54,7 @@ new_db_userAsmb <- function(
     curate_memory = 8,
     curate_target = "fish_mito",
     max_blast_hits = 10,
+    linear_complete = FALSE,
     curate_params = NULL,
     # Default ORF-finder options
     orf_cpus = 4,
@@ -368,6 +374,7 @@ new_db_userAsmb <- function(
       warnings INTEGER,
       reviewed TEXT,
       problematic TEXT,
+      partial TEXT,
       structure TEXT,
       length INTEGER,
       topology TEXT,
@@ -384,6 +391,7 @@ new_db_userAsmb <- function(
         orf_opts = "default",
         reviewed = "no",
         problematic = "no",
+        partial = "no",
         ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0
@@ -452,6 +460,7 @@ new_db_userAsmb <- function(
       max_blast_hits INTEGER,
       ref_db TEXT,
       ref_dir TEXT,
+      linear_complete INTEGER,
       params JSON,
       PRIMARY KEY (curate_opts)
     );"
@@ -466,6 +475,7 @@ new_db_userAsmb <- function(
         max_blast_hits = 10,
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
+        linear_complete = as.integer(isTRUE(linear_complete)),
         params = jsonlite::toJSON(curate_params)
       ),
       in_place = TRUE,
@@ -545,6 +555,8 @@ new_db_userAsmb <- function(
       tool TEXT,
       start_codon TEXT,
       stop_codon TEXT,
+      partial_start INTEGER,
+      partial_stop INTEGER,
       translation TEXT,
       notes TEXT,
       warnings TEXT,
