@@ -50,12 +50,12 @@ process validate {
 // such writer at a time. errorStrategy 'ignore' drops a failed sample so the
 // gated downstream stages skip it.
 //
-// The SQLite JDBC driver ships in inst/nextflow/lib/. Nextflow's lib/ auto-add
-// doesn't reliably reach the native task classloader on every executor (e.g.
-// sge on Hydra -> ClassNotFoundException), so we fall back to loading the jar
-// explicitly from ${projectDir}/lib/. We instantiate the driver and call
+// The SQLite JDBC driver is provided by the nf-sqldb plugin, which is already a
+// hard dependency (every .config declares it and main.nf uses fromQuery/sqlInsert),
+// so org.sqlite.JDBC is already loaded in the JVM. We resolve it from that plugin's
+// classloader rather than shipping our own jar. We instantiate the driver and call
 // .connect() directly rather than via DriverManager, whose caller-classloader
-// filtering does not see jars loaded from lib/ ("No suitable driver found").
+// filtering would not see a class from the plugin classloader.
 process write_curated_result {
 
     // Native (exec) task: writes the .sqlite driver-side via JDBC. Pin to the
@@ -75,21 +75,21 @@ process write_curated_result {
     exec:
     def ts = params.ts as String
     def dbPath = "${workflow.launchDir}/.sqlite"
-    // Load the SQLite JDBC driver. Try the classpath first (lib/ auto-add); if
-    // the native task's classloader doesn't see it, load the jar explicitly from
-    // the pipeline's lib/ dir. We only ever touch the driver via java.sql.*
-    // interfaces, so the loader it comes from doesn't matter downstream.
-    def drv
+    // Resolve org.sqlite.JDBC from the nf-sqldb plugin classloader (the plugin
+    // bundles sqlite-jdbc and is always started), falling back to the app
+    // classpath. We only touch the driver via java.sql.* interfaces, so the
+    // loader it comes from doesn't matter downstream.
+    def driverClass = null
     try {
-        drv = Class.forName("org.sqlite.JDBC").getDeclaredConstructor().newInstance()
-    } catch (ClassNotFoundException ignored) {
-        def libDir = new File("${workflow.projectDir}/lib")
-        def jars = libDir.listFiles({ d, n -> n ==~ /sqlite-jdbc.*\.jar/ } as java.io.FilenameFilter)
-        if (!jars) throw new RuntimeException("SQLite JDBC jar not found in ${libDir}")
-        def loader = new java.net.URLClassLoader(
-            [jars[0].toURI().toURL()] as java.net.URL[], this.class.classLoader)
-        drv = loader.loadClass("org.sqlite.JDBC").getDeclaredConstructor().newInstance()
+        def pcl = nextflow.plugin.Plugins.manager?.getPluginClassLoader('nf-sqldb')
+        if (pcl) driverClass = pcl.loadClass("org.sqlite.JDBC")
+    } catch (Throwable ignored) {}
+    if (driverClass == null) {
+        try { driverClass = Class.forName("org.sqlite.JDBC") } catch (Throwable ignored) {}
     }
+    if (driverClass == null)
+        throw new RuntimeException("Could not load org.sqlite.JDBC from the nf-sqldb plugin or the classpath")
+    def drv = driverClass.getDeclaredConstructor().newInstance()
     def conn = drv.connect("jdbc:sqlite:${dbPath}", new java.util.Properties())
 
     // set a string-or-NULL parameter (lets SQLite column affinity coerce numeric
