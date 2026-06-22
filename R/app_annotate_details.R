@@ -2327,15 +2327,54 @@ annotations_details_server <- function(id, rv) {
     # Reactive controls shown in edit mode for PCGs: flag the 5'/3' end as
     # partial (honored by export as < / > location markers) and trim the stop
     # to a 1-2 bp partial (T / TA) completed by a 3' poly-A tail.
+    # TRUE when the terminal codon is not in the gene-specific allowed list from
+    # the curation params (an undetermined / partial end). Empty allowed list ->
+    # no check.
+    start_codon_invalid <- function(sel) {
+      allowed <- rv$editing$params$start_codons
+      sc <- rv$annotations$start_codon[sel]
+      !is.null(allowed) && length(allowed) > 0 && isTRUE(nzchar(sc)) && sc %nin% allowed
+    }
+    stop_codon_invalid <- function(sel) {
+      allowed <- rv$editing$params$stop_codons
+      ec <- rv$annotations$stop_codon[sel]
+      !is.null(allowed) && length(allowed) > 0 && isTRUE(nzchar(ec)) && ec %nin% allowed
+    }
+
+    # Persist the partial flag when a terminal codon is not an allowed gene codon,
+    # so an undetermined end is recorded (and survives save) like export already
+    # treats it. Only sets (never clears) so a deliberate flag on a valid codon is
+    # kept; converges because the guard skips once the flag is 1.
+    observe({
+      req(rv$editing)
+      req(all(c("partial_start", "partial_stop") %in% names(rv$annotations)))
+      sel <- selected()
+      req(length(sel) == 1)
+      req(rv$annotations$type[sel] == "PCG")
+      if (start_codon_invalid(sel) && !isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L)) {
+        rv$annotations$partial_start[sel] <- 1L
+      }
+      if (stop_codon_invalid(sel) && !isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L)) {
+        rv$annotations$partial_stop[sel] <- 1L
+      }
+    })
+
     output$partial_ctrls <- renderUI({
       req(rv$editing)
       req(all(c("partial_start", "partial_stop") %in% names(rv$annotations)))
       sel <- selected()
       req(length(sel) == 1)
       req(rv$annotations$type[sel] == "PCG")
-      ps <- isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L)
-      pe <- isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L)
+      # Highlight a partial end when the flag is set OR the terminal codon is not
+      # an allowed gene codon.
+      ps <- isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L) || start_codon_invalid(sel)
+      pe <- isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L) || stop_codon_invalid(sel)
       tagList(
+        actionButton(
+          ns("polyA_stop"), "poly-A stop",
+          icon = icon("scissors"),
+          class = "btn btn-default btn-sm"
+        ),
         tags$span(style = "font-weight: bold;", "PARTIAL"),
         actionButton(
           ns("toggle_partial_start"), "5'",
@@ -2344,11 +2383,6 @@ annotations_details_server <- function(id, rv) {
         actionButton(
           ns("toggle_partial_stop"), "3'",
           class = if (pe) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
-        ),
-        actionButton(
-          ns("polyA_stop"), "poly-A stop",
-          icon = icon("scissors"),
-          class = "btn btn-default btn-sm"
         )
       )
     })
@@ -3420,6 +3454,20 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                 )
               )
             ),
+            tags$label(
+              style = paste(
+                "display: flex; align-items: center; gap: 4px;",
+                "margin: 0; font-weight: normal; cursor: pointer;"
+              ),
+              tags$input(
+                type = "checkbox",
+                style = "margin: 0; vertical-align: middle;",
+                onchange = stringr::str_glue(
+                  "Shiny.setInputValue('{ns('single_codon')}', this.checked, {{priority: 'event'}})"
+                )
+              ),
+              "single codon"
+            ),
             div(
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "STOP"),
@@ -3446,20 +3494,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                   width = "48px"
                 )
               )
-            ),
-            tags$label(
-              style = paste(
-                "display: flex; align-items: center; gap: 4px;",
-                "margin: 0; font-weight: normal; cursor: pointer;"
-              ),
-              tags$input(
-                type = "checkbox",
-                style = "margin: 0; vertical-align: middle;",
-                onchange = stringr::str_glue(
-                  "Shiny.setInputValue('{ns('single_codon')}', this.checked, {{priority: 'event'}})"
-                )
-              ),
-              "single codon"
             ),
             # Manual partial-end flags + poly-A stop trim (PCG only). Rendered
             # reactively so button state reflects the selected gene.
