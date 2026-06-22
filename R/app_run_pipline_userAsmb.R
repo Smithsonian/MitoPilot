@@ -323,6 +323,19 @@ pipeline_server_userAsmb <- function(id) {
       req(!job_submitting())
       job_submitting(TRUE)
       shinyjs::disable(ns("submit_job"))
+
+      # Let the user know submission is underway. The qsub call below blocks the
+      # R thread, so defer it to the next event-loop tick to let this render.
+      shinyWidgets::sendSweetAlert(
+        title = "Submitting job...",
+        text = "Hold tight, handing your job off to the scheduler. This can take a moment.",
+        type = "info",
+        btn_labels = NA,
+        closeOnClickOutside = FALSE
+      )
+
+      later::later(function() {
+       shiny::withReactiveDomain(session, {
       tryCatch({
         work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
         full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
@@ -373,6 +386,8 @@ pipeline_server_userAsmb <- function(id) {
           type = "error"
         )
       })
+       })
+      }, delay = 0.05)
     })
 
     # Monitor progress ----

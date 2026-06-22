@@ -329,6 +329,20 @@ pipeline_server <- function(id) {
       req(!job_submitting())
       job_submitting(TRUE)
       shinyjs::disable(ns("submit_job"))
+
+      # Let the user know submission is underway. The qsub/sbatch call below
+      # blocks the R thread, so defer it to the next event-loop tick to let
+      # this message render first.
+      shinyWidgets::sendSweetAlert(
+        title = "Submitting job...",
+        text = "Hold tight, handing your job off to the scheduler. This can take a moment.",
+        type = "info",
+        btn_labels = NA,
+        closeOnClickOutside = FALSE
+      )
+
+      later::later(function() {
+       shiny::withReactiveDomain(session, {
       is_hydra_cluster <- FALSE
       is_sedna_cluster <- FALSE
 
@@ -478,6 +492,8 @@ pipeline_server <- function(id) {
                                        type = "error")
         })
       }
+       })
+      }, delay = 0.05)
     })
 
 
