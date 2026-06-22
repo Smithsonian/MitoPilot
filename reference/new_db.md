@@ -39,6 +39,7 @@ new_db(
   curate_memory = 8,
   curate_target = "fish_mito",
   max_blast_hits = 10,
+  linear_complete = FALSE,
   curate_params = NULL,
   orf_cpus = 4,
   orf_memory = 8,
@@ -179,6 +180,14 @@ new_db(
 - max_blast_hits:
 
   Maximum number of top BLAST hits to retain (default = 10)
+
+- linear_complete:
+
+  Treat linear assemblies as complete genomes for the export
+  "completeness" field? By default only circular assemblies are labeled
+  "complete genome" and linear assemblies "partial genome". Set TRUE for
+  taxa whose complete mitogenome is genuinely linear (default = FALSE).
+  Editable later in the curation-options modal.
 
 - curate_params:
 

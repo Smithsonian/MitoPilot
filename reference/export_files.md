@@ -10,7 +10,7 @@ export_files(
   IDs = NULL,
   fasta_header =
     paste("{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
-    "[location=mitochondrion] {Taxon} mitochondrion, complete genome"),
+    "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"),
   fasta_header_gene = paste("{ID} [organism={Taxon}] [mgcode={genetic_code}]",
     "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
@@ -19,7 +19,8 @@ export_files(
   review = TRUE,
   start_aa = 10,
   stop_aa = 10,
-  ident_pct = 60
+  ident_pct = 60,
+  summary_csv = TRUE
 )
 ```
 
@@ -76,6 +77,11 @@ export_files(
 
   Identity threshold (percent) passed to \[flag_PCG_outliers()\].
   Default 60.
+
+- summary_csv:
+
+  Write a per-sample summary CSV (organism, topology, completeness, gene
+  counts, reference, etc.) into the export directory? (default: TRUE)
 
 ## Value
 

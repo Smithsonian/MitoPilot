@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,6 +82,7 @@
 <span>  curate_memory <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  curate_target <span class="op">=</span> <span class="st">"fish_mito"</span>,</span>
 <span>  max_blast_hits <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  linear_complete <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  curate_params <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  orf_cpus <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  orf_memory <span class="op">=</span> <span class="fl">8</span>,</span>
@@ -217,6 +218,14 @@ but flagged as ignored (default = 500).</p></dd>
 
 <dt id="arg-max-blast-hits">max_blast_hits<a class="anchor" aria-label="anchor" href="#arg-max-blast-hits"></a></dt>
 <dd><p>Maximum number of top BLAST hits to retain (default = 10)</p></dd>
+
+
+<dt id="arg-linear-complete">linear_complete<a class="anchor" aria-label="anchor" href="#arg-linear-complete"></a></dt>
+<dd><p>Treat linear assemblies as complete genomes for the
+export "completeness" field? By default only circular assemblies are
+labeled "complete genome" and linear assemblies "partial genome". Set TRUE
+for taxa whose complete mitogenome is genuinely linear (default = FALSE).
+Editable later in the curation-options modal.</p></dd>
 
 
 <dt id="arg-curate-params">curate_params<a class="anchor" aria-label="anchor" href="#arg-curate-params"></a></dt>

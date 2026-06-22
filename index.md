@@ -501,6 +501,19 @@ correct scheduler directives for your project’s executor, that you can
 submit to your scheduler directly from the app or save and submit
 yourself.
 
+## Exporting Complete vs. Partial Mitogenomes
+
+When exporting for NCBI GenBank submission, MitoPilot sets each sample’s
+title via the `{completeness}` field, which defaults to “complete
+genome” for circular assemblies and “partial genome” for linear
+assemblies. You can override a sample with the “Mark Partial” button in
+the Annotate module (useful for an incomplete circular assembly), and
+projects whose taxa have genuinely linear mitogenomes can set the
+`linear_complete` curation option so linear assemblies are still
+exported as complete. A single GenBank submission cannot mix complete
+and partial mitogenomes, so the export popup will warn you and offer to
+split a group into complete and partial sets.
+
 # Development Notes
 
 - This package uses [{renv}](https://smithsonian.github.io/MitoPilot/)

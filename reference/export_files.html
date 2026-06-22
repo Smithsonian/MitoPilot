@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,7 +53,7 @@
 <span>  IDs <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fasta_header <span class="op">=</span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]"</span>,</span>
-<span>    <span class="st">"[location=mitochondrion] {Taxon} mitochondrion, complete genome"</span><span class="op">)</span>,</span>
+<span>    <span class="st">"[location=mitochondrion] {Taxon} mitochondrion, {completeness}"</span><span class="op">)</span>,</span>
 <span>  fasta_header_gene <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"{ID} [organism={Taxon}] [mgcode={genetic_code}]"</span>,</span>
 <span>    <span class="st">"[location=mitochondrion] {Taxon}"</span><span class="op">)</span>,</span>
 <span>  out_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -62,7 +62,8 @@
 <span>  review <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  start_aa <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  stop_aa <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  ident_pct <span class="op">=</span> <span class="fl">60</span></span>
+<span>  ident_pct <span class="op">=</span> <span class="fl">60</span>,</span>
+<span>  summary_csv <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -121,6 +122,12 @@ return the flagged results? (default: TRUE)</p></dd>
 <dt id="arg-ident-pct">ident_pct<a class="anchor" aria-label="anchor" href="#arg-ident-pct"></a></dt>
 <dd><p>Identity threshold (percent) passed to
 [flag_PCG_outliers()]. Default 60.</p></dd>
+
+
+<dt id="arg-summary-csv">summary_csv<a class="anchor" aria-label="anchor" href="#arg-summary-csv"></a></dt>
+<dd><p>Write a per-sample summary CSV (organism, topology,
+completeness, gene counts, reference, etc.) into the export directory?
+(default: TRUE)</p></dd>
 
 </dl></div>
     <div class="section level2">

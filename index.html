@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -336,6 +336,11 @@
 <p>When one or more samples are in the “Ready to Run” state, the Nextflow pipeline can be run by clicking the “UPDATE” button at the top of the interface. This will open a popup where the <code>Run from App</code> button can be pressed and output from the pipeline can be viewed to track progress.</p>
 <p>Alternatively, the Nextflow command displayed in the popup can be copied and run in a terminal from the project directory. This can be useful if you would like to specify additional command line options or override input parameters. Or you can paste the Nextflow command into a job submission script for a computing cluster.</p>
 <p>When running the app headless over an SSH tunnel (see above), the pipeline is not launched with “Run from App”. Instead, MitoPilot generates an editable cluster submission script, pre-filled with the correct scheduler directives for your project’s executor, that you can submit to your scheduler directly from the app or save and submit yourself.</p>
+</div>
+<div class="section level2">
+<h2 id="exporting-complete-vs-partial-mitogenomes">Exporting Complete vs. Partial Mitogenomes<a class="anchor" aria-label="anchor" href="#exporting-complete-vs-partial-mitogenomes"></a>
+</h2>
+<p>When exporting for NCBI GenBank submission, MitoPilot sets each sample’s title via the <code>{completeness}</code> field, which defaults to “complete genome” for circular assemblies and “partial genome” for linear assemblies. You can override a sample with the “Mark Partial” button in the Annotate module (useful for an incomplete circular assembly), and projects whose taxa have genuinely linear mitogenomes can set the <code>linear_complete</code> curation option so linear assemblies are still exported as complete. A single GenBank submission cannot mix complete and partial mitogenomes, so the export popup will warn you and offer to split a group into complete and partial sets.</p>
 </div>
 </div>
 <div class="section level1">
