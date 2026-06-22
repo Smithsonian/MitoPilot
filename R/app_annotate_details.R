@@ -1889,7 +1889,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::rows_update(rv$updating[, c("ID", "partial")], by = "ID")
     }
     observeEvent(input$partial, {
-      if (is.na(rv$updating$partial)) {
+      if (!isTRUE(rv$updating$partial == "yes")) {
         # turning partial on: warn first if the assembly is circular
         if (isTRUE(rv$updating$topology == "circular")) {
           shinyWidgets::confirmSweetAlert(
@@ -1909,7 +1909,7 @@ annotations_details_server <- function(id, rv) {
         }
         apply_partial("yes")
       } else {
-        apply_partial(NA_character_)
+        apply_partial("no")
       }
     })
     observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {

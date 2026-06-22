@@ -425,7 +425,7 @@ annotate_server <- function(id) {
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge(invert = TRUE, hide_no = TRUE)
+            cell = rt_bool_badge(invert = TRUE, hide_no = FALSE)
           ),
           time_stamp = colDef(
             show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
@@ -659,8 +659,8 @@ annotate_server <- function(id) {
       upd <- filtered_data() |>
         dplyr::select(ID, partial, topology) |>
         dplyr::slice(selected())
-      cur <- sort(unique(upd$partial))[1]
-      if (is.na(cur)) {
+      is_on <- any(upd$partial == "yes", na.rm = TRUE)
+      if (!is_on) {
         # turning partial on: warn if any selected assembly is circular
         if (any(upd$topology == "circular", na.rm = TRUE)) {
           rv$partial_pending <- upd
@@ -681,7 +681,7 @@ annotate_server <- function(id) {
         }
         upd$partial <- "yes"
       } else {
-        upd$partial <- NA_character_
+        upd$partial <- "no"
       }
       apply_partial_update(upd)
     })
