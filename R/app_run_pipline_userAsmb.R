@@ -338,7 +338,9 @@ pipeline_server_userAsmb <- function(id) {
        shiny::withReactiveDomain(session, {
       tryCatch({
         work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
-        full_nf_cmd <- paste(c("nextflow", nf_cmd()), collapse = " ")
+        # nf_cmd() is reactive; read it via isolate() since this deferred
+        # callback runs outside a reactive context.
+        full_nf_cmd <- paste(c("nextflow", shiny::isolate(nf_cmd())), collapse = " ")
 
         # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
         timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
