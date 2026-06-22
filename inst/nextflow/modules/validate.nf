@@ -177,10 +177,29 @@ process write_curated_result {
         } catch (Exception ignored) {}
         def partial = (topology == 'circular' || linComplete) ? 'no' : 'yes'
 
+        // Drop auto-generated "EDITED:" notes (e.g. the manual linearization
+        // note) now that WF2 has regenerated the assembly; keep user-typed notes
+        // (the other "; "-delimited segments). NULL when nothing remains.
+        String cleanedNotes = null
+        try {
+            def nq = conn.prepareStatement("SELECT annotate_notes FROM annotate WHERE ID = ?")
+            nq.setString(1, id.toString())
+            def nrs = nq.executeQuery()
+            if (nrs.next()) {
+                def raw = nrs.getString(1)
+                if (raw != null) {
+                    def kept = raw.split('; ', -1).findAll { !it.trim().startsWith('EDITED:') }
+                    cleanedNotes = kept.join('; ')
+                    if (cleanedNotes.trim().length() == 0) cleanedNotes = null
+                }
+            }
+            nrs.close(); nq.close()
+        } catch (Exception ignored) {}
+
         def updAnn = conn.prepareStatement(
             "UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, structure = ?, " +
             "PCGCount = ?, tRNACount = ?, rRNACount = ?, missing = ?, extra = ?, warnings = ?, " +
-            "partial = ?, annotate_switch = 2, time_stamp = ? WHERE ID = ?")
+            "partial = ?, annotate_notes = ?, annotate_switch = 2, time_stamp = ? WHERE ID = ?")
         updAnn.setInt(1, path as int)
         updAnn.setInt(2, scaffolds)
         setStr(updAnn, 3, topology)
@@ -193,8 +212,9 @@ process write_curated_result {
         setStr(updAnn, 10, g('extra'))
         setStr(updAnn, 11, g('warnings'))
         updAnn.setString(12, partial)
-        updAnn.setString(13, ts)
-        updAnn.setString(14, id.toString())
+        setStr(updAnn, 13, cleanedNotes)
+        updAnn.setString(14, ts)
+        updAnn.setString(15, id.toString())
         def na = updAnn.executeUpdate()
         if (na != 1) throw new RuntimeException("annotate UPDATE matched ${na} rows (expected 1) for ID '${id}'")
         updAnn.close()

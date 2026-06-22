@@ -174,18 +174,24 @@ annotations_details_server <- function(id, rv) {
 
     # Compact status pill renderer. `state` is one of "yes" / "no" / NA;
     # `invert = TRUE` flips the color mapping so "yes" reads as warning.
-    status_badge <- function(label, state, invert = FALSE) {
+    # neutral_no: render a "no" value with the neutral (grey) styling rather than
+    # a coloured one. Used for the Partial badge, where "no" means a complete
+    # assembly and a green "good" colour is misleading.
+    status_badge <- function(label, state, invert = FALSE, neutral_no = FALSE) {
       val <- if (is.na(state)) "na" else as.character(state)
-      bg <- if (val == "yes") {
+      # Colour decision separate from the displayed text so "no" can read NO but
+      # render neutral.
+      color_val <- if (neutral_no && val == "no") "na" else val
+      bg <- if (color_val == "yes") {
         if (invert) "#fde8d0" else "#d4edda"
-      } else if (val == "no") {
+      } else if (color_val == "no") {
         if (invert) "#d4edda" else "#fde8d0"
       } else {
         "#e9ecef"
       }
-      fg <- if (val == "yes") {
+      fg <- if (color_val == "yes") {
         if (invert) "#7d4a1e" else "#2d6a4f"
-      } else if (val == "no") {
+      } else if (color_val == "no") {
         if (invert) "#2d6a4f" else "#7d4a1e"
       } else {
         "#6c757d"
@@ -206,18 +212,21 @@ annotations_details_server <- function(id, rv) {
         status_badge("ID verified", rv$updating$ID_verified),
         status_badge("Reviewed",    rv$updating$reviewed),
         status_badge("Problematic", rv$updating$problematic, invert = TRUE),
-        status_badge("Partial",     rv$updating$partial, invert = TRUE)
+        status_badge("Partial Mito",     rv$updating$partial, invert = TRUE, neutral_no = TRUE)
       )
     })
 
     # Footer toggle buttons: clicking still drives the same input$ID_verified /
     # input$reviewed / input$problematic observers below; visual state reflects
     # the current value so the user sees what each click will flip.
-    toggle_btn <- function(id, label, state, invert = FALSE) {
+    # neutral_no: style a "no" value as the neutral default button rather than a
+    # coloured one (for Partial, where "no" = complete and green is misleading).
+    toggle_btn <- function(id, label, state, invert = FALSE, neutral_no = FALSE) {
       val <- if (is.na(state)) "na" else as.character(state)
-      cls <- if (val == "yes") {
+      cls_val <- if (neutral_no && val == "no") "na" else val
+      cls <- if (cls_val == "yes") {
         if (invert) "btn btn-warning" else "btn btn-success"
-      } else if (val == "no") {
+      } else if (cls_val == "no") {
         if (invert) "btn btn-success" else "btn btn-default"
       } else {
         "btn btn-default"
@@ -248,7 +257,7 @@ annotations_details_server <- function(id, rv) {
         toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
                    invert = TRUE),
         toggle_btn(ns("partial"),     "Partial",     rv$updating$partial,
-                   invert = TRUE)
+                   invert = TRUE, neutral_no = TRUE)
       )
     })
 
@@ -2341,24 +2350,6 @@ annotations_details_server <- function(id, rv) {
       !is.null(allowed) && length(allowed) > 0 && isTRUE(nzchar(ec)) && ec %nin% allowed
     }
 
-    # Persist the partial flag when a terminal codon is not an allowed gene codon,
-    # so an undetermined end is recorded (and survives save) like export already
-    # treats it. Only sets (never clears) so a deliberate flag on a valid codon is
-    # kept; converges because the guard skips once the flag is 1.
-    observe({
-      req(rv$editing)
-      req(all(c("partial_start", "partial_stop") %in% names(rv$annotations)))
-      sel <- selected()
-      req(length(sel) == 1)
-      req(rv$annotations$type[sel] == "PCG")
-      if (start_codon_invalid(sel) && !isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L)) {
-        rv$annotations$partial_start[sel] <- 1L
-      }
-      if (stop_codon_invalid(sel) && !isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L)) {
-        rv$annotations$partial_stop[sel] <- 1L
-      }
-    })
-
     output$partial_ctrls <- renderUI({
       req(rv$editing)
       req(all(c("partial_start", "partial_stop") %in% names(rv$annotations)))
@@ -2375,7 +2366,7 @@ annotations_details_server <- function(id, rv) {
           icon = icon("scissors"),
           class = "btn btn-default btn-sm"
         ),
-        tags$span(style = "font-weight: bold;", "PARTIAL"),
+        tags$span(style = "font-weight: bold; margin-left: 1em;", "PARTIAL"),
         actionButton(
           ns("toggle_partial_start"), "5'",
           class = if (ps) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
@@ -3554,7 +3545,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       },
       uiOutput(ns("status_toggles"), inline = TRUE),
       actionButton(ns("linearize"), "Linearize"),
-      actionButton(ns("lock"), "Lock&Close"),
+      actionButton(ns("lock"), "Lock & Close"),
       actionButton(ns("close"), "Close")
     )
   )
