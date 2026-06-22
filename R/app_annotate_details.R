@@ -444,15 +444,36 @@ annotations_details_server <- function(id, rv) {
       )
     })
 
+    # TRUE when the annotation being edited has changes not yet saved. Checks the
+    # raw fields, not just the translation: the manual partial 5'/3' flags and the
+    # poly-A stop trim change partial_start/partial_stop/stop_codon/positions
+    # without altering the translation, so a translation-only test would let the
+    # user close/lock and silently drop those edits.
+    editing_unsaved <- function() {
+      if (is.null(rv$editing) || is.null(rv$editing$backup)) return(FALSE)
+      sel <- selected()
+      if (length(sel) != 1) return(FALSE)
+      bak <- rv$editing$backup
+      changed <- function(f) {
+        a <- if (f %in% names(rv$annotations)) rv$annotations[[f]][sel] else NA
+        b <- if (f %in% names(bak)) bak[[f]] else NA
+        !isTRUE(a == b) && !(is.na(a) && is.na(b))
+      }
+      any(vapply(
+        c("translation", "pos1", "pos2", "stop_codon", "partial_start", "partial_stop"),
+        changed, logical(1)
+      ))
+    }
+
     # Close Modal ----
     observeEvent(input$close, {
       # Nothing to do if the modal state is already cleared (e.g. a second/spurious
       # close after rv$annotations was nulled below) - avoids filter() on NULL.
       req(!is.null(rv$annotations))
-      if (!is.null(rv$editing) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
+      if (editing_unsaved()) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
-          text = "Discard or save edits before selecting a new annotation"
+          text = "Discard or save edits before closing"
         )
         req(F)
       }
@@ -504,10 +525,10 @@ annotations_details_server <- function(id, rv) {
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
-      if (!is.null(rv$editing) && rv$annotations$translation[selected()] != rv$editing$backup$translation) {
+      if (editing_unsaved()) {
         shinyWidgets::sendSweetAlert(
           title = "Unsaved Edits!",
-          text = "Discard or save edits before selecting a new annotation"
+          text = "Discard or save edits before locking"
         )
         req(F)
       }
