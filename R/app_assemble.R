@@ -89,7 +89,7 @@ assemble_ui <- function(id) {
         )
       )
     ),
-    reactableOutput(ns("table")),
+    div(class = "mp-table-resize", reactableOutput(ns("table"))),
     div(
       style = "margin-top: 12px; display: flex; gap: 8px;",
       downloadButton(ns("export_selected"), "Export Selected to CSV",
@@ -195,7 +195,7 @@ assemble_server <- function(id) {
           selection = "multiple",
           searchable = TRUE,
           defaultSorted = list(time_stamp = "desc"),
-          height = 550,
+          height = "100%",
           wrap = FALSE,
           pageSizeOptions = c(25, 50, 100, 200, 500),
           rowStyle = rt_highlight_row(),

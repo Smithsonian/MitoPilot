@@ -148,3 +148,18 @@ details[open] summary {
 .rt-tr-striped-sticky:not(.rt-tr-selected) {
   background-color: #e4e4e4 !important;
 }
+
+/* Sample tables: auto-fit window height, plus a drag handle to resize. */
+.mp-table-resize {
+  height: calc(100vh - 300px);
+  min-height: 240px;
+  resize: vertical;
+  overflow: hidden;
+}
+
+/* Make the shiny output container and reactable widget fill the wrapper so
+   height: "100%" on the table resolves against the resizable box. */
+.mp-table-resize > div,
+.mp-table-resize > div > .reactable {
+  height: 100% !important;
+}
