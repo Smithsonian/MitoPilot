@@ -69,6 +69,18 @@ $( document ).ready(function(){
   });
 });
 
+// Sample-table resize: the CSS handle (resize: vertical) writes an inline
+// height, which then sticks and stops the table re-fitting the window. On
+// window resize, clear that inline height so the stylesheet calc() takes
+// over again and the table stays fully displayed.
+$( document ).ready(function(){
+  window.addEventListener('resize', function() {
+    document.querySelectorAll('.mp-table-resize').forEach(function(el) {
+      el.style.height = '';
+    });
+  });
+});
+
 // Shift-click range selection for the main sample reactable tables.
 // reactable (0.4.5) has no native range selection, so we drive it on the
 // client: a plain click stores an "anchor" row, and a shift-click selects
