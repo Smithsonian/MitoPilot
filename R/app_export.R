@@ -57,7 +57,7 @@ export_ui <- function(id) {
         width                  = "150px"
       )
     ),
-    reactableOutput(ns("table")),
+    div(class = "mp-table-resize", reactableOutput(ns("table"))),
     div(
       style = "margin-top: 12px; display: flex; gap: 8px;",
       downloadButton(ns("export_selected"), "Export Selected to CSV",
@@ -141,7 +141,7 @@ export_server <- function(id) {
         searchable = TRUE,
         resizable = TRUE,
         filterable = TRUE,
-        height = 550,
+        height = "100%",
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         striped = TRUE,

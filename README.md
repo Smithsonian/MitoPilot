@@ -356,6 +356,36 @@ for one or more of the processing steps. After initializing a new
 project you should review the `.config` file to ensure that all
 necessary parameters are provided.
 
+### Container Cache Directory
+
+MitoPilot runs each processing step inside a container (Docker locally,
+or Singularity/Apptainer on most HPC clusters). The container image is
+fairly large, so on first use it must be downloaded and, for
+Singularity/Apptainer, converted to a single `.sif` file. By default
+Nextflow caches this image inside each project's `work/` directory, which
+means every new project re-downloads and rebuilds the same image. On
+shared cluster filesystems this can be slow enough to exceed the default
+pull timeout and cause the run to fail.
+
+To download the image once and reuse it across all projects, point
+Nextflow at a single, persistent cache directory by setting an
+environment variable before launching MitoPilot (e.g. in your
+`~/.bashrc` or job submission script):
+
+``` bash
+# Singularity / Apptainer (most HPC clusters)
+export NXF_SINGULARITY_CACHEDIR=/path/to/persistent/singularity_cache
+export NXF_APPTAINER_CACHEDIR=/path/to/persistent/apptainer_cache
+
+# Docker (local)
+# Docker manages its own image cache, so no setting is required.
+```
+
+Choose a location with enough space that persists between sessions (not a
+per-project or temporary scratch directory). If image pulls still time
+out on a slow filesystem, increase `pullTimeout` in the
+`singularity { }` block of the `.config` file.
+
 ### Database Creation
 
 MitoPilot makes use of the Nextflow plugin

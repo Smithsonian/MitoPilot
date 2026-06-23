@@ -92,7 +92,7 @@ annotate_ui <- function(id) {
         ),
         uiOutput(ns("warnings_select"))
       ),
-      reactable::reactableOutput(ns("table")),
+      div(class = "mp-table-resize", reactable::reactableOutput(ns("table"))),
       div(
         style = "margin-top: 12px; display: flex; gap: 8px;",
         downloadButton(ns("export_selected"), "Export Selected to CSV",
@@ -247,7 +247,7 @@ annotate_server <- function(id) {
         searchable = TRUE,
         filterable = TRUE,
         defaultSorted = list(time_stamp = "desc"),
-        height = 500,
+        height = "100%",
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
         rowStyle = rt_highlight_row(),
