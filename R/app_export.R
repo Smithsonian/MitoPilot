@@ -120,7 +120,10 @@ export_server <- function(id) {
     output$col_css <- renderUI({
       hidden <- setdiff(names(EXPORT_COL_GROUPS), col_groups_rv())
       if (length(hidden) == 0) return(NULL)
-      rules <- paste0(".mp-grp-", hidden,
+      # Scope to THIS module's table so rules don't hit the shared mp-grp
+      # classes on the assemble, userAsmb, and annotate tables.
+      sel <- paste0("#", ns("table"), " ")
+      rules <- paste0(sel, ".mp-grp-", hidden,
                       " { display: none !important; }",
                       collapse = "\n")
       tags$style(HTML(rules))
