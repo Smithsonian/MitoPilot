@@ -180,24 +180,28 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
       }
     }, error = function(e) NULL)
 
-    # Fetch taxonomy XML once; derive both species name and condensed lineage
+    # Fetch taxonomy XML once; derive both species name and condensed lineage.
+    # NCBI occasionally returns HTTP 200 with an error payload inside <TaxaSet>
+    # when its taxonomy backend times out. A valid record always carries a
+    # <ScientificName>, so treat its absence as a transient failure and stop()
+    # to let Nextflow's errorStrategy retry the task, rather than silently
+    # writing null organism/lineage.
     tax_xml <- if (!is.null(taxid)) {
-      tryCatch({
-        tax_url <- paste0(
-          "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
-          "?db=taxonomy&id=", taxid, "&retmode=xml",
-          api_key_qs
-        )
-        httr2::resp_body_string(
-          ncbi_efetch(tax_url, 60L, paste0("taxonomy/", taxid))
-        )
-      }, error = function(e) {
-        message(sprintf(
-          "[blast_ref_fetch] taxonomy/%s failed after all retries: %s - organism/lineage will be NULL",
-          taxid, conditionMessage(e)
-        ))
-        NULL
-      })
+      tax_url <- paste0(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+        "?db=taxonomy&id=", taxid, "&retmode=xml",
+        api_key_qs
+      )
+      body <- httr2::resp_body_string(
+        ncbi_efetch(tax_url, 60L, paste0("taxonomy/", taxid))
+      )
+      if (!grepl("<ScientificName>", body, fixed = TRUE)) {
+        stop(sprintf(
+          "taxonomy/%s returned no usable record (likely NCBI backend timeout) - retrying via Nextflow",
+          taxid
+        ), call. = FALSE)
+      }
+      body
     } else NULL
 
     # Clean species name = first <ScientificName> before <LineageEx>

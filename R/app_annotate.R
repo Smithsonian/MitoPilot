@@ -219,10 +219,13 @@ annotate_server <- function(id) {
       hidden_grp   <- setdiff(names(ANNOTATE_COL_GROUPS), col_groups_rv())
       hidden_lock  <- setdiff(unname(ANNOTATE_LOCK_CHOICES), lock_filter_rv())
       hidden_state <- setdiff(unname(ANNOTATE_STATE_CHOICES), state_filter_rv())
+      # Scope to THIS module's table so rules don't hit the shared mp-lock /
+      # mp-state / mp-grp classes on the assemble, userAsmb, and export tables.
+      sel <- paste0("#", ns("table"), " ")
       rules <- c(
-        if (length(hidden_grp))   paste0(".mp-grp-",   hidden_grp,   " { display: none !important; }"),
-        if (length(hidden_lock))  paste0(".mp-lock-",  hidden_lock,  " { display: none !important; }"),
-        if (length(hidden_state)) paste0(".mp-state-", hidden_state, " { display: none !important; }")
+        if (length(hidden_grp))   paste0(sel, ".mp-grp-",   hidden_grp,   " { display: none !important; }"),
+        if (length(hidden_lock))  paste0(sel, ".mp-lock-",  hidden_lock,  " { display: none !important; }"),
+        if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }")
       )
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
@@ -504,7 +507,33 @@ annotate_server <- function(id) {
     })
 
     # table selection ----
-    selected <- reactive(reactable::getReactableState("table", "selected"))
+    # Rows hidden by the lock/state filters stay mounted in reactable's row
+    # model, so a shift-click range can select them. Drop currently-hidden rows
+    # so bulk ops only ever touch visible samples.
+    selected <- reactive({
+      sel <- reactable::getReactableState("table", "selected")
+      if (is.null(sel) || length(sel) == 0) return(sel)
+      visible <- as.character(rv$data$annotate_lock)   %in% lock_filter_rv() &
+                 as.character(rv$data$annotate_switch) %in% state_filter_rv()
+      intersect(sel, which(visible))
+    })
+
+    # Prune hidden rows from reactable's actual selection whenever the
+    # selection OR the filters change. Triggering on the selection itself is
+    # what catches a shift-click range: hidden rows are removed immediately, so
+    # they never persist in reactable's state to reappear when later revealed.
+    observeEvent(
+      list(reactable::getReactableState("table", "selected"),
+           lock_filter_rv(), state_filter_rv()), {
+      sel <- reactable::getReactableState("table", "selected")
+      if (is.null(sel) || length(sel) == 0) return()
+      visible <- as.character(rv$data$annotate_lock)   %in% lock_filter_rv() &
+                 as.character(rv$data$annotate_switch) %in% state_filter_rv()
+      keep <- intersect(sel, which(visible))
+      if (length(keep) != length(sel)) {
+        reactable::updateReactable("table", selected = keep)
+      }
+    }, ignoreInit = TRUE)
 
     # Set State ----
     init("state")

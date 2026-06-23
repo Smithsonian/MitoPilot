@@ -1,3 +1,23 @@
+# Togglable column groups for the user-assemble table. Cols not listed here
+# (sticky cols, action buttons, the always-shown Input Assembly File) are
+# always visible. Mirrors ASSEMBLE_COL_GROUPS but drops assemble_opts (no
+# assembler step in user-assemble mode).
+ASSEMBLE_COL_GROUPS_USERASMB <- list(
+  Options  = c("pre_opts", "blast_opts"),
+  Stats    = c("trimmed_reads", "mean_length", "topology", "length",
+               "paths", "scaffolds"),
+  BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
+               "blast_lineage", "blast_pident", "blast_qcovs"),
+  Metadata = c("time_stamp", "assemble_notes")
+)
+ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
+  out <- character()
+  for (.g in names(ASSEMBLE_COL_GROUPS_USERASMB)) {
+    for (.c in ASSEMBLE_COL_GROUPS_USERASMB[[.g]]) out[.c] <- .g
+  }
+  out
+}
+
 #' assemble UI
 #'
 #' @param id,input,output,session Internal parameters for {shiny}.
@@ -6,7 +26,56 @@
 assemble_ui_userAsmb <- function(id) {
   ns <- NS(id)
   tagList(
-    reactableOutput(ns("table"))
+    uiOutput(ns("col_css")),
+    div(
+      style = "display: flex; flex-flow: row wrap; gap: 1em; align-items: flex-end;",
+      shinyWidgets::pickerInput(
+        inputId  = ns("lock_filter"),
+        width    = "140px",
+        label    = "Lock:",
+        choices  = ASSEMBLE_LOCK_CHOICES,
+        selected = ASSEMBLE_LOCK_CHOICES,
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "140px"
+        )
+      ),
+      shinyWidgets::pickerInput(
+        inputId  = ns("state_filter"),
+        width    = "140px",
+        label    = "State:",
+        choices  = ASSEMBLE_STATE_CHOICES,
+        selected = ASSEMBLE_STATE_CHOICES,
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "140px"
+        )
+      ),
+      shinyWidgets::pickerInput(
+        inputId  = ns("col_groups"),
+        width    = "150px",
+        label    = "Show columns:",
+        choices  = names(ASSEMBLE_COL_GROUPS_USERASMB),
+        selected = names(ASSEMBLE_COL_GROUPS_USERASMB),
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "150px"
+        )
+      )
+    ),
+    div(class = "mp-table-resize", reactableOutput(ns("table")))
   )
 }
 
@@ -40,12 +109,55 @@ assemble_server_userAsmb <- function(id) {
       )
     })
 
+    # Column-group / status filters. Mirror the pickers so NULL (= user cleared
+    # all) is distinguishable from the pre-init state. Defaults: everything on.
+    col_groups_rv <- reactiveVal(names(ASSEMBLE_COL_GROUPS_USERASMB))
+    observeEvent(input$col_groups, {
+      col_groups_rv(input$col_groups %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+    lock_filter_rv <- reactiveVal(unname(ASSEMBLE_LOCK_CHOICES))
+    observeEvent(input$lock_filter, {
+      lock_filter_rv(input$lock_filter %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+    state_filter_rv <- reactiveVal(unname(ASSEMBLE_STATE_CHOICES))
+    observeEvent(input$state_filter, {
+      state_filter_rv(input$state_filter %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+    # CSS class for a togglable column, added to both body cell and header so
+    # the whole column collapses when its group is unselected.
+    .grp <- function(col) {
+      g <- ASSEMBLE_COL_GROUP_LOOKUP_USERASMB[col]
+      if (is.na(g)) NULL else paste0("mp-grp-", g)
+    }
+
+    # Hide unselected column groups and lock/state codes via CSS. Hiding (not
+    # removing) keeps columns/rows mounted, so filters, sort, page, and
+    # selection survive toggling.
+    output$col_css <- renderUI({
+      hidden_grp   <- setdiff(names(ASSEMBLE_COL_GROUPS_USERASMB), col_groups_rv())
+      hidden_lock  <- setdiff(unname(ASSEMBLE_LOCK_CHOICES), lock_filter_rv())
+      hidden_state <- setdiff(unname(ASSEMBLE_STATE_CHOICES), state_filter_rv())
+      # Scope to THIS module's table so rules don't hit the shared mp-lock /
+      # mp-state / mp-grp classes on the annotate, export, and assemble tables.
+      sel <- paste0("#", ns("table"), " ")
+      rules <- c(
+        if (length(hidden_grp))   paste0(sel, ".mp-grp-",   hidden_grp,   " { display: none !important; }"),
+        if (length(hidden_lock))  paste0(sel, ".mp-lock-",  hidden_lock,  " { display: none !important; }"),
+        if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }")
+      )
+      if (length(rules) == 0) return(NULL)
+      tags$style(HTML(paste(rules, collapse = "\n")))
+    })
+
     # Render table ----
     output$table <- renderReactable({
       isolate(req(rv$data)) |>
         reactable(
           resizable = TRUE,
           filterable = TRUE,
+          striped = TRUE,
           compact = TRUE,
           defaultPageSize = 100,
           showPageSizeOptions = TRUE,
@@ -53,21 +165,19 @@ assemble_server_userAsmb <- function(id) {
           selection = "multiple",
           searchable = TRUE,
           defaultSorted = list(time_stamp = "desc"),
-          height = 650,
+          height = "100%",
           wrap = FALSE,
           pageSizeOptions = c(25, 50, 100, 200, 500),
           rowStyle = rt_highlight_row(),
+          rowClass = JS("function(rowInfo) {
+            if (!rowInfo || !rowInfo.values) return '';
+            return 'mp-lock-' + rowInfo.values['assemble_lock'] +
+                   ' mp-state-' + rowInfo.values['assemble_switch'];
+          }"),
           theme = reactable::reactableTheme(
             headerStyle = list(whiteSpace = "normal", lineHeight = "1.2", textAlign = "left")
           ),
           defaultColDef = colDef(align = "left", show = F),
-          columnGroups = list(
-            reactable::colGroup(
-              name = "BLAST",
-              columns = c("blast_accession", "blast_ref_status", "blast_species",
-                          "blast_pident", "blast_qcovs", "blast_evalue", "blast_lineage")
-            )
-          ),
           columns = list(
             `.selection` = colDef(show = T, sticky = "left", width = 28),
             assemble_lock = colDef(
@@ -118,7 +228,7 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_longtext()
             ),
             topology = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
               width = 100,
               name = "Topology"
             ),
@@ -130,33 +240,33 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_longtext()
             ),
             pre_opts = colDef(
-              show = T,
+              show = T, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
               name = "Preprocess Opts.",
               html = T,
               width = 130,
               cell = rt_link(ns("set_pre_opts"))
             ),
             blast_opts = colDef(
-              show = T,
+              show = T, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
               name = "BLAST Opts.",
               html = T,
               width = 120,
               cell = rt_link(ns("set_blast_opts"))
             ),
             trimmed_reads = colDef(
-              show = T,
+              show = T, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
               name = "Reads",
               filterable = FALSE,
               minWidth = 100
             ),
             mean_length = colDef(
-              show = T,
+              show = T, class = .grp("mean_length"), headerClass = .grp("mean_length"),
               name = "Read Length",
               filterable = FALSE,
               minWidth = 100
             ),
             length = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("length"), headerClass = .grp("length"),
               minWidth = 140,
               name = "Asmb. Length (raw)",
               filterable = FALSE,
@@ -164,15 +274,17 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_longtext()
             ),
             paths = colDef(
-              show = TRUE, width = 100, name = "# Paths", align = "center",
+              show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
+              width = 100, name = "# Paths", align = "center",
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
             scaffolds = colDef(
-              show = TRUE, width = 100, name = "# Scaffolds", align = "center"
+              show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
+              width = 100, name = "# Scaffolds", align = "center"
             ),
             blast_accession = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
               name = "Top Hit",
               html = TRUE,
               width = 120,
@@ -180,7 +292,7 @@ assemble_server_userAsmb <- function(id) {
             ),
             poor_blast_ref = colDef(show = FALSE),
             blast_ref_status = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
               name = "Ref Align",
               html = TRUE,
               width = 100,
@@ -189,35 +301,35 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_blast_ref_status()
             ),
             blast_species = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
               name = "Species",
               html = TRUE,
               minWidth = 160,
               cell = rt_longtext()
             ),
             blast_lineage = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
               name = "Lineage",
               html = TRUE,
               minWidth = 200,
               cell = rt_longtext()
             ),
             blast_pident = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
               name = "% Ident",
               filterable = FALSE,
               width = 90,
               align = "center"
             ),
             blast_qcovs = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
               name = "% Cov",
               filterable = FALSE,
               width = 90,
               align = "center"
             ),
             time_stamp = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
               name = "Last Updated",
               filterable = FALSE,
               html = T,
@@ -225,7 +337,7 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_ts_date()
             ),
             assemble_notes = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("assemble_notes"), headerClass = .grp("assemble_notes"),
               name = "Notes",
               html = TRUE,
               align = "left",
@@ -278,7 +390,33 @@ assemble_server_userAsmb <- function(id) {
     })
 
     # table selection ----
-    selected <- reactive(reactable::getReactableState("table", "selected"))
+    # Rows hidden by the lock/state filters stay mounted in reactable's row
+    # model, so a shift-click range can select them. Drop currently-hidden rows
+    # so bulk ops only ever touch visible samples.
+    selected <- reactive({
+      sel <- reactable::getReactableState("table", "selected")
+      if (is.null(sel) || length(sel) == 0) return(sel)
+      visible <- as.character(rv$data$assemble_lock)   %in% lock_filter_rv() &
+                 as.character(rv$data$assemble_switch) %in% state_filter_rv()
+      intersect(sel, which(visible))
+    })
+
+    # Prune hidden rows from reactable's actual selection whenever the
+    # selection OR the filters change. Triggering on the selection itself is
+    # what catches a shift-click range: hidden rows are removed immediately, so
+    # they never persist in reactable's state to reappear when later revealed.
+    observeEvent(
+      list(reactable::getReactableState("table", "selected"),
+           lock_filter_rv(), state_filter_rv()), {
+      sel <- reactable::getReactableState("table", "selected")
+      if (is.null(sel) || length(sel) == 0) return()
+      visible <- as.character(rv$data$assemble_lock)   %in% lock_filter_rv() &
+                 as.character(rv$data$assemble_switch) %in% state_filter_rv()
+      keep <- intersect(sel, which(visible))
+      if (length(keep) != length(sel)) {
+        reactable::updateReactable("table", selected = keep)
+      }
+    }, ignoreInit = TRUE)
 
     # Set State ----
     init("state")
