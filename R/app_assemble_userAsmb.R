@@ -401,6 +401,11 @@ assemble_server_userAsmb <- function(id) {
       intersect(sel, which(visible))
     })
 
+    # Publish current selection so the work-dir browser can pre-select this sample
+    observe({
+      session$userData$wd_selected[["Assemble"]] <- unique(rv$data$ID[selected()])
+    })
+
     # Prune hidden rows from reactable's actual selection whenever the
     # selection OR the filters change. Triggering on the selection itself is
     # what catches a shift-click range: hidden rows are removed immediately, so

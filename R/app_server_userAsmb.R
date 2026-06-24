@@ -112,4 +112,5 @@ app_server_userAsmb <- function(input, output, session) {
   assemble_server_userAsmb("assemble")
   annotate_server("annotate")
   export_server("export")
+  workdir_browser_server("workdir_browser")
 }

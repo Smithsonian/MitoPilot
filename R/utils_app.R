@@ -7,6 +7,35 @@ coming_soon <- function(text = "This feature is not yet implemented.") {
   )
 }
 
+#' Open a directory in an environment-aware way
+#'
+#' Local desktop opens the OS file browser; RStudio Server navigates the Files pane; headless
+#' sessions cannot open folders, so a warning notification with the path is shown instead.
+#'
+#' @noRd
+open_path <- function(pth) {
+  if (isTRUE(getOption("MitoPilot.headless"))) {
+    showNotification(
+      paste0("Headless session: cannot open folders here. Use the Copy button. Path: ", pth),
+      type = "warning", duration = 10
+    )
+    return(invisible(FALSE))
+  }
+  if (!dir.exists(pth)) {
+    showNotification(
+      paste0("Work directory not found (it may have been cleaned): ", pth),
+      type = "warning", duration = 10
+    )
+    return(invisible(FALSE))
+  }
+  if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
+    if (requireNamespace("rstudioapi", quietly = TRUE)) rstudioapi::filesPaneNavigate(pth)
+  } else {
+    utils::browseURL(pth)
+  }
+  invisible(TRUE)
+}
+
 #' Set state of details element open/closed
 #'
 #' @noRd

@@ -105,7 +105,8 @@ app_ui <- function(request) {
               style = "material-flat",
               size = "sm"
             )
-          )
+          ),
+          workdir_browser_ui("workdir_browser")
         ),
         div(
           style = "padding: 1em;",
