@@ -22,7 +22,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::collect() |>
     dplyr::group_by(ID) |>
     dplyr::summarise(
-      warnings_details = warnings[warnings != ""] |>
+      warnings_details = warnings[!is.na(warnings) & warnings != ""] |>
         paste(collapse = "; "),
       ORFCount = sum(type == "ORF")
     )
