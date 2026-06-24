@@ -639,44 +639,90 @@ export_server <- function(id) {
     }
 
     run_export <- function() {
-      shinyjs::removeClass("gears", "paused")
-      shinyjs::disable("export_data")
-      review_res <- export_files(
-        group = input$export_group,
-        fasta_header = input$fasta_header,
-        fasta_header_gene = input$fasta_header_gene,
-        generateAAalignments = input$include_alignments,
-        out_dir = session$userData$dir_out,
-        gene_export = input$export_genes,
-        review = isTRUE(input$review_outliers),
-        start_aa = input$start_aa %||% 10,
-        stop_aa = input$stop_aa %||% 10,
-        ident_pct = input$ident_pct %||% 60
-      )
-      shinyjs::addClass("gears", "paused")
-      shinyjs::enable("export_data")
+      group <- input$export_group
+      # PCG review needs a multi-sample group; flag_PCG_outliers/export_files
+      # only review when length(IDs) > 1.
+      n_samples <- sum(rv$data$export_group == group, na.rm = TRUE)
+      do_review <- isTRUE(input$review_outliers) && n_samples > 1
 
-      # Remember params so "Back to Review" can recompute against fresh edits
-      rv$review_group <- input$export_group
+      # Remember params so "Back to Review" can recompute against fresh edits and
+      # the deferred write (after review) uses the same options. Stashed because
+      # the export modal (and its inputs) is removed once the review modal opens.
+      rv$review_group <- group
       rv$review_start <- input$start_aa %||% 10
       rv$review_stop <- input$stop_aa %||% 10
       rv$review_ident <- input$ident_pct %||% 60
-
-      # Where the files landed; surfaced via a popup once the user is done (after
-      # PCG review, or immediately when review is off / not possible).
+      rv$export_params <- list(
+        fasta_header = input$fasta_header,
+        fasta_header_gene = input$fasta_header_gene,
+        generateAAalignments = input$include_alignments,
+        gene_export = input$export_genes
+      )
+      # Where the files will land; surfaced via a popup once the user is done.
       rv$export_done_path <- file.path(
-        session$userData$dir_out, "export", input$export_group
+        session$userData$dir_out, "export", group
       )
 
-      # Surface outlier review when on (present_review opens the modal if any
-      # genes were flagged, otherwise shows the export-complete popup itself).
-      # When review is off or not possible (e.g. single-sample group ->
-      # review_res NULL), show the popup now.
-      if (isTRUE(input$review_outliers) && !is.null(review_res)) {
+      shinyjs::removeClass("gears", "paused")
+      shinyjs::disable("export_data")
+
+      if (do_review) {
+        # Review BEFORE writing files: edits made during review must land in the
+        # DB first, otherwise the exported .fasta/.tbl/.gff would be stale.
+        # Files are written on "Done" (see finalize_export).
+        review_res <- flag_PCG_outliers(
+          group = group,
+          db = file.path(session$userData$dir, ".sqlite"),
+          start_aa = rv$review_start,
+          stop_aa = rv$review_stop,
+          ident_pct = rv$review_ident
+        )
+        shinyjs::addClass("gears", "paused")
+        shinyjs::enable("export_data")
         present_review(review_res)
       } else {
+        # No review: write files immediately, then announce.
+        write_export_files()
+        shinyjs::addClass("gears", "paused")
+        shinyjs::enable("export_data")
         show_export_done_alert()
       }
+    }
+
+    # Write the export files for the current group using the stashed options,
+    # with review off (flagging already happened up front). Shown behind a waiter
+    # overlay since this runs after the export modal is gone.
+    write_export_files <- function() {
+      p <- rv$export_params
+      if (is.null(p)) return(invisible(NULL))
+      export_files(
+        group = rv$review_group,
+        fasta_header = p$fasta_header,
+        fasta_header_gene = p$fasta_header_gene,
+        generateAAalignments = p$generateAAalignments,
+        out_dir = session$userData$dir_out,
+        gene_export = p$gene_export,
+        review = FALSE,
+        start_aa = rv$review_start,
+        stop_aa = rv$review_stop,
+        ident_pct = rv$review_ident
+      )
+    }
+
+    # Finish a reviewed export: write files (now that all edits are committed to
+    # the DB), then show the export-complete popup. Used both when the user clicks
+    # "Done" and when review finds nothing to flag.
+    finalize_export <- function(extra = NULL) {
+      waiter::waiter_show(
+        html = tagList(
+          waiter::spin_fading_circles(),
+          tags$h4(style = "color:white; margin-top:1em;", "Writing export files, hold tight...")
+        ),
+        color = "rgba(40,40,40,0.85)"
+      )
+      on.exit(waiter::waiter_hide())
+      write_export_files()
+      show_export_done_alert(extra = extra)
     }
 
     # Popup announcing where files were written. `extra` adds a second line
@@ -751,8 +797,8 @@ export_server <- function(id) {
         removeModal()
         trigger("outlier_modal")
       } else {
-        # Nothing to review: go straight to the export-complete popup.
-        show_export_done_alert(extra = "No outlier PCG annotations were flagged.")
+        # Nothing to review: write the files now, then announce.
+        finalize_export(extra = "No outlier PCG annotations were flagged.")
       }
     }
 
@@ -1058,10 +1104,11 @@ export_server <- function(id) {
       highlight_label(NULL)
       rv$review_idx <- min(length(rv$review_genes), rv$review_idx + 1L)
     })
-    # Finish review: close the modal and surface the export-complete popup.
+    # Finish review: close the modal, write the files (now that all edits are in
+    # the DB), and surface the export-complete popup.
     observeEvent(input$review_done, {
       removeModal()
-      show_export_done_alert()
+      finalize_export()
     })
     # Mark gene completed: flag every sample for this gene as resolved (kept in
     # rv$resolved so the rows survive recompute and show struck-through) rather than
