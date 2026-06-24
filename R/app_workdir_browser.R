@@ -51,8 +51,7 @@ workdir_browser_server <- function(id) {
         tags$p(
           class = "text-muted",
           style = "font-size: 12px; margin-bottom: 0.75em;",
-          "Each pipeline step runs in its own work directory holding that step's ",
-          "intermediate files and logs. Use these to troubleshoot a failed process ",
+          "Each pipeline step creates working directories to hold intermediate files and logs. Use these to troubleshoot a failed process ",
           "or to inspect intermediate outputs. Failed attempts are listed too (see Status)."
         ),
         shinyWidgets::pickerInput(
@@ -159,6 +158,10 @@ workdir_status_icon <- function(status) {
 #' process creates inside its work directory (NA / "-" for processes without one, or when
 #' the work directory has been cleaned).
 #'
+#' Purely native bookkeeping tasks (e.g. `write_curated_result`, which writes the .sqlite
+#' driver-side) are omitted: their work dirs hold nothing to inspect, and as native tasks
+#' they have no OS exit code so the exit-based status check would mis-flag them as failed.
+#'
 #' @param project_dir Project root (the directory holding `.logs/`); `session$userData$dir`.
 #' @param sample_id Sample ID to filter on.
 #' @return data.frame with columns process, param_set, status, workdir (possibly 0 rows)
@@ -188,7 +191,10 @@ find_workdirs <- function(project_dir, sample_id) {
   process <- nm[, 2]
   sample  <- sub("\\.[0-9]+$", "", nm[, 3])
 
-  keep <- !is.na(workdir) & !is.na(process) & sample == sample_id
+  # Native bookkeeping tasks with no inspectable work dir (and no OS exit code).
+  exclude_processes <- c("write_curated_result")
+  keep <- !is.na(workdir) & !is.na(process) & sample == sample_id &
+          !process %in% exclude_processes
   if (!any(keep)) return(empty)
   out <- data.frame(
     process = process[keep], sample = sample[keep], exit = exit[keep],
