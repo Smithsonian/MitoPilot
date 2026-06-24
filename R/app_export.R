@@ -220,6 +220,11 @@ export_server <- function(id) {
     # table selection ----
     selected <- reactive(reactable::getReactableState("table", "selected"))
 
+    # Publish current selection so the work-dir browser can pre-select this sample
+    observe({
+      session$userData$wd_selected[["Export"]] <- unique(rv$data$ID[selected()])
+    })
+
     # CSV Export ----
     .export_cols_drop <- c("poor_blast_ref")
 

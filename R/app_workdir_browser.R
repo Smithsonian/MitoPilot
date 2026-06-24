@@ -39,17 +39,30 @@ workdir_browser_server <- function(id) {
         DBI::dbGetQuery(session$userData$con, "SELECT ID FROM samples ORDER BY ID")$ID,
         error = function(e) character(0)
       )
+      # Pre-select the sample currently highlighted in the active mode's table
+      # (first one if several are selected).
+      mode <- session$userData$mode %||% "Assemble"
+      presel <- session$userData$wd_selected[[mode]]
+      presel <- if (length(presel) >= 1 && presel[1] %in% ids) presel[1] else NULL
       showModal(modalDialog(
         title = "Sample Work Directories",
         size = "l",
         easyClose = TRUE,
+        tags$p(
+          class = "text-muted",
+          style = "font-size: 12px; margin-bottom: 0.75em;",
+          "Each pipeline step runs in its own work directory holding that step's ",
+          "intermediate files and logs. Use these to troubleshoot a failed process ",
+          "or to inspect intermediate outputs. Failed attempts are listed too (see Status)."
+        ),
         shinyWidgets::pickerInput(
           ns("sample"),
           label = "Sample",
           choices = ids,
+          selected = presel,
           options = list(`live-search` = TRUE)
         ),
-        uiOutput(ns("tbl")),
+        div(style = "max-height: 60vh; overflow: auto;", uiOutput(ns("tbl"))),
         footer = modalButton("Close")
       ))
     })
@@ -69,30 +82,37 @@ workdir_browser_server <- function(id) {
           tags$td(style = "text-align: center;", workdir_status_icon(df$status[i])),
           tags$td(df$param_set[i]),
           tags$td(style = "white-space: nowrap;", df$modified[i]),
-          tags$td(tags$code(df$workdir[i])),
+          tags$td(tags$code(
+            style = "font-size: 11px; word-break: break-all;",
+            df$workdir[i]
+          )),
           tags$td(
             style = "white-space: nowrap;",
             rclipboard::rclipButton(
               ns(paste0("clip", i)),
-              label = "Copy",
+              label = NULL,
               clipText = df$workdir[i],
               icon = icon("copy"),
-              modal = TRUE
+              modal = TRUE,
+              class = "btn-xs",
+              title = "Copy path"
             ),
             tags$button(
               type = "button",
-              class = "btn btn-default btn-sm",
+              class = "btn btn-default btn-xs",
+              title = "Open",
               onclick = sprintf(
                 "Shiny.setInputValue('%s', %d, {priority: 'event'})",
                 ns("open_row"), i
               ),
-              icon("folder-open"), " Open"
+              icon("folder-open")
             )
           )
         )
       })
       tags$table(
-        class = "table table-striped",
+        class = "table table-striped table-condensed",
+        style = "font-size: 13px;",
         tags$thead(tags$tr(
           tags$th("Process"), tags$th("Status"), tags$th("Param set"),
           tags$th("Modified"), tags$th("Work directory"), tags$th("")
