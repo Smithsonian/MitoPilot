@@ -1993,10 +1993,16 @@ annotations_details_server <- function(id, rv) {
         dplyr::pull(params) |>
         json_parse() |>
         {
-          \(x) modifyList(
-            x$default_rules[[rv$annotations$type[selected()]]] %||% list(),
-            x$rules[[rv$annotations$gene[selected()]]] %||% list()
-          )
+          \(x) {
+            # ORFs have no curation ruleset; inherit PCG defaults so the
+            # start/stop codon-search editing controls have valid codon lists.
+            rule_type <- rv$annotations$type[selected()]
+            if (identical(rule_type, "ORF")) rule_type <- "PCG"
+            modifyList(
+              x$default_rules[[rule_type]] %||% list(),
+              x$rules[[rv$annotations$gene[selected()]]] %||% list()
+            )
+          }
         }()
       rv$editing$assembly <- get_assembly(
         ID = rv$annotations$ID[selected()],
