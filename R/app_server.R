@@ -149,4 +149,5 @@ app_server <- function(input, output, session) {
   assemble_server("assemble")
   annotate_server("annotate")
   export_server("export")
+  workdir_browser_server("workdir_browser")
 }

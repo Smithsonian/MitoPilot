@@ -119,7 +119,8 @@ app_ui_userAsmb <- function(request) {
             condition = "input.mode == 'Export'",
             annotate_ui("export")
           )
-        )
+        ),
+        workdir_browser_ui("workdir_browser")
       )
     )
   )
