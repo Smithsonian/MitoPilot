@@ -8,7 +8,7 @@
 workdir_browser_ui <- function(id) {
   ns <- NS(id)
   div(
-    style = "position: fixed; bottom: 1em; right: 1em; z-index: 1030;",
+    style = "margin-left: auto;",
     shinyWidgets::actionBttn(
       ns("open_browser"),
       label = "Work Dirs",

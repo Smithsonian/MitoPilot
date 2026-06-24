@@ -105,7 +105,8 @@ app_ui <- function(request) {
               style = "material-flat",
               size = "sm"
             )
-          )
+          ),
+          workdir_browser_ui("workdir_browser")
         ),
         div(
           style = "padding: 1em;",
@@ -121,8 +122,7 @@ app_ui <- function(request) {
             condition = "input.mode == 'Export'",
             annotate_ui("export")
           )
-        ),
-        workdir_browser_ui("workdir_browser")
+        )
       )
     )
   )
