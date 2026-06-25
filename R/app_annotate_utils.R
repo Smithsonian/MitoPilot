@@ -241,6 +241,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
+            id = ns("mitos_opts_box"),
             style = "flex: 2",
             textInput(
               ns("mitos_opts"),
@@ -260,6 +261,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           )
         ),
         div(
+          id = ns("mitos_best_box"),
           style = "display: flex; flex-flow: row nowrap; align-items: center; margin-bottom: 8px;",
           shinyWidgets::prettyCheckbox(
             ns("use_mitos_best"),
@@ -273,43 +275,47 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
                   "top-scoring of overlapping predictions.",
                   href = "http://mitos2.bioinf.uni-leipzig.de/index.py"),
         div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          id = ns("mitos_ref_box"),
           div(
-            style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
-            selectizeInput(
-              ns("mitos_ref_dir"),
-              label = "ref_dir",
-              choices = unique(rv$annotate_opts$ref_dir),
-              selected = current$ref_dir %||% character(0),
-              width = "100%",
-              options = list(
-                create = TRUE,
-                maxItems = 1
-              )
-            ) |> shinyjs::disabled()
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+            div(
+              style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
+              selectizeInput(
+                ns("mitos_ref_dir"),
+                label = "ref_dir",
+                choices = unique(rv$annotate_opts$ref_dir),
+                selected = current$ref_dir %||% character(0),
+                width = "100%",
+                options = list(
+                  create = TRUE,
+                  maxItems = 1
+                )
+              ) |> shinyjs::disabled()
+            ),
+            div(
+              style = "flex: 1",
+              selectizeInput(
+                ns("mitos_ref_db"),
+                label = "ref_db",
+                # choices = unique(rv$annotate_opts$ref_db),
+                choices = c("Metazoa_RefSeq89", "Chordata"),
+                selected = current$ref_db %||% character(0),
+                width = "100%",
+                options = list(
+                  create = TRUE,
+                  maxItems = 1
+                )
+              ) |> shinyjs::disabled()
+            )
           ),
-          div(
-            style = "flex: 1",
-            selectizeInput(
-              ns("mitos_ref_db"),
-              label = "ref_db",
-              # choices = unique(rv$annotate_opts$ref_db),
-              choices = c("Metazoa_RefSeq89", "Chordata"),
-              selected = current$ref_db %||% character(0),
-              width = "100%",
-              options = list(
-                create = TRUE,
-                maxItems = 1
-              )
-            ) |> shinyjs::disabled()
-          )
+          opts_help("Location (ref_dir) and name (ref_db) of the MITOS2 reference ",
+                    "database used for annotation; pick a clade closest to your samples.",
+                    href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html")
         ),
-        opts_help("Location (ref_dir) and name (ref_db) of the MITOS2 reference ",
-                  "database used for annotation; pick a clade closest to your samples.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
+            id = ns("trnascan_opts_box"),
             style = "flex: 2",
             textInput(
               ns("trnaScan_opts"),
@@ -328,9 +334,6 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
-        opts_help("Predict tRNA genes with tRNAscan-SE (mito mode); the options box ",
-                  "takes extra flags.",
-                  href = "http://lowelab.ucsc.edu/tRNAscan-SE/"),
         shinyWidgets::prettyCheckbox(
           ns("use_mitofinder"),
           label = "Also use MitoFinder for annotation",
@@ -340,77 +343,77 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         opts_help("Run MitoFinder as a second annotator and merge its gene models ",
                   "with the MITOS2 results.",
                   href = "https://github.com/RemiAllio/MitoFinder"),
-        textInput(
-          ns("mitofinder_db"),
-          label = "MitoFinder reference database (.gb format)",
-          value = current$mitofinder_db %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("GenBank-format (.gb) reference used by MitoFinder to identify genes.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
         div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          id = ns("mitofinder_box"),
+          textInput(
+            ns("mitofinder_db"),
+            label = "MitoFinder reference database (.gb format)",
+            value = current$mitofinder_db %||% character(0),
+            width = "100%"
+          ) |> shinyjs::disabled(),
+          opts_help("GenBank-format (.gb) reference used by MitoFinder to identify genes.",
+                    href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
           div(
-            style = "flex: 2",
-            textInput(
-              ns("mitofinder_opts"),
-              label = tagList("MitoFinder options:", tool_help_icon("mitofinder")),
-              value = current$mitofinder_opts %||% character(0),
-              width = "100%"
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "margin-top: 24px;",
-            shinyWidgets::prettyCheckbox(
-              ns("mitofinder_new_genes"),
-              label = "Annotate non-standard genes (--new-genes)",
-              value = isTRUE(as.logical(current$mitofinder_new_genes %||% 0L)),
-              status = "primary"
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "margin-top: 24px;",
-            shinyWidgets::prettyCheckbox(
-              ns("mitofinder_allow_introns"),
-              label = "Search for genes with introns (--allow-intron)",
-              value = isTRUE(as.logical(current$mitofinder_allow_introns %||% 0L)),
-              status = "primary"
-            ) |> shinyjs::disabled()
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+            div(
+              style = "flex: 2",
+              textInput(
+                ns("mitofinder_opts"),
+                label = tagList("MitoFinder options:", tool_help_icon("mitofinder")),
+                value = current$mitofinder_opts %||% character(0),
+                width = "100%"
+              ) |> shinyjs::disabled()
+            ),
+            div(
+              style = "margin-top: 24px;",
+              shinyWidgets::prettyCheckbox(
+                ns("mitofinder_new_genes"),
+                label = "Annotate non-standard genes (--new-genes)",
+                value = isTRUE(as.logical(current$mitofinder_new_genes %||% 0L)),
+                status = "primary"
+              ) |> shinyjs::disabled()
+            ),
+            div(
+              style = "margin-top: 24px;",
+              shinyWidgets::prettyCheckbox(
+                ns("mitofinder_allow_introns"),
+                label = "Search for genes with introns (--allow-intron)",
+                value = isTRUE(as.logical(current$mitofinder_allow_introns %||% 0L)),
+                status = "primary"
+              ) |> shinyjs::disabled()
+            )
           )
         ),
-        opts_help("Extra MitoFinder flags. '--new-genes' lets it report genes absent ",
-                  "from the reference; '--allow-intron' searches for intron-containing genes.",
-                  href = "https://github.com/RemiAllio/MitoFinder"),
         shinyWidgets::prettyCheckbox(
           ns("use_arwen"),
           label = "Also use ARWEN for tRNA prediction",
           value = isTRUE(as.logical(current$use_arwen)),
           status = "primary"
         ) |> shinyjs::disabled(),
-        textInput(
-          ns("arwen_opts"),
-          label = tagList("ARWEN options:", tool_help_icon("arwen")),
-          value = current$arwen_opts %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Run ARWEN as an additional tRNA predictor; the options box takes ",
-                  "extra flags.",
-                  href = "https://www.acgt.me/arwen"),
+        div(
+          id = ns("arwen_box"),
+          textInput(
+            ns("arwen_opts"),
+            label = tagList("ARWEN options:", tool_help_icon("arwen")),
+            value = current$arwen_opts %||% character(0),
+            width = "100%"
+          ) |> shinyjs::disabled()
+        ),
         shinyWidgets::prettyCheckbox(
           ns("use_aragorn"),
           label = "Also use ARAGORN for tRNA prediction",
           value = isTRUE(as.logical(current$use_aragorn)),
           status = "primary"
         ) |> shinyjs::disabled(),
-        textInput(
-          ns("aragorn_opts"),
-          label = tagList("ARAGORN options:", tool_help_icon("aragorn")),
-          value = current$aragorn_opts %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Run ARAGORN as an additional tRNA predictor; the options box takes ",
-                  "extra flags.",
-                  href = "https://www.ansikte.se/ARAGORN/"),
+        div(
+          id = ns("aragorn_box"),
+          textInput(
+            ns("aragorn_opts"),
+            label = tagList("ARAGORN options:", tool_help_icon("aragorn")),
+            value = current$aragorn_opts %||% character(0),
+            width = "100%"
+          ) |> shinyjs::disabled()
+        ),
         shinyWidgets::prettyCheckbox(
           ns("coverage_trim"),
           label = "Trim low-coverage ends of linear assemblies",

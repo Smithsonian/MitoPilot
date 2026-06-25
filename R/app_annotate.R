@@ -922,6 +922,26 @@ annotate_server <- function(id) {
         )
       }
     })
+    # Show each tool's option inputs only when that tool is enabled; the
+    # "use <tool>" toggle itself always stays visible.
+    observeEvent(input$use_mitos, {
+      on <- isTRUE(input$use_mitos)
+      shinyjs::toggle("mitos_opts_box", condition = on)
+      shinyjs::toggle("mitos_best_box", condition = on)
+      shinyjs::toggle("mitos_ref_box", condition = on)
+    })
+    observeEvent(input$use_trnaScan, {
+      shinyjs::toggle("trnascan_opts_box", condition = isTRUE(input$use_trnaScan))
+    })
+    observeEvent(input$use_mitofinder, {
+      shinyjs::toggle("mitofinder_box", condition = isTRUE(input$use_mitofinder))
+    })
+    observeEvent(input$use_arwen, {
+      shinyjs::toggle("arwen_box", condition = isTRUE(input$use_arwen))
+    })
+    observeEvent(input$use_aragorn, {
+      shinyjs::toggle("aragorn_box", condition = isTRUE(input$use_aragorn))
+    })
     ## Save Changes ----
     observeEvent(input$update_annotate_opts, {
       ## Add to params table if new or editing ----
