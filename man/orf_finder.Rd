@@ -16,6 +16,7 @@ orf_finder(
   ref_dir = ".",
   max_blast_hits = 10,
   blast_condaenv = "base",
+  blast_ref_file = NULL,
   out_dir = NULL
 )
 }
@@ -46,6 +47,11 @@ of the ORF length, before an ORF is discarded (default: 0.1).}
 
 \item{blast_condaenv}{Conda environment containing blastp/makeblastdb (default:
 "base"). Set NULL to use them on the PATH.}
+
+\item{blast_ref_file}{Optional path to the staged `remote_blast_ref.json` for
+this sample. When supplied, the closest-relative reference's translated genes
+are injected into the per-gene FASTAs before the combined ORF database is
+built, so ORFs can also match the remote reference.}
 
 \item{out_dir}{Output directory for the ORF annotations TSV.}
 }
