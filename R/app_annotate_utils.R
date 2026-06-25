@@ -603,10 +603,10 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             status = "primary"
           ) |> shinyjs::disabled()
         ),
-        opts_help("Per-gene curation rules (expected length, start/stop codons, etc.) ",
-                  "for the selected target; edit values directly in the tree below.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.html"),
         listviewer::reactjsonOutput(ns("params")),
+        opts_help("Per-gene curation rules (expected length, start/stop codons, etc.) ",
+                  "for the selected target.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.html"),
         size = "m",
         footer = tagList(
           actionButton(ns("update_curate_opts"), "Update"),
