@@ -447,6 +447,19 @@ annotate <- function(
     )
   )
 
+  # Enforce the annotations primary key (ID/path/scaffold/gene/pos1 in the DB):
+  # two features of the same gene starting at the same position are redundant
+  # (e.g. a MitoFinder call duplicating a MITOS one that the overlap filter
+  # missed). The DB write would silently keep one while the validation summary
+  # counts both -> a phantom "extra" gene. Collapse them here, keeping the
+  # longest (most complete) feature. Genuine multi-copy genes (e.g. duplicated
+  # tRNAs) sit at different pos1 and are untouched.
+  annotations <- annotations |>
+    dplyr::group_by(contig, gene, pos1) |>
+    dplyr::slice_max(order_by = length, n = 1, with_ties = FALSE) |>
+    dplyr::ungroup() |>
+    dplyr::arrange(contig, pos1)
+
   # Write outputs
   file.path(
     out_dir,
