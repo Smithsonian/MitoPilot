@@ -207,26 +207,17 @@ curate_mito_core <- function(
   # that have no per-gene featureProt FASTA. Built lazily on first need so the
   # common all-standard-gene case pays nothing.
   combined_ref_db <- local({
-    cache <- NULL
+    cache <- NULL; built <- FALSE
     function() {
-      if (!is.null(cache)) return(cache)
-      fas <- list.files(file.path(ref_dir, "featureProt"),
-                        pattern = "\\.fas$", full.names = TRUE)
-      if (length(fas) == 0L) return(NULL)
-      combined <- file.path(tempdir(), "_curate_all_genes.fas")
-      if (file.exists(combined)) file.remove(combined)
-      file.create(combined)
-      for (f in fas) file.append(combined, f)
-      mk_args <- c("-in", combined, "-dbtype", "prot")
-      tryCatch(
-        system2(reticulate::conda_binary(),
-                c("run", "-n", "base", "makeblastdb", mk_args),
-                stdout = NULL, stderr = NULL),
-        error = function(e) system2("makeblastdb", mk_args,
-                                    stdout = NULL, stderr = NULL)
+      if (built) return(cache)
+      cache <<- tryCatch(
+        build_combined_orf_db(file.path(ref_dir, "featureProt"),
+                              file.path(tempdir(), "_curate_all_genes.fas"),
+                              condaenv = "base"),
+        error = function(e) NULL
       )
-      cache <<- combined
-      combined
+      built <<- TRUE
+      cache
     }
   })
 

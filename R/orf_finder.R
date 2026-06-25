@@ -234,19 +234,13 @@ orf_finder <- function(
     )
   }
   feature_dir <- file.path(ref_dir, "featureProt")
-  fas <- list.files(feature_dir, pattern = "\\.fas$", full.names = TRUE)
   orfs$refHits <- NA_character_
-  if (length(fas) > 0) {
-    combined <- file.path(tempdir(), "_ORF_all.fas")
-    if (file.exists(combined)) file.remove(combined)
-    file.create(combined)
-    for (f in fas) file.append(combined, f)
-    mk_args <- c("-in", combined, "-dbtype", "prot")
-    if (!is.null(blast_condaenv)) {
-      system2(reticulate::conda_binary(), c("run", "-n", blast_condaenv, "makeblastdb", mk_args))
-    } else {
-      system2("makeblastdb", mk_args)
-    }
+  # Combined DB with gene-labeled, unique headers so get_top_hits_orf can recover
+  # each hit's gene + correct target from the gene-less per-gene FASTAs.
+  combined <- build_combined_orf_db(
+    feature_dir, file.path(tempdir(), "_ORF_all.fas"), condaenv = blast_condaenv
+  )
+  if (!is.null(combined)) {
     orfs$refHits <- orfs$translation |>
       purrr::map_chr(~ {
         get_top_hits_orf(combined, .x, max_blast_hits, condaenv = blast_condaenv) |>

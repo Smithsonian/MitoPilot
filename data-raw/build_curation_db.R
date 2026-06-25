@@ -236,7 +236,12 @@ parse_gb_file <- function(path, chunk = 20000L) {
 # ---- build one db per clade ------------------------------------------------
 
 write_gene_db <- function(sub, gene, dir, dbtype) {
-  sub <- sub[!duplicated(sub$sequence), , drop = FALSE]
+  # One representative (the longest sequence) per accession: the
+  # ">{accession} {Species}" header carries no copy index, so a genome with two
+  # copies of a gene would otherwise yield duplicate headers. Keeping the longest
+  # also drops identical/partial duplicate copies.
+  sub <- sub[order(-sub$length), , drop = FALSE]
+  sub <- sub[!duplicated(sub$accession), , drop = FALSE]
   if (is.finite(MAX_PER_GENE) && nrow(sub) > MAX_PER_GENE) {
     sub <- sub[seq_len(MAX_PER_GENE), , drop = FALSE]
   }

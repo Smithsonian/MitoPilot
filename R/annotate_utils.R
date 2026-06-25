@@ -226,14 +226,59 @@ get_top_hits <- function(
 
 }
 
+#' Build a combined, gene-labeled protein BLAST database for ORF search
+#'
+#' The distributed per-gene `featureProt/<gene>.fas` files use gene-less headers
+#' (`>{accession} {Species}`), so the gene is implicit in the file name. Simply
+#' concatenating them would make the same accession non-unique across genes in
+#' the combined DB (each genome's cox1/nad1/... share one accession id), which
+#' breaks per-hit target retrieval and gene recovery. This reads every per-gene
+#' file and relabels each sequence as `>{accession}:{gene}-{i} {Species}` (gene
+#' from the file name, `i` a per-gene counter that also disambiguates two copies
+#' of a gene in one genome), writes the combined FASTA, and builds its index, so
+#' [get_top_hits_orf()] can recover the gene and a unique target per hit.
+#'
+#' @param feature_dir directory of per-gene `featureProt/*.fas` files
+#' @param out_fasta path to write the combined FASTA (index built alongside)
+#' @param condaenv conda env with makeblastdb (NULL = on PATH)
+#'
+#' @return `out_fasta` on success, or NULL when no per-gene files are present
+#'
+#' @noRd
+build_combined_orf_db <- function(feature_dir, out_fasta, condaenv = "base") {
+  fas <- list.files(feature_dir, pattern = "\\.fas$", full.names = TRUE)
+  if (length(fas) == 0) return(NULL)
+  all_seqs <- Biostrings::AAStringSet()
+  for (f in fas) {
+    gene <- sub("\\.fas$", "", basename(f))
+    s <- tryCatch(Biostrings::readAAStringSet(f), error = function(e) NULL)
+    if (is.null(s) || length(s) == 0) next
+    nm  <- names(s)
+    acc <- sub("\\s.*$", "", nm)               # accession (first token)
+    sp  <- sub("^\\S+\\s*", "", nm)             # species (rest; may be empty)
+    names(s) <- sprintf("%s:%s-%d %s", acc, gene, seq_along(s), sp)
+    all_seqs <- c(all_seqs, s)
+  }
+  if (length(all_seqs) == 0) return(NULL)
+  Biostrings::writeXStringSet(all_seqs, out_fasta)
+  mk_args <- c("-in", out_fasta, "-dbtype", "prot")
+  if (!is.null(condaenv)) {
+    system2(reticulate::conda_binary(), c("run", "-n", condaenv, "makeblastdb", mk_args),
+            stdout = NULL, stderr = NULL)
+  } else {
+    system2("makeblastdb", mk_args, stdout = NULL, stderr = NULL)
+  }
+  out_fasta
+}
+
 #' Get top BLASTP hits for an ORF against a combined gene database
 #'
 #' Like [get_top_hits()], but BLASTs a query against a single combined protein
-#' database holding sequences from every gene (built by concatenating the
-#' per-gene `featureProt/*.fas` files). Because the gene of an ORF is unknown,
-#' the gene name is recovered per hit from the reference header format
-#' `>{accession}:{gene}-{idx}-{pos1}-{pos2} {species}` and returned in a `gene`
-#' column.
+#' database holding sequences from every gene (built by [build_combined_orf_db()]
+#' from the per-gene `featureProt/*.fas` files). Because the gene of an ORF is
+#' unknown, the gene name is recovered per hit from the combined-DB header format
+#' `>{accession}:{gene}-{i} {species}` that builder injects, and returned in a
+#' `gene` column.
 #'
 #' @param ref_db combined reference database (FASTA with a makeblastdb index)
 #' @param query query (amino acid) sequence
