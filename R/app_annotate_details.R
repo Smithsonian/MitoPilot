@@ -2577,18 +2577,18 @@ annotations_details_server <- function(id, rv) {
           tags$span(style = "font-weight: bold;", "5'"),
           nudge("rrna-5-out", "+"),   # extend 5' (grow upstream)
           nudge("rrna-5-in", "−"),
-          tags$span(style = "font-weight: bold; margin-left: 0.6em;", "3'"),
-          nudge("rrna-3-out", "+"),   # extend 3' (grow downstream)
-          nudge("rrna-3-in", "−"),
           div(
             class = "mp-step-box",
-            style = "width: 56px; margin-left: 0.4em;",
+            style = "width: 56px; margin: 0 0.2em;",
             numericInput(
               ns("rrna_step_size"), label = NULL,
               value = 1, min = 1, max = 500, step = 1, width = "56px"
             )
           ),
-          tags$span(style = "font-size: 0.75em; color: #666;", "nt")
+          tags$span(style = "font-size: 0.75em; color: #666; margin-right: 0.4em;", "nt"),
+          tags$span(style = "font-weight: bold;", "3'"),
+          nudge("rrna-3-in", "−"),
+          nudge("rrna-3-out", "+")    # extend 3' (grow downstream)
         )
       )
     })
@@ -3737,11 +3737,12 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               )
             )
             ),
+            # rRNA nucleotide-boundary nudge controls (shown for rRNA only); kept
+            # left of the partial buttons.
+            uiOutput(ns("rrna_edit_ctrls"), inline = TRUE),
             # Manual partial-end flags + poly-A stop trim (PCG/rRNA). Rendered
             # reactively so button state reflects the selected gene.
-            uiOutput(ns("partial_ctrls"), inline = TRUE),
-            # rRNA nucleotide-boundary nudge controls (shown for rRNA only).
-            uiOutput(ns("rrna_edit_ctrls"), inline = TRUE)
+            uiOutput(ns("partial_ctrls"), inline = TRUE)
           ) |> shinyjs::hidden()
         ),
         div(
