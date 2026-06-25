@@ -241,9 +241,10 @@ write_gene_db <- function(sub, gene, dir, dbtype) {
     sub <- sub[seq_len(MAX_PER_GENE), , drop = FALSE]
   }
   seqs <- if (dbtype == "prot") AAStringSet(sub$sequence) else DNAStringSet(sub$sequence)
-  # Header contract: >{accession}:{gene}-1-1-{len} {Species}. The gene token (used
-  # by get_top_hits_orf to recover a hit's candidate gene) must be hyphen-free.
-  names(seqs) <- sprintf("%s:%s-1-1-%d %s", sub$accession, gene, sub$length,
+  # Header contract matches the distributed curation DBs: ">{accession} {Species}".
+  # The gene is implicit in the file name; get_top_hits / get_top_hits_nuc key on
+  # the accession (the leading non-":" token).
+  names(seqs) <- sprintf("%s %s", sub$accession,
                          ifelse(is.na(sub$taxon) | !nzchar(sub$taxon), "unknown", sub$taxon))
   fas <- file.path(dir, paste0(gene, ".fas"))
   writeXStringSet(seqs, fas)
