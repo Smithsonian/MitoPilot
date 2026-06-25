@@ -267,7 +267,7 @@ curate_mito_core <- function(
 
   ## Get top ref hits for each rRNA (nucleotide BLAST) ----
   # Uses per-gene featureNuc/<gene>.fas databases. Inert (no-op) until those
-  # reference databases are built (see data-raw/build_rrna_refdbs.R); the
+  # reference databases are built (see data-raw/build_curation_db.R); the
   # annotate-details rRNA alignment falls back to the BLAST reference genome.
   nuc_ref_dir <- file.path(ref_dir, "featureNuc")
   for (i in which(annotations$type == "rRNA")) {
