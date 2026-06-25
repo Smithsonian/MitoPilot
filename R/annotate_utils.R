@@ -100,10 +100,22 @@ recompute_hit_stats <- function(focal, targets, subMx = "BLOSUM80") {
 #' @noRd
 #'
 circ_overlap <- function(p1, p2, q1_vec, q2_vec) {
+  # Either interval may span the origin (start > end). Decompose the cases so an
+  # origin-spanning *compared* interval (q1 > q2) is handled too, not just a
+  # wrapping focal interval. Length-free: a wrapping arc covers the origin point.
+  q_wrap <- q1_vec > q2_vec
   if (p1 <= p2) {
-    p1 <= q2_vec & q1_vec <= p2
+    ifelse(
+      q_wrap,
+      p1 <= q2_vec | p2 >= q1_vec,   # q wraps: focal hits its [start,q2] or [q1,end] arm
+      p1 <= q2_vec & q1_vec <= p2    # neither wraps
+    )
   } else {
-    q2_vec >= p1 | q1_vec <= p2
+    ifelse(
+      q_wrap,
+      TRUE,                          # both wrap -> both cover the origin
+      q1_vec <= p2 | q2_vec >= p1    # only focal wraps
+    )
   }
 }
 
@@ -127,12 +139,16 @@ circ_len <- function(p1, p2, L) {
 #' @noRd
 #'
 circ_overlap_len <- function(p1, p2, q1, q2, L) {
-  if (p1 <= p2) {
-    max(0L, min(p2, q2) - max(p1, q1) + 1L)
-  } else {
-    max(0L, q2 - max(p1, q1) + 1L) + # [p1, L] intersect [q1, q2]
-      max(0L, min(p2, q2) - q1 + 1L) # [1, p2] intersect [q1, q2]
+  # Decompose each (possibly origin-spanning) interval into non-wrapping segments
+  # and sum the pairwise linear overlaps, so a wrapping q (q1 > q2) is handled.
+  segs <- function(a, b) if (a <= b) list(c(a, b)) else list(c(a, L), c(1L, b))
+  total <- 0L
+  for (s in segs(p1, p2)) {
+    for (t in segs(q1, q2)) {
+      total <- total + max(0L, min(s[2], t[2]) - max(s[1], t[1]) + 1L)
+    }
   }
+  total
 }
 
 #' Get top BLASTP hits
