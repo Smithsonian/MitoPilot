@@ -145,19 +145,21 @@ custom_curation_db <- function(path = ".",
              showWarnings = FALSE)
   # download the base curation database
   if (base_db == "Metazoa") {
-    URL <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2/Metazoa_RefSeq231.tar.gz"
+    # Metazoa_RefSeq235 is the current base (includes the rRNA featureNuc BLAST
+    # DBs, which carry through to the custom database).
+    URL <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2/Metazoa_RefSeq235.tar.gz"
     download.file(
       url = URL,
-      destfile = file.path('./custom_curation_dbs/Metazoa_RefSeq231.tar.gz'),
+      destfile = file.path('./custom_curation_dbs/Metazoa_RefSeq235.tar.gz'),
       method = 'curl'
     )
     untar(
-      file.path('./custom_curation_dbs/Metazoa_RefSeq231.tar.gz'),
+      file.path('./custom_curation_dbs/Metazoa_RefSeq235.tar.gz'),
       exdir = file.path(path, "custom_curation_dbs", cur_dir)
     )
-    file.remove(file.path('./custom_curation_dbs/Metazoa_RefSeq231.tar.gz'))
-    orig_db_dir_base <- "Metazoa_RefSeq231"
-    orig_db_dir <- file.path(path, "custom_curation_dbs", cur_dir, "Metazoa_RefSeq231")
+    file.remove(file.path('./custom_curation_dbs/Metazoa_RefSeq235.tar.gz'))
+    orig_db_dir_base <- "Metazoa_RefSeq235"
+    orig_db_dir <- file.path(path, "custom_curation_dbs", cur_dir, "Metazoa_RefSeq235")
   } else if (base_db == "Chordata") {
     URL <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2/Chordata.tar.gz"
     download.file(

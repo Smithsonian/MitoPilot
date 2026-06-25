@@ -547,7 +547,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
               ns("curate_ref_db"),
               label = "ref_db",
               # choices = unique(rv$annotate_opts$ref_db),
-              choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
+              choices = c("Metazoa_RefSeq235", "Metazoa_RefSeq235_custom", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Metazoa_RefSeq89", "Chordata", "Chordata_custom"),
               selected = current$ref_db %||% character(0),
               width = "100%",
               options = list(
@@ -558,7 +558,10 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         opts_help("Location (ref_dir) and name (ref_db) of the reference database ",
-                  "used to validate gene boundaries during curation.",
+                  "used to validate gene boundaries during curation. rRNA reference ",
+                  "data is only included in Metazoa_RefSeq235 (and custom databases ",
+                  "built from it); with other databases the annotation editor's rRNA ",
+                  "alignment falls back to the per-sample BLAST reference genome.",
                   href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
         div(
           style = "flex: 1",
