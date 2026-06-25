@@ -81,10 +81,22 @@ workdir_browser_server <- function(id) {
           tags$td(style = "text-align: center;", workdir_status_icon(df$status[i])),
           tags$td(df$param_set[i]),
           tags$td(style = "white-space: nowrap;", df$modified[i]),
-          tags$td(tags$code(
-            style = "font-size: 11px; word-break: break-all;",
-            df$workdir[i]
-          )),
+          tags$td(
+            tags$code(
+              style = sprintf(
+                "font-size: 11px; word-break: break-all;%s",
+                if (!df$exists[i]) " color: #9e9e9e;" else ""
+              ),
+              df$workdir[i]
+            ),
+            if (!df$exists[i]) {
+              tags$span(
+                style = "color: #c62828; font-size: 11px; margin-left: 0.4em;",
+                title = "Not reachable from this host (e.g. purged or node-local scratch)",
+                "(missing)"
+              )
+            }
+          ),
           tags$td(
             style = "white-space: nowrap;",
             rclipboard::rclipButton(
@@ -96,16 +108,26 @@ workdir_browser_server <- function(id) {
               class = "btn-xs",
               title = "Copy path"
             ),
-            tags$button(
-              type = "button",
-              class = "btn btn-default btn-xs",
-              title = "Open",
-              onclick = sprintf(
-                "Shiny.setInputValue('%s', %d, {priority: 'event'})",
-                ns("open_row"), i
-              ),
-              icon("folder-open")
-            )
+            if (df$exists[i]) {
+              tags$button(
+                type = "button",
+                class = "btn btn-default btn-xs",
+                title = "Open",
+                onclick = sprintf(
+                  "Shiny.setInputValue('%s', %d, {priority: 'event'})",
+                  ns("open_row"), i
+                ),
+                icon("folder-open")
+              )
+            } else {
+              tags$button(
+                type = "button",
+                class = "btn btn-default btn-xs",
+                disabled = NA,
+                title = "Not reachable from this host",
+                icon("folder-open")
+              )
+            }
           )
         )
       })
@@ -156,7 +178,12 @@ workdir_status_icon <- function(status) {
 #' Status is taken from the task exit code (0 = success, otherwise failed). The param set
 #' (opts_id) is recovered best-effort from the `<sample>/assemble/<opts_id>` directory the
 #' process creates inside its work directory (NA / "-" for processes without one, or when
-#' the work directory has been cleaned).
+#' the work directory cannot be read on this host).
+#'
+#' Work directories are listed straight from the log and are NOT dropped when they don't
+#' resolve on the current host: on a cluster the path may live on node-local or purged
+#' scratch the app host can't see, yet the path is still worth copying. The `exists` column
+#' flags whether the dir is reachable here; the UI disables Open for unreachable rows.
 #'
 #' Purely native bookkeeping tasks (e.g. `write_curated_result`, which writes the .sqlite
 #' driver-side) are omitted: their work dirs hold nothing to inspect, and as native tasks
@@ -164,12 +191,14 @@ workdir_status_icon <- function(status) {
 #'
 #' @param project_dir Project root (the directory holding `.logs/`); `session$userData$dir`.
 #' @param sample_id Sample ID to filter on.
-#' @return data.frame with columns process, param_set, status, workdir (possibly 0 rows)
+#' @return data.frame with columns process, param_set, status, modified, workdir, exists
+#'   (possibly 0 rows)
 #' @noRd
 find_workdirs <- function(project_dir, sample_id) {
   empty <- data.frame(
-    process = character(0), param_set = character(0),
-    status = character(0), workdir = character(0), stringsAsFactors = FALSE
+    process = character(0), param_set = character(0), status = character(0),
+    modified = character(0), workdir = character(0), exists = logical(0),
+    stringsAsFactors = FALSE
   )
   if (is.null(project_dir) || is.null(sample_id) || !nzchar(sample_id)) return(empty)
   logs <- list.files(
@@ -185,7 +214,9 @@ find_workdirs <- function(project_dir, sample_id) {
 
   name    <- stringr::str_match(th, "name:\\s*(.*?);")[, 2]
   exit    <- stringr::str_match(th, "exit:\\s*(.*?);")[, 2]
-  workdir <- stringr::str_match(th, "workDir:\\s*([^\\]]+)\\]")[, 2]
+  # Stop at first whitespace or "]": grid executors (e.g. SGE) append
+  # " started: ...; exited: ...; " after the path before the closing "]".
+  workdir <- stringr::str_match(th, "workDir:\\s*([^\\]\\s]+)")[, 2]
   # name is e.g. "WF1:ASSEMBLE:assemble (sample)"; tag may carry a ".<path_idx>" suffix
   nm      <- stringr::str_match(name, "([^:\\s]+)\\s*\\(([^)]+)\\)\\s*$")
   process <- nm[, 2]
@@ -201,15 +232,16 @@ find_workdirs <- function(project_dir, sample_id) {
     workdir = trimws(workdir[keep]), stringsAsFactors = FALSE
   )
   out <- out[!duplicated(out$workdir), , drop = FALSE]
-  # Reruns spread the same process across log files, each with its own work dir. Keep only
-  # dirs that still exist on disk (cleaned / overwritten reruns drop out), so the list
-  # reflects what is actually inspectable.
-  out <- out[dir.exists(out$workdir), , drop = FALSE]
-  if (nrow(out) == 0) return(empty)
   out$status <- ifelse(out$exit == "0", "success", "failed")
-  out$mtime <- file.info(out$workdir)$mtime
-  out$modified <- format(out$mtime, "%Y-%m-%d %H:%M")
+  # Whether the work dir resolves on THIS host. Do not drop missing ones: on a cluster
+  # the path may be on node-local / purged scratch the app host can't see, but the logged
+  # path is still useful to copy. Missing rows are flagged and their Open is disabled.
+  out$exists <- dir.exists(out$workdir)
+  out$mtime <- file.info(out$workdir)$mtime  # NA when missing
+  out$modified <- ifelse(is.na(out$mtime), "-", format(out$mtime, "%Y-%m-%d %H:%M"))
+  # Param set (opts_id) only recoverable when the dir exists locally; "-" otherwise.
   out$param_set <- vapply(seq_len(nrow(out)), function(i) {
+    if (!out$exists[i]) return("-")
     g <- tryCatch(
       Sys.glob(file.path(out$workdir[i], out$sample[i], "assemble", "*")),
       error = function(e) character(0)
@@ -217,8 +249,8 @@ find_workdirs <- function(project_dir, sample_id) {
     g <- g[dir.exists(g)]
     if (length(g) >= 1) basename(g[1]) else "-"
   }, character(1))
-  # Newest first so the most recent run for each process is at the top.
-  out <- out[order(out$mtime, decreasing = TRUE), , drop = FALSE]
+  # Newest first; missing dirs (NA mtime) sort to the bottom.
+  out <- out[order(out$mtime, decreasing = TRUE, na.last = TRUE), , drop = FALSE]
   rownames(out) <- NULL
-  out[, c("process", "param_set", "status", "modified", "workdir")]
+  out[, c("process", "param_set", "status", "modified", "workdir", "exists")]
 }
