@@ -518,7 +518,10 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
               width = "100%",
               value = current$memory %||% numeric(0)
             ) |> shinyjs::disabled()
-          ),
+          )
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
             style = "flex: 1",
             numericInput(
