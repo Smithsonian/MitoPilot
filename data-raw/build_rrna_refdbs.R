@@ -71,11 +71,16 @@ parse_gb_records <- function(lines) {
     oi <- grep("^ORIGIN", rec)[1]
     if (is.na(fi) || is.na(oi) || oi <= fi) next
 
+    # ORIGIN body: only the numbered counter lines ("        1 gatc ..."), so no
+    # stray non-sequence text (e.g. a malformed record's LOCUS) leaks in. Keep
+    # IUPAC codes; map anything else to N so DNAString never chokes.
     seqlines <- rec[(oi + 1L):length(rec)]
-    seqlines <- seqlines[!grepl("^//", seqlines)]
+    seqlines <- seqlines[grepl("^\\s*[0-9]+ ", seqlines)]
     seqstr <- toupper(gsub("[^A-Za-z]", "", paste(seqlines, collapse = "")))
+    seqstr <- gsub("[^ACGTNRYKMSWBDHV]", "N", seqstr)
     if (!nzchar(seqstr)) next
-    seq <- DNAString(seqstr)
+    seq <- tryCatch(DNAString(seqstr), error = function(e) NULL)
+    if (is.null(seq)) next
 
     feat <- rec[(fi + 1L):(oi - 1L)]
     key_idx <- which(grepl("^ {5}\\S", feat))         # feature key lines (col 6)
@@ -154,16 +159,21 @@ for (cl in names(clades)) {
     clades[[cl]]
   )
   gb_file <- file.path(STAGE, paste0("_", cl, ".gb"))
-  conda_run(EDIRECT,
-            sprintf("esearch -db nuccore -query %s | efetch -format gb > %s",
-                    shQuote(q), shQuote(gb_file)),
-            stdout = FALSE)
+  # Reuse an existing download (lets you re-run the parse without re-fetching;
+  # delete the file to force a fresh fetch).
+  if (file.exists(gb_file) && file.size(gb_file) > 0) {
+    message("  reusing existing ", gb_file)
+  } else {
+    conda_run(EDIRECT,
+              sprintf("esearch -db nuccore -query %s | efetch -format gb > %s",
+                      shQuote(q), shQuote(gb_file)),
+              stdout = FALSE)
+  }
   if (!file.exists(gb_file) || file.size(gb_file) == 0) {
     message("  no records fetched for ", cl); next
   }
   message("  parsing ", round(file.size(gb_file) / 1e6, 1), " MB of GenBank records...")
   df <- parse_gb_file(gb_file)
-  unlink(gb_file)
   if (is.null(df)) { message("  no rRNA features found"); next }
   df$source_clade <- cl
   all_rows[[length(all_rows) + 1L]] <- df
