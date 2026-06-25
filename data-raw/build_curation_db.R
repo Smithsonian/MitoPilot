@@ -1,8 +1,10 @@
 # Build a MitoPilot curation reference database (one per clade) from RefSeq
 # mitogenomes. The distributed ref DBs (ref_dbs/Mitos2/<name>.tar.gz) are plain
 # BLAST databases:
-#   <name>/featureProt/<gene>.fas   protein BLAST per PCG  (curate get_top_hits,
-#                                    orf get_top_hits_orf)
+#   <name>/featureProt/<gene>.fas   protein BLAST per gene (curate get_top_hits,
+#                                    orf get_top_hits_orf) -- the standard 13
+#                                    PCGs plus accessory and other named
+#                                    non-standard mitochondrial genes
 #   <name>/featureNuc/<gene>.fas    nucleotide BLAST per rRNA (curate
 #                                    get_top_hits_nuc; rrnL = 16S, rrnS = 12S)
 # Header contract (see R/annotate_utils.R get_top_hits / get_top_hits_nuc):
@@ -46,9 +48,30 @@ clades <- list(
   # Chordata = list(taxid = 7711, name = sprintf("Chordata_RefSeq%s", REFSEQ_VER))
 )
 
-# PCG genes to retain in featureProt (normalized names). Mirrors the standard 13
-# plus the accessory PCGs the rulesets recognize.
-PCG_KEEP <- unique(c(MITO_PCG_GENES, MITO_EXTRA_PCG_GENES))
+# normalize_mito_gene() only canonicalizes the standard 13 PCGs; everything else
+# comes back flagged ("?<name>"). To also capture non-standard mitochondrial
+# genes we (a) consolidate the recognized accessory genes via the synonym map
+# below so they land in one file per gene (and match the names the rulesets
+# know), and (b) keep any other *named* non-standard CDS under its own symbol,
+# subject to a minimum occurrence count. Generic / uninformative names are
+# dropped. Keys are matched against the lowercased, separator-stripped gene
+# symbol and (as a fallback) the product description.
+EXTRA_PCG_SYNONYMS <- c(
+  atp9 = "atp9", atpase9 = "atp9", atpsynthasef0subunit9 = "atp9",
+  mttb = "mttb", trimethylaminemethyltransferase = "mttb",
+  msh1 = "msh1", muts = "msh1", mutshomolog = "msh1", mismatchrepairprotein = "msh1",
+  dpo = "dpo", polb = "dpo", dnapolymerase = "dpo", dnapolymeraseb = "dpo",
+  lagli = "lagli", laglidadg = "lagli", homingendonuclease = "lagli",
+  rvt = "rvt", reversetranscriptase = "rvt",
+  dnab = "dnaB", dnahelicase = "dnaB", replicativednahelicase = "dnaB"
+)
+# A non-standard (non-canonical, non-accessory) gene is kept only if it occurs in
+# at least this many distinct references, so per-species junk ORFs / singletons
+# do not pollute the reference set.
+MIN_NONSTD_SEQS <- 5L
+# Names that carry no transferable identity -> never make a reference file.
+GENERIC_RE <- paste0("^(orf|hypothetical|unknown|uncharacter|putative|unnamed|",
+                     "predicted|ymf|protein|gene|cds|membrane|product|conserved)")
 
 dir.create(STAGE, showWarnings = FALSE, recursive = TRUE)
 `%||%` <- function(a, b) if (length(a) == 0 || is.null(a)) b else a
@@ -134,9 +157,26 @@ parse_gb_records <- function(lines) {
       if (is.na(raw) || !nzchar(raw)) next
 
       if (key == "CDS") {
-        gene <- tryCatch(normalize_mito_gene(raw, "PCG", prod_q %||% raw),
+        norm <- tryCatch(normalize_mito_gene(raw, "PCG", prod_q %||% raw),
                          error = function(e) NA_character_)
-        if (is.na(gene) || !gene %in% PCG_KEEP) next
+        if (is.na(norm)) next
+        if (startsWith(norm, "?")) {
+          # Non-standard CDS: try the accessory-gene synonyms (gene symbol, then
+          # product), else keep under its own sanitized symbol.
+          sym <- gsub("[^a-z0-9]", "", tolower(sub("^\\?", "", norm)))
+          psym <- if (!is.na(prod_q)) gsub("[^a-z0-9]", "", tolower(prod_q)) else ""
+          ex <- EXTRA_PCG_SYNONYMS[sym]
+          if (is.na(ex)) ex <- EXTRA_PCG_SYNONYMS[psym]
+          if (!is.na(ex)) {
+            gene <- unname(ex); nonstd <- FALSE
+          } else if (nzchar(sym) && !grepl(GENERIC_RE, sym)) {
+            gene <- sym; nonstd <- TRUE
+          } else {
+            next
+          }
+        } else {
+          gene <- norm; nonstd <- FALSE
+        }
         prot <- get_qualifier(quals, "translation")
         if (is.na(prot) || !nzchar(prot)) next
         prot <- gsub("[^A-Za-z*]", "", prot)
@@ -144,7 +184,8 @@ parse_gb_records <- function(lines) {
         if (!nzchar(prot)) next
         out[[length(out) + 1L]] <- data.frame(
           kind = "prot", gene = gene, accession = acc, taxon = organism,
-          length = nchar(prot), sequence = prot, stringsAsFactors = FALSE
+          length = nchar(prot), sequence = prot, nonstd = nonstd,
+          stringsAsFactors = FALSE
         )
       } else { # RRNA
         if (is.null(seq)) next
@@ -161,7 +202,8 @@ parse_gb_records <- function(lines) {
         if (comp) s <- reverseComplement(s)
         out[[length(out) + 1L]] <- data.frame(
           kind = "nuc", gene = gene, accession = acc, taxon = organism,
-          length = length(s), sequence = as.character(s), stringsAsFactors = FALSE
+          length = length(s), sequence = as.character(s), nonstd = FALSE,
+          stringsAsFactors = FALSE
         )
       }
     }
@@ -199,7 +241,9 @@ write_gene_db <- function(sub, gene, dir, dbtype) {
     sub <- sub[seq_len(MAX_PER_GENE), , drop = FALSE]
   }
   seqs <- if (dbtype == "prot") AAStringSet(sub$sequence) else DNAStringSet(sub$sequence)
-  names(seqs) <- sprintf("%s %s", sub$accession,
+  # Header contract: >{accession}:{gene}-1-1-{len} {Species}. The gene token (used
+  # by get_top_hits_orf to recover a hit's candidate gene) must be hyphen-free.
+  names(seqs) <- sprintf("%s:%s-1-1-%d %s", sub$accession, gene, sub$length,
                          ifelse(is.na(sub$taxon) | !nzchar(sub$taxon), "unknown", sub$taxon))
   fas <- file.path(dir, paste0(gene, ".fas"))
   writeXStringSet(seqs, fas)
@@ -242,12 +286,18 @@ for (cl in names(clades)) {
 
   rows <- list()
   for (gene in sort(unique(dat$gene[dat$kind == "prot"]))) {
-    n <- write_gene_db(dat[dat$kind == "prot" & dat$gene == gene, ], gene, prot_dir, "prot")
-    rows[[length(rows) + 1L]] <- data.frame(db = name, set = "featureProt", gene = gene, n = n)
+    g <- dat[dat$kind == "prot" & dat$gene == gene, ]
+    ns <- isTRUE(g$nonstd[1])
+    # Drop poorly-supported non-standard genes (canonical/accessory always kept).
+    if (ns && length(unique(g$sequence)) < MIN_NONSTD_SEQS) next
+    n <- write_gene_db(g, gene, prot_dir, "prot")
+    rows[[length(rows) + 1L]] <- data.frame(
+      db = name, set = "featureProt", gene = gene, nonstd = ns, n = n)
   }
   for (gene in sort(unique(dat$gene[dat$kind == "nuc"]))) {
     n <- write_gene_db(dat[dat$kind == "nuc" & dat$gene == gene, ], gene, nuc_dir, "nucl")
-    rows[[length(rows) + 1L]] <- data.frame(db = name, set = "featureNuc", gene = gene, n = n)
+    rows[[length(rows) + 1L]] <- data.frame(
+      db = name, set = "featureNuc", gene = gene, nonstd = FALSE, n = n)
   }
 
   tarball <- file.path(STAGE, paste0(name, ".tar.gz"))
@@ -259,13 +309,14 @@ for (cl in names(clades)) {
 }
 
 prov_df <- if (length(prov)) do.call(rbind, prov) else
-  data.frame(db = character(), set = character(), gene = character(), n = integer())
+  data.frame(db = character(), set = character(), gene = character(),
+             nonstd = logical(), n = integer())
 prov_df$refseq_version <- REFSEQ_VER
 prov_df$date_downloaded <- as.character(Sys.Date())
 write.csv(prov_df, "data-raw/curation_db_provenance.csv", row.names = FALSE)
 
-cat("\nSummary (sequences per gene):\n")
-if (nrow(prov_df)) print(prov_df[, c("db", "set", "gene", "n")]) else cat("(nothing built)\n")
+cat("\nSummary (sequences per gene; nonstd = non-standard mito gene):\n")
+if (nrow(prov_df)) print(prov_df[, c("db", "set", "gene", "nonstd", "n")]) else cat("(nothing built)\n")
 cat("\nProvenance: data-raw/curation_db_provenance.csv\n")
 cat("Staged tarball(s): ", STAGE,
     "/<name>.tar.gz (REVIEW before moving into ref_dbs/Mitos2/)\n", sep = "")
