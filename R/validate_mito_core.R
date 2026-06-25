@@ -63,6 +63,9 @@ validate_mito_core <- function(
   ## Prepare rules ----
   rules <- rules |>
     purrr::map(~ modifyList(default_rules[[.x$type]] %||% list(), .x))
+  # Non-standard genes (e.g. MitoFinder CDS with no canonical name) inherit the
+  # default PCG ruleset so they are validated like any other PCG.
+  rules <- augment_rules_for_unknown_genes(rules, annotations, default_rules)
 
   # counter for warnings
   total_warnings <- 0

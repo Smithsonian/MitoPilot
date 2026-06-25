@@ -57,3 +57,17 @@ mito_gene_type <- function(gene) {
     "PCG"
   }
 }
+
+#' Identify non-standard MitoFinder genes.
+#'
+#' A non-standard gene is a MitoFinder-called PCG whose name is not one of the
+#' canonical mitochondrial gene names. These are kept (not dropped) and edited
+#' like ORFs: BLASTed against the combined gene DB and renameable. Vectorized.
+#'
+#' @param gene,type,tool annotation columns
+#' @noRd
+is_nonstandard_mito_gene <- function(gene, type, tool) {
+  !is.na(gene) & nzchar(gene) &
+    (type %in% "PCG") & (tool %in% "MitoFinder") &
+    !(gene %in% MITO_GENE_CHOICES)
+}

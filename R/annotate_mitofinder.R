@@ -218,7 +218,13 @@ annotate_mitofinder <- function(
     dplyr::transmute(
       contig,
       type,
-      gene = normalize_mitofinder_gene(raw_gene),
+      # Map to a canonical name; when a CDS does not map to a known gene keep it
+      # as a non-standard PCG with a sanitized fallback name so the user can
+      # curate it. Unmapped tRNA/rRNA features are still dropped (no ruleset).
+      gene = dplyr::coalesce(
+        normalize_mitofinder_gene(raw_gene),
+        dplyr::if_else(type == "PCG", mitofinder_fallback_gene(raw_gene), NA_character_)
+      ),
       pos1 = pmin(start, end),
       pos2 = pmax(start, end),
       direction = ifelse(strand == "-", "-", "+"),
@@ -349,5 +355,25 @@ normalize_mitofinder_gene <- function(x) {
     # delimited token.
     first_tok <- stringr::str_extract(label, "^[^\\s_]+")
     map_key(norm_key(first_tok))
+  }, character(1), USE.NAMES = FALSE)
+}
+
+#' Derive a sanitized fallback gene name for a non-standard MitoFinder CDS
+#'
+#' MitoFinder can annotate CDS features that do not map to a canonical mito
+#' gene. Keep them as non-standard PCGs under a safe, lowercase name (first
+#' space/underscore token, restricted to the characters the gene-assignment UI
+#' accepts). Empty labels fall back to "orf".
+#'
+#' @noRd
+mitofinder_fallback_gene <- function(x) {
+  raw <- stringr::str_squish(x)
+  vapply(raw, function(label) {
+    if (is.na(label) || !nzchar(label)) return("orf")
+    first_tok <- stringr::str_extract(label, "^[^\\s_]+")
+    nm <- first_tok |>
+      stringr::str_to_lower() |>
+      stringr::str_remove_all("[^a-z0-9._-]")
+    if (is.na(nm) || !nzchar(nm)) "orf" else nm
   }, character(1), USE.NAMES = FALSE)
 }

@@ -332,6 +332,138 @@ get_top_hits_orf <- function(
     dplyr::ungroup()
 }
 
+#' Pairwise comparison of nucleotide sequences
+#'
+#' Nucleotide analog of [compare_aa()] for rRNA (which does not translate). Uses
+#' a simple match/mismatch nucleotide substitution matrix.
+#'
+#' @param query,target nucleotide sequences (character)
+#' @param type "pctId" (query-centric) or "similarity" (over aligned columns)
+#' @noRd
+compare_nt <- function(query, target, type = c("pctId", "similarity")) {
+  s1 <- Biostrings::DNAString(query)
+  s2 <- Biostrings::DNAString(target)
+  submx <- pwalign::nucleotideSubstitutionMatrix(match = 1, mismatch = -1, baseOnly = FALSE)
+  aln <- pwalign::pairwiseAlignment(
+    subject = s1, pattern = s2, substitutionMatrix = submx,
+    gapOpening = 5, gapExtension = 2
+  )
+  if (type[1] == "similarity") {
+    return(100 * pwalign::nmatch(aln) / pwalign::nchar(aln))
+  }
+  100 * pwalign::nmatch(aln) / nchar(query)
+}
+
+#' Get top BLASTN hits for a nucleotide query against a per-gene reference DB
+#'
+#' Nucleotide analog of [get_top_hits()] for rRNA features. The reference DB is a
+#' featureNuc/<gene>.fas BLAST database with the same header contract
+#' (`>{accession}:{gene}-1-1-{len} {Species}`). Returns the same columns as
+#' [get_top_hits()] so the refHits JSON / annotate-details alignment are shared.
+#'
+#' @param ref_db nucleotide BLAST database (FASTA with a makeblastdb index)
+#' @param query nucleotide query sequence
+#' @param max_blast_hits maximum hits to retain (default 10)
+#' @param condaenv conda env with blastn (NULL = on PATH)
+#' @noRd
+get_top_hits_nuc <- function(
+    ref_db,
+    query,
+    max_blast_hits = 10,
+    condaenv = "base") {
+  ref_seqs <- Biostrings::readDNAStringSet(ref_db)
+
+  if (!is.null(condaenv)) {
+    hits_refSeq <- stringr::str_glue(
+      "run -n {condaenv}",
+      "echo -e '{query}' |",
+      "blastn ",
+      "-task blastn",
+      "-db {ref_db}",
+      "-max_hsps 1",
+      "-max_target_seqs 1000",
+      "-outfmt '6 salltitles evalue'",
+      "-query -",
+      .sep = " "
+    ) |>
+      system2(reticulate::conda_binary(), args = _, stdout = TRUE)
+  } else {
+    hits_refSeq <- stringr::str_glue(
+      "-task blastn",
+      "-db {ref_db}",
+      "-max_hsps 1",
+      "-max_target_seqs 1000",
+      "-outfmt '6 salltitles evalue'",
+      "-query -",
+      .sep = " "
+    ) |>
+      system2("blastn", args = _, input = query, stdout = TRUE)
+  }
+
+  empty <- data.frame(
+    acc = character(), Taxon = character(), eval = numeric(),
+    target = character(), pctid = numeric(), similarity = numeric(),
+    gap_leading = numeric(), gap_trailing = numeric()
+  )
+  if (length(hits_refSeq) == 0) return(empty)
+
+  hits_refSeq |>
+    purrr::map_dfr(~ {
+      df <- data.frame(stringr::str_split(.x, "\\t", simplify = T))
+      colnames(df) <- c("hit", "eval")
+      df |> dplyr::mutate(across(!hit, as.numeric))
+    }) |>
+    dplyr::arrange(eval) |>
+    dplyr::transmute(
+      acc = stringr::str_extract(hit, "^[^:]+"),
+      Taxon = stringr::str_remove(hit, "^\\S+ "),
+      eval = eval
+    ) |>
+    dplyr::rowwise() |>
+    dplyr::mutate(
+      target = as.character(ref_seqs[stringr::str_extract(names(ref_seqs), "^[^:]+") == acc])[1]
+    ) |>
+    dplyr::mutate(
+      pctid = compare_nt(query, target, "pctId"),
+      similarity = compare_nt(query, target, "similarity"),
+      gap_leading = NA_real_,
+      gap_trailing = NA_real_,
+      .after = "eval"
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::arrange(dplyr::desc(similarity)) |>
+    dplyr::slice_head(n = as.numeric(max_blast_hits))
+}
+
+#' Inject synthetic ruleset entries for genes absent from the params `rules`
+#'
+#' Non-standard MitoFinder genes (and any other gene not listed in a clade's
+#' params `rules`) would otherwise be skipped entirely by curation and
+#' validation, which only iterate `names(rules)`. Give each such gene a rule
+#' that inherits the type's `default_rules` (so start/stop codon, overlap and
+#' length checks apply) with `count = c(0, Inf)` so it is never flagged as a
+#' missing or duplicated gene. Called by both `curate_mito_core()` and
+#' `validate_mito_core()` after the rules/defaults merge.
+#'
+#' @param rules merged rules list (gene -> rule list)
+#' @param annotations annotations data frame (needs `gene`, `type` columns)
+#' @param default_rules per-type default rules list from params
+#'
+#' @return `rules` with synthetic entries added for unknown genes
+#'
+#' @noRd
+augment_rules_for_unknown_genes <- function(rules, annotations, default_rules) {
+  if (is.null(annotations) || nrow(annotations) == 0L) return(rules)
+  unknown <- setdiff(unique(annotations$gene), names(rules))
+  unknown <- unknown[!is.na(unknown) & nzchar(unknown)]
+  for (g in unknown) {
+    g_type <- annotations$type[annotations$gene == g][1]
+    base <- default_rules[[g_type]] %||% default_rules[["PCG"]] %||% list()
+    rules[[g]] <- utils::modifyList(base, list(type = g_type, count = c(0, Inf)))
+  }
+  rules
+}
+
 #' Count end gaps in a pairwise alignment
 #'
 #' @param query The focal sequence

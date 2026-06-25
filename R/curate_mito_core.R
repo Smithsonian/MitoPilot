@@ -102,6 +102,9 @@ curate_mito_core <- function(
   ## Prepare rules ----
   rules <- rules |>
     purrr::map(~ modifyList(default_rules[[.x$type]] %||% list(), .x))
+  # Non-standard genes (e.g. MitoFinder CDS with no canonical name) inherit the
+  # default PCG ruleset so they are curated like any other PCG.
+  rules <- augment_rules_for_unknown_genes(rules, annotations, default_rules)
 
   ## Set genetic code ----
   genetic_code <- tryCatch(
@@ -199,6 +202,34 @@ curate_mito_core <- function(
 
   # PCGs ----
   ## Get top ref hits for each PCG ----
+  # Combined all-gene DB (built from every featureProt FASTA, which already
+  # include the remote reference genes injected above) for non-standard PCGs
+  # that have no per-gene featureProt FASTA. Built lazily on first need so the
+  # common all-standard-gene case pays nothing.
+  combined_ref_db <- local({
+    cache <- NULL
+    function() {
+      if (!is.null(cache)) return(cache)
+      fas <- list.files(file.path(ref_dir, "featureProt"),
+                        pattern = "\\.fas$", full.names = TRUE)
+      if (length(fas) == 0L) return(NULL)
+      combined <- file.path(tempdir(), "_curate_all_genes.fas")
+      if (file.exists(combined)) file.remove(combined)
+      file.create(combined)
+      for (f in fas) file.append(combined, f)
+      mk_args <- c("-in", combined, "-dbtype", "prot")
+      tryCatch(
+        system2(reticulate::conda_binary(),
+                c("run", "-n", "base", "makeblastdb", mk_args),
+                stdout = NULL, stderr = NULL),
+        error = function(e) system2("makeblastdb", mk_args,
+                                    stdout = NULL, stderr = NULL)
+      )
+      cache <<- combined
+      combined
+    }
+  })
+
   annotations$refHits <- annotations |>
     dplyr::select(type, gene, translation) |>
     purrr::pmap(function(type, gene, translation) {
@@ -210,10 +241,17 @@ curate_mito_core <- function(
       ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
         stringr::str_glue()
 
-      # No reference DB for this gene (e.g. a novel ORF without a built
-      # featureProt FASTA): skip BLAST so curation does not error.
+      # No per-gene reference DB (e.g. a non-standard MitoFinder gene): BLAST the
+      # translation against the combined all-gene DB like an ORF so candidate
+      # identities still surface in the alignment.
       if (!file.exists(as.character(ref_db))) {
-        return('{}')
+        cdb <- combined_ref_db()
+        if (is.null(cdb) || is.na(translation) || !nzchar(translation)) {
+          return('{}')
+        }
+        out <- get_top_hits_orf(cdb, translation, max_blast_hits) |>
+          json_string()
+        return(out %||% '{}')
       }
 
       out <- get_top_hits(ref_db, translation, max_blast_hits) |>
@@ -225,6 +263,30 @@ curate_mito_core <- function(
   # Prepend remote BLAST top hit to refHits for each PCG
   if (!is.null(blast_ref_file)) {
     annotations <- prepend_blast_hit_to_refhits(annotations, blast_ref_file)
+  }
+
+  ## Get top ref hits for each rRNA (nucleotide BLAST) ----
+  # Uses per-gene featureNuc/<gene>.fas databases. Inert (no-op) until those
+  # reference databases are built (see data-raw/build_rrna_refdbs.R); the
+  # annotate-details rRNA alignment falls back to the BLAST reference genome.
+  nuc_ref_dir <- file.path(ref_dir, "featureNuc")
+  for (i in which(annotations$type == "rRNA")) {
+    gene <- annotations$gene[i]
+    db <- file.path(nuc_ref_dir, paste0(gene, ".fas"))
+    if (!file.exists(db)) next
+    nt <- tryCatch({
+      s <- Biostrings::subseq(
+        assembly[contig_key[annotations$contig[i]]],
+        annotations$pos1[i], annotations$pos2[i]
+      )
+      if (identical(annotations$direction[i], "-")) s <- Biostrings::reverseComplement(s)
+      unname(as.character(s))
+    }, error = function(e) NA_character_)
+    if (is.na(nt) || !nzchar(nt)) next
+    annotations$refHits[i] <- tryCatch(
+      get_top_hits_nuc(db, nt, max_blast_hits) |> json_string() %||% "{}",
+      error = function(e) annotations$refHits[i]
+    )
   }
 
   ## Curate against top hits ----

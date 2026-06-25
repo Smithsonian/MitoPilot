@@ -24,6 +24,10 @@
 #' @param max_blast_hits Maximum number of BLAST hits to retain per ORF (default: 10).
 #' @param blast_condaenv Conda environment containing blastp/makeblastdb (default:
 #'   "base"). Set NULL to use them on the PATH.
+#' @param blast_ref_file Optional path to the staged `remote_blast_ref.json` for
+#'   this sample. When supplied, the closest-relative reference's translated genes
+#'   are injected into the per-gene FASTAs before the combined ORF database is
+#'   built, so ORFs can also match the remote reference.
 #' @param out_dir Output directory for the ORF annotations TSV.
 #'
 #' @export
@@ -40,6 +44,7 @@ orf_finder <- function(
   ref_dir = ".",
   max_blast_hits = 10,
   blast_condaenv = "base",
+  blast_ref_file = NULL,
   out_dir = NULL
 ) {
   orf_min_len <- as.integer(orf_min_len)
@@ -218,6 +223,16 @@ orf_finder <- function(
   orfs$warnings <- NA_character_
 
   # BLAST each ORF against the combined gene database ----
+  # Inject the closest-relative reference's genes into the per-gene FASTAs first
+  # (no-op when no blast ref is staged) so the combined DB also covers the remote
+  # reference, giving ORFs a better chance of a match.
+  if (!is.null(blast_ref_file) && nzchar(blast_ref_file)) {
+    tryCatch(
+      inject_remote_hits_into_blast_db(blast_ref_file, ref_dir),
+      error = function(e) message("orf_finder: remote hit injection failed: ",
+                                  conditionMessage(e))
+    )
+  }
   feature_dir <- file.path(ref_dir, "featureProt")
   fas <- list.files(feature_dir, pattern = "\\.fas$", full.names = TRUE)
   orfs$refHits <- NA_character_
