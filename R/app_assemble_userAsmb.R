@@ -781,13 +781,7 @@ assemble_server_userAsmb <- function(id) {
         "assemble",
         rv$data$assemble_opts[as.numeric(input$output)]
       )
-      req(file.exists(pth))
-      if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
-        rstudioapi::filesPaneNavigate(pth)
-        req(F)
-      } else {
-        utils::browseURL(pth)
-      }
+      open_path(pth)
     })
 
     # Open Assembly Details ----

@@ -1273,13 +1273,7 @@ annotate_server <- function(id) {
         filtered_data()$ID[as.numeric(input$output)],
         "annotate"
       )
-      req(file.exists(pth))
-      if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
-        rstudioapi::filesPaneNavigate(pth)
-        req(F)
-      } else {
-        utils::browseURL(pth)
-      }
+      open_path(pth)
     })
 
     # Open annotation details ----

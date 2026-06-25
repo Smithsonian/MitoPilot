@@ -9,8 +9,9 @@ coming_soon <- function(text = "This feature is not yet implemented.") {
 
 #' Open a directory in an environment-aware way
 #'
-#' Local desktop opens the OS file browser; RStudio Server navigates the Files pane; headless
-#' sessions cannot open folders, so a warning notification with the path is shown instead.
+#' Local desktop opens the OS file browser; RStudio Server navigates the Files pane (and
+#' notifies the user, since that is not obvious); headless sessions cannot open folders, so a
+#' warning notification with the path is shown instead.
 #'
 #' @noRd
 open_path <- function(pth) {
@@ -23,13 +24,18 @@ open_path <- function(pth) {
   }
   if (!dir.exists(pth)) {
     showNotification(
-      paste0("Work directory not found (it may have been cleaned): ", pth),
+      paste0("Folder not found (it may have been cleaned or is on storage this host ",
+             "cannot see): ", pth),
       type = "warning", duration = 10
     )
     return(invisible(FALSE))
   }
   if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
     if (requireNamespace("rstudioapi", quietly = TRUE)) rstudioapi::filesPaneNavigate(pth)
+    showNotification(
+      "Opened in the RStudio Files pane (bottom-right panel).",
+      type = "message", duration = 5
+    )
   } else {
     utils::browseURL(pth)
   }
