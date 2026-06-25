@@ -274,6 +274,30 @@ export_server <- function(id) {
       trigger("group_modal")
     })
 
+    # Clear Group ----
+    # Remove the export_group assignment from any selected samples that currently
+    # have one. Always-visible button; a no-group selection is a silent no-op.
+    init("clear_group")
+    on("clear_group", {
+      req(session$userData$mode == "Export")
+      req(selected())
+      rv$updating <- rv$data |> dplyr::slice(selected())
+      if (!any(!is.na(rv$updating$export_group))) {
+        req(FALSE)
+      }
+      shinyWidgets::confirmSweetAlert(
+        title = "Clear group?",
+        text = "Remove the selected samples from their export group? This will not automatically remove them from previously generated export files.",
+        inputId = ns("clear_group_confirm"),
+        btn_labels = c("No", "Yes"),
+        btn_colors = c("#0056b3", "#0056b3")
+      )
+    })
+    observeEvent(input$clear_group_confirm, {
+      req(input$clear_group_confirm)
+      assign_export_group(rep(NA_character_, nrow(rv$updating)))
+    })
+
     init("group_modal")
     on("group_modal", {
       rv$updating <- rv$data |> dplyr::slice(selected())
