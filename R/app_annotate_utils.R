@@ -351,7 +351,9 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             value = current$mitofinder_db %||% character(0),
             width = "100%"
           ) |> shinyjs::disabled(),
-          opts_help("GenBank-format (.gb) reference used by MitoFinder to identify genes.",
+          opts_help("GenBank-format (.gb) reference used by MitoFinder to identify ",
+                    "genes. The MitoPilot custom_assembly_db() function can generate ",
+                    "this annotation database for a clade.",
                     href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html"),
           div(
             style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
