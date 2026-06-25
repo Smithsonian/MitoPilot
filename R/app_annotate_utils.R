@@ -217,7 +217,10 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               width = "100%",
               value = current$memory %||% numeric(0)
             ) |> shinyjs::disabled()
-          ),
+          )
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
             style = "flex: 1",
             selectizeInput(
@@ -241,7 +244,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             style = "flex: 2",
             textInput(
               ns("mitos_opts"),
-              label = tagList("Mitos2 options:", tool_help_icon("mitos")),
+              label = tagList("MITOS2 options:", tool_help_icon("mitos")),
               value = current$mitos_opts %||% character(0),
               width = "100%"
             ) |> shinyjs::disabled()
@@ -254,20 +257,20 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               value = isTRUE(as.logical(current$use_mitos %||% 1L)),
               status = "primary"
             ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "margin-top: 24px;",
-            shinyWidgets::prettyCheckbox(
-              ns("use_mitos_best"),
-              label = "Keep only best of overlapping predictions (--best)",
-              value = isTRUE(as.logical(current$use_mitos_best %||% 1L)),
-              status = "primary"
-            ) |> shinyjs::disabled()
           )
         ),
-        opts_help("MITOS2 is the primary annotator (genes, tRNAs, rRNAs); ",
-                  "the options box takes extra MITOS2 flags and '--best' keeps only ",
-                  "the top-scoring of overlapping predictions.",
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; margin-bottom: 8px;",
+          shinyWidgets::prettyCheckbox(
+            ns("use_mitos_best"),
+            label = "Keep only best of overlapping predictions (--best)",
+            value = isTRUE(as.logical(current$use_mitos_best %||% 1L)),
+            status = "primary"
+          ) |> shinyjs::disabled()
+        ),
+        opts_help("MITOS2 is the primary annotator (genes, tRNAs, rRNAs). The ",
+                  "options box takes extra MITOS2 flags; '--best' keeps only the ",
+                  "top-scoring of overlapping predictions.",
                   href = "http://mitos2.bioinf.uni-leipzig.de/index.py"),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
