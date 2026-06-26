@@ -1446,9 +1446,10 @@ annotations_details_server <- function(id, rv) {
     }
 
     # Build a nucleotide MSA for an rRNA row: the focal rRNA sequence aligned to
-    # the matching rRNA region of the per-sample BLAST reference genome (Source A:
-    # reuses the already-fetched reference, so it is pairwise). Returns a list
-    # shaped like the protein `new_alignment` so the msa header/widget render it.
+    # the matching rRNA region of the per-sample remote BLAST reference genome
+    # (Source A, always shown when available) plus any featureNuc multi-reference
+    # hits stored in refHits (Source B). Returns a list shaped like the protein
+    # `new_alignment` so the msa header/widget render it.
     build_rrna_alignment <- function(sel) {
       gene <- rv$annotations$gene[sel]
       out <- list(
@@ -1477,25 +1478,12 @@ annotations_details_server <- function(id, rv) {
       }
       focal <- setNames(focal_seq, paste(gene, "(focal)"))
 
-      # Source B: multi-reference nucleotide MSA from stored refHits (populated by
-      # curation when the featureNuc/<gene>.fas BLAST DBs exist). Preferred when
-      # present; otherwise fall back to the per-sample BLAST reference (Source A).
-      hits <- tryCatch(json_parse(rv$annotations$refHits[sel], TRUE), error = function(e) NULL)
-      if (is.data.frame(hits) && nrow(hits) > 0 && "target" %in% names(hits)) {
-        refs <- stats::setNames(hits$target, hits$Taxon %||% hits$acc)
-        dna_set <- Biostrings::DNAStringSet(c(focal, refs))
-        aln <- tryCatch(DECIPHER::AlignSeqs(dna_set, verbose = FALSE),
-                        error = function(e) dna_set)
-        out$aln <- aln
-        out$alignmentHeight <- 20 + length(aln) * 20
-        sim <- suppressWarnings(max(hits$similarity, na.rm = TRUE))
-        out$id <- if (!is.finite(sim)) "<b>Max Similarity:</b> n/a" else
-          paste0("<b>Max Similarity:</b> ", round(sim, 1), "%")
-        return(out)
-      }
+      refs <- character(0)   # named reference sequences (remote ref + featureNuc hits)
+      best_sim <- NA_real_   # header similarity (from featureNuc hits when present)
 
-      # Reference rRNA region from the BLAST reference genome.
-      ref_seq_chr <- NULL
+      # Source A: rRNA region of the per-sample remote BLAST reference genome.
+      # Always included (mirrors how the remote hit is prepended for PCGs) so the
+      # GenBank reference shows even when featureNuc multi-reference hits exist.
       if (!is.null(rv$blast_ref) && !is.null(rv$blast_ref_seq) &&
           nrow(rv$blast_ref) > 0 && nrow(rv$blast_ref_seq) > 0) {
         refrow <- rv$blast_ref[rv$blast_ref$type == "rRNA" & rv$blast_ref$gene == gene, , drop = FALSE]
@@ -1509,26 +1497,43 @@ annotations_details_server <- function(id, rv) {
               if (identical(refrow$direction, "-")) s <- Biostrings::reverseComplement(s)
               as.character(s)
             }, error = function(e) NULL)
+            if (!is.null(ref_seq_chr) && nzchar(ref_seq_chr)) {
+              ref_name <- paste0(rv$blast_ref_seq$accession[1] %||% "reference", " (GenBank ref)")
+              refs <- c(refs, stats::setNames(ref_seq_chr, ref_name))
+            }
           }
         }
       }
 
-      if (is.null(ref_seq_chr) || !nzchar(ref_seq_chr)) {
+      # Source B: featureNuc multi-reference hits stored in refHits by curation
+      # (populated when the featureNuc/<gene>.fas BLAST DBs exist).
+      hits <- tryCatch(json_parse(rv$annotations$refHits[sel], TRUE), error = function(e) NULL)
+      if (is.data.frame(hits) && nrow(hits) > 0 && "target" %in% names(hits)) {
+        refs <- c(refs, stats::setNames(hits$target, hits$Taxon %||% hits$acc))
+        best_sim <- suppressWarnings(max(hits$similarity, na.rm = TRUE))
+      }
+
+      # Drop duplicate reference sequences (e.g. the GenBank ref also in featureNuc).
+      refs <- refs[!duplicated(unname(refs))]
+
+      if (length(refs) == 0) {
         out$aln <- Biostrings::DNAStringSet(focal)
         out$alignmentHeight <- 40
-        out$id <- "<b>No BLAST reference rRNA available</b>"
+        out$id <- "<b>No rRNA reference available</b>"
         return(out)
       }
 
-      ref_name <- paste0(rv$blast_ref_seq$accession[1] %||% "reference", " (ref)")
-      dna_set <- Biostrings::DNAStringSet(c(focal, setNames(ref_seq_chr, ref_name)))
+      dna_set <- Biostrings::DNAStringSet(c(focal, refs))
       aln <- tryCatch(DECIPHER::AlignSeqs(dna_set, verbose = FALSE),
                       error = function(e) dna_set)
       out$aln <- aln
       out$alignmentHeight <- 20 + length(aln) * 20
-      pid <- tryCatch(round(dna_pct_identity(aln), 1), error = function(e) NA_real_)
-      out$id <- if (is.na(pid)) "<b>Max Similarity:</b> n/a" else
-        paste0("<b>Max Similarity:</b> ", pid, "%")
+      # Header: best featureNuc similarity if available, else focal-vs-ref identity.
+      if (!is.finite(best_sim)) {
+        best_sim <- tryCatch(dna_pct_identity(aln), error = function(e) NA_real_)
+      }
+      out$id <- if (!is.finite(best_sim)) "<b>Max Similarity:</b> n/a" else
+        paste0("<b>Max Similarity:</b> ", round(best_sim, 1), "%")
       out
     }
 
