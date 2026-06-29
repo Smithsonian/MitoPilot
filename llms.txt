@@ -360,6 +360,36 @@ for one or more of the processing steps. After initializing a new
 project you should review the `.config` file to ensure that all
 necessary parameters are provided.
 
+### Container Cache Directory
+
+MitoPilot runs each processing step inside a container (Docker locally,
+or Singularity/Apptainer on most HPC clusters). The container image is
+fairly large, so on first use it must be downloaded and, for
+Singularity/Apptainer, converted to a single `.sif` file. By default
+Nextflow caches this image inside each project’s `work/` directory,
+which means every new project re-downloads and rebuilds the same image.
+On shared cluster filesystems this can be slow enough to exceed the
+default pull timeout and cause the run to fail.
+
+To download the image once and reuse it across all projects, point
+Nextflow at a single, persistent cache directory by setting an
+environment variable before launching MitoPilot (e.g. in your
+`~/.bashrc` or job submission script):
+
+``` bash
+# Singularity / Apptainer (most HPC clusters)
+export NXF_SINGULARITY_CACHEDIR=/path/to/persistent/singularity_cache
+export NXF_APPTAINER_CACHEDIR=/path/to/persistent/apptainer_cache
+
+# Docker (local)
+# Docker manages its own image cache, so no setting is required.
+```
+
+Choose a location with enough space that persists between sessions (not
+a per-project or temporary scratch directory). If image pulls still time
+out on a slow filesystem, increase `pullTimeout` in the
+`singularity { }` block of the `.config` file.
+
 ### Database Creation
 
 MitoPilot makes use of the Nextflow plugin
@@ -550,6 +580,9 @@ split a group into complete and partial sets.
 
 - [`annotate_arwen()`](https://smithsonian.github.io/MitoPilot/reference/annotate_arwen.md)
   : Use ARWEN to annotate tRNAs in a mitochondrial genome assembly
+
+- [`annotate_mitofinder()`](https://smithsonian.github.io/MitoPilot/reference/annotate_mitofinder.md)
+  : Annotate a mitogenome assembly with MitoFinder (WF2, optional)
 
 - [`annotate_mitos2()`](https://smithsonian.github.io/MitoPilot/reference/annotate_mitos2.md)
   : Annotate mitochondrial genomes using MITOS2
@@ -846,6 +879,9 @@ split a group into complete and partial sets.
 - [`params_turtle_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_turtle_mito.md)
   : Default curation and validation parameters for turtle Mitochondria
 
+- [`patch_blast_ref_meta()`](https://smithsonian.github.io/MitoPilot/reference/patch_blast_ref_meta.md)
+  : Re-stamp per-sample BLAST hit metadata onto a cached reference JSON
+
 - [`rotate_asmb()`](https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.md)
   : Rotate circular mitogenome to start at given gene
 
@@ -854,6 +890,13 @@ split a group into complete and partial sets.
 
 - [`run_app()`](https://smithsonian.github.io/MitoPilot/reference/run_app.md)
   : Run the Shiny Application
+
+- [`run_scaffold_join()`](https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.md)
+  : Nextflow entry point: build + persist a joined assembly (file
+  outputs only)
+
+- [`scaffold_join`](https://smithsonian.github.io/MitoPilot/reference/scaffold_join.md)
+  : Multi-scaffold assembly joining
 
 - [`tbl_to_gff3()`](https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.md)
   : Convert a GenBank 5-column feature table to GFF3 format.

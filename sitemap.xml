@@ -17,6 +17,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/annotate.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/annotate_aragorn.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/annotate_arwen.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/annotate_mitofinder.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/annotate_mitos2.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/annotate_trnaScan.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html</loc></url>
@@ -108,9 +109,12 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_thaliacea_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_thecostraca_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_turtle_mito.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/patch_blast_ref_meta.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/ruleset_browser.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_app.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/scaffold_join.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/tunnel_instructions.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.html</loc></url>

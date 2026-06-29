@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -286,11 +286,24 @@
 <p>Initializing a new project will populate the <code>.config</code> file in the project directory that may include place holders for important parameters, in the format: <code>&lt;&lt;PARAMETER_NAME&gt;&gt;</code>. For example, all new configuration files will include the line <code>rawDir = '&lt;&lt;RAW_DIR&gt;&gt;'</code>, which should be updated to <code>rawDir = '/path/to/your/data'</code> indicating the location of the raw data file specified in the mapping file. The configuration files can also be modified to specify custom docker images for one or more of the processing steps. After initializing a new project you should review the <code>.config</code> file to ensure that all necessary parameters are provided.</p>
 </div>
 <div class="section level3">
+<h3 id="container-cache-directory">Container Cache Directory<a class="anchor" aria-label="anchor" href="#container-cache-directory"></a>
+</h3>
+<p>MitoPilot runs each processing step inside a container (Docker locally, or Singularity/Apptainer on most HPC clusters). The container image is fairly large, so on first use it must be downloaded and, for Singularity/Apptainer, converted to a single <code>.sif</code> file. By default Nextflow caches this image inside each project’s <code>work/</code> directory, which means every new project re-downloads and rebuilds the same image. On shared cluster filesystems this can be slow enough to exceed the default pull timeout and cause the run to fail.</p>
+<p>To download the image once and reuse it across all projects, point Nextflow at a single, persistent cache directory by setting an environment variable before launching MitoPilot (e.g. in your <code>~/.bashrc</code> or job submission script):</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co"># Singularity / Apptainer (most HPC clusters)</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_SINGULARITY_CACHEDIR</span><span class="op">=</span>/path/to/persistent/singularity_cache</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_APPTAINER_CACHEDIR</span><span class="op">=</span>/path/to/persistent/apptainer_cache</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co"># Docker (local)</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co"># Docker manages its own image cache, so no setting is required.</span></span></code></pre></div>
+<p>Choose a location with enough space that persists between sessions (not a per-project or temporary scratch directory). If image pulls still time out on a slow filesystem, increase <code>pullTimeout</code> in the <code>singularity { }</code> block of the <code>.config</code> file.</p>
+</div>
+<div class="section level3">
 <h3 id="database-creation">Database Creation<a class="anchor" aria-label="anchor" href="#database-creation"></a>
 </h3>
 <p>MitoPilot makes use of the Nextflow plugin <a href="https://github.com/nextflow-io/nf-sqldb" class="external-link">nf-sqldb</a> to store and retrieve processing parameters and information about the samples and their processing status. The database (<code>.sqlite</code>) is created automatically when the project is initialized and is stored in the project directory.</p>
 <p>The interactive MitoPilot GUI also interacts with this database to allow you run the pipeline, modify parameters, and view the results. When initializing a new project, default processing parameters for the pipeline modules are stored in the database, but any processing parameters can also be passed to the <code><a href="reference/new_project.html">new_project()</a></code> function to modify the initial defaults. For example, the following options would modify the allocated memory and GetOrganelle command line options :</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  mapping <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
 <span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>

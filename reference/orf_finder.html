@@ -19,7 +19,7 @@ annotations named `ORF.1`, `ORF.2`, ... with `type = "ORF"`.'><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -78,6 +78,7 @@ annotations named `ORF.1`, `ORF.2`, ... with `type = "ORF"`.</p>
 <span>  ref_dir <span class="op">=</span> <span class="st">"."</span>,</span>
 <span>  max_blast_hits <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  blast_condaenv <span class="op">=</span> <span class="st">"base"</span>,</span>
+<span>  blast_ref_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  out_dir <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -133,6 +134,13 @@ of the ORF length, before an ORF is discarded (default: 0.1).</p></dd>
 <dt id="arg-blast-condaenv">blast_condaenv<a class="anchor" aria-label="anchor" href="#arg-blast-condaenv"></a></dt>
 <dd><p>Conda environment containing blastp/makeblastdb (default:
 "base"). Set NULL to use them on the PATH.</p></dd>
+
+
+<dt id="arg-blast-ref-file">blast_ref_file<a class="anchor" aria-label="anchor" href="#arg-blast-ref-file"></a></dt>
+<dd><p>Optional path to the staged `remote_blast_ref.json` for
+this sample. When supplied, the closest-relative reference's translated genes
+are injected into the per-gene FASTAs before the combined ORF database is
+built, so ORFs can also match the remote reference.</p></dd>
 
 
 <dt id="arg-out-dir">out_dir<a class="anchor" aria-label="anchor" href="#arg-out-dir"></a></dt>

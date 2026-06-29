@@ -24,6 +24,7 @@ orf_finder(
   ref_dir = ".",
   max_blast_hits = 10,
   blast_condaenv = "base",
+  blast_ref_file = NULL,
   out_dir = NULL
 )
 ```
@@ -79,6 +80,13 @@ orf_finder(
 
   Conda environment containing blastp/makeblastdb (default: "base"). Set
   NULL to use them on the PATH.
+
+- blast_ref_file:
+
+  Optional path to the staged \`remote_blast_ref.json\` for this sample.
+  When supplied, the closest-relative reference's translated genes are
+  injected into the per-gene FASTAs before the combined ORF database is
+  built, so ORFs can also match the remote reference.
 
 - out_dir:
 

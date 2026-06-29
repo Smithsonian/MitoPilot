@@ -1,0 +1,13 @@
+# Multi-scaffold assembly joining
+
+Reference-guided ordering of the scaffolds of a single fragmented
+assembly path into one joined sequence: map each scaffold to a reference
+mitogenome with minimap2, order + orient by reference coordinate, insert
+N-gap spacers where scaffolds are disjoint, and stitch per-position
+coverage to match.
+
+## Details
+
+Pure-logic functions here back both the automatic Nextflow join (WF1)
+and the in-app manual override editor, so they take/return plain vectors
+and data.frames and never touch Shiny or the database directly.

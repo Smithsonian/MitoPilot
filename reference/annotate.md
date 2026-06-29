@@ -12,8 +12,10 @@ annotate(
   genetic_code = "2",
   ref_db = "Chordata",
   ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
+  use_mitos = TRUE,
   mitos_opts = "--intron 0 --oril 0",
   mitos_condaenv = "mitos",
+  use_trnaScan = TRUE,
   trnaScan_opts = "-M vert -X 20",
   trnaScan_condaenv = "base",
   arwen_opts = "-mtx",
@@ -22,6 +24,12 @@ annotate(
   aragorn_condaenv = "aragorn",
   use_aragorn = FALSE,
   use_mitos_best = TRUE,
+  use_mitofinder = FALSE,
+  mitofinder_db = NULL,
+  mitofinder_new_genes = FALSE,
+  mitofinder_allow_introns = FALSE,
+  mitofinder_opts = "",
+  mitofinder_condaenv = NULL,
   start_gene = "trnF",
   coverage_trim = TRUE,
   retain_low_conf_trna = FALSE,
@@ -56,6 +64,10 @@ annotate(
 
   Path to the Mitos2 reference database.
 
+- use_mitos:
+
+  logical; whether to run MITOS2 annotation (default: TRUE).
+
 - mitos_opts:
 
   Additional command line options for MITOS2.
@@ -63,6 +75,10 @@ annotate(
 - mitos_condaenv:
 
   Conda environment to run MITOS2 (default: "mitos").
+
+- use_trnaScan:
+
+  logical; whether to run tRNAscan-SE annotation (default: TRUE).
 
 - trnaScan_opts:
 
@@ -95,6 +111,32 @@ annotate(
 - use_mitos_best:
 
   logical; whether to pass –best to MITOS2 (default: FALSE).
+
+- use_mitofinder:
+
+  logical; whether to run MitoFinder annotation (lowest priority;
+  default: FALSE).
+
+- mitofinder_db:
+
+  path to a MitoFinder reference database (GenBank .gb).
+
+- mitofinder_new_genes:
+
+  logical; pass –new-genes to MitoFinder (default: FALSE).
+
+- mitofinder_allow_introns:
+
+  logical; pass –allow-intron to MitoFinder (default: FALSE).
+
+- mitofinder_opts:
+
+  additional command line options for MitoFinder.
+
+- mitofinder_condaenv:
+
+  conda environment containing MitoFinder, or NULL for PATH (default:
+  NULL).
 
 - start_gene:
 

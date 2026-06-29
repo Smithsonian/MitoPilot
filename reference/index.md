@@ -17,6 +17,9 @@
 - [`annotate_arwen()`](https://smithsonian.github.io/MitoPilot/reference/annotate_arwen.md)
   : Use ARWEN to annotate tRNAs in a mitochondrial genome assembly
 
+- [`annotate_mitofinder()`](https://smithsonian.github.io/MitoPilot/reference/annotate_mitofinder.md)
+  : Annotate a mitogenome assembly with MitoFinder (WF2, optional)
+
 - [`annotate_mitos2()`](https://smithsonian.github.io/MitoPilot/reference/annotate_mitos2.md)
   : Annotate mitochondrial genomes using MITOS2
 
@@ -312,6 +315,9 @@
 - [`params_turtle_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_turtle_mito.md)
   : Default curation and validation parameters for turtle Mitochondria
 
+- [`patch_blast_ref_meta()`](https://smithsonian.github.io/MitoPilot/reference/patch_blast_ref_meta.md)
+  : Re-stamp per-sample BLAST hit metadata onto a cached reference JSON
+
 - [`rotate_asmb()`](https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.md)
   : Rotate circular mitogenome to start at given gene
 
@@ -320,6 +326,13 @@
 
 - [`run_app()`](https://smithsonian.github.io/MitoPilot/reference/run_app.md)
   : Run the Shiny Application
+
+- [`run_scaffold_join()`](https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.md)
+  : Nextflow entry point: build + persist a joined assembly (file
+  outputs only)
+
+- [`scaffold_join`](https://smithsonian.github.io/MitoPilot/reference/scaffold_join.md)
+  : Multi-scaffold assembly joining
 
 - [`tbl_to_gff3()`](https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.md)
   : Convert a GenBank 5-column feature table to GFF3 format.
