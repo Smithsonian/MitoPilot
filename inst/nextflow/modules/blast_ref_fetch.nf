@@ -50,7 +50,12 @@ process blast_ref_fetch {
     DONE="$CACHE_DIR/.done"
     LOCK="$CACHE_DIR/.lock"
     MAX_WAIT=600   # seconds to wait for an in-progress fetch before fetching independently
-    mkdir -p "$CACHE_DIR"
+    # The cache lives under the publishDir, which on some HPC setups is not
+    # bind-mounted writable inside the container (read-only filesystem). Treat
+    # the cache as best-effort: if we cannot create it, skip caching entirely
+    # and fetch directly into the always-writable task work dir.
+    CACHE_OK=1
+    mkdir -p "$CACHE_DIR" 2>/dev/null || CACHE_OK=0
 
     copy_from_cache() {
         cp "$CACHE_DIR/blast_ref_annotations.csv"  "$ann" &&
@@ -62,35 +67,37 @@ process blast_ref_fetch {
         Rscript -e "MitoPilot::patch_blast_ref_meta('$json', '!{blast_species}', !{blast_evalue})" || true
     }
 
-    # Fast path: accession already cached by a prior task / run
-    if [ -f "$DONE" ]; then
-        copy_from_cache && exit 0
-    fi
-
-    # Try to become the fetcher; otherwise wait for the in-progress fetch to finish.
     HOLD=0
-    waited=0
-    while true; do
-        if mkdir "$LOCK" 2>/dev/null; then
-            HOLD=1
-            trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
-            break
-        fi
+    if [ "$CACHE_OK" -eq 1 ]; then
+        # Fast path: accession already cached by a prior task / run
         if [ -f "$DONE" ]; then
             copy_from_cache && exit 0
         fi
-        if [ "$waited" -ge "$MAX_WAIT" ]; then
-            # In-progress fetch did not finish in time (holder may have died);
-            # fall back to fetching independently without touching the cache.
-            break
-        fi
-        sleep 30
-        waited=$(( waited + 30 ))
-    done
 
-    # It may have completed between our last check and acquiring the lock
-    if [ -f "$DONE" ]; then
-        copy_from_cache && exit 0
+        # Try to become the fetcher; otherwise wait for the in-progress fetch to finish.
+        waited=0
+        while true; do
+            if mkdir "$LOCK" 2>/dev/null; then
+                HOLD=1
+                trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+                break
+            fi
+            if [ -f "$DONE" ]; then
+                copy_from_cache && exit 0
+            fi
+            if [ "$waited" -ge "$MAX_WAIT" ]; then
+                # In-progress fetch did not finish in time (holder may have died);
+                # fall back to fetching independently without touching the cache.
+                break
+            fi
+            sleep 30
+            waited=$(( waited + 30 ))
+        done
+
+        # It may have completed between our last check and acquiring the lock
+        if [ -f "$DONE" ]; then
+            copy_from_cache && exit 0
+        fi
     fi
 
     # Back off on retries to give NCBI EFetch time to recover from rate limits
