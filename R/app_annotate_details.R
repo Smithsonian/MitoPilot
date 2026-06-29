@@ -2581,7 +2581,7 @@ annotations_details_server <- function(id, rv) {
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
           tags$span(style = "font-weight: bold;", "5'"),
           nudge("rrna-5-out", "+"),   # extend 5' (grow upstream)
-          nudge("rrna-5-in", "−"),
+          nudge("rrna-5-in", "\u2212"),
           div(
             class = "mp-step-box",
             style = "width: 56px; margin: 0 0.2em;",
@@ -2592,7 +2592,7 @@ annotations_details_server <- function(id, rv) {
           ),
           tags$span(style = "font-size: 0.75em; color: #666; margin-right: 0.4em;", "nt"),
           tags$span(style = "font-weight: bold;", "3'"),
-          nudge("rrna-3-in", "−"),
+          nudge("rrna-3-in", "\u2212"),
           nudge("rrna-3-out", "+")    # extend 3' (grow downstream)
         )
       )

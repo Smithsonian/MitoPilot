@@ -33,6 +33,9 @@ run_scaffold_join(
 
 \item{circular}{whether to mark the joined molecule circular.}
 
+\item{db}{optional DBI connection; unused for file-only outputs (DB writes
+are done in Groovy) and kept for call-site compatibility.}
+
 \item{auto_join}{when TRUE (and the scaffolds' BLAST hits agree) build + write
 the joined Path 0. When FALSE (toggle off) or the hits disagree, only the
 precomputed scaffold->reference mappings are written, leaving the sample
