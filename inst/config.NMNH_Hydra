@@ -11,6 +11,7 @@ executor {
 singularity {
   enabled = true
   pullTimeout = '60 min'  // large image on Hydra's shared filesystem can exceed the 20 min default
+  runOptions = '-B /scratch02/'
 }
 
 process {
