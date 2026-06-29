@@ -81,6 +81,65 @@ $( document ).ready(function(){
   });
 });
 
+// Mousewheel -> horizontal scroll for the annotate-details alignment views.
+// The coverage map and synteny PNGs sit in overflow-x:auto containers
+// (coverageDiv / syntenyScrollDiv); the MSA viewer scrolls its own
+// .biojs_msa_rheader element. Translate vertical wheel delta into horizontal
+// scroll (down = right, up = left) and suppress page scroll over these views.
+$( document ).ready(function(){
+  document.addEventListener('wheel', function(e) {
+    if (!e.target.closest) return;
+    var delta = e.deltaY;
+    if (!delta) return;
+
+    var box = e.target.closest('[id$="coverageDiv"], [id$="syntenyScrollDiv"]');
+    if (box) {
+      box.scrollLeft += delta;
+      e.preventDefault();
+      return;
+    }
+
+    var msa = e.target.closest('.msaR');
+    if (msa) {
+      var header = msa.querySelector('.biojs_msa_rheader')
+                || document.getElementsByClassName('biojs_msa_rheader')[0];
+      if (header) {
+        header.scrollLeft += delta;
+        header.dispatchEvent(new Event('scroll'));
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
+});
+
+// Add an "All" choice to the sample-table page-size dropdowns. reactable
+// (0.4.5) has no native "All", so append an option with a very large page size
+// (shows every filtered row). A MutationObserver re-adds it after reactable
+// re-renders the select.
+$( document ).ready(function(){
+  var GATED_ALL = '#assemble-table, #annotate-table, #export-table';
+  var ALL_PAGE_SIZE = 1000000;
+
+  function addAllOption(select) {
+    if (!select || select.querySelector('option[data-mp-all]')) return;
+    var opt = document.createElement('option');
+    opt.value = String(ALL_PAGE_SIZE);
+    opt.text = 'All';
+    opt.setAttribute('data-mp-all', '1');
+    select.appendChild(opt);
+  }
+
+  function refreshAllOptions() {
+    document.querySelectorAll(GATED_ALL).forEach(function(tbl) {
+      tbl.querySelectorAll('.rt-page-size-select').forEach(addAllOption);
+    });
+  }
+
+  refreshAllOptions();
+  new MutationObserver(refreshAllOptions)
+    .observe(document.body, { childList: true, subtree: true });
+});
+
 // Shift-click range selection for the main sample reactable tables.
 // reactable (0.4.5) has no native range selection, so we drive it on the
 // client: a plain click stores an "anchor" row, and a shift-click selects
