@@ -21,7 +21,11 @@ def appendTaggedNoteSql(String tag, String msg) {
     return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
 }
 
-params.blastNoHitMsg = 'BLAST returned no hits after all retries. Possible connection failure. Use -resume to retry.'
+// Two distinct failure modes, distinguished by blast_genbank.nf:
+//   - blastNoOutputMsg: blast produced no output after all retries (connection / tool error).
+//   - blastNoHitMsg:    blast ran cleanly but found no significant hits (sentinel output).
+params.blastNoOutputMsg = "BLAST produced no output after all retries (possible NCBI connection or rate-limit issue). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
+params.blastNoHitMsg = "No significant BLAST hits found in GenBank for this assembly. The assembly may be non-target, too fragmented, or from a taxon not represented in the database."
 
 params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
 // blast_lineage is NOT set here: ref fetch hasn't run yet so the subquery would
@@ -31,6 +35,13 @@ params.sqlWriteBlastHitScaffold = '''UPDATE assemblies
     SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ?
     WHERE assemblies.ID = ? AND path = ? AND scaffold = ?'''
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
+// Connection / tool failure: blast produced no output file after all retries.
+params.sqlWriteBlastNoOutput = "UPDATE assemble SET " +
+    "assemble_switch = 3, " +
+    "assemble_notes = ${appendTaggedNoteSql('[blast]', params.blastNoOutputMsg)}, " +
+    "poor_blast_ref = 'failed' " +
+    "WHERE ID = ? AND assemble_switch = 4"
+// Genuine no-hit: blast ran cleanly but every path returned no significant hit.
 params.sqlWriteBlastNoHit = "UPDATE assemble SET " +
     "assemble_switch = 3, " +
     "assemble_notes = ${appendTaggedNoteSql('[blast]', params.blastNoHitMsg)}, " +
@@ -147,14 +158,14 @@ workflow BLAST_GENBANK {
             .map { id, result_file -> tuple('4', id) }
             .sqlInsert(statement: params.sqlWriteAssembleSwitch, db: 'sqlite')
 
-        // NO HIT failures: IDs that entered BLAST but produced no output after all
-        // retries. UPDATE guarded WHERE assemble_switch = 4 so it can't overwrite a
+        // Connection/tool failures: IDs that entered BLAST but produced no output after
+        // all retries. UPDATE guarded WHERE assemble_switch = 4 so it can't overwrite a
         // terminal state=3 row.
         blast_in_split.ids
             .join(blast_out.succeeded, remainder: true)
             .filter { id, blast_flag, success_flag -> success_flag == null }
             .map { id, blast_flag, success_flag -> tuple(id) }
-            .sqlInsert(statement: params.sqlWriteBlastNoHit, db: 'sqlite')
+            .sqlInsert(statement: params.sqlWriteBlastNoOutput, db: 'sqlite')
 
         // Parse each per-path BLAST result. blast outfmt is
         //   qseqid saccver stitle pident qcovs evalue
@@ -232,6 +243,19 @@ workflow BLAST_GENBANK {
             }
             .set { blast_records }
 
+        // Genuine no-hit: every path for this ID returned 'NO HIT' (blast ran cleanly
+        // but found nothing significant). Distinct from the no-output connection failure
+        // above. Guarded WHERE assemble_switch = 4. NOTE: an ID with a mix of no-hit
+        // paths and connection-failed paths is treated as no-hit here (connection-failed
+        // paths emit no 'path' row); such mixed cases are rare and are flagged either way.
+        blast_records
+            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'path' }
+            .map    { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> tuple(id, accession) }
+            .groupTuple()
+            .filter { id, accessions -> accessions.every { it == 'NO HIT' } }
+            .map    { id, accessions -> tuple(id) }
+            .sqlInsert(statement: params.sqlWriteBlastNoHit, db: 'sqlite')
+
         // Per-scaffold rows: update assemblies table
         blast_records
             .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'scaffold' }
@@ -298,10 +322,26 @@ workflow BLAST_GENBANK {
             }
             .set { scaffold_accession }
 
+        // Per-id list of "scaffold|accession|pident" for the assembled scaffolds,
+        // passed to SCAFFOLD_JOIN so the reference choice / multi-ref mapping /
+        // conflicting-hit check use reliably-available channel data rather than a
+        // racy read of the per-scaffold assemblies.blast_accession (written above
+        // by an async sqlInsert with no happens-before vs scaffold_join).
+        blast_records
+            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'scaffold' }
+            .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, "${scaffold}|${accession}|${pident == null ? '' : pident}")
+            }
+            .groupTuple()
+            .map { id, items -> tuple(id, items.join(';')) }
+            .set { scaffold_hits_ch }
+
     emit:
         // Downstream BLAST_REF_FETCH consumes this; filtered to real hits only.
         ref_input = ref_fetch_input
             .filter{ id, accession, species, evalue, opts_id, is_top -> accession != 'NO HIT' && accession != null }
         // (id, path, scaffold, accession) for per-scaffold lineage assignment.
         scaffold_map = scaffold_accession
+        // Consumed by SCAFFOLD_JOIN (per-scaffold hits as a ';'-joined string).
+        scaffold_hits = scaffold_hits_ch
 }

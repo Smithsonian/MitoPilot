@@ -128,6 +128,9 @@ app_server <- function(input, output, session) {
   observeEvent(input$group, {
     trigger("group")
   })
+  observeEvent(input$clear_group, {
+    trigger("clear_group")
+  })
   observeEvent(input$export, {
     trigger("export")
   })

@@ -739,6 +739,11 @@ assemble_server <- function(id) {
           inputId = "min_assembly_length",
           value = cur$min_assembly_length %||% 500
         )
+        shinyWidgets::updatePrettyCheckbox(
+          session = session,
+          inputId = "join_scaffolds",
+          value = as.logical(cur$join_scaffolds %||% 0)
+        )
         updateTextAreaInput(
           inputId = "getOrganelle",
           value = cur$getOrganelle
@@ -769,16 +774,26 @@ assemble_server <- function(id) {
         )
         if (cur$assembler == "GetOrganelle") {
           shinyjs::hide(id = "mitofinder")
+          shinyjs::hide(id = "help_mitofinder")
           shinyjs::hide(id = "mf_db")
+          shinyjs::hide(id = "help_mf_db")
           shinyjs::show(id = "getOrganelle")
+          shinyjs::show(id = "help_getOrganelle")
           shinyjs::show(id = "seeds_db")
+          shinyjs::show(id = "help_seeds_db")
           shinyjs::show(id = "labels_db")
+          shinyjs::show(id = "help_labels_db")
         } else if (cur$assembler == "MitoFinder") {
           shinyjs::show(id = "mitofinder")
+          shinyjs::show(id = "help_mitofinder")
           shinyjs::show(id = "mf_db")
+          shinyjs::show(id = "help_mf_db")
           shinyjs::hide(id = "getOrganelle")
+          shinyjs::hide(id = "help_getOrganelle")
           shinyjs::hide(id = "seeds_db")
+          shinyjs::hide(id = "help_seeds_db")
           shinyjs::hide(id = "labels_db")
+          shinyjs::hide(id = "help_labels_db")
         }
       }
     })
@@ -794,6 +809,7 @@ assemble_server <- function(id) {
       shinyjs::toggleState("max_paths", condition = input$edit_assemble_opts)
       shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
       shinyjs::toggleState("min_assembly_length", condition = input$edit_assemble_opts)
+      shinyjs::toggleState("join_scaffolds", condition = input$edit_assemble_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
@@ -839,16 +855,26 @@ assemble_server <- function(id) {
     observeEvent(input$assembler, {
       if (input$assembler == "GetOrganelle") {
         shinyjs::hide(id = "mitofinder")
+        shinyjs::hide(id = "help_mitofinder")
         shinyjs::hide(id = "mf_db")
+        shinyjs::hide(id = "help_mf_db")
         shinyjs::show(id = "getOrganelle")
+        shinyjs::show(id = "help_getOrganelle")
         shinyjs::show(id = "seeds_db")
+        shinyjs::show(id = "help_seeds_db")
         shinyjs::show(id = "labels_db")
+        shinyjs::show(id = "help_labels_db")
       } else if (input$assembler == "MitoFinder") {
         shinyjs::show(id = "mitofinder")
+        shinyjs::show(id = "help_mitofinder")
         shinyjs::show(id = "mf_db")
+        shinyjs::show(id = "help_mf_db")
         shinyjs::hide(id = "getOrganelle")
+        shinyjs::hide(id = "help_getOrganelle")
         shinyjs::hide(id = "seeds_db")
+        shinyjs::hide(id = "help_seeds_db")
         shinyjs::hide(id = "labels_db")
+        shinyjs::hide(id = "help_labels_db")
       }
     })
     ## Save Changes ----
@@ -869,7 +895,8 @@ assemble_server <- function(id) {
               mitofinder = req(input$mitofinder),
               max_paths = as.integer(req(input$max_paths)),
               max_scaffolds = as.integer(req(input$max_scaffolds)),
-              min_assembly_length = as.integer(req(input$min_assembly_length))
+              min_assembly_length = as.integer(req(input$min_assembly_length)),
+              join_scaffolds = as.integer(isTRUE(input$join_scaffolds))
             ),
             in_place = TRUE,
             copy = TRUE,

@@ -95,7 +95,13 @@ app_ui <- function(request) {
             style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
             shinyWidgets::actionBttn(
               "group",
-              label = "Group",
+              label = "Assign Group",
+              style = "material-flat",
+              size = "sm"
+            ),
+            shinyWidgets::actionBttn(
+              "clear_group",
+              label = "Clear Group",
               style = "material-flat",
               size = "sm"
             ),

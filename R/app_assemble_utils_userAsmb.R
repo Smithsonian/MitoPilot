@@ -124,6 +124,8 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -149,6 +151,9 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           value =  current$fastp %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Command-line flags passed to fastp, which trims adapters and ",
+                  "filters low-quality reads.",
+                  href = "https://github.com/OpenGene/fastp"),
         size = "m",
         footer = tagList(
           actionButton(ns("update_pre_opts"), "Update"),
@@ -205,12 +210,17 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         shinyWidgets::prettyCheckbox(
           ns("run_blast"),
           label = "Run remote BLAST search using using assembly as query",
           value = as.logical(current$run_blast %||% 1L),
           status = "primary"
         ) |> shinyjs::disabled(),
+        opts_help("BLAST each assembly against NCBI GenBank to find the closest ",
+                  "reference mitogenome (used for orientation and curation).",
+                  href = "https://blast.ncbi.nlm.nih.gov/Blast.cgi"),
         div(
           id = ns("blast_entrez_group"),
           tags$label(
@@ -225,7 +235,9 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             label = NULL,
             value = current$entrez_query %||% "mitochondrion[Location]",
             width = "100%"
-          ) |> shinyjs::disabled()
+          ) |> shinyjs::disabled(),
+          opts_help("Restricts the BLAST search to GenBank records matching this ",
+                    "Entrez filter (default limits hits to mitochondrial sequences).")
         ),
         div(
           id = ns("blast_extra_group"),
@@ -233,7 +245,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",
-            "Cannot override: -outfmt, -max_target_seqs, -max_hsps."
+            "Extra flags passed to blastn. Cannot override: -outfmt, -max_target_seqs, -max_hsps."
           ),
           textAreaInput(
             ns("extra_opts"),

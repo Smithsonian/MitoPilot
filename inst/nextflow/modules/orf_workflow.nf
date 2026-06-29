@@ -2,10 +2,12 @@ include {orf} from './orf.nf'
 
 // max_blast_hits, ref_dir and ref_db are shared with curation (sourced from
 // curate_opts via annotate.curate_opts), not stored in orf_opts.
+// assemble_opts + blast_accession (cols 12, 13) locate the staged remote BLAST
+// reference so ORFs can also BLAST against the closest-relative reference genes.
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' +
                     'd.use_orffinder, ' +
                     'd.cpus, d.memory, d.orffinder_opts, d.orf_min_len, d.orf_max_overlap, d.orf_nested, e.max_blast_hits, ' +
-                    'e.ref_dir, e.ref_db ' +
+                    'e.ref_dir, e.ref_db, b.assemble_opts, b.blast_accession ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -34,8 +36,8 @@ workflow ORF {
             .set { curate_assembly }
 
         channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .join(validatedAnnotations, by: [0, 1])   // append validated annotations tsv (index 12)
-            .join(curate_assembly, by: [0, 1])         // append assembly (index 13)
+            .join(validatedAnnotations, by: [0, 1])   // append validated annotations tsv (index 14)
+            .join(curate_assembly, by: [0, 1])         // append assembly (index 15)
             .branch { it ->
                 on:  (it[2] as Integer) == 1
                 off: true
@@ -52,11 +54,22 @@ workflow ORF {
                     }
                 }
 
+                // Locate the staged remote BLAST reference for this sample (same
+                // layout CURATE uses); fall back to an empty stub when absent.
+                def blastAccession = it[13] ?: ""
+                def blastRefRel = blastAccession
+                    ? "${params.publishDir}/${it[0]}/assemble/${it[12]}/blast_ref_${blastAccession}/remote_blast_ref.json"
+                    : "${params.publishDir}/${it[0]}/assemble/${it[12]}/remote_blast_ref.json"
+                def blastRefAbs = new File(launchDir.toString(), blastRefRel)
+                def blastRefFile = blastRefAbs.exists()
+                    ? file(blastRefRel)
+                    : file("${baseDir}/modules/empty_remote_blast_ref.json")
+
                 tuple(
                     it[0],                                          // ID
                     it[1],                                          // path
-                    it[12],                                         // validated annotations tsv
-                    it[13],                                         // post-curate assembly
+                    it[14],                                         // validated annotations tsv
+                    it[15],                                         // post-curate assembly
                     [
                         cpus:  it[3],                                      // cpus
                         memory: it[4],                                     // memory
@@ -68,7 +81,8 @@ workflow ORF {
                     ],
                     file(it[10] + "/" + it[11]),                           // curation ref dir + clade
                     it[11],                                                // ref clade
-                    it[11].replaceFirst(/\.tar\.gz$/, '')              // ref_db without ".tar.gz"
+                    it[11].replaceFirst(/\.tar\.gz$/, ''),             // ref_db without ".tar.gz"
+                    blastRefFile                                           // staged remote BLAST ref json
                 )
             }
             .set { orf_in }

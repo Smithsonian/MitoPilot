@@ -57,6 +57,13 @@ params {
         container = process.container
         executor = process.executor
     }
+    scaffold_join {
+        cpus = 1
+        memory = 4
+        clusterOptions = '<<CLUSTER_OPTIONS>>'
+        container = process.container
+        executor = process.executor
+    }
     annotate {
         clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container

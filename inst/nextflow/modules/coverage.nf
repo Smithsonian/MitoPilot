@@ -22,7 +22,7 @@ process coverage {
         tuple val(id), val(opt_id), path(reads), path(assembly), val(assembler)
 
     output:
-        tuple path("${outDir}/*"),
+        tuple val(id), path("${outDir}/*"),
             path("${id}/assemble/${opt_id}/NF_work_dir_coverage.txt")
 
     shell:

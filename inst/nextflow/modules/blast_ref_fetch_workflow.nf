@@ -36,7 +36,7 @@ def stripBlastAndRefTagsSql() {
     ", '; ')"
 }
 
-params.refFetchFailedMsg = 'BLAST reference fetch timed out after all retries. Rerun pipeline with -resume to retry.'
+params.refFetchFailedMsg = "BLAST reference fetch failed after all retries (possible NCBI connection or rate-limit issue). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
 
 params.sqlWriteBlastLineage = 'UPDATE assemble SET blast_lineage = ? WHERE ID = ?'
 // Per-scaffold lineage: keyed on (ID, path, scaffold). The scaffold->accession
@@ -183,4 +183,11 @@ workflow BLAST_REF_FETCH {
             .filter { id, all_flag, success_flag -> success_flag == null }
             .map    { id, all_flag, success_flag -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastRefFetchFailed, db: 'sqlite')
+
+    emit:
+        // Per-ID top-hit reference sequence file, for reference-guided scaffold join.
+        ref_seq = ref_out
+            .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
+            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file ->
+                        tuple(id, seq_file) }
 }

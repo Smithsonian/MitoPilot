@@ -19,7 +19,7 @@ process annotate {
     tag "${id}"
 
     input:
-    tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_db_clean)
+    tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_db_clean), path(mitofinder_db)
 
     output:
     tuple val(id), val(path), path("${id}/annotate/${id}_annotations_*.csv"), path("${id}/annotate/${id}_assembly_*.fasta"), path("${id}/annotate/${id}_coverageStats_*.csv"), path("${id}/annotate/NF_work_dir_annotate.txt")
@@ -39,6 +39,21 @@ process annotate {
         echo "Input ref_db not .tar.gz"
     fi
 
+    # Resolve MitoFinder reference db (decompress if gzip/tar.gz)
+    MF_DB="!{mitofinder_db}"
+    if [ "!{opts.use_mitofinder}" == "1" ]; then
+        MF_MIME=$(file --mime-type -b "$MF_DB")
+        if [[ "$MF_MIME" == "application/gzip" ]]; then
+            if tar -tzf "$MF_DB" >/dev/null 2>&1; then
+                tar -xzf "$MF_DB"
+                MF_DB=$(find . -maxdepth 2 -name '*.gb' | head -n1)
+            else
+                gunzip -c "$MF_DB" > mitofinder_ref.gb
+                MF_DB="mitofinder_ref.gb"
+            fi
+        fi
+    fi
+
     Rscript -e "MitoPilot::annotate( \
         assembly_fn = '!{assembly}', \
         coverage_fn = '!{coverage}', \
@@ -46,9 +61,11 @@ process annotate {
         genetic_code = '!{params.genetic_code}', \
         ref_db = '!{ref_db_clean}', \
         ref_dir = '.', \
+        use_mitos = !{opts.use_mitos == 1 ? "TRUE" : "FALSE"}, \
         mitos_opts = '!{opts.mitos}', \
         use_mitos_best = !{opts.use_mitos_best == 1 ? "TRUE" : "FALSE"}, \
         mitos_condaenv = '!{params.mitos_condaenv}', \
+        use_trnaScan = !{opts.use_trnaScan == 1 ? "TRUE" : "FALSE"}, \
         trnaScan_opts = '!{opts.trnaScan}', \
         trnaScan_condaenv = '!{params.trnaScan_condaenv}', \
         arwen_opts = '!{opts.arwen}', \
@@ -56,6 +73,11 @@ process annotate {
         aragorn_opts = '!{opts.aragorn}', \
         aragorn_condaenv = '!{params.aragorn_condaenv}', \
         use_aragorn = !{opts.use_aragorn == 1 ? "TRUE" : "FALSE"}, \
+        use_mitofinder = !{opts.use_mitofinder == 1 ? "TRUE" : "FALSE"}, \
+        mitofinder_db = '$MF_DB', \
+        mitofinder_new_genes = !{opts.mitofinder_new_genes == 1 ? "TRUE" : "FALSE"}, \
+        mitofinder_allow_introns = !{opts.mitofinder_allow_introns == 1 ? "TRUE" : "FALSE"}, \
+        mitofinder_opts = '!{opts.mitofinder_opts}', \
         start_gene = '!{opts.start_gene}', \
         ignore_scaffolds = '!{opts.ignore_scaffolds}', \
         coverage_trim = !{opts.coverage_trim == 1 ? "TRUE" : "FALSE"}, \

@@ -19,6 +19,7 @@ include {COVERAGE_userAsmb} from './modules/coverage_userAsmb_workflow.nf'
 include {BLAST_GENBANK} from './modules/blast_genbank_workflow.nf'
 include {BLAST_REF_FETCH} from './modules/blast_ref_fetch_workflow.nf'
 include {BLAST_REF_ALIGN} from './modules/blast_ref_align_workflow.nf'
+include {SCAFFOLD_JOIN} from './modules/scaffold_join_workflow.nf'
 
 // ASSEMBLY WORKFLOW
 workflow WF1 {
@@ -31,6 +32,16 @@ workflow WF1 {
     COVERAGE(ASSEMBLE.out.cov)
     BLAST_GENBANK(ASSEMBLE.out.blast.map{ it -> tuple(it[0], it[1], it[4]) })
     BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map)
+
+    // Auto-join single-path multi-scaffold assemblies. Joined here (not just in
+    // the app) so a reference-ordered Path 0 is ready before annotation. Gated to
+    // eligible IDs that also have coverage + a fetched reference (inner joins).
+    ASSEMBLE.out.join_eligible
+        .join(COVERAGE.out.cov_files)
+        .join(BLAST_REF_FETCH.out.ref_seq)
+        .join(BLAST_GENBANK.out.scaffold_hits)
+        .set { scaffold_join_in }
+    SCAFFOLD_JOIN(scaffold_join_in)
 
 }
 

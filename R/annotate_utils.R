@@ -100,10 +100,22 @@ recompute_hit_stats <- function(focal, targets, subMx = "BLOSUM80") {
 #' @noRd
 #'
 circ_overlap <- function(p1, p2, q1_vec, q2_vec) {
+  # Either interval may span the origin (start > end). Decompose the cases so an
+  # origin-spanning *compared* interval (q1 > q2) is handled too, not just a
+  # wrapping focal interval. Length-free: a wrapping arc covers the origin point.
+  q_wrap <- q1_vec > q2_vec
   if (p1 <= p2) {
-    p1 <= q2_vec & q1_vec <= p2
+    ifelse(
+      q_wrap,
+      p1 <= q2_vec | p2 >= q1_vec,   # q wraps: focal hits its [start,q2] or [q1,end] arm
+      p1 <= q2_vec & q1_vec <= p2    # neither wraps
+    )
   } else {
-    q2_vec >= p1 | q1_vec <= p2
+    ifelse(
+      q_wrap,
+      TRUE,                          # both wrap -> both cover the origin
+      q1_vec <= p2 | q2_vec >= p1    # only focal wraps
+    )
   }
 }
 
@@ -127,12 +139,16 @@ circ_len <- function(p1, p2, L) {
 #' @noRd
 #'
 circ_overlap_len <- function(p1, p2, q1, q2, L) {
-  if (p1 <= p2) {
-    max(0L, min(p2, q2) - max(p1, q1) + 1L)
-  } else {
-    max(0L, q2 - max(p1, q1) + 1L) + # [p1, L] intersect [q1, q2]
-      max(0L, min(p2, q2) - q1 + 1L) # [1, p2] intersect [q1, q2]
+  # Decompose each (possibly origin-spanning) interval into non-wrapping segments
+  # and sum the pairwise linear overlaps, so a wrapping q (q1 > q2) is handled.
+  segs <- function(a, b) if (a <= b) list(c(a, b)) else list(c(a, L), c(1L, b))
+  total <- 0L
+  for (s in segs(p1, p2)) {
+    for (t in segs(q1, q2)) {
+      total <- total + max(0L, min(s[2], t[2]) - max(s[1], t[1]) + 1L)
+    }
   }
+  total
 }
 
 #' Get top BLASTP hits
@@ -226,14 +242,59 @@ get_top_hits <- function(
 
 }
 
+#' Build a combined, gene-labeled protein BLAST database for ORF search
+#'
+#' The distributed per-gene `featureProt/<gene>.fas` files use gene-less headers
+#' (`>{accession} {Species}`), so the gene is implicit in the file name. Simply
+#' concatenating them would make the same accession non-unique across genes in
+#' the combined DB (each genome's cox1/nad1/... share one accession id), which
+#' breaks per-hit target retrieval and gene recovery. This reads every per-gene
+#' file and relabels each sequence as `>{accession}:{gene}-{i} {Species}` (gene
+#' from the file name, `i` a per-gene counter that also disambiguates two copies
+#' of a gene in one genome), writes the combined FASTA, and builds its index, so
+#' [get_top_hits_orf()] can recover the gene and a unique target per hit.
+#'
+#' @param feature_dir directory of per-gene `featureProt/*.fas` files
+#' @param out_fasta path to write the combined FASTA (index built alongside)
+#' @param condaenv conda env with makeblastdb (NULL = on PATH)
+#'
+#' @return `out_fasta` on success, or NULL when no per-gene files are present
+#'
+#' @noRd
+build_combined_orf_db <- function(feature_dir, out_fasta, condaenv = "base") {
+  fas <- list.files(feature_dir, pattern = "\\.fas$", full.names = TRUE)
+  if (length(fas) == 0) return(NULL)
+  all_seqs <- Biostrings::AAStringSet()
+  for (f in fas) {
+    gene <- sub("\\.fas$", "", basename(f))
+    s <- tryCatch(Biostrings::readAAStringSet(f), error = function(e) NULL)
+    if (is.null(s) || length(s) == 0) next
+    nm  <- names(s)
+    acc <- sub("\\s.*$", "", nm)               # accession (first token)
+    sp  <- sub("^\\S+\\s*", "", nm)             # species (rest; may be empty)
+    names(s) <- sprintf("%s:%s-%d %s", acc, gene, seq_along(s), sp)
+    all_seqs <- c(all_seqs, s)
+  }
+  if (length(all_seqs) == 0) return(NULL)
+  Biostrings::writeXStringSet(all_seqs, out_fasta)
+  mk_args <- c("-in", out_fasta, "-dbtype", "prot")
+  if (!is.null(condaenv)) {
+    system2(reticulate::conda_binary(), c("run", "-n", condaenv, "makeblastdb", mk_args),
+            stdout = NULL, stderr = NULL)
+  } else {
+    system2("makeblastdb", mk_args, stdout = NULL, stderr = NULL)
+  }
+  out_fasta
+}
+
 #' Get top BLASTP hits for an ORF against a combined gene database
 #'
 #' Like [get_top_hits()], but BLASTs a query against a single combined protein
-#' database holding sequences from every gene (built by concatenating the
-#' per-gene `featureProt/*.fas` files). Because the gene of an ORF is unknown,
-#' the gene name is recovered per hit from the reference header format
-#' `>{accession}:{gene}-{idx}-{pos1}-{pos2} {species}` and returned in a `gene`
-#' column.
+#' database holding sequences from every gene (built by [build_combined_orf_db()]
+#' from the per-gene `featureProt/*.fas` files). Because the gene of an ORF is
+#' unknown, the gene name is recovered per hit from the combined-DB header format
+#' `>{accession}:{gene}-{i} {species}` that builder injects, and returned in a
+#' `gene` column.
 #'
 #' @param ref_db combined reference database (FASTA with a makeblastdb index)
 #' @param query query (amino acid) sequence
@@ -330,6 +391,138 @@ get_top_hits_orf <- function(
     dplyr::group_by(gene) |>
     dplyr::slice_head(n = as.numeric(max_blast_hits)) |>
     dplyr::ungroup()
+}
+
+#' Pairwise comparison of nucleotide sequences
+#'
+#' Nucleotide analog of [compare_aa()] for rRNA (which does not translate). Uses
+#' a simple match/mismatch nucleotide substitution matrix.
+#'
+#' @param query,target nucleotide sequences (character)
+#' @param type "pctId" (query-centric) or "similarity" (over aligned columns)
+#' @noRd
+compare_nt <- function(query, target, type = c("pctId", "similarity")) {
+  s1 <- Biostrings::DNAString(query)
+  s2 <- Biostrings::DNAString(target)
+  submx <- pwalign::nucleotideSubstitutionMatrix(match = 1, mismatch = -1, baseOnly = FALSE)
+  aln <- pwalign::pairwiseAlignment(
+    subject = s1, pattern = s2, substitutionMatrix = submx,
+    gapOpening = 5, gapExtension = 2
+  )
+  if (type[1] == "similarity") {
+    return(100 * pwalign::nmatch(aln) / pwalign::nchar(aln))
+  }
+  100 * pwalign::nmatch(aln) / nchar(query)
+}
+
+#' Get top BLASTN hits for a nucleotide query against a per-gene reference DB
+#'
+#' Nucleotide analog of [get_top_hits()] for rRNA features. The reference DB is a
+#' featureNuc/<gene>.fas BLAST database with the same header contract
+#' (`>{accession}:{gene}-1-1-{len} {Species}`). Returns the same columns as
+#' [get_top_hits()] so the refHits JSON / annotate-details alignment are shared.
+#'
+#' @param ref_db nucleotide BLAST database (FASTA with a makeblastdb index)
+#' @param query nucleotide query sequence
+#' @param max_blast_hits maximum hits to retain (default 10)
+#' @param condaenv conda env with blastn (NULL = on PATH)
+#' @noRd
+get_top_hits_nuc <- function(
+    ref_db,
+    query,
+    max_blast_hits = 10,
+    condaenv = "base") {
+  ref_seqs <- Biostrings::readDNAStringSet(ref_db)
+
+  if (!is.null(condaenv)) {
+    hits_refSeq <- stringr::str_glue(
+      "run -n {condaenv}",
+      "echo -e '{query}' |",
+      "blastn ",
+      "-task blastn",
+      "-db {ref_db}",
+      "-max_hsps 1",
+      "-max_target_seqs 1000",
+      "-outfmt '6 salltitles evalue'",
+      "-query -",
+      .sep = " "
+    ) |>
+      system2(reticulate::conda_binary(), args = _, stdout = TRUE)
+  } else {
+    hits_refSeq <- stringr::str_glue(
+      "-task blastn",
+      "-db {ref_db}",
+      "-max_hsps 1",
+      "-max_target_seqs 1000",
+      "-outfmt '6 salltitles evalue'",
+      "-query -",
+      .sep = " "
+    ) |>
+      system2("blastn", args = _, input = query, stdout = TRUE)
+  }
+
+  empty <- data.frame(
+    acc = character(), Taxon = character(), eval = numeric(),
+    target = character(), pctid = numeric(), similarity = numeric(),
+    gap_leading = numeric(), gap_trailing = numeric()
+  )
+  if (length(hits_refSeq) == 0) return(empty)
+
+  hits_refSeq |>
+    purrr::map_dfr(~ {
+      df <- data.frame(stringr::str_split(.x, "\\t", simplify = T))
+      colnames(df) <- c("hit", "eval")
+      df |> dplyr::mutate(across(!hit, as.numeric))
+    }) |>
+    dplyr::arrange(eval) |>
+    dplyr::transmute(
+      acc = stringr::str_extract(hit, "^[^:]+"),
+      Taxon = stringr::str_remove(hit, "^\\S+ "),
+      eval = eval
+    ) |>
+    dplyr::rowwise() |>
+    dplyr::mutate(
+      target = as.character(ref_seqs[stringr::str_extract(names(ref_seqs), "^[^:]+") == acc])[1]
+    ) |>
+    dplyr::mutate(
+      pctid = compare_nt(query, target, "pctId"),
+      similarity = compare_nt(query, target, "similarity"),
+      gap_leading = NA_real_,
+      gap_trailing = NA_real_,
+      .after = "eval"
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::arrange(dplyr::desc(similarity)) |>
+    dplyr::slice_head(n = as.numeric(max_blast_hits))
+}
+
+#' Inject synthetic ruleset entries for genes absent from the params `rules`
+#'
+#' Non-standard MitoFinder genes (and any other gene not listed in a clade's
+#' params `rules`) would otherwise be skipped entirely by curation and
+#' validation, which only iterate `names(rules)`. Give each such gene a rule
+#' that inherits the type's `default_rules` (so start/stop codon, overlap and
+#' length checks apply) with `count = c(0, Inf)` so it is never flagged as a
+#' missing or duplicated gene. Called by both `curate_mito_core()` and
+#' `validate_mito_core()` after the rules/defaults merge.
+#'
+#' @param rules merged rules list (gene -> rule list)
+#' @param annotations annotations data frame (needs `gene`, `type` columns)
+#' @param default_rules per-type default rules list from params
+#'
+#' @return `rules` with synthetic entries added for unknown genes
+#'
+#' @noRd
+augment_rules_for_unknown_genes <- function(rules, annotations, default_rules) {
+  if (is.null(annotations) || nrow(annotations) == 0L) return(rules)
+  unknown <- setdiff(unique(annotations$gene), names(rules))
+  unknown <- unknown[!is.na(unknown) & nzchar(unknown)]
+  for (g in unknown) {
+    g_type <- annotations$type[annotations$gene == g][1]
+    base <- default_rules[[g_type]] %||% default_rules[["PCG"]] %||% list()
+    rules[[g]] <- utils::modifyList(base, list(type = g_type, count = c(0, Inf)))
+  }
+  rules
 }
 
 #' Count end gaps in a pairwise alignment

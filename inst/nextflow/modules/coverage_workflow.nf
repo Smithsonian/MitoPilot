@@ -30,6 +30,8 @@ workflow COVERAGE {
             .flatten()
             .filter{ it =~ /(.*coverageStats.csv)$/ }
             .splitCsv(header: true, sep: ',')
+            .set { coverage_rows }
+        coverage_rows
             .map { it ->
                 tuple(
                     it.SeqId,
@@ -49,5 +51,15 @@ workflow COVERAGE {
                 ).flatten()
             }
             .sqlInsert(statement: params.sqlWrite, db: 'sqlite')
-    
+
+    emit:
+        // Per-ID coverageStats CSV files, for the scaffold-join step to stitch.
+        cov_files = coverage_out
+            .map { id, files, wd ->
+                def fl = (files instanceof List) ? files : [files]
+                tuple(id, fl.findAll { it.name ==~ /.*coverageStats\.csv/ })
+            }
+            .filter { id, csvs -> csvs.size() > 0 }
+            .groupTuple()
+            .map { id, lists -> tuple(id, lists.flatten()) }
 }

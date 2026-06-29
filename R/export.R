@@ -791,6 +791,17 @@ export_files <- function(
       }
 
       if (cur$type == "rRNA") {
+        # Manual 5'/3' partial flags: '<' prepends the start coord, '>' the stop
+        # coord (pos is already strand-oriented: pos[1] = 5', pos[2] = 3').
+        rrna_note <- NULL
+        if (isTRUE(as.integer(cur$partial_start) == 1L)) {
+          pos[1] <- paste0("<", pos[1])
+          rrna_note <- "5' end not determined"
+        }
+        if (isTRUE(as.integer(cur$partial_stop) == 1L)) {
+          pos[2] <- paste0(">", pos[2])
+          rrna_note <- paste(c(rrna_note, "3' end not determined"), collapse = "; ")
+        }
         # write to .tbl
         paste(c(pos, "gene"), collapse = "\t") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
@@ -800,6 +811,10 @@ export_files <- function(
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste("\t\t\tproduct\t", cur$product) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
+        if (length(rrna_note) > 0) {
+          paste0("\t\t\tnote\t", rrna_note) |>
+            cat(file = tbl_fn, sep = "\n", append = TRUE)
+        }
 
         # write to GFF
         # rRNA feature
@@ -851,9 +866,14 @@ export_files <- function(
           gene_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".fasta"))
           Biostrings::writeXStringSet(gene, filepath = gene_fn)
 
-          # fix the start and stop position
+          # fix the start and stop position; carry the 5'/3' partial markers
+          # (extracted gene is 5'->3', so pos1_new = 5', pos2_new = 3').
           pos1_new = 1
           pos2_new = abs(cur$pos2 - cur$pos1)
+          gene_p1 <- as.character(pos1_new)
+          gene_p2 <- as.character(pos2_new)
+          if (isTRUE(as.integer(cur$partial_start) == 1L)) gene_p1 <- paste0("<", gene_p1)
+          if (isTRUE(as.integer(cur$partial_stop) == 1L)) gene_p2 <- paste0(">", gene_p2)
 
           # write gene feature table
           gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".tbl"))
@@ -861,16 +881,16 @@ export_files <- function(
             file.remove(gene_tbl_fn)
           }
           cat(paste0(">Feature ", .x, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
-          paste(c(pos1_new, pos2_new, "gene"), collapse = "\t") |>
+          paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           paste0("\t\t\tgene\t", cur$gene_uniq) |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste(c(pos1_new, pos2_new, "rRNA"), collapse = "\t") |>
+          paste(c(gene_p1, gene_p2, "rRNA"), collapse = "\t") |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           paste("\t\t\tproduct\t", cur$product) |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          if (length(note) > 0) {
-            paste0("\t\t\tnote\t", note) |>
+          if (length(rrna_note) > 0) {
+            paste0("\t\t\tnote\t", rrna_note) |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           }
 

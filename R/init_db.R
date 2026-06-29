@@ -307,6 +307,7 @@ new_db <- function(
       max_paths INTEGER,
       max_scaffolds INTEGER,
       min_assembly_length INTEGER,
+      join_scaffolds INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -324,7 +325,8 @@ new_db <- function(
         mitofinder = mitofinder,
         max_paths = max_paths,
         max_scaffolds = max_scaffolds,
-        min_assembly_length = min_assembly_length
+        min_assembly_length = min_assembly_length,
+        join_scaffolds = 0L
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -401,6 +403,26 @@ new_db <- function(
     );"
   )
 
+  ## Precomputed scaffold->reference mappings (one row per ID/scaffold/ref) ----
+  ## Written by the Nextflow scaffold-join so the in-app manual join editor can
+  ## build layouts with no minimap2 dependency.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE scaffold_mappings (
+      ID TEXT NOT NULL,
+      ref_accession TEXT NOT NULL,
+      scaffold INTEGER NOT NULL,
+      ref_start INTEGER,
+      ref_end INTEGER,
+      strand TEXT,
+      nmatch INTEGER,
+      qcov REAL,
+      qstart INTEGER,
+      mapped INTEGER,
+      PRIMARY KEY (ID, ref_accession, scaffold)
+    );"
+  )
+
   # Add Annotate table ----
   DBI::dbExecute(
     con,
@@ -459,13 +481,20 @@ new_db <- function(
       memory INTEGER,
       ref_db TEXT,
       ref_dir TEXT,
+      use_mitos INTEGER,
       mitos_opts TEXT,
       use_mitos_best INTEGER,
+      use_trnaScan INTEGER,
       trnaScan_opts TEXT,
       arwen_opts TEXT,
       use_arwen INTEGER,
       aragorn_opts TEXT,
       use_aragorn INTEGER,
+      use_mitofinder INTEGER,
+      mitofinder_db TEXT,
+      mitofinder_new_genes INTEGER,
+      mitofinder_allow_introns INTEGER,
+      mitofinder_opts TEXT,
       start_gene TEXT,
       coverage_trim INTEGER,
       feature_trim INTEGER,
@@ -481,13 +510,20 @@ new_db <- function(
         memory = annotate_memory,
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
+        use_mitos = 1L,
         mitos_opts = mitos_opts,
         use_mitos_best = 1L,
+        use_trnaScan = 1L,
         trnaScan_opts = trnaScan_opts,
         arwen_opts = arwen_opts,
         use_arwen = 0L,
         aragorn_opts = aragorn_opts,
         use_aragorn = 0L,
+        use_mitofinder = 0L,
+        mitofinder_db = NA_character_,
+        mitofinder_new_genes = 0L,
+        mitofinder_allow_introns = 0L,
+        mitofinder_opts = "",
         start_gene = "trnF",
         coverage_trim = 1L,
         feature_trim = 1L,

@@ -161,6 +161,8 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -186,6 +188,9 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           value =  current$fastp %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Command-line flags passed to fastp, which trims adapters and ",
+                  "filters low-quality reads before assembly.",
+                  href = "https://github.com/OpenGene/fastp"),
         size = "m",
         footer = tagList(
           actionButton(ns("update_pre_opts"), "Update"),
@@ -243,23 +248,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             )
           )
         ),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            selectizeInput(
-              ns("assembler"),
-              label = "Assembler:",
-              choices = c("GetOrganelle", "MitoFinder"),
-              selected = current$assembler %||% character(0),
-              width = "100%",
-              options = list(
-                create = TRUE,
-                maxItems = 1
-              )
-            ) |> shinyjs::disabled()
-          )
-        ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -279,36 +269,89 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ) |> shinyjs::disabled()
           )
         ),
+        # Assembler choice + its tool-specific options, boxed off.
+        div(
+          style = paste(
+            "border: 1px solid #ddd; border-radius: 6px;",
+            "padding: 12px 14px 4px; margin: 8px 0 14px;"
+          ),
+        tags$div(
+          style = "font-weight: bold; margin-bottom: 8px;",
+          "Assembler"
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            selectizeInput(
+              ns("assembler"),
+              label = "Assembler:",
+              choices = c("GetOrganelle", "MitoFinder"),
+              selected = current$assembler %||% character(0),
+              width = "100%",
+              options = list(
+                create = TRUE,
+                maxItems = 1
+              )
+            ) |> shinyjs::disabled()
+          )
+        ),
+        opts_help("Tool used to assemble the mitogenome from reads: ",
+                  tags$a(href = "https://github.com/Kinggerm/GetOrganelle",
+                         target = "_blank", rel = "noopener", "GetOrganelle"),
+                  " or ",
+                  tags$a(href = "https://github.com/RemiAllio/MitoFinder",
+                         target = "_blank", rel = "noopener", "MitoFinder"),
+                  "; the relevant tool options appear below."),
         textInput(
           ns("mitofinder"),
           label = tagList("MitoFinder options", tool_help_icon("mitofinder")),
           value = current$mitofinder %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Extra command-line flags passed to MitoFinder.",
+                  href = "https://github.com/RemiAllio/MitoFinder",
+                  id = ns("help_mitofinder")),
         textInput(
           ns("mf_db"),
           label = "MitoFinder Database:",
           value = current$mitofinder_db %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Path to the MitoFinder reference database (GenBank .gb format) ",
+                  "used to seed the assembly.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+                  id = ns("help_mf_db")),
         textInput(
           ns("getOrganelle"),
           label = tagList("getOrganelle options", tool_help_icon("getOrganelle")),
           value = current$getOrganelle %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Extra command-line flags passed to GetOrganelle.",
+                  href = "https://github.com/Kinggerm/GetOrganelle/wiki",
+                  id = ns("help_getOrganelle")),
         textInput(
           ns("seeds_db"),
           label = "getOrganelle Seeds:",
           value = current$seeds_db %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Seed database: reference sequences GetOrganelle uses to start ",
+                  "recruiting mitochondrial reads.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+                  id = ns("help_seeds_db")),
         textInput(
           ns("labels_db"),
           label = "getOrganelle Labels:",
           value = current$labels_db %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled(),
+        opts_help("Label database: reference genes GetOrganelle uses to identify ",
+                  "and extend mitochondrial contigs.",
+                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+                  id = ns("help_labels_db"))
+        ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -355,6 +398,23 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           style = "margin-top: -8px; font-size: 0.85em;",
           "Scaffolds shorter than this threshold are stored but ignored for additional processing"
         ),
+        div(
+          class = "form-group shiny-input-container",
+          shinyWidgets::prettyCheckbox(
+            ns("join_scaffolds"),
+            label = "Automatically join multi-scaffold assemblies (Path 0)",
+            value = as.logical(current$join_scaffolds %||% 0),
+            status = "primary"
+          ) |> shinyjs::disabled()
+        ),
+        tags$p(
+          class = "text-muted",
+          style = "margin-top: -8px; font-size: 0.85em;",
+          paste("Off by default. When on, single-path fragmented assemblies are",
+                "reference-ordered into a joined Path 0 (only if scaffolds share a",
+                "BLAST hit). Scaffold-to-reference mappings are always computed so",
+                "the in-app join editor works regardless of this setting.")
+        ),
         size = "m",
         footer = tagList(
           actionButton(ns("update_assemble_opts"), "Update"),
@@ -365,11 +425,16 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
 
     if(current$assembler == "GetOrganelle"){
       shinyjs::hide(id = "mitofinder")
+      shinyjs::hide(id = "help_mitofinder")
       shinyjs::hide(id = "mf_db")
+      shinyjs::hide(id = "help_mf_db")
     } else if(current$assembler == "MitoFinder"){
       shinyjs::hide(id = "getOrganelle")
+      shinyjs::hide(id = "help_getOrganelle")
       shinyjs::hide(id = "seeds_db")
+      shinyjs::hide(id = "help_seeds_db")
       shinyjs::hide(id = "labels_db")
+      shinyjs::hide(id = "help_labels_db")
     }
   } else {
     shinyWidgets::show_alert(
@@ -419,12 +484,17 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           )
         ),
+        opts_help("Reusable named set of options applied to the selected samples; ",
+                  "check Edit to change values or type a new name to create a set."),
         shinyWidgets::prettyCheckbox(
           ns("run_blast"),
           label = "Run remote BLAST search using using assembly as query",
           value = as.logical(current$run_blast %||% 1L),
           status = "primary"
         ) |> shinyjs::disabled(),
+        opts_help("BLAST each assembly against NCBI GenBank to find the closest ",
+                  "reference mitogenome (used for orientation and curation).",
+                  href = "https://blast.ncbi.nlm.nih.gov/Blast.cgi"),
         div(
           id = ns("blast_entrez_group"),
           tags$label(
@@ -439,7 +509,9 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             label = NULL,
             value = current$entrez_query %||% "mitochondrion[Location]",
             width = "100%"
-          ) |> shinyjs::disabled()
+          ) |> shinyjs::disabled(),
+          opts_help("Restricts the BLAST search to GenBank records matching this ",
+                    "Entrez filter (default limits hits to mitochondrial sequences).")
         ),
         div(
           id = ns("blast_extra_group"),
@@ -447,7 +519,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",
-            "Cannot override: -outfmt, -max_target_seqs, -max_hsps."
+            "Extra flags passed to blastn. Cannot override: -outfmt, -max_target_seqs, -max_hsps."
           ),
           textAreaInput(
             ns("extra_opts"),

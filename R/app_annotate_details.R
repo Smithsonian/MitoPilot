@@ -142,6 +142,21 @@ annotations_details_server <- function(id, rv) {
         error = function(e) NULL
       )
 
+      ## Load BLAST reference nucleotide sequence (for rRNA nt alignment) ----
+      # Linked to the sample via assemble.blast_accession; one row per accession.
+      rv$blast_ref_seq <- tryCatch({
+        acc <- dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::filter(ID == !!rv$updating$ID) |>
+          dplyr::pull(blast_accession)
+        if (length(acc) == 0 || is.na(acc[1]) || !nzchar(acc[1])) {
+          NULL
+        } else {
+          dplyr::tbl(session$userData$con, "blast_ref_sequences") |>
+            dplyr::filter(accession == !!acc[1]) |>
+            dplyr::collect()
+        }
+      }, error = function(e) NULL)
+
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
 
@@ -290,8 +305,17 @@ annotations_details_server <- function(id, rv) {
                   var colors = {ctrl:'#FAA34A', PCG:'#60BD68', rRNA:'#5DA5DA', tRNA:'#F17CB0', ORF:'#4D4D4D'};
                   var v = cellInfo.value || '';
                   var c = colors[v] || '#888888';
-                  return '<span style=\"background:' + c + '30;color:#111111;border:1px solid ' + c +
+                  var badge = '<span style=\"background:' + c + '30;color:#111111;border:1px solid ' + c +
                     ';border-radius:3px;padding:1px 4px;font-size:11px;white-space:nowrap;\">' + v + '</span>';
+                  // Non-standard MitoFinder gene: PCG from MitoFinder with no
+                  // canonical product. Flag so the user knows it can be renamed.
+                  var row = cellInfo.row || {};
+                  var noProduct = (row.product == null || row.product === '' || row.product === 'NA');
+                  if (v === 'PCG' && row.tool === 'MitoFinder' && noProduct) {
+                    badge += ' <span style=\"background:#FAA34A30;color:#111111;border:1px solid #FAA34A;' +
+                      'border-radius:3px;padding:1px 4px;font-size:10px;white-space:nowrap;\">non-std</span>';
+                  }
+                  return badge;
                 }
               ")
             ),
@@ -350,7 +374,7 @@ annotations_details_server <- function(id, rv) {
       # Check for unsaved edits
       isolate({
         req(rv$annotations)
-        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] %in% c("PCG", "ORF"))
+        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] %in% c("PCG", "ORF", "rRNA"))
         is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
         is_orf <- length(sel) > 0 && rv$annotations$type[sel] == "ORF"
         # An assigned ORF keeps tool == "ORFfinder" but a non-ORF type; offer the
@@ -358,9 +382,13 @@ annotations_details_server <- function(id, rv) {
         is_assigned_orf <- length(sel) > 0 &&
           isTRUE(rv$annotations$tool[sel] == "ORFfinder") &&
           isTRUE(rv$annotations$type[sel] != "ORF")
+        # Non-standard MitoFinder gene: editable/renameable like an unassigned ORF.
+        is_nonstd <- length(sel) > 0 && isTRUE(is_nonstandard_mito_gene(
+          rv$annotations$gene[sel], rv$annotations$type[sel], rv$annotations$tool[sel]
+        ))
         shinyjs::toggle("annotation_action_btns", condition = length(sel) > 0 && !is_deleted)
         shinyjs::toggle("annotation_restore_btn", condition = is_deleted)
-        shinyjs::toggle("assign_gene_btn", condition = (is_orf || is_assigned_orf) && !is_deleted)
+        shinyjs::toggle("assign_gene_btn", condition = (is_orf || is_assigned_orf || is_nonstd) && !is_deleted)
         updateActionButton(
           inputId = "assign_gene",
           label = if (is_assigned_orf) "Edit gene assignment" else "Assign gene name"
@@ -398,7 +426,7 @@ annotations_details_server <- function(id, rv) {
         if (identical(sel, rv$editing$idx)) {
           return(sel)
         }
-        if (!is.null(rv$editing) && rv$annotations$translation[sel] != rv$editing$backup$translation) {
+        if (!is.null(rv$editing) && editing_unsaved(rv$editing$idx)) {
           shinyWidgets::sendSweetAlert(
             title = "Unsaved Edits!",
             text = "Discard or save edits before selecting a new annotation"
@@ -412,7 +440,7 @@ annotations_details_server <- function(id, rv) {
         rv$alignment <- rv$local_hits <- NULL
         ref_msa_cache$msa <- NULL
         ref_msa_cache$key <- NULL
-        if (rv$annotations$type[sel] == "PCG" & length(rv$alignment) != 0) {
+        if (rv$annotations$type[sel] %in% c("PCG", "rRNA") & length(rv$alignment) != 0) {
           trigger("align_now")
         } else {
           toggleDetails(ns("alignment_div"), FALSE)
@@ -458,9 +486,9 @@ annotations_details_server <- function(id, rv) {
     # poly-A stop trim change partial_start/partial_stop/stop_codon/positions
     # without altering the translation, so a translation-only test would let the
     # user close/lock and silently drop those edits.
-    editing_unsaved <- function() {
+    editing_unsaved <- function(idx = selected()) {
       if (is.null(rv$editing) || is.null(rv$editing$backup)) return(FALSE)
-      sel <- selected()
+      sel <- idx
       if (length(sel) != 1) return(FALSE)
       bak <- rv$editing$backup
       changed <- function(f) {
@@ -1406,6 +1434,109 @@ annotations_details_server <- function(id, rv) {
       )
       trigger("align_now")
     })
+    # Percent identity over the aligned (gap-free) columns of a 2-sequence
+    # nucleotide alignment. Returns NA when there is no comparable column.
+    dna_pct_identity <- function(aln) {
+      if (length(aln) < 2L) return(NA_real_)
+      m <- as.matrix(aln)
+      a <- m[1, ]; b <- m[2, ]
+      keep <- a != "-" & b != "-"
+      if (!any(keep)) return(NA_real_)
+      100 * sum(a[keep] == b[keep]) / sum(keep)
+    }
+
+    # Build a nucleotide MSA for an rRNA row: the focal rRNA sequence aligned to
+    # the matching rRNA region of the per-sample remote BLAST reference genome
+    # (Source A, always shown when available) plus any featureNuc multi-reference
+    # hits stored in refHits (Source B). Returns a list shaped like the protein
+    # `new_alignment` so the msa header/widget render it.
+    build_rrna_alignment <- function(sel) {
+      gene <- rv$annotations$gene[sel]
+      out <- list(
+        start = "", stop = "",
+        partial = partial_label(sel), internal_stop = "",
+        colorscheme = "nucleotide",
+        render_nonce = isolate(rv$alignment$render_nonce %||% 0L) + 1L
+      )
+
+      # Focal rRNA nucleotide sequence from the assembly (revcomp on - strand).
+      asm <- rv$editing$assembly %||% tryCatch(get_assembly(
+        ID = rv$annotations$ID[sel], path = rv$annotations$path[sel],
+        scaffold = rv$annotations$scaffold[sel], con = session$userData$con
+      ), error = function(e) NULL)
+      focal_seq <- tryCatch({
+        s <- Biostrings::subseq(asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel])
+        if (rv$annotations$direction[sel] == "-") s <- Biostrings::reverseComplement(s)
+        as.character(s)
+      }, error = function(e) NA_character_)
+
+      if (is.na(focal_seq) || !nzchar(focal_seq)) {
+        out$aln <- Biostrings::DNAStringSet(setNames("N", paste(gene, "(focal)")))
+        out$alignmentHeight <- 40
+        out$id <- "<b>rRNA sequence unavailable</b>"
+        return(out)
+      }
+      focal <- setNames(focal_seq, paste(gene, "(focal)"))
+
+      refs <- character(0)   # named reference sequences (remote ref + featureNuc hits)
+      best_sim <- NA_real_   # header similarity (from featureNuc hits when present)
+
+      # Source A: rRNA region of the per-sample remote BLAST reference genome.
+      # Always included (mirrors how the remote hit is prepended for PCGs) so the
+      # GenBank reference shows even when featureNuc multi-reference hits exist.
+      if (!is.null(rv$blast_ref) && !is.null(rv$blast_ref_seq) &&
+          nrow(rv$blast_ref) > 0 && nrow(rv$blast_ref_seq) > 0) {
+        refrow <- rv$blast_ref[rv$blast_ref$type == "rRNA" & rv$blast_ref$gene == gene, , drop = FALSE]
+        if (nrow(refrow) > 0) {
+          refrow <- refrow[1, ]
+          ref_dna <- tryCatch(Biostrings::DNAString(rv$blast_ref_seq$sequence[1]),
+                              error = function(e) NULL)
+          if (!is.null(ref_dna)) {
+            ref_seq_chr <- tryCatch({
+              s <- Biostrings::subseq(ref_dna, refrow$pos1, refrow$pos2)
+              if (identical(refrow$direction, "-")) s <- Biostrings::reverseComplement(s)
+              as.character(s)
+            }, error = function(e) NULL)
+            if (!is.null(ref_seq_chr) && nzchar(ref_seq_chr)) {
+              ref_name <- paste0(rv$blast_ref_seq$accession[1] %||% "reference", " (GenBank ref)")
+              refs <- c(refs, stats::setNames(ref_seq_chr, ref_name))
+            }
+          }
+        }
+      }
+
+      # Source B: featureNuc multi-reference hits stored in refHits by curation
+      # (populated when the featureNuc/<gene>.fas BLAST DBs exist).
+      hits <- tryCatch(json_parse(rv$annotations$refHits[sel], TRUE), error = function(e) NULL)
+      if (is.data.frame(hits) && nrow(hits) > 0 && "target" %in% names(hits)) {
+        refs <- c(refs, stats::setNames(hits$target, hits$Taxon %||% hits$acc))
+        best_sim <- suppressWarnings(max(hits$similarity, na.rm = TRUE))
+      }
+
+      # Drop duplicate reference sequences (e.g. the GenBank ref also in featureNuc).
+      refs <- refs[!duplicated(unname(refs))]
+
+      if (length(refs) == 0) {
+        out$aln <- Biostrings::DNAStringSet(focal)
+        out$alignmentHeight <- 40
+        out$id <- "<b>No rRNA reference available</b>"
+        return(out)
+      }
+
+      dna_set <- Biostrings::DNAStringSet(c(focal, refs))
+      aln <- tryCatch(DECIPHER::AlignSeqs(dna_set, verbose = FALSE),
+                      error = function(e) dna_set)
+      out$aln <- aln
+      out$alignmentHeight <- 20 + length(aln) * 20
+      # Header: best featureNuc similarity if available, else focal-vs-ref identity.
+      if (!is.finite(best_sim)) {
+        best_sim <- tryCatch(dna_pct_identity(aln), error = function(e) NA_real_)
+      }
+      out$id <- if (!is.finite(best_sim)) "<b>Max Similarity:</b> n/a" else
+        paste0("<b>Max Similarity:</b> ", round(best_sim, 1), "%")
+      out
+    }
+
     on("align_now", {
       # Clear any "hold tight" overlay from a +/- edit once alignment finishes;
       # on.exit so it also clears if a req() below aborts. No-op when not shown.
@@ -1413,11 +1544,23 @@ annotations_details_server <- function(id, rv) {
       # check if user wants to use fewer reference samples in alignment
       if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
 
+      # rRNA: nucleotide-level alignment against the BLAST reference rRNA region.
+      # Handled separately (no protein translation / per-gene protein hits).
+      if (isTRUE(rv$annotations$type[selected()] == "rRNA")) {
+        rv$alignment <- build_rrna_alignment(selected())
+        req(FALSE)  # alignment built; skip the protein path below
+      }
+
       req(rv$annotations$type[selected()] %in% c("PCG", "ORF"))
       is_orf <- rv$annotations$type[selected()] == "ORF"
       # An ORF assigned a gene keeps tool == "ORFfinder" but a non-ORF type.
       feat_gene <- rv$annotations$gene[selected()]
       is_assigned_orf <- isTRUE(rv$annotations$tool[selected()] == "ORFfinder") && !is_orf
+      # Non-standard MitoFinder gene: hits come from the combined gene DB and
+      # carry a candidate-gene column, so label them like ORF hits.
+      is_nonstd <- isTRUE(is_nonstandard_mito_gene(
+        feat_gene, rv$annotations$type[selected()], rv$annotations$tool[selected()]
+      ))
 
       using_local <- !is.null(rv$local_hits)
       hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
@@ -1465,7 +1608,7 @@ annotations_details_server <- function(id, rv) {
         # whose hits are not restricted to a single assigned gene: unassigned
         # ORFs and custom-name assignments (all-gene hits kept). A standard
         # assignment (filtered above) and real PCGs drop the redundant prefix.
-        show_gene_prefix <- (is_orf || (is_assigned_orf && !gene_filtered)) &&
+        show_gene_prefix <- (is_orf || is_nonstd || (is_assigned_orf && !gene_filtered)) &&
           "gene" %in% names(hits)
         hit_labels <- if (show_gene_prefix) {
           paste(hits$gene, "|", hits$Taxon)
@@ -1529,7 +1672,7 @@ annotations_details_server <- function(id, rv) {
         menu = FALSE,
         conservation = TRUE,
         labelNameLength = 200,
-        colorscheme = "zappo",
+        colorscheme = rv$alignment$colorscheme %||% "zappo",
         rowheight = 20,
         alignmentHeight = min(rv$alignment$alignmentHeight, 200)
       )
@@ -1993,16 +2136,28 @@ annotations_details_server <- function(id, rv) {
         dplyr::pull(params) |>
         json_parse() |>
         {
-          \(x) modifyList(
-            x$default_rules[[rv$annotations$type[selected()]]] %||% list(),
-            x$rules[[rv$annotations$gene[selected()]]] %||% list()
-          )
+          \(x) {
+            # ORFs have no curation ruleset; inherit PCG defaults so the
+            # start/stop codon-search editing controls have valid codon lists.
+            rule_type <- rv$annotations$type[selected()]
+            if (identical(rule_type, "ORF")) rule_type <- "PCG"
+            modifyList(
+              x$default_rules[[rule_type]] %||% list(),
+              x$rules[[rv$annotations$gene[selected()]]] %||% list()
+            )
+          }
         }()
       rv$editing$assembly <- get_assembly(
         ID = rv$annotations$ID[selected()],
         path = rv$annotations$path[selected()],
         scaffold = rv$annotations$scaffold[selected()],
         con = session$userData$con
+      )
+      # rRNA uses the nucleotide-boundary editor (no codon search); show the
+      # codon controls only for protein-coding rows.
+      shinyjs::toggle(
+        "codon_edit_ctrls",
+        condition = !identical(rv$annotations$type[selected()], "rRNA")
       )
     })
 
@@ -2355,13 +2510,17 @@ annotations_details_server <- function(id, rv) {
       req(all(c("partial_start", "partial_stop") %in% names(rv$annotations)))
       sel <- selected()
       req(length(sel) == 1)
-      req(rv$annotations$type[sel] == "PCG")
-      # Highlight a partial end when the flag is set OR the terminal codon is not
-      # an allowed gene codon.
-      ps <- isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L) || start_codon_invalid(sel)
-      pe <- isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L) || stop_codon_invalid(sel)
+      is_rrna <- identical(rv$annotations$type[sel], "rRNA")
+      req(rv$annotations$type[sel] == "PCG" || is_rrna)
+      # Highlight a partial end when the flag is set OR (PCG only) the terminal
+      # codon is not an allowed gene codon.
+      ps <- isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L) ||
+        (!is_rrna && start_codon_invalid(sel))
+      pe <- isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L) ||
+        (!is_rrna && stop_codon_invalid(sel))
       tagList(
-        actionButton(
+        # poly-A stop trim is meaningless for non-coding rRNA.
+        if (!is_rrna) actionButton(
           ns("polyA_stop"), "poly-A stop",
           icon = icon("scissors"),
           class = "btn btn-default btn-sm"
@@ -2394,6 +2553,91 @@ annotations_details_server <- function(id, rv) {
         rv$alignment$partial <- partial_label(selected())
       }
     })
+
+    ## rRNA nucleotide-boundary editor ----
+    # rRNAs do not code, so there is no codon search: the user nudges the 5'/3'
+    # boundary by N nucleotides. Moving an end auto-flags it as partial (the exact
+    # boundary is uncertain); the PARTIAL toggle buttons let the user clear it.
+    rrna_step_size <- function() {
+      n <- suppressWarnings(as.integer(input$rrna_step_size))
+      if (length(n) == 0 || is.na(n) || n < 1L) 1L else min(n, 500L)
+    }
+    output$rrna_edit_ctrls <- renderUI({
+      req(rv$editing)
+      sel <- selected()
+      req(length(sel) == 1)
+      req(identical(rv$annotations$type[sel], "rRNA"))
+      nudge <- function(id, sym) {
+        tags$button(
+          class = "icon-circle grow",
+          onclick = stringr::str_glue(
+            "Shiny.setInputValue('{ns(id)}', Math.random(), {{priority: 'event'}})"
+          ),
+          tags$span(style = "font-size: 0.75em;", sym)
+        )
+      }
+      tagList(
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
+          tags$span(style = "font-weight: bold;", "5'"),
+          nudge("rrna-5-out", "+"),   # extend 5' (grow upstream)
+          nudge("rrna-5-in", "\u2212"),
+          div(
+            class = "mp-step-box",
+            style = "width: 56px; margin: 0 0.2em;",
+            numericInput(
+              ns("rrna_step_size"), label = NULL,
+              value = 1, min = 1, max = 500, step = 1, width = "56px"
+            )
+          ),
+          tags$span(style = "font-size: 0.75em; color: #666; margin-right: 0.4em;", "nt"),
+          tags$span(style = "font-weight: bold;", "3'"),
+          nudge("rrna-3-in", "\u2212"),
+          nudge("rrna-3-out", "+")    # extend 3' (grow downstream)
+        )
+      )
+    })
+
+    # Move an rRNA boundary by the step size. `end` is "5"/"3"; `action` is
+    # "extend"/"trim". Strand decides which physical coordinate each end maps to.
+    adjust_rrna <- function(end, action) {
+      sel <- selected()
+      req(rv$editing, length(sel) == 1)
+      req(identical(rv$annotations$type[sel], "rRNA"))
+      step <- rrna_step_size()
+      dir <- rv$annotations$direction[sel]
+      pos1 <- rv$annotations$pos1[sel]
+      pos2 <- rv$annotations$pos2[sel]
+      width <- rv$editing$assembly@ranges@width
+      # 5' maps to pos1 on +, pos2 on -; 3' maps to pos2 on +, pos1 on -.
+      end_is_pos1 <- (end == "5") == (dir != "-")
+      outward <- action == "extend"
+      if (end_is_pos1) {
+        pos1 <- pos1 + (if (outward) -step else step)
+      } else {
+        pos2 <- pos2 + (if (outward) step else -step)
+      }
+      pos1 <- max(1L, as.integer(pos1))
+      pos2 <- min(as.integer(width), as.integer(pos2))
+      req(pos1 < pos2)
+      rv$annotations$pos1[sel] <- pos1
+      rv$annotations$pos2[sel] <- pos2
+      rv$annotations$length[sel] <- abs(pos2 - pos1) + 1L
+      # Auto-flag the moved end as partial (toggleable via the PARTIAL buttons).
+      if (end == "5" && "partial_start" %in% names(rv$annotations)) {
+        rv$annotations$partial_start[sel] <- 1L
+      }
+      if (end == "3" && "partial_stop" %in% names(rv$annotations)) {
+        rv$annotations$partial_stop[sel] <- 1L
+      }
+      if (!is.null(rv$alignment)) rv$alignment$partial <- partial_label(sel)
+      show_edit_waiter()
+      shinyjs::delay(50, trigger("re_align"))
+    }
+    observeEvent(input$`rrna-5-out`, adjust_rrna("5", "extend"))
+    observeEvent(input$`rrna-5-in`,  adjust_rrna("5", "trim"))
+    observeEvent(input$`rrna-3-out`, adjust_rrna("3", "extend"))
+    observeEvent(input$`rrna-3-in`,  adjust_rrna("3", "trim"))
 
     # Trim the stop codon by one terminal base (TAA -> TA -> T), shrinking the
     # CDS by 1 bp so it no longer overlaps a downstream feature. The removed
@@ -2436,26 +2680,29 @@ annotations_details_server <- function(id, rv) {
     ## RE-align after edit ----
     init("re_align")
     on("re_align", {
-      # check if user wants to use fewer reference samples in alignment
-      if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
-      ### Calculate new stats ----
-      focal <- rv$annotations$translation[selected()]
-      hits <-
-        {
-          rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
-        } |>
-        dplyr::slice_head(n = n_hits) |>
-        dplyr::mutate(
-          similarity = compare_aa(focal, target, "similarity"),
-          pctid = compare_aa(focal, target, "pctId"),
-          gap_leading = count_end_gaps(focal, target, "leading"),
-          gap_trailing = count_end_gaps(focal, target, "trailing"),
-          .after = "eval",
-          .by = dplyr::everything()
-        ) |>
-        dplyr::arrange(dplyr::desc(similarity))
+      # rRNA has no protein hit stats to recompute; just rebuild the nt alignment.
+      if (!identical(rv$annotations$type[selected()], "rRNA")) {
+        # check if user wants to use fewer reference samples in alignment
+        if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
+        ### Calculate new stats ----
+        focal <- rv$annotations$translation[selected()]
+        hits <-
+          {
+            rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
+          } |>
+          dplyr::slice_head(n = n_hits) |>
+          dplyr::mutate(
+            similarity = compare_aa(focal, target, "similarity"),
+            pctid = compare_aa(focal, target, "pctId"),
+            gap_leading = count_end_gaps(focal, target, "leading"),
+            gap_trailing = count_end_gaps(focal, target, "trailing"),
+            .after = "eval",
+            .by = dplyr::everything()
+          ) |>
+          dplyr::arrange(dplyr::desc(similarity))
 
-      temp_hits <- json_string(hits)
+        temp_hits <- json_string(hits)
+      }
       # Keep rv$alignment around (incl. cached ref_msa); align_now rebuilds it.
       trigger("align_now")
     })
@@ -2490,19 +2737,22 @@ annotations_details_server <- function(id, rv) {
           ### Recompute per-hit stats against the edited focal sequence ----
           # recompute_hit_stats aligns each pair once (vectorized pwalign) instead
           # of the old row-by-row compare_aa/count_end_gaps (4 alignments per hit).
-          focal <- rv$annotations$translation[selected()]
-          hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
-          stats <- recompute_hit_stats(focal, hits$target)
-          hits <- hits |>
-            dplyr::mutate(
-              similarity = stats$similarity,
-              pctid = stats$pctid,
-              gap_leading = stats$gap_leading,
-              gap_trailing = stats$gap_trailing,
-              .after = "eval"
-            ) |>
-            dplyr::arrange(dplyr::desc(similarity))
-          rv$annotations$refHits[selected()] <- json_string(hits)
+          # rRNA edits have no protein hits to recompute; just persist positions.
+          if (!identical(rv$annotations$type[selected()], "rRNA")) {
+            focal <- rv$annotations$translation[selected()]
+            hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+            stats <- recompute_hit_stats(focal, hits$target)
+            hits <- hits |>
+              dplyr::mutate(
+                similarity = stats$similarity,
+                pctid = stats$pctid,
+                gap_leading = stats$gap_leading,
+                gap_trailing = stats$gap_trailing,
+                .after = "eval"
+              ) |>
+              dplyr::arrange(dplyr::desc(similarity))
+            rv$annotations$refHits[selected()] <- json_string(hits)
+          }
 
           dplyr::tbl(session$userData$con, "annotations") |>
             dplyr::rows_delete(
@@ -3418,6 +3668,11 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               ".mp-step-box .form-group {{ margin-bottom: 0; }}",
               ".mp-step-box .form-control {{ height: 28px; padding: 2px 4px; }}"
             ))),
+            # Codon START/STOP search controls (PCG/ORF only); hidden for rRNA,
+            # which uses the nucleotide-boundary editor instead.
+            div(
+              id = ns("codon_edit_ctrls"),
+              style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1.5em;",
             div(
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "START"),
@@ -3485,8 +3740,12 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                   width = "48px"
                 )
               )
+            )
             ),
-            # Manual partial-end flags + poly-A stop trim (PCG only). Rendered
+            # rRNA nucleotide-boundary nudge controls (shown for rRNA only); kept
+            # left of the partial buttons.
+            uiOutput(ns("rrna_edit_ctrls"), inline = TRUE),
+            # Manual partial-end flags + poly-A stop trim (PCG/rRNA). Rendered
             # reactively so button state reflects the selected gene.
             uiOutput(ns("partial_ctrls"), inline = TRUE)
           ) |> shinyjs::hidden()

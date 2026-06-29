@@ -788,6 +788,14 @@ annotate_server <- function(id) {
           value = cur$trnaScan_opts
         )
         shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_mitos",
+          value = isTRUE(as.logical(cur$use_mitos %||% 1L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_trnaScan",
+          value = isTRUE(as.logical(cur$use_trnaScan %||% 1L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
           inputId = "use_mitos_best",
           value = isTRUE(as.logical(cur$use_mitos_best %||% 1L))
         )
@@ -806,6 +814,26 @@ annotate_server <- function(id) {
         updateTextInput(
           inputId = "aragorn_opts",
           value = cur$aragorn_opts
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "use_mitofinder",
+          value = isTRUE(as.logical(cur$use_mitofinder %||% 0L))
+        )
+        updateTextInput(
+          inputId = "mitofinder_db",
+          value = cur$mitofinder_db %||% ""
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "mitofinder_new_genes",
+          value = isTRUE(as.logical(cur$mitofinder_new_genes %||% 0L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "mitofinder_allow_introns",
+          value = isTRUE(as.logical(cur$mitofinder_allow_introns %||% 0L))
+        )
+        updateTextInput(
+          inputId = "mitofinder_opts",
+          value = cur$mitofinder_opts %||% ""
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "coverage_trim",
@@ -833,15 +861,22 @@ annotate_server <- function(id) {
     observeEvent(input$edit_annotate_opts, ignoreInit = T, {
       shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
       shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_mitos", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_mitos_best", condition = input$edit_annotate_opts)
       # shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_trnaScan", condition = input$edit_annotate_opts)
       shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_arwen", condition = input$edit_annotate_opts)
       shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_aragorn", condition = input$edit_annotate_opts)
       shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("use_mitofinder", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_db", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_new_genes", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_allow_introns", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("mitofinder_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("retain_low_conf_trna", condition = input$edit_annotate_opts)
@@ -887,6 +922,26 @@ annotate_server <- function(id) {
         )
       }
     })
+    # Show each tool's option inputs only when that tool is enabled; the
+    # "use <tool>" toggle itself always stays visible.
+    observeEvent(input$use_mitos, {
+      on <- isTRUE(input$use_mitos)
+      shinyjs::toggle("mitos_opts_box", condition = on)
+      shinyjs::toggle("mitos_best_box", condition = on)
+      shinyjs::toggle("mitos_ref_box", condition = on)
+    })
+    observeEvent(input$use_trnaScan, {
+      shinyjs::toggle("trnascan_opts_box", condition = isTRUE(input$use_trnaScan))
+    })
+    observeEvent(input$use_mitofinder, {
+      shinyjs::toggle("mitofinder_box", condition = isTRUE(input$use_mitofinder))
+    })
+    observeEvent(input$use_arwen, {
+      shinyjs::toggle("arwen_box", condition = isTRUE(input$use_arwen))
+    })
+    observeEvent(input$use_aragorn, {
+      shinyjs::toggle("aragorn_box", condition = isTRUE(input$use_aragorn))
+    })
     ## Save Changes ----
     observeEvent(input$update_annotate_opts, {
       ## Add to params table if new or editing ----
@@ -897,15 +952,22 @@ annotate_server <- function(id) {
               annotate_opts = req(input$annotate_opts),
               cpus = req(input$annotate_opts_cpus),
               memory = req(input$annotate_opts_memory),
+              use_mitos = as.integer(isTRUE(input$use_mitos)),
               mitos_opts = req(input$mitos_opts),
               use_mitos_best = as.integer(isTRUE(input$use_mitos_best)),
               ref_dir = req(input$mitos_ref_dir),
               ref_db = req(input$mitos_ref_db),
+              use_trnaScan = as.integer(isTRUE(input$use_trnaScan)),
               trnaScan_opts = req(input$trnaScan_opts),
               arwen_opts = req(input$arwen_opts),
               use_arwen = as.integer(isTRUE(input$use_arwen)),
               aragorn_opts = req(input$aragorn_opts),
               use_aragorn = as.integer(isTRUE(input$use_aragorn)),
+              use_mitofinder = as.integer(isTRUE(input$use_mitofinder)),
+              mitofinder_db = if (nzchar(input$mitofinder_db %||% "")) input$mitofinder_db else NA_character_,
+              mitofinder_new_genes = as.integer(isTRUE(input$mitofinder_new_genes)),
+              mitofinder_allow_introns = as.integer(isTRUE(input$mitofinder_allow_introns)),
+              mitofinder_opts = input$mitofinder_opts %||% "",
               start_gene = req(input$start_gene),
               coverage_trim = as.integer(isTRUE(input$coverage_trim)),
               feature_trim = as.integer(isTRUE(input$feature_trim)),
