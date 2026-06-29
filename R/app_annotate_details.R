@@ -48,6 +48,74 @@ split_wrapped_genes <- function(df, x_lo, x_hi) {
   dplyr::bind_rows(pieces)
 }
 
+# Build an absolutely-positioned HTML overlay of gene-name labels for a static
+# plot image. Each gene becomes a block at its pixel x-range; the label inside
+# uses CSS `position: sticky; left: 0` so it stays pinned at the scroll
+# container's left edge while the block is in view, then hands off to the next
+# gene as blocks scroll past. `direction` ("+"/"-") prefixes a ">"/"<" marker.
+# x_lo/x_hi are the plot's x-scale limits; img_w is the image width in px.
+# `inset` is the fixed pixel gap between the image edge and the plot panel
+# (theme/patchwork margins), so labels track the panel rather than the image.
+gene_label_overlay <- function(df, img_w, x_lo, x_hi, track_top, track_height,
+                               scale_y = 2, scale_x = 1.5, inset = 0) {
+  if (is.null(df) || nrow(df) == 0) return(NULL)
+  df <- df[!is.na(df$gene) & nzchar(df$gene), , drop = FALSE]
+  if (nrow(df) == 0) return(NULL)
+  span_px <- (img_w - 2 * inset) / (x_hi - x_lo)
+  blocks <- lapply(seq_len(nrow(df)), function(i) {
+    r <- df[i, , drop = FALSE]
+    left  <- inset + (min(r$xmin, r$xmax) - x_lo) * span_px
+    width <- abs(r$xmax - r$xmin) * span_px
+    fwd <- identical(as.character(r$direction), "+")
+    marker <- if (fwd) ">" else "<"
+    marker_span <- htmltools::tags$span(
+      # Directional arrow, stretched to span the full block height; no bg.
+      style = sprintf(
+        paste0("font-size:%.0fpx; line-height:1; color:#808080; ",
+               "transform:scale(0.8,1.7); transform-origin:center;"),
+        track_height
+      ),
+      marker
+    )
+    name_span <- htmltools::tags$span(
+      # Gene name, size unchanged (scale_x/scale_y only).
+      style = sprintf(paste0(
+        "white-space:nowrap; font-size:10px; line-height:1; color:#000; ",
+        "padding:0 2px; transform:scale(%s,%s); transform-origin:%s center;"),
+        scale_x, scale_y, if (fwd) "left" else "right"
+      ),
+      r$gene
+    )
+    # + strand: arrow then name, left-justified, pinned to the viewport's left
+    # edge. - strand: name then arrow, right-justified, pinned to the right edge.
+    inner <- if (fwd) list(marker_span, name_span) else list(name_span, marker_span)
+    sticky_style <- sprintf(
+      "position:sticky; %s:0; z-index:1; display:flex; align-items:center; height:100%%; gap:4px;",
+      if (fwd) "left" else "right"
+    )
+    htmltools::div(
+      # No overflow:hidden here: an overflow-clipping ancestor would become the
+      # sticky label's scroll context and pin it to this (non-scrolling) block
+      # instead of the scroll viewport. Labels may overlap a neighbour, but stay
+      # visible for any annotation on screen.
+      style = sprintf(
+        paste0("position:absolute; left:%.2fpx; width:%.2fpx; top:%.0fpx; ",
+               "height:%.0fpx; display:flex; align-items:center; ",
+               "justify-content:%s; pointer-events:none;"),
+        left, width, track_top, track_height, if (fwd) "flex-start" else "flex-end"
+      ),
+      htmltools::div(style = sticky_style, inner)
+    )
+  })
+  htmltools::div(
+    style = sprintf(
+      "position:absolute; top:0; left:0; width:%.0fpx; height:100%%; pointer-events:none;",
+      img_w
+    ),
+    blocks
+  )
+}
+
 annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -630,10 +698,6 @@ annotations_details_server <- function(id, rv) {
           arrowhead_width = ggplot2::unit(1, "mm"),
           alpha = gene_type_alpha
         ) +
-        gggenes::geom_gene_label(
-          align = "left",
-          height = ggplot2::unit(4, "mm")
-        ) +
         ggplot2::scale_fill_manual(values = gene_type_fill) +
         ggplot2::scale_x_continuous(
           expand = c(0, 0),
@@ -741,7 +805,15 @@ annotations_details_server <- function(id, rv) {
         )
       # plot with dynamic width
       #plotOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")  # OLD CODE, problems with Cairo
-      shiny::imageOutput(ns("coverage_plot"), width = paste0(fig_ctx()$length, "px"), height = "125px")
+      img_w <- fig_ctx()$length
+      x_hi  <- max(c(rv$coverage$Position, rv$annotations$pos2))
+      div(
+        style = sprintf("position:relative; width:%dpx; height:125px;", as.integer(img_w)),
+        shiny::imageOutput(ns("coverage_plot"), width = paste0(img_w, "px"), height = "125px"),
+        # Block = measured gene-arrow band (px 96-112 in the 125px cowplot image).
+        gene_label_overlay(genes_df, img_w = img_w, x_lo = 1, x_hi = x_hi,
+                           track_top = 96, track_height = 16, scale_y = 1.6)
+      )
     })
     # Use renderImage + ragg::agg_png to bypass Cairo's per-dimension image
     # surface limit (~16384 px on common libcairo builds), which silently
@@ -771,6 +843,9 @@ annotations_details_server <- function(id, rv) {
       deleteFile = TRUE
     )
     # BLAST Reference Synteny ----
+    # Gene-block coords (alignment-space %) stashed by the synteny image render,
+    # consumed by the sticky-label overlay (output$synteny_labels).
+    synteny_overlay <- reactiveVal(NULL)
     output$synteny_ui <- renderUI({
       req(rv$blast_ref)
       ctx <- req(fig_ctx())
@@ -854,8 +929,12 @@ annotations_details_server <- function(id, rv) {
             id = ns("syntenyScrollDiv"),
             style = paste0("overflow-x: auto; flex: 1;",
                            if (has_aln) " cursor: zoom-in;" else ""),
-            imageOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
-                       click = ns("synteny_click"))
+            div(
+              style = sprintf("position: relative; width: %dpx;", as.integer(w)),
+              imageOutput(ns("synteny_plot"), width = paste0(w, "px"), height = plot_h,
+                         click = ns("synteny_click")),
+              uiOutput(ns("synteny_labels"))
+            )
           )
         ),
         if (has_aln) {
@@ -903,7 +982,6 @@ annotations_details_server <- function(id, rv) {
           arrowhead_width   = ggplot2::unit(2, "mm"),
           alpha = gene_type_alpha
         ),
-        gggenes::geom_gene_label(align = "left", height = ggplot2::unit(6, "mm")),
         ggplot2::scale_fill_manual(values = gene_type_fill),
         ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(0, 100)),
         ggplot2::coord_cartesian(clip = "off"),
@@ -1017,6 +1095,11 @@ annotations_details_server <- function(id, rv) {
                        fill = type, y = 0, label = gene) +
           gene_track
 
+        synteny_overlay(list(
+          has_aln = TRUE, img_w = img_w,
+          sample_df = sample_df, ref_df = ref_df
+        ))
+
         print(sample_plot / aln_plot / ref_plot +
                 patchwork::plot_layout(heights = c(3, 1, 3)))
 
@@ -1055,6 +1138,11 @@ annotations_details_server <- function(id, rv) {
         ref_plot <- ggplot2::ggplot(ref_pct) +
           ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+",
                        fill = type, y = 0, label = gene) + gene_track
+        synteny_overlay(list(
+          has_aln = FALSE, img_w = img_w,
+          sample_df = sample_pct, ref_df = ref_pct
+        ))
+
         print(sample_plot / ref_plot + patchwork::plot_layout(heights = c(1, 1)))
       }
       dev.off()
@@ -1069,7 +1157,31 @@ annotations_details_server <- function(id, rv) {
       deleteFile = TRUE
     )
 
+    # Sticky gene-name labels overlaid on the synteny image. Two gene tracks
+    # (sample on top, reference on bottom); band positions track the patchwork
+    # layout heights (3:1:3 with alignment, 1:1 without).
+    output$synteny_labels <- renderUI({
+      ov <- synteny_overlay()
+      req(ov)
+      # Block = measured gene-arrow bands (px). has_aln sample 41-74 / ref
+      # 194-227 (280px image); no_aln sample 30-63 / ref 125-158 (200px image).
+      if (ov$has_aln) {
+        sample_top <- 41; ref_top <- 194
+      } else {
+        sample_top <- 30; ref_top <- 125
+      }
+      tagList(
+        gene_label_overlay(ov$sample_df, img_w = ov$img_w, x_lo = 0, x_hi = 100,
+                           track_top = sample_top, track_height = 33, inset = 5),
+        gene_label_overlay(ov$ref_df, img_w = ov$img_w, x_lo = 0, x_hi = 100,
+                           track_top = ref_top, track_height = 33, inset = 5)
+      )
+    })
+
     # Zoomed base-pair view of selected gene's alignment region ----
+    # Gene-block coords (local alignment cols) stashed by the zoom plot render,
+    # consumed by the sticky-label overlay (output$synteny_zoom_labels).
+    zoom_overlay <- reactiveVal(NULL)
     output$synteny_zoom_ui <- renderUI({
       req(isTRUE(input$synteny_zoom))
       has_aln <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
@@ -1128,8 +1240,12 @@ annotations_details_server <- function(id, rv) {
           ),
           div(
             style = "overflow-x: auto; flex: 1;",
-            plotOutput(ns("synteny_zoom_plot"),
-                       width = paste0(plot_w, "px"), height = "180px")
+            div(
+              style = sprintf("position: relative; width: %dpx;", plot_w),
+              plotOutput(ns("synteny_zoom_plot"),
+                         width = paste0(plot_w, "px"), height = "180px"),
+              uiOutput(ns("synteny_zoom_labels"))
+            )
           )
         ),
         div(
@@ -1294,6 +1410,19 @@ annotations_details_server <- function(id, rv) {
         )
       } else NULL
 
+      # Stash gene blocks for the sticky-label overlay (forward -> +/- marker).
+      mk_ov <- function(d) {
+        if (is.null(d)) return(NULL)
+        d$direction <- ifelse(d$forward, "+", "-")
+        d
+      }
+      zoom_overlay(list(
+        sample_df = mk_ov(sample_gene_df),
+        ref_df    = mk_ov(ref_gene_df),
+        n_cols    = length(win_cols),
+        plot_w    = as.integer(win * 14L)
+      ))
+
       # Vertical guide lines every 10 cols (behind everything)
       guide_x <- seq(10L, length(win_cols), by = 10L)
 
@@ -1314,12 +1443,6 @@ annotations_details_server <- function(id, rv) {
             arrow_body_height = ggplot2::unit(6, "mm"),
             arrowhead_height  = ggplot2::unit(6, "mm"),
             arrowhead_width   = ggplot2::unit(3, "mm")
-          ),
-          gggenes::geom_gene_label(
-            data = sample_gene_df,
-            ggplot2::aes(xmin = xmin, xmax = xmax, y = 4, label = gene),
-            inherit.aes = FALSE, align = "left",
-            height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
         # Identity bar - merged runs reduce render items
@@ -1347,12 +1470,6 @@ annotations_details_server <- function(id, rv) {
             arrow_body_height = ggplot2::unit(6, "mm"),
             arrowhead_height  = ggplot2::unit(6, "mm"),
             arrowhead_width   = ggplot2::unit(3, "mm")
-          ),
-          gggenes::geom_gene_label(
-            data = ref_gene_df,
-            ggplot2::aes(xmin = xmin, xmax = xmax, y = 0, label = gene),
-            inherit.aes = FALSE, align = "left",
-            height = ggplot2::unit(4.5, "mm")
           )
         ) else NULL) +
         ggplot2::scale_fill_identity() +
@@ -1370,6 +1487,23 @@ annotations_details_server <- function(id, rv) {
           plot.margin     = ggplot2::margin(2, 2, 2, 2, "mm")
         )
       p
+    })
+
+    # Sticky gene-name labels overlaid on the zoom plot. Kept small to fit the
+    # ~16 px arrow blocks. Arrow centres (px): sample 34, ref 159 (180px plot);
+    # ~6 px panel inset from the 2 mm plot margin.
+    output$synteny_zoom_labels <- renderUI({
+      ov <- zoom_overlay()
+      req(ov)
+      x_lo <- 0.5; x_hi <- ov$n_cols + 0.5
+      tagList(
+        gene_label_overlay(ov$sample_df, img_w = ov$plot_w, x_lo = x_lo, x_hi = x_hi,
+                           track_top = 26, track_height = 16,
+                           scale_x = 1, scale_y = 1, inset = 6),
+        gene_label_overlay(ov$ref_df, img_w = ov$plot_w, x_lo = x_lo, x_hi = x_hi,
+                           track_top = 151, track_height = 16,
+                           scale_x = 1, scale_y = 1, inset = 6)
+      )
     })
 
     # Synteny overview click -> zoom centered at click x.

@@ -75,7 +75,11 @@ assemble_ui_userAsmb <- function(id) {
         )
       )
     ),
-    div(class = "mp-table-resize", reactableOutput(ns("table")))
+    div(class = "mp-table-resize", reactableOutput(ns("table"))),
+    div(
+      style = "font-size: 0.85em; color: #555; margin-top: 4px;",
+      textOutput(ns("n_selected"), inline = TRUE)
+    )
   )
 }
 
@@ -399,6 +403,10 @@ assemble_server_userAsmb <- function(id) {
       visible <- as.character(rv$data$assemble_lock)   %in% lock_filter_rv() &
                  as.character(rv$data$assemble_switch) %in% state_filter_rv()
       intersect(sel, which(visible))
+    })
+
+    output$n_selected <- renderText({
+      paste0(length(selected()), " selected")
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample

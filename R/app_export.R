@@ -59,6 +59,10 @@ export_ui <- function(id) {
     ),
     div(class = "mp-table-resize", reactableOutput(ns("table"))),
     div(
+      style = "font-size: 0.85em; color: #555; margin-top: 4px;",
+      textOutput(ns("n_selected"), inline = TRUE)
+    ),
+    div(
       style = "margin-top: 12px; display: flex; gap: 8px;",
       downloadButton(ns("export_selected"), "Export Selected to CSV",
                      class = "btn-sm btn-default"),
@@ -219,6 +223,10 @@ export_server <- function(id) {
 
     # table selection ----
     selected <- reactive(reactable::getReactableState("table", "selected"))
+
+    output$n_selected <- renderText({
+      paste0(length(selected()), " selected")
+    })
 
     # Publish current selection so the work-dir browser can pre-select this sample
     observe({
