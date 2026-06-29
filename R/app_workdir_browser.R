@@ -61,7 +61,7 @@ workdir_browser_server <- function(id) {
           selected = presel,
           options = list(`live-search` = TRUE)
         ),
-        div(style = "max-height: 60vh; overflow: auto;", uiOutput(ns("tbl"))),
+        div(style = "max-height: 60vh; overflow: auto;", reactable::reactableOutput(ns("tbl"))),
         footer = modalButton("Close")
       ))
     })
@@ -70,75 +70,99 @@ workdir_browser_server <- function(id) {
       rows(find_workdirs(session$userData$dir, input$sample))
     })
 
-    output$tbl <- renderUI({
+    output$tbl <- reactable::renderReactable({
       df <- rows()
-      if (is.null(df) || nrow(df) == 0) {
-        return(tags$em("No work directories found for this sample (has the pipeline run?)."))
-      }
-      body <- lapply(seq_len(nrow(df)), function(i) {
-        tags$tr(
-          tags$td(df$process[i]),
-          tags$td(style = "text-align: center;", workdir_status_icon(df$status[i])),
-          tags$td(df$param_set[i]),
-          tags$td(style = "white-space: nowrap;", df$modified[i]),
-          tags$td(
-            tags$code(
-              style = sprintf(
-                "font-size: 11px; word-break: break-all;%s",
-                if (!df$exists[i]) " color: #9e9e9e;" else ""
-              ),
-              df$workdir[i]
-            ),
-            if (!df$exists[i]) {
-              tags$span(
-                style = "color: #c62828; font-size: 11px; margin-left: 0.4em;",
-                title = "Not reachable from this host (e.g. purged or node-local scratch)",
-                "(missing)"
-              )
-            }
+      if (is.null(df)) df <- df[0, , drop = FALSE]
+      # Pre-render the per-row Actions cell in R, where `exists` is known: copy
+      # button always, Open enabled only for reachable dirs, plus a "(missing)"
+      # marker otherwise. The row index encoded in Open is the data-frame index,
+      # so sorting/filtering the table cannot misroute the click.
+      actions <- vapply(seq_len(nrow(df)), function(i) {
+        copy_btn <- sprintf(
+          paste0(
+            "<button class='btn btn-default btn-xs' title='Copy path' ",
+            "onclick=\"navigator.clipboard.writeText('%s')\">",
+            "<i class='fa fa-copy'></i></button>"
           ),
-          tags$td(
-            style = "white-space: nowrap;",
-            rclipboard::rclipButton(
-              ns(paste0("clip", i)),
-              label = NULL,
-              clipText = df$workdir[i],
-              icon = icon("copy"),
-              modal = TRUE,
-              class = "btn-xs",
-              title = "Copy path"
+          gsub("'", "\\\\'", df$workdir[i])
+        )
+        open_btn <- if (df$exists[i]) {
+          sprintf(
+            paste0(
+              "<button class='btn btn-default btn-xs' title='Open' ",
+              "onclick=\"Shiny.setInputValue('%s', %d, {priority: 'event'})\">",
+              "<i class='fa fa-folder-open'></i></button>"
             ),
-            if (df$exists[i]) {
-              tags$button(
-                type = "button",
-                class = "btn btn-default btn-xs",
-                title = "Open",
-                onclick = sprintf(
-                  "Shiny.setInputValue('%s', %d, {priority: 'event'})",
-                  ns("open_row"), i
-                ),
-                icon("folder-open")
-              )
-            } else {
-              tags$button(
-                type = "button",
-                class = "btn btn-default btn-xs",
-                disabled = NA,
-                title = "Not reachable from this host",
-                icon("folder-open")
-              )
-            }
+            ns("open_row"), i
+          )
+        } else {
+          paste0(
+            "<button class='btn btn-default btn-xs' disabled ",
+            "title='Not reachable from this host'><i class='fa fa-folder-open'></i></button>",
+            "<span style='color:#c62828; font-size:11px; margin-left:0.4em;' ",
+            "title='Not reachable from this host (e.g. purged or node-local scratch)'>(missing)</span>"
+          )
+        }
+        paste0("<span style='white-space:nowrap;'>", copy_btn, " ", open_btn, "</span>")
+      }, character(1))
+
+      disp <- data.frame(
+        Process = df$process,
+        Status = df$status,
+        `Param set` = df$param_set,
+        Modified = df$modified,
+        `Work directory` = df$workdir,
+        Actions = actions,
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+
+      reactable::reactable(
+        disp,
+        filterable = TRUE,
+        sortable = TRUE,
+        resizable = TRUE,
+        defaultPageSize = 25,
+        compact = TRUE,
+        highlight = TRUE,
+        wrap = FALSE,
+        language = reactable::reactableLang(
+          noData = "No work directories found for this sample (has the pipeline run?)."
+        ),
+        columns = list(
+          Process = reactable::colDef(maxWidth = 160),
+          `Param set` = reactable::colDef(maxWidth = 120),
+          Status = reactable::colDef(
+            cell = htmlwidgets::JS(
+              "function(cellInfo) {
+                if (cellInfo.value === 'success') {
+                  return `<span style='color:#2e7d32;' title='Completed successfully'><i class='fa fa-circle-check'></i> success</span>`
+                }
+                return `<span style='color:#c62828;' title='Failed (non-zero exit)'><i class='fa fa-triangle-exclamation'></i> failed</span>`
+              }"
+            ),
+            html = TRUE,
+            maxWidth = 110
+          ),
+          `Work directory` = reactable::colDef(
+            cell = htmlwidgets::JS(
+              "function(cellInfo) {
+                var v = cellInfo.value ? cellInfo.value : ''
+                return `<code style='font-size:11px; word-break:break-all;'>${v}</code>`
+              }"
+            ),
+            html = TRUE,
+            minWidth = 220
+          ),
+          Actions = reactable::colDef(
+            name = "",
+            html = TRUE,
+            sortable = FALSE,
+            filterable = FALSE,
+            resizable = FALSE,
+            maxWidth = 110
           )
         )
-      })
-      tags$table(
-        class = "table table-striped table-condensed",
-        style = "font-size: 13px;",
-        tags$thead(tags$tr(
-          tags$th("Process"), tags$th("Status"), tags$th("Param set"),
-          tags$th("Modified"), tags$th("Work directory"), tags$th("")
-        )),
-        tags$tbody(body)
       )
     })
 
@@ -149,23 +173,6 @@ workdir_browser_server <- function(id) {
       open_path(df$workdir[i])
     })
   })
-}
-
-#' Compact status icon for a work-directory row
-#'
-#' @noRd
-workdir_status_icon <- function(status) {
-  if (identical(status, "success")) {
-    tags$span(
-      style = "color: #2e7d32;", title = "Completed successfully",
-      icon("circle-check")
-    )
-  } else {
-    tags$span(
-      style = "color: #c62828;", title = "Failed (non-zero exit)",
-      icon("triangle-exclamation")
-    )
-  }
 }
 
 #' Enumerate Nextflow task work directories for a sample

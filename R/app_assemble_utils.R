@@ -254,6 +254,35 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
             style = "flex: 1",
+            numericInput(
+              ns("assemble_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("assemble_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
+        # Assembler choice + its tool-specific options, boxed off.
+        div(
+          style = paste(
+            "border: 1px solid #ddd; border-radius: 6px;",
+            "padding: 12px 14px 4px; margin: 8px 0 14px;"
+          ),
+        tags$div(
+          style = "font-weight: bold; margin-bottom: 8px;",
+          "Assembler"
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
             selectizeInput(
               ns("assembler"),
               label = "Assembler:",
@@ -274,25 +303,6 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
                   tags$a(href = "https://github.com/RemiAllio/MitoFinder",
                          target = "_blank", rel = "noopener", "MitoFinder"),
                   "; the relevant tool options appear below."),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("assemble_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("assemble_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        ),
         textInput(
           ns("mitofinder"),
           label = tagList("MitoFinder options", tool_help_icon("mitofinder")),
@@ -340,7 +350,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         opts_help("Label database: reference genes GetOrganelle uses to identify ",
                   "and extend mitochondrial contigs.",
                   href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-                  id = ns("help_labels_db")),
+                  id = ns("help_labels_db"))
+        ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(

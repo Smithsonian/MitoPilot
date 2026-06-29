@@ -238,27 +238,33 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ),
         opts_help("Circular mitogenomes are rotated to begin at this gene, giving a ",
                   "consistent start position across samples (e.g. tRNA-Phe in vertebrates)."),
+        # Annotation tools section, boxed off from the surrounding options.
         div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            id = ns("mitos_opts_box"),
-            style = "flex: 2",
-            textInput(
-              ns("mitos_opts"),
-              label = tagList("MITOS2 options:", tool_help_icon("mitos")),
-              value = current$mitos_opts %||% character(0),
-              width = "100%"
-            ) |> shinyjs::disabled()
+          style = paste(
+            "border: 1px solid #ddd; border-radius: 6px;",
+            "padding: 12px 14px 4px; margin: 8px 0 14px;"
           ),
-          div(
-            style = "margin-top: 24px;",
-            shinyWidgets::prettyCheckbox(
-              ns("use_mitos"),
-              label = "Use MITOS2",
-              value = isTRUE(as.logical(current$use_mitos %||% 1L)),
-              status = "primary"
-            ) |> shinyjs::disabled()
-          )
+        tags$div(
+          style = "font-weight: bold; margin-bottom: 8px;",
+          "Annotation tools"
+        ),
+        opts_help("When merging results from multiple annotators, higher-priority ",
+                  "tools win and lower-priority tools only fill gaps. Genes and rRNAs: ",
+                  "MITOS2 > MitoFinder. tRNAs: tRNAscan-SE > ARWEN > ARAGORN > MITOS2."),
+        shinyWidgets::prettyCheckbox(
+          ns("use_mitos"),
+          label = "Use MITOS2",
+          value = isTRUE(as.logical(current$use_mitos %||% 1L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        div(
+          id = ns("mitos_opts_box"),
+          textInput(
+            ns("mitos_opts"),
+            label = tagList("MITOS2 options:", tool_help_icon("mitos")),
+            value = current$mitos_opts %||% character(0),
+            width = "100%"
+          ) |> shinyjs::disabled()
         ),
         div(
           id = ns("mitos_best_box"),
@@ -312,27 +318,20 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
                     "database used for annotation; pick a clade closest to your samples.",
                     href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html")
         ),
+        shinyWidgets::prettyCheckbox(
+          ns("use_trnaScan"),
+          label = "Use tRNAscan-SE",
+          value = isTRUE(as.logical(current$use_trnaScan %||% 1L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
         div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            id = ns("trnascan_opts_box"),
-            style = "flex: 2",
-            textInput(
-              ns("trnaScan_opts"),
-              label = tagList("trnAScan-SE options:", tool_help_icon("trnaScan-SE")),
-              value = current$trnaScan_opts %||% character(0),
-              width = "100%"
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "margin-top: 24px;",
-            shinyWidgets::prettyCheckbox(
-              ns("use_trnaScan"),
-              label = "Use tRNAscan-SE",
-              value = isTRUE(as.logical(current$use_trnaScan %||% 1L)),
-              status = "primary"
-            ) |> shinyjs::disabled()
-          )
+          id = ns("trnascan_opts_box"),
+          textInput(
+            ns("trnaScan_opts"),
+            label = tagList("trnAScan-SE options:", tool_help_icon("trnaScan-SE")),
+            value = current$trnaScan_opts %||% character(0),
+            width = "100%"
+          ) |> shinyjs::disabled()
         ),
         shinyWidgets::prettyCheckbox(
           ns("use_mitofinder"),
@@ -340,9 +339,6 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           value = isTRUE(as.logical(current$use_mitofinder %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
-        opts_help("Run MitoFinder as a second annotator and merge its gene models ",
-                  "with the MITOS2 results.",
-                  href = "https://github.com/RemiAllio/MitoFinder"),
         div(
           id = ns("mitofinder_box"),
           textInput(
@@ -415,6 +411,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             value = current$aragorn_opts %||% character(0),
             width = "100%"
           ) |> shinyjs::disabled()
+        )
         ),
         shinyWidgets::prettyCheckbox(
           ns("coverage_trim"),
@@ -606,7 +603,10 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             status = "primary"
           ) |> shinyjs::disabled()
         ),
-        listviewer::reactjsonOutput(ns("params")),
+        div(
+          style = "margin-bottom: 14px; height: 300px; overflow: auto;",
+          listviewer::reactjsonOutput(ns("params"))
+        ),
         opts_help("Per-gene curation rules (expected length, start/stop codons, etc.) ",
                   "for the selected target.",
                   href = "https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.html"),
@@ -757,7 +757,7 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
           status = "primary"
         ) |> shinyjs::disabled(),
-        opts_help("Optional step that scans still-unannotated regions for open ",
+        opts_help("Optional step that scans unannotated regions for open ",
                   "reading frames using NCBI ORFfinder.",
                   href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
         orf_param_opts,
