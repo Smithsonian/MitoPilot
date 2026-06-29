@@ -67,7 +67,6 @@ workflow COVERAGE_userAsmb {
             .flatten()
             .filter{ it =~ /(.*coverageStats.csv)$/ }
             .splitCsv(header: true, sep: ',')
-            .take(2)
             .map { it ->
                 tuple(
                     it.SeqId,

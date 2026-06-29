@@ -22,11 +22,14 @@ coverage_trim <- function(assembly, stats) {
       )
     )
 
-  # Set trailing trim point
-  trailing_good_depth <- min(which(rev(stats$MeanDepth > 10)))
-  if (trailing_good_depth > 100) {
-    trailing_good_depth <- min(which(rev(stats$MeanDepth > 15)))
-    stats$mask[(nrow(stats) - trailing_good_depth + 1):nrow(stats)] <- TRUE
+  # Set trailing trim point. Skip when no position clears the depth threshold
+  # (min(which(...)) would be Inf); the trim heuristic doesn't apply there.
+  good_tail <- which(rev(stats$MeanDepth > 10))
+  if (length(good_tail) > 0L && min(good_tail) > 100) {
+    good_tail15 <- which(rev(stats$MeanDepth > 15))
+    if (length(good_tail15) > 0L) {
+      stats$mask[(nrow(stats) - min(good_tail15) + 1):nrow(stats)] <- TRUE
+    }
   }
   trailing_trim <- nrow(stats)
   if (sum(rev(stats$mask)[1:100]) > 10) {
@@ -41,11 +44,13 @@ coverage_trim <- function(assembly, stats) {
     stats <- stats[1:(trailing_trim - 1), ]
   }
 
-  # Set leading trim point
-  leading_good_depth <- min(which(stats$MeanDepth > 10))
-  if (leading_good_depth > 100) {
-    leading_good_depth <- min(which(stats$MeanDepth > 15))
-    stats$mask[1:leading_good_depth] <- TRUE
+  # Set leading trim point. Same guard as the trailing case.
+  good_lead <- which(stats$MeanDepth > 10)
+  if (length(good_lead) > 0L && min(good_lead) > 100) {
+    good_lead15 <- which(stats$MeanDepth > 15)
+    if (length(good_lead15) > 0L) {
+      stats$mask[1:min(good_lead15)] <- TRUE
+    }
   }
   if (sum(stats$mask[1:100]) > 10) {
     leading_trim <- 1

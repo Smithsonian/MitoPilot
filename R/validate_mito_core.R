@@ -45,6 +45,15 @@ validate_mito_core <- function(
         stop("Invalid coverage.")
       }
     )
+    # Outlier-masked values are written with a leading "#"; strip it so the
+    # numeric comparisons below don't fall back to string comparison.
+    for (col in c("MeanDepth", "ErrorRate")) {
+      if (col %in% names(coverage)) {
+        coverage[[col]] <- suppressWarnings(
+          as.numeric(sub("^#", "", coverage[[col]]))
+        )
+      }
+    }
   } else {
     coverage <- NULL
   }
@@ -229,11 +238,12 @@ validate_mito_core <- function(
         dplyr::filter(SeqId == {{ contig }}) |>
         dplyr::rowwise() |>
         dplyr::filter(Position %in% pos1:pos2)
-      if (sum(gene_coverage$MeanDepth <= 10) / nrow(gene_coverage) > 0.05) {
+      n_cov <- nrow(gene_coverage)
+      if (n_cov > 0L && sum(gene_coverage$MeanDepth <= 10, na.rm = TRUE) / n_cov > 0.05) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low coverage region")
         total_warnings <- total_warnings + 1
       }
-      if (sum(gene_coverage$ErrorRate >= 0.05) / nrow(gene_coverage) > 0.05) {
+      if (n_cov > 0L && sum(gene_coverage$ErrorRate >= 0.05, na.rm = TRUE) / n_cov > 0.05) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "high error region")
         total_warnings <- total_warnings + 1
       }
