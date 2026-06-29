@@ -1,3 +1,12 @@
+# Map internal rRNA gene names to their export convention (rrnS -> rrn12,
+# rrnL -> rrn16). Operates on the prefix so make.unique suffixes are preserved
+# (rrnS.1 -> rrn12.1); non-rRNA names pass through unchanged.
+.export_rrna_name <- function(x) {
+  x <- sub("^rrnS", "rrn12", x)
+  x <- sub("^rrnL", "rrn16", x)
+  x
+}
+
 #' Generate export NCBI files
 #'
 #' @param group (optional) export group names
@@ -791,6 +800,9 @@ export_files <- function(
       }
 
       if (cur$type == "rRNA") {
+        # Export naming: rrnS -> rrn12, rrnL -> rrn16
+        rrna_gene      <- .export_rrna_name(cur$gene)
+        rrna_gene_uniq <- .export_rrna_name(cur$gene_uniq)
         # Manual 5'/3' partial flags: '<' prepends the start coord, '>' the stop
         # coord (pos is already strand-oriented: pos[1] = 5', pos[2] = 3').
         rrna_note <- NULL
@@ -805,7 +817,7 @@ export_files <- function(
         # write to .tbl
         paste(c(pos, "gene"), collapse = "\t") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste0("\t\t\tgene\t", ifelse(cur$gene == "rrnS", "s-rRNA", "l-rRNA")) |>
+        paste0("\t\t\tgene\t", rrna_gene) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste(c(pos, "rRNA"), collapse = "\t") |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
@@ -818,7 +830,7 @@ export_files <- function(
 
         # write to GFF
         # rRNA feature
-        f9 = paste0("ID=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";Name=",cur$gene,";gbkey=rRNA;product=",cur$product)
+        f9 = paste0("ID=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";Name=",rrna_gene,";gbkey=rRNA;product=",cur$product)
         # logic to deal with annotations that wrap around the end of a circular assembly
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
@@ -844,7 +856,7 @@ export_files <- function(
         if(gene_export){
           # EXTRACT GENE FROM ASSEMBLY
           # make directory for gene if it doesn't exist
-          group_geneName_pth <- file.path(group_pth, "genes", cur$gene)
+          group_geneName_pth <- file.path(group_pth, "genes", rrna_gene)
           dir.create(group_geneName_pth, recursive = T, showWarnings = F)
 
           # get gene region from assembly
@@ -852,7 +864,7 @@ export_files <- function(
 
           # update FASTA header with gene name
           head_split <- strsplit(fasta_header_gene, "\\s+")
-          head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene_uniq)
+          head_split[[1]][1] <- paste0(head_split[[1]][1], "_", rrna_gene_uniq)
           head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
           head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
           names(gene) <- stringr::str_glue_data(dat, head)
@@ -863,7 +875,7 @@ export_files <- function(
           }
 
           # write FASTA
-          gene_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".fasta"))
+          gene_fn <- file.path(export_path, paste0(.x, "_", rrna_gene_uniq, ".fasta"))
           Biostrings::writeXStringSet(gene, filepath = gene_fn)
 
           # fix the start and stop position; carry the 5'/3' partial markers
@@ -876,14 +888,14 @@ export_files <- function(
           if (isTRUE(as.integer(cur$partial_stop) == 1L)) gene_p2 <- paste0(">", gene_p2)
 
           # write gene feature table
-          gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".tbl"))
+          gene_tbl_fn <- file.path(export_path, paste0(.x, "_", rrna_gene_uniq, ".tbl"))
           if (file.exists(gene_tbl_fn)) {
             file.remove(gene_tbl_fn)
           }
-          cat(paste0(">Feature ", .x, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
+          cat(paste0(">Feature ", .x, "_", rrna_gene_uniq), file = gene_tbl_fn, sep = "\n")
           paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste0("\t\t\tgene\t", cur$gene_uniq) |>
+          paste0("\t\t\tgene\t", rrna_gene_uniq) |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           paste(c(gene_p1, gene_p2, "rRNA"), collapse = "\t") |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
@@ -896,11 +908,11 @@ export_files <- function(
 
           # concatenate sequences and tables by gene
           if (length(group) == 1) {
-            group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
+            group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".tbl"))
             stringr::str_glue(
               "cat {gene_tbl_fn} >> {group_gene_tbl}"
             ) |> system()
-            group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
+            group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".fasta"))
             stringr::str_glue(
               "cat {gene_fn} >> {group_gene_fasta}"
             ) |> system()
