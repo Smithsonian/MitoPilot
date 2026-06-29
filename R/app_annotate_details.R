@@ -57,7 +57,8 @@ split_wrapped_genes <- function(df, x_lo, x_hi) {
 # `inset` is the fixed pixel gap between the image edge and the plot panel
 # (theme/patchwork margins), so labels track the panel rather than the image.
 gene_label_overlay <- function(df, img_w, x_lo, x_hi, track_top, track_height,
-                               scale_y = 2, scale_x = 1.5, inset = 0) {
+                               scale_y = 2, scale_x = 1.5, inset = 0,
+                               arrow_w = 0.3) {
   if (is.null(df) || nrow(df) == 0) return(NULL)
   df <- df[!is.na(df$gene) & nzchar(df$gene), , drop = FALSE]
   if (nrow(df) == 0) return(NULL)
@@ -67,30 +68,49 @@ gene_label_overlay <- function(df, img_w, x_lo, x_hi, track_top, track_height,
     left  <- inset + (min(r$xmin, r$xmax) - x_lo) * span_px
     width <- abs(r$xmax - r$xmin) * span_px
     fwd <- identical(as.character(r$direction), "+")
-    marker <- if (fwd) ">" else "<"
-    marker_span <- htmltools::tags$span(
-      # Directional arrow, stretched to span the full block height; no bg.
+    # Directional arrow drawn as a CSS border-triangle, not a text glyph: it is
+    # pure geometry, so it occupies the exact block height, stays narrow, and
+    # cannot be clipped the way a stretched glyph's ink is. The point faces the
+    # gene name (+ points right, - points left).
+    mk_w <- max(4L, round(track_height * arrow_w))
+    arrow_border <- if (fwd) {
+      sprintf("border-left:%dpx solid #808080;", mk_w)
+    } else {
+      sprintf("border-right:%dpx solid #808080;", mk_w)
+    }
+    marker_span <- htmltools::div(
       style = sprintf(
-        paste0("font-size:%.0fpx; line-height:1; color:#808080; ",
-               "transform:scale(0.8,1.7); transform-origin:center;"),
-        track_height
-      ),
-      marker
+        paste0("flex:none; width:0; height:0; opacity:0.5; ",
+               "border-top:%.1fpx solid transparent; ",
+               "border-bottom:%.1fpx solid transparent; %s"),
+        track_height / 2, track_height / 2, arrow_border
+      )
     )
+    # scale_x grows the name's visual width past its (unscaled) layout box toward
+    # the arrow; reserve that overflow as margin on the arrow-facing side so the
+    # name and arrow don't overlap (~6 px per char at 10 px font, less the gap).
+    name_overflow <- max(0, (scale_x - 1) * nchar(r$gene) * 6 - 4)
+    name_margin <- if (fwd) {
+      sprintf(" margin-right:%.0fpx;", name_overflow)
+    } else {
+      sprintf(" margin-left:%.0fpx;", name_overflow)
+    }
     name_span <- htmltools::tags$span(
       # Gene name, size unchanged (scale_x/scale_y only).
       style = sprintf(paste0(
         "white-space:nowrap; font-size:10px; line-height:1; color:#000; ",
-        "padding:0 2px; transform:scale(%s,%s); transform-origin:%s center;"),
-        scale_x, scale_y, if (fwd) "left" else "right"
+        "padding:0 2px; transform:scale(%s,%s); transform-origin:%s center;%s"),
+        scale_x, scale_y, if (fwd) "left" else "right", name_margin
       ),
       r$gene
     )
-    # + strand: arrow then name, left-justified, pinned to the viewport's left
-    # edge. - strand: name then arrow, right-justified, pinned to the right edge.
-    inner <- if (fwd) list(marker_span, name_span) else list(name_span, marker_span)
+    # + strand: name then arrow, left-justified, pinned to the viewport's left
+    # edge. - strand: arrow then name, right-justified, pinned to the right edge.
+    inner <- if (fwd) list(name_span, marker_span) else list(marker_span, name_span)
+    # Inset a few px so a pinned label is not flush against the scroll
+    # container's clip edge (which would shave the arrow ink).
     sticky_style <- sprintf(
-      "position:sticky; %s:0; z-index:1; display:flex; align-items:center; height:100%%; gap:4px;",
+      "position:sticky; %s:3px; z-index:1; display:flex; align-items:center; height:100%%; gap:4px;",
       if (fwd) "left" else "right"
     )
     htmltools::div(
@@ -812,7 +832,8 @@ annotations_details_server <- function(id, rv) {
         shiny::imageOutput(ns("coverage_plot"), width = paste0(img_w, "px"), height = "125px"),
         # Block = measured gene-arrow band (px 96-112 in the 125px cowplot image).
         gene_label_overlay(genes_df, img_w = img_w, x_lo = 1, x_hi = x_hi,
-                           track_top = 96, track_height = 16, scale_y = 1.6)
+                           track_top = 96, track_height = 16, scale_y = 1.6,
+                           arrow_w = 0.6)
       )
     })
     # Use renderImage + ragg::agg_png to bypass Cairo's per-dimension image
@@ -1499,10 +1520,10 @@ annotations_details_server <- function(id, rv) {
       tagList(
         gene_label_overlay(ov$sample_df, img_w = ov$plot_w, x_lo = x_lo, x_hi = x_hi,
                            track_top = 26, track_height = 16,
-                           scale_x = 1, scale_y = 1, inset = 6),
+                           scale_x = 1, scale_y = 1, inset = 6, arrow_w = 0.6),
         gene_label_overlay(ov$ref_df, img_w = ov$plot_w, x_lo = x_lo, x_hi = x_hi,
                            track_top = 151, track_height = 16,
-                           scale_x = 1, scale_y = 1, inset = 6)
+                           scale_x = 1, scale_y = 1, inset = 6, arrow_w = 0.6)
       )
     })
 
