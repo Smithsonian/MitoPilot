@@ -11,7 +11,8 @@
 #'   shown/hidden together with the field it describes.
 #' @return a `tags$p` element.
 #' @noRd
-opts_help <- function(..., href = NULL, link_text = "learn more", id = NULL) {
+opts_help <- function(..., href = NULL, link_text = "learn more", id = NULL,
+                      nested = FALSE) {
   inner <- list(...)
   if (!is.null(href)) {
     inner <- c(inner, list(
@@ -20,10 +21,14 @@ opts_help <- function(..., href = NULL, link_text = "learn more", id = NULL) {
       ")"
     ))
   }
+  # The default negative top margin snugs the help under a sibling input. When
+  # the help is appended INSIDE the input's container (nested = TRUE), that
+  # negative margin overlaps the input box, so use a small positive margin.
+  margin_top <- if (nested) "2px" else "-6px"
   shiny::tags$p(
     id = id,
     class = "text-muted",
-    style = "margin-top: -6px; margin-bottom: 14px; font-size: 0.85em;",
+    style = paste0("margin-top: ", margin_top, "; margin-bottom: 14px; font-size: 0.85em;"),
     inner
   )
 }

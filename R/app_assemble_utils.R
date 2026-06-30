@@ -285,7 +285,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             style = "flex: 1",
             selectizeInput(
               ns("assembler"),
-              label = "Assembler:",
+              label = NULL,
               choices = c("GetOrganelle", "MitoFinder"),
               selected = current$assembler %||% character(0),
               width = "100%",
@@ -303,54 +303,62 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
                   tags$a(href = "https://github.com/RemiAllio/MitoFinder",
                          target = "_blank", rel = "noopener", "MitoFinder"),
                   "; the relevant tool options appear below."),
+        # Each tool's help line is appended INSIDE its input's container (not as a
+        # standalone <p>), so it shows/hides together with the field: shinyjs::hide
+        # on the input hides its .shiny-input-container, and the help with it.
         textInput(
           ns("mitofinder"),
           label = tagList("MitoFinder options", tool_help_icon("mitofinder")),
           value = current$mitofinder %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Extra command-line flags passed to MitoFinder.",
-                  href = "https://github.com/RemiAllio/MitoFinder",
-                  id = ns("help_mitofinder")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Extra command-line flags passed to MitoFinder.",
+            href = "https://github.com/RemiAllio/MitoFinder",
+            id = ns("help_mitofinder"), nested = TRUE)),
         textInput(
           ns("mf_db"),
           label = "MitoFinder Database:",
           value = current$mitofinder_db %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Path to the MitoFinder reference database (GenBank .gb format) ",
-                  "used to seed the assembly.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-                  id = ns("help_mf_db")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Path to the MitoFinder reference database (GenBank .gb format) ",
+            "used to seed the assembly.",
+            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+            id = ns("help_mf_db"), nested = TRUE)),
         textInput(
           ns("getOrganelle"),
           label = tagList("getOrganelle options", tool_help_icon("getOrganelle")),
           value = current$getOrganelle %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Extra command-line flags passed to GetOrganelle.",
-                  href = "https://github.com/Kinggerm/GetOrganelle/wiki",
-                  id = ns("help_getOrganelle")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Extra command-line flags passed to GetOrganelle.",
+            href = "https://github.com/Kinggerm/GetOrganelle/wiki",
+            id = ns("help_getOrganelle"), nested = TRUE)),
         textInput(
           ns("seeds_db"),
           label = "getOrganelle Seeds:",
           value = current$seeds_db %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Seed database: reference sequences GetOrganelle uses to start ",
-                  "recruiting mitochondrial reads.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-                  id = ns("help_seeds_db")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Seed database: reference sequences GetOrganelle uses to start ",
+            "recruiting mitochondrial reads.",
+            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+            id = ns("help_seeds_db"), nested = TRUE)),
         textInput(
           ns("labels_db"),
           label = "getOrganelle Labels:",
           value = current$labels_db %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Label database: reference genes GetOrganelle uses to identify ",
-                  "and extend mitochondrial contigs.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-                  id = ns("help_labels_db"))
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Label database: reference genes GetOrganelle uses to identify ",
+            "and extend mitochondrial contigs.",
+            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+            id = ns("help_labels_db"), nested = TRUE))
         ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
@@ -423,18 +431,16 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       )
     )
 
+    # Hide the non-selected assembler's inputs. Each help line lives inside its
+    # input's container, so hiding the input hides its help too - do NOT hide the
+    # help_* ids separately, or showing the input later won't bring the help back.
     if(current$assembler == "GetOrganelle"){
       shinyjs::hide(id = "mitofinder")
-      shinyjs::hide(id = "help_mitofinder")
       shinyjs::hide(id = "mf_db")
-      shinyjs::hide(id = "help_mf_db")
     } else if(current$assembler == "MitoFinder"){
       shinyjs::hide(id = "getOrganelle")
-      shinyjs::hide(id = "help_getOrganelle")
       shinyjs::hide(id = "seeds_db")
-      shinyjs::hide(id = "help_seeds_db")
       shinyjs::hide(id = "labels_db")
-      shinyjs::hide(id = "help_labels_db")
     }
   } else {
     shinyWidgets::show_alert(
