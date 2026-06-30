@@ -1,6 +1,6 @@
 import groovy.json.JsonSlurper
 
-include {blast_ref_fetch} from './blast_ref_fetch.nf'
+include {blast_ref_fetch; blast_ref_stamp} from './blast_ref_fetch.nf'
 
 // SQL fragment: assemble_notes with any segment starting at `tag` stripped
 // (and a preceding '; ' if present). Mirrors the helper in
@@ -86,7 +86,29 @@ workflow BLAST_REF_FETCH {
             .map    { id, accession, species, evalue, opts_id, is_top -> tuple(id, true) }
             .set { all_top_ids }
 
-        blast_ref_fetch(input).set { ref_out }
+        // Cross-sample dedup: fetch each unique accession from NCBI exactly once.
+        // unique() streams (emits an accession the moment its first sample arrives),
+        // so fetches start without waiting for all samples to finish remote BLAST.
+        input
+            .map { id, accession, species, evalue, opts_id, is_top -> accession }
+            .unique()
+            .set { uniq_accessions }
+
+        blast_ref_fetch(uniq_accessions).set { fetched }
+        // fetched: tuple(accession, csv_file, seq_file, gc_file, json_file)
+
+        // Fan back out to every sample sharing an accession via a per-key join. A
+        // sample waits only for ITS accession's single fetch, not for any global
+        // barrier. blast_ref_stamp does the cheap per-sample copy + metadata stamp.
+        input
+            .map { id, accession, species, evalue, opts_id, is_top ->
+                tuple(accession, id, species, evalue, opts_id, is_top) }
+            .combine(fetched, by: 0)
+            .map { accession, id, species, evalue, opts_id, is_top, csv_file, seq_file, gc_file, json_file ->
+                tuple(id, accession, species, evalue, opts_id, is_top, csv_file, seq_file, gc_file, json_file) }
+            .set { stamp_input }
+
+        blast_ref_stamp(stamp_input).set { ref_out }
         // ref_out: tuple(id, accession, is_top, csv_file, seq_file, gc_file, json_file)
 
         // Parse annotations CSV; only write for the per-ID top hit so the
