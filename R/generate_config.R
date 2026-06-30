@@ -57,6 +57,161 @@ fill_config <- function(lines, replacements) {
   lines
 }
 
+#' Pull a single `key = value` setting out of an existing .config
+#'
+#' Matches the first `key = value` line (value may be quoted or bare),
+#' strips a trailing `// comment` and surrounding quotes.
+#'
+#' @return The value as a string, or `NULL` if absent / empty.
+#' @noRd
+config_get_param <- function(lines, key) {
+  pat <- paste0("^\\s*", key, "\\s*=\\s*(.*)$")
+  hit <- grep(pat, lines, value = TRUE)
+  if (length(hit) == 0) return(NULL)
+  val <- sub(pat, "\\1", hit[1])
+  val <- sub("//.*$", "", val)            # strip trailing comment
+  val <- trimws(val)
+  val <- gsub("^['\"]|['\"]$", "", val)   # strip surrounding quotes
+  if (nzchar(val)) val else NULL
+}
+
+#' Reconstruct the container-engine block from an existing .config
+#'
+#' Finds the first enabled `docker`/`singularity`/`apptainer` block and rebuilds
+#' it (preserving cacheDir / runOptions) via [container_engine_block()]. Falls
+#' back to a plain `singularity { enabled = true }` block (the HPC default).
+#'
+#' @param lines Character vector of the old .config.
+#' @return A single string for the `<<CONTAINER_ENGINE>>` placeholder.
+#' @noRd
+extract_container_engine <- function(lines) {
+  for (eng in c("singularity", "apptainer", "docker")) {
+    start <- grep(paste0("^\\s*", eng, "\\s*\\{"), lines)
+    if (length(start) == 0) next
+    start <- start[1]
+    end <- length(lines)
+    for (j in (start + 1):length(lines)) {
+      if (grepl("^\\s*\\}", lines[j])) { end <- j; break }
+    }
+    block <- lines[start:end]
+    if (!any(grepl("enabled\\s*=\\s*true", block))) next
+    cache <- config_get_param(block, "cacheDir")
+    run_options <- config_get_param(block, "runOptions")
+    return(container_engine_block(eng, cache, run_options))
+  }
+  container_engine_block("singularity")
+}
+
+#' Regenerate a project's .config from the current built-in template
+#'
+#' Backwards-compatibility helper. Rather than patch an old `.config` line by
+#' line, this detects the executor from the existing config, regenerates a fresh
+#' config from the matching built-in template (so every current section is
+#' present), then ports the project-specific values across (raw/asmb dirs, min
+#' depth, genetic code, NCBI key, queue, clusterOptions, container engine). The
+#' container is bumped to the current package version. The old config is backed
+#' up to a timestamped `.config.bak.<ts>` before the new one is written.
+#'
+#' If the executor cannot be detected, or regeneration would leave unfilled
+#' placeholders, the old config is left untouched and a warning is issued.
+#'
+#' @param path Project directory containing `.config`.
+#' @param con Optional open DB connection, used to default `genetic_code` from
+#'   the samples table when the old config does not set it.
+#'
+#' @return (invisibly) `TRUE` if the config was regenerated, `FALSE` otherwise.
+#' @noRd
+migrate_config <- function(path, con = NULL) {
+  conf_path <- file.path(path, ".config")
+  old <- readLines(conf_path)
+
+  # Detect executor: a quoted literal (ignores `executor = process.executor`).
+  hits <- regmatches(
+    old, regexpr("executor\\s*=\\s*['\"][A-Za-z0-9_]+['\"]", old)
+  )
+  exec <- if (length(hits) > 0) {
+    sub(".*['\"]([A-Za-z0-9_]+)['\"].*", "\\1", hits[1])
+  } else {
+    NA_character_
+  }
+  builtin <- c("local", "slurm", "sge", "pbs", "lsf", "awsbatch")
+  if (is.na(exec) || !(exec %in% builtin)) {
+    warning(
+      "Could not detect a known executor in .config; leaving .config unchanged. ",
+      "Regenerate it manually with new_project(..., force = TRUE) if needed.",
+      call. = FALSE
+    )
+    return(invisible(FALSE))
+  }
+
+  template <- app_sys(paste0("config.", exec))
+  if (!nzchar(template) || !file.exists(template)) {
+    warning("No built-in template for executor '", exec,
+            "'; leaving .config unchanged.", call. = FALSE)
+    return(invisible(FALSE))
+  }
+  lines <- readLines(template)
+
+  # Port project-specific values from the old config ----
+  raw_dir   <- config_get_param(old, "rawDir")
+  asmb_dir  <- config_get_param(old, "asmbDir") %||% "NA"
+  min_depth <- config_get_param(old, "minDepth")
+  gcode     <- config_get_param(old, "genetic_code")
+  api_key   <- config_get_param(old, "ncbi_api_key")
+  queue     <- config_get_param(old, "queue")
+  cluster_options <- config_get_param(old, "clusterOptions")
+
+  # Default genetic_code from the (already-migrated) samples table if absent.
+  if (is.null(gcode) && !is.null(con)) {
+    gcode <- tryCatch({
+      v <- DBI::dbGetQuery(
+        con,
+        "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL LIMIT 1"
+      )$genetic_code
+      if (length(v) == 1) as.character(as.integer(v)) else NULL
+    }, error = function(e) NULL)
+  }
+
+  engine_repl <- NULL
+  if (any(grepl("<<CONTAINER_ENGINE>>", lines, fixed = TRUE))) {
+    engine_repl <- extract_container_engine(old)
+  }
+
+  new_container <- paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
+
+  # Drop the queue directive if the old config had no queue (mirror generate_config).
+  if (is.null(queue)) {
+    lines <- lines[!grepl("<<QUEUE>>", lines, fixed = TRUE)]
+  }
+
+  lines <- fill_config(lines, list(
+    CONTAINER_ID     = new_container,
+    RAW_DIR          = raw_dir %||% "NA",
+    ASMB_DIR         = asmb_dir,
+    MIN_DEPTH        = min_depth %||% "2000000",
+    GENETIC_CODE     = gcode %||% "2",
+    NCBI_API_KEY     = api_key %||% "",
+    QUEUE            = queue,
+    CLUSTER_OPTIONS  = cluster_options %||% "",
+    CONTAINER_ENGINE = engine_repl
+  ))
+
+  # Fail safe: never write a config that still has unfilled placeholders.
+  if (any(grepl("<<[A-Z_]+>>", lines))) {
+    warning("Config regeneration left unfilled placeholders; leaving .config unchanged.",
+            call. = FALSE)
+    return(invisible(FALSE))
+  }
+
+  ts <- format(Sys.time(), "%Y%m%d-%H%M%S")
+  backup <- file.path(path, paste0(".config.bak.", ts))
+  file.copy(conf_path, backup, overwrite = FALSE)
+  writeLines(lines, conf_path)
+  message("regenerated .config from built-in '", exec,
+          "' template (old config backed up to ", basename(backup), ")")
+  invisible(TRUE)
+}
+
 #' Resolve an executor name to a config template path
 #'
 #' Resolution order: a saved user profile (`<profile_dir>/config.<executor>`)

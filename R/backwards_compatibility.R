@@ -1,18 +1,19 @@
 #' Update old project database for backwards compatibility
 #'
-#' Update old project database for backwards compatibility.
-#' Adds "reviewed", "ID_verified", "genetic_code", and "problematic" columns to the annotate table,
-#' "start_gene" column to the annotate_opts table. Adds
-#' "assembler", "mitofinder_db", and "mitofinder" columns to the assemble_opts table.
-#' Adds "max_blast_hits" to the curate_opts table.
-#' Adds "asmbDir = 'NA'" to the .config params block
-#' and updates the container to the current MitoPilot version
-#' in the .config file.
-#' Updates the "ref_dir" and "ref_db" fields in the annotate_opts table
-#' adds these fields to the curate_opts table,
-#' and updates the curation rules in the curate_opts table.
+#' Migrates an old project's SQLite database to the current schema (adding any
+#' missing columns and tables, e.g. "reviewed"/"ID_verified"/"problematic" on
+#' annotate, "start_gene" on annotate_opts, "assembler"/"mitofinder_db"/
+#' "mitofinder" on assemble_opts, "max_blast_hits"/"ref_dir"/"ref_db" on
+#' curate_opts) and refreshes the curation rules.
 #'
-#
+#' The Nextflow `.config` is regenerated wholesale from the current built-in
+#' template for the project's executor (rather than patched line by line): the
+#' project-specific values (raw/asmb dirs, min depth, genetic code, NCBI key,
+#' queue, clusterOptions, container engine) are carried over, the container is
+#' bumped to the current MitoPilot version, and the previous `.config` is saved
+#' to a timestamped `.config.bak.<timestamp>` backup. If the executor cannot be
+#' detected the `.config` is left untouched and a warning is issued.
+#'
 #' @param path Path to the project directory (default = current working directory)
 #'
 #' @export
@@ -32,31 +33,32 @@ backwards_compatibility <- function(
 
   assemble_table <- DBI::dbReadTable(con, "assemble")
 
-  # check if .config file contains "asmbDir" parameter
+  # read .config; the .config is regenerated wholesale from the current built-in
+  # template (see migrate_config()) rather than patched line by line. Container
+  # version currency is the proxy for "config is already up to date".
   conf <- tryCatch({
     readLines(file.path(path, ".config"))
   }, error = function(e) {
     stop("Error reading .config file: ", e$message)
   })
-  asmbDir <- any(grep("asmbDir = ", conf))
-
-  # check if .config file contains "failOnIgnore = true"
-  conf <- tryCatch({
-    readLines(file.path(path, ".config"))
-  }, error = function(e) {
-    stop("Error reading .config file: ", e$message)
-  })
-  failOnIgnore <- any(grep("failOnIgnore = true", conf))
-  blast_gb_conf <- any(grepl("blast_gb", conf))
-  orffinder_conf <- any(grepl("orffinder_condaenv", conf))
-  orf_block_conf <- any(grepl("^\\s*orf \\{", conf))
-
-  # check if .config file contains latest container version
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
-  containerVer <- any(grep(new_container, conf))
+  containerVer <- any(grep(new_container, conf, fixed = TRUE))
 
-  # check if annotate_opts or curate_params contains the ref_dir path
-  old_ref_str = ("/ref_dbs/Mitos2" %in% annotate_opts_table || any(grep("/ref_dbs/Mitos2", curate_opts_table$params)))
+  # genetic_code must be numeric: assemble.nf calls genetic_code.intValue(),
+  # which throws on a TEXT value. Older migrations stored it as TEXT.
+  genetic_code_numeric <- isTRUE(tryCatch(
+    !("text" %in% DBI::dbGetQuery(
+      con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples"
+    )$t),
+    error = function(e) TRUE
+  ))
+
+  # detect the old in-container Mitos2 ref path in the curate_opts params JSON.
+  # (Only the params JSON is a safe trigger: migration strips this exact path
+  # from params, and the replacement github-raw URL still contains the substring
+  # "/ref_dbs/Mitos2" so matching annotate_opts$ref_dir would re-fire the block
+  # on already-migrated projects.)
+  old_ref_str <- any(grepl("/ref_dbs/Mitos2", curate_opts_table$params))
 
   # the pre-{completeness} default export header, for detecting unmodified templates
   old_export_default <- sub("{completeness}", "complete genome",
@@ -68,10 +70,8 @@ backwards_compatibility <- function(
     error = function(e) TRUE
   )
 
-  if (asmbDir &&
-      failOnIgnore &&
-      blast_gb_conf &&
-      containerVer &&
+  if (containerVer &&
+      genetic_code_numeric &&
       !old_ref_str &&
       "arwen_opts" %in% names(annotate_opts_table) &&
       "use_arwen" %in% names(annotate_opts_table) &&
@@ -112,8 +112,6 @@ backwards_compatibility <- function(
       )) &&
       "orf_opts" %in% names(annotate_table) &&
       "orf_opts" %in% DBI::dbListTables(con) &&
-      orffinder_conf &&
-      orf_block_conf &&
       "assembly_blast" %in% DBI::dbListTables(con) &&
       "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
       isTRUE(tryCatch(
@@ -137,8 +135,10 @@ backwards_compatibility <- function(
     # update annotate ref_dir path
     annotate_opts_table$ref_dir <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
                                        nrow(annotate_opts_table))
-    # update annotate ref_db name
-    if("Metazoa" %in% annotate_opts_table){
+    # update annotate ref_db name (exact match on the ref_db column; the prior
+    # `%in% annotate_opts_table` compared against deparsed columns and never hit)
+    if("ref_db" %in% names(annotate_opts_table) &&
+       "Metazoa" %in% annotate_opts_table$ref_db){
       annotate_opts_table[which(annotate_opts_table$ref_db == "Metazoa"),]$ref_db <- "Metazoa_RefSeq89"
     }
     # update the annotate_opts table
@@ -187,101 +187,18 @@ backwards_compatibility <- function(
       )
   }
 
-  # update the Docker/Singularity container version to match the current package version
-  if(!(containerVer)){
-    conf <- readLines(file.path(path, ".config"))
-    # update the container version in the .config
-    container_index <- grep("container = .*mitopilot.*", conf)
-    if (length(container_index) == 1) {
-      conf[container_index] <- paste0("  container = \'", new_container, "\'")
-    } else {
-      stop("Container not found or multiple containers specificed in Nextflow .config")
-    }
-    message("updated container version in nextflow .config file")
-    writeLines(conf, file.path(path, ".config"))
-  }
-
-  # if .config does not contain "asmbDir" param, add it
-  if(!(asmbDir)){
-    conf <- readLines(file.path(path, ".config"))
-    message("added \"asmbDir = 'NA'\" to nextflow .config file")
-    rawDir_line <- grep("rawDir", conf) # find line containing "rawDir"
-    conf <- append(conf, "    asmbDir = 'NA'", after = rawDir_line) # add new line to conf after "rawDir" line
-    writeLines(conf, file.path(path, ".config"))
-  }
-
-  # if .config does not contain "failOnIgnore = true" param, add it
-  if(!(failOnIgnore)){
-    conf <- readLines(file.path(path, ".config"))
-    message("added \"failOnIgnore = true\" to nextflow .config file")
-    lines <- c("// pipeline will exit with a non-zero exit code if any failed tasks are ignored using the ignore error strategy",
-               "workflow {",
-               "  failOnIgnore = true",
-               "}")
-    conf <- append(conf, lines)
-    writeLines(conf, file.path(path, ".config"))
-  }
-
-  # if .config does not contain "orffinder_condaenv" param, add it. Anchor after
-  # the last *_condaenv line if present, otherwise just inside the params block.
-  if(!(orffinder_conf)){
-    conf <- readLines(file.path(path, ".config"))
-    anchor <- grep("_condaenv", conf)
-    anchor <- if (length(anchor) > 0) max(anchor) else grep("^\\s*params \\{", conf)[1]
-    if (length(anchor) == 1 && !is.na(anchor)) {
-      conf <- append(conf, "    orffinder_condaenv = 'orffinder'", after = anchor)
-      message("added \"orffinder_condaenv = 'orffinder'\" to nextflow .config file")
-      writeLines(conf, file.path(path, ".config"))
-    }
-  }
-
-  # if .config does not contain an "orf { }" process block, add one. Mirror the
-  # curate block when present (to inherit clusterOptions); otherwise insert a
-  # minimal block inside the params section.
-  if(!(orf_block_conf)){
-    conf <- readLines(file.path(path, ".config"))
-    cur_start <- grep("^\\s*curate \\{", conf)
-    if (length(cur_start) >= 1) {
-      cur_start <- cur_start[1]
-      cur_end <- cur_start
-      for (j in (cur_start + 1):length(conf)) {
-        if (grepl("^\\s*\\}", conf[j])) {
-          cur_end <- j
-          break
-        }
-      }
-      block <- conf[cur_start:cur_end]
-      block[1] <- sub("curate", "orf", block[1])
-      conf <- append(conf, block, after = cur_end)
-      message("added \"orf { }\" process block to nextflow .config file")
-      writeLines(conf, file.path(path, ".config"))
-    } else {
-      params_line <- grep("^\\s*params \\{", conf)[1]
-      if (!is.na(params_line)) {
-        block <- c(
-          "    orf {",
-          "        container = process.container",
-          "        executor = process.executor",
-          "    }"
-        )
-        conf <- append(conf, block, after = params_line)
-        message("added \"orf { }\" process block to nextflow .config file")
-        writeLines(conf, file.path(path, ".config"))
-      }
-    }
-  }
+  # NOTE: the .config is regenerated from the current built-in template at the
+  # end of this function (see migrate_config()), which adds asmbDir, failOnIgnore,
+  # the orffinder_condaenv param, the orf { } process block, blast_gb, and bumps
+  # the container version in one pass.
 
   # if genetic_code column doesn't exist, add it
   if(!("genetic_code" %in% names(samples_table))){
     message("added 'genetic_code' column to samples table")
-    samples_table$genetic_code <- rep("2", nrow(samples_table)) # add genetic_code column
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE samples
-       ADD COLUMN genetic_code TEXT",
-      col = col,
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
+    # store as INTEGER so assemble.nf's genetic_code.intValue() works (fresh
+    # projects store a number here; a TEXT value crashes assembly).
+    samples_table$genetic_code <- rep(2L, nrow(samples_table)) # add genetic_code column
+    DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN genetic_code INTEGER")
 
     dplyr::tbl(con, "samples") |> # update SQL database
       dplyr::rows_upsert(
@@ -290,6 +207,20 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "ID"
       )
+  }
+
+  # normalize any legacy TEXT genetic_code to INTEGER (idempotent). Projects
+  # migrated by older versions declared the column as TEXT, whose TEXT affinity
+  # stores values as strings and crashes the assemble step (assemble.nf calls
+  # genetic_code.intValue()). A plain UPDATE/CAST is not enough: the TEXT
+  # affinity coerces the result straight back to text, so the column itself must
+  # be rebuilt with INTEGER affinity.
+  if (!genetic_code_numeric) {
+    message("rebuilt TEXT 'genetic_code' column in samples table as integer")
+    DBI::dbExecute(con, "ALTER TABLE samples RENAME COLUMN genetic_code TO genetic_code_old")
+    DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN genetic_code INTEGER")
+    DBI::dbExecute(con, "UPDATE samples SET genetic_code = CAST(genetic_code_old AS INTEGER)")
+    DBI::dbExecute(con, "ALTER TABLE samples DROP COLUMN genetic_code_old")
   }
 
   # if poor_blast_ref column doesn't exist on assemble, add it (TEXT: good/poor/failed/NULL)
@@ -358,7 +289,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate
        ADD COLUMN reviewed TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -378,7 +308,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate
        ADD COLUMN ID_verified TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -398,7 +327,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate
        ADD COLUMN problematic TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -417,7 +345,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate
        ADD COLUMN partial TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -452,7 +379,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN use_arwen INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -472,7 +398,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN arwen_opts TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -492,7 +417,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN use_mitos_best INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -512,7 +436,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN use_mitos INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -532,7 +455,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN use_trnaScan INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -552,7 +474,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN use_aragorn INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -572,7 +493,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN aragorn_opts TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -592,7 +512,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN use_mitofinder INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -612,7 +531,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN mitofinder_db TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -632,7 +550,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN mitofinder_new_genes INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -652,7 +569,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN mitofinder_allow_introns INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -672,7 +588,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN mitofinder_opts TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -692,7 +607,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN coverage_trim INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
     dplyr::tbl(con, "annotate_opts") |>
@@ -711,7 +625,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN feature_trim INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
     dplyr::tbl(con, "annotate_opts") |>
@@ -730,7 +643,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN retain_low_conf_trna INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
     dplyr::tbl(con, "annotate_opts") |>
@@ -825,7 +737,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN start_gene TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -846,7 +757,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE curate_opts
        ADD COLUMN max_blast_hits INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -867,7 +777,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE curate_opts
        ADD COLUMN ref_dir TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -888,7 +797,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE curate_opts
        ADD COLUMN ref_db TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -909,7 +817,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE assemble_opts
        ADD COLUMN assembler TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -931,7 +838,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE assemble_opts
        ADD COLUMN mitofinder_db TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -953,7 +859,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE assemble_opts
        ADD COLUMN mitofinder TEXT",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -973,7 +878,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE assemble_opts
        ADD COLUMN max_paths INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -993,7 +897,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE assemble_opts
        ADD COLUMN max_scaffolds INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -1013,7 +916,6 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE assemble_opts
        ADD COLUMN min_assembly_length INTEGER",
-      col = col,
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 
@@ -1231,22 +1133,11 @@ backwards_compatibility <- function(
     )
   }
 
-  # if .config does not contain "blast_gb" params section, add it
-  if (!blast_gb_conf) {
-    conf <- readLines(file.path(path, ".config"))
-    message("added 'blast_gb' section to nextflow .config file")
-    blast_gb_lines <- c(
-      "    blast_gb {",
-      "        cpus = 1",
-      "        maxForks = 10 // only allow 10 concurrent BLAST/ref-fetch runs to avoid NCBI timeout issues",
-      "        container = process.container",
-      "        executor = process.executor",
-      "    }"
-    )
-    # Insert after the last nested closing brace (end of the validate block)
-    last_nested_close <- max(grep("^    }$", conf))
-    conf <- append(conf, blast_gb_lines, after = last_nested_close)
-    writeLines(conf, file.path(path, ".config"))
+  # Regenerate the .config from the current built-in template (detect executor,
+  # port project values, bump container, back up the old config). Gated on the
+  # container being stale so an already-current config is left alone.
+  if (!containerVer) {
+    migrate_config(path, con)
   }
 
 }
