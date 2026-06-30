@@ -177,6 +177,38 @@ annotations_details_server <- function(id, rv) {
       )
     })
 
+    # Active synteny-plot reference accession (user pick, else top hit).
+    active_ref_acc <- reactiveVal(NULL)
+
+    # Load reference annotations / sequence / alignment for one accession into rv.
+    # Used on modal open and whenever the user switches the reference in the picker.
+    load_blast_ref <- function(acc) {
+      if (is.null(acc) || is.na(acc) || !nzchar(acc) || acc == "NO HIT") {
+        rv$blast_ref     <- NULL
+        rv$blast_ref_seq <- NULL
+        rv$blast_ref_aln <- NULL
+        return(invisible())
+      }
+      rv$blast_ref <- tryCatch(
+        dplyr::tbl(session$userData$con, "blast_ref_annotations") |>
+          dplyr::filter(accession == !!acc) |>
+          dplyr::collect(),
+        error = function(e) NULL
+      )
+      rv$blast_ref_seq <- tryCatch(
+        dplyr::tbl(session$userData$con, "blast_ref_sequences") |>
+          dplyr::filter(accession == !!acc) |>
+          dplyr::collect(),
+        error = function(e) NULL
+      )
+      rv$blast_ref_aln <- tryCatch(
+        dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
+          dplyr::filter(ID == !!rv$updating$ID, accession == !!acc) |>
+          dplyr::collect(),
+        error = function(e) NULL
+      )
+    }
+
     # Prepare modal data ----
     init("annotations_modal")
     on("annotations_modal", {
@@ -217,33 +249,24 @@ annotations_details_server <- function(id, rv) {
         list.files(pattern = "coverageStats", full.names = T) |>
         read.csv()
 
-      ## Load BLAST reference annotations ----
-      rv$blast_ref <- dplyr::tbl(session$userData$con, "blast_ref_annotations") |>
-        dplyr::filter(ID == !!rv$updating$ID) |>
-        dplyr::collect()
-
-      ## Load BLAST reference alignment ----
-      rv$blast_ref_aln <- tryCatch(
-        dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
+      ## Load BLAST candidate references (rank-ordered; rank 1 = top hit) ----
+      rv$blast_ref_candidates <- tryCatch(
+        dplyr::tbl(session$userData$con, "blast_ref_candidates") |>
           dplyr::filter(ID == !!rv$updating$ID) |>
+          dplyr::arrange(rank) |>
           dplyr::collect(),
         error = function(e) NULL
       )
 
-      ## Load BLAST reference nucleotide sequence (for rRNA nt alignment) ----
-      # Linked to the sample via assemble.blast_accession; one row per accession.
-      rv$blast_ref_seq <- tryCatch({
-        acc <- dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::filter(ID == !!rv$updating$ID) |>
-          dplyr::pull(blast_accession)
-        if (length(acc) == 0 || is.na(acc[1]) || !nzchar(acc[1])) {
-          NULL
-        } else {
-          dplyr::tbl(session$userData$con, "blast_ref_sequences") |>
-            dplyr::filter(accession == !!acc[1]) |>
-            dplyr::collect()
-        }
-      }, error = function(e) NULL)
+      ## Active synteny reference: user pick (synteny_accession), else top hit ----
+      sel <- rv$updating[["synteny_accession"]]
+      acc0 <- if (!is.null(sel) && !is.na(sel) && nzchar(sel)) {
+        sel
+      } else {
+        rv$updating[["blast_accession"]]
+      }
+      active_ref_acc(acc0)
+      load_blast_ref(acc0)
 
       annotate_details_modal(rv) |> showModal()
       render_annotations_table(Sys.time())
@@ -898,19 +921,26 @@ annotations_details_server <- function(id, rv) {
     # consumed by the sticky-label overlay (output$synteny_labels).
     synteny_overlay <- reactiveVal(NULL)
     output$synteny_ui <- renderUI({
-      req(rv$blast_ref)
       ctx <- req(fig_ctx())
-      req(nrow(rv$blast_ref) > 0)
-      # Don't render synteny when no current BLAST ref exists on this sample
-      # (e.g. BLAST disabled in opts). Stale rows may linger in
-      # blast_ref_annotations from a prior run with BLAST enabled.
-      req(!is.na(ctx$blast_accession),
-          nzchar(ctx$blast_accession))
+      # Need at least one candidate BLAST reference for this sample. The picker is
+      # rendered even when the active reference has no annotations, so the user can
+      # switch away from an unannotated top hit.
+      cand <- rv$blast_ref_candidates
+      req(!is.null(cand), nrow(cand) > 0)
+      active_acc <- active_ref_acc() %||% ctx$blast_accession
+      req(!is.null(active_acc), !is.na(active_acc), nzchar(active_acc))
+
+      has_ref    <- !is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0
       w          <- max(ctx$length %||% 800L, 800L)
       sample_lbl <- ctx$ID
-      ref_lbl    <- ctx$blast_species %||% ctx$blast_accession
-      ref_acc    <- ctx$blast_accession
-      has_aln    <- !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
+      cand_row   <- cand[cand$accession == active_acc, ]
+      ref_lbl    <- if (nrow(cand_row) > 0 && !is.na(cand_row$species[1]) && nzchar(cand_row$species[1])) {
+        cand_row$species[1]
+      } else {
+        ctx$blast_species %||% active_acc
+      }
+      ref_acc    <- active_acc
+      has_aln    <- has_ref && !is.null(rv$blast_ref_aln) && nrow(rv$blast_ref_aln) > 0 &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
       plot_h     <- if (has_aln) "280px" else "200px"
@@ -936,6 +966,38 @@ annotations_details_server <- function(id, rv) {
         )
       }
       is_poor <- isTRUE(ctx$poor_blast_ref == "poor")
+      # Reference picker (rank-ordered; default = active accession). Switching only
+      # changes which reference the synteny plot displays, not the curation result.
+      ref_choices <- stats::setNames(
+        cand$accession,
+        sprintf(
+          "%s%s (%s) | pid %s%% cov %s%%",
+          ifelse(is.na(cand$rank), "", paste0(cand$rank, ". ")),
+          ifelse(is.na(cand$species) | !nzchar(cand$species), cand$accession, cand$species),
+          cand$accession,
+          ifelse(is.na(cand$pident), "?", format(cand$pident, trim = TRUE)),
+          ifelse(is.na(cand$qcovs), "?", format(cand$qcovs, trim = TRUE))
+        )
+      )
+      picker <- if (length(ref_choices) > 0) {
+        div(
+          style = "margin-bottom: 6px; max-width: 560px;",
+          shiny::selectInput(
+            ns("synteny_ref_select"),
+            label = "Reference genome",
+            choices = ref_choices,
+            selected = active_acc,
+            width = "100%"
+          )
+        )
+      }
+      no_ref_msg <- if (!has_ref) {
+        div(
+          class = "alert alert-info",
+          style = "padding: 6px 10px; font-size: 0.85em; margin-bottom: 6px;",
+          "Selected reference has no usable annotations. Choose another reference above."
+        )
+      }
       tagList(
         div(
           style = "display: flex; justify-content: start; margin-bottom: 6px;",
@@ -951,7 +1013,9 @@ annotations_details_server <- function(id, rv) {
             inline = TRUE
           )
         ),
-        if (isTRUE(ctx$topology == "linear")) {
+        picker,
+        no_ref_msg,
+        if (has_ref && isTRUE(ctx$topology == "linear")) {
           div(
             class = "alert alert-warning",
             style = "padding: 6px 10px; font-size: 0.85em; margin-bottom: 6px;",
@@ -967,7 +1031,7 @@ annotations_details_server <- function(id, rv) {
                 "click to zoom")
           )
         },
-        div(
+        if (has_ref) div(
           style = "display: flex; align-items: flex-start;",
           div(
             style = paste0(
@@ -1253,7 +1317,7 @@ annotations_details_server <- function(id, rv) {
       plot_w <- as.integer(win * px_per_col)
       ctx <- req(fig_ctx())
       sample_lbl <- ctx$ID
-      ref_acc    <- ctx$blast_accession
+      ref_acc    <- active_ref_acc() %||% ctx$blast_accession
       header_txt <- if (!is.null(click_col)) {
         s_chars   <- strsplit(rv$blast_ref_aln$aligned_sample[1], "")[[1]]
         anchor_bp <- as.integer(cumsum(s_chars != "-")[click_col])
@@ -2375,6 +2439,29 @@ annotations_details_server <- function(id, rv) {
           ),
           by = "ID"
         )
+    })
+
+    # Reference picker: switch which candidate reference the synteny plot shows.
+    # Persists the choice (assemble.synteny_accession) and reloads the reference
+    # annotations / sequence / alignment for that accession. Does not re-curate.
+    observeEvent(input$synteny_ref_select, ignoreInit = TRUE, {
+      acc <- input$synteny_ref_select
+      req(acc, nzchar(acc))
+      if (identical(acc, active_ref_acc())) return()
+      active_ref_acc(acc)
+      rv$updating$synteny_accession <- acc
+      load_blast_ref(acc)
+      tryCatch(
+        dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::rows_update(
+            data.frame(ID = rv$updating$ID, synteny_accession = acc),
+            by = "ID",
+            unmatched = "ignore",
+            copy = TRUE,
+            in_place = TRUE
+          ),
+        error = function(e) NULL
+      )
     })
 
     # Join-group editing helpers ----

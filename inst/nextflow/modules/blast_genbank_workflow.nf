@@ -280,38 +280,13 @@ workflow BLAST_GENBANK {
             }
             .sqlInsert(statement: params.sqlWriteBlastHitScaffold, db: 'sqlite')
 
-        // Per-path rows: insert into assembly_blast + carry forward for id-level rollup
+        // Per-path rows: insert into assembly_blast (one row per path)
         blast_records
             .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'path' }
-            .multiMap { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue ->
-                db_path: tuple(id, path_idx, opts_id, accession, species, pident, qcovs, evalue, params.ts)
-                group:   tuple(id, [path_idx, opts_id, accession, species, pident, qcovs, evalue])
+            .map { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, path_idx, opts_id, accession, species, pident, qcovs, evalue, params.ts)
             }
-            .set { blast_path }
-
-        // Per-path insert into assembly_blast
-        blast_path.db_path
             .sqlInsert(statement: params.sqlWriteAssemblyBlast, db: 'sqlite')
-
-        // Group per-id to compute "representative" hit for the assemble table (best by
-        // pident*qcovs across paths) and write a single row per id.
-        blast_path.group
-            .groupTuple()
-            .map { id, rows ->
-                def best = rows
-                    .findAll { it[2] != 'NO HIT' && it[2] != null }
-                    .max { (it[4] ?: 0) * (it[5] ?: 0) }
-                if (best == null) best = rows[0]
-                tuple(id, best[0], best[1], best[2], best[3], best[4], best[5], best[6])
-            }
-            .map { id, path_idx, opts_id, accession, species, pident, qcovs, evalue ->
-                tuple(accession, species, pident, qcovs, evalue, id)
-            }
-            .set { blast_rep_assemble }
-
-        // Representative hit into assemble table (one row per id)
-        blast_rep_assemble
-            .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')
 
         // Per-scaffold (id, path, scaffold) -> accession map for real hits. Lets
         // BLAST_REF_FETCH write each scaffold its own ref lineage keyed on the same
@@ -349,6 +324,18 @@ workflow BLAST_GENBANK {
                 tuple(id, opts_id, ranked)
             }
             .set { candidates_ch }  // (id, opts_id, [ [opts_id, acc, species, pident, qcovs, evalue], ... ])
+
+        // Representative hit for the assemble table = the rank-1 candidate. Derived
+        // from the same ranking as the candidate list and is_top below, so
+        // assemble.blast_accession, the fetched top hit, and the picker default all
+        // agree on one accession.
+        candidates_ch
+            .map { id, opts_id, ranked ->
+                def r = ranked ? ranked[0] : null
+                r ? tuple(r[1], r[2], r[3], r[4], r[5], id) : null
+            }
+            .filter { it != null }
+            .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')
 
         // Clear stale candidate rows before re-inserting (time-stamp gated, mirrors
         // the assembly_blast delete pattern).
