@@ -1065,7 +1065,7 @@ annotate_server <- function(id) {
         updateSelectizeInput(
           inputId = "curate_ref_db",
           selected = cur$ref_db,
-          choices = c("Metazoa_RefSeq89", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Chordata", "Chordata_custom"),
+          choices = c("Metazoa_RefSeq235", "Metazoa_RefSeq235_custom", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Metazoa_RefSeq89", "Chordata", "Chordata_custom"),
           options = list(
             create = TRUE,
             maxItems = 1
