@@ -230,6 +230,7 @@ new_db_userAsmb <- function(
       blast_qcovs REAL,
       blast_evalue REAL,
       blast_lineage TEXT,
+      synteny_accession TEXT,
       poor_blast_ref TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
@@ -602,7 +603,7 @@ new_db_userAsmb <- function(
   DBI::dbExecute(
     con,
     "CREATE TABLE blast_ref_annotations (
-      ID TEXT NOT NULL,
+      accession TEXT NOT NULL,
       gene TEXT NOT NULL,
       type TEXT,
       pos1 INTEGER,
@@ -610,7 +611,22 @@ new_db_userAsmb <- function(
       direction TEXT,
       ref_length INTEGER,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, gene, pos1)
+      PRIMARY KEY (accession, gene, pos1)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_candidates (
+      ID TEXT NOT NULL,
+      rank INTEGER,
+      accession TEXT NOT NULL,
+      species TEXT,
+      pident REAL,
+      qcovs REAL,
+      evalue REAL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, accession)
     );"
   )
 
@@ -630,12 +646,13 @@ new_db_userAsmb <- function(
     con,
     "CREATE TABLE blast_ref_alignment (
       ID TEXT NOT NULL,
+      accession TEXT NOT NULL,
       aligned_sample TEXT NOT NULL,
       aligned_ref TEXT NOT NULL,
       rotation INTEGER NOT NULL DEFAULT 0,
       ref_length INTEGER NOT NULL,
       time_stamp INTEGER,
-      PRIMARY KEY (ID)
+      PRIMARY KEY (ID, accession)
     );"
   )
 
