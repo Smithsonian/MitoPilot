@@ -521,6 +521,15 @@ annotations_details_server <- function(id, rv) {
         if (identical(sel, rv$editing$idx)) {
           return(sel)
         }
+        # In a join edit session, switching to a sibling segment of the same group
+        # just changes the active segment (its edits are already in rv$annotations);
+        # do not warn about unsaved edits or snap the selection back.
+        if (!is.null(rv$editing) && !is.null(rv$editing$join_grp) &&
+            sel %in% join_members(rv$editing$join_grp)) {
+          rv$editing$idx <- sel
+          trigger("align_now")
+          return(sel)
+        }
         if (!is.null(rv$editing) && editing_unsaved(rv$editing$idx)) {
           shinyWidgets::sendSweetAlert(
             title = "Unsaved Edits!",
@@ -583,9 +592,23 @@ annotations_details_server <- function(id, rv) {
     # user close/lock and silently drop those edits.
     editing_unsaved <- function(idx = selected()) {
       if (is.null(rv$editing) || is.null(rv$editing$backup)) return(FALSE)
+      bak <- rv$editing$backup
+      flds <- c("translation", "pos1", "pos2", "start_codon", "stop_codon",
+                "partial_start", "partial_stop")
+      # Join session: backup holds every segment. Compare the whole group as an
+      # order-independent signature (positions may re-sort during editing).
+      if (!is.null(rv$editing$join_grp)) {
+        cur <- rv$annotations[join_members(rv$editing$join_grp), , drop = FALSE]
+        sig <- function(df) {
+          cols <- lapply(flds, function(f) {
+            if (f %in% names(df)) as.character(df[[f]]) else rep(NA, nrow(df))
+          })
+          paste(sort(do.call(paste, c(cols, sep = ""))), collapse = "")
+        }
+        return(!identical(sig(cur), sig(bak)))
+      }
       sel <- idx
       if (length(sel) != 1) return(FALSE)
-      bak <- rv$editing$backup
       changed <- function(f) {
         a <- if (f %in% names(rv$annotations)) rv$annotations[[f]][sel] else NA
         b <- if (f %in% names(bak)) bak[[f]] else NA
@@ -1744,7 +1767,7 @@ annotations_details_server <- function(id, rv) {
       }
       hits <- hits |> dplyr::slice_head(n = n_hits)
 
-      focal <- rv$annotations$translation[selected()] |>
+      focal <- focal_for(selected()) |>
         setNames(paste(
           rv$annotations$gene[selected()],
           if (is_orf) "(ORF, focal)" else "(focal)"
@@ -1825,6 +1848,80 @@ annotations_details_server <- function(id, rv) {
         p(HTML(rv$alignment$partial)),
         p(HTML(rv$alignment$internal_stop))
       )
+    })
+
+    # Spliced-CDS preview for joined PCGs: shows the concatenated translation as
+    # one colored block per exon/segment (5'->3'). Clicking a block selects that
+    # segment so the edit controls act on it. The boundary indicator for joins.
+    output$join_preview <- renderUI({
+      sel <- selected()
+      req(length(sel) == 1)
+      req(identical(rv$annotations$type[sel], "PCG"))
+      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      req(length(grp) == 1, !is.na(grp))
+      mem <- join_members(grp)
+      req(length(mem) >= 2)
+      sp <- spliced_active(sel)
+      if (is.null(sp)) {
+        return(div(
+          class = "alert alert-warning",
+          style = "padding: 6px 10px; margin: 4px 0;",
+          icon("triangle-exclamation"),
+          paste(
+            " Spliced CDS could not be translated - the segment lengths may not",
+            "sum to a multiple of 3. Adjust a junction by nucleotide."
+          )
+        ))
+      }
+      prot <- sp$translation
+      segs <- sp$segments
+      palette <- c("#9ecae1", "#a1d99b", "#fdae6b", "#bcbddc", "#fa9fb5", "#c7e9c0")
+      blocks <- lapply(seq_len(nrow(segs)), function(i) {
+        aa1 <- segs$aa_start[i]
+        aa2 <- segs$aa_end[i]
+        real_idx <- mem[segs$member_row[i]]
+        is_active <- isTRUE(real_idx == sel)
+        col <- palette[((i - 1) %% length(palette)) + 1]
+        tags$span(
+          title = stringr::str_glue(
+            "exon {i}: aa {aa1}-{aa2}, nt {segs$pos1[i]}-{segs$pos2[i]}"
+          ),
+          onclick = stringr::str_glue(
+            "Shiny.setInputValue('{ns('join_seg_click')}', {real_idx}, {{priority: 'event'}})"
+          ),
+          style = paste0(
+            "cursor: pointer; padding: 2px 1px; font-family: monospace; ",
+            "background-color:", col, ";",
+            if (is_active) " outline: 2px solid #c00; outline-offset: -2px; font-weight: bold;" else ""
+          ),
+          substr(prot, aa1, aa2)
+        )
+      })
+      internal_stop <- stringr::str_detect(prot, "\\*")
+      div(
+        style = "margin-bottom: 6px;",
+        tags$b("Spliced CDS "),
+        tags$span(
+          style = "color:#666;",
+          stringr::str_glue(
+            "({nchar(prot)} aa, {nrow(segs)} segments – click a segment to edit it)"
+          )
+        ),
+        if (internal_stop) tags$span(
+          style = "color:#c00; font-weight:bold; margin-left:8px;",
+          icon("triangle-exclamation"), " internal stop codon"
+        ),
+        div(
+          style = "word-break: break-all; line-height: 1.6; margin-top: 4px;",
+          blocks
+        )
+      )
+    })
+
+    observeEvent(input$join_seg_click, {
+      idx <- suppressWarnings(as.integer(input$join_seg_click))
+      req(length(idx) == 1, !is.na(idx))
+      reactable::updateReactable("table", selected = idx)
     })
     output$msa <- msaR::renderMsaR({
       msa <- msaR::msaR(
@@ -2280,6 +2377,79 @@ annotations_details_server <- function(id, rv) {
         )
     })
 
+    # Join-group editing helpers ----
+    # A joined gene (multi-exon / ribosomal-slippage) is stored as several
+    # annotation rows sharing a "JOIN: ... group=<id>" marker. The editor treats
+    # the group as one entity: the selected row is the "active segment", controls
+    # act on it, and the spliced-CDS preview / protein alignment are computed over
+    # all members via splice_join_cds() (shared with export).
+
+    # Group id for a row's JOIN marker, or NA if it is not a join member.
+    join_grp_of <- function(idx) {
+      if (length(idx) != 1) return(NA_character_)
+      stringr::str_match(
+        rv$annotations$notes[idx] %|NA|% "", "^JOIN: mode=\\w+ group=(\\d+)"
+      )[, 2]
+    }
+    # Current member row indices for a group, ordered 5'->3'.
+    join_members <- function(grp) {
+      if (length(grp) != 1 || is.na(grp)) return(integer(0))
+      idx <- which(stringr::str_detect(
+        dplyr::coalesce(rv$annotations$notes, ""),
+        paste0("^JOIN: mode=\\w+ group=", grp, "\\b")
+      ))
+      if (length(idx) == 0) return(idx)
+      idx <- idx[order(rv$annotations$pos1[idx])]
+      if (rv$annotations$direction[idx[1]] == "-") idx <- rev(idx)
+      idx
+    }
+    # Role of the active segment within its group: which terminal end(s) it owns.
+    # Non-join annotations own both ends.
+    seg_role <- function(sel) {
+      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      if (length(grp) != 1 || is.na(grp)) {
+        return(list(join = FALSE, is_5 = TRUE, is_3 = TRUE, n = 1L))
+      }
+      mem <- join_members(grp)
+      list(
+        join = TRUE,
+        is_5 = isTRUE(sel == mem[1]),
+        is_3 = isTRUE(sel == mem[length(mem)]),
+        n = length(mem)
+      )
+    }
+    # Spliced CDS for the active segment's group, or NULL on failure (e.g. a
+    # transient out-of-frame length mid-edit). Uses the loaded edit assembly.
+    spliced_active <- function(sel) {
+      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      if (length(grp) != 1 || is.na(grp)) return(NULL)
+      mem <- join_members(grp)
+      if (length(mem) < 2) return(NULL)
+      asm <- rv$editing$assembly
+      if (is.null(asm)) {
+        asm <- tryCatch(get_assembly(
+          ID = rv$annotations$ID[sel],
+          path = rv$annotations$path[sel],
+          scaffold = rv$annotations$scaffold[sel],
+          con = session$userData$con
+        ), error = function(e) NULL)
+      }
+      if (is.null(asm)) return(NULL)
+      tryCatch(
+        splice_join_cds(rv$annotations[mem, ], asm, session$userData$gcode),
+        error = function(e) NULL
+      )
+    }
+    # Focal protein for the alignment: spliced CDS for a joined PCG, else the
+    # row's own translation.
+    focal_for <- function(sel) {
+      if (identical(rv$annotations$type[sel], "PCG") && seg_role(sel)$join) {
+        sp <- spliced_active(sel)
+        if (!is.null(sp)) return(sp$translation)
+      }
+      rv$annotations$translation[sel]
+    }
+
     # Edit Annotation ----
     observeEvent(input$edit_mode, {
       shinyjs::show("edit_mode_ctrls")
@@ -2287,7 +2457,14 @@ annotations_details_server <- function(id, rv) {
       shinyjs::show("discard_edits")
       shinyjs::hide("edit_mode")
       rv$editing$idx <- selected()
-      rv$editing$backup <- rv$annotations[selected(), ]
+      grp <- join_grp_of(selected())
+      rv$editing$join_grp <- if (is.na(grp)) NULL else grp
+      # Back up the whole group so discard restores every segment.
+      rv$editing$backup <- if (is.null(rv$editing$join_grp)) {
+        rv$annotations[selected(), ]
+      } else {
+        rv$annotations[join_members(rv$editing$join_grp), ]
+      }
       rv$editing$params <- dplyr::left_join(
         dplyr::tbl(session$userData$con, "annotate") |>
           dplyr::select(ID, curate_opts) |>
@@ -2321,6 +2498,20 @@ annotations_details_server <- function(id, rv) {
         "codon_edit_ctrls",
         condition = !identical(rv$annotations$type[selected()], "rRNA")
       )
+      # Codon START/STOP search only applies to the segment owning the gene's
+      # 5'/3' end (whole gene for non-join annotations).
+      role <- seg_role(selected())
+      shinyjs::toggle("start_search_ctrl", condition = role$is_5)
+      shinyjs::toggle("stop_search_ctrl", condition = role$is_3)
+    })
+
+    # Re-toggle codon search controls when the active segment changes within a
+    # join edit session.
+    observeEvent(selected(), {
+      req(rv$editing, length(selected()) == 1, !is.null(rv$editing$join_grp))
+      role <- seg_role(selected())
+      shinyjs::toggle("start_search_ctrl", condition = role$is_5)
+      shinyjs::toggle("stop_search_ctrl", condition = role$is_3)
     })
 
     ## Re align if user wants to show fewer reference samples ----
@@ -2657,11 +2848,15 @@ annotations_details_server <- function(id, rv) {
     # the curation params (an undetermined / partial end). Empty allowed list ->
     # no check.
     start_codon_invalid <- function(sel) {
+      # Only the 5'-terminal segment of a join owns the gene's start codon.
+      if (!seg_role(sel)$is_5) return(FALSE)
       allowed <- rv$editing$params$start_codons
       sc <- rv$annotations$start_codon[sel]
       !is.null(allowed) && length(allowed) > 0 && isTRUE(nzchar(sc)) && sc %nin% allowed
     }
     stop_codon_invalid <- function(sel) {
+      # Only the 3'-terminal segment of a join owns the gene's stop codon.
+      if (!seg_role(sel)$is_3) return(FALSE)
       allowed <- rv$editing$params$stop_codons
       ec <- rv$annotations$stop_codon[sel]
       !is.null(allowed) && length(allowed) > 0 && isTRUE(nzchar(ec)) && ec %nin% allowed
@@ -2674,6 +2869,9 @@ annotations_details_server <- function(id, rv) {
       req(length(sel) == 1)
       is_rrna <- identical(rv$annotations$type[sel], "rRNA")
       req(rv$annotations$type[sel] == "PCG" || is_rrna)
+      # In a join, the 5'-terminal segment owns the gene's 5' end and the
+      # 3'-terminal segment owns the 3' end; internal segments own neither.
+      role <- seg_role(sel)
       # Highlight a partial end when the flag is set OR (PCG only) the terminal
       # codon is not an allowed gene codon.
       ps <- isTRUE(as.integer(rv$annotations$partial_start[sel]) == 1L) ||
@@ -2681,18 +2879,20 @@ annotations_details_server <- function(id, rv) {
       pe <- isTRUE(as.integer(rv$annotations$partial_stop[sel]) == 1L) ||
         (!is_rrna && stop_codon_invalid(sel))
       tagList(
-        # poly-A stop trim is meaningless for non-coding rRNA.
-        if (!is_rrna) actionButton(
+        # poly-A stop trim applies to the gene's 3' end only (and not rRNA).
+        if (!is_rrna && role$is_3) actionButton(
           ns("polyA_stop"), "poly-A stop",
           icon = icon("scissors"),
           class = "btn btn-default btn-sm"
         ),
-        tags$span(style = "font-weight: bold; margin-left: 1em;", "PARTIAL"),
-        actionButton(
+        if (role$is_5 || role$is_3) tags$span(
+          style = "font-weight: bold; margin-left: 1em;", "PARTIAL"
+        ),
+        if (role$is_5) actionButton(
           ns("toggle_partial_start"), "5'",
           class = if (ps) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
         ),
-        actionButton(
+        if (role$is_3) actionButton(
           ns("toggle_partial_stop"), "3'",
           class = if (pe) "btn btn-warning btn-sm" else "btn btn-default btn-sm"
         )
@@ -2724,11 +2924,19 @@ annotations_details_server <- function(id, rv) {
       n <- suppressWarnings(as.integer(input$rrna_step_size))
       if (length(n) == 0 || is.na(n) || n < 1L) 1L else min(n, 500L)
     }
+    # TRUE when the active row should expose the nucleotide-boundary nudge:
+    # rRNA (no codon search) or a joined-PCG segment (junctions are not codons).
+    nt_nudge_row <- function(sel) {
+      length(sel) == 1 && (
+        identical(rv$annotations$type[sel], "rRNA") ||
+        (identical(rv$annotations$type[sel], "PCG") && seg_role(sel)$join)
+      )
+    }
     output$rrna_edit_ctrls <- renderUI({
       req(rv$editing)
       sel <- selected()
       req(length(sel) == 1)
-      req(identical(rv$annotations$type[sel], "rRNA"))
+      req(nt_nudge_row(sel))
       nudge <- function(id, sym) {
         tags$button(
           class = "icon-circle grow",
@@ -2765,7 +2973,8 @@ annotations_details_server <- function(id, rv) {
     adjust_rrna <- function(end, action) {
       sel <- selected()
       req(rv$editing, length(sel) == 1)
-      req(identical(rv$annotations$type[sel], "rRNA"))
+      req(nt_nudge_row(sel))
+      is_rrna <- identical(rv$annotations$type[sel], "rRNA")
       step <- rrna_step_size()
       dir <- rv$annotations$direction[sel]
       pos1 <- rv$annotations$pos1[sel]
@@ -2785,14 +2994,18 @@ annotations_details_server <- function(id, rv) {
       rv$annotations$pos1[sel] <- pos1
       rv$annotations$pos2[sel] <- pos2
       rv$annotations$length[sel] <- abs(pos2 - pos1) + 1L
-      # Auto-flag the moved end as partial (toggleable via the PARTIAL buttons).
-      if (end == "5" && "partial_start" %in% names(rv$annotations)) {
-        rv$annotations$partial_start[sel] <- 1L
+      # rRNA: moving an end means the exact boundary is uncertain, so auto-flag it
+      # partial. For a joined-PCG segment the moved end is usually an internal
+      # splice junction (not a partial gene end), so do not auto-flag.
+      if (is_rrna) {
+        if (end == "5" && "partial_start" %in% names(rv$annotations)) {
+          rv$annotations$partial_start[sel] <- 1L
+        }
+        if (end == "3" && "partial_stop" %in% names(rv$annotations)) {
+          rv$annotations$partial_stop[sel] <- 1L
+        }
+        if (!is.null(rv$alignment)) rv$alignment$partial <- partial_label(sel)
       }
-      if (end == "3" && "partial_stop" %in% names(rv$annotations)) {
-        rv$annotations$partial_stop[sel] <- 1L
-      }
-      if (!is.null(rv$alignment)) rv$alignment$partial <- partial_label(sel)
       show_edit_waiter()
       shinyjs::delay(50, trigger("re_align"))
     }
@@ -2847,7 +3060,7 @@ annotations_details_server <- function(id, rv) {
         # check if user wants to use fewer reference samples in alignment
         if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
         ### Calculate new stats ----
-        focal <- rv$annotations$translation[selected()]
+        focal <- focal_for(selected())
         hits <-
           {
             rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
@@ -2871,7 +3084,13 @@ annotations_details_server <- function(id, rv) {
 
     # Discard edits ----
     observeEvent(input$discard_edits, {
-      rv$annotations <- rv$annotations[-selected(), ] |>
+      # Restore the whole group for a join session, else just the edited row.
+      drop_idx <- if (!is.null(rv$editing$join_grp)) {
+        join_members(rv$editing$join_grp)
+      } else {
+        selected()
+      }
+      rv$annotations <- rv$annotations[-drop_idx, ] |>
         dplyr::bind_rows(rv$editing$backup) |>
         dplyr::arrange(pos1)
       reactable::updateReactable(
@@ -2901,7 +3120,7 @@ annotations_details_server <- function(id, rv) {
           # of the old row-by-row compare_aa/count_end_gaps (4 alignments per hit).
           # rRNA edits have no protein hits to recompute; just persist positions.
           if (!identical(rv$annotations$type[selected()], "rRNA")) {
-            focal <- rv$annotations$translation[selected()]
+            focal <- focal_for(selected())
             hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
             stats <- recompute_hit_stats(focal, hits$target)
             hits <- hits |>
@@ -4010,6 +4229,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               id = ns("codon_edit_ctrls"),
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1.5em;",
             div(
+              id = ns("start_search_ctrl"),
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "START"),
               tags$button(
@@ -4051,6 +4271,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               "single codon"
             ),
             div(
+              id = ns("stop_search_ctrl"),
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "STOP"),
               tags$button(
@@ -4115,6 +4336,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         ),
         div(
           style = "margin: 30px 5px 5px 5px;",
+          uiOutput(ns("join_preview")),
           uiOutput(ns("msa_header")),
           msaR::msaROutput(ns("msa"))
         )

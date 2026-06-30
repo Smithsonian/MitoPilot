@@ -315,61 +315,35 @@ export_files <- function(
           exons <- exons[order(exons$pos1), ]
           # skip if not the first exon
           if (cur$pos1 != exons[1,]$pos1) return()
-          exon_seqs <- rep(NA, nrow(exons))
-          if (all(exons$direction == "+")) {
-            # extract exons
-            for (i in 1:nrow(exons)) {
-              exon_seqs[i] <- Biostrings::subseq(seq, start = exons[i, ]$pos1, end = exons[i, ]$pos2)
-            }
-            # merge exons
-            merged_sequence <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = ""))
-            # translate
-            cur$translation <- Biostrings::translate(merged_sequence,
-                                                     genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))) |>
-              as.character()
-            cur$translation <- sub("\\*$", "", cur$translation) # remove terminal stop codon
-            # set new start and stop codons
-            cur$start_codon <- exons[1,]$start_codon
-            cur$stop_codon <- exons[nrow(exons),]$stop_codon
-            # carry manual partial flags from the 5' / 3' exons
-            cur$partial_start <- exons[1,]$partial_start
-            cur$partial_stop <- exons[nrow(exons),]$partial_stop
-            # set new start and stop pos for gene
-            pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character()
-            cur$pos1 <- exons[1,]$pos1
-            cur$pos2 <- exons[nrow(exons),]$pos2
-            # set new CDS length
-            cur$length <- sum(exons$length)
-          } else if (all(exons$direction == "-")) {
-            # extract exons
-            for (i in 1:nrow(exons)) {
-              exon_seqs[i] <- Biostrings::subseq(seq, start = exons[i, ]$pos1, end = exons[i, ]$pos2)
-            }
-            # merge exons and reverse complement
-            merged_sequence <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = "")) |>
-              Biostrings::reverseComplement()
-            # translate
-            cur$translation <- Biostrings::translate(merged_sequence,
-                                                     genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))) |>
-              as.character()
-            cur$translation <- sub("\\*$", "", cur$translation) # remove terminal stop codon
-            # set new start and stop codons
-            cur$start_codon <- exons[nrow(exons),]$start_codon
-            cur$stop_codon <- exons[1]$stop_codon
-            # carry manual partial flags from the 5' / 3' exons
-            cur$partial_start <- exons[nrow(exons),]$partial_start
-            cur$partial_stop <- exons[1,]$partial_stop
-            # set new start and stop pos for gene
-            pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character() |> rev()
-            cur$pos1 <- exons[nrow(exons),]$pos2
-            cur$pos2 <- exons[1,]$pos1
-            # set new CDS length
-            cur$length <- sum(exons$length)
-          } else {
+          if (length(unique(exons$direction)) > 1) {
             message(crayon::red(
               paste0("Warning: exons on opposite strands for gene ", cur$gene)
-              # NEED LOGIC TO DEAL WITH THIS
             ))
+          } else {
+            # splice segments into one CDS (shared with the annotate editor)
+            spliced <- splice_join_cds(
+              exons, seq,
+              Biostrings::getGeneticCode(as.character(dat$genetic_code))
+            )
+            # spliced CDS sequence (5'->3', revcomp applied for - strand); used
+            # below for the per-gene FASTA export.
+            merged_sequence <- Biostrings::DNAStringSet(spliced$dna)
+            cur$translation <- spliced$translation
+            cur$start_codon <- spliced$start_codon
+            cur$stop_codon <- spliced$stop_codon
+            cur$partial_start <- spliced$partial_start
+            cur$partial_stop <- spliced$partial_stop
+            cur$length <- spliced$length
+            # tbl coordinates: + strand low..high, - strand high..low
+            if (all(exons$direction == "+")) {
+              pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character()
+              cur$pos1 <- exons[1,]$pos1
+              cur$pos2 <- exons[nrow(exons),]$pos2
+            } else {
+              pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character() |> rev()
+              cur$pos1 <- exons[nrow(exons),]$pos2
+              cur$pos2 <- exons[1,]$pos1
+            }
           }
 
           if (stringr::str_detect(cur$translation, "\\*")) {

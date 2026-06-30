@@ -596,3 +596,81 @@ guess_orf_gene <- function(refHits_json, threshold = ORF_ASSIGN_SIM_THRESHOLD) {
     taxon = if ("Taxon" %in% names(hits)) best$Taxon else NA_character_
   )
 }
+
+#' Splice a joined gene's segments into one CDS
+#'
+#' Concatenates a join group's segment (exon) sequences in 5'->3' order and
+#' translates them, matching the export-time splice logic so the manual editor
+#' and the exported feature table agree. Used both by [export()] and by the
+#' annotate-details editor's spliced-CDS preview / alignment.
+#'
+#' @param members data frame of the group's annotation rows. Requires columns
+#'   pos1, pos2, direction, start_codon, stop_codon, partial_start, partial_stop.
+#' @param seq the scaffold assembly sequence (DNAString/DNAStringSet) the members
+#'   belong to.
+#' @param genetic_code a resolved Biostrings genetic-code vector (e.g.
+#'   `session$userData$gcode` or `Biostrings::getGeneticCode("2")`).
+#'
+#' @return list with `dna`, `translation` (terminal stop stripped), `start_codon`,
+#'   `stop_codon`, `partial_start`, `partial_stop`, `pos1`, `pos2`, `length`,
+#'   `direction`, and `segments`: a data frame (one row per exon, ordered 5'->3')
+#'   with `member_row` (index into `members`), `pos1`, `pos2`, `aa_start`, `aa_end`.
+#' @keywords internal
+splice_join_cds <- function(members, seq, genetic_code) {
+  members$.__row <- seq_len(nrow(members))
+  exons <- members[order(members$pos1), ]            # ascending coordinate
+  direction <- exons$direction[1]
+  n <- nrow(exons)
+
+  exon_seqs <- vapply(seq_len(n), function(i) {
+    as.character(Biostrings::subseq(seq, start = exons$pos1[i], end = exons$pos2[i]))
+  }, character(1))
+  merged <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = ""))
+  if (direction == "-") merged <- Biostrings::reverseComplement(merged)
+
+  translation <- Biostrings::translate(merged, genetic.code = genetic_code) |>
+    as.character()
+  translation <- sub("\\*$", "", translation)
+  aa_len <- nchar(translation)
+
+  # biological 5'->3' order: + strand ascending pos1, - strand descending
+  fivep <- if (direction == "-") rev(seq_len(n)) else seq_len(n)
+  exons_53 <- exons[fivep, ]
+  seg_len <- exons_53$pos2 - exons_53$pos1 + 1
+  cum_end <- cumsum(seg_len)
+  cum_start <- cum_end - seg_len + 1
+  segments <- data.frame(
+    member_row = exons_53$.__row,
+    pos1 = exons_53$pos1,
+    pos2 = exons_53$pos2,
+    aa_start = pmin(floor((cum_start - 1) / 3) + 1, aa_len),
+    aa_end = pmin(ceiling(cum_end / 3), aa_len),
+    stringsAsFactors = FALSE
+  )
+
+  if (direction == "-") {
+    start_codon <- exons$start_codon[n]
+    stop_codon <- exons$stop_codon[1]
+    partial_start <- exons$partial_start[n]
+    partial_stop <- exons$partial_stop[1]
+  } else {
+    start_codon <- exons$start_codon[1]
+    stop_codon <- exons$stop_codon[n]
+    partial_start <- exons$partial_start[1]
+    partial_stop <- exons$partial_stop[n]
+  }
+
+  list(
+    dna = as.character(merged),
+    translation = translation,
+    start_codon = start_codon,
+    stop_codon = stop_codon,
+    partial_start = partial_start,
+    partial_stop = partial_stop,
+    pos1 = min(exons$pos1),
+    pos2 = max(exons$pos2),
+    length = sum(seg_len),
+    direction = direction,
+    segments = segments
+  )
+}
