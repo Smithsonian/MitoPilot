@@ -92,6 +92,7 @@ params {
         executor = process.executor
     }
     blast_gb {
+        max_target_seqs = 5 // BLAST hits retained per sample as candidate references
         cpus = 1
         memory = 8
         maxForks = 10 // only allow 10 concurrent BLAST/ref-fetch runs to avoid NCBI timeout issues

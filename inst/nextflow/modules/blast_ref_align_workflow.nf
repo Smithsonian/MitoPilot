@@ -18,17 +18,18 @@ def appendTaggedNoteSql(String tag, String msg) {
     return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
 }
 
-// Reference sequence and rotation for newly-curated samples (gated on curate_out).
+// Reference sequence and rotation per candidate reference for newly-curated
+// samples (gated on curate_out). One row per (ID, candidate accession). rank=1 is
+// the top hit. Rotation is computed from that accession's own annotations.
 // Assembly sequence comes from the curate output FASTA (already rotated to start_gene).
 params.sqlReadRef =
-    'SELECT b.ID, s.sequence, ' +
+    'SELECT c.ID, c.accession, c.rank, s.sequence, ' +
         'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
-                  'WHERE r.ID = b.ID AND r.gene = d.start_gene), 0) ' +
-    'FROM assemble b ' +
-    'JOIN annotate a     ON b.ID = a.ID ' +
+                  'WHERE r.accession = c.accession AND r.gene = d.start_gene), 0) ' +
+    'FROM blast_ref_candidates c ' +
+    'JOIN annotate a     ON c.ID = a.ID ' +
     'JOIN annotate_opts d ON a.annotate_opts = d.annotate_opts ' +
-    'JOIN blast_ref_sequences s ON b.blast_accession = s.accession ' +
-    'WHERE b.blast_accession IS NOT NULL'
+    'JOIN blast_ref_sequences s ON c.accession = s.accession'
 
 // Backfill: samples already validated in a prior run (assemblies.sequence is the
 // rotated post-curate sequence) that are missing an alignment row. annotate_switch = 2
@@ -37,23 +38,23 @@ params.sqlReadRef =
 // pre-populated with the unrotated user FASTA in WF1_userAsmb and only becomes
 // rotated after CURATE runs in WF2.
 params.sqlBackfill =
-    'SELECT b.ID, a.sequence, s.sequence, ' +
+    'SELECT b.ID, cd.accession, cd.rank, a.sequence, s.sequence, ' +
         'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
-                  'WHERE r.ID = b.ID AND r.gene = d.start_gene), 0) ' +
+                  'WHERE r.accession = cd.accession AND r.gene = d.start_gene), 0) ' +
     'FROM assemble b ' +
+    'JOIN blast_ref_candidates cd ON cd.ID = b.ID ' +
     'JOIN assemblies a   ON b.ID = a.ID AND a.ignore = 0 ' +
         'AND a.scaffold = (SELECT MIN(scaffold) FROM assemblies a2 WHERE a2.ID = a.ID AND a2.ignore = 0) ' +
     'JOIN annotate c     ON b.ID = c.ID ' +
     'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
-    'JOIN blast_ref_sequences s ON b.blast_accession = s.accession ' +
-    'WHERE b.blast_accession IS NOT NULL ' +
-      'AND a.sequence IS NOT NULL ' +
+    'JOIN blast_ref_sequences s ON cd.accession = s.accession ' +
+    'WHERE a.sequence IS NOT NULL ' +
       'AND c.annotate_switch = 2 ' +
-      'AND NOT EXISTS (SELECT 1 FROM blast_ref_alignment al WHERE al.ID = b.ID)'
+      'AND NOT EXISTS (SELECT 1 FROM blast_ref_alignment al WHERE al.ID = b.ID AND al.accession = cd.accession)'
 
 params.sqlWriteAlignment = '''INSERT OR REPLACE INTO blast_ref_alignment
-    (ID, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
-    VALUES (?, ?, ?, ?, ?, ?)'''
+    (ID, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?)'''
 
 // Mark the 'BLAST Ref Align' field (poor_blast_ref) = 'failed' and add an [align]
 // note when blast_ref_align fails for a sample (errorStrategy 'ignore' suppresses
@@ -79,50 +80,60 @@ workflow BLAST_REF_ALIGN {
         //   this asymmetric-lifetime join risks a deadlock. Fix by carrying
         //   ref_seq/rotation through upstream channels or a per-item DB lookup.
         channel.fromQuery(params.sqlReadRef, db: 'sqlite')
-            .map { row -> tuple(row[0], row[1], row[2] as Long) }
-            .filter { id, ref_seq, rotation -> ref_seq }
-            .set { ref_ch }  // (id, ref_seq, rotation)
+            .map { row -> tuple(row[0], row[1], (row[2] as Integer) == 1, row[3], row[4] as Long) }
+            .filter { id, accession, is_top, ref_seq, rotation -> ref_seq }
+            .set { ref_ch }  // (id, accession, is_top, ref_seq, rotation)
 
         // Newly-validated samples: gate on `validated` so alignment runs after
         // VALIDATE completes. Pull the rotated assembly FASTA from curate_out.
+        // combine(by:0) fans each sample's assembly across all its candidate refs.
         validated
             .join(curate_out, by: [0, 1])
             .map { id, path, annotations, assembly_fasta, coverage, work_dir ->
                 tuple(id, path, assembly_fasta)
             }
-            .join(ref_ch, by: 0)
-            .map { id, path, assembly_fasta, ref_seq, rotation ->
+            .combine(ref_ch, by: 0)
+            .map { id, path, assembly_fasta, accession, is_top, ref_seq, rotation ->
                 def seq = assembly_fasta.readLines()
                     .findAll { !it.startsWith('>') }
                     .join('')
-                tuple(id, seq, ref_seq, rotation)
+                tuple(id, accession, is_top, seq, ref_seq, rotation)
             }
             .set { new_align_in }
 
-        // Backfill: already-curated samples with no alignment row.
+        // Backfill: already-curated samples missing an alignment row for a candidate.
         channel.fromQuery(params.sqlBackfill, db: 'sqlite')
             .map { row ->
-                def asm_seq = row[1]?.toString()
-                def ref_seq = row[2]?.toString()
-                if (!asm_seq || !ref_seq) return null
+                def accession = row[1]?.toString()
+                def is_top    = (row[2] as Integer) == 1
+                def asm_seq   = row[3]?.toString()
+                def ref_seq   = row[4]?.toString()
+                if (!accession || !asm_seq || !ref_seq) return null
                 if (!ref_seq.matches('[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+')) return null
-                tuple(row[0], asm_seq, ref_seq, row[3] as Long)
+                tuple(row[0], accession, is_top, asm_seq, ref_seq, row[5] as Long)
             }
             .filter { it != null }
             .set { backfill_ch }
 
         new_align_in.mix(backfill_ch).set { align_in }
 
-        // Track all IDs entering align so failures (no output) can be detected
+        // Track top-hit (id, accession) entering align so a failed TOP-ref alignment
+        // can flag the sample. Non-top candidate failures only lose that candidate's
+        // 3-track view and are not surfaced as sample-level failures.
         align_in
-            .map { id, assembly_seq, ref_seq, rotation -> tuple(id, true) }
-            .set { all_align_ids }
+            .filter { id, accession, is_top, assembly_seq, ref_seq, rotation -> is_top }
+            .map    { id, accession, is_top, assembly_seq, ref_seq, rotation -> tuple("${id}|${accession}".toString(), id) }
+            .set { top_align_keys }
 
-        blast_ref_align(align_in).set { align_out }
+        blast_ref_align(
+            align_in.map { id, accession, is_top, assembly_seq, ref_seq, rotation ->
+                tuple(id, accession, assembly_seq, ref_seq, rotation)
+            }
+        ).set { align_out }
 
         // Parse the one-row CSV and write to blast_ref_alignment table
         align_out
-            .map { id, csv_file ->
+            .map { id, accession, csv_file ->
                 def lines = csv_file.readLines()
                 if (lines.size() < 2) return null
                 // CSV columns: aligned_sample, aligned_ref, rotation, ref_length
@@ -131,6 +142,7 @@ workflow BLAST_REF_ALIGN {
                 def ts = java.time.Instant.now().getEpochSecond()
                 tuple(
                     id,
+                    accession,
                     parts[0],           // aligned_sample
                     parts[1],           // aligned_ref
                     parts[2].toLong(),  // rotation
@@ -141,14 +153,15 @@ workflow BLAST_REF_ALIGN {
             .filter { it != null }
             .sqlInsert(statement: params.sqlWriteAlignment, db: 'sqlite')
 
-        // Detect align failures: IDs that entered but produced no CSV output
+        // Detect TOP-ref align failures: top (id, accession) that entered but produced
+        // no CSV output. Keyed on "id|accession" so only the top candidate counts.
         align_out
-            .map { id, csv_file -> tuple(id, true) }
-            .set { succeeded_align_ids }
+            .map { id, accession, csv_file -> tuple("${id}|${accession}".toString(), true) }
+            .set { succeeded_align_keys }
 
-        all_align_ids
-            .join(succeeded_align_ids, remainder: true)
-            .filter { id, all_flag, success_flag -> success_flag == null }
-            .map    { id, all_flag, success_flag -> tuple(id) }
+        top_align_keys
+            .join(succeeded_align_keys, remainder: true)
+            .filter { key, id, success_flag -> success_flag == null }
+            .map    { key, id, success_flag -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastRefAlignFailed, db: 'sqlite')
 }

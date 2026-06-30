@@ -54,7 +54,7 @@ process blast_genbank {
         -db core_nt \
         -query !{assembly} \
         -outfmt "6 qseqid saccver stitle pident qcovs evalue" \
-        -max_target_seqs 1 \
+        -max_target_seqs !{params.blast_gb.max_target_seqs ?: 5} \
         -max_hsps 1 \
         -task megablast \
         -entrez_query "!{entrez_query}" \
