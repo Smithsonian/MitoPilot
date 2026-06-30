@@ -288,8 +288,31 @@ export_files <- function(
           }
         }
 
-        if (intron & length(which(annotations$gene == cur$gene)) > 1) {  # logic to merge exons if intron is present
-          exons <- annotations[which(annotations$gene == cur$gene), ]
+        # User-defined join group (set in the annotate modal). Members share a
+        # "JOIN: mode=<exon|frameshift> group=<id>" marker in their notes. This
+        # exports a subset of same-gene rows as one joined feature, independent of
+        # the curation intron rule, and supports the frameshift/slippage exception.
+        join_match <- stringr::str_match(
+          cur$notes %|NA|% "", "^JOIN: mode=(\\w+) group=(\\d+)( note=([^;]*))?"
+        )
+        join_mode <- join_match[, 2]
+        join_grp <- join_match[, 3]
+        join_note <- join_match[, 5]
+        do_join <- !is.na(join_grp) ||
+          (intron & length(which(annotations$gene == cur$gene)) > 1)
+        exon_mode <- if (!is.na(join_grp)) join_mode else "exon"
+
+        if (do_join) {  # logic to merge exons (intron rule or user join group)
+          if (!is.na(join_grp)) {
+            member_idx <- which(stringr::str_detect(
+              dplyr::coalesce(annotations$notes, ""),
+              paste0("^JOIN: mode=\\w+ group=", join_grp, "\\b")
+            ))
+          } else {
+            member_idx <- which(annotations$gene == cur$gene)
+          }
+          exons <- annotations[member_idx, ]
+          exons <- exons[order(exons$pos1), ]
           # skip if not the first exon
           if (cur$pos1 != exons[1,]$pos1) return()
           exon_seqs <- rep(NA, nrow(exons))
@@ -422,6 +445,20 @@ export_files <- function(
           if (!cur$start_codon %in% start_codons) {
             paste("\t\t\tcodon_start\t", 1) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
+          }
+          # frameshift/RNA-editing join: INSDC requires the ribosomal_slippage
+          # qualifier + exception; note carries no nucleotide locations per
+          # GenBank guidance
+          if (identical(exon_mode, "frameshift")) {
+            cat("\t\t\tribosomal_slippage", file = tbl_fn, sep = "\n", append = TRUE)
+            paste0("\t\t\texception\tribosomal slippage") |>
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            fs_note <- if (!is.na(join_note) && nzchar(trimws(join_note))) {
+              trimws(join_note)
+            } else {
+              "frameshift mechanism unknown"
+            }
+            note <- paste(c(note, fs_note), collapse = "; ")
           }
           if (length(note) > 0) {
             paste0("\t\t\tnote\t", note) |>

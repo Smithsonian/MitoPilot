@@ -454,6 +454,9 @@ annotations_details_server <- function(id, rv) {
     ## Table selection ----
     sel <- reactiveVal("init")
 
+    # Holds a pending join (rows + mode) awaiting confirmation when warnings apply.
+    pending_join <- reactiveVal(NULL)
+
     # Synteny-overview click anchor: alignment column to center zoom on.
     # Set by clicking the overview plot; cleared when user picks a new gene row.
     zoom_click_col <- reactiveVal(NULL)
@@ -474,7 +477,11 @@ annotations_details_server <- function(id, rv) {
         is_nonstd <- length(sel) > 0 && isTRUE(is_nonstandard_mito_gene(
           rv$annotations$gene[sel], rv$annotations$type[sel], rv$annotations$tool[sel]
         ))
+        is_joined <- length(sel) > 0 && stringr::str_detect(
+          dplyr::coalesce(rv$annotations$notes[sel], ""), "^JOIN: "
+        )
         shinyjs::toggle("annotation_action_btns", condition = length(sel) > 0 && !is_deleted)
+        shinyjs::toggle("unjoin_btn", condition = is_joined && !is_deleted)
         shinyjs::toggle("annotation_restore_btn", condition = is_deleted)
         shinyjs::toggle("assign_gene_btn", condition = (is_orf || is_assigned_orf || is_nonstd) && !is_deleted)
         updateActionButton(
@@ -3047,6 +3054,56 @@ annotations_details_server <- function(id, rv) {
       shinyjs::hide("merge_select_div")
     })
 
+    observeEvent(list(input$merge_method, input$join_type), {
+      is_join <- isTRUE(input$merge_method == "join")
+      shinyjs::toggle("join_type_div", condition = is_join)
+      shinyjs::toggle(
+        "slippage_note_div",
+        condition = is_join && isTRUE(input$join_type == "frameshift")
+      )
+    })
+
+    # Persist rv$annotations to the DB (delete this sample's rows, re-insert).
+    save_annotations <- function() {
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_delete(
+          rv$updating[, c("ID")],
+          by = "ID",
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_insert(
+          rv$annotations |> dplyr::select(-faa, -fas),
+          by = "ID",
+          conflict = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+    }
+
+    # Tag selected rows as a join group instead of collapsing them. Segments stay
+    # as visible rows; export combines them into a single joined annotation.
+    do_join_merge <- function(rows_to_merge, merge_anns, join_mode, slip_note = NULL) {
+      grp <- as.integer(as.numeric(Sys.time()))
+      marker <- stringr::str_glue("JOIN: mode={join_mode} group={grp}")
+      # frameshift note travels to export in the marker; ";" would break the
+      # "; "-joined notes field, so swap it for ","
+      if (identical(join_mode, "frameshift") && !is.null(slip_note) && nzchar(trimws(slip_note))) {
+        marker <- paste0(marker, " note=", stringr::str_replace_all(trimws(slip_note), ";", ","))
+      }
+      rv$annotations$notes[rows_to_merge] <- purrr::map_chr(
+        rv$annotations$notes[rows_to_merge],
+        ~ paste(marker, .x %|NA|% "", sep = "; ") |> stringr::str_remove("; $")
+      )
+      rv$annotations$edited[rows_to_merge] <- 1L
+      rv$annotations$time_stamp[rows_to_merge] <- as.numeric(Sys.time())
+      save_annotations()
+      shinyjs::hide("merge_select_div")
+      reactable::updateReactable("table", data = rv$annotations)
+    }
+
     observeEvent(input$confirm_merge, {
       rows_to_merge <- as.integer(req(input$merge_selected_rows))
       if (length(rows_to_merge) < 2) {
@@ -3063,6 +3120,40 @@ annotations_details_server <- function(id, rv) {
         )
         req(F)
       }
+
+      # Join mode: warn (intron rule + slippage), then tag as a join group. The
+      # actual commit happens in confirm_join (or directly if no warnings apply).
+      if (isTRUE(input$merge_method == "join")) {
+        join_mode <- input$join_type %||% "exon"
+        sel_gene <- merge_anns$gene[1]
+        sel_type <- merge_anns$type[1]
+        warn_msgs <- character(0)
+        if (!isTRUE(gene_allows_intron(sel_gene, sel_type))) {
+          warn_msgs <- c(warn_msgs, stringr::str_glue(
+            "{sel_gene} is not configured to allow introns/joined features in the curation rules. A joined export may be unexpected for this gene."
+          ))
+        }
+        if (identical(join_mode, "frameshift")) {
+          warn_msgs <- c(warn_msgs,
+            "The 'ribosomal_slippage' exception may not be accepted by GenBank without further explanation or supporting evidence. Contact GenBank curation staff before submitting."
+          )
+        }
+        slip_note <- if (identical(join_mode, "frameshift")) input$slippage_note else NULL
+        pending_join(list(rows = rows_to_merge, anns = merge_anns, mode = join_mode, slip_note = slip_note))
+        if (length(warn_msgs) > 0) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = ns("confirm_join"),
+            title = "Proceed with join?",
+            text = paste(warn_msgs, collapse = " "),
+            type = "warning",
+            btn_labels = c("Cancel", "Join anyway")
+          )
+        } else {
+          do_join_merge(rows_to_merge, merge_anns, join_mode, slip_note)
+        }
+        req(F)
+      }
+
       new_pos1 <- min(merge_anns$pos1)
       new_pos2 <- max(merge_anns$pos2)
       direction <- merge_anns$direction[1]
@@ -3166,6 +3257,56 @@ annotations_details_server <- function(id, rv) {
         "table",
         data = rv$annotations
       )
+    })
+
+    # TRUE if the gene's curation ruleset allows introns (joined/exon features).
+    gene_allows_intron <- function(gene, type) {
+      rule_type <- if (identical(type, "ORF")) "PCG" else type
+      rules <- tryCatch(
+        dplyr::left_join(
+          dplyr::tbl(session$userData$con, "annotate") |>
+            dplyr::select(ID, curate_opts) |>
+            dplyr::filter(ID == !!rv$updating$ID),
+          dplyr::tbl(session$userData$con, "curate_opts"),
+          by = "curate_opts"
+        ) |>
+          dplyr::pull(params) |>
+          json_parse(),
+        error = function(e) NULL
+      )
+      if (is.null(rules)) return(FALSE)
+      merged <- modifyList(
+        rules$default_rules[[rule_type]] %||% list(),
+        rules$rules[[gene]] %||% list()
+      )
+      isTRUE(merged$intron)
+    }
+
+    observeEvent(input$confirm_join, {
+      pj <- pending_join()
+      if (isTRUE(input$confirm_join) && !is.null(pj)) {
+        do_join_merge(pj$rows, pj$anns, pj$mode, pj$slip_note)
+      }
+      pending_join(NULL)
+    })
+
+    observeEvent(input$unjoin, {
+      req(length(selected()) > 0)
+      sel_notes <- rv$annotations$notes[selected()] %|NA|% ""
+      grp <- stringr::str_match(sel_notes, "^JOIN: mode=\\w+ group=(\\d+)")[, 2]
+      req(!is.na(grp))
+      grp_idx <- which(stringr::str_detect(
+        dplyr::coalesce(rv$annotations$notes, ""),
+        paste0("^JOIN: mode=\\w+ group=", grp, "\\b")
+      ))
+      rv$annotations$notes[grp_idx] <- stringr::str_remove(
+        rv$annotations$notes[grp_idx],
+        "^JOIN: mode=\\w+ group=\\d+( note=[^;]*)?(; )?"
+      )
+      rv$annotations$edited[grp_idx] <- 1L
+      rv$annotations$time_stamp[grp_idx] <- as.numeric(Sys.time())
+      save_annotations()
+      reactable::updateReactable("table", data = rv$annotations)
     })
 
     # Restore Annotation ----
@@ -3684,6 +3825,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
             id = ns("annotation_action_btns"),
             style = "display: contents;",
             actionButton(ns("merge"), "Merge PCGs/rRNAs"),
+            shinyjs::hidden(
+              div(
+                id = ns("unjoin_btn"),
+                style = "display: contents;",
+                actionButton(ns("unjoin"), "Un-join")
+              )
+            ),
             actionButton(ns("delete"), "Delete"),
             shinyjs::hidden(
               div(
@@ -3708,6 +3856,39 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         style = "border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin: 6px 0;",
         tags$b("Select annotations to merge:"),
         uiOutput(ns("merge_choices")),
+        radioButtons(
+          ns("merge_method"),
+          "Merge method",
+          choices = c(
+            "Span region (single annotation)" = "span",
+            "Join segments (joined feature)" = "join"
+          ),
+          selected = "span"
+        ),
+        shinyjs::hidden(
+          div(
+            id = ns("join_type_div"),
+            radioButtons(
+              ns("join_type"),
+              "Join type",
+              choices = c(
+                "True exons (spliced)" = "exon",
+                "Translational frameshift / RNA editing" = "frameshift"
+              ),
+              selected = "exon"
+            )
+          )
+        ),
+        shinyjs::hidden(
+          div(
+            id = ns("slippage_note_div"),
+            textInput(
+              ns("slippage_note"),
+              "Note (added with ribosomal_slippage exception)",
+              value = "frameshift mechanism unknown"
+            )
+          )
+        ),
         div(
           style = "display: flex; gap: 8px; margin-top: 8px;",
           shinyWidgets::actionBttn(
