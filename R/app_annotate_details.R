@@ -1748,7 +1748,9 @@ annotations_details_server <- function(id, rv) {
       ))
 
       using_local <- !is.null(rv$local_hits)
-      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+      # For a joined gene, hits come from the group's representative member (the
+      # active segment may have none), so the alignment stays populated.
+      hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[align_hits_idx(selected())], TRUE)
       # For an ORF assigned a gene, the combined-DB hits already cover every
       # per-gene reference set (top hits per gene). Decide what to show:
       #   - gene present in hits  -> restrict to that gene (gene-specific align)
@@ -1923,6 +1925,91 @@ annotations_details_server <- function(id, rv) {
       req(length(idx) == 1, !is.na(idx))
       reactable::updateReactable("table", selected = idx)
     })
+
+    # Live nucleotide context for the active join segment's two boundaries, so
+    # the user can make junction nudges while seeing the actual bases (not just
+    # the AA translation). Shows ~12 flanking (excluded) bases, a cut marker, and
+    # the in-CDS bases grouped into reading-frame codons. Updates on each nudge.
+    output$junction_context <- renderUI({
+      req(rv$editing)
+      sel <- selected()
+      req(length(sel) == 1)
+      req(identical(rv$annotations$type[sel], "PCG"))
+      req(seg_role(sel)$join)
+      asm <- rv$editing$assembly
+      req(!is.null(asm))
+      width <- asm@ranges@width
+      dir <- rv$annotations$direction[sel]
+      p1 <- rv$annotations$pos1[sel]
+      p2 <- rv$annotations$pos2[sel]
+      flank <- 12L; inN <- 15L
+      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      mem <- join_members(grp)
+      k <- match(sel, mem)
+      seglen <- function(i) abs(rv$annotations$pos2[i] - rv$annotations$pos1[i]) + 1L
+      cum_before <- if (k > 1) sum(vapply(mem[seq_len(k - 1)], seglen, integer(1))) else 0L
+      this_len <- seglen(sel)
+
+      gseq <- function(a, b) {
+        a <- max(1L, as.integer(a)); b <- min(as.integer(width), as.integer(b))
+        if (a > b) return("")
+        as.character(Biostrings::subseq(asm, a, b))
+      }
+      rc <- function(s) if (nchar(s) == 0) s else
+        as.character(Biostrings::reverseComplement(Biostrings::DNAString(s)))
+      # insert spaces so codon boundaries align; phase0 = bases already used in
+      # the current codon at the first base of `s`.
+      codon_group <- function(s, phase0) {
+        if (nchar(s) == 0) return(s)
+        chars <- strsplit(s, "")[[1]]
+        used <- phase0 %% 3
+        out <- character(0)
+        for (ch in chars) {
+          if (used == 0 && length(out) > 0) out <- c(out, " ")
+          out <- c(out, ch); used <- (used + 1L) %% 3L
+        }
+        paste(out, collapse = "")
+      }
+      outside <- function(s) tags$span(style = "color:#aa99aa;", tolower(s))
+      inside  <- function(s) tags$span(style = "color:#111;", s)
+      cut <- tags$span(style = "color:#c00; font-weight:bold;", "|")
+      # 5' end of the segment (reads 5'->3'): outside | inside-codons. Inside
+      # windows are clamped to [p1, p2] so a short segment never shows adjacent
+      # (intron / neighbouring-segment) bases as if they were coding.
+      if (dir == "-") {
+        out5 <- rc(gseq(p2 + 1, p2 + flank)); in5 <- rc(gseq(max(p1, p2 - inN + 1), p2))
+      } else {
+        out5 <- gseq(p1 - flank, p1 - 1); in5 <- gseq(p1, min(p2, p1 + inN - 1))
+      }
+      line5 <- tags$div(
+        style = "font-family: monospace; white-space: nowrap;",
+        tags$span(style = "color:#666; margin-right:6px;", "5'"),
+        outside(out5), cut, inside(codon_group(in5, cum_before %% 3))
+      )
+      # 3' end of the segment: inside-codons | outside
+      phase3 <- (cum_before + max(0L, this_len - inN)) %% 3
+      if (dir == "-") {
+        in3 <- rc(gseq(p1, min(p2, p1 + inN - 1))); out3 <- rc(gseq(p1 - flank, p1 - 1))
+      } else {
+        in3 <- gseq(max(p1, p2 - inN + 1), p2); out3 <- gseq(p2 + 1, p2 + flank)
+      }
+      line3 <- tags$div(
+        style = "font-family: monospace; white-space: nowrap;",
+        tags$span(style = "color:#666; margin-right:6px;", "3'"),
+        inside(codon_group(in3, phase3)), cut, outside(out3)
+      )
+      div(
+        class = "mp-edit-group",
+        style = "margin: 6px 0; padding-top: 12px; overflow-x: auto;",
+        tags$span(class = "mp-edit-group-label", "Active segment junctions (nt)"),
+        line5, line3,
+        tags$div(
+          style = "color:#888; font-size:0.75em; margin-top:2px;",
+          "| = current boundary; lowercase = excluded flank; spaces = codon frame"
+        )
+      )
+    })
+
     output$msa <- msaR::renderMsaR({
       msa <- msaR::msaR(
         req(rv$alignment$aln),
@@ -2449,6 +2536,34 @@ annotations_details_server <- function(id, rv) {
       }
       rv$annotations$translation[sel]
     }
+    # Row whose refHits represent the whole gene for alignment. For a joined gene
+    # the active segment may have no hits of its own (internal/3' segments), so
+    # use the first member (5'->3') that carries non-empty refHits, else `sel`.
+    align_hits_idx <- function(sel) {
+      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      if (length(grp) != 1 || is.na(grp)) return(sel)
+      mem <- join_members(grp)
+      has_hits <- vapply(mem, function(i) {
+        rh <- rv$annotations$refHits[i]
+        !is.na(rh) && nzchar(rh) && rh != "[]"
+      }, logical(1))
+      if (any(has_hits)) mem[which(has_hits)[1]] else sel
+    }
+    # TRUE if [new_pos1, new_pos2] would intersect another member of idx's join
+    # group (genomic overlap; members share path/scaffold by construction).
+    seg_would_overlap <- function(idx, new_pos1, new_pos2) {
+      grp <- rv$editing$join_grp %||% join_grp_of(idx)
+      if (length(grp) != 1 || is.na(grp)) return(FALSE)
+      others <- setdiff(join_members(grp), idx)
+      if (length(others) == 0) return(FALSE)
+      lo <- min(new_pos1, new_pos2)
+      hi <- max(new_pos1, new_pos2)
+      any(vapply(others, function(i) {
+        olo <- min(rv$annotations$pos1[i], rv$annotations$pos2[i])
+        ohi <- max(rv$annotations$pos1[i], rv$annotations$pos2[i])
+        lo <= ohi && olo <= hi
+      }, logical(1)))
+    }
 
     # Edit Annotation ----
     observeEvent(input$edit_mode, {
@@ -2946,7 +3061,12 @@ annotations_details_server <- function(id, rv) {
           tags$span(style = "font-size: 0.75em;", sym)
         )
       }
-      tagList(
+      # Caption distinguishes the nucleotide nudge from the codon-search box.
+      cap <- if (seg_role(sel)$join) "Junction (nt)" else "Boundary (nt)"
+      tagList(div(
+        class = "mp-edit-group",
+        style = "display: flex; align-items: center;",
+        tags$span(class = "mp-edit-group-label", cap),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
           tags$span(style = "font-weight: bold;", "5'"),
@@ -2956,14 +3076,18 @@ annotations_details_server <- function(id, rv) {
             class = "mp-step-box",
             style = "width: 56px; margin: 0 0.2em;",
             numericInput(
+              # Retain the chosen step across re-renders of this renderUI (it
+              # re-renders on each nudge because it depends on rv$editing).
               ns("rrna_step_size"), label = NULL,
-              value = 1, min = 1, max = 500, step = 1, width = "56px"
+              value = isolate(input$rrna_step_size) %||% 1,
+              min = 1, max = 500, step = 1, width = "56px"
             )
           ),
           tags$span(style = "font-size: 0.75em; color: #666; margin-right: 0.4em;", "nt"),
           tags$span(style = "font-weight: bold;", "3'"),
           nudge("rrna-3-in", "\u2212"),
           nudge("rrna-3-out", "+")    # extend 3' (grow downstream)
+        )
         )
       )
     })
@@ -2991,6 +3115,16 @@ annotations_details_server <- function(id, rv) {
       pos1 <- max(1L, as.integer(pos1))
       pos2 <- min(as.integer(width), as.integer(pos2))
       req(pos1 < pos2)
+      # Block edits that would push this segment into a neighbouring segment of
+      # the same joined gene.
+      if (seg_would_overlap(sel, pos1, pos2)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Segments would overlap",
+          text = "That move would overlap another segment of this gene. Adjust the other segment first.",
+          type = "warning"
+        )
+        return(invisible(NULL))
+      }
       rv$annotations$pos1[sel] <- pos1
       rv$annotations$pos2[sel] <- pos2
       rv$annotations$length[sel] <- abs(pos2 - pos1) + 1L
@@ -3063,7 +3197,7 @@ annotations_details_server <- function(id, rv) {
         focal <- focal_for(selected())
         hits <-
           {
-            rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], T)
+            rv$local_hits %||% json_parse(rv$annotations$refHits[align_hits_idx(selected())], T)
           } |>
           dplyr::slice_head(n = n_hits) |>
           dplyr::mutate(
@@ -3120,8 +3254,9 @@ annotations_details_server <- function(id, rv) {
           # of the old row-by-row compare_aa/count_end_gaps (4 alignments per hit).
           # rRNA edits have no protein hits to recompute; just persist positions.
           if (!identical(rv$annotations$type[selected()], "rRNA")) {
+            hits_idx <- align_hits_idx(selected())
             focal <- focal_for(selected())
-            hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[selected()], TRUE)
+            hits <- rv$local_hits %||% json_parse(rv$annotations$refHits[hits_idx], TRUE)
             stats <- recompute_hit_stats(focal, hits$target)
             hits <- hits |>
               dplyr::mutate(
@@ -3132,7 +3267,7 @@ annotations_details_server <- function(id, rv) {
                 .after = "eval"
               ) |>
               dplyr::arrange(dplyr::desc(similarity))
-            rv$annotations$refHits[selected()] <- json_string(hits)
+            rv$annotations$refHits[hits_idx] <- json_string(hits)
           }
 
           dplyr::tbl(session$userData$con, "annotations") |>
@@ -4221,13 +4356,23 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
             # checkbox's vertical margin so every element lines up vertically.
             tags$style(HTML(stringr::str_glue(
               ".mp-step-box .form-group {{ margin-bottom: 0; }}",
-              ".mp-step-box .form-control {{ height: 28px; padding: 2px 4px; }}"
+              ".mp-step-box .form-control {{ height: 28px; padding: 2px 4px; }}",
+              # Bordered, captioned box around a group of edit buttons so the
+              # codon-search and nucleotide-junction controls are distinguishable.
+              ".mp-edit-group {{ border: 1px solid #ccc; border-radius: 5px; ",
+              "  padding: 10px 8px 6px; position: relative; }}",
+              ".mp-edit-group > .mp-edit-group-label {{ position: absolute; ",
+              "  top: -8px; left: 8px; background: #fff; padding: 0 4px; ",
+              "  font-size: 0.7em; font-weight: bold; color: #666; ",
+              "  text-transform: uppercase; letter-spacing: 0.03em; }}"
             ))),
             # Codon START/STOP search controls (PCG/ORF only); hidden for rRNA,
             # which uses the nucleotide-boundary editor instead.
             div(
               id = ns("codon_edit_ctrls"),
+              class = "mp-edit-group",
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1.5em;",
+            tags$span(class = "mp-edit-group-label", "Codon search"),
             div(
               id = ns("start_search_ctrl"),
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
@@ -4337,6 +4482,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         div(
           style = "margin: 30px 5px 5px 5px;",
           uiOutput(ns("join_preview")),
+          uiOutput(ns("junction_context")),
           uiOutput(ns("msa_header")),
           msaR::msaROutput(ns("msa"))
         )
