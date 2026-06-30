@@ -94,9 +94,14 @@ curate_mito_core <- function(
     default = paste0(ref_dir, "/featureProt/{gene}.fas")
   )
 
-  # Augment local BLAST DB with translated remote BLAST hit gene sequences
-  if (!is.null(blast_ref_file)) {
-    inject_remote_hits_into_blast_db(blast_ref_file, ref_dir)
+  # Augment local BLAST DB with translated remote BLAST hit gene sequences.
+  # blast_ref_file may name multiple candidate-reference JSONs (whitespace
+  # separated); inject each so all retained BLAST hits enrich the curation DB.
+  if (!is.null(blast_ref_file) && nzchar(blast_ref_file)) {
+    ref_files <- strsplit(trimws(blast_ref_file), "\\s+")[[1]]
+    for (rf in ref_files) {
+      if (nzchar(rf)) inject_remote_hits_into_blast_db(rf, ref_dir)
+    }
   }
 
   ## Prepare rules ----
