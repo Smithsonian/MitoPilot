@@ -1004,8 +1004,10 @@ annotations_details_server <- function(id, rv) {
       req(nrow(rv$blast_ref_aln) > 0)
       div(
         style = "display: flex; align-items: center;",
+        # Center the checkbox box + label within .pretty so the control lines up
+        # vertically with the taller action buttons sharing its row.
         tags$style(HTML(sprintf(
-          "#%s .pretty { margin-bottom: 0; }",
+          "#%s .pretty { margin: 0; display: inline-flex; align-items: center; }",
           ns("synteny_zoom")
         ))),
         shinyWidgets::prettyCheckbox(
