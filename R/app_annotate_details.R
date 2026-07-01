@@ -460,6 +460,9 @@ annotations_details_server <- function(id, rv) {
     # Synteny-overview click anchor: alignment column to center zoom on.
     # Set by clicking the overview plot; cleared when user picks a new gene row.
     zoom_click_col <- reactiveVal(NULL)
+    # Previous selection, so a switch between segments of the same joined gene can
+    # keep the alignment view open instead of collapsing it.
+    last_sel <- reactiveVal(NULL)
     selected <- reactive({
       sel <- reactable::getReactableState("table", "selected")
       # Check for unsaved edits
@@ -493,6 +496,8 @@ annotations_details_server <- function(id, rv) {
         if (length(sel) == 0) {
           return(sel)
         }
+        prev <- last_sel()
+        last_sel(sel)
         # Review mode: only the focal (flagged) gene is editable. If the user
         # selects a different row, warn and snap the selection back so only one
         # gene can change between "Back to Review" recomputes.
@@ -541,10 +546,27 @@ annotations_details_server <- function(id, rv) {
           )
           return(rv$editing$idx)
         }
+        # Clicked away to a different gene (not the edited row, not a join
+        # sibling) with no pending edits: cleanly exit the edit session so its
+        # controls and spliced/join state don't carry over onto the new gene.
+        if (!is.null(rv$editing)) {
+          shinyjs::hide("edit_mode_ctrls")
+          shinyjs::hide("save_edits")
+          shinyjs::hide("discard_edits")
+          shinyjs::show("edit_mode")
+          rv$editing <- NULL
+        }
+        # Switching between segments of the same joined gene (e.g. clicking a
+        # block in the spliced-CDS panel) should refresh the alignment in place,
+        # not collapse it - the spliced alignment is the same gene either way.
+        pg <- join_grp_of(prev)
+        ng <- join_grp_of(sel)
+        same_join <- !is.na(pg) && !is.na(ng) && identical(pg, ng)
         rv$alignment <- rv$local_hits <- NULL
         ref_msa_cache$msa <- NULL
         ref_msa_cache$key <- NULL
-        if (rv$annotations$type[sel] %in% c("PCG", "rRNA") & length(rv$alignment) != 0) {
+        if (rv$annotations$type[sel] %in% c("PCG", "rRNA") &&
+            (same_join || length(rv$alignment) != 0)) {
           trigger("align_now")
         } else {
           toggleDetails(ns("alignment_div"), FALSE)
@@ -1861,7 +1883,7 @@ annotations_details_server <- function(id, rv) {
       sel <- selected()
       req(length(sel) == 1)
       req(identical(rv$annotations$type[sel], "PCG"))
-      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      grp <- grp_of(sel)
       req(length(grp) == 1, !is.na(grp))
       mem <- join_members(grp)
       req(length(mem) >= 2)
@@ -1894,7 +1916,7 @@ annotations_details_server <- function(id, rv) {
             "Shiny.setInputValue('{ns('join_seg_click')}', {real_idx}, {{priority: 'event'}})"
           ),
           style = paste0(
-            "cursor: pointer; padding: 2px 1px; font-family: monospace; ",
+            "cursor: pointer; padding: 2px 1px; font-family: 'Courier New', Courier, monospace; ",
             "background-color:", col, ";",
             if (is_active) " outline: 2px solid #c00; outline-offset: -2px; font-weight: bold;" else ""
           ),
@@ -1945,7 +1967,7 @@ annotations_details_server <- function(id, rv) {
       p1 <- rv$annotations$pos1[sel]
       p2 <- rv$annotations$pos2[sel]
       flank <- 12L; inN <- 15L
-      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      grp <- grp_of(sel)
       mem <- join_members(grp)
       k <- match(sel, mem)
       seglen <- function(i) abs(rv$annotations$pos2[i] - rv$annotations$pos1[i]) + 1L
@@ -1972,42 +1994,106 @@ annotations_details_server <- function(id, rv) {
         }
         paste(out, collapse = "")
       }
-      outside <- function(s) tags$span(style = "color:#aa99aa;", tolower(s))
       inside  <- function(s) tags$span(style = "color:#111;", s)
       cut <- tags$span(style = "color:#c00; font-weight:bold;", "|")
-      # 5' end of the segment (reads 5'->3'): outside | inside-codons. Inside
+      # Per-member genomic bounds + cumulative spliced offset (bases before each
+      # member, 5'->3'), so flanking bases that fall in a neighbouring exon can be
+      # coloured AND grouped into the spliced reading frame of that exon.
+      mem_len <- vapply(mem, seglen, integer(1))
+      mem_cum <- cumsum(c(0L, mem_len))[seq_along(mem)]
+      lo_of <- vapply(mem, function(i) min(rv$annotations$pos1[i], rv$annotations$pos2[i]), integer(1))
+      hi_of <- vapply(mem, function(i) max(rv$annotations$pos1[i], rv$annotations$pos2[i]), integer(1))
+      pos_member <- function(pos) {
+        hit <- which(pos >= lo_of & pos <= hi_of)
+        if (length(hit)) hit[1] else 0L
+      }
+      # Spliced-CDS phase (bases already used in the current codon) at a genomic
+      # position within member k, using k's 5' end as its coding start.
+      pos_phase <- function(pos, k) {
+        off <- if (dir == "-") hi_of[k] - pos else pos - lo_of[k]
+        (mem_cum[k] + off) %% 3
+      }
+      comp1 <- function(chars) {
+        m <- c(A = "T", T = "A", G = "C", C = "G", a = "t", t = "a",
+               g = "c", c = "g")
+        out <- m[chars]; out[is.na(out)] <- chars[is.na(out)]; unname(out)
+      }
+      # Render a flanking (outside-CDS) window with per-base colouring: bases
+      # inside a neighbouring exon of this gene are shown blue + uppercase
+      # (colourblind-friendly Okabe-Ito blue) and codon-grouped in that exon's
+      # reading frame; intron/intergenic bases stay muted lowercase. gstart/gend
+      # are ascending genomic coords; revcomp reverses + complements for display
+      # on the - strand so it reads 5'->3'.
+      flank_span <- function(gstart, gend, revcomp) {
+        gstart <- max(1L, as.integer(gstart)); gend <- min(as.integer(width), as.integer(gend))
+        if (gstart > gend) return(NULL)
+        chars <- strsplit(as.character(Biostrings::subseq(asm, gstart, gend)), "")[[1]]
+        positions <- gstart:gend
+        if (revcomp) { chars <- rev(comp1(chars)); positions <- rev(positions) }
+        cls <- vapply(positions, pos_member, integer(1))
+        spans <- list(); i <- 1L; n <- length(chars)
+        while (i <= n) {
+          j <- i
+          while (j < n && cls[j + 1L] == cls[i]) j <- j + 1L
+          seg <- paste(chars[i:j], collapse = "")
+          spans[[length(spans) + 1L]] <- if (cls[i] > 0L) {
+            tags$span(
+              style = "color:#0072B2;",
+              codon_group(toupper(seg), pos_phase(positions[i], cls[i]))
+            )
+          } else {
+            tags$span(style = "color:#aa99aa;", tolower(seg))
+          }
+          i <- j + 1L
+        }
+        spans
+      }
+      # 5' end of the segment (reads 5'->3'): flank | inside-codons. Inside
       # windows are clamped to [p1, p2] so a short segment never shows adjacent
       # (intron / neighbouring-segment) bases as if they were coding.
       if (dir == "-") {
-        out5 <- rc(gseq(p2 + 1, p2 + flank)); in5 <- rc(gseq(max(p1, p2 - inN + 1), p2))
+        flank5 <- flank_span(p2 + 1, p2 + flank, TRUE)
+        in5 <- rc(gseq(max(p1, p2 - inN + 1), p2))
       } else {
-        out5 <- gseq(p1 - flank, p1 - 1); in5 <- gseq(p1, min(p2, p1 + inN - 1))
+        flank5 <- flank_span(p1 - flank, p1 - 1, FALSE)
+        in5 <- gseq(p1, min(p2, p1 + inN - 1))
       }
       line5 <- tags$div(
-        style = "font-family: monospace; white-space: nowrap;",
+        style = "font-family: 'Courier New', Courier, monospace; white-space: nowrap;",
         tags$span(style = "color:#666; margin-right:6px;", "5'"),
-        outside(out5), cut, inside(codon_group(in5, cum_before %% 3))
+        flank5, cut, inside(codon_group(in5, cum_before %% 3))
       )
-      # 3' end of the segment: inside-codons | outside
+      # 3' end of the segment: inside-codons | flank
       phase3 <- (cum_before + max(0L, this_len - inN)) %% 3
       if (dir == "-") {
-        in3 <- rc(gseq(p1, min(p2, p1 + inN - 1))); out3 <- rc(gseq(p1 - flank, p1 - 1))
+        in3 <- rc(gseq(p1, min(p2, p1 + inN - 1))); flank3 <- flank_span(p1 - flank, p1 - 1, TRUE)
       } else {
-        in3 <- gseq(max(p1, p2 - inN + 1), p2); out3 <- gseq(p2 + 1, p2 + flank)
+        in3 <- gseq(max(p1, p2 - inN + 1), p2); flank3 <- flank_span(p2 + 1, p2 + flank, FALSE)
       }
       line3 <- tags$div(
-        style = "font-family: monospace; white-space: nowrap;",
-        tags$span(style = "color:#666; margin-right:6px;", "3'"),
-        inside(codon_group(in3, phase3)), cut, outside(out3)
+        style = "font-family: 'Courier New', Courier, monospace; white-space: nowrap;",
+        inside(codon_group(in3, phase3)), cut, flank3,
+        tags$span(style = "color:#666; margin-left:6px;", "3'")
+      )
+      # Bases of the segment interior hidden between the two shown windows.
+      mid_bp <- this_len - nchar(in5) - nchar(in3)
+      gap_line <- if (mid_bp > 0) tags$div(
+        style = "font-family: 'Courier New', Courier, monospace; color:#888; font-size:0.8em; margin: 1px 0;",
+        paste0("\u22ee ", mid_bp, " bp \u22ee")
       )
       div(
         class = "mp-edit-group",
-        style = "margin: 6px 0; padding-top: 12px; overflow-x: auto;",
+        # Keep the horizontal scroll on an inner wrapper: putting overflow-x on
+        # the .mp-edit-group itself makes the browser clip overflow-y too, which
+        # cuts off the absolutely-positioned caption sitting above the border.
+        style = "margin: 6px 0; padding-top: 14px;",
         tags$span(class = "mp-edit-group-label", "Active segment junctions (nt)"),
-        line5, line3,
+        tags$div(style = "overflow-x: auto;", line5, gap_line, line3),
         tags$div(
           style = "color:#888; font-size:0.75em; margin-top:2px;",
-          "| = current boundary; lowercase = excluded flank; spaces = codon frame"
+          tags$span(style = "color:#c00; font-weight:bold;", "|"), " = current boundary; ",
+          tags$span(style = "color:#0072B2;", "ATG"), " = neighbouring exon; ",
+          tags$span(style = "color:#aa99aa;", "atg"), " = intron/flank; spaces = codon frame"
         )
       )
     })
@@ -2492,10 +2578,23 @@ annotations_details_server <- function(id, rv) {
       if (rv$annotations$direction[idx[1]] == "-") idx <- rev(idx)
       idx
     }
+    # Resolve the join group for a row. During an edit session the stored group
+    # is authoritative, but only for rows that actually belong to it; any other
+    # row (e.g. after the user clicks away to a different gene) derives its group
+    # from its own notes, so a stale edit session never leaks its spliced view /
+    # segment roles onto an unrelated gene.
+    grp_of <- function(sel) {
+      eg <- rv$editing$join_grp
+      if (!is.null(eg) && length(sel) == 1 && !is.na(sel) &&
+          sel %in% join_members(eg)) {
+        return(eg)
+      }
+      join_grp_of(sel)
+    }
     # Role of the active segment within its group: which terminal end(s) it owns.
     # Non-join annotations own both ends.
     seg_role <- function(sel) {
-      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      grp <- grp_of(sel)
       if (length(grp) != 1 || is.na(grp)) {
         return(list(join = FALSE, is_5 = TRUE, is_3 = TRUE, n = 1L))
       }
@@ -2510,7 +2609,7 @@ annotations_details_server <- function(id, rv) {
     # Spliced CDS for the active segment's group, or NULL on failure (e.g. a
     # transient out-of-frame length mid-edit). Uses the loaded edit assembly.
     spliced_active <- function(sel) {
-      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      grp <- grp_of(sel)
       if (length(grp) != 1 || is.na(grp)) return(NULL)
       mem <- join_members(grp)
       if (length(mem) < 2) return(NULL)
@@ -2542,7 +2641,7 @@ annotations_details_server <- function(id, rv) {
     # the active segment may have no hits of its own (internal/3' segments), so
     # use the first member (5'->3') that carries non-empty refHits, else `sel`.
     align_hits_idx <- function(sel) {
-      grp <- rv$editing$join_grp %||% join_grp_of(sel)
+      grp <- grp_of(sel)
       if (length(grp) != 1 || is.na(grp)) return(sel)
       mem <- join_members(grp)
       has_hits <- vapply(mem, function(i) {
@@ -2554,7 +2653,7 @@ annotations_details_server <- function(id, rv) {
     # TRUE if [new_pos1, new_pos2] would intersect another member of idx's join
     # group (genomic overlap; members share path/scaffold by construction).
     seg_would_overlap <- function(idx, new_pos1, new_pos2) {
-      grp <- rv$editing$join_grp %||% join_grp_of(idx)
+      grp <- grp_of(idx)
       if (length(grp) != 1 || is.na(grp)) return(FALSE)
       others <- setdiff(join_members(grp), idx)
       if (length(others) == 0) return(FALSE)
@@ -3064,31 +3163,45 @@ annotations_details_server <- function(id, rv) {
         )
       }
       # Caption distinguishes the nucleotide nudge from the codon-search box.
-      cap <- if (seg_role(sel)$join) "Junction (nt)" else "Boundary (nt)"
+      role <- seg_role(sel)
+      cap <- "Nucleotide edit"
+      # For a joined PCG the start/stop-owning terminal end is edited via codon
+      # search (not nucleotides), so only expose the nt nudge on junction (non-
+      # terminal) ends. rRNA has no codon search, so it keeps both ends.
+      is_pcg <- identical(rv$annotations$type[sel], "PCG")
+      show_5 <- !(is_pcg && role$is_5)
+      show_3 <- !(is_pcg && role$is_3)
+      seg_5 <- if (show_5) list(
+        tags$span(style = "font-weight: bold;", "5'"),
+        nudge("rrna-5-out", "+"),   # extend 5' (grow upstream)
+        nudge("rrna-5-in", "\u2212")
+      )
+      seg_3 <- if (show_3) list(
+        tags$span(style = "font-weight: bold;", "3'"),
+        nudge("rrna-3-in", "\u2212"),
+        nudge("rrna-3-out", "+")    # extend 3' (grow downstream)
+      )
+      step_box <- list(
+        div(
+          class = "mp-step-box",
+          style = "width: 56px; margin: 0 0.2em;",
+          numericInput(
+            # Retain the chosen step across re-renders of this renderUI (it
+            # re-renders on each nudge because it depends on rv$editing).
+            ns("rrna_step_size"), label = NULL,
+            value = isolate(input$rrna_step_size) %||% 1,
+            min = 1, max = 500, step = 1, width = "56px"
+          )
+        ),
+        tags$span(style = "font-size: 0.75em; color: #666; margin-right: 0.4em;", "nt")
+      )
       tagList(div(
         class = "mp-edit-group",
         style = "display: flex; align-items: center;",
         tags$span(class = "mp-edit-group-label", cap),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
-          tags$span(style = "font-weight: bold;", "5'"),
-          nudge("rrna-5-out", "+"),   # extend 5' (grow upstream)
-          nudge("rrna-5-in", "\u2212"),
-          div(
-            class = "mp-step-box",
-            style = "width: 56px; margin: 0 0.2em;",
-            numericInput(
-              # Retain the chosen step across re-renders of this renderUI (it
-              # re-renders on each nudge because it depends on rv$editing).
-              ns("rrna_step_size"), label = NULL,
-              value = isolate(input$rrna_step_size) %||% 1,
-              min = 1, max = 500, step = 1, width = "56px"
-            )
-          ),
-          tags$span(style = "font-size: 0.75em; color: #666; margin-right: 0.4em;", "nt"),
-          tags$span(style = "font-weight: bold;", "3'"),
-          nudge("rrna-3-in", "\u2212"),
-          nudge("rrna-3-out", "+")    # extend 3' (grow downstream)
+          seg_5, step_box, seg_3
         )
         )
       )
@@ -3101,6 +3214,14 @@ annotations_details_server <- function(id, rv) {
       req(rv$editing, length(sel) == 1)
       req(nt_nudge_row(sel))
       is_rrna <- identical(rv$annotations$type[sel], "rRNA")
+      # A joined PCG's start/stop-owning terminal end is edited via codon search,
+      # not the nucleotide nudge; ignore any nudge on that end.
+      if (!is_rrna) {
+        role <- seg_role(sel)
+        if ((end == "5" && role$is_5) || (end == "3" && role$is_3)) {
+          return(invisible(NULL))
+        }
+      }
       step <- rrna_step_size()
       dir <- rv$annotations$direction[sel]
       pos1 <- rv$annotations$pos1[sel]
@@ -4364,9 +4485,8 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               ".mp-edit-group {{ border: 1px solid #ccc; border-radius: 5px; ",
               "  padding: 10px 8px 6px; position: relative; }}",
               ".mp-edit-group > .mp-edit-group-label {{ position: absolute; ",
-              "  top: -8px; left: 8px; background: #fff; padding: 0 4px; ",
-              "  font-size: 0.7em; font-weight: bold; color: #666; ",
-              "  text-transform: uppercase; letter-spacing: 0.03em; }}"
+              "  top: -9px; left: 8px; background: #fff; padding: 0 4px; ",
+              "  font-size: 12px; font-weight: bold; color: #666; }}"
             ))),
             # Codon START/STOP search controls (PCG/ORF only); hidden for rRNA,
             # which uses the nucleotide-boundary editor instead.
@@ -4374,7 +4494,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               id = ns("codon_edit_ctrls"),
               class = "mp-edit-group",
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1.5em;",
-            tags$span(class = "mp-edit-group-label", "Codon search"),
+            tags$span(class = "mp-edit-group-label", "Codon edit"),
             div(
               id = ns("start_search_ctrl"),
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
