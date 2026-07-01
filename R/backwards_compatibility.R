@@ -6,25 +6,48 @@
 #' "mitofinder" on assemble_opts, "max_blast_hits"/"ref_dir"/"ref_db" on
 #' curate_opts) and refreshes the curation rules.
 #'
-#' The Nextflow `.config` is regenerated wholesale from the current built-in
-#' template for the project's executor (rather than patched line by line): the
-#' project-specific values (raw/asmb dirs, min depth, genetic code, NCBI key,
-#' queue, clusterOptions, container engine) are carried over, the container is
-#' bumped to the current MitoPilot version, and the previous `.config` is saved
-#' to a timestamped `.config.bak.<timestamp>` backup. If the executor cannot be
-#' detected the `.config` is left untouched and a warning is issued.
+#' When `update_config = TRUE` the Nextflow `.config` is regenerated wholesale
+#' from the template for the supplied `executor` (rather than patched line by
+#' line): the project-specific values (raw/asmb dirs, min depth, genetic code,
+#' NCBI key, and, for generic HPC templates, queue / penv / clusterOptions /
+#' container engine) are carried over, the container is bumped to the current
+#' MitoPilot version, and the previous `.config` is saved to a timestamped
+#' `.config.bak.<timestamp>` backup. Because an existing config may carry hand
+#' edits that cannot be parsed reliably (e.g. a multi-line `clusterOptions`
+#' closure), the executor must be given explicitly and you should review the
+#' regenerated config against the backup.
 #'
 #' @param path Path to the project directory (default = current working directory)
-#' @param update_config Regenerate the Nextflow `.config` from the current
-#'   built-in template (default `TRUE`). Set to `FALSE` to migrate only the
-#'   SQLite database and leave the existing `.config` untouched.
+#' @param executor The executor whose config template to regenerate from. Same
+#'   options as [new_project()]: a built-in template ("local", "awsbatch",
+#'   "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a
+#'   saved cluster profile (see [list_configs()]). Required when
+#'   `update_config = TRUE`.
+#' @param update_config Regenerate the Nextflow `.config` from the `executor`
+#'   template (default `TRUE`). Set to `FALSE` to migrate only the SQLite
+#'   database and leave the existing `.config` untouched.
 #'
 #' @export
 #'
 backwards_compatibility <- function(
     path = ".",
+    executor = NULL,
     update_config = TRUE
 ){
+  # Validate the executor up front (before any DB writes) so we fail fast rather
+  # than half-migrate and then error on config regeneration.
+  if (isTRUE(update_config)) {
+    if (is.null(executor) || !nzchar(executor)) {
+      stop(
+        "`executor` is required when update_config = TRUE. Choose one of: ",
+        paste(list_configs()$name, collapse = ", "),
+        ".\nOr call backwards_compatibility(..., update_config = FALSE) to ",
+        "migrate only the database.",
+        call. = FALSE
+      )
+    }
+    resolve_config(executor)  # errors early if the executor is unknown
+  }
   # update SQL database with "reviewed" column for annotations table
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite")) # open connection
   on.exit(DBI::dbDisconnect(con))
@@ -1137,12 +1160,12 @@ backwards_compatibility <- function(
     )
   }
 
-  # Regenerate the .config from the current built-in template (detect executor,
-  # port project values, bump container, back up the old config). Gated on the
-  # container being stale so an already-current config is left alone, and on the
-  # caller opting in (default on).
+  # Regenerate the .config from the chosen executor's template (port project
+  # values, bump container, back up the old config). Gated on the container
+  # being stale so an already-current config is left alone, and on the caller
+  # opting in (default on).
   if (update_config && !containerVer) {
-    migrate_config(path, con)
+    migrate_config(path, executor, con = con)
   }
 
 }

@@ -4,14 +4,20 @@
 \alias{backwards_compatibility}
 \title{Update old project database for backwards compatibility}
 \usage{
-backwards_compatibility(path = ".", update_config = TRUE)
+backwards_compatibility(path = ".", executor = NULL, update_config = TRUE)
 }
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
 
-\item{update_config}{Regenerate the Nextflow `.config` from the current
-built-in template (default `TRUE`). Set to `FALSE` to migrate only the
-SQLite database and leave the existing `.config` untouched.}
+\item{executor}{The executor whose config template to regenerate from. Same
+options as [new_project()]: a built-in template ("local", "awsbatch",
+"slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a
+saved cluster profile (see [list_configs()]). Required when
+`update_config = TRUE`.}
+
+\item{update_config}{Regenerate the Nextflow `.config` from the `executor`
+template (default `TRUE`). Set to `FALSE` to migrate only the SQLite
+database and leave the existing `.config` untouched.}
 }
 \description{
 Migrates an old project's SQLite database to the current schema (adding any
@@ -21,11 +27,14 @@ annotate, "start_gene" on annotate_opts, "assembler"/"mitofinder_db"/
 curate_opts) and refreshes the curation rules.
 }
 \details{
-The Nextflow `.config` is regenerated wholesale from the current built-in
-template for the project's executor (rather than patched line by line): the
-project-specific values (raw/asmb dirs, min depth, genetic code, NCBI key,
-queue, clusterOptions, container engine) are carried over, the container is
-bumped to the current MitoPilot version, and the previous `.config` is saved
-to a timestamped `.config.bak.<timestamp>` backup. If the executor cannot be
-detected the `.config` is left untouched and a warning is issued.
+When `update_config = TRUE` the Nextflow `.config` is regenerated wholesale
+from the template for the supplied `executor` (rather than patched line by
+line): the project-specific values (raw/asmb dirs, min depth, genetic code,
+NCBI key, and, for generic HPC templates, queue / penv / clusterOptions /
+container engine) are carried over, the container is bumped to the current
+MitoPilot version, and the previous `.config` is saved to a timestamped
+`.config.bak.<timestamp>` backup. Because an existing config may carry hand
+edits that cannot be parsed reliably (e.g. a multi-line `clusterOptions`
+closure), the executor must be given explicitly and you should review the
+regenerated config against the backup.
 }
