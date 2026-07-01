@@ -241,16 +241,14 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         div(
           id = ns("blast_mts_group"),
-          tags$label("Candidate reference genomes to retain"),
+          tags$label("Candidate reference mitogenomes to retain"),
           numericInput(
             ns("max_target_seqs"),
             label = NULL,
             value = as.integer(current$max_target_seqs %||% 5L),
             min = 1, max = 50, step = 1, width = "120px"
           ) |> shinyjs::disabled(),
-          opts_help("Number of top BLAST hits kept per sample as candidate ",
-                    "reference mitogenomes (sets blastn -max_target_seqs and the ",
-                    "candidate list shown in the annotate synteny picker).")
+          opts_help("Number of top BLAST hits kept per sample (-max_target_seqs).")
         ),
         div(
           id = ns("blast_extra_group"),
@@ -259,7 +257,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",
             "Extra flags passed to blastn. Cannot override: -outfmt, -max_hsps, or ",
-            "-max_target_seqs (set via the field above)."
+            "-max_target_seqs."
           ),
           textAreaInput(
             ns("extra_opts"),
