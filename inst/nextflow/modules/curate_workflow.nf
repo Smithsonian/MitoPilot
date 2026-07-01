@@ -30,14 +30,29 @@ workflow CURATE {
 
                 def jsonParams = it[7].toString()
                 def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
-                def blastAccession = it[12] ?: ""
-                def blastRefRel = blastAccession
-                    ? "${params.publishDir}/${it[0]}/assemble/${it[2]}/blast_ref_${blastAccession}/remote_blast_ref.json"
-                    : "${params.publishDir}/${it[0]}/assemble/${it[2]}/remote_blast_ref.json"
-                def blastRefAbs = new File(launchDir.toString(), blastRefRel)
-                def blastRefFile = blastRefAbs.exists()
-                    ? file(blastRefRel)
-                    : file("${baseDir}/modules/empty_remote_blast_ref.json")
+                // Gather every fetched candidate-reference JSON for this sample
+                // (blast_ref_<accession>/remote_blast_ref.json published by
+                // blast_ref_stamp). All are injected into the curation BLAST DB so
+                // the extra retained BLAST hits enrich curation. Falls back to the
+                // legacy single-hit path, then an empty stub.
+                def assembleRel = "${params.publishDir}/${it[0]}/assemble/${it[2]}"
+                def assembleAbs = new File(launchDir.toString(), assembleRel)
+                def blastRefFiles = []
+                if (assembleAbs.exists()) {
+                    assembleAbs.listFiles()?.findAll {
+                        d -> d.isDirectory() && d.name.startsWith('blast_ref_')
+                    }?.sort { a, b -> a.name <=> b.name }?.each { d ->
+                        def j = new File(d, 'remote_blast_ref.json')
+                        if (j.exists()) blastRefFiles << file("${assembleRel}/${d.name}/remote_blast_ref.json")
+                    }
+                }
+                if (blastRefFiles.isEmpty()) {
+                    def legacy = new File(assembleAbs, 'remote_blast_ref.json')
+                    if (legacy.exists()) blastRefFiles << file("${assembleRel}/remote_blast_ref.json")
+                }
+                if (blastRefFiles.isEmpty()) {
+                    blastRefFiles << file("${baseDir}/modules/empty_remote_blast_ref.json")
+                }
 
                 tuple(
                     it[0],                                          // ID
@@ -56,7 +71,7 @@ workflow CURATE {
                     file(it[9] + "/" + it[10]),                              // curation ref dir + clade
                     it[10],                                                   // ref clade
                     it[10].replaceFirst(/\.tar\.gz$/, ''),                // ref_db without ".tar.gz"
-                    blastRefFile
+                    blastRefFiles                                            // candidate-reference JSONs
 
                 )
             }

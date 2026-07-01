@@ -125,6 +125,16 @@ backwards_compatibility <- function(
         error = function(e) FALSE
       )) &&
       "export_opts" %in% DBI::dbListTables(con) &&
+      "synteny_accession" %in% names(assemble_table) &&
+      "blast_ref_candidates" %in% DBI::dbListTables(con) &&
+      isTRUE(tryCatch(
+        "accession" %in% DBI::dbListFields(con, "blast_ref_annotations"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "accession" %in% DBI::dbListFields(con, "blast_ref_alignment"),
+        error = function(e) FALSE
+      )) &&
       export_default_current)
   {
     message("nothing to update")
@@ -1037,6 +1047,12 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
   }
 
+  # user-selected synteny-plot reference accession (NULL falls back to top hit)
+  if (!("synteny_accession" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'synteny_accession' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN synteny_accession TEXT")
+  }
+
   # if tool column doesn't exist in annotations table, add it
   annotations_cols <- DBI::dbListFields(con, "annotations")
   if (!("tool" %in% annotations_cols)) {
@@ -1050,7 +1066,7 @@ backwards_compatibility <- function(
     message("created blast_ref_annotations table")
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_annotations (
-        ID TEXT NOT NULL,
+        accession TEXT NOT NULL,
         gene TEXT NOT NULL,
         type TEXT,
         pos1 INTEGER,
@@ -1058,8 +1074,61 @@ backwards_compatibility <- function(
         direction TEXT,
         ref_length INTEGER,
         time_stamp INTEGER,
-        PRIMARY KEY (ID, gene, pos1)
+        PRIMARY KEY (accession, gene, pos1)
       );"
+    )
+  } else if (!("accession" %in% DBI::dbListFields(con, "blast_ref_annotations"))) {
+    # Migrate ID-keyed table to accession-keyed: map each sample's rows to its
+    # blast_accession (annotations are a property of the reference genome).
+    message("re-keyed blast_ref_annotations table by accession")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_annotations_new (
+        accession TEXT NOT NULL,
+        gene TEXT NOT NULL,
+        type TEXT,
+        pos1 INTEGER,
+        pos2 INTEGER,
+        direction TEXT,
+        ref_length INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (accession, gene, pos1)
+      );"
+    )
+    DBI::dbExecute(con,
+      "INSERT OR IGNORE INTO blast_ref_annotations_new
+         (accession, gene, type, pos1, pos2, direction, ref_length, time_stamp)
+       SELECT a.blast_accession, r.gene, r.type, r.pos1, r.pos2, r.direction, r.ref_length, r.time_stamp
+       FROM blast_ref_annotations r
+       JOIN assemble a ON r.ID = a.ID
+       WHERE a.blast_accession IS NOT NULL"
+    )
+    DBI::dbExecute(con, "DROP TABLE blast_ref_annotations")
+    DBI::dbExecute(con, "ALTER TABLE blast_ref_annotations_new RENAME TO blast_ref_annotations")
+  }
+
+  # per-sample candidate references (rank 1 = top hit). Seed existing projects
+  # with the single current top hit so the in-app picker shows one entry.
+  if (!("blast_ref_candidates" %in% DBI::dbListTables(con))) {
+    message("created blast_ref_candidates table")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_candidates (
+        ID TEXT NOT NULL,
+        rank INTEGER,
+        accession TEXT NOT NULL,
+        species TEXT,
+        pident REAL,
+        qcovs REAL,
+        evalue REAL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, accession)
+      );"
+    )
+    DBI::dbExecute(con,
+      "INSERT OR IGNORE INTO blast_ref_candidates
+         (ID, rank, accession, species, pident, qcovs, evalue, time_stamp)
+       SELECT ID, 1, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp
+       FROM assemble
+       WHERE blast_accession IS NOT NULL AND blast_accession != 'NO HIT'"
     )
   }
 
@@ -1088,14 +1157,41 @@ backwards_compatibility <- function(
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_alignment (
         ID TEXT NOT NULL,
+        accession TEXT NOT NULL,
         aligned_sample TEXT NOT NULL,
         aligned_ref TEXT NOT NULL,
         rotation INTEGER NOT NULL DEFAULT 0,
         ref_length INTEGER NOT NULL,
         time_stamp INTEGER,
-        PRIMARY KEY (ID)
+        PRIMARY KEY (ID, accession)
       );"
     )
+  } else if (!("accession" %in% DBI::dbListFields(con, "blast_ref_alignment"))) {
+    # Migrate single-ref (ID-keyed) alignment to (ID, accession): the existing
+    # alignment is against the sample's current top hit.
+    message("re-keyed blast_ref_alignment table by (ID, accession)")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_alignment_new (
+        ID TEXT NOT NULL,
+        accession TEXT NOT NULL,
+        aligned_sample TEXT NOT NULL,
+        aligned_ref TEXT NOT NULL,
+        rotation INTEGER NOT NULL DEFAULT 0,
+        ref_length INTEGER NOT NULL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, accession)
+      );"
+    )
+    DBI::dbExecute(con,
+      "INSERT OR IGNORE INTO blast_ref_alignment_new
+         (ID, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+       SELECT al.ID, a.blast_accession, al.aligned_sample, al.aligned_ref, al.rotation, al.ref_length, al.time_stamp
+       FROM blast_ref_alignment al
+       JOIN assemble a ON al.ID = a.ID
+       WHERE a.blast_accession IS NOT NULL"
+    )
+    DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+    DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
   }
 
   # if blast_opts column doesn't exist in assemble table, add it
@@ -1238,6 +1334,7 @@ backwards_compatibility <- function(
     blast_gb_lines <- c(
       "    blast_gb {",
       "        cpus = 1",
+      "        max_target_seqs = 5 // BLAST hits retained per sample as candidate references",
       "        maxForks = 10 // only allow 10 concurrent BLAST/ref-fetch runs to avoid NCBI timeout issues",
       "        container = process.container",
       "        executor = process.executor",

@@ -78,6 +78,7 @@ params {
         executor = process.executor
     }
     blast_gb {
+        max_target_seqs = 5 // BLAST hits retained per sample as candidate references
         cpus = 1
         maxForks = 10 // only allow 10 concurrent BLAST runs to avoid server timeout issues
         maxRetries = 3
