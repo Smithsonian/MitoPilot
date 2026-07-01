@@ -4,21 +4,28 @@
 \alias{backwards_compatibility}
 \title{Update old project database for backwards compatibility}
 \usage{
-backwards_compatibility(path = ".")
+backwards_compatibility(path = ".", update_config = TRUE)
 }
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
+
+\item{update_config}{Regenerate the Nextflow `.config` from the current
+built-in template (default `TRUE`). Set to `FALSE` to migrate only the
+SQLite database and leave the existing `.config` untouched.}
 }
 \description{
-Update old project database for backwards compatibility.
-Adds "reviewed", "ID_verified", "genetic_code", and "problematic" columns to the annotate table,
-"start_gene" column to the annotate_opts table. Adds
-"assembler", "mitofinder_db", and "mitofinder" columns to the assemble_opts table.
-Adds "max_blast_hits" to the curate_opts table.
-Adds "asmbDir = 'NA'" to the .config params block
-and updates the container to the current MitoPilot version
-in the .config file.
-Updates the "ref_dir" and "ref_db" fields in the annotate_opts table
-adds these fields to the curate_opts table,
-and updates the curation rules in the curate_opts table.
+Migrates an old project's SQLite database to the current schema (adding any
+missing columns and tables, e.g. "reviewed"/"ID_verified"/"problematic" on
+annotate, "start_gene" on annotate_opts, "assembler"/"mitofinder_db"/
+"mitofinder" on assemble_opts, "max_blast_hits"/"ref_dir"/"ref_db" on
+curate_opts) and refreshes the curation rules.
+}
+\details{
+The Nextflow `.config` is regenerated wholesale from the current built-in
+template for the project's executor (rather than patched line by line): the
+project-specific values (raw/asmb dirs, min depth, genetic code, NCBI key,
+queue, clusterOptions, container engine) are carried over, the container is
+bumped to the current MitoPilot version, and the previous `.config` is saved
+to a timestamped `.config.bak.<timestamp>` backup. If the executor cannot be
+detected the `.config` is left untouched and a warning is issued.
 }
