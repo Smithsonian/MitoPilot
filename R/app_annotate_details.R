@@ -1025,11 +1025,15 @@ annotations_details_server <- function(id, rv) {
       req(!is.null(rv$blast_ref_aln))
       req(nrow(rv$blast_ref_aln) > 0)
       div(
-        style = "display: flex; align-items: center;",
-        # Center the checkbox box + label within .pretty so the control lines up
-        # vertically with the taller action buttons sharing its row.
+        style = "display: flex; align-items: center; align-self: stretch;",
+        # Match the checkbox control height to the sibling buttons (~34px) and
+        # center its box + label, so it lines up on the row midline rather than
+        # sitting at the top.
         tags$style(HTML(sprintf(
-          "#%s .pretty { margin: 0; display: inline-flex; align-items: center; }",
+          paste0(
+            "#%s .pretty { margin: 0; min-height: 34px; display: inline-flex; ",
+            "align-items: center; }"
+          ),
           ns("synteny_zoom")
         ))),
         shinyWidgets::prettyCheckbox(
@@ -1412,14 +1416,14 @@ annotations_details_server <- function(id, rv) {
         col_class == "mismatch" ~ "#E55330",
         TRUE                    ~ "#CCCCCC"
       )
+      # Per-base letter colour.
       base_color <- function(b) {
         u <- toupper(b)
         dplyr::case_when(
-          u == "A" ~ "#D9342B",
-          u == "C" ~ "#3878C5",
-          u == "G" ~ "#E6A500",
-          u == "T" ~ "#2D9E3F",
-          b == "-" ~ "#BBBBBB",
+          u == "A" ~ "#4faf45",
+          u == "C" ~ "#e0a53f",
+          u == "G" ~ "#e0555a",
+          u == "T" ~ "#4a90d9",
           TRUE     ~ "#666666"
         )
       }
@@ -1855,9 +1859,15 @@ annotations_details_server <- function(id, rv) {
         "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
       )
       new_alignment$partial <- partial_label(selected())
+      # Use the displayed protein (spliced translation for a joined gene) so the
+      # internal-stop warning appears in the same header spot for all PCGs.
       new_alignment$internal_stop <- ifelse(
-        stringr::str_detect(rv$annotations$translation[selected()], "\\*"),
-        paste("<span>", as.character(icon("warning")), "<b>Internal Stop Detected</b>", as.character(icon("warning")), "<span>"),
+        stringr::str_detect(unname(focal), "\\*"),
+        paste0(
+          "<span style=\"color:#c00; font-weight:bold;\">",
+          as.character(icon("triangle-exclamation")),
+          " internal stop codon</span>"
+        ),
         ""
       )
       # Nonce so each edit invalidates the render (reactiveValues dedupes
@@ -1923,7 +1933,6 @@ annotations_details_server <- function(id, rv) {
           substr(prot, aa1, aa2)
         )
       })
-      internal_stop <- stringr::str_detect(prot, "\\*")
       div(
         style = "margin-bottom: 6px;",
         tags$b("Spliced CDS "),
@@ -1932,10 +1941,6 @@ annotations_details_server <- function(id, rv) {
           stringr::str_glue(
             "({nchar(prot)} aa, {nrow(segs)} segments – click a segment to edit it)"
           )
-        ),
-        if (internal_stop) tags$span(
-          style = "color:#c00; font-weight:bold; margin-left:8px;",
-          icon("triangle-exclamation"), " internal stop codon"
         ),
         div(
           style = "word-break: break-all; line-height: 1.6; margin-top: 4px;",
@@ -1950,17 +1955,22 @@ annotations_details_server <- function(id, rv) {
       reactable::updateReactable("table", selected = idx)
     })
 
-    # Live nucleotide context for the active join segment's two boundaries, so
-    # the user can make junction nudges while seeing the actual bases (not just
-    # the AA translation). Shows ~12 flanking (excluded) bases, a cut marker, and
-    # the in-CDS bases grouped into reading-frame codons. Updates on each nudge.
+    # Live nucleotide context for a PCG's boundaries, so the user can see the
+    # actual bases (not just the AA translation) at the start/stop (and, for a
+    # joined gene, the splice junctions). Shows ~12 flanking bases, a cut marker,
+    # and the in-CDS bases grouped into reading-frame codons. For a joined gene
+    # the flank bases that fall in a neighbouring exon are highlighted. Shown for
+    # any PCG in both view and edit mode; updates on each nudge.
     output$junction_context <- renderUI({
-      req(rv$editing)
       sel <- selected()
       req(length(sel) == 1)
       req(identical(rv$annotations$type[sel], "PCG"))
-      req(seg_role(sel)$join)
-      asm <- rv$editing$assembly
+      # Use the loaded edit assembly if editing, else fetch it (viewer works in
+      # both edit and view mode).
+      asm <- rv$editing$assembly %||% tryCatch(get_assembly(
+        ID = rv$annotations$ID[sel], path = rv$annotations$path[sel],
+        scaffold = rv$annotations$scaffold[sel], con = session$userData$con
+      ), error = function(e) NULL)
       req(!is.null(asm))
       width <- asm@ranges@width
       dir <- rv$annotations$direction[sel]
@@ -1968,9 +1978,12 @@ annotations_details_server <- function(id, rv) {
       p2 <- rv$annotations$pos2[sel]
       flank <- 12L; inN <- 15L
       grp <- grp_of(sel)
-      mem <- join_members(grp)
+      is_join <- !is.na(grp)
+      seglen <- function(i) as.integer(abs(rv$annotations$pos2[i] - rv$annotations$pos1[i]) + 1L)
+      # Members of this gene, 5'->3'. A single-feature PCG is its own only member
+      # (no neighbouring segments to highlight).
+      mem <- if (is_join) join_members(grp) else sel
       k <- match(sel, mem)
-      seglen <- function(i) abs(rv$annotations$pos2[i] - rv$annotations$pos1[i]) + 1L
       cum_before <- if (k > 1) sum(vapply(mem[seq_len(k - 1)], seglen, integer(1))) else 0L
       this_len <- seglen(sel)
 
@@ -2001,8 +2014,8 @@ annotations_details_server <- function(id, rv) {
       # coloured AND grouped into the spliced reading frame of that exon.
       mem_len <- vapply(mem, seglen, integer(1))
       mem_cum <- cumsum(c(0L, mem_len))[seq_along(mem)]
-      lo_of <- vapply(mem, function(i) min(rv$annotations$pos1[i], rv$annotations$pos2[i]), integer(1))
-      hi_of <- vapply(mem, function(i) max(rv$annotations$pos1[i], rv$annotations$pos2[i]), integer(1))
+      lo_of <- vapply(mem, function(i) as.integer(min(rv$annotations$pos1[i], rv$annotations$pos2[i])), integer(1))
+      hi_of <- vapply(mem, function(i) as.integer(max(rv$annotations$pos1[i], rv$annotations$pos2[i])), integer(1))
       pos_member <- function(pos) {
         hit <- which(pos >= lo_of & pos <= hi_of)
         if (length(hit)) hit[1] else 0L
@@ -2048,6 +2061,17 @@ annotations_details_server <- function(id, rv) {
         }
         spans
       }
+      # Whether more assembly sequence continues past the shown flank at each end
+      # (i.e. we are not at a linear-assembly boundary). Used to add a "..."
+      # continuation marker at the outer edge of each line.
+      if (dir == "-") {
+        more5 <- (p2 + flank) < width
+        more3 <- (p1 - flank) > 1L
+      } else {
+        more5 <- (p1 - flank) > 1L
+        more3 <- (p2 + flank) < width
+      }
+      ell <- function() tags$span(style = "color:#888; margin: 0 2px;", "...")
       # 5' end of the segment (reads 5'->3'): flank | inside-codons. Inside
       # windows are clamped to [p1, p2] so a short segment never shows adjacent
       # (intron / neighbouring-segment) bases as if they were coding.
@@ -2061,6 +2085,7 @@ annotations_details_server <- function(id, rv) {
       line5 <- tags$div(
         style = "font-family: 'Courier New', Courier, monospace; white-space: nowrap;",
         tags$span(style = "color:#666; margin-right:6px;", "5'"),
+        if (more5) ell(),
         flank5, cut, inside(codon_group(in5, cum_before %% 3))
       )
       # 3' end of the segment: inside-codons | flank
@@ -2073,6 +2098,7 @@ annotations_details_server <- function(id, rv) {
       line3 <- tags$div(
         style = "font-family: 'Courier New', Courier, monospace; white-space: nowrap;",
         inside(codon_group(in3, phase3)), cut, flank3,
+        if (more3) ell(),
         tags$span(style = "color:#666; margin-left:6px;", "3'")
       )
       # Bases of the segment interior hidden between the two shown windows.
@@ -2087,13 +2113,18 @@ annotations_details_server <- function(id, rv) {
         # the .mp-edit-group itself makes the browser clip overflow-y too, which
         # cuts off the absolutely-positioned caption sitting above the border.
         style = "margin: 6px 0; padding-top: 14px;",
-        tags$span(class = "mp-edit-group-label", "Active segment junctions (nt)"),
+        tags$span(
+          class = "mp-edit-group-label",
+          if (is_join) "Active segment junctions (nt)" else "Nucleotide boundaries (nt)"
+        ),
         tags$div(style = "overflow-x: auto;", line5, gap_line, line3),
         tags$div(
           style = "color:#888; font-size:0.75em; margin-top:2px;",
-          tags$span(style = "color:#c00; font-weight:bold;", "|"), " = current boundary; ",
-          tags$span(style = "color:#0072B2;", "ATG"), " = neighbouring exon; ",
-          tags$span(style = "color:#aa99aa;", "atg"), " = intron/flank; spaces = codon frame"
+          tags$span(style = "color:#c00; font-weight:bold;", "|"), " = boundary; ",
+          if (is_join) tagList(
+            tags$span(style = "color:#0072B2;", "neighbouring segment"), "; "
+          ),
+          "spaces = codon frame"
         )
       )
     })
@@ -3601,6 +3632,16 @@ annotations_details_server <- function(id, rv) {
       # Join mode: warn (intron rule + slippage), then tag as a join group. The
       # actual commit happens in confirm_join (or directly if no warnings apply).
       if (isTRUE(input$merge_method == "join")) {
+        # Block joining features that are already part of a join; the user must
+        # un-join them first (nested/overlapping join groups are not supported).
+        if (any(stringr::str_detect(dplyr::coalesce(merge_anns$notes, ""), "^JOIN: "))) {
+          shinyWidgets::sendSweetAlert(
+            title = "Already joined",
+            text = "One or more selected features are already part of a joined gene. Un-join them first before creating a new join.",
+            type = "warning"
+          )
+          req(F)
+        }
         join_mode <- input$join_type %||% "exon"
         sel_gene <- merge_anns$gene[1]
         sel_type <- merge_anns$type[1]
@@ -4318,13 +4359,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
             ),
             uiOutput(ns("synteny_zoom_ctrl"))
           )
-        )
-      ),
-      shinyjs::hidden(
-        div(
-          id = ns("annotation_restore_btn"),
-          style = "display: flex; gap: 8px; margin: 6px 0;",
-          actionButton(ns("restore"), "Restore")
+        ),
+        shinyjs::hidden(
+          div(
+            id = ns("annotation_restore_btn"),
+            style = "display: contents;",
+            actionButton(ns("restore"), "Restore")
+          )
         )
       ),
       shinyjs::hidden(
