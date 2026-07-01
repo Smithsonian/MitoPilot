@@ -92,6 +92,10 @@ backwards_compatibility <- function(
       "blast_accession" %in% names(assemble_table) &&
       "blast_opts" %in% names(assemble_table) &&
       "blast_opts" %in% DBI::dbListTables(con) &&
+      isTRUE(tryCatch(
+        "max_target_seqs" %in% DBI::dbListFields(con, "blast_opts"),
+        error = function(e) FALSE
+      )) &&
       "use_mitos_best" %in% names(annotate_opts_table) &&
       "use_aragorn" %in% names(annotate_opts_table) &&
       "aragorn_opts" %in% names(annotate_opts_table) &&
@@ -1106,6 +1110,16 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE blast_ref_annotations_new RENAME TO blast_ref_annotations")
   }
 
+  # max_target_seqs moved out of the nextflow .config into the blast_opts table
+  # so it can be edited per parameter-set in the app. Add the column + backfill
+  # the previous default (5) for existing projects.
+  if ("blast_opts" %in% DBI::dbListTables(con) &&
+      !("max_target_seqs" %in% DBI::dbListFields(con, "blast_opts"))) {
+    message("added max_target_seqs column to blast_opts table")
+    DBI::dbExecute(con, "ALTER TABLE blast_opts ADD COLUMN max_target_seqs INTEGER")
+    DBI::dbExecute(con, "UPDATE blast_opts SET max_target_seqs = 5 WHERE max_target_seqs IS NULL")
+  }
+
   # per-sample candidate references (rank 1 = top hit). Seed existing projects
   # with the single current top hit so the in-app picker shows one entry.
   if (!("blast_ref_candidates" %in% DBI::dbListTables(con))) {
@@ -1251,16 +1265,18 @@ backwards_compatibility <- function(
         run_blast INTEGER,
         entrez_query TEXT,
         extra_opts TEXT,
+        max_target_seqs INTEGER,
         PRIMARY KEY (blast_opts)
       );"
     )
     dplyr::tbl(con, "blast_opts") |>
       dplyr::rows_upsert(
         data.frame(
-          blast_opts   = "default",
-          run_blast    = 1L,
-          entrez_query = "mitochondrion[Location]",
-          extra_opts   = ""
+          blast_opts      = "default",
+          run_blast       = 1L,
+          entrez_query    = "mitochondrion[Location]",
+          extra_opts      = "",
+          max_target_seqs = 5L
         ),
         in_place = TRUE,
         copy = TRUE,
@@ -1334,7 +1350,6 @@ backwards_compatibility <- function(
     blast_gb_lines <- c(
       "    blast_gb {",
       "        cpus = 1",
-      "        max_target_seqs = 5 // BLAST hits retained per sample as candidate references",
       "        maxForks = 10 // only allow 10 concurrent BLAST/ref-fetch runs to avoid NCBI timeout issues",
       "        container = process.container",
       "        executor = process.executor",

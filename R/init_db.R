@@ -342,16 +342,18 @@ new_db <- function(
       run_blast INTEGER,
       entrez_query TEXT,
       extra_opts TEXT,
+      max_target_seqs INTEGER,
       PRIMARY KEY (blast_opts)
     );"
   )
   dplyr::tbl(con, "blast_opts") |>
     dplyr::rows_upsert(
       data.frame(
-        blast_opts    = "default",
-        run_blast     = 1L,
-        entrez_query  = "mitochondrion[Location]",
-        extra_opts    = ""
+        blast_opts      = "default",
+        run_blast       = 1L,
+        entrez_query    = "mitochondrion[Location]",
+        extra_opts      = "",
+        max_target_seqs = 5L
       ),
       in_place = TRUE,
       copy = TRUE,

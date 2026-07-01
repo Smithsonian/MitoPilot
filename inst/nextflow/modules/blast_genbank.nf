@@ -28,7 +28,7 @@ process blast_genbank {
     tag "${id}.${path_idx}"
 
     input:
-        tuple val(id), val(path_idx), path(assembly), val(opts_id), val(entrez_query), val(extra_opts)
+        tuple val(id), val(path_idx), path(assembly), val(opts_id), val(entrez_query), val(extra_opts), val(max_target_seqs)
 
     output:
         tuple val(id), val(path_idx), path("${outDir}/${outFile}")
@@ -54,7 +54,7 @@ process blast_genbank {
         -db core_nt \
         -query !{assembly} \
         -outfmt "6 qseqid saccver stitle pident qcovs evalue" \
-        -max_target_seqs !{params.blast_gb.max_target_seqs ?: 5} \
+        -max_target_seqs !{max_target_seqs ?: 5} \
         -max_hsps 1 \
         -task megablast \
         -entrez_query "!{entrez_query}" \

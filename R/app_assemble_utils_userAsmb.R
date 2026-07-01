@@ -240,12 +240,26 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                     "Entrez filter (default limits hits to mitochondrial sequences).")
         ),
         div(
+          id = ns("blast_mts_group"),
+          tags$label("Candidate reference genomes to retain"),
+          numericInput(
+            ns("max_target_seqs"),
+            label = NULL,
+            value = as.integer(current$max_target_seqs %||% 5L),
+            min = 1, max = 50, step = 1, width = "120px"
+          ) |> shinyjs::disabled(),
+          opts_help("Number of top BLAST hits kept per sample as candidate ",
+                    "reference mitogenomes (sets blastn -max_target_seqs and the ",
+                    "candidate list shown in the annotate synteny picker).")
+        ),
+        div(
           id = ns("blast_extra_group"),
           tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",
-            "Extra flags passed to blastn. Cannot override: -outfmt, -max_target_seqs, -max_hsps."
+            "Extra flags passed to blastn. Cannot override: -outfmt, -max_hsps, or ",
+            "-max_target_seqs (set via the field above)."
           ),
           textAreaInput(
             ns("extra_opts"),
@@ -265,6 +279,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
 
     if (!as.logical(current$run_blast %||% 1L)) {
       shinyjs::hide(id = "blast_entrez_group")
+      shinyjs::hide(id = "blast_mts_group")
       shinyjs::hide(id = "blast_extra_group")
     }
 

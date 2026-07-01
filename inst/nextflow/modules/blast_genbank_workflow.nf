@@ -53,7 +53,7 @@ params.sqlWriteCandidate = 'INSERT OR REPLACE INTO blast_ref_candidates (ID, ran
 params.sqlDeleteCandidates = 'DELETE FROM blast_ref_candidates WHERE ID = ? AND time_stamp != ?'
 
 params.sqlReadBlastOpts =
-    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
+    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts, b.max_target_seqs ' +
     'FROM assemble a ' +
     'JOIN blast_opts b ON a.blast_opts = b.blast_opts'
 
@@ -70,11 +70,20 @@ workflow BLAST_GENBANK {
         input
 
     main:
-        // Read per-sample BLAST opts from DB; filter to run_blast == 1
+        // Read per-sample BLAST opts from DB; filter to run_blast == 1.
+        // max_target_seqs is now a per-parameter-set DB value (was a .config
+        // param); it sets both the blastn -max_target_seqs flag and the number
+        // of candidate references retained (N_CAND below). Default 5.
         channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
             .filter { row -> row[1] as Integer == 1 }
-            .map { row -> tuple(row[0], row[2], row[3] ?: '') }
-            .set { blast_opts_ch }  // (id, entrez_query, extra_opts)
+            .map { row -> tuple(row[0], row[2], row[3] ?: '', (row[4] == null ? 5 : (row[4] as Integer))) }
+            .set { blast_opts_ch }  // (id, entrez_query, extra_opts, max_target_seqs)
+
+        // Per-sample max_target_seqs, used to bound the retained candidate list.
+        channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
+            .filter { row -> row[1] as Integer == 1 }
+            .map { row -> tuple(row[0], (row[4] == null ? 5 : (row[4] as Integer))) }
+            .set { mts_ch }  // (id, max_target_seqs)
 
         input
             // Normalize: wrap single Path in a list so downstream logic is uniform
@@ -130,11 +139,11 @@ workflow BLAST_GENBANK {
             }
             // Join with blast opts; samples with run_blast = 0 have no entry and are dropped
             .combine(blast_opts_ch, by: 0)
-            .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts ->
-                tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts)
+            .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
+                tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
             }
-            .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts ->
-                process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts)
+            .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
+                process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
                 ids:     tuple(id, true)
             }
             .set { blast_in_split }
@@ -303,14 +312,16 @@ workflow BLAST_GENBANK {
 
         // Per-sample candidate references: group all per-path 'cand' rows, dedup by
         // accession (keeping the best pident*qcovs), rank, keep the top N. N is the
-        // configured BLAST max_target_seqs (default 5).
-        def N_CAND = (params.blast_gb.max_target_seqs ?: 5) as Integer
+        // per-sample blast_opts.max_target_seqs (default 5), joined in from mts_ch.
         blast_records
             .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'cand' }
             .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
                 tuple(id, [opts_id, accession, species, pident, qcovs, evalue]) }
             .groupTuple()
-            .map { id, rows ->
+            .join(mts_ch, by: 0, remainder: true)
+            .map { id, rows, mts ->
+                def n_cand = (mts ?: 5) as Integer
+                rows = rows ?: []
                 def opts_id = rows ? rows[0][0] : null
                 def byacc = [:]
                 rows.each { r ->
@@ -320,9 +331,10 @@ workflow BLAST_GENBANK {
                         byacc[acc] = [row: r, score: score]
                     }
                 }
-                def ranked = byacc.values().toList().sort { -it.score }.take(N_CAND).collect { it.row }
+                def ranked = byacc.values().toList().sort { -it.score }.take(n_cand).collect { it.row }
                 tuple(id, opts_id, ranked)
             }
+            .filter { id, opts_id, ranked -> ranked != null && ranked.size() > 0 }
             .set { candidates_ch }  // (id, opts_id, [ [opts_id, acc, species, pident, qcovs, evalue], ... ])
 
         // Representative hit for the assemble table = the rank-1 candidate. Derived
