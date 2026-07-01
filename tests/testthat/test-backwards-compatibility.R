@@ -471,6 +471,30 @@ test_that("backwards_compatibility migrates the old Mitos2 ref path (and is idem
 })
 
 
+test_that("backwards_compatibility(update_config = FALSE) migrates DB but not .config", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v100_db(td)
+  make_config(td, version = "1.0.0")
+  before <- readLines(file.path(td, ".config"))
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, update_config = FALSE))
+
+  # .config untouched, no backup written
+  expect_identical(readLines(file.path(td, ".config")), before)
+  expect_equal(length(list.files(td, pattern = "^\\.config\\.bak\\.", all.files = TRUE)), 0L)
+
+  # DB still migrated
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_cols(con, "annotate", c("reviewed", "ID_verified", "problematic"))
+  expect_false("text" %in%
+    DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t)
+})
+
+
 test_that("migrate_config leaves .config untouched when executor is undetectable", {
   td <- tempfile()
   dir.create(td)

@@ -4,10 +4,14 @@
 \alias{backwards_compatibility}
 \title{Update old project database for backwards compatibility}
 \usage{
-backwards_compatibility(path = ".")
+backwards_compatibility(path = ".", update_config = TRUE)
 }
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
+
+\item{update_config}{Regenerate the Nextflow `.config` from the current
+built-in template (default `TRUE`). Set to `FALSE` to migrate only the
+SQLite database and leave the existing `.config` untouched.}
 }
 \description{
 Migrates an old project's SQLite database to the current schema (adding any

@@ -15,11 +15,15 @@
 #' detected the `.config` is left untouched and a warning is issued.
 #'
 #' @param path Path to the project directory (default = current working directory)
+#' @param update_config Regenerate the Nextflow `.config` from the current
+#'   built-in template (default `TRUE`). Set to `FALSE` to migrate only the
+#'   SQLite database and leave the existing `.config` untouched.
 #'
 #' @export
 #'
 backwards_compatibility <- function(
-    path = "."
+    path = ".",
+    update_config = TRUE
 ){
   # update SQL database with "reviewed" column for annotations table
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite")) # open connection
@@ -70,7 +74,7 @@ backwards_compatibility <- function(
     error = function(e) TRUE
   )
 
-  if (containerVer &&
+  if ((!update_config || containerVer) &&
       genetic_code_numeric &&
       !old_ref_str &&
       "arwen_opts" %in% names(annotate_opts_table) &&
@@ -1135,8 +1139,9 @@ backwards_compatibility <- function(
 
   # Regenerate the .config from the current built-in template (detect executor,
   # port project values, bump container, back up the old config). Gated on the
-  # container being stale so an already-current config is left alone.
-  if (!containerVer) {
+  # container being stale so an already-current config is left alone, and on the
+  # caller opting in (default on).
+  if (update_config && !containerVer) {
     migrate_config(path, con)
   }
 
