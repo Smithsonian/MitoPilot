@@ -140,7 +140,7 @@ export_files <- function(
       ) |>
       dplyr::left_join(
         dplyr::tbl(con, "assemble") |>
-          dplyr::select(ID, blast_accession, dplyr::any_of(c("synteny_accession", "poor_blast_ref"))),
+          dplyr::select(ID, blast_accession, dplyr::any_of("poor_blast_ref")),
         by = "ID"
       ) |>
       dplyr::collect()
@@ -167,14 +167,10 @@ export_files <- function(
     if (isTRUE(dat$topology == "fragmented") && !is.na(kept$topology[1])) {
       dat$topology <- kept$topology[1]
     }
-    # Effective reference = user-selected synteny reference if set, else top hit.
+    # Reference = the sample's blast_accession (the rank-1 top hit unless the user
+    # set a different candidate via "Set as reference genome" in annotate details).
     # Always a single accession in the note.
-    blast_acc <- if ("synteny_accession" %in% names(dat) &&
-                     !is.na(dat$synteny_accession[1]) && nzchar(dat$synteny_accession[1])) {
-      dat$synteny_accession[1]
-    } else {
-      dat$blast_accession[1]
-    }
+    blast_acc <- dat$blast_accession[1]
     blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) &&
                       blast_acc != "NO HIT" &&
                       !isTRUE(dat$poor_blast_ref[1] %in% c("poor", "failed"))) {

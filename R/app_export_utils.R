@@ -225,13 +225,13 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
   out <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, blast_accession, blast_species, blast_lineage,
-                  dplyr::any_of("poor_blast_ref")) |>
+                  dplyr::any_of(c("blast_accession_auto", "poor_blast_ref"))) |>
     dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(
       ID, blast_accession, blast_species, blast_lineage, curate_opts, topology,
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
-      dplyr::any_of(c("poor_blast_ref", "partial"))
+      dplyr::any_of(c("blast_accession_auto", "poor_blast_ref", "partial"))
     ) |>
     dplyr::left_join(
       dplyr::tbl(db, "curate_opts") |>

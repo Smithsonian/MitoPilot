@@ -27,7 +27,9 @@ def appendTaggedNoteSql(String tag, String msg) {
 params.blastNoOutputMsg = "BLAST produced no output after all retries (possible NCBI connection or rate-limit issue). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
 params.blastNoHitMsg = "No significant BLAST hits found in GenBank for this assembly. The assembly may be non-target, too fragmented, or from a taxon not represented in the database."
 
-params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
+// blast_accession_auto mirrors the automatic rank-1 hit so a later user override
+// of blast_accession can be flagged in the tables; set both from the same values.
+params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_accession_auto = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
 // blast_lineage is NOT set here: ref fetch hasn't run yet so the subquery would
 // resolve to NULL, and this deferred commit could clobber the lineage written
 // later by BLAST_REF_FETCH. Lineage is handled solely in blast_ref_fetch_workflow.nf.
@@ -472,7 +474,9 @@ workflow BLAST_GENBANK {
         candidates_ch
             .map { id, opts_id, ranked ->
                 def r = ranked ? ranked[0] : null
-                r ? tuple(r[1], r[2], r[3], r[4], r[5], id) : null
+                // acc bound twice: blast_accession and blast_accession_auto (the
+                // remembered rank-1 top hit, used to flag user overrides).
+                r ? tuple(r[1], r[1], r[2], r[3], r[4], r[5], id) : null
             }
             .filter { it != null }
             .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')

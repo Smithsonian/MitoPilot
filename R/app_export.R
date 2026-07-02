@@ -177,11 +177,12 @@ export_server <- function(id) {
           ),
           blast_accession = colDef(
             show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Top Hit",
+            name = "BLAST Reference",
             html = TRUE,
             width = 120,
-            cell = rt_ncbi_link()
+            cell = rt_ncbi_link(auto_col = "blast_accession_auto")
           ),
+          blast_accession_auto = colDef(show = FALSE),
           blast_species = colDef(
             show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
             name = "BLAST Species",
@@ -234,7 +235,7 @@ export_server <- function(id) {
     })
 
     # CSV Export ----
-    .export_cols_drop <- c("poor_blast_ref")
+    .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)

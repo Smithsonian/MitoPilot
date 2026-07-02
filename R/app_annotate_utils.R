@@ -12,7 +12,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
   assemble <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs,
-                  dplyr::any_of("poor_blast_ref"))
+                  dplyr::any_of(c("blast_accession_auto", "poor_blast_ref")))
 
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
@@ -61,6 +61,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       topology,
       scaffolds,
       blast_accession,
+      dplyr::any_of("blast_accession_auto"),
       blast_species,
       blast_lineage,
       blast_pident,

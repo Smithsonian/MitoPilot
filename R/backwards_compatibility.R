@@ -340,6 +340,19 @@ backwards_compatibility <- function(
      END"
   )
 
+  # Remember the automatic (rank-1) BLAST top hit so a user-set reference override
+  # (which overwrites blast_accession) can be flagged in the sample tables.
+  # Initialize to the current blast_accession (the auto value at migration time).
+  if (!("blast_accession_auto" %in% names(assemble_table))) {
+    message("added 'blast_accession_auto' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_accession_auto TEXT")
+    DBI::dbExecute(
+      con,
+      "UPDATE assemble SET blast_accession_auto = blast_accession
+         WHERE blast_accession_auto IS NULL"
+    )
+  }
+
   # if join_scaffolds toggle column doesn't exist on assemble_opts, add it (default off)
   if (!("join_scaffolds" %in% names(assemble_opts_table))) {
     message("added 'join_scaffolds' column to assemble_opts table")

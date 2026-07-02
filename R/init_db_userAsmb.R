@@ -225,6 +225,7 @@ new_db_userAsmb <- function(
       assemble_opts TEXT,
       blast_opts TEXT,
       blast_accession TEXT,
+      blast_accession_auto TEXT,
       blast_species TEXT,
       blast_pident REAL,
       blast_qcovs REAL,

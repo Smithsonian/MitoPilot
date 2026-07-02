@@ -253,9 +253,10 @@ annotations_details_server <- function(id, rv) {
       # Candidates are stored per (ID, path, scaffold) - never merged. The
       # annotation reference is inherited from the single scaffold the user kept
       # when finalizing the assembly: the scaffold whose hits include the sample's
-      # chosen reference (synteny_accession, else the representative blast_accession).
-      # Fall back to the best-scoring scaffold if no match. This keeps a divergent
-      # scaffold's candidate list from leaking into another scaffold's reference pick.
+      # current reference (blast_accession, which a user "Set as reference" may
+      # have overwritten from the rank-1 default). Fall back to the best-scoring
+      # scaffold if no match, so a divergent scaffold's candidate list can't leak
+      # into another scaffold's reference pick.
       rv$blast_ref_candidates <- tryCatch({
         all_cand <- dplyr::tbl(session$userData$con, "blast_ref_candidates") |>
           dplyr::filter(ID == !!rv$updating$ID) |>
@@ -263,8 +264,9 @@ annotations_details_server <- function(id, rv) {
         if (nrow(all_cand) == 0) {
           NULL
         } else {
-          ref_acc <- rv$updating[["synteny_accession"]] %|NA|% ""
-          if (!nzchar(ref_acc)) ref_acc <- rv$updating[["blast_accession"]] %|NA|% ""
+          # NULL-safe: blast_accession may be absent from rv$updating, and %|NA|%
+          # errors on a NULL (is.na(NULL) is length 0). Coalesce to "".
+          ref_acc <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
           src <- all_cand[!is.na(all_cand$accession) & all_cand$accession == ref_acc,
                           c("path", "scaffold"), drop = FALSE]
           if (nrow(src) == 0) {
@@ -278,13 +280,10 @@ annotations_details_server <- function(id, rv) {
         }
       }, error = function(e) NULL)
 
-      ## Active synteny reference: user pick (synteny_accession), else top hit ----
-      sel <- rv$updating[["synteny_accession"]]
-      acc0 <- if (!is.null(sel) && !is.na(sel) && nzchar(sel)) {
-        sel
-      } else {
-        rv$updating[["blast_accession"]]
-      }
+      ## Active synteny reference = the sample's current reference (blast_accession,
+      ## possibly a user-set override of the rank-1 default) ----
+      acc0 <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
+      if (!nzchar(acc0)) acc0 <- NA_character_
       active_ref_acc(acc0)
       load_blast_ref(acc0)
 
@@ -1023,14 +1022,48 @@ annotations_details_server <- function(id, rv) {
       )
       picker <- if (length(ref_choices) > 0) {
         div(
-          style = "margin-bottom: 6px; max-width: 560px;",
+          id = ns("synteny_ref_picker"),
+          style = "margin-bottom: 6px; max-width: 820px;",
+          # Compact + single-line: shrink the selectize font and keep the selected
+          # item / dropdown options on one line (long "species (acc) | pid.. cov.."
+          # labels otherwise wrap in the box). Let the dropdown grow to fit.
+          tags$style(HTML(sprintf(
+            paste0(
+              "#%1$s .selectize-input, #%1$s .selectize-dropdown { font-size: 11px; }",
+              "#%1$s .selectize-input > .item, #%1$s .selectize-dropdown .option { white-space: nowrap; }",
+              "#%1$s .selectize-dropdown { width: auto !important; min-width: 100%%; }"
+            ),
+            ns("synteny_ref_picker")
+          ))),
           shiny::selectInput(
             ns("synteny_ref_select"),
             label = "Reference genome",
             choices = ref_choices,
             selected = active_acc,
             width = "100%"
-          )
+          ),
+          # Explicit commit: the picker above is view-only; this makes the viewed
+          # candidate the sample's reference (tables + .tbl note + synteny default).
+          local({
+            cur_ref <- (ctx$blast_accession %||% NA) %|NA|% ""
+            if (nzchar(active_acc) && !identical(active_acc, cur_ref)) {
+              div(
+                style = "margin-top: 2px;",
+                shinyWidgets::actionBttn(
+                  ns("synteny_set_ref"),
+                  label = paste0("Set ", active_acc, " as reference genome"),
+                  style = "material-flat", size = "xs", color = "primary",
+                  icon = shiny::icon("check")
+                ),
+                div(style = "font-size: 11px; color: #888; margin-top: 3px;",
+                    "Overwrites the sample's BLAST reference, shown in the Annotate/Export ",
+                    "tables and used in the .tbl reference-comparison note.")
+              )
+            } else {
+              div(style = "font-size: 11px; color: #888; margin-top: 2px;",
+                  "Current reference for this sample.")
+            }
+          })
         )
       }
       no_ref_msg <- if (!has_ref) {
@@ -1045,8 +1078,8 @@ annotations_details_server <- function(id, rv) {
           style = "display: flex; justify-content: start; margin-bottom: 6px;",
           shinyWidgets::prettyToggle(
             ns("poor_blast_ref_toggle"),
-            label_on  = "Poor reference flagged",
-            label_off = "Flag as poor reference",
+            label_on  = "Reference flagged as poor",
+            label_off = "Flag reference as poor",
             icon_on   = shiny::icon("flag"),
             icon_off  = shiny::icon("flag"),
             status_on  = "warning",
@@ -1054,6 +1087,12 @@ annotations_details_server <- function(id, rv) {
             value = is_poor,
             inline = TRUE
           )
+        ),
+        div(
+          style = "font-size: 11px; color: #888; margin: -2px 0 6px 0;",
+          "Sample-level flag for this sample's current reference. Merely viewing a ",
+          "different candidate below does not change it; use 'Set as reference genome' ",
+          "to change the reference itself."
         ),
         picker,
         no_ref_msg,
@@ -2667,27 +2706,71 @@ annotations_details_server <- function(id, rv) {
         )
     })
 
-    # Reference picker: switch which candidate reference the synteny plot shows.
-    # Persists the choice (assemble.synteny_accession) and reloads the reference
-    # annotations / sequence / alignment for that accession. Does not re-curate.
+    # Reference picker: view-only. Switching just repaints the synteny plot for the
+    # selected candidate; it does NOT change the sample's reference. Committing a new
+    # reference is an explicit action (the "Set as reference genome" button below).
     observeEvent(input$synteny_ref_select, ignoreInit = TRUE, {
       acc <- input$synteny_ref_select
       req(acc, nzchar(acc))
       if (identical(acc, active_ref_acc())) return()
       active_ref_acc(acc)
-      rv$updating$synteny_accession <- acc
       load_blast_ref(acc)
-      tryCatch(
-        dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::rows_update(
-            data.frame(ID = rv$updating$ID, synteny_accession = acc),
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          ),
-        error = function(e) NULL
-      )
+    })
+
+    # "Set as reference genome": make the currently-viewed candidate the sample's
+    # reference. Overwrites assemble.blast_accession (+ its metadata) from the
+    # candidate row; blast_accession_auto keeps the original rank-1 hit so the
+    # tables can flag the override. This drives the .tbl export note and the synteny
+    # default on reopen. Does not re-curate.
+    observeEvent(input$synteny_set_ref, ignoreInit = TRUE, {
+      acc <- active_ref_acc()
+      req(acc, !is.na(acc), nzchar(acc))
+      cur <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
+      if (identical(acc, cur)) return()
+      cand <- rv$blast_ref_candidates
+      crow <- if (!is.null(cand)) cand[!is.na(cand$accession) & cand$accession == acc, , drop = FALSE]
+      species <- if (!is.null(crow) && nrow(crow) > 0) crow$species[1] else NA_character_
+      pident  <- if (!is.null(crow) && nrow(crow) > 0) crow$pident[1]  else NA_real_
+      qcovs   <- if (!is.null(crow) && nrow(crow) > 0) crow$qcovs[1]   else NA_real_
+      evalue  <- if (!is.null(crow) && nrow(crow) > 0) crow$evalue[1]  else NA_real_
+      lineage <- tryCatch({
+        l <- dplyr::tbl(session$userData$con, "blast_ref_sequences") |>
+          dplyr::filter(accession == !!acc) |>
+          dplyr::pull(lineage)
+        if (length(l) > 0) l[1] else NA_character_
+      }, error = function(e) NA_character_)
+
+      ok <- tryCatch({
+        DBI::dbExecute(
+          session$userData$con,
+          # COALESCE captures the pre-override blast_accession as the auto value the
+          # first time (SQLite evaluates RHS against the old row before assigning).
+          "UPDATE assemble SET
+             blast_accession_auto = COALESCE(blast_accession_auto, blast_accession),
+             blast_accession = ?, blast_species = ?, blast_pident = ?,
+             blast_qcovs = ?, blast_evalue = ?, blast_lineage = ?
+           WHERE ID = ?",
+          params = list(acc, species, pident, qcovs, evalue, lineage, rv$updating$ID)
+        )
+        TRUE
+      }, error = function(e) { showNotification(paste("Failed to set reference:", conditionMessage(e)), type = "error"); FALSE })
+      req(ok)
+
+      # Reflect in the modal (fig_ctx / picker) and the Annotate table (rv$data).
+      rv$updating$blast_accession <- acc
+      if ("blast_species" %in% names(rv$updating)) rv$updating$blast_species <- species
+      if ("blast_pident"  %in% names(rv$updating)) rv$updating$blast_pident  <- pident
+      if ("blast_qcovs"   %in% names(rv$updating)) rv$updating$blast_qcovs   <- qcovs
+      if ("blast_lineage" %in% names(rv$updating)) rv$updating$blast_lineage <- lineage
+      set_cols <- list(blast_accession = acc, blast_species = species,
+                       blast_pident = pident, blast_qcovs = qcovs, blast_lineage = lineage)
+      set_cols <- set_cols[intersect(names(set_cols), names(rv$data))]
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          data.frame(ID = rv$updating$ID, set_cols, stringsAsFactors = FALSE),
+          by = "ID", unmatched = "ignore"
+        )
+      showNotification(paste0("Reference set to ", acc, " for ", rv$updating$ID), type = "message")
     })
 
     # Join-group editing helpers ----
