@@ -179,7 +179,7 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
   make_config(td, version = "1.0.0")
 
   expect_message(
-    MitoPilot::backwards_compatibility(path = td),
+    MitoPilot::backwards_compatibility(path = td, executor = "local"),
     regexp = "added|updated|created",
     all = FALSE
   )
@@ -243,7 +243,7 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
               has_asmb_dir = TRUE, has_fail_on_ignore = TRUE)
 
   expect_message(
-    MitoPilot::backwards_compatibility(path = td),
+    MitoPilot::backwards_compatibility(path = td, executor = "local"),
     regexp = "added|updated|created",
     all = FALSE
   )
@@ -291,7 +291,7 @@ test_that("backwards_compatibility migrates an unmodified default export templat
   # Bring a v1.0.0 DB up to current (this seeds export_opts with the new default)
   create_v100_db(td)
   make_config(td, version = "1.0.0")
-  suppressMessages(MitoPilot::backwards_compatibility(path = td))
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, executor = "local"))
 
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -312,7 +312,7 @@ test_that("backwards_compatibility migrates an unmodified default export templat
                  params = list(custom))
 
   expect_message(
-    suppressWarnings(MitoPilot::backwards_compatibility(path = td)),
+    suppressWarnings(MitoPilot::backwards_compatibility(path = td, executor = "local")),
     regexp = "export template"
   )
 
@@ -332,11 +332,220 @@ test_that("backwards_compatibility is idempotent (early-exit on already-current 
   # First pass: migrate from v1.0.0
   create_v100_db(td)
   make_config(td, version = "1.0.0")
-  suppressMessages(MitoPilot::backwards_compatibility(path = td))
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, executor = "local"))
 
   # Second pass: should early-exit with "nothing to update"
   expect_message(
-    MitoPilot::backwards_compatibility(path = td),
+    MitoPilot::backwards_compatibility(path = td, executor = "local"),
     regexp = "nothing to update"
   )
+})
+
+
+test_that("backwards_compatibility stores genetic_code as a number (not TEXT)", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  # v1.0.0 has no genetic_code column; migration must add it as a number so
+  # assemble.nf's genetic_code.intValue() works.
+  create_v100_db(td)
+  make_config(td, version = "1.0.0")
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, executor = "local"))
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  types <- DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t
+  expect_false("text" %in% types)
+})
+
+
+test_that("backwards_compatibility normalizes legacy TEXT genetic_code on re-run", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  # Bring a v1.3.10 DB (genetic_code stored as TEXT) up to current.
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10",
+              has_asmb_dir = TRUE, has_fail_on_ignore = TRUE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  # confirm the fixture really stores it as TEXT
+  expect_true("text" %in%
+    DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t)
+  DBI::dbDisconnect(con)
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, executor = "local"))
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  types <- DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t
+  expect_false("text" %in% types)
+  # value preserved
+  expect_equal(DBI::dbGetQuery(con, "SELECT genetic_code FROM samples")$genetic_code, 2L)
+})
+
+
+test_that("backwards_compatibility regenerates .config and backs up the old one", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v100_db(td)
+  make_config(td, version = "1.0.0")  # process executor = 'local', rawDir = 'raw'
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, executor = "local"))
+
+  conf <- readLines(file.path(td, ".config"))
+  # regenerated from the built-in local template: current sections present
+  expect_true(any(grepl("orffinder_condaenv", conf)))
+  expect_true(any(grepl("^\\s*orf \\{", conf)))
+  expect_true(any(grepl("blast_gb", conf)))
+  expect_true(any(grepl("failOnIgnore", conf)))
+  # project value carried over from the old config
+  expect_true(any(grepl("rawDir = 'raw'", conf, fixed = TRUE)))
+  # container bumped to current version
+  current_ver <- as.character(utils::packageVersion("MitoPilot"))
+  expect_true(any(grepl(current_ver, conf, fixed = TRUE)))
+
+  # timestamped backup of the old config was written
+  backups <- list.files(td, pattern = "^\\.config\\.bak\\.", all.files = TRUE)
+  expect_true(length(backups) >= 1)
+})
+
+
+# Helper: a DB carrying the old in-container Mitos2 ref path (triggers the
+# old_ref_str branch). annotate_opts has ref_db="Metazoa"/ref_dir=old path;
+# curate_opts params embed the old path and the table lacks ref_dir/ref_db.
+create_old_ref_db <- function(path) {
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(path, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con))
+
+  DBI::dbExecute(con, "CREATE TABLE samples (ID TEXT NOT NULL PRIMARY KEY, sample TEXT, genetic_code INTEGER)")
+  DBI::dbExecute(con, "INSERT INTO samples VALUES ('s1', 'Sample1', 2)")
+  DBI::dbExecute(con, "CREATE TABLE annotate (ID TEXT NOT NULL PRIMARY KEY, gene TEXT)")
+  DBI::dbExecute(con, "INSERT INTO annotate VALUES ('s1', 'cox1')")
+  DBI::dbExecute(con, "CREATE TABLE assemble (ID TEXT NOT NULL PRIMARY KEY, assembly TEXT)")
+  DBI::dbExecute(con, "INSERT INTO assemble VALUES ('s1', 'ATCG')")
+  DBI::dbExecute(con, "CREATE TABLE assemble_opts (assemble_opts TEXT NOT NULL PRIMARY KEY, params TEXT)")
+  DBI::dbExecute(con, "INSERT INTO assemble_opts VALUES ('default', '{}')")
+  DBI::dbExecute(con, "CREATE TABLE annotate_opts (annotate_opts TEXT NOT NULL PRIMARY KEY, params TEXT, ref_db TEXT, ref_dir TEXT)")
+  DBI::dbExecute(con, "INSERT INTO annotate_opts VALUES ('default', '{}', 'Metazoa', '/ref_dbs/Mitos2')")
+  DBI::dbExecute(con, "CREATE TABLE curate_opts (curate_opts TEXT NOT NULL PRIMARY KEY, params TEXT)")
+  DBI::dbExecute(con, "INSERT INTO curate_opts VALUES ('default', '{\"ref_dbs\":{\"default\":[\"/ref_dbs/Mitos2/Metazoa/featureProt/{gene}.fas\"]},\"max_blast_hits\":100}')")
+  DBI::dbExecute(con, "CREATE TABLE annotations (ID TEXT NOT NULL, gene TEXT NOT NULL, PRIMARY KEY (ID, gene))")
+  DBI::dbExecute(con, "INSERT INTO annotations VALUES ('s1', 'cox1')")
+}
+
+
+test_that("backwards_compatibility migrates the old Mitos2 ref path (and is idempotent)", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_old_ref_db(td)
+  make_config(td, version = "1.0.0")
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, executor = "local"))
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  ao <- DBI::dbReadTable(con, "annotate_opts")
+  co <- DBI::dbReadTable(con, "curate_opts")
+  # annotate_opts ref_db renamed (the previously-dead %in% check) and ref_dir bumped
+  expect_equal(ao$ref_db, "Metazoa_RefSeq89")
+  expect_match(ao$ref_dir, "githubusercontent")
+  # curate_opts gained ref_dir/ref_db and the old path was stripped from params
+  expect_true(all(c("ref_dir", "ref_db") %in% names(co)))
+  expect_equal(co$ref_db, "Metazoa_RefSeq89")
+  expect_false(grepl("/ref_dbs/Mitos2/Metazoa", co$params))
+  DBI::dbDisconnect(con)
+
+  # Re-run must not re-fire the block (no duplicate-column ALTER crash)
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, executor = "local"),
+    regexp = "nothing to update"
+  )
+})
+
+
+test_that("backwards_compatibility(update_config = FALSE) migrates DB but not .config", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v100_db(td)
+  make_config(td, version = "1.0.0")
+  before <- readLines(file.path(td, ".config"))
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, update_config = FALSE))
+
+  # .config untouched, no backup written
+  expect_identical(readLines(file.path(td, ".config")), before)
+  expect_equal(length(list.files(td, pattern = "^\\.config\\.bak\\.", all.files = TRUE)), 0L)
+
+  # DB still migrated
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_cols(con, "annotate", c("reviewed", "ID_verified", "problematic"))
+  expect_false("text" %in%
+    DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t)
+})
+
+
+test_that("backwards_compatibility errors when executor missing and update_config = TRUE", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v100_db(td)
+  make_config(td, version = "1.0.0")
+
+  expect_error(
+    MitoPilot::backwards_compatibility(path = td),
+    regexp = "executor.*required"
+  )
+})
+
+
+test_that("migrate_config fills PENV and does not inject a clusterOptions closure (SGE)", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  # SGE config with penv and a multi-line clusterOptions Groovy closure
+  writeLines(c(
+    "process {",
+    "  executor = 'sge'",
+    "  container = 'macguigand/mitopilot:1.4.8'",
+    "  penv = 'mthread'",
+    "  clusterOptions = {",
+    "    if (x > 8) { '-l himem' } else { '-l normal' }",
+    "  }",
+    "}",
+    "params {",
+    "    rawDir = '/scratch/foo'",
+    "    asmbDir = 'NA'",
+    "    minDepth = 2000000",
+    "    genetic_code = 2",
+    "    ncbi_api_key = 'KEY'",
+    "}"
+  ), file.path(td, ".config"))
+
+  expect_warning(
+    res <- suppressMessages(MitoPilot:::migrate_config(td, executor = "sge")),
+    regexp = "clusterOptions"
+  )
+  expect_true(res)
+
+  conf <- readLines(file.path(td, ".config"))
+  # PENV was filled (no leftover placeholder), rawDir carried over
+  expect_false(any(grepl("<<", conf, fixed = TRUE)))
+  expect_true(any(grepl("penv = 'mthread'", conf, fixed = TRUE)))
+  expect_true(any(grepl("rawDir = '/scratch/foo'", conf, fixed = TRUE)))
+  # the closure brace was NOT injected as a clusterOptions value
+  expect_false(any(grepl("clusterOptions = '-S /bin/bash {", conf, fixed = TRUE)))
+  # backup written
+  expect_true(length(list.files(td, pattern = "^\\.config\\.bak\\.", all.files = TRUE)) >= 1)
 })

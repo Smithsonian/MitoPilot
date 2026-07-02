@@ -4,21 +4,38 @@
 \alias{backwards_compatibility}
 \title{Update old project database for backwards compatibility}
 \usage{
-backwards_compatibility(path = ".")
+backwards_compatibility(path = ".", executor = NULL, update_config = TRUE)
 }
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
+
+\item{executor}{The executor whose config template to regenerate from. Same
+options as \code{\link[=new_project]{new_project()}}: a built-in template ("local", "awsbatch",
+"slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a
+saved cluster profile (see \code{\link[=list_configs]{list_configs()}}). Required when
+\code{update_config = TRUE}.}
+
+\item{update_config}{Regenerate the Nextflow \code{.config} from the \code{executor}
+template (default \code{TRUE}). Set to \code{FALSE} to migrate only the SQLite
+database and leave the existing \code{.config} untouched.}
 }
 \description{
-Update old project database for backwards compatibility.
-Adds "reviewed", "ID_verified", "genetic_code", and "problematic" columns to the annotate table,
-"start_gene" column to the annotate_opts table. Adds
-"assembler", "mitofinder_db", and "mitofinder" columns to the assemble_opts table.
-Adds "max_blast_hits" to the curate_opts table.
-Adds "asmbDir = 'NA'" to the .config params block
-and updates the container to the current MitoPilot version
-in the .config file.
-Updates the "ref_dir" and "ref_db" fields in the annotate_opts table
-adds these fields to the curate_opts table,
-and updates the curation rules in the curate_opts table.
+Migrates an old project's SQLite database to the current schema (adding any
+missing columns and tables, e.g. "reviewed"/"ID_verified"/"problematic" on
+annotate, "start_gene" on annotate_opts, "assembler"/"mitofinder_db"/
+"mitofinder" on assemble_opts, "max_blast_hits"/"ref_dir"/"ref_db" on
+curate_opts, per-scaffold "blast_ref_candidates" and "blast_accession_auto"
+on assemble) and refreshes the curation rules.
+}
+\details{
+When \code{update_config = TRUE} the Nextflow \code{.config} is regenerated wholesale
+from the template for the supplied \code{executor} (rather than patched line by
+line): the project-specific values (raw/asmb dirs, min depth, genetic code,
+NCBI key, and, for generic HPC templates, queue / penv / clusterOptions /
+container engine) are carried over, the container is bumped to the current
+MitoPilot version, and the previous \code{.config} is saved to a timestamped
+\code{.config.bak.<timestamp>} backup. Because an existing config may carry hand
+edits that cannot be parsed reliably (e.g. a multi-line \code{clusterOptions}
+closure), the executor must be given explicitly and you should review the
+regenerated config against the backup.
 }

@@ -57,6 +57,169 @@ fill_config <- function(lines, replacements) {
   lines
 }
 
+#' Pull a single `key = value` setting out of an existing .config
+#'
+#' Matches the first `key = value` line (value may be quoted or bare),
+#' strips a trailing `// comment` and surrounding quotes.
+#'
+#' @return The value as a string, or `NULL` if absent / empty.
+#' @noRd
+config_get_param <- function(lines, key) {
+  pat <- paste0("^\\s*", key, "\\s*=\\s*(.*)$")
+  hit <- grep(pat, lines, value = TRUE)
+  if (length(hit) == 0) return(NULL)
+  val <- sub(pat, "\\1", hit[1])
+  val <- sub("//.*$", "", val)            # strip trailing comment
+  val <- trimws(val)
+  val <- gsub("^['\"]|['\"]$", "", val)   # strip surrounding quotes
+  if (nzchar(val)) val else NULL
+}
+
+#' Reconstruct the container-engine block from an existing .config
+#'
+#' Finds the first enabled `docker`/`singularity`/`apptainer` block and rebuilds
+#' it (preserving cacheDir / runOptions) via [container_engine_block()]. Falls
+#' back to a plain `singularity { enabled = true }` block (the HPC default).
+#'
+#' @param lines Character vector of the old .config.
+#' @return A single string for the `<<CONTAINER_ENGINE>>` placeholder.
+#' @noRd
+extract_container_engine <- function(lines) {
+  for (eng in c("singularity", "apptainer", "docker")) {
+    start <- grep(paste0("^\\s*", eng, "\\s*\\{"), lines)
+    if (length(start) == 0) next
+    start <- start[1]
+    end <- length(lines)
+    for (j in (start + 1):length(lines)) {
+      if (grepl("^\\s*\\}", lines[j])) { end <- j; break }
+    }
+    block <- lines[start:end]
+    if (!any(grepl("enabled\\s*=\\s*true", block))) next
+    cache <- config_get_param(block, "cacheDir")
+    run_options <- config_get_param(block, "runOptions")
+    return(container_engine_block(eng, cache, run_options))
+  }
+  container_engine_block("singularity")
+}
+
+#' Regenerate a project's .config from the current built-in template
+#'
+#' Backwards-compatibility helper. Rather than patch an old `.config` line by
+#' line, this regenerates a fresh config from the template for the
+#' caller-supplied `executor` (a built-in template, a named cluster config, or a
+#' saved profile, resolved with [resolve_config()]), then ports the
+#' project-specific values across (raw/asmb dirs, min depth, genetic code, NCBI
+#' key, and, for generic HPC templates, queue / penv / clusterOptions /
+#' container engine). The container is bumped to the current package version.
+#' The old config is backed up to a timestamped `.config.bak.<ts>` first.
+#'
+#' The executor is supplied by the caller rather than sniffed from the old
+#' `.config`: an old config may carry hand edits (e.g. a multi-line
+#' `clusterOptions` Groovy closure) that cannot be parsed or carried over
+#' reliably, so the user is asked to name the executor and advised to review the
+#' regenerated config against the backup.
+#'
+#' If regeneration would leave unfilled placeholders, the old config is left
+#' untouched and a warning is issued.
+#'
+#' @param path Project directory containing `.config`.
+#' @param executor Executor / profile name (see [list_configs()]).
+#' @param con Optional open DB connection, used to default `genetic_code` from
+#'   the samples table when the old config does not set it.
+#' @param profile_dir Directory searched for saved profiles (see
+#'   [mitopilot_config_dir()]).
+#'
+#' @return (invisibly) `TRUE` if the config was regenerated, `FALSE` otherwise.
+#' @noRd
+migrate_config <- function(path, executor, con = NULL,
+                           profile_dir = mitopilot_config_dir()) {
+  conf_path <- file.path(path, ".config")
+  old <- readLines(conf_path)
+
+  template <- resolve_config(executor, profile_dir = profile_dir)
+  lines <- readLines(template)
+
+  # Port project-specific values from the old config ----
+  raw_dir   <- config_get_param(old, "rawDir")
+  asmb_dir  <- config_get_param(old, "asmbDir") %||% "NA"
+  min_depth <- config_get_param(old, "minDepth")
+  gcode     <- config_get_param(old, "genetic_code")
+  api_key   <- config_get_param(old, "ncbi_api_key")
+  queue     <- config_get_param(old, "queue")
+  penv      <- config_get_param(old, "penv")
+
+  # clusterOptions may be a multi-line Groovy closure (`clusterOptions = { ... }`)
+  # which cannot be ported into a simple quoted-string slot; only carry over a
+  # plain scalar value.
+  cluster_options <- config_get_param(old, "clusterOptions")
+  cluster_options_closure <- FALSE
+  if (!is.null(cluster_options) && grepl("[{}]", cluster_options)) {
+    cluster_options <- NULL
+    cluster_options_closure <- TRUE
+  }
+
+  # Default genetic_code from the (already-migrated) samples table if absent.
+  if (is.null(gcode) && !is.null(con)) {
+    gcode <- tryCatch({
+      v <- DBI::dbGetQuery(
+        con,
+        "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL LIMIT 1"
+      )$genetic_code
+      if (length(v) == 1) as.character(as.integer(v)) else NULL
+    }, error = function(e) NULL)
+  }
+
+  engine_repl <- NULL
+  if (any(grepl("<<CONTAINER_ENGINE>>", lines, fixed = TRUE))) {
+    engine_repl <- extract_container_engine(old)
+  }
+
+  new_container <- paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
+
+  # Drop the queue directive if the old config had no queue (mirror generate_config).
+  if (is.null(queue)) {
+    lines <- lines[!grepl("<<QUEUE>>", lines, fixed = TRUE)]
+  }
+
+  lines <- fill_config(lines, list(
+    CONTAINER_ID     = new_container,
+    RAW_DIR          = raw_dir %||% "NA",
+    ASMB_DIR         = asmb_dir,
+    MIN_DEPTH        = min_depth %||% "2000000",
+    GENETIC_CODE     = gcode %||% "2",
+    NCBI_API_KEY     = api_key %||% "",
+    QUEUE            = queue,
+    PENV             = penv %||% "mthread",
+    CLUSTER_OPTIONS  = cluster_options %||% "",
+    CONTAINER_ENGINE = engine_repl
+  ))
+
+  # Fail safe: never write a config that still has unfilled placeholders.
+  if (any(grepl("<<[A-Z_]+>>", lines))) {
+    warning("Config regeneration left unfilled placeholders; leaving .config unchanged.",
+            call. = FALSE)
+    return(invisible(FALSE))
+  }
+
+  ts <- format(Sys.time(), "%Y%m%d-%H%M%S")
+  backup <- file.path(path, paste0(".config.bak.", ts))
+  file.copy(conf_path, backup, overwrite = FALSE)
+  writeLines(lines, conf_path)
+  message("regenerated .config from '", executor,
+          "' template (old config backed up to ", basename(backup), ")")
+  message("please review the new .config against ", basename(backup),
+          " and re-apply any custom settings.")
+  # Only warn about a lost closure if the new template doesn't already carry its
+  # own clusterOptions closure (named templates like NMNH_Hydra bake one in).
+  template_has_closure <- any(grepl("clusterOptions\\s*=\\s*\\{", lines))
+  if (cluster_options_closure && !template_has_closure) {
+    warning("The old .config had a custom multi-line clusterOptions block that ",
+            "was not carried over; re-apply it in the new .config if needed.",
+            call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 #' Resolve an executor name to a config template path
 #'
 #' Resolution order: a saved user profile (`<profile_dir>/config.<executor>`)
