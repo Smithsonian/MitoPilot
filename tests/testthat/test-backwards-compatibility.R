@@ -17,6 +17,7 @@ make_config <- function(path, version, has_asmb_dir = FALSE,
   process_block <- c(
     "",
     "process {",
+    "    executor = 'local'",
     paste0("    container = 'macguigand/mitopilot:", version, "'"),
     "    withName:getOrganelle {",
     "        cpus = 4",

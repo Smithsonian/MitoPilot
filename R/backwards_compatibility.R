@@ -1,11 +1,29 @@
 #' Update old project database for backwards compatibility
 #'
-#' Migrates an old project's SQLite database to the current schema (adding any
-#' missing columns and tables, e.g. "reviewed"/"ID_verified"/"problematic" on
-#' annotate, "start_gene" on annotate_opts, "assembler"/"mitofinder_db"/
-#' "mitofinder" on assemble_opts, "max_blast_hits"/"ref_dir"/"ref_db" on
-#' curate_opts, per-scaffold "blast_ref_candidates" and "blast_accession_auto"
-#' on assemble) and refreshes the curation rules.
+#' Migrates an old project's SQLite database to the current schema and refreshes
+#' the curation rules. Each migration step is guarded by an existence check, so
+#' the function is idempotent and safe to re-run; already-current projects report
+#' "nothing to update" and exit without changes. Migrations include, among
+#' others:
+#' \itemize{
+#'   \item \code{annotate}: "reviewed", "ID_verified", "problematic", "partial",
+#'     "orf_opts" columns.
+#'   \item \code{annotate_opts}: "start_gene", ARWEN / Aragorn / MitoFinder /
+#'     tRNAscan / MITOS toggles and options, coverage/feature trimming, and
+#'     reference db columns.
+#'   \item \code{assemble_opts}: "assembler", "mitofinder_db"/"mitofinder",
+#'     "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds".
+#'   \item \code{curate_opts}: "max_blast_hits", "ref_dir", "ref_db",
+#'     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
+#'     to the GitHub-hosted reference db).
+#'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
+#'     normalized to TEXT), BLAST result columns, "blast_opts".
+#'   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
+#'     column as INTEGER so assembly does not crash).
+#'   \item New tables: "orf_opts", "blast_opts", "export_opts",
+#'     "scaffold_mappings", "assemblies", "assembly_blast", and the
+#'     "blast_ref_annotations"/"blast_ref_sequences"/"blast_ref_alignment" set.
+#' }
 #'
 #' When `update_config = TRUE` the Nextflow `.config` is regenerated wholesale
 #' from the template for the supplied `executor` (rather than patched line by
