@@ -250,13 +250,33 @@ annotations_details_server <- function(id, rv) {
         read.csv()
 
       ## Load BLAST candidate references (rank-ordered; rank 1 = top hit) ----
-      rv$blast_ref_candidates <- tryCatch(
-        dplyr::tbl(session$userData$con, "blast_ref_candidates") |>
+      # Candidates are stored per (ID, path, scaffold) - never merged. The
+      # annotation reference is inherited from the single scaffold the user kept
+      # when finalizing the assembly: the scaffold whose hits include the sample's
+      # chosen reference (synteny_accession, else the representative blast_accession).
+      # Fall back to the best-scoring scaffold if no match. This keeps a divergent
+      # scaffold's candidate list from leaking into another scaffold's reference pick.
+      rv$blast_ref_candidates <- tryCatch({
+        all_cand <- dplyr::tbl(session$userData$con, "blast_ref_candidates") |>
           dplyr::filter(ID == !!rv$updating$ID) |>
-          dplyr::arrange(rank) |>
-          dplyr::collect(),
-        error = function(e) NULL
-      )
+          dplyr::collect()
+        if (nrow(all_cand) == 0) {
+          NULL
+        } else {
+          ref_acc <- rv$updating[["synteny_accession"]] %|NA|% ""
+          if (!nzchar(ref_acc)) ref_acc <- rv$updating[["blast_accession"]] %|NA|% ""
+          src <- all_cand[!is.na(all_cand$accession) & all_cand$accession == ref_acc,
+                          c("path", "scaffold"), drop = FALSE]
+          if (nrow(src) == 0) {
+            # No match: pick the best-scoring scaffold's list (its rank-1 score).
+            r1 <- all_cand[all_cand$rank == 1, , drop = FALSE]
+            sc <- ifelse(is.na(r1$pident), 0, r1$pident) * ifelse(is.na(r1$qcovs), 0, r1$qcovs)
+            src <- r1[which.max(sc), c("path", "scaffold"), drop = FALSE]
+          }
+          all_cand[all_cand$path == src$path[1] & all_cand$scaffold == src$scaffold[1], ] |>
+            dplyr::arrange(rank)
+        }
+      }, error = function(e) NULL)
 
       ## Active synteny reference: user pick (synteny_accession), else top hit ----
       sel <- rv$updating[["synteny_accession"]]

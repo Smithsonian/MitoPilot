@@ -49,7 +49,7 @@ params.sqlWriteBlastNoHit = "UPDATE assemble SET " +
     "WHERE ID = ? AND assemble_switch = 4"
 params.sqlWriteAssemblyBlast = 'INSERT OR REPLACE INTO assembly_blast (ID, path, blast_opts, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
 params.sqlDeleteAssemblyBlast = 'DELETE FROM assembly_blast WHERE ID = ? AND time_stamp != ?'
-params.sqlWriteCandidate = 'INSERT OR REPLACE INTO blast_ref_candidates (ID, rank, accession, species, pident, qcovs, evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+params.sqlWriteCandidate = 'INSERT OR REPLACE INTO blast_ref_candidates (ID, path, scaffold, rank, accession, species, pident, qcovs, evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 params.sqlDeleteCandidates = 'DELETE FROM blast_ref_candidates WHERE ID = ? AND time_stamp != ?'
 
 params.sqlReadBlastOpts =
@@ -169,12 +169,61 @@ workflow BLAST_GENBANK {
 
         blast_genbank(blast_in_split.process)
             .multiMap { id, path_idx, result_file ->
-                state:     tuple(id, result_file)
-                parse:     tuple(id, path_idx, result_file)
-                perpath:   tuple(id, path_idx, result_file)
-                succeeded: tuple(id, true)
+                state:      tuple(id, result_file)
+                parse:      tuple(id, path_idx, result_file)
+                perpath:    tuple(id, path_idx, result_file)
+                candidates: tuple(id, path_idx, result_file)
+                succeeded:  tuple(id, true)
             }
             .set { blast_out }
+
+        // Per-SCAFFOLD candidate references: for each scaffold (BLAST query), its
+        // own top-N hits, ranked and keyed by (ID, path, scaffold). Hits are NEVER
+        // merged across scaffolds/paths, so a divergent scaffold keeps its own
+        // reference list. blastn already caps hits per query at max_target_seqs.
+        blast_out.candidates
+            .flatMap { id, path_idx, result_file ->
+                def lines = result_file.readLines().findAll { it.trim() }
+                def per_scaffold = [:]
+                lines.each { line ->
+                    def parts = line.split('\t')
+                    if (parts.size() >= 6) {
+                        def rec = [
+                            parts[1],
+                            parts[2],
+                            Math.round(parts[3].toFloat() * 100) / 100.0,
+                            Math.round(parts[4].toFloat() * 100) / 100.0,
+                            parts[5].toDouble()
+                        ]
+                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
+                        per_scaffold[parts[0]] << rec
+                    }
+                }
+                def out = []
+                per_scaffold.each { qseqid, hits ->
+                    def toks = qseqid.split(/\./)
+                    if (toks.size() < 3) return
+                    def path = toks[-2]; def scaffold = toks[-1]
+                    // Dedup accessions within THIS scaffold (best pident*qcovs), rank.
+                    def byacc = [:]
+                    hits.each { v ->
+                        def acc = v[0]
+                        if (acc != null && acc != 'NO HIT') {
+                            def score = (v[2] ?: 0) * (v[3] ?: 0)
+                            if (!byacc.containsKey(acc) || score > byacc[acc].score) {
+                                byacc[acc] = [rec: v, score: score]
+                            }
+                        }
+                    }
+                    byacc.values().toList().sort { -it.score }.eachWithIndex { info, i ->
+                        def v = info.rec
+                        out << tuple(id, path as Integer, scaffold as Integer, i + 1,
+                                     v[0], v[1], v[2], v[3], v[4], params.ts)
+                    }
+                }
+                out
+            }
+            .set { scaffold_candidates }  // (id, path, scaffold, rank, acc, species, pident, qcovs, evalue, ts)
 
         // Per-path candidate + scaffold-accession summary (exactly one tuple per
         // blasted path, empty lists allowed) parsed from the same BLAST result.
@@ -400,7 +449,12 @@ workflow BLAST_GENBANK {
                         byacc[acc] = [row: r, score: score]
                     }
                 }
-                def ranked = byacc.values().toList().sort { -it.score }.take(n_cand).collect { it.row }
+                // All candidate accessions for this sample (union across paths),
+                // ranked by score. NOT capped: every per-scaffold candidate must
+                // get a fetched reference (+lineage), and rank-1 is the sample's
+                // representative hit. Per-scaffold separation lives in the
+                // blast_ref_candidates table (written from scaffold_candidates).
+                def ranked = byacc.values().toList().sort { -it.score }.collect { it.row }
                 tuple(id, opts_id, ranked, (allScaffs ?: []).unique())
             }
             .set { sample_agg }  // (id, opts_id, ranked, [scaffAcc...])
@@ -429,14 +483,8 @@ workflow BLAST_GENBANK {
             .map { id, asmb_list, opts_id -> tuple(id, params.ts) }
             .sqlInsert(statement: params.sqlDeleteCandidates, db: 'sqlite')
 
-        candidates_ch
-            .flatMap { id, opts_id, ranked ->
-                def out = []
-                ranked.eachWithIndex { r, i ->
-                    out << tuple(id, i + 1, r[1], r[2], r[3], r[4], r[5], params.ts)
-                }
-                out
-            }
+        // Per-scaffold candidate rows (kept separate per ID/path/scaffold).
+        scaffold_candidates
             .sqlInsert(statement: params.sqlWriteCandidate, db: 'sqlite')
 
         // BLAST_REF_FETCH input: fetch the union of (a) the top-N candidate accessions

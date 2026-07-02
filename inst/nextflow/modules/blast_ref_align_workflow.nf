@@ -26,7 +26,8 @@ params.sqlReadRef =
     'SELECT c.ID, c.accession, c.rank, s.sequence, ' +
         'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
                   'WHERE r.accession = c.accession AND r.gene = d.start_gene), 0) ' +
-    'FROM blast_ref_candidates c ' +
+    'FROM (SELECT ID, accession, MIN(rank) AS rank FROM blast_ref_candidates ' +
+         'GROUP BY ID, accession) c ' +
     'JOIN annotate a     ON c.ID = a.ID ' +
     'JOIN annotate_opts d ON a.annotate_opts = d.annotate_opts ' +
     'JOIN blast_ref_sequences s ON c.accession = s.accession'
@@ -42,7 +43,8 @@ params.sqlBackfill =
         'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
                   'WHERE r.accession = cd.accession AND r.gene = d.start_gene), 0) ' +
     'FROM assemble b ' +
-    'JOIN blast_ref_candidates cd ON cd.ID = b.ID ' +
+    'JOIN (SELECT ID, accession, MIN(rank) AS rank FROM blast_ref_candidates ' +
+         'GROUP BY ID, accession) cd ON cd.ID = b.ID ' +
     'JOIN assemblies a   ON b.ID = a.ID AND a.ignore = 0 ' +
         'AND a.scaffold = (SELECT MIN(scaffold) FROM assemblies a2 WHERE a2.ID = a.ID AND a2.ignore = 0) ' +
     'JOIN annotate c     ON b.ID = c.ID ' +

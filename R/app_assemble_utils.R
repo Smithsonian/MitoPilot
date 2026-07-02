@@ -575,15 +575,12 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   }
 }
 
-#' Modal listing all BLAST hits for one sample
+#' Modal listing all BLAST hits for one sample, kept separate per scaffold/path
 #'
-#' Opened from the "All BLAST Hits" table button. Shows two parts:
-#'  1. the sample's full candidate reference list (blast_ref_candidates, the
-#'     top-N hits retained by the multi-candidate BLAST step), ranked, with
-#'     species, percents, e-value and per-accession lineage (from
-#'     blast_ref_sequences); and
-#'  2. a collapsible per-scaffold / per-path breakdown (each scaffold's best hit
-#'     from the assemblies table), grouped by assembly path.
+#' Opened from the "All BLAST Hits" table button. BLAST hits are stored per
+#' (ID, path, scaffold) - never merged across scaffolds/paths - so the modal
+#' shows one collapsible, ranked candidate list per path/scaffold (accession,
+#' species, percents, e-value, per-accession lineage from blast_ref_sequences).
 #' Accessions are hyperlinks to NCBI. Header mirrors the assembly-details modal.
 #'
 #' @param rv the local reactive vals object (uses rv$updating$ID / $Taxon)
@@ -595,7 +592,6 @@ blast_hits_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   id <- rv$updating$ID[1]
   taxon <- rv$updating$Taxon[1] %|NA|% "NA"
 
-  # 1) Full candidate reference list (all BLAST hits) with per-accession lineage.
   cand <- tryCatch(
     dplyr::tbl(con, "blast_ref_candidates") |>
       dplyr::filter(ID == !!id) |>
@@ -604,110 +600,60 @@ blast_hits_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           dplyr::select(accession, lineage),
         by = "accession"
       ) |>
-      dplyr::select(rank, accession, species, pident, qcovs, evalue, lineage) |>
+      dplyr::select(path, scaffold, rank, accession, species, pident, qcovs, evalue, lineage) |>
       dplyr::collect() |>
-      dplyr::arrange(rank),
+      dplyr::arrange(path, scaffold, rank),
     error = function(e) data.frame()
   )
 
-  # 2) Per-scaffold best hits (grouped by path in the collapsible section).
-  scaf <- tryCatch(
-    dplyr::tbl(con, "assemblies") |>
-      dplyr::filter(ID == !!id) |>
-      dplyr::select(path, scaffold, length, blast_accession, blast_species,
-                    blast_pident, blast_qcovs, blast_lineage) |>
-      dplyr::collect() |>
-      dplyr::arrange(path, scaffold),
-    error = function(e) data.frame()
+  cand_cols <- list(
+    rank = reactable::colDef(name = "Rank", maxWidth = 60, align = "center"),
+    accession = reactable::colDef(
+      name = "BLAST Hit", html = TRUE, minWidth = 120, cell = rt_ncbi_link()
+    ),
+    species = reactable::colDef(
+      name = "BLAST Species", html = TRUE, minWidth = 160, cell = rt_longtext()
+    ),
+    pident = reactable::colDef(name = "% Ident", maxWidth = 90, align = "center"),
+    qcovs = reactable::colDef(name = "% Cov", maxWidth = 90, align = "center"),
+    evalue = reactable::colDef(name = "E-value", maxWidth = 100, align = "center"),
+    lineage = reactable::colDef(
+      name = "BLAST Lineage", html = TRUE, minWidth = 220, cell = rt_longtext()
+    )
   )
 
-  cand_body <- if (nrow(cand) == 0) {
+  body <- if (nrow(cand) == 0) {
     div(
       style = "padding: 8px; color: #555;",
-      "No candidate BLAST hits are available for this sample yet."
+      "No BLAST hits are available for this sample yet."
     )
   } else {
-    reactable::reactable(
-      cand,
-      defaultExpanded = TRUE,
-      bordered = TRUE,
-      highlight = TRUE,
-      compact = TRUE,
-      wrap = FALSE,
-      defaultColDef = reactable::colDef(align = "left"),
-      columns = list(
-        rank = reactable::colDef(name = "Rank", maxWidth = 60, align = "center"),
-        accession = reactable::colDef(
-          name = "BLAST Hit", html = TRUE, minWidth = 120, cell = rt_ncbi_link()
-        ),
-        species = reactable::colDef(
-          name = "BLAST Species", html = TRUE, minWidth = 160, cell = rt_longtext()
-        ),
-        pident = reactable::colDef(
-          name = "% Ident", maxWidth = 90, align = "center"
-        ),
-        qcovs = reactable::colDef(
-          name = "% Cov", maxWidth = 90, align = "center"
-        ),
-        evalue = reactable::colDef(
-          name = "E-value", maxWidth = 100, align = "center"
-        ),
-        lineage = reactable::colDef(
-          name = "BLAST Lineage", html = TRUE, minWidth = 220, cell = rt_longtext()
-        )
+    combos <- unique(cand[, c("path", "scaffold")])
+    combos <- combos[order(combos$path, combos$scaffold), , drop = FALSE]
+    multi <- nrow(combos) > 1
+    lapply(seq_len(nrow(combos)), function(i) {
+      p <- combos$path[i]; s <- combos$scaffold[i]
+      sub <- cand[cand$path == p & cand$scaffold == s,
+                  c("rank", "accession", "species", "pident", "qcovs", "evalue", "lineage")]
+      tbl <- reactable::reactable(
+        sub, defaultExpanded = TRUE, bordered = TRUE, highlight = TRUE,
+        compact = TRUE, wrap = FALSE,
+        defaultColDef = reactable::colDef(align = "left"),
+        columns = cand_cols
       )
-    )
-  }
-
-  scaf_section <- if (nrow(scaf) > 0) {
-    n_paths <- length(unique(scaf$path))
-    multi_path <- n_paths > 1
-    tags$details(
-      # Open by default so the embedded table sizes correctly; collapsible so it
-      # can be tucked away. Group by path for a clear per-path/scaffold breakdown.
-      open = NA,
-      style = "margin-top: 16px;",
-      tags$summary(
-        style = "cursor: pointer; font-weight: bold;",
-        stringr::str_glue(
-          "Per-scaffold best hits ({nrow(scaf)} scaffold",
-          "{ifelse(nrow(scaf) == 1, '', 's')} across {n_paths} path",
-          "{ifelse(n_paths == 1, '', 's')})"
-        )
-      ),
-      div(
-        style = "margin-top: 8px;",
-        reactable::reactable(
-          scaf,
-          groupBy = if (multi_path) "path" else NULL,
-          defaultExpanded = TRUE,
-          bordered = TRUE,
-          highlight = TRUE,
-          compact = TRUE,
-          wrap = FALSE,
-          defaultColDef = reactable::colDef(align = "left"),
-          columns = list(
-            path = reactable::colDef(name = "Path", maxWidth = 70, align = "center"),
-            scaffold = reactable::colDef(name = "Scaffold", maxWidth = 90, align = "center"),
-            length = reactable::colDef(
-              name = "Assembly Length", maxWidth = 130, align = "right",
-              format = reactable::colFormat(separators = TRUE)
-            ),
-            blast_accession = reactable::colDef(
-              name = "BLAST Hit", html = TRUE, minWidth = 120, cell = rt_ncbi_link()
-            ),
-            blast_species = reactable::colDef(
-              name = "BLAST Species", html = TRUE, minWidth = 160, cell = rt_longtext()
-            ),
-            blast_pident = reactable::colDef(name = "% Ident", maxWidth = 90, align = "center"),
-            blast_qcovs = reactable::colDef(name = "% Cov", maxWidth = 90, align = "center"),
-            blast_lineage = reactable::colDef(
-              name = "BLAST Lineage", html = TRUE, minWidth = 220, cell = rt_longtext()
-            )
-          )
-        )
+      # One collapsible section per (path, scaffold). Open by default so the
+      # embedded table sizes correctly. For a single scaffold, no wrapper.
+      if (!multi) return(tbl)
+      tags$details(
+        open = NA,
+        style = "margin-top: 12px;",
+        tags$summary(
+          style = "cursor: pointer; font-weight: bold;",
+          stringr::str_glue("Path {p} / Scaffold {s} ({nrow(sub)} hits)")
+        ),
+        div(style = "margin-top: 8px;", tbl)
       )
-    )
+    })
   }
 
   showModal(modalDialog(
@@ -719,12 +665,7 @@ blast_hits_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
       )
     ),
     size = "l",
-    tags$div(
-      style = "font-weight: bold; margin-bottom: 6px;",
-      "Candidate references (all BLAST hits)"
-    ),
-    cand_body,
-    scaf_section,
+    body,
     easyClose = TRUE,
     footer = modalButton("Close")
   ))

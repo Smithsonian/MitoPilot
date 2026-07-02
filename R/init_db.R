@@ -676,6 +676,8 @@ new_db <- function(
     con,
     "CREATE TABLE blast_ref_candidates (
       ID TEXT NOT NULL,
+      path INTEGER NOT NULL,
+      scaffold INTEGER NOT NULL,
       rank INTEGER,
       accession TEXT NOT NULL,
       species TEXT,
@@ -683,7 +685,7 @@ new_db <- function(
       qcovs REAL,
       evalue REAL,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, accession)
+      PRIMARY KEY (ID, path, scaffold, accession)
     );"
   )
 

@@ -132,6 +132,10 @@ backwards_compatibility <- function(
       "synteny_accession" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
+        "scaffold" %in% DBI::dbListFields(con, "blast_ref_candidates"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
         "accession" %in% DBI::dbListFields(con, "blast_ref_annotations"),
         error = function(e) FALSE
       )) &&
@@ -1120,13 +1124,17 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "UPDATE blast_opts SET max_target_seqs = 5 WHERE max_target_seqs IS NULL")
   }
 
-  # per-sample candidate references (rank 1 = top hit). Seed existing projects
-  # with the single current top hit so the in-app picker shows one entry.
-  if (!("blast_ref_candidates" %in% DBI::dbListTables(con))) {
-    message("created blast_ref_candidates table")
+  # Per-SCAFFOLD candidate references (rank 1 = that scaffold's top hit). Kept
+  # separate per (ID, path, scaffold) so divergent scaffolds/paths never merge
+  # into one ranked list. Legacy tables (per-sample, PK (ID, accession)) are
+  # rebuilt; seed each scaffold's existing best hit as rank 1 from assemblies so
+  # the in-app picker shows something before a re-run.
+  .create_scaffold_candidates <- function() {
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_candidates (
         ID TEXT NOT NULL,
+        path INTEGER NOT NULL,
+        scaffold INTEGER NOT NULL,
         rank INTEGER,
         accession TEXT NOT NULL,
         species TEXT,
@@ -1134,16 +1142,24 @@ backwards_compatibility <- function(
         qcovs REAL,
         evalue REAL,
         time_stamp INTEGER,
-        PRIMARY KEY (ID, accession)
+        PRIMARY KEY (ID, path, scaffold, accession)
       );"
     )
     DBI::dbExecute(con,
       "INSERT OR IGNORE INTO blast_ref_candidates
-         (ID, rank, accession, species, pident, qcovs, evalue, time_stamp)
-       SELECT ID, 1, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp
-       FROM assemble
+         (ID, path, scaffold, rank, accession, species, pident, qcovs, evalue, time_stamp)
+       SELECT ID, path, scaffold, 1, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp
+       FROM assemblies
        WHERE blast_accession IS NOT NULL AND blast_accession != 'NO HIT'"
     )
+  }
+  if (!("blast_ref_candidates" %in% DBI::dbListTables(con))) {
+    message("created blast_ref_candidates table (per-scaffold)")
+    .create_scaffold_candidates()
+  } else if (!("scaffold" %in% DBI::dbListFields(con, "blast_ref_candidates"))) {
+    message("migrated blast_ref_candidates to per-scaffold schema")
+    DBI::dbExecute(con, "DROP TABLE blast_ref_candidates")
+    .create_scaffold_candidates()
   }
 
   if (!("blast_ref_sequences" %in% existing_tables)) {
