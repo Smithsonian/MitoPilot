@@ -780,36 +780,56 @@ export_server <- function(id) {
           "Data exported to:",
           tags$div(
             style = paste(
-              "display: flex; align-items: stretch; gap: 0.4em;",
+              "display: flex; flex-direction: column; gap: 0.4em;",
               "margin-top: 0.5em;"
             ),
             tags$div(
               style = paste(
-                "flex: 1; min-width: 0; background: #000; color: #fff;",
-                "font-family: monospace; padding: 0.5em 0.6em; border-radius: 4px;",
+                "min-width: 0; background: #000; color: #fff;",
+                "font-family: monospace; font-size: 0.8em; padding: 0.5em 0.6em; border-radius: 4px;",
                 "white-space: normal; word-break: break-all; text-align: left;"
               ),
               path
             ),
-            tags$button(
-              type = "button",
-              class = "btn btn-secondary",
-              title = "Copy path",
-              onclick = sprintf(
-                paste0(
-                  "navigator.clipboard.writeText('%s');",
-                  "var t=this.querySelector('span');",
-                  "if(t){var o=t.innerText;t.innerText='Copied!';",
-                  "setTimeout(function(){t.innerText=o;},1200);}"
+            tags$div(
+              style = "display: flex; flex-direction: row; gap: 0.4em; justify-content: center;",
+              tags$button(
+                type = "button",
+                class = "btn btn-secondary",
+                title = "Copy path",
+                onclick = sprintf(
+                  paste0(
+                    "navigator.clipboard.writeText('%s');",
+                    "var t=this.querySelector('span');",
+                    "if(t){var o=t.innerText;t.innerText='Copied!';",
+                    "setTimeout(function(){t.innerText=o;},1200);}"
+                  ),
+                  path_js
                 ),
-                path_js
+                shiny::icon("copy"),
+                tags$span(
+                  # Fixed width sized for "Copied!" so the button does not resize
+                  # when the label changes on click.
+                  style = "margin-left: 0.3em; display: inline-block; min-width: 4.5em; text-align: center;",
+                  "Copy"
+                )
               ),
-              shiny::icon("copy"),
-              tags$span(
-                # Fixed width sized for "Copied!" so the button does not resize
-                # when the label changes on click.
-                style = "margin-left: 0.3em; display: inline-block; min-width: 4.5em; text-align: center;",
-                "Copy"
+              # Open the export folder in an environment-aware way (see open_path):
+              # OS file browser locally, RStudio Files pane on Server (with a
+              # notification), or a warning path on headless sessions.
+              tags$button(
+                type = "button",
+                class = "btn btn-secondary",
+                title = "Open export folder",
+                onclick = sprintf(
+                  "Shiny.setInputValue('%s', Math.random(), {priority: 'event'});",
+                  ns("open_export_dir")
+                ),
+                shiny::icon("folder-open"),
+                tags$span(
+                  style = "margin-left: 0.3em; display: inline-block; min-width: 4.5em; text-align: center;",
+                  "Open"
+                )
               )
             )
           ),
@@ -819,6 +839,13 @@ export_server <- function(id) {
         html = TRUE
       )
     }
+
+    # "Open" button in the export-complete popup: open the export folder in an
+    # environment-aware way (open_path handles desktop / RStudio Server / headless
+    # and notifies the user accordingly).
+    observeEvent(input$open_export_dir, ignoreInit = TRUE, {
+      open_path(rv$export_done_path)
+    })
 
     # Load a review result into rv and open the modal (or report none found).
     # focus_gene: optional gene name to navigate to (e.g. the gene just reviewed
