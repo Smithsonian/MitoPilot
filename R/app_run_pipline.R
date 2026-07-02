@@ -251,6 +251,9 @@ pipeline_server <- function(id) {
         env = c(
           "current",
           NXF_ANSI_SUMMARY = TRUE,
+          # Keep Nextflow's ANSI log from truncating process names; stable, full
+          # names keep the progress parser's per-process keys consistent.
+          COLUMNS = 500,
           SGE = "/cm/shared/apps/uge/8.8.1/age",
           SGE_ARCH = "lx-amd64",
           SGE_CELL = "age",
@@ -514,8 +517,12 @@ pipeline_server <- function(id) {
       remaining <- rep(T, length(process_out))
       process_out <- cli::ansi_strip(process_out) # clean up ansi encoded output
       executor_lines <- stringr::str_detect(process_out, "^executor")
+      # Key on the full "WF..." process-name token (not a fixed 4-char tail):
+      # per-scaffold BLAST tasks carry long tags that force Nextflow to truncate
+      # names down to a few chars, which broke the old 4-char-minimum pattern and
+      # dumped every redraw snapshot into the footer.
       keys <- stringr::str_match(process_out,
-                                 "^(?<prefix>\\[.+\\]) WF[^\\s]+(?<key>\\S{4}) (?<suffix>.*)")
+                                 "^(?<prefix>\\[.+?\\]) (?<key>WF\\S*) +(?<suffix>.*)")
       progress_lines <- !is.na(keys[, 1])
       if (length(prog_process) == 0) {
         header_stop <- which(executor_lines | progress_lines)
