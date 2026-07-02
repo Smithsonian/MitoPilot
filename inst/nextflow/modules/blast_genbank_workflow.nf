@@ -437,7 +437,7 @@ workflow BLAST_GENBANK {
                 def allScaffs = items.collectMany { it[3] ?: [] }.unique()
                 tuple(id, opts_id, allCands, allScaffs)
             }
-            .join(mts_ch, by: 0, remainder: true)
+            .join(mts_ch, by: 0)
             .map { id, opts_id, allCands, allScaffs, mts ->
                 def n_cand = (mts ?: 5) as Integer
                 allCands = allCands ?: []

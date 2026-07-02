@@ -132,7 +132,7 @@ backwards_compatibility <- function(
       "synteny_accession" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
-        "scaffold" %in% DBI::dbListFields(con, "blast_ref_candidates"),
+        all(c("path", "scaffold") %in% DBI::dbListFields(con, "blast_ref_candidates")),
         error = function(e) FALSE
       )) &&
       isTRUE(tryCatch(
@@ -1156,7 +1156,7 @@ backwards_compatibility <- function(
   if (!("blast_ref_candidates" %in% DBI::dbListTables(con))) {
     message("created blast_ref_candidates table (per-scaffold)")
     .create_scaffold_candidates()
-  } else if (!("scaffold" %in% DBI::dbListFields(con, "blast_ref_candidates"))) {
+  } else if (!all(c("path", "scaffold") %in% DBI::dbListFields(con, "blast_ref_candidates"))) {
     message("migrated blast_ref_candidates to per-scaffold schema")
     DBI::dbExecute(con, "DROP TABLE blast_ref_candidates")
     .create_scaffold_candidates()
