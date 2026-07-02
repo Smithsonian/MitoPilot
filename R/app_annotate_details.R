@@ -2056,7 +2056,7 @@ annotations_details_server <- function(id, rv) {
         tags$span(
           style = "color:#666;",
           stringr::str_glue(
-            "({nchar(prot)} aa, {nrow(segs)} segments – click a segment to edit it)"
+            "({nchar(prot)} aa, {nrow(segs)} segments - click a segment to edit it)"
           )
         ),
         div(

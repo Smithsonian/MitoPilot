@@ -4,7 +4,7 @@
 #' immediately below an input. Optionally appends a "(learn more)" link to the
 #' MitoPilot documentation or an external tool page.
 #'
-#' @param ... help text (character/﻿tags), one short sentence.
+#' @param ... help text (character/tags), one short sentence.
 #' @param href optional URL to link out to.
 #' @param link_text label for the trailing link (default "learn more").
 #' @param id optional element id (namespace via `ns()`) so the help can be
