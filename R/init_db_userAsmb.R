@@ -639,6 +639,7 @@ new_db_userAsmb <- function(
       sequence TEXT NOT NULL,
       ref_length INTEGER,
       genetic_code INTEGER,
+      lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (accession)
     );"

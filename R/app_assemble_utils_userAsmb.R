@@ -20,7 +20,10 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
-    dplyr::mutate(blast_ref_status = poor_blast_ref)
+    dplyr::mutate(
+      blast_ref_status = poor_blast_ref,
+      blast_hits = dplyr::if_else(assemble_switch > 1, "All BLAST Hits", NA_character_)
+    )
 
   out |>
     dplyr::relocate(
@@ -45,6 +48,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       blast_qcovs,
       blast_evalue,
       blast_lineage,
+      blast_hits,
       time_stamp,
       assemble_notes
     ) |>

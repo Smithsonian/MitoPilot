@@ -31,7 +31,7 @@ workflow WF1 {
     // BLAST (status=4). See ASSEMBLE emit comments.
     COVERAGE(ASSEMBLE.out.cov)
     BLAST_GENBANK(ASSEMBLE.out.blast.map{ it -> tuple(it[0], it[1], it[4]) })
-    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map)
+    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map, BLAST_GENBANK.out.ref_batches)
 
     // Auto-join single-path multi-scaffold assemblies. Joined here (not just in
     // the app) so a reference-ordered Path 0 is ready before annotation. Gated to
@@ -51,7 +51,7 @@ workflow WF1_userAsmb {
     PREPROCESS()
     COVERAGE_userAsmb(PREPROCESS.out[0])
     BLAST_GENBANK(COVERAGE_userAsmb.out.blast_in)
-    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map)
+    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map, BLAST_GENBANK.out.ref_batches)
 
 }
 

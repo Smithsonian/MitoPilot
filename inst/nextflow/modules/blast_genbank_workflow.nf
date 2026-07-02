@@ -145,8 +145,20 @@ workflow BLAST_GENBANK {
             .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
                 process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
                 ids:     tuple(id, true)
+                pathkey: id
             }
             .set { blast_in_split }
+
+        // Number of BLAST paths per sample. The blast inputs are produced up front
+        // (fast, local), so this completes well before any BLAST finishes and can
+        // size the per-sample groupKey below so a sample's candidates + ref fetch
+        // emit as soon as *its* paths finish BLAST (streaming, like the pre-wf1
+        // per-path behavior) instead of waiting for the whole cohort.
+        blast_in_split.pathkey
+            .map { id -> tuple(id, 1) }
+            .groupTuple()
+            .map { id, ones -> tuple(id, ones.size()) }
+            .set { path_count_ch }  // (id, n_paths)
 
         // Clear stale per-path rows before re-inserting. Time-stamp gating mirrors
         // the assemblies-table delete pattern so this is safe regardless of channel
@@ -159,9 +171,58 @@ workflow BLAST_GENBANK {
             .multiMap { id, path_idx, result_file ->
                 state:     tuple(id, result_file)
                 parse:     tuple(id, path_idx, result_file)
+                perpath:   tuple(id, path_idx, result_file)
                 succeeded: tuple(id, true)
             }
             .set { blast_out }
+
+        // Per-path candidate + scaffold-accession summary (exactly one tuple per
+        // blasted path, empty lists allowed) parsed from the same BLAST result.
+        // Aggregated per-sample below with groupKey so ref fetch streams.
+        blast_out.perpath
+            .map { id, path_idx, result_file ->
+                def opts_id = result_file.parent.name
+                def lines = result_file.readLines().findAll { it.trim() }
+                def per_scaffold = [:]
+                lines.each { line ->
+                    def parts = line.split('\t')
+                    if (parts.size() >= 6) {
+                        def rec = [
+                            parts[1],
+                            parts[2],
+                            Math.round(parts[3].toFloat() * 100) / 100.0,
+                            Math.round(parts[4].toFloat() * 100) / 100.0,
+                            parts[5].toDouble()
+                        ]
+                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
+                        per_scaffold[parts[0]] << rec
+                    }
+                }
+                // Candidate list: every distinct accession across all hits, keeping
+                // its best pident*qcovs (matches the old per-path 'cand' rows).
+                def byacc = [:]
+                per_scaffold.values().each { hits ->
+                    hits.each { v ->
+                        def acc = v[0]
+                        if (acc != null && acc != 'NO HIT') {
+                            def score = (v[2] ?: 0) * (v[3] ?: 0)
+                            if (!byacc.containsKey(acc) || score > byacc[acc].score) {
+                                byacc[acc] = [rec: v, score: score]
+                            }
+                        }
+                    }
+                }
+                def candList = byacc.values().collect {
+                    [opts_id, it.rec[0], it.rec[1], it.rec[2], it.rec[3], it.rec[4]]
+                }
+                // Each scaffold's best-hit accession (for per-scaffold lineage fetch).
+                def scaffAccs = per_scaffold.values()
+                    .collect { it[0][0] }
+                    .findAll { it != null && it != 'NO HIT' }
+                    .unique()
+                tuple(id, opts_id, candList, scaffAccs)
+            }
+            .set { perpath_ch }  // (id, opts_id, [candRec...], [scaffAcc...])
 
         // Write state=4 (BLAST done, ref fetch pending); BLAST_REF_FETCH writes
         // state=2 once the ref fetch completes. Redundant per-id updates are safe.
@@ -310,21 +371,29 @@ workflow BLAST_GENBANK {
             }
             .set { scaffold_accession }
 
-        // Per-sample candidate references: group all per-path 'cand' rows, dedup by
-        // accession (keeping the best pident*qcovs), rank, keep the top N. N is the
-        // per-sample blast_opts.max_target_seqs (default 5), joined in from mts_ch.
-        blast_records
-            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'cand' }
-            .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                tuple(id, [opts_id, accession, species, pident, qcovs, evalue]) }
+        // Per-sample aggregation of the per-path summaries. groupKey(id, n_paths)
+        // makes groupTuple emit a sample as soon as all *its* paths finish BLAST
+        // (streaming) instead of waiting for the whole cohort. Candidates are
+        // deduped by accession (best pident*qcovs), ranked, and capped at the
+        // per-sample blast_opts.max_target_seqs (default 5, joined from mts_ch).
+        perpath_ch
+            .combine(path_count_ch, by: 0)
+            .map { id, opts_id, candList, scaffAccs, n_paths ->
+                tuple(groupKey(id, n_paths), [id, opts_id, candList, scaffAccs]) }
             .groupTuple()
+            .map { gk, items ->
+                def id = items[0][0]
+                def opts_id = items[0][1]
+                def allCands = items.collectMany { it[2] ?: [] }
+                def allScaffs = items.collectMany { it[3] ?: [] }.unique()
+                tuple(id, opts_id, allCands, allScaffs)
+            }
             .join(mts_ch, by: 0, remainder: true)
-            .map { id, rows, mts ->
+            .map { id, opts_id, allCands, allScaffs, mts ->
                 def n_cand = (mts ?: 5) as Integer
-                rows = rows ?: []
-                def opts_id = rows ? rows[0][0] : null
+                allCands = allCands ?: []
                 def byacc = [:]
-                rows.each { r ->
+                allCands.each { r ->
                     def acc = r[1]
                     def score = (r[3] ?: 0) * (r[4] ?: 0)
                     if (acc != null && acc != 'NO HIT' && (!byacc.containsKey(acc) || score > byacc[acc].score)) {
@@ -332,9 +401,14 @@ workflow BLAST_GENBANK {
                     }
                 }
                 def ranked = byacc.values().toList().sort { -it.score }.take(n_cand).collect { it.row }
-                tuple(id, opts_id, ranked)
+                tuple(id, opts_id, ranked, (allScaffs ?: []).unique())
             }
-            .filter { id, opts_id, ranked -> ranked != null && ranked.size() > 0 }
+            .set { sample_agg }  // (id, opts_id, ranked, [scaffAcc...])
+
+        // Candidate list for the SQL writes (samples with at least one candidate).
+        sample_agg
+            .filter { id, opts_id, ranked, scaffs -> ranked != null && ranked.size() > 0 }
+            .map { id, opts_id, ranked, scaffs -> tuple(id, opts_id, ranked) }
             .set { candidates_ch }  // (id, opts_id, [ [opts_id, acc, species, pident, qcovs, evalue], ... ])
 
         // Representative hit for the assemble table = the rank-1 candidate. Derived
@@ -368,13 +442,8 @@ workflow BLAST_GENBANK {
         // BLAST_REF_FETCH input: fetch the union of (a) the top-N candidate accessions
         // and (b) every scaffold's best-hit accession (needed for per-scaffold lineage
         // even when that hit ranks below N). is_top marks the per-sample rank-1 hit.
-        scaffold_accession
-            .map { id, path, scaffold, accession -> tuple(id, accession) }
-            .groupTuple()
-            .set { scaff_acc_byid }  // (id, [accessions])
-
-        candidates_ch
-            .join(scaff_acc_byid, by: 0, remainder: true)
+        // Streams per-sample from sample_agg (no cohort-wide groupTuple).
+        sample_agg
             .flatMap { id, opts_id, ranked, scaffaccs ->
                 ranked = ranked ?: []
                 scaffaccs = (scaffaccs ?: []).unique()
@@ -391,6 +460,19 @@ workflow BLAST_GENBANK {
                 out
             }
             .set { ref_fetch_input }
+
+        // Per-sample accession BATCH for BLAST_REF_FETCH: this sample's unique real
+        // hit accessions (top-N candidates + per-scaffold best hits). Streams per
+        // sample (from sample_agg's groupKey) so each sample's reference fetch is
+        // batched on its own and starts / re-runs independently of other samples.
+        sample_agg
+            .map { id, opts_id, ranked, scaffaccs ->
+                def accs = ((ranked ?: []).collect { it[1] } + (scaffaccs ?: []))
+                    .findAll { it != null && it != 'NO HIT' }.unique()
+                tuple(id, opts_id, accs)
+            }
+            .filter { id, opts_id, accs -> accs.size() > 0 }
+            .set { ref_fetch_batches }
 
         // Per-id list of "scaffold|accession|pident" for the assembled scaffolds,
         // passed to SCAFFOLD_JOIN so the reference choice / multi-ref mapping /
@@ -410,6 +492,8 @@ workflow BLAST_GENBANK {
         // Downstream BLAST_REF_FETCH consumes this; filtered to real hits only.
         ref_input = ref_fetch_input
             .filter{ id, accession, species, evalue, opts_id, is_top -> accession != 'NO HIT' && accession != null }
+        // Per-sample accession batch (id, opts_id, [accessions]) for the fetch step.
+        ref_batches = ref_fetch_batches
         // (id, path, scaffold, accession) for per-scaffold lineage assignment.
         scaffold_map = scaffold_accession
         // Consumed by SCAFFOLD_JOIN (per-scaffold hits as a ';'-joined string).

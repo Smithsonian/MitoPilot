@@ -364,6 +364,16 @@ assemble_server <- function(id) {
               minWidth = 200,
               cell = rt_longtext()
             ),
+            blast_hits = colDef(
+              show = TRUE,
+              name = "",
+              filterable = FALSE,
+              sortable = FALSE,
+              html = TRUE,
+              width = 140,
+              align = "center",
+              cell = rt_icon_bttn_text(ns("all_blast_hits"), "fas fa-list", "All BLAST Hits")
+            ),
             blast_pident = colDef(
               show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
               name = "BLAST % Ident",
@@ -431,6 +441,10 @@ assemble_server <- function(id) {
             ),
             view = dplyr::case_when(
               assemble_switch > 1 ~ "details",
+              .default = NA_character_
+            ),
+            blast_hits = dplyr::case_when(
+              assemble_switch > 1 ~ "All BLAST Hits",
               .default = NA_character_
             )
           ),
@@ -1064,8 +1078,14 @@ assemble_server <- function(id) {
     })
     assembly_coverage_details_server(ns("coverage_details"), rv)
 
+    # Open All BLAST Hits ----
+    observeEvent(input$all_blast_hits, ignoreInit = T, {
+      rv$updating <- rv$data |> dplyr::slice(as.numeric(input$all_blast_hits))
+      blast_hits_modal(rv)
+    })
+
     # CSV Export ----
-    .export_cols_drop <- c("ignore_flags", "min_assembly_length", "output", "view", "poor_blast_ref")
+    .export_cols_drop <- c("ignore_flags", "min_assembly_length", "output", "view", "blast_hits", "poor_blast_ref")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)

@@ -121,7 +121,7 @@ backwards_compatibility <- function(
       "assembly_blast" %in% DBI::dbListTables(con) &&
       "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
       isTRUE(tryCatch(
-        "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
+        all(c("genetic_code", "lineage") %in% names(DBI::dbReadTable(con, "blast_ref_sequences"))),
         error = function(e) FALSE
       )) &&
       isTRUE(tryCatch(
@@ -1154,6 +1154,7 @@ backwards_compatibility <- function(
         sequence TEXT NOT NULL,
         ref_length INTEGER,
         genetic_code INTEGER,
+        lineage TEXT,
         time_stamp INTEGER,
         PRIMARY KEY (accession)
       );"
@@ -1163,6 +1164,10 @@ backwards_compatibility <- function(
     if (!("genetic_code" %in% ref_seq_cols)) {
       message("added 'genetic_code' column to blast_ref_sequences table")
       DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN genetic_code INTEGER")
+    }
+    if (!("lineage" %in% ref_seq_cols)) {
+      message("added 'lineage' column to blast_ref_sequences table")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN lineage TEXT")
     }
   }
 
