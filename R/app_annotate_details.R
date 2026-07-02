@@ -1051,17 +1051,17 @@ annotations_details_server <- function(id, rv) {
                 style = "margin-top: 2px;",
                 shinyWidgets::actionBttn(
                   ns("synteny_set_ref"),
-                  label = paste0("Set ", active_acc, " as reference genome"),
+                  label = paste0("Set ", active_acc, " as best reference"),
                   style = "material-flat", size = "xs", color = "primary",
                   icon = shiny::icon("check")
                 ),
                 div(style = "font-size: 11px; color: #888; margin-top: 3px;",
-                    "Overwrites the sample's BLAST reference, shown in the Annotate/Export ",
+                    "Overwrites the sample's best reference, shown in the Annotate/Export ",
                     "tables and used in the .tbl reference-comparison note.")
               )
             } else {
               div(style = "font-size: 11px; color: #888; margin-top: 2px;",
-                  "Current reference for this sample.")
+                  "Current best reference.")
             }
           })
         )
@@ -1078,8 +1078,8 @@ annotations_details_server <- function(id, rv) {
           style = "display: flex; justify-content: start; margin-bottom: 6px;",
           shinyWidgets::prettyToggle(
             ns("poor_blast_ref_toggle"),
-            label_on  = "Reference flagged as poor",
-            label_off = "Flag reference as poor",
+            label_on  = "Best reference flagged as poor",
+            label_off = "Flag best reference as poor",
             icon_on   = shiny::icon("flag"),
             icon_off  = shiny::icon("flag"),
             status_on  = "warning",
@@ -1087,12 +1087,6 @@ annotations_details_server <- function(id, rv) {
             value = is_poor,
             inline = TRUE
           )
-        ),
-        div(
-          style = "font-size: 11px; color: #888; margin: -2px 0 6px 0;",
-          "Sample-level flag for this sample's current reference. Merely viewing a ",
-          "different candidate below does not change it; use 'Set as reference genome' ",
-          "to change the reference itself."
         ),
         picker,
         no_ref_msg,
