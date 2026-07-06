@@ -71,6 +71,7 @@ external command-line tools are required.</p>
 <span>  drop_no_product <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  retain_genbank <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  resume <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  api_key <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -140,6 +141,14 @@ Ignored when a MitoFinder database is built (the .gb file is the MitoFinder data
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
 <dd><p>If TRUE, replace the dated output directory if it already exists and is
 non-empty. If FALSE (default), an existing non-empty output directory is an error.</p></dd>
+
+
+<dt id="arg-resume">resume<a class="anchor" aria-label="anchor" href="#arg-resume"></a></dt>
+<dd><p>If TRUE, continue an interrupted download instead of starting over: an
+existing output directory for this clade (any date) is reused and only the records not
+yet present in its <code>genbank.gb</code> are downloaded. Any partial trailing record is
+trimmed first. Best used soon after an interruption, while the NCBI result set is
+unchanged. Default FALSE. Ignored (treated as a fresh run) when no prior download exists.</p></dd>
 
 
 <dt id="arg-api-key">api_key<a class="anchor" aria-label="anchor" href="#arg-api-key"></a></dt>
