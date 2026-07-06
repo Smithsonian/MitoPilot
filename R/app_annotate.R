@@ -861,7 +861,7 @@ annotate_server <- function(id) {
           choices = MITO_GENE_CHOICES,
           selected = cur$start_gene %||% character(0),
           options = list(
-            create = TRUE,
+            create = FALSE,
             maxItems = 1
           )
         )
@@ -1050,7 +1050,7 @@ annotate_server <- function(id) {
           inputId = "target",
           selected = cur$target,
           options = list(
-            create = TRUE,
+            create = FALSE,
             maxItems = 1
           )
         )
@@ -1137,6 +1137,9 @@ annotate_server <- function(id) {
       }
     })
     observeEvent(input$target, {
+      # Guard against partial/invalid entries (e.g. while typing): only known
+      # rulesets dispatch to params_<target>/curate_<target> functions.
+      req(input$target %in% names(RULESET_MAP))
       rv$params <- do.call(paste0("params_", input$target), list()) |>
         jsonlite::toJSON(auto_unbox = TRUE)
       # Refresh the "Auto" label to show the code this target resolves to,
@@ -1145,7 +1148,7 @@ annotate_server <- function(id) {
         session,
         "genetic_code",
         choices = gcode_choices(input$target),
-        selected = input$genetic_code %||% ""
+        selected = input$genetic_code %||% "auto"
       )
       output$params <- listviewer::renderReactjson({
         listviewer::reactjson(
@@ -1178,6 +1181,16 @@ annotate_server <- function(id) {
     observeEvent(input$update_curate_opts, {
       ## Add to params table if new or editing ----
       if (input$edit_curate_opts) {
+        # Target must be a known ruleset (dispatches to params_<target>); block
+        # save on a cleared/invalid selection rather than erroring.
+        if (!isTRUE(input$target %in% names(RULESET_MAP))) {
+          shinyWidgets::show_alert(
+            title = "Invalid target",
+            text = "Please select a valid curation ruleset before saving.",
+            type = "error"
+          )
+          return()
+        }
         params <- do.call(paste0("params_", input$target), list()) |>
           jsonlite::toJSON(auto_unbox = TRUE)
         dplyr::tbl(session$userData$con, "curate_opts") |>
@@ -1191,8 +1204,9 @@ annotate_server <- function(id) {
               ref_db = req(input$curate_ref_db),
               target = req(input$target),
               linear_complete = as.integer(isTRUE(input$linear_complete)),
-              # "" = auto-from-ruleset (NA); a number is an explicit override.
-              genetic_code = if (is.null(input$genetic_code) || !nzchar(input$genetic_code)) {
+              # "auto" (or empty) = auto-from-ruleset (NA); a number is an override.
+              genetic_code = if (is.null(input$genetic_code) ||
+                                 input$genetic_code %in% c("", "auto")) {
                 NA_integer_
               } else {
                 as.integer(input$genetic_code)

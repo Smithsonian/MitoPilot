@@ -34,7 +34,9 @@ resolve_genetic_code <- function(target, override = NA) {
 gcode_choices <- function(target = "fish_mito") {
   codes <- c(1L, 2L, 3L, 4L, 5L, 9L, 13L, 14L, 21L, 24L)
   auto_code <- resolve_genetic_code(target, NA)
-  vals <- c("", as.character(codes))
+  # "auto" (not "") so selectize keeps it as a reselectable option rather than
+  # treating an empty value as a placeholder.
+  vals <- c("auto", as.character(codes))
   labs <- c(
     paste0("Auto (from ruleset: ", auto_code, " - ", genetic_code_name(auto_code), ")"),
     vapply(codes, function(x) paste0(x, " - ", genetic_code_name(x)), character(1))

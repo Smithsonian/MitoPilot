@@ -231,7 +231,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               selected = current$start_gene %||% character(0),
               width = "100%",
               options = list(
-                create = TRUE,
+                create = FALSE,
                 maxItems = 1
               )
             ) |> shinyjs::disabled()
@@ -578,16 +578,19 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             ns("target"),
             label = "Target:",
             # Values = full keys (dispatch); labels = "Scientific (common)".
+            # Ordered alphabetically by the displayed label.
             choices = local({
-              tg <- sort(names(RULESET_MAP))
-              stats::setNames(tg, vapply(tg, function(k)
+              tg <- names(RULESET_MAP)
+              labs <- vapply(tg, function(k)
                 paste0(RULESET_MAP[[k]]$ncbi, " (", RULESET_MAP[[k]]$label, ")"),
-                character(1)))
+                character(1))
+              ord <- order(labs)
+              stats::setNames(tg[ord], labs[ord])
             }),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(
-              create = TRUE,
+              create = FALSE,
               maxItems = 1
             )
           ) |> shinyjs::disabled()
@@ -600,10 +603,10 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           selectizeInput(
             ns("genetic_code"),
             label = "Genetic code:",
-            # "" = auto-from-ruleset; explicit values override the ruleset default.
+            # "auto" = auto-from-ruleset; explicit values override the ruleset default.
             choices = gcode_choices(current$target %||% "fish_mito"),
             selected = if (is.null(current$genetic_code) || is.na(current$genetic_code)) {
-              ""
+              "auto"
             } else {
               as.character(current$genetic_code)
             },
@@ -611,9 +614,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             options = list(maxItems = 1)
           ) |> shinyjs::disabled()
         ),
-        opts_help("NCBI translation table used to translate coding genes during ",
-                  "curation. Leave on 'Auto' to use the code defined by the selected ",
-                  "ruleset, or pick a specific table to override it for these samples.",
+        opts_help("NCBI translation table used for protien-coding genes. 'Auto' to sets the genetic code based on selected ",
+                  "ruleset. Or pick a specific table to override it for these samples.",
                   href = "https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi"),
         div(
           class = "form-group shiny-input-container",

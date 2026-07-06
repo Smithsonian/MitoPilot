@@ -294,7 +294,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               selected = current$assembler %||% character(0),
               width = "100%",
               options = list(
-                create = TRUE,
+                create = FALSE,
                 maxItems = 1
               )
             ) |> shinyjs::disabled()
