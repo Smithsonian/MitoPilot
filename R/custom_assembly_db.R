@@ -47,6 +47,11 @@
 #'   Ignored when a MitoFinder database is built (the .gb file is the MitoFinder database).
 #' @param overwrite If TRUE, replace the dated output directory if it already exists and is
 #'   non-empty. If FALSE (default), an existing non-empty output directory is an error.
+#' @param resume If TRUE, continue an interrupted download instead of starting over: an
+#'   existing output directory for this clade (any date) is reused and only the records not
+#'   yet present in its \code{genbank.gb} are downloaded. Any partial trailing record is
+#'   trimmed first. Best used soon after an interruption, while the NCBI result set is
+#'   unchanged. Default FALSE. Ignored (treated as a fresh run) when no prior download exists.
 #' @param api_key Optional NCBI API key (raises the rate limit). Defaults to the
 #'   \code{NCBI_API_KEY} or \code{ENTREZ_KEY} environment variable if set.
 #'
@@ -65,6 +70,7 @@ custom_assembly_db <- function(clade,
                                drop_no_product = TRUE,
                                retain_genbank = FALSE,
                                overwrite = FALSE,
+                               resume = FALSE,
                                api_key = NULL) {
   db_type <- match.arg(db_type)
 
@@ -107,27 +113,44 @@ custom_assembly_db <- function(clade,
   }
   message("Found ", se$count, " matching records.")
 
-  # ---- 3. create dated output directory ----
+  # ---- 3. create or locate the output directory ----
   date_str <- format(as.Date(Sys.time(), tz = "UTC"), "%Y-%m-%d")
   access_time <- strftime(as.POSIXlt(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ")
   clade_san <- gsub("_+", "_", gsub("[^A-Za-z0-9]+", "_", clade))
   clade_san <- gsub("^_|_$", "", clade_san)
   src_tag <- if (refseq_only) "refseq" else "all"
-  out_dir <- file.path(db_path, paste0(clade_san, "_", src_tag, "_", date_str))
-  if (dir.exists(out_dir) && length(list.files(out_dir, all.files = TRUE, no.. = TRUE)) > 0) {
-    if (!isTRUE(overwrite)) {
-      stop("Output directory already exists and is not empty:\n  ", out_dir,
-           "\nRemove it, or set `overwrite = TRUE` to replace its contents.")
+
+  resume_from <- 0L
+  resume_dir <- if (isTRUE(resume)) .cadb_find_resume_dir(db_path, clade_san, src_tag) else NULL
+  if (!is.null(resume_dir)) {
+    out_dir <- resume_dir
+    gb_file <- file.path(out_dir, "genbank.gb")
+    resume_from <- .cadb_trim_partial_gb(gb_file)
+    if (resume_from >= se$count) {
+      message("All ", se$count, " records already present in ", out_dir,
+              "; skipping download.")
+    } else {
+      message("Resuming download in ", out_dir, ": ", resume_from, " of ", se$count,
+              " records already present.")
     }
-    unlink(out_dir, recursive = TRUE)
+  } else {
+    out_dir <- file.path(db_path, paste0(clade_san, "_", src_tag, "_", date_str))
+    if (dir.exists(out_dir) && length(list.files(out_dir, all.files = TRUE, no.. = TRUE)) > 0) {
+      if (!isTRUE(overwrite)) {
+        stop("Output directory already exists and is not empty:\n  ", out_dir,
+             "\nRemove it, set `overwrite = TRUE` to replace its contents, ",
+             "or set `resume = TRUE` to continue an interrupted download.")
+      }
+      unlink(out_dir, recursive = TRUE)
+    }
+    dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+    gb_file <- file.path(out_dir, "genbank.gb")
   }
-  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  gb_file <- file.path(out_dir, "genbank.gb")
 
   # ---- 4. download records ----
   message("Downloading ", se$count, " GenBank records (this may take a few minutes)...")
   .cadb_efetch(se, se$count, gb_file, rettype = "gb", retmode = "text", api_key, delay,
-               what = "GenBank records")
+               what = "GenBank records", query = query, resume_from = resume_from)
   message("Download complete: ", gb_file)
 
   counts <- list(downloaded = se$count, multigene = 0L, singlegene = 0L,
@@ -320,21 +343,49 @@ custom_assembly_db <- function(clade,
 }
 
 #' Fetch records from the esearch history in batches, writing to `out_file`
+#'
+#' NCBI's history server (WebEnv/query_key) can expire or transiently reject a
+#' request mid-download (HTTP 400) on long, multi-minute batched fetches. When
+#' `query` is supplied, a failed batch triggers a fresh esearch to renew the
+#' history session, and the batch is retried before giving up.
 #' @noRd
 .cadb_efetch <- function(se, count, out_file, rettype, retmode, api_key, delay,
-                         what = "records") {
+                         what = "records", query = NULL, max_refresh = 5L,
+                         resume_from = 0L) {
   batch <- 200L
   report_every <- 1000L
-  if (file.exists(out_file)) file.remove(out_file)
-  con <- file(out_file, open = "wb")
+  if (resume_from <= 0L) {
+    if (file.exists(out_file)) file.remove(out_file)
+    con <- file(out_file, open = "wb")
+  } else {
+    con <- file(out_file, open = "ab")  # append after the records already downloaded
+  }
   on.exit(close(con))
-  last_reported <- 0L
-  for (start in seq(0L, count - 1L, by = batch)) {
-    resp <- .cadb_req("efetch.fcgi",
-                      list(db = "nuccore", WebEnv = se$webenv, query_key = se$query_key,
-                           rettype = rettype, retmode = retmode,
-                           retstart = start, retmax = batch),
-                      api_key)
+  last_reported <- resume_from
+  if (resume_from >= count) {
+    cat("\n", file = stderr())
+    return(invisible())
+  }
+  for (start in seq(resume_from, count - 1L, by = batch)) {
+    attempt <- 0L
+    repeat {
+      resp <- tryCatch(
+        .cadb_req("efetch.fcgi",
+                  list(db = "nuccore", WebEnv = se$webenv, query_key = se$query_key,
+                       rettype = rettype, retmode = retmode,
+                       retstart = start, retmax = batch),
+                  api_key),
+        httr2_http = function(e) e
+      )
+      if (!inherits(resp, "condition")) break
+      attempt <- attempt + 1L
+      # without a query we cannot renew the history session, so re-raise
+      if (is.null(query) || attempt > max_refresh) stop(resp)
+      cat(sprintf("\n  ...NCBI request failed at record %d (%s); renewing history session and retrying (%d/%d)\n",
+                  start, conditionMessage(resp), attempt, max_refresh), file = stderr())
+      Sys.sleep(delay * 3)
+      se <- .cadb_esearch(query, api_key, delay)
+    }
     writeBin(httr2::resp_body_raw(resp), con)
     fetched <- min(start + batch, count)
     if (fetched - last_reported >= report_every || fetched == count) {
@@ -346,6 +397,67 @@ custom_assembly_db <- function(clade,
     Sys.sleep(delay)
   }
   cat("\n", file = stderr())
+}
+
+#' Find a prior output directory for this clade/source to resume into
+#'
+#' Matches the dated `clade_src_YYYY-MM-DD` naming, requires a `genbank.gb`,
+#' and returns the most recent match (or NULL if none).
+#' @noRd
+.cadb_find_resume_dir <- function(db_path, clade_san, src_tag) {
+  if (!dir.exists(db_path)) return(NULL)
+  cand <- list.dirs(db_path, recursive = FALSE)
+  pat <- paste0("^", clade_san, "_", src_tag, "_\\d{4}-\\d{2}-\\d{2}$")
+  cand <- cand[grepl(pat, basename(cand))]
+  cand <- cand[file.exists(file.path(cand, "genbank.gb"))]
+  if (length(cand) == 0) return(NULL)
+  cand[order(basename(cand), decreasing = TRUE)][1]
+}
+
+#' Count complete GenBank records in a partial flat file, trimming a partial tail
+#'
+#' Each GenBank record ends with a line `//`. Scans the file for the `\n//\n`
+#' terminator, truncates any bytes after the last complete record (guards against
+#' a crash mid-write), and returns the number of complete records. Streams in
+#' chunks so multi-GB partial downloads are handled without loading the whole
+#' file into memory.
+#' @noRd
+.cadb_trim_partial_gb <- function(path) {
+  size <- file.info(path)$size
+  if (is.na(size) || size == 0) return(0L)
+  pat <- as.raw(c(0x0A, 0x2F, 0x2F, 0x0A))  # "\n//\n"
+  plen <- length(pat)
+  con <- file(path, open = "rb")
+  count <- 0L
+  truncate_at <- 0        # number of bytes through the last complete record
+  base <- 0               # 0-based offset of the first byte of `dat`
+  carry <- raw(0)
+  chunksize <- 4194304L   # 4 MB
+  repeat {
+    buf <- readBin(con, what = "raw", n = chunksize)
+    if (length(buf) == 0L) break
+    dat <- c(carry, buf)
+    m <- grepRaw(pat, dat, all = TRUE, fixed = TRUE)
+    if (length(m) > 0L) {
+      count <- count + length(m)
+      truncate_at <- base + m[length(m)] - 1 + plen
+    }
+    keep <- min(length(dat), plen - 1L)  # retain tail so a boundary-spanning "\n//\n" is caught
+    base <- base + (length(dat) - keep)
+    carry <- utils::tail(dat, keep)
+  }
+  close(con)
+  if (count == 0L) {
+    file.remove(path)  # nothing usable; fall back to a fresh download
+    return(0L)
+  }
+  if (truncate_at < size) {
+    con2 <- file(path, open = "r+b")
+    seek(con2, where = truncate_at, origin = "start")
+    truncate(con2)
+    close(con2)
+  }
+  count
 }
 
 #' Grab the text content of the first <tag>...</tag> in a string
