@@ -233,6 +233,7 @@ pipeline_server <- function(id) {
       prog_header(NULL)
       prog_executor(NULL)
       prog_process(list())
+      prog_frame(list())
       prog_footer(NULL)
       shinyjs::hide("start_button_ui") # Hide the container with the start buttons
       shinyjs::show("stop")
