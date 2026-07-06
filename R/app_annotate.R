@@ -1102,6 +1102,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("curate_ref_dir", condition = input$edit_curate_opts)
       shinyjs::toggleState("curate_ref_db", condition = input$edit_curate_opts)
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
+      shinyjs::toggleState("genetic_code", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
       shinyjs::toggleState("linear_complete", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
