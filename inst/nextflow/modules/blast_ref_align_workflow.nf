@@ -77,10 +77,7 @@ workflow BLAST_REF_ALIGN {
 
     main:
         // Reference data (sequence + rotation) available at WF2 startup from WF1.
-        // TODO: ref_ch (fromQuery) closes at WF2 startup but the left side of the
-        //   .join(ref_ch) closes much later (after ANNOTATE→CURATE→VALIDATE);
-        //   this asymmetric-lifetime join risks a deadlock. Fix by carrying
-        //   ref_seq/rotation through upstream channels or a per-item DB lookup.
+        // combine(by:0) below buffers this finite fromQuery side, so no deadlock.
         channel.fromQuery(params.sqlReadRef, db: 'sqlite')
             .map { row -> tuple(row[0], row[1], (row[2] as Integer) == 1, row[3], row[4] as Long) }
             .filter { id, accession, is_top, ref_seq, rotation -> ref_seq }

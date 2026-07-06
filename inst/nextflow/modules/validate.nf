@@ -39,23 +39,16 @@ process validate {
     '''
 }
 
-// Single, serialized, transactional commit of the curated + validated result for
-// one (id, path). Native exec process: the body runs in the Nextflow driver JVM
-// on the head node (no executor task, no container), the same locus where the
-// nf-sqldb operators already write the project .sqlite reliably over NFS. One
-// JDBC transaction writes the assembly sequence (assemblies), the validated
-// annotation coordinates (annotations), and the summary (annotate) atomically;
-// any row-count mismatch or error rolls back ALL of it and fails the task, so a
-// sample is never left half-written / desynced. maxForks 1 makes it the single
-// such writer at a time. errorStrategy 'ignore' drops a failed sample so the
-// gated downstream stages skip it.
+// Single serialized transactional commit of the curated + validated result for one
+// (id, path). Native exec: runs in the Nextflow driver JVM (no executor/container),
+// where nf-sqldb already writes the .sqlite reliably over NFS. One JDBC transaction
+// writes assemblies + annotations + annotate atomically; any row-count mismatch or
+// error rolls back all of it and fails the task, so a sample is never left
+// half-written. maxForks 1 = single writer; errorStrategy 'ignore' drops a failure.
 //
-// The SQLite JDBC driver is provided by the nf-sqldb plugin, which is already a
-// hard dependency (every .config declares it and main.nf uses fromQuery/sqlInsert),
-// so org.sqlite.JDBC is already loaded in the JVM. We resolve it from that plugin's
-// classloader rather than shipping our own jar. We instantiate the driver and call
-// .connect() directly rather than via DriverManager, whose caller-classloader
-// filtering would not see a class from the plugin classloader.
+// org.sqlite.JDBC is already loaded by the nf-sqldb plugin (a hard dependency), so we
+// resolve it from that plugin's classloader and call driver.connect() directly
+// (DriverManager's caller-classloader filtering wouldn't see a plugin class).
 process write_curated_result {
 
     // Native (exec) task: writes the .sqlite driver-side via JDBC. Pin to the
@@ -75,10 +68,8 @@ process write_curated_result {
     exec:
     def ts = params.ts as String
     def dbPath = "${workflow.launchDir}/.sqlite"
-    // Resolve org.sqlite.JDBC from the nf-sqldb plugin classloader (the plugin
-    // bundles sqlite-jdbc and is always started), falling back to the app
-    // classpath. We only touch the driver via java.sql.* interfaces, so the
-    // loader it comes from doesn't matter downstream.
+    // Resolve org.sqlite.JDBC from the nf-sqldb plugin classloader, falling back
+    // to the app classpath.
     def driverClass = null
     try {
         def pcl = nextflow.plugin.Plugins.manager?.getPluginClassLoader('nf-sqldb')

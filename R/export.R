@@ -214,7 +214,7 @@ export_files <- function(
           )
       }
       stop <- max(annotations$pos2)
-      if (stop > seq@ranges@width) {
+      if (stop < seq@ranges@width) {
         seq <- Biostrings::subseq(seq, 1, stop)
       }
     }
@@ -677,7 +677,7 @@ export_files <- function(
             dir.create(group_geneName_pth, recursive = T, showWarnings = F)
 
             # get gene region from assembly
-            gene = Biostrings::subseq(seq, start = cur$pos1, end = cur$pos2)
+            gene = extract_circ_region(seq, cur$pos1, cur$pos2)
 
             # update FASTA header with gene name
             head_split <- strsplit(fasta_header_gene, "\\s+")
@@ -874,7 +874,7 @@ export_files <- function(
           dir.create(group_geneName_pth, recursive = T, showWarnings = F)
 
           # get gene region from assembly
-          gene = Biostrings::subseq(seq, start = cur$pos1, end = cur$pos2)
+          gene = extract_circ_region(seq, cur$pos1, cur$pos2)
 
           # update FASTA header with gene name
           head_split <- strsplit(fasta_header_gene, "\\s+")
@@ -895,7 +895,7 @@ export_files <- function(
           # fix the start and stop position; carry the 5'/3' partial markers
           # (extracted gene is 5'->3', so pos1_new = 5', pos2_new = 3').
           pos1_new = 1
-          pos2_new = abs(cur$pos2 - cur$pos1)
+          pos2_new = length(gene[[1]])
           gene_p1 <- as.character(pos1_new)
           gene_p2 <- as.character(pos2_new)
           if (isTRUE(as.integer(cur$partial_start) == 1L)) gene_p1 <- paste0("<", gene_p1)

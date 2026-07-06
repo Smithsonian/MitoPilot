@@ -156,12 +156,19 @@ annotate_mitofinder <- function(
     return(empty)
   }
 
+  # 0-row frame matching the raw per-file columns emitted below (bound by name)
+  empty_raw <- data.frame(
+    contig = character(), feature = character(),
+    start = integer(), end = integer(),
+    strand = character(), attrs = character(),
+    stringsAsFactors = FALSE
+  )
   raw <- purrr::map_dfr(gff_files, ~ {
     lines <- readLines(.x, warn = FALSE)
     lines <- lines[!stringr::str_detect(lines, "^#") & nzchar(lines)]
-    if (length(lines) == 0L) return(empty[0, 1:9])
+    if (length(lines) == 0L) return(empty_raw)
     cols <- stringr::str_split(lines, "\t", simplify = TRUE)
-    if (ncol(cols) < 9L) return(empty[0, 1:9])
+    if (ncol(cols) < 9L) return(empty_raw)
     data.frame(
       contig    = cols[, 1],
       feature   = cols[, 3],
@@ -190,7 +197,7 @@ annotate_mitofinder <- function(
 
   # Extract a raw gene label from the attributes column, trying common keys.
   attr_val <- function(attrs, key) {
-    stringr::str_match(attrs, stringr::regex(paste0(key, "=([^;]+)"), ignore_case = TRUE))[, 2]
+    stringr::str_match(attrs, stringr::regex(paste0("(?:^|;)", key, "=([^;]+)"), ignore_case = TRUE))[, 2]
   }
   raw <- raw |>
     dplyr::mutate(

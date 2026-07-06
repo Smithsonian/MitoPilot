@@ -22,7 +22,7 @@ workflow CURATE {
             .map { it ->
 
                 // Check if refDir is a GitHub link
-                if (it[9].contains('githubusercontent')) {
+                if (it[9]?.contains('githubusercontent')) {
                     if (!it[10].endsWith('.tar.gz')) {
                         it[10] = it[10] + '.tar.gz'
                     }

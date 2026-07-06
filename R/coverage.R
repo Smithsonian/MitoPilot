@@ -87,7 +87,7 @@ coverage <- function(
         Call == "C" ~ as.numeric(stringr::str_split(X7, ":", simplify = T)[, 2]),
         Call == "G" ~ as.numeric(stringr::str_split(X8, ":", simplify = T)[, 2])
       ),
-      ErrorRate = (Depth - Correct) / Depth
+      ErrorRate = dplyr::if_else(Depth == 0, NA_real_, (Depth - Correct) / Depth)
     )
 
   # Add missing coverage at start ----
@@ -118,7 +118,7 @@ coverage <- function(
         .by = c(SeqId, Position)
       ) |>
       dplyr::mutate(
-        ErrorRate = (Depth - Correct) / Depth
+        ErrorRate = dplyr::if_else(Depth == 0, NA_real_, (Depth - Correct) / Depth)
       )
   }
 
@@ -157,7 +157,7 @@ coverage <- function(
   if (length(seq_ids) > 1) {
     stats_long <- stats_long |>
       dplyr::mutate(
-        Scaffold = stringr::str_glue("Scaffold {stringr::str_extract(SeqId, '[0-9]$')} ({dplyr::n()} bp)"),
+        Scaffold = stringr::str_glue("Scaffold {stringr::str_extract(SeqId, '[0-9]+$')} ({dplyr::n()} bp)"),
         .by = c(SeqId, Stat)
       )
   } else {

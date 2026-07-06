@@ -604,11 +604,12 @@ annotations_details_server <- function(id, rv) {
         pg <- join_grp_of(prev)
         ng <- join_grp_of(sel)
         same_join <- !is.na(pg) && !is.na(ng) && identical(pg, ng)
+        was_open <- length(rv$alignment) != 0
         rv$alignment <- rv$local_hits <- NULL
         ref_msa_cache$msa <- NULL
         ref_msa_cache$key <- NULL
         if (rv$annotations$type[sel] %in% c("PCG", "rRNA") &&
-            (same_join || length(rv$alignment) != 0)) {
+            (same_join || was_open)) {
           trigger("align_now")
         } else {
           toggleDetails(ns("alignment_div"), FALSE)
@@ -679,7 +680,7 @@ annotations_details_server <- function(id, rv) {
         !isTRUE(a == b) && !(is.na(a) && is.na(b))
       }
       any(vapply(
-        c("translation", "pos1", "pos2", "stop_codon", "partial_start", "partial_stop"),
+        c("translation", "pos1", "pos2", "start_codon", "stop_codon", "partial_start", "partial_stop"),
         changed, logical(1)
       ))
     }
@@ -1969,11 +1970,19 @@ annotations_details_server <- function(id, rv) {
           "<b>Max Similarity:</b> {ifelse(max(hits$similarity)<25,'-',paste0(round(max(hits$similarity),1),'%'))}"
         )
       }
+      # For a joined gene, show the spliced gene's terminal codons (not the active
+      # internal segment's), matching the displayed spliced protein.
+      active_sp <- if (identical(rv$annotations$type[selected()], "PCG") &&
+                       seg_role(selected())$join) {
+        spliced_active(selected())
+      } else {
+        NULL
+      }
       new_alignment$stop <- stringr::str_glue(
-        "<b>Stop Codon:</b> {rv$annotations$stop_codon[selected()]}"
+        "<b>Stop Codon:</b> {active_sp$stop_codon %||% rv$annotations$stop_codon[selected()]}"
       )
       new_alignment$start <- stringr::str_glue(
-        "<b>Start Codon:</b> {rv$annotations$start_codon[selected()]}"
+        "<b>Start Codon:</b> {active_sp$start_codon %||% rv$annotations$start_codon[selected()]}"
       )
       new_alignment$partial <- partial_label(selected())
       # Use the displayed protein (spliced translation for a joined gene) so the
@@ -3529,15 +3538,12 @@ annotations_details_server <- function(id, rv) {
     on("re_align", {
       # rRNA has no protein hit stats to recompute; just rebuild the nt alignment.
       if (!identical(rv$annotations$type[selected()], "rRNA")) {
-        # check if user wants to use fewer reference samples in alignment
-        if (isTRUE(input$reduce_align)){ n_hits = 5 } else { n_hits = Inf }
-        ### Calculate new stats ----
+        ### Calculate new stats (on the full hit set; align_now slices for display)
         focal <- focal_for(selected())
         hits <-
           {
             rv$local_hits %||% json_parse(rv$annotations$refHits[align_hits_idx(selected())], T)
           } |>
-          dplyr::slice_head(n = n_hits) |>
           dplyr::mutate(
             similarity = compare_aa(focal, target, "similarity"),
             pctid = compare_aa(focal, target, "pctId"),
@@ -3548,7 +3554,13 @@ annotations_details_server <- function(id, rv) {
           ) |>
           dplyr::arrange(dplyr::desc(similarity))
 
-        temp_hits <- json_string(hits)
+        # Persist recomputed stats so align_now and the "Max Similarity" header
+        # read the fresh values (previously computed then discarded).
+        if (!is.null(rv$local_hits)) {
+          rv$local_hits <- hits
+        } else {
+          rv$annotations$refHits[align_hits_idx(selected())] <- json_string(hits)
+        }
       }
       # Keep rv$alignment around (incl. cached ref_msa); align_now rebuilds it.
       trigger("align_now")
@@ -3778,7 +3790,12 @@ annotations_details_server <- function(id, rv) {
     # Tag selected rows as a join group instead of collapsing them. Segments stay
     # as visible rows; export combines them into a single joined annotation.
     do_join_merge <- function(rows_to_merge, merge_anns, join_mode, slip_note = NULL) {
-      grp <- as.integer(as.numeric(Sys.time()))
+      # Unique group id = one past the max existing group in this sample. A
+      # whole-second Sys.time() collides when two joins happen in the same second.
+      existing_grps <- as.integer(
+        stringr::str_match(rv$annotations$notes %|NA|% "", "group=(\\d+)")[, 2]
+      )
+      grp <- if (all(is.na(existing_grps))) 1L else max(existing_grps, na.rm = TRUE) + 1L
       marker <- stringr::str_glue("JOIN: mode={join_mode} group={grp}")
       # frameshift note travels to export in the marker; ";" would break the
       # "; "-joined notes field, so swap it for ","

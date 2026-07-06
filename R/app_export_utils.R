@@ -215,7 +215,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(ID, type) |>
     dplyr::collect() |>
     dplyr::group_by(ID) |>
-    dplyr::summarise(ORFCount = sum(type == "ORF"))
+    dplyr::summarise(ORFCount = sum(type == "ORF", na.rm = TRUE))
   orf_enabled <- dplyr::tbl(db, "annotate") |>
     dplyr::select(ID, orf_opts) |>
     dplyr::left_join(dplyr::tbl(db, "orf_opts"), by = "orf_opts") |>

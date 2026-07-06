@@ -877,6 +877,7 @@ normalize_pcg <- function(n, product = NA_character_) {
     # ATP synthase
     "atp6"="atp6", "atpase6"="atp6", "atp synthase 6"="atp6",
     "atp8"="atp8", "atpase8"="atp8", "atp synthase 8"="atp8",
+    "atp9"="atp9", "atpase9"="atp9", "atp synthase 9"="atp9",
     # Cytochrome b
     "cob"="cob", "cytb"="cob", "cyb"="cob", "cytob"="cob",
     "cytochromeb"="cob"
@@ -1005,8 +1006,9 @@ normalize_trna <- function(n, product = NA_character_) {
     s <- sub("(?i)\\btransfer\\s*rna\\b", "trna", s, perl = TRUE)
     # Strip codon-family parens like "(CUN)", "(UUR)", "(AGY)"
     s <- sub("\\s*\\([^)]*\\)\\s*$", "", s, perl = TRUE)
-    # Strip all-uppercase 3-letter anticodon suffix "trnA-UGC"
-    s <- sub("[-_][A-Z]{3}$", "", s, perl = TRUE)
+    # Strip a trailing 3-letter nucleotide anticodon suffix "trnA-UGC"
+    # (restricted to ACGTU so uppercase AA names like "tRNA-SER" are not stripped)
+    s <- sub("[-_][ACGTU]{3}$", "", s, perl = TRUE)
     # Strip trailing isoacceptor number "trnL1" -> "trnL"
     s_stripped <- sub("[0-9]+$", "", s)
 

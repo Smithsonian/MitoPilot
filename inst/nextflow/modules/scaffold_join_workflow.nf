@@ -27,7 +27,7 @@ params.sqlInsertMappings = '''INSERT OR REPLACE INTO scaffold_mappings
 
 workflow SCAFFOLD_JOIN {
     take:
-        // tuple(id, assembly_fasta, opts_id, auto_join, cov_csvs, ref_seq_file)
+        // tuple(id, assembly_fasta, opts_id, auto_join, cov_csvs, ref_seq_file, scaffold_hits)
         input
 
     main:

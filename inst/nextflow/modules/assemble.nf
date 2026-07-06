@@ -24,7 +24,7 @@ process assemble {
 
     '''
     mkdir -p !{workingDir}
-    if [ !{opts.assembler} == "GetOrganelle" ]; then
+    if [ "!{opts.assembler}" = "GetOrganelle" ]; then
         mkdir -p !{workingDir}
         get_organelle_from_reads.py \
             -1 !{reads[0]} \
@@ -53,7 +53,7 @@ process assemble {
         else
             parallel -j !{opts.cpus} 'awk -v topo=$topology "/^>/ {print \\">!{id}.{#}.\\" ++count[\\">\\"] \\" \\" topo} !/^>/ {print}" {} > !{outDir}/!{id}_assembly_{#}.fasta' ::: "${files[@]}"
         fi
-    elif [ !{opts.assembler} == "MitoFinder" ]; then      
+    elif [ "!{opts.assembler}" = "MitoFinder" ]; then
         cd !{workingDir}
         # run MitoFinder
         mitofinder \

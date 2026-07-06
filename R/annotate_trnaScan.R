@@ -1,8 +1,8 @@
 #' Use tRNAscan-SE to annotate tRNAs in a mitochondrial genome assembly
 #'
-#' @param assembly text string of the assembly to annotate
-#' @param rotate should the assembly be rotated? default = TRUE
-#' @param trnaScan_opts command line options for tRNAscan-SE (defatult = `-M vert -X 20`)
+#' @param assembly a DNAStringSet of the assembly to annotate
+#' @param rotate unused; rotation now runs after tRNAscan and MITOS2 complete
+#' @param trnaScan_opts command line options for tRNAscan-SE (default = `-M vert -X 20`)
 #' @param cpus number of cpus to use (default = 4)
 #' @param out output file name
 #' @param condaenv conda environment to use (default = "base")
@@ -17,10 +17,8 @@ annotate_trnaScan <- function(
   out = NULL,
   condaenv = "base"
 ) {
-  out <- out %||% tempfile()
-
-  # debugging
-  out <- "tRNAscan-SE_out"
+  # write tRNAscan-SE output into the local work dir so it is retained for inspection
+  out <- out %||% "tRNAscan-SE_out"
 
   fasta <- tempfile(fileext = ".fa")
   Biostrings::writeXStringSet(assembly, fasta)
@@ -41,52 +39,6 @@ annotate_trnaScan <- function(
 
   do.call(process, process_args)
 
-  # ROTATION NOW EXECUTED AFTER TRNASCAN AND MITOS ARE COMPLETE
-  # if (rotate && length(assembly) == 1L) {
-  #   seq_length <- Biostrings::width(assembly)
-  #
-  #   # Find start position for rotation
-  #   start <- read.delim(
-  #     out,
-  #     skip = 3,
-  #     header = F,
-  #     col.names = c(
-  #       "seq", "idx", "begin", "end",
-  #       "type", "anticodon", "intron_beign",
-  #       "intron_end", "score", "notes"
-  #     )
-  #   ) |>
-  #     dplyr::filter(type %in% c("Phe", "Val")) |>
-  #     dplyr::arrange(type, desc(score)) |>
-  #     dplyr::select(begin, end) |>
-  #     dplyr::slice(1)
-  #
-  #   # Rotate sequence (heavy strand)
-  #   if (nrow(start) == 1 && start$begin < start$end && start$begin > 1) {
-  #     assembly <- Biostrings::xscat(
-  #       Biostrings::subseq(assembly, start$begin, seq_length),
-  #       Biostrings::subseq(assembly, 1, start$begin - 1)
-  #     ) |>
-  #       setNames(names(assembly))
-  #     assembly@metadata["rotate_to"] <- start$begin
-  #   }
-  #
-  #   # Rotate sequence (light strand)
-  #   if (nrow(start) == 1 && start$begin > start$end && start$begin < seq_length) {
-  #     assembly <- Biostrings::xscat(
-  #       Biostrings::subseq(assembly, start$begin + 1, seq_length),
-  #       Biostrings::subseq(assembly, 1, start$begin)
-  #     ) |>
-  #       setNames(names(assembly)) |>
-  #       Biostrings::reverseComplement()
-  #     assembly@metadata["rotate_to"] <- -start$begin
-  #   }
-  #
-  #   unlink(out)
-  #   Biostrings::writeXStringSet(assembly, fasta)
-  #   do.call(process, process_args)
-  # }
-
   # Format output
   annotations <- read.delim(
     out,
@@ -103,7 +55,7 @@ annotate_trnaScan <- function(
       data.frame(
         contig = stringr::str_squish(cur$seq),
         type = "tRNA",
-        gene = .trnA_key[[cur$type]],
+        gene = .trnA_key[[cur$type]] %||% NA_character_,
         product = paste("tRNA", cur$type, sep = "-"),
         pos1 = min(c(cur$begin, cur$end)),
         pos2 = max(c(cur$begin, cur$end)),

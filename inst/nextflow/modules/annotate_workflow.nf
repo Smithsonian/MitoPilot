@@ -19,7 +19,7 @@ workflow ANNOTATE {
         .map{ it ->
 
             // Check if refDir is a GitHub link
-            if (it[6].contains('githubusercontent')) {
+            if (it[6]?.contains('githubusercontent')) {
                 if (!it[5].endsWith('.tar.gz')) {
                     it[5] = it[5] + '.tar.gz'
                 }

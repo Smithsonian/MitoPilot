@@ -26,7 +26,7 @@ process preprocess {
     out1 = "${id}/${id}_preprocess_R1.fastq.gz"
     out2 = "${id}/${id}_preprocess_R2.fastq.gz"
     '''
-    mkdir !{id}
+    mkdir -p !{id}
     fastp --in1 !{R1} --in2 !{R2} --out1 !{out1} --out2 !{out2} --json !{json_out} --thread !{task.cpus} !{opts.fastp}
     before=$(jq '.summary.before_filtering.total_reads' !{json_out})
     after=$(jq '.summary.after_filtering.total_reads' !{json_out})

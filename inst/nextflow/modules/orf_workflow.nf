@@ -48,7 +48,7 @@ workflow ORF {
             .map { it ->
 
                 // Check if refDir is a GitHub link
-                if (it[10].contains('githubusercontent')) {
+                if (it[10]?.contains('githubusercontent')) {
                     if (!it[11].endsWith('.tar.gz')) {
                         it[11] = it[11] + '.tar.gz'
                     }

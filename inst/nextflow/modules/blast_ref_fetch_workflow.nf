@@ -183,8 +183,11 @@ workflow BLAST_REF_FETCH {
         // scaffolds hit different taxa keep distinct per-scaffold lineages.
         ref_out
             .map { id, accession, is_top, csv_file, seq_file, gc_file, json_file ->
-                def json = new JsonSlurper().parse(json_file)
-                def lineage = json?.lineage ?: null
+                def lineage = null
+                try {
+                    def json = new JsonSlurper().parse(json_file)
+                    lineage = json?.lineage ?: null
+                } catch (ignored) { lineage = null }
                 lineage ? tuple(id, accession, is_top, lineage) : null
             }
             .filter { it != null }

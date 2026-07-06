@@ -780,10 +780,6 @@ assemble_server <- function(id) {
         )
         updateTextAreaInput(
           inputId = "mf_db",
-          value = cur$labels_db
-        )
-        updateTextAreaInput(
-          inputId = "mf_db",
           value = cur$mitofinder_db
         )
         updateTextAreaInput(

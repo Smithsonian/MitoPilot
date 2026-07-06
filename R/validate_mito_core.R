@@ -102,7 +102,7 @@ validate_mito_core <- function(
     }
 
     ## Duplication ----
-    if (nrow(gene_annotations) > max(gene_rules$count)) {
+    if (nrow(gene_annotations) > max(gene_rules$count %||% 1)) {
       if (!(has_intron)) { # do not issue duplicate warnings for genes that may have introns
         extra <- semicolon_paste(extra, gene)
         annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "possible duplicate")
@@ -234,10 +234,12 @@ validate_mito_core <- function(
     ## Coverage and Error Rate----
     ## TODO! Heuristics need review (maybe put in params)
     if (!is.null(coverage)) {
-      gene_coverage <- coverage |>
-        dplyr::filter(SeqId == {{ contig }}) |>
-        dplyr::rowwise() |>
-        dplyr::filter(Position %in% pos1:pos2)
+      gene_coverage <- if (pos1 <= pos2) {
+        dplyr::filter(coverage, SeqId == {{ contig }} & Position >= pos1 & Position <= pos2)
+      } else {
+        # feature wraps the circular origin (pos1 > pos2)
+        dplyr::filter(coverage, SeqId == {{ contig }} & (Position >= pos1 | Position <= pos2))
+      }
       n_cov <- nrow(gene_coverage)
       if (n_cov > 0L && sum(gene_coverage$MeanDepth <= 10, na.rm = TRUE) / n_cov > 0.05) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low coverage region")
@@ -272,18 +274,18 @@ validate_mito_core <- function(
     }
 
     ## Ref Similarity ----
-    if (!any(refHits$similarity >= hit_threshold)) {
+    if (!any(refHits$similarity >= hit_threshold, na.rm = TRUE)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "low reference similarity")
       total_warnings <- total_warnings + 1
     }
 
 
     ## Ref alignments ----
-    if (!any(refHits$gap_leading == 0L)) {
+    if (!any(refHits$gap_leading == 0L, na.rm = TRUE)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "check reference start alignment")
       total_warnings <- total_warnings + 1
     }
-    if (!any(refHits$gap_trailing == 0L)) {
+    if (!any(refHits$gap_trailing == 0L, na.rm = TRUE)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "check reference stop alignment")
       total_warnings <- total_warnings + 1
     }

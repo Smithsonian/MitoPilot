@@ -36,6 +36,8 @@ process blast_genbank {
     shell:
     outDir = "${id}/assemble/${opts_id}"
     outFile = "blast_genbank_${path_idx}.txt"
+    // Omit -entrez_query entirely when unset (a literal "null"/"" filters out all hits)
+    entrez = entrez_query ? "-entrez_query \"${entrez_query}\"" : ""
     '''
     mkdir -p !{outDir}
     # Back off on retries to give NCBI BLAST time to recover from rate limits
@@ -57,7 +59,7 @@ process blast_genbank {
         -max_target_seqs !{max_target_seqs ?: 5} \
         -max_hsps 1 \
         -task megablast \
-        -entrez_query "!{entrez_query}" \
+        !{entrez} \
         !{extra_opts} \
         > !{outDir}/!{outFile}; then
         if [ ! -s !{outDir}/!{outFile} ]; then
