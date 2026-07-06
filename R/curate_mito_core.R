@@ -94,9 +94,14 @@ curate_mito_core <- function(
     default = paste0(ref_dir, "/featureProt/{gene}.fas")
   )
 
-  # Augment local BLAST DB with translated remote BLAST hit gene sequences
-  if (!is.null(blast_ref_file)) {
-    inject_remote_hits_into_blast_db(blast_ref_file, ref_dir)
+  # Augment local BLAST DB with translated remote BLAST hit gene sequences.
+  # blast_ref_file may name multiple candidate-reference JSONs (whitespace
+  # separated); inject each so all retained BLAST hits enrich the curation DB.
+  if (!is.null(blast_ref_file) && nzchar(blast_ref_file)) {
+    ref_files <- strsplit(trimws(blast_ref_file), "\\s+")[[1]]
+    for (rf in ref_files) {
+      if (nzchar(rf)) inject_remote_hits_into_blast_db(rf, ref_dir)
+    }
   }
 
   ## Prepare rules ----
@@ -229,8 +234,7 @@ curate_mito_core <- function(
       }
 
       ## Gene ref database ----
-      ref_db <- ref_dbs[[gene]] %||% ref_dbs[["default"]] |>
-        stringr::str_glue()
+      ref_db <- stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]])
 
       # No per-gene reference DB (e.g. a non-standard MitoFinder gene): BLAST the
       # translation against the combined all-gene DB like an ORF so candidate
@@ -290,7 +294,7 @@ curate_mito_core <- function(
 
     # Stop if no hits above threshold
     refHits <- json_parse(refHits[[1]], TRUE)
-    if (nrow(refHits) == 0L || !any(refHits$similarity >= hit_threshold)) {
+    if (nrow(refHits) == 0L || !any(refHits$similarity >= hit_threshold, na.rm = TRUE)) {
       return(cur)
     }
 
@@ -303,7 +307,7 @@ curate_mito_core <- function(
 
     ## Fix TRUNCATION ----
     ### START ----
-    if (refHits$gap_leading[1] != 0 && (sum(refHits$gap_leading > 0L) / nrow(refHits)) > 0.5) {
+    if (isTRUE(refHits$gap_leading[1] != 0) && (sum(refHits$gap_leading > 0L, na.rm = TRUE) / nrow(refHits)) > 0.5) {
       gaps_target <- max(refHits$gap_leading)
       if (direction == "+") {
         while (gaps_target > 0) {
@@ -329,7 +333,7 @@ curate_mito_core <- function(
           cur$translation <- translation <- Biostrings::subseq(
             assembly[contig_key[contig]],
             pos1,
-            pos2 - nchar(stop_codon)
+            pos2 - .codon_len(stop_codon)
           ) |>
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
@@ -365,7 +369,7 @@ curate_mito_core <- function(
           cur$start_codon <- start_codon <- new_start_codon
           cur$translation <- translation <- Biostrings::subseq(
             assembly[contig_key[contig]],
-            pos1 + nchar(stop_codon),
+            pos1 + .codon_len(stop_codon),
             pos2
           ) |>
             Biostrings::reverseComplement() |>
@@ -382,11 +386,11 @@ curate_mito_core <- function(
     }
 
     ### STOP ----
-    if (refHits$gap_trailing[1] != 0 && (sum(refHits$gap_trailing > 0L) / nrow(refHits)) > 0.5) {
+    if (isTRUE(refHits$gap_trailing[1] != 0) && (sum(refHits$gap_trailing > 0L, na.rm = TRUE) / nrow(refHits)) > 0.5) {
       gaps_target <- max(refHits$gap_trailing)
       if (direction == "+") {
         while (gaps_target > 0) {
-          pos2_new <- pos2 - nchar(stop_codon) + 3 + (3 * gaps_target)
+          pos2_new <- pos2 - .codon_len(stop_codon) + 3 + (3 * gaps_target)
           if ((pos2_new + 1) > assembly[contig_key[contig]]@ranges@width) {
             gaps_target <- gaps_target - 1
             next
@@ -435,7 +439,7 @@ curate_mito_core <- function(
       }
       if (direction == "-") {
         while (gaps_target > 0) {
-          pos1_new <- pos1 + nchar(stop_codon) - 3 - (3 * gaps_target)
+          pos1_new <- pos1 + .codon_len(stop_codon) - 3 - (3 * gaps_target)
           if ((pos1_new + 2) < 1) {
             gaps_target <- gaps_target - 1
             next
@@ -491,7 +495,7 @@ curate_mito_core <- function(
 
     ## Fix OVER-EXTENSION ----
     ### START ----
-    if (refHits$gap_leading[1] != 0 && (sum(refHits$gap_leading < 0L) / nrow(refHits)) > 0.5) {
+    if (isTRUE(refHits$gap_leading[1] != 0) && (sum(refHits$gap_leading < 0L, na.rm = TRUE) / nrow(refHits)) > 0.5) {
       if (direction == "+") {
         alt_starts <- Biostrings::subseq(
           assembly[contig_key[contig]],
@@ -512,7 +516,7 @@ curate_mito_core <- function(
             next
           }
           pos1_new <- pos1 + (3 * alt_idx)
-          translation_new <- Biostrings::subseq(assembly[contig_key[contig]], pos1_new, pos2 - nchar(stop_codon)) |>
+          translation_new <- Biostrings::subseq(assembly[contig_key[contig]], pos1_new, pos2 - .codon_len(stop_codon)) |>
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits_new <- get_top_hits(
@@ -520,7 +524,7 @@ curate_mito_core <- function(
             translation_new,
             max_blast_hits
           )
-          if (refHits_new$gap_leading[1] != 0 && (sum(refHits_new$gap_leading < 0L) / nrow(refHits_new)) > 0.5) {
+          if (isTRUE(refHits_new$gap_leading[1] != 0) && (sum(refHits_new$gap_leading < 0L, na.rm = TRUE) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1
             next
           }
@@ -557,7 +561,7 @@ curate_mito_core <- function(
             next
           }
           pos2_new <- pos2 - (3 * alt_idx)
-          translation_new <- Biostrings::subseq(assembly[contig_key[contig]], pos1 + nchar(stop_codon), pos2_new) |>
+          translation_new <- Biostrings::subseq(assembly[contig_key[contig]], pos1 + .codon_len(stop_codon), pos2_new) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
@@ -566,7 +570,7 @@ curate_mito_core <- function(
             translation_new,
             max_blast_hits
           )
-          if (refHits_new$gap_leading[1] != 0 && (sum(refHits_new$gap_leading < 0L) / nrow(refHits_new)) > 0.5) {
+          if (isTRUE(refHits_new$gap_leading[1] != 0) && (sum(refHits_new$gap_leading < 0L, na.rm = TRUE) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1
             next
           }
@@ -585,12 +589,12 @@ curate_mito_core <- function(
     }
 
     ### STOP ----
-    if (refHits$gap_trailing[1] != 0 && (sum(refHits$gap_trailing < 0L) / nrow(refHits)) > 0.5) {
+    if (isTRUE(refHits$gap_trailing[1] != 0) && (sum(refHits$gap_trailing < 0L, na.rm = TRUE) / nrow(refHits)) > 0.5) {
       if (direction == "+") {
         alt_stops <- Biostrings::subseq(
           assembly[contig_key[contig]],
-          pos2 - nchar(stop_codon) - (3 * max(abs(refHits$gap_trailing[refHits$gap_trailing < 0]))) + 1,
-          pos2 - nchar(stop_codon)
+          pos2 - .codon_len(stop_codon) - (3 * max(abs(refHits$gap_trailing[refHits$gap_trailing < 0]))) + 1,
+          pos2 - .codon_len(stop_codon)
         ) |>
           as.character() |>
           stringr::str_extract_all(".{1,3}") |>
@@ -607,7 +611,7 @@ curate_mito_core <- function(
             alt_idx <- alt_idx + 1
             next
           }
-          pos2_new <- pos2 - nchar(stop_codon) + 3 - (3 * alt_idx) - (3 - nchar(alt_stops[[alt_idx]]))
+          pos2_new <- pos2 - .codon_len(stop_codon) + 3 - (3 * alt_idx) - (3 - nchar(alt_stops[[alt_idx]]))
           translation_new <- Biostrings::subseq(
             assembly[contig_key[contig]],
             pos1,
@@ -620,7 +624,7 @@ curate_mito_core <- function(
             translation_new,
             max_blast_hits
           )
-          if (refHits_new$gap_trailing[1] != 0 && (sum(refHits_new$gap_trailing < 0L) / nrow(refHits_new)) > 0.5) {
+          if (isTRUE(refHits_new$gap_trailing[1] != 0) && (sum(refHits_new$gap_trailing < 0L, na.rm = TRUE) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1
             next
           }
@@ -639,8 +643,8 @@ curate_mito_core <- function(
       if (direction == "-") {
         alt_stops <- Biostrings::subseq(
           assembly[contig_key[contig]],
-          pos1 + nchar(stop_codon),
-          pos1 + nchar(stop_codon) + (3 * max(abs(refHits$gap_trailing[refHits$gap_trailing < 0]))) - 1
+          pos1 + .codon_len(stop_codon),
+          pos1 + .codon_len(stop_codon) + (3 * max(abs(refHits$gap_trailing[refHits$gap_trailing < 0]))) - 1
         ) |>
           Biostrings::reverseComplement() |>
           as.character() |>
@@ -658,7 +662,7 @@ curate_mito_core <- function(
             alt_idx <- alt_idx + 1
             next
           }
-          pos1_new <- pos1 + nchar(stop_codon) - 3 + (3 * alt_idx) + (3 - nchar(alt_stops[[alt_idx]]))
+          pos1_new <- pos1 + .codon_len(stop_codon) - 3 + (3 * alt_idx) + (3 - nchar(alt_stops[[alt_idx]]))
           translation_new <- Biostrings::subseq(
             assembly[contig_key[contig]],
             pos1 + nchar(alt_stops[[alt_idx]]),
@@ -672,7 +676,7 @@ curate_mito_core <- function(
             translation_new,
             max_blast_hits
           )
-          if (refHits_new$gap_trailing[1] != 0 && (sum(refHits_new$gap_trailing < 0L) / nrow(refHits_new)) > 0.5) {
+          if (isTRUE(refHits_new$gap_trailing[1] != 0) && (sum(refHits_new$gap_trailing < 0L, na.rm = TRUE) / nrow(refHits_new)) > 0.5) {
             alt_idx <- alt_idx + 1
             next
           }
@@ -709,13 +713,14 @@ curate_mito_core <- function(
     while (annotations$direction[idx] == "+") {
       if (idx == nrow(annotations)) break
       if (overlap_rules$stop) break
-      codon_positions <- (annotations$pos2[idx] - nchar(annotations$stop_codon[idx]) + 1):annotations$pos2[idx]
+      if (.codon_len(annotations$stop_codon[idx]) < 1) break
+      codon_positions <- (annotations$pos2[idx] - .codon_len(annotations$stop_codon[idx]) + 1):annotations$pos2[idx]
       overlaps <- annotations[(idx + 1):nrow(annotations), ] |>
         dplyr::filter(pos1 %in% codon_positions) |>
         dplyr::filter(direction == annotations$direction[idx])
       if (nrow(overlaps) != 1L) break
       overlap <- sum(overlaps$pos1:overlaps$pos2 %in% codon_positions)
-      new_stop <- stringr::str_sub(annotations$stop_codon[idx], 1, nchar(annotations$stop_codon[idx]) - overlap)
+      new_stop <- stringr::str_sub(annotations$stop_codon[idx], 1, .codon_len(annotations$stop_codon[idx]) - overlap)
       if (nchar(new_stop) < 1) break
       if (!new_stop %in% stop_opts) break
       annotations$stop_codon[idx] <- new_stop
@@ -730,13 +735,14 @@ curate_mito_core <- function(
     while (annotations$direction[idx] == "-") {
       if (idx == 1) break
       if (overlap_rules$stop) break
-      codon_positions <- annotations$pos1[idx]:(annotations$pos1[idx] + nchar(annotations$stop_codon[idx]) - 1)
+      if (.codon_len(annotations$stop_codon[idx]) < 1) break
+      codon_positions <- annotations$pos1[idx]:(annotations$pos1[idx] + .codon_len(annotations$stop_codon[idx]) - 1)
       overlaps <- annotations[1:(idx - 1), ] |>
         dplyr::filter(pos2 %in% codon_positions) |>
         dplyr::filter(direction == annotations$direction[idx])
       if (nrow(overlaps) != 1L) break
       overlap <- sum(overlaps$pos1:overlaps$pos2 %in% codon_positions)
-      new_stop <- stringr::str_sub(annotations$stop_codon[idx], 1, nchar(annotations$stop_codon[idx]) - overlap)
+      new_stop <- stringr::str_sub(annotations$stop_codon[idx], 1, .codon_len(annotations$stop_codon[idx]) - overlap)
       if (nchar(new_stop) < 1) break
       if (!new_stop %in% stop_opts) break
       annotations$stop_codon[idx] <- new_stop
@@ -758,12 +764,13 @@ curate_mito_core <- function(
     if (stringr::str_detect(.x, "circular")) {
       return()
     }
+    # Nothing to trim against on a contig with no annotations
+    ctg_ann <- dplyr::filter(annotations, contig == .y)
+    if (nrow(ctg_ann) == 0L) {
+      return()
+    }
     ## Check beginning ----
-    min_ann <- annotations |>
-      dplyr::filter(contig == .y) |>
-      dplyr::mutate(min_ann = pmin(pos1, pos2)) |>
-      dplyr::pull(min_ann) |>
-      min()
+    min_ann <- min(pmin(ctg_ann$pos1, ctg_ann$pos2))
     if (min_ann > 1) {
       assembly[.x] <<- Biostrings::subseq(assembly[.x], min_ann, -1)
       annotations <<- annotations |>
@@ -777,27 +784,27 @@ curate_mito_core <- function(
             .default = pos2
           )
         )
-      coverage <<- coverage |>
-        dplyr::mutate(
-          Position = dplyr::case_when(
-            SeqId == .y ~ Position - min_ann + 1,
-            .default = Position
-          )
-        ) |>
-        dplyr::filter(Position > 0)
+      if (!is.null(coverage)) {
+        coverage <<- coverage |>
+          dplyr::mutate(
+            Position = dplyr::case_when(
+              SeqId == .y ~ Position - min_ann + 1,
+              .default = Position
+            )
+          ) |>
+          dplyr::filter(Position > 0)
+      }
     }
     ## Check end ----
-    max_ann <- annotations |>
-      dplyr::filter(contig == .y) |>
-      dplyr::mutate(max_ann = pmax(pos1, pos2)) |>
-      dplyr::pull(max_ann) |>
-      max()
+    max_ann <- max(pmax(ctg_ann$pos1, ctg_ann$pos2))
     if (max_ann < assembly[.x]@ranges@width) {
       assembly[.x] <<- Biostrings::subseq(assembly[.x], 1, max_ann)
-      coverage <<- coverage |>
-        dplyr::filter(
-          SeqId != .y | Position <= max_ann
-        )
+      if (!is.null(coverage)) {
+        coverage <<- coverage |>
+          dplyr::filter(
+            SeqId != .y | Position <= max_ann
+          )
+      }
     }
   })
 

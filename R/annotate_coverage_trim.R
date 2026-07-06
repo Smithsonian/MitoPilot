@@ -22,6 +22,11 @@ coverage_trim <- function(assembly, stats) {
       )
     )
 
+  # The trim heuristic uses 100-bp windows; skip contigs too short to apply it.
+  if (nrow(stats) < 152) {
+    return(list(assembly = assembly, stats = stats))
+  }
+
   # Set trailing trim point. Skip when no position clears the depth threshold
   # (min(which(...)) would be Inf); the trim heuristic doesn't apply there.
   good_tail <- which(rev(stats$MeanDepth > 10))
@@ -34,6 +39,7 @@ coverage_trim <- function(assembly, stats) {
   trailing_trim <- nrow(stats)
   if (sum(rev(stats$mask)[1:100]) > 10) {
     while (T) {
+      if (trailing_trim - 51 < 1) break
       if (any(stats$mask[(trailing_trim - 51):(trailing_trim - 1)])) {
         trailing_trim <- trailing_trim - 1
       } else {
@@ -55,6 +61,7 @@ coverage_trim <- function(assembly, stats) {
   if (sum(stats$mask[1:100]) > 10) {
     leading_trim <- 1
     while (T) {
+      if (leading_trim + 51 > nrow(stats)) break
       if (any(stats$mask[(leading_trim + 1):(leading_trim + 51)])) {
         leading_trim <- leading_trim + 1
       } else {

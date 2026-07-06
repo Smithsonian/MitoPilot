@@ -90,10 +90,7 @@ ruleset_browser <- function(output_file = tempfile(fileext = ".html"),
     lapply(names(ruleset_map), function(tgt) {
       params <- get(paste0("params_", tgt), mode = "function")()
       # Genetic code is the default arg of the matching curate_* function
-      gcode <- tryCatch(
-        as.integer(eval(formals(get(paste0("curate_", tgt), mode = "function"))$genetic_code)),
-        error = function(e) NA_integer_
-      )
+      gcode <- resolve_genetic_code(tgt)
       build_ruleset_display(params, ruleset_map[[tgt]]$label, ruleset_map[[tgt]]$ncbi, gcode, ruleset_map[[tgt]]$taxid)
     }),
     names(ruleset_map)

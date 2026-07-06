@@ -69,6 +69,6 @@ use it automatically, filling in the remaining per-project values.
 }
 \details{
 Per-project placeholders (`<<CONTAINER_ID>>`, `<<RAW_DIR>>`, `<<ASMB_DIR>>`,
-`<<MIN_DEPTH>>`, `<<GENETIC_CODE>>`, `<<NCBI_API_KEY>>`) are intentionally
+`<<MIN_DEPTH>>`, `<<NCBI_API_KEY>>`) are intentionally
 left in the saved profile for the project-init step to complete.
 }

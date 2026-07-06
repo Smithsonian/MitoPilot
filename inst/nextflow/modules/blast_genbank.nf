@@ -28,7 +28,7 @@ process blast_genbank {
     tag "${id}.${path_idx}"
 
     input:
-        tuple val(id), val(path_idx), path(assembly), val(opts_id), val(entrez_query), val(extra_opts)
+        tuple val(id), val(path_idx), path(assembly), val(opts_id), val(entrez_query), val(extra_opts), val(max_target_seqs)
 
     output:
         tuple val(id), val(path_idx), path("${outDir}/${outFile}")
@@ -36,6 +36,8 @@ process blast_genbank {
     shell:
     outDir = "${id}/assemble/${opts_id}"
     outFile = "blast_genbank_${path_idx}.txt"
+    // Omit -entrez_query entirely when unset (a literal "null"/"" filters out all hits)
+    entrez = entrez_query ? "-entrez_query \"${entrez_query}\"" : ""
     '''
     mkdir -p !{outDir}
     # Back off on retries to give NCBI BLAST time to recover from rate limits
@@ -54,10 +56,10 @@ process blast_genbank {
         -db core_nt \
         -query !{assembly} \
         -outfmt "6 qseqid saccver stitle pident qcovs evalue" \
-        -max_target_seqs 1 \
+        -max_target_seqs !{max_target_seqs ?: 5} \
         -max_hsps 1 \
         -task megablast \
-        -entrez_query "!{entrez_query}" \
+        !{entrez} \
         !{extra_opts} \
         > !{outDir}/!{outFile}; then
         if [ ! -s !{outDir}/!{outFile} ]; then

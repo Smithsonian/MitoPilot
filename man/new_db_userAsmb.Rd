@@ -9,7 +9,7 @@ new_db_userAsmb(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
-  genetic_code = 2,
+  genetic_code = NULL,
   annotate_cpus = 6,
   annotate_memory = 36,
   annotate_ref_db = "Chordata",
@@ -22,6 +22,7 @@ new_db_userAsmb(
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
+  curate_ref_db = "Metazoa_RefSeq235",
   max_blast_hits = 10,
   linear_complete = FALSE,
   curate_params = NULL,
@@ -43,8 +44,9 @@ new_db_userAsmb(
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
 
-\item{genetic_code}{Translation table for your organisms. See NCBI website
-for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
+\item{genetic_code}{Optional NCBI translation table override. Default `NULL`
+auto-selects from the curation ruleset; a number sets an override on the
+default curate_opts set. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{annotate_cpus}{Default # cpus for annotation}
 
@@ -67,6 +69,9 @@ for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 \item{curate_memory}{Default memory (GB) for curation}
 
 \item{curate_target}{Default target database for curation}
+
+\item{curate_ref_db}{Default curation reference database (default =
+"Metazoa_RefSeq235", the only bundled DB with rRNA BLAST references)}
 
 \item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 10)}
 

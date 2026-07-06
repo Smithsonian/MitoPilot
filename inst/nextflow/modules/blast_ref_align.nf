@@ -15,28 +15,29 @@ process blast_ref_align {
 
     errorStrategy 'ignore'
 
-    tag "${id}"
+    tag "${id}.${accession}"
 
     input:
         // assembly_seq and ref_seq are plain nucleotide strings (no headers)
         // rotation is the 0-based offset into the reference for the anchor gene
-        tuple val(id), val(assembly_seq), val(ref_seq), val(rotation)
+        tuple val(id), val(accession), val(assembly_seq), val(ref_seq), val(rotation)
 
     output:
-        tuple val(id), path("${id}/annotate/blast_ref_alignment.csv")
+        tuple val(id), val(accession), path("${id}/annotate/blast_ref_alignment_${accession}.csv")
 
     shell:
     outDir = "${id}/annotate"
+    outFile = "blast_ref_alignment_${accession}.csv"
     '''
     mkdir -p !{outDir}
-    # Write sequences to files — avoids Rscript -e expression length limits
+    # Write sequences to files - avoids Rscript -e expression length limits
     printf '%s\n' '!{assembly_seq}' > _assembly.txt
     printf '%s\n' '!{ref_seq}'      > _ref.txt
     Rscript -e "MitoPilot::compute_blast_ref_alignment( \
         assembly_seq = paste(readLines('_assembly.txt'), collapse = ''), \
         ref_seq      = paste(readLines('_ref.txt'),      collapse = ''), \
         rotation     = !{rotation}, \
-        output_file  = '!{outDir}/blast_ref_alignment.csv' \
+        output_file  = '!{outDir}/!{outFile}' \
     )"
     '''
 }

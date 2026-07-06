@@ -19,33 +19,14 @@ annotate_mitos2 <- function(
     out = NULL,
     condaenv = "mitos") {
   genetic_code <- as.character(genetic_code)
-  out <- out %||% tempdir()
-
-  # debugging
-  out <- "MITOS2_temp"
-  dir.create(out)
-  ###
+  # write MITOS2 output into the local work dir so it is retained for inspection
+  out <- out %||% "MITOS2_temp"
+  dir.create(out, showWarnings = FALSE, recursive = TRUE)
 
   fasta <- tempfile(fileext = ".fa")
 
-  # debugging
-  fasta <- "temp_asmb.fa"
-  ###
-
   names(assembly) <- stringr::str_extract(names(assembly), "^\\S+")
   Biostrings::writeXStringSet(assembly, fasta)
-
-  process_args <- list(
-    cmd = "runmitos",
-    args = "--version"
-  )
-  if (!is.null(condaenv)) {
-    process <- reticulate::conda_run2
-    process_args$envname <- condaenv
-    process_args$echo <- FALSE
-  } else {
-    process <- "system2"
-  }
 
   process_args <- list(
     cmd = "runmitos",
@@ -101,7 +82,7 @@ annotate_mitos2 <- function(
           ) |>
             dplyr::mutate(
               type = dplyr::case_when(
-                stringr::str_detect(gene, "^rrn[L|S]") ~ "rRNA",
+                stringr::str_detect(gene, "^rrn[LS]") ~ "rRNA",
                 stringr::str_detect(gene, "^trn") ~ "tRNA",
                 stringr::str_detect(gene, "^Intron") ~ "intron",
                 stringr::str_detect(gene, "^OL") ~ "OL",
@@ -316,8 +297,6 @@ annotate_mitos2 <- function(
     })
 }
 
-# PCG key ----
-
 # PCG key for full metazoan dataset ----
 CDS_key <- c(
   nad1 = "NADH dehydrogenase subunit 1",
@@ -328,7 +307,6 @@ CDS_key <- c(
   atp8 = "ATP synthase F0 subunit 8",
   atp6 = "ATP synthase F0 subunit 6",
   atp9 = "ATP synthase F0 subunit 9",
-  cox3 = "cytochrome c oxidase subunit 3",
   nad3 = "NADH dehydrogenase subunit 3",
   nad4l = "NADH dehydrogenase subunit 4L",
   nad4 = "NADH dehydrogenase subunit 4",
@@ -342,7 +320,7 @@ CDS_key <- c(
 )
 
 # Key for translating tRNA codes to Amino Acid codes
-trnA_key_MITOS <- list(
+trnA_key_MITOS <- c(
   trnF = "Phe",
   trnV = "Val",
   trnL1 = "Leu",

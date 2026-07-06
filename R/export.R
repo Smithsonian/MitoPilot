@@ -167,6 +167,9 @@ export_files <- function(
     if (isTRUE(dat$topology == "fragmented") && !is.na(kept$topology[1])) {
       dat$topology <- kept$topology[1]
     }
+    # Reference = the sample's blast_accession (the rank-1 top hit unless the user
+    # set a different candidate via "Set as reference genome" in annotate details).
+    # Always a single accession in the note.
     blast_acc <- dat$blast_accession[1]
     blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) &&
                       blast_acc != "NO HIT" &&
@@ -211,7 +214,7 @@ export_files <- function(
           )
       }
       stop <- max(annotations$pos2)
-      if (stop > seq@ranges@width) {
+      if (stop < seq@ranges@width) {
         seq <- Biostrings::subseq(seq, 1, stop)
       }
     }
@@ -288,65 +291,62 @@ export_files <- function(
           }
         }
 
-        if (intron & length(which(annotations$gene == cur$gene)) > 1) {  # logic to merge exons if intron is present
-          exons <- annotations[which(annotations$gene == cur$gene), ]
+        # User-defined join group (set in the annotate modal). Members share a
+        # "JOIN: mode=<exon|frameshift> group=<id>" marker in their notes. This
+        # exports a subset of same-gene rows as one joined feature, independent of
+        # the curation intron rule, and supports the frameshift/slippage exception.
+        join_match <- stringr::str_match(
+          cur$notes %|NA|% "", "^JOIN: mode=(\\w+) group=(\\d+)( note=([^;]*))?"
+        )
+        join_mode <- join_match[, 2]
+        join_grp <- join_match[, 3]
+        join_note <- join_match[, 5]
+        do_join <- !is.na(join_grp) ||
+          (intron & length(which(annotations$gene == cur$gene)) > 1)
+        exon_mode <- if (!is.na(join_grp)) join_mode else "exon"
+
+        if (do_join) {  # logic to merge exons (intron rule or user join group)
+          if (!is.na(join_grp)) {
+            member_idx <- which(stringr::str_detect(
+              dplyr::coalesce(annotations$notes, ""),
+              paste0("^JOIN: mode=\\w+ group=", join_grp, "\\b")
+            ))
+          } else {
+            member_idx <- which(annotations$gene == cur$gene)
+          }
+          exons <- annotations[member_idx, ]
+          exons <- exons[order(exons$pos1), ]
           # skip if not the first exon
           if (cur$pos1 != exons[1,]$pos1) return()
-          exon_seqs <- rep(NA, nrow(exons))
-          if (all(exons$direction == "+")) {
-            # extract exons
-            for (i in 1:nrow(exons)) {
-              exon_seqs[i] <- Biostrings::subseq(seq, start = exons[i, ]$pos1, end = exons[i, ]$pos2)
-            }
-            # merge exons
-            merged_sequence <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = ""))
-            # translate
-            cur$translation <- Biostrings::translate(merged_sequence,
-                                                     genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))) |>
-              as.character()
-            cur$translation <- sub("\\*$", "", cur$translation) # remove terminal stop codon
-            # set new start and stop codons
-            cur$start_codon <- exons[1,]$start_codon
-            cur$stop_codon <- exons[nrow(exons),]$stop_codon
-            # carry manual partial flags from the 5' / 3' exons
-            cur$partial_start <- exons[1,]$partial_start
-            cur$partial_stop <- exons[nrow(exons),]$partial_stop
-            # set new start and stop pos for gene
-            pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character()
-            cur$pos1 <- exons[1,]$pos1
-            cur$pos2 <- exons[nrow(exons),]$pos2
-            # set new CDS length
-            cur$length <- sum(exons$length)
-          } else if (all(exons$direction == "-")) {
-            # extract exons
-            for (i in 1:nrow(exons)) {
-              exon_seqs[i] <- Biostrings::subseq(seq, start = exons[i, ]$pos1, end = exons[i, ]$pos2)
-            }
-            # merge exons and reverse complement
-            merged_sequence <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = "")) |>
-              Biostrings::reverseComplement()
-            # translate
-            cur$translation <- Biostrings::translate(merged_sequence,
-                                                     genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))) |>
-              as.character()
-            cur$translation <- sub("\\*$", "", cur$translation) # remove terminal stop codon
-            # set new start and stop codons
-            cur$start_codon <- exons[nrow(exons),]$start_codon
-            cur$stop_codon <- exons[1]$stop_codon
-            # carry manual partial flags from the 5' / 3' exons
-            cur$partial_start <- exons[nrow(exons),]$partial_start
-            cur$partial_stop <- exons[1,]$partial_stop
-            # set new start and stop pos for gene
-            pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character() |> rev()
-            cur$pos1 <- exons[nrow(exons),]$pos2
-            cur$pos2 <- exons[1,]$pos1
-            # set new CDS length
-            cur$length <- sum(exons$length)
-          } else {
+          if (length(unique(exons$direction)) > 1) {
             message(crayon::red(
               paste0("Warning: exons on opposite strands for gene ", cur$gene)
-              # NEED LOGIC TO DEAL WITH THIS
             ))
+          } else {
+            # splice segments into one CDS (shared with the annotate editor)
+            spliced <- splice_join_cds(
+              exons, seq,
+              Biostrings::getGeneticCode(as.character(dat$genetic_code))
+            )
+            # spliced CDS sequence (5'->3', revcomp applied for - strand); used
+            # below for the per-gene FASTA export.
+            merged_sequence <- Biostrings::DNAStringSet(spliced$dna)
+            cur$translation <- spliced$translation
+            cur$start_codon <- spliced$start_codon
+            cur$stop_codon <- spliced$stop_codon
+            cur$partial_start <- spliced$partial_start
+            cur$partial_stop <- spliced$partial_stop
+            cur$length <- spliced$length
+            # tbl coordinates: + strand low..high, - strand high..low
+            if (all(exons$direction == "+")) {
+              pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character()
+              cur$pos1 <- exons[1,]$pos1
+              cur$pos2 <- exons[nrow(exons),]$pos2
+            } else {
+              pos <- c(exons[1,]$pos1, exons[nrow(exons),]$pos2) |> as.character() |> rev()
+              cur$pos1 <- exons[nrow(exons),]$pos2
+              cur$pos2 <- exons[1,]$pos1
+            }
           }
 
           if (stringr::str_detect(cur$translation, "\\*")) {
@@ -422,6 +422,20 @@ export_files <- function(
           if (!cur$start_codon %in% start_codons) {
             paste("\t\t\tcodon_start\t", 1) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
+          }
+          # frameshift/RNA-editing join: INSDC requires the ribosomal_slippage
+          # qualifier + exception; note carries no nucleotide locations per
+          # GenBank guidance
+          if (identical(exon_mode, "frameshift")) {
+            cat("\t\t\tribosomal_slippage", file = tbl_fn, sep = "\n", append = TRUE)
+            paste0("\t\t\texception\tribosomal slippage") |>
+              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            fs_note <- if (!is.na(join_note) && nzchar(trimws(join_note))) {
+              trimws(join_note)
+            } else {
+              "frameshift mechanism unknown"
+            }
+            note <- paste(c(note, fs_note), collapse = "; ")
           }
           if (length(note) > 0) {
             paste0("\t\t\tnote\t", note) |>
@@ -663,7 +677,7 @@ export_files <- function(
             dir.create(group_geneName_pth, recursive = T, showWarnings = F)
 
             # get gene region from assembly
-            gene = Biostrings::subseq(seq, start = cur$pos1, end = cur$pos2)
+            gene = extract_circ_region(seq, cur$pos1, cur$pos2)
 
             # update FASTA header with gene name
             head_split <- strsplit(fasta_header_gene, "\\s+")
@@ -860,7 +874,7 @@ export_files <- function(
           dir.create(group_geneName_pth, recursive = T, showWarnings = F)
 
           # get gene region from assembly
-          gene = Biostrings::subseq(seq, start = cur$pos1, end = cur$pos2)
+          gene = extract_circ_region(seq, cur$pos1, cur$pos2)
 
           # update FASTA header with gene name
           head_split <- strsplit(fasta_header_gene, "\\s+")
@@ -881,7 +895,7 @@ export_files <- function(
           # fix the start and stop position; carry the 5'/3' partial markers
           # (extracted gene is 5'->3', so pos1_new = 5', pos2_new = 3').
           pos1_new = 1
-          pos2_new = abs(cur$pos2 - cur$pos1)
+          pos2_new = length(gene[[1]])
           gene_p1 <- as.character(pos1_new)
           gene_p2 <- as.character(pos2_new)
           if (isTRUE(as.integer(cur$partial_start) == 1L)) gene_p1 <- paste0("<", gene_p1)

@@ -19,321 +19,439 @@
 fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
                             genetic_code_file = NULL, json_file = NULL,
                             blast_species = NULL, blast_evalue = NULL) {
-  message(sprintf("[fetch_blast_ref] START  accession=%s  time=%s", accession, format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
-  message(sprintf("[fetch_blast_ref] host=%s  pid=%d", Sys.info()[["nodename"]], Sys.getpid()))
-  mem <- tryCatch(gc(verbose = FALSE), error = function(e) NULL)
-  if (!is.null(mem)) message(sprintf("[fetch_blast_ref] mem_used_MB=%.1f", sum(mem[, 2])))
+  message(sprintf("[fetch_blast_ref] START  accession=%s  time=%s",
+                  accession, format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
+  api_qs <- .blast_ref_api_key_qs()
+  base <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
-  # Optional NCBI API key (set by nextflow process from params.ncbi_api_key).
-  # When present, appended to eutils URLs to raise the per-IP rate limit from
-  # 3 to 10 req/s. URL-encoded defensively even though valid keys are hex.
-  ncbi_api_key <- Sys.getenv("NCBI_API_KEY", unset = "")
-  api_key_qs <- if (nzchar(ncbi_api_key)) {
-    paste0("&api_key=", utils::URLencode(ncbi_api_key, reserved = TRUE))
-  } else ""
+  # GFF3 annotations (+ ref length, taxid, genetic code) for this accession.
+  gff3_text <- httr2::resp_body_string(.blast_ref_efetch(
+    paste0(base, "?db=nuccore&id=", accession, "&rettype=gff3&retmode=text", api_qs),
+    120L, paste0("GFF3/", accession)
+  ))
+  g <- .parse_ref_gff3(accession, gff3_text)
 
-  empty <- data.frame(
-    gene      = character(),
-    type      = character(),
-    pos1      = integer(),
-    pos2      = integer(),
-    direction = character(),
-    ref_length = integer()
-  )
-
-  write_empty_ref <- function() {
-    write.csv(empty, output_file, row.names = FALSE)
-    if (!is.null(sequence_file)) writeLines("", sequence_file)
-    if (!is.null(genetic_code_file)) writeLines("2", genetic_code_file)
-    if (!is.null(json_file)) {
-      jsonlite::write_json(list(), json_file, auto_unbox = TRUE)
+  # Taxonomy (species + condensed lineage) for the accession's taxid.
+  tax_xml <- if (!is.null(g$taxid)) {
+    body <- httr2::resp_body_string(.blast_ref_efetch(
+      paste0(base, "?db=taxonomy&id=", g$taxid, "&retmode=xml", api_qs),
+      60L, paste0("taxonomy/", g$taxid)
+    ))
+    if (!grepl("<ScientificName>", body, fixed = TRUE)) {
+      stop(sprintf(
+        "taxonomy/%s returned no usable record (likely NCBI backend timeout) - retrying via Nextflow",
+        g$taxid
+      ), call. = FALSE)
     }
-  }
+    body
+  } else NULL
+  tax <- .parse_ref_taxonomy(tax_xml)
+  organism <- tax$species %||% g$gff_organism
 
-  # Retry-aware NCBI EFetch helper. Returns the httr2 response on success;
-  # logs a message before each retry wait; stops on final failure so the
-  # outer tryCatch can re-throw transient errors to Nextflow.
-  ncbi_efetch <- function(url, timeout = 120L, label = "") {
-    transient <- c(429L, 500L, 503L)
-    max_tries <- 5L
-    for (attempt in seq_len(max_tries)) {
-      safe_url <- sub("&api_key=[^&]*", "&api_key=REDACTED", url)
-      message(sprintf("[fetch_blast_ref] HTTP attempt %d/%d  label=%s  url=%s",
-                      attempt, max_tries, label, safe_url))
-      t0 <- proc.time()[["elapsed"]]
-      resp <- tryCatch(
-        httr2::request(url) |>
-          httr2::req_timeout(timeout) |>
-          httr2::req_error(is_error = \(r) FALSE) |>
-          httr2::req_perform(),
-        error = function(e) e
-      )
-      elapsed <- proc.time()[["elapsed"]] - t0
-      if (inherits(resp, "error")) {
-        err_msg <- conditionMessage(resp)
-        message(sprintf("[fetch_blast_ref] HTTP error after %.1fs: %s", elapsed, err_msg))
-        if (attempt < max_tries) {
-          message(sprintf("[fetch_blast_ref] %s attempt %d/%d failed: %s - retrying in %ds",
-                          label, attempt, max_tries, err_msg, 120L * attempt))
-          Sys.sleep(120L * attempt)
-          next
-        }
-        message(sprintf("[fetch_blast_ref] %s all %d attempts failed: %s",
-                        label, max_tries, err_msg))
-        stop(err_msg, call. = FALSE)
-      }
-      status <- httr2::resp_status(resp)
-      message(sprintf("[fetch_blast_ref] HTTP %d after %.1fs  label=%s", status, elapsed, label))
-      if (status == 200L) return(resp)
-      if (attempt < max_tries && status %in% transient) {
-        message(sprintf("[fetch_blast_ref] %s attempt %d/%d returned HTTP %d - retrying in %ds",
-                        label, attempt, max_tries, status, 120L * attempt))
-        Sys.sleep(120L * attempt)
-        next
-      }
-      message(sprintf("[fetch_blast_ref] %s all %d attempts failed: HTTP %d",
-                      label, max_tries, status))
-      stop(sprintf("HTTP %d", status), call. = FALSE)
-    }
-  }
-
+  # Reference nucleotide sequence (optional).
   fasta_failed <- FALSE
-
-  tryCatch({
-    url <- paste0(
-      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
-      "?db=nuccore&id=", accession,
-      "&rettype=gff3&retmode=text",
-      api_key_qs
+  seq_str <- ""
+  if (!is.null(sequence_file)) {
+    fasta_text <- tryCatch(
+      httr2::resp_body_string(.blast_ref_efetch(
+        paste0(base, "?db=nuccore&id=", accession, "&rettype=fasta&retmode=text", api_qs),
+        120L, paste0("FASTA/", accession)
+      )),
+      error = function(e) ""
     )
-    gff3_text <- httr2::resp_body_string(
-      ncbi_efetch(url, 120L, paste0("GFF3/", accession))
-    )
+    seq_str <- .parse_ref_fasta(fasta_text)
+    if (!nzchar(seq_str)) fasta_failed <- TRUE
+  }
 
-    lines <- strsplit(gff3_text, "\n", fixed = TRUE)[[1]]
+  .write_ref_files(accession, g$result, g$genetic_code_num, organism, tax$lineage,
+                   seq_str, blast_species, blast_evalue,
+                   output_file, sequence_file, genetic_code_file, json_file)
 
-    # Sequence length from ##sequence-region pragma
-    sr_line <- grep("^##sequence-region", lines, value = TRUE)[1]
-    ref_length <- if (!is.na(sr_line)) {
-      as.integer(strsplit(trimws(sr_line), "\\s+")[[1]][4])
-    } else {
-      NA_integer_
-    }
-
-    # Data lines only
-    data_lines <- lines[!grepl("^#", lines) & nchar(trimws(lines)) > 0]
-    if (length(data_lines) == 0) {
-      stop("GFF3 response has no data lines for accession ", accession, call. = FALSE)
-    }
-
-    fields <- strsplit(data_lines, "\t", fixed = TRUE)
-    fields <- fields[vapply(fields, length, integer(1)) >= 9]
-    if (length(fields) == 0) {
-      stop("GFF3 response has no tab-separated feature lines for accession ", accession, call. = FALSE)
-    }
-
-    df <- data.frame(
-      feature    = vapply(fields, `[`, character(1), 3),
-      pos1       = as.integer(vapply(fields, `[`, character(1), 4)),
-      pos2       = as.integer(vapply(fields, `[`, character(1), 5)),
-      direction  = vapply(fields, `[`, character(1), 7),
-      attributes = vapply(fields, `[`, character(1), 9),
-      stringsAsFactors = FALSE
-    )
-
-    # Extract a named attribute from GFF3 attributes string.
-    # Uses sub() with a full-string pattern so the result is always the same
-    # length as attrs (no elements dropped for non-matches).
-    get_attr <- function(attrs, key) {
-      has_key <- grepl(paste0("(?:^|;)", key, "="), attrs, perl = TRUE)
-      ifelse(
-        has_key,
-        sub(paste0("^.*(?:^|;)", key, "=([^;]*).*$"), "\\1", attrs, perl = TRUE),
-        NA_character_
-      )
-    }
-
-    df$gbkey      <- get_attr(df$attributes, "gbkey")
-    df$gene_nm    <- get_attr(df$attributes, "gene")
-    df$product    <- get_attr(df$attributes, "product")
-    df$reg_cls    <- get_attr(df$attributes, "regulatory_class")
-    df$note       <- get_attr(df$attributes, "Note")
-    df$transl_tbl <- get_attr(df$attributes, "transl_table")
-
-    # GFF region organism attribute is best-effort fallback (often absent on RefSeq)
-    region_attrs <- df$attributes[df$feature == "region"]
-    gff_organism <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
-      org <- get_attr(region_attrs[1], "organism")
-      if (!is.na(org) && nzchar(org)) org else NULL
-    } else NULL
-
-    # Extract NCBI taxonomy ID from region Dbxref attribute (e.g. "taxon:9606")
-    taxid <- tryCatch({
-      dbxref <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
-        get_attr(region_attrs[1], "Dbxref")
-      } else NA_character_
-      if (is.na(dbxref)) {
-        NULL
-      } else {
-        m <- regmatches(dbxref, regexpr("(?<=taxon:)\\d+", dbxref, perl = TRUE))
-        if (length(m) > 0L && nzchar(m)) m else NULL
-      }
-    }, error = function(e) NULL)
-
-    # Fetch taxonomy XML once; derive both species name and condensed lineage.
-    # NCBI occasionally returns HTTP 200 with an error payload inside <TaxaSet>
-    # when its taxonomy backend times out. A valid record always carries a
-    # <ScientificName>, so treat its absence as a transient failure and stop()
-    # to let Nextflow's errorStrategy retry the task, rather than silently
-    # writing null organism/lineage.
-    tax_xml <- if (!is.null(taxid)) {
-      tax_url <- paste0(
-        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
-        "?db=taxonomy&id=", taxid, "&retmode=xml",
-        api_key_qs
-      )
-      body <- httr2::resp_body_string(
-        ncbi_efetch(tax_url, 60L, paste0("taxonomy/", taxid))
-      )
-      if (!grepl("<ScientificName>", body, fixed = TRUE)) {
-        stop(sprintf(
-          "taxonomy/%s returned no usable record (likely NCBI backend timeout) - retrying via Nextflow",
-          taxid
-        ), call. = FALSE)
-      }
-      body
-    } else NULL
-
-    # Clean species name = first <ScientificName> before <LineageEx>
-    tax_species <- if (!is.null(tax_xml) && nzchar(tax_xml)) {
-      prefix <- sub("(?s)<LineageEx>.*", "", tax_xml, perl = TRUE)
-      m <- regmatches(prefix, regexpr("(?<=<ScientificName>)[^<]+", prefix, perl = TRUE))
-      if (length(m) > 0L && nzchar(m)) m else NULL
-    } else NULL
-
-    organism <- tax_species %||% gff_organism
-
-    # Phylum; order; family from <LineageEx>
-    lineage <- if (!is.null(tax_xml) && nzchar(tax_xml)) {
-      tryCatch({
-        lex_m <- regmatches(tax_xml, regexpr("(?s)<LineageEx>.*?</LineageEx>", tax_xml, perl = TRUE))
-        if (length(lex_m) == 0L) {
-          NULL
-        } else {
-          taxon_blocks <- regmatches(lex_m, gregexpr("(?s)<Taxon>.*?</Taxon>", lex_m, perl = TRUE))[[1]]
-          get_tag <- function(block, tag) {
-            pat <- paste0("(?<=<", tag, ">)[^<]+")
-            m <- regmatches(block, regexpr(pat, block, perl = TRUE))
-            if (length(m) > 0L && nzchar(m)) m else NA_character_
-          }
-          ranks <- vapply(taxon_blocks, get_tag, character(1), tag = "Rank")
-          names_vec <- vapply(taxon_blocks, get_tag, character(1), tag = "ScientificName")
-          keep <- ranks %in% c("phylum", "order", "family") & !is.na(names_vec)
-          if (any(keep)) paste(names_vec[keep], collapse = "; ") else NULL
-        }
-      }, error = function(e) NULL)
-    } else NULL
-
-    # Extract genetic code from CDS transl_table attribute; default 2
-    cds_gc <- df$transl_tbl[df$feature == "CDS" & !is.na(df$transl_tbl)]
-    genetic_code_num <- if (length(cds_gc) > 0) as.integer(cds_gc[1]) else 2L
-    if (!is.null(genetic_code_file)) {
-      writeLines(as.character(genetic_code_num), genetic_code_file)
-    }
-
-    # Classify feature type then drop anything that doesn't match
-    df$type <- dplyr::case_when(
-      df$feature == "CDS"  | (!is.na(df$gbkey) & df$gbkey == "CDS") ~ "PCG",
-      df$feature == "tRNA"  ~ "tRNA",
-      df$feature == "rRNA"  ~ "rRNA",
-      df$feature == "D-loop" |
-        (!is.na(df$gbkey)   & df$gbkey == "D_loop") |
-        (!is.na(df$reg_cls) & grepl("control", df$reg_cls, ignore.case = TRUE)) |
-        (!is.na(df$note)    & grepl("control region|d-loop|d loop|displacement loop", df$note, ignore.case = TRUE)) ~ "ctrl",
-      .default = NA_character_
-    )
-
-    df <- df[!is.na(df$type), ]
-    if (nrow(df) == 0) {
-      stop("GFF3 has no recognized mitochondrial features for accession ", accession, call. = FALSE)
-    }
-
-    # Best available name for each row
-    df$raw <- dplyr::coalesce(df$gene_nm, df$product)
-
-    # Normalize gene names to MitoPilot convention
-    df$gene <- mapply(
-      normalize_mito_gene,
-      df$raw, df$type, df$product,
-      USE.NAMES = FALSE
-    )
-
-    df$direction <- dplyr::if_else(
-      df$direction %in% c("+", "-"), df$direction, "+"
-    )
-
-    result <- df[!is.na(df$gene) & !is.na(df$type),
-                 c("gene", "type", "pos1", "pos2", "direction")]
-    result$ref_length <- ref_length
-
-    write.csv(result, output_file, row.names = FALSE)
-
-    # Optionally fetch and write the reference nucleotide sequence (with retries)
-    seq_str <- ""
-    if (!is.null(sequence_file)) {
-      fasta_url <- paste0(
-        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
-        "?db=nuccore&id=", accession,
-        "&rettype=fasta&retmode=text",
-        api_key_qs
-      )
-      fasta_text <- tryCatch(
-        httr2::resp_body_string(
-          ncbi_efetch(fasta_url, 120L, paste0("FASTA/", accession))
-        ),
-        error = function(e) ""
-      )
-      # Strip FASTA header line(s) and collapse sequence lines into one string
-      seq_lines <- strsplit(fasta_text, "\n", fixed = TRUE)[[1]]
-      seq_lines <- seq_lines[!grepl("^>", seq_lines) & nchar(trimws(seq_lines)) > 0]
-      seq_str   <- paste(trimws(seq_lines), collapse = "")
-      # Only write if it looks like a valid nucleotide sequence (not an API error)
-      if (nzchar(seq_str) && grepl("^[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+$", seq_str)) {
-        writeLines(seq_str, sequence_file)
-      } else {
-        seq_str <- ""
-        writeLines("", sequence_file)
-        fasta_failed <- TRUE
-      }
-    }
-
-    if (!is.null(json_file)) {
-      pcg <- result[result$type == "PCG", c("gene", "pos1", "pos2", "direction")]
-      ref_json <- list(
-        accession = accession,
-        blast_species = blast_species %||% accession,
-        blast_evalue = blast_evalue,
-        organism = organism,
-        lineage = lineage,
-        sequence = seq_str,
-        genetic_code = genetic_code_num,
-        pcg = pcg
-      )
-      jsonlite::write_json(ref_json, json_file, auto_unbox = TRUE, null = "null")
-    }
-
-  }, error = function(e) {
-    msg <- conditionMessage(e)
-    message("fetch_blast_ref error for ", accession, ": ", msg)
-    stop(msg, call. = FALSE)
-  })
-
-  # Signal failure to Nextflow so the process can retry on transient FASTA fetch errors
+  # Signal a transient FASTA failure to Nextflow so the process can retry.
   if (isTRUE(fasta_failed)) {
     stop("fetch_blast_ref: FASTA sequence fetch failed for ", accession,
          " after retries", call. = FALSE)
   }
-  message(sprintf("[fetch_blast_ref] DONE  accession=%s  time=%s", accession, format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
+  message(sprintf("[fetch_blast_ref] DONE  accession=%s  time=%s",
+                  accession, format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
+  invisible(NULL)
+}
+
+# NCBI API key query-string fragment (raises EFetch rate limit 3 -> 10 req/s).
+.blast_ref_api_key_qs <- function() {
+  k <- Sys.getenv("NCBI_API_KEY", unset = "")
+  if (nzchar(k)) paste0("&api_key=", utils::URLencode(k, reserved = TRUE)) else ""
+}
+
+# Retry-aware NCBI EFetch. Returns the httr2 response on success; stops on final
+# failure so callers can retry / fall back. Shared by single + batched fetch.
+.blast_ref_efetch <- function(url, timeout = 120L, label = "") {
+  transient <- c(429L, 500L, 503L)
+  max_tries <- 5L
+  for (attempt in seq_len(max_tries)) {
+    safe_url <- sub("&api_key=[^&]*", "&api_key=REDACTED", url)
+    message(sprintf("[fetch_blast_ref] HTTP attempt %d/%d  label=%s  url=%s",
+                    attempt, max_tries, label, safe_url))
+    t0 <- proc.time()[["elapsed"]]
+    resp <- tryCatch(
+      httr2::request(url) |>
+        httr2::req_timeout(timeout) |>
+        httr2::req_error(is_error = \(r) FALSE) |>
+        httr2::req_perform(),
+      error = function(e) e
+    )
+    elapsed <- proc.time()[["elapsed"]] - t0
+    if (inherits(resp, "error")) {
+      err_msg <- conditionMessage(resp)
+      message(sprintf("[fetch_blast_ref] HTTP error after %.1fs: %s", elapsed, err_msg))
+      if (attempt < max_tries) {
+        message(sprintf("[fetch_blast_ref] %s attempt %d/%d failed: %s - retrying in %ds",
+                        label, attempt, max_tries, err_msg, 120L * attempt))
+        Sys.sleep(120L * attempt)
+        next
+      }
+      message(sprintf("[fetch_blast_ref] %s all %d attempts failed: %s",
+                      label, max_tries, err_msg))
+      stop(err_msg, call. = FALSE)
+    }
+    status <- httr2::resp_status(resp)
+    message(sprintf("[fetch_blast_ref] HTTP %d after %.1fs  label=%s", status, elapsed, label))
+    if (status == 200L) return(resp)
+    if (attempt < max_tries && status %in% transient) {
+      message(sprintf("[fetch_blast_ref] %s attempt %d/%d returned HTTP %d - retrying in %ds",
+                      label, attempt, max_tries, status, 120L * attempt))
+      Sys.sleep(120L * attempt)
+      next
+    }
+    message(sprintf("[fetch_blast_ref] %s all %d attempts failed: HTTP %d",
+                    label, max_tries, status))
+    stop(sprintf("HTTP %d", status), call. = FALSE)
+  }
+}
+
+# Parse ONE accession's GFF3 text into the annotation data frame + metadata.
+# Throws on unusable content so the caller can retry / fall back.
+.parse_ref_gff3 <- function(accession, gff3_text) {
+  lines <- strsplit(gff3_text, "\n", fixed = TRUE)[[1]]
+
+  sr_line <- grep("^##sequence-region", lines, value = TRUE)[1]
+  ref_length <- if (!is.na(sr_line)) {
+    as.integer(strsplit(trimws(sr_line), "\\s+")[[1]][4])
+  } else {
+    NA_integer_
+  }
+
+  data_lines <- lines[!grepl("^#", lines) & nchar(trimws(lines)) > 0]
+  if (length(data_lines) == 0) {
+    stop("GFF3 response has no data lines for accession ", accession, call. = FALSE)
+  }
+  fields <- strsplit(data_lines, "\t", fixed = TRUE)
+  fields <- fields[vapply(fields, length, integer(1)) >= 9]
+  if (length(fields) == 0) {
+    stop("GFF3 response has no tab-separated feature lines for accession ", accession, call. = FALSE)
+  }
+
+  df <- data.frame(
+    feature    = vapply(fields, `[`, character(1), 3),
+    pos1       = as.integer(vapply(fields, `[`, character(1), 4)),
+    pos2       = as.integer(vapply(fields, `[`, character(1), 5)),
+    direction  = vapply(fields, `[`, character(1), 7),
+    attributes = vapply(fields, `[`, character(1), 9),
+    stringsAsFactors = FALSE
+  )
+
+  get_attr <- function(attrs, key) {
+    has_key <- grepl(paste0("(?:^|;)", key, "="), attrs, perl = TRUE)
+    ifelse(
+      has_key,
+      sub(paste0("^.*(?:^|;)", key, "=([^;]*).*$"), "\\1", attrs, perl = TRUE),
+      NA_character_
+    )
+  }
+
+  df$gbkey      <- get_attr(df$attributes, "gbkey")
+  df$gene_nm    <- get_attr(df$attributes, "gene")
+  df$product    <- get_attr(df$attributes, "product")
+  df$reg_cls    <- get_attr(df$attributes, "regulatory_class")
+  df$note       <- get_attr(df$attributes, "Note")
+  df$transl_tbl <- get_attr(df$attributes, "transl_table")
+
+  region_attrs <- df$attributes[df$feature == "region"]
+  gff_organism <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
+    org <- get_attr(region_attrs[1], "organism")
+    if (!is.na(org) && nzchar(org)) org else NULL
+  } else NULL
+
+  taxid <- tryCatch({
+    dbxref <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
+      get_attr(region_attrs[1], "Dbxref")
+    } else NA_character_
+    if (is.na(dbxref)) {
+      NULL
+    } else {
+      m <- regmatches(dbxref, regexpr("(?<=taxon:)\\d+", dbxref, perl = TRUE))
+      if (length(m) > 0L && nzchar(m)) m else NULL
+    }
+  }, error = function(e) NULL)
+
+  cds_gc <- df$transl_tbl[df$feature == "CDS" & !is.na(df$transl_tbl)]
+  genetic_code_num <- if (length(cds_gc) > 0) as.integer(cds_gc[1]) else 2L
+
+  df$type <- dplyr::case_when(
+    df$feature == "CDS"  | (!is.na(df$gbkey) & df$gbkey == "CDS") ~ "PCG",
+    df$feature == "tRNA"  ~ "tRNA",
+    df$feature == "rRNA"  ~ "rRNA",
+    df$feature == "D-loop" |
+      (!is.na(df$gbkey)   & df$gbkey == "D_loop") |
+      (!is.na(df$reg_cls) & grepl("control", df$reg_cls, ignore.case = TRUE)) |
+      (!is.na(df$note)    & grepl("control region|d-loop|d loop|displacement loop", df$note, ignore.case = TRUE)) ~ "ctrl",
+    .default = NA_character_
+  )
+  df <- df[!is.na(df$type), ]
+  if (nrow(df) == 0) {
+    stop("GFF3 has no recognized mitochondrial features for accession ", accession, call. = FALSE)
+  }
+
+  df$raw <- dplyr::coalesce(df$gene_nm, df$product)
+  df$gene <- mapply(normalize_mito_gene, df$raw, df$type, df$product, USE.NAMES = FALSE)
+  df$direction <- dplyr::if_else(df$direction %in% c("+", "-"), df$direction, "+")
+
+  result <- df[!is.na(df$gene) & !is.na(df$type),
+               c("gene", "type", "pos1", "pos2", "direction")]
+  result$ref_length <- ref_length
+
+  list(result = result, taxid = taxid, gff_organism = gff_organism,
+       genetic_code_num = genetic_code_num, ref_length = ref_length)
+}
+
+# Parse taxonomy XML (a single <Taxon> record) into species + condensed lineage.
+.parse_ref_taxonomy <- function(tax_xml) {
+  if (is.null(tax_xml) || !nzchar(tax_xml)) return(list(species = NULL, lineage = NULL))
+  prefix <- sub("(?s)<LineageEx>.*", "", tax_xml, perl = TRUE)
+  m <- regmatches(prefix, regexpr("(?<=<ScientificName>)[^<]+", prefix, perl = TRUE))
+  species <- if (length(m) > 0L && nzchar(m)) m else NULL
+  lineage <- tryCatch({
+    lex_m <- regmatches(tax_xml, regexpr("(?s)<LineageEx>.*?</LineageEx>", tax_xml, perl = TRUE))
+    if (length(lex_m) == 0L) {
+      NULL
+    } else {
+      taxon_blocks <- regmatches(lex_m, gregexpr("(?s)<Taxon>.*?</Taxon>", lex_m, perl = TRUE))[[1]]
+      get_tag <- function(block, tag) {
+        pat <- paste0("(?<=<", tag, ">)[^<]+")
+        mm <- regmatches(block, regexpr(pat, block, perl = TRUE))
+        if (length(mm) > 0L && nzchar(mm)) mm else NA_character_
+      }
+      ranks <- vapply(taxon_blocks, get_tag, character(1), tag = "Rank")
+      names_vec <- vapply(taxon_blocks, get_tag, character(1), tag = "ScientificName")
+      keep <- ranks %in% c("phylum", "order", "family") & !is.na(names_vec)
+      if (any(keep)) paste(names_vec[keep], collapse = "; ") else NULL
+    }
+  }, error = function(e) NULL)
+  list(species = species, lineage = lineage)
+}
+
+# Strip FASTA header(s), collapse to one sequence string, validate as nucleotide.
+# Returns "" for empty / invalid (e.g. an EFetch error page).
+.parse_ref_fasta <- function(fasta_text) {
+  if (is.null(fasta_text) || !nzchar(fasta_text)) return("")
+  seq_lines <- strsplit(fasta_text, "\n", fixed = TRUE)[[1]]
+  seq_lines <- seq_lines[!grepl("^>", seq_lines) & nchar(trimws(seq_lines)) > 0]
+  seq_str <- paste(trimws(seq_lines), collapse = "")
+  if (nzchar(seq_str) && grepl("^[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+$", seq_str)) seq_str else ""
+}
+
+# Write the four per-accession output files from parsed pieces.
+.write_ref_files <- function(accession, result, genetic_code_num, organism, lineage,
+                             seq_str, blast_species, blast_evalue,
+                             output_file, sequence_file, genetic_code_file, json_file) {
+  if (!is.null(genetic_code_file)) writeLines(as.character(genetic_code_num), genetic_code_file)
+  write.csv(result, output_file, row.names = FALSE)
+  if (!is.null(sequence_file)) writeLines(seq_str, sequence_file)
+  if (!is.null(json_file)) {
+    pcg <- result[result$type == "PCG", c("gene", "pos1", "pos2", "direction")]
+    ref_json <- list(
+      accession = accession,
+      blast_species = blast_species %||% accession,
+      blast_evalue = blast_evalue,
+      organism = organism,
+      lineage = lineage,
+      sequence = seq_str,
+      genetic_code = genetic_code_num,
+      pcg = pcg
+    )
+    jsonlite::write_json(ref_json, json_file, auto_unbox = TRUE, null = "null")
+  }
+}
+
+# Split a batched (multi-accession) GFF3 response into per-accession text chunks,
+# keyed by the accession named in each `##sequence-region` line. Keyed (not
+# positional) so a scrambled/short batch cannot misassign a record.
+.split_gff3_by_accession <- function(gff3_all) {
+  lines <- strsplit(gff3_all, "\n", fixed = TRUE)[[1]]
+  sr_idx <- grep("^##sequence-region", lines)
+  if (length(sr_idx) == 0) return(list())
+  ends <- c(sr_idx[-1] - 1L, length(lines))
+  map <- list()
+  for (i in seq_along(sr_idx)) {
+    acc <- strsplit(trimws(lines[sr_idx[i]]), "\\s+")[[1]][2]
+    if (!is.na(acc) && nzchar(acc)) {
+      map[[acc]] <- paste(lines[sr_idx[i]:ends[i]], collapse = "\n")
+    }
+  }
+  map
+}
+
+# Split a batched multi-FASTA into per-accession chunks keyed by header accession.
+.split_fasta_by_accession <- function(fasta_all) {
+  lines <- strsplit(fasta_all, "\n", fixed = TRUE)[[1]]
+  hdr_idx <- grep("^>", lines)
+  if (length(hdr_idx) == 0) return(list())
+  ends <- c(hdr_idx[-1] - 1L, length(lines))
+  map <- list()
+  for (i in seq_along(hdr_idx)) {
+    acc <- sub("^>\\s*(\\S+).*$", "\\1", lines[hdr_idx[i]], perl = TRUE)
+    if (nzchar(acc)) map[[acc]] <- paste(lines[hdr_idx[i]:ends[i]], collapse = "\n")
+  }
+  map
+}
+
+# Look up an accession's chunk, allowing a version-insensitive match
+# (e.g. request "OR12345.1" vs. a key "OR12345").
+.lookup_by_accession <- function(map, acc) {
+  if (acc %in% names(map)) return(map[[acc]])
+  base_acc <- sub("\\.\\d+$", "", acc)
+  keys <- names(map)
+  hit <- which(sub("\\.\\d+$", "", keys) == base_acc)
+  if (length(hit) > 0) return(map[[keys[hit[1]]]])
+  NULL
+}
+
+# Batched path for fetch_blast_refs: 1 GFF3 call + 1 FASTA call for all
+# accessions + one taxonomy call per UNIQUE taxid. Writes per-accession output
+# dirs and returns the accessions successfully written. Throws only if a batched
+# HTTP call fails outright (caller then falls back to per-accession fetches).
+.fetch_blast_refs_batched <- function(accessions, acc_paths) {
+  api_qs <- .blast_ref_api_key_qs()
+  base <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+  ids <- paste(accessions, collapse = ",")
+
+  gff3_all <- httr2::resp_body_string(.blast_ref_efetch(
+    paste0(base, "?db=nuccore&id=", ids, "&rettype=gff3&retmode=text", api_qs),
+    240L, paste0("GFF3-batch/", length(accessions))
+  ))
+  gff3_map <- .split_gff3_by_accession(gff3_all)
+
+  fasta_all <- httr2::resp_body_string(.blast_ref_efetch(
+    paste0(base, "?db=nuccore&id=", ids, "&rettype=fasta&retmode=text", api_qs),
+    240L, paste0("FASTA-batch/", length(accessions))
+  ))
+  fasta_map <- .split_fasta_by_accession(fasta_all)
+
+  # Parse each accession's GFF3 (need taxids before the taxonomy calls).
+  parsed <- list()
+  taxids <- character(0)
+  for (acc in accessions) {
+    chunk <- .lookup_by_accession(gff3_map, acc)
+    if (is.null(chunk)) next
+    g <- tryCatch(.parse_ref_gff3(acc, chunk), error = function(e) NULL)
+    if (is.null(g)) next
+    parsed[[acc]] <- g
+    if (!is.null(g$taxid)) taxids <- c(taxids, g$taxid)
+  }
+
+  # Taxonomy once per unique taxid (single-record XML; best-effort lineage).
+  tax_by_taxid <- list()
+  for (tid in unique(taxids)) {
+    tax_by_taxid[[tid]] <- tryCatch({
+      body <- httr2::resp_body_string(.blast_ref_efetch(
+        paste0(base, "?db=taxonomy&id=", tid, "&retmode=xml", api_qs),
+        60L, paste0("taxonomy/", tid)
+      ))
+      if (!grepl("<ScientificName>", body, fixed = TRUE)) NULL else .parse_ref_taxonomy(body)
+    }, error = function(e) NULL)
+  }
+
+  written <- character(0)
+  for (acc in names(parsed)) {
+    g <- parsed[[acc]]
+    seq_str <- .parse_ref_fasta(.lookup_by_accession(fasta_map, acc) %||% "")
+    if (!nzchar(seq_str)) next   # missing/invalid FASTA -> leave for fallback
+    tax <- if (!is.null(g$taxid)) tax_by_taxid[[g$taxid]] else NULL
+    organism <- tax$species %||% g$gff_organism
+    p <- acc_paths(acc)
+    dir.create(p$dir, showWarnings = FALSE, recursive = TRUE)
+    ok <- tryCatch({
+      .write_ref_files(acc, g$result, g$genetic_code_num, organism, tax$lineage,
+                       seq_str, NULL, NULL, p$ann, p$seq, p$gc, p$json)
+      TRUE
+    }, error = function(e) {
+      message("[fetch_blast_refs] write failed for ", acc, ": ", conditionMessage(e))
+      unlink(p$dir, recursive = TRUE)
+      FALSE
+    })
+    if (ok) written <- c(written, acc)
+  }
+  written
+}
+
+#' Fetch NCBI references for many accessions using batched EFetch requests
+#'
+#' Reduces NCBI round-trips by fetching all accessions' GFF3 and FASTA in one
+#' request each (plus one taxonomy request per unique taxid), then writing one
+#' `ref_<accession>/` subdirectory per accession (annotations CSV, sequence,
+#' genetic code, JSON) under \code{out_dir}. The concatenated responses are split
+#' by accession key, so a scrambled batch can never misassign a record. Any
+#' accession the batch cannot produce (missing/invalid chunk, or a failed batched
+#' HTTP call) falls back to a per-accession [fetch_blast_ref()] call. A fully
+#' failed accession produces no output dir (its samples are flagged downstream),
+#' matching the old one-accession-per-task behavior.
+#'
+#' @param accessions character vector of NCBI accessions
+#' @param out_dir directory to create the per-accession `ref_<accession>/` dirs in
+#' @param blast_species,blast_evalue unused (per-sample metadata is stamped
+#'   downstream); kept for signature parity with [fetch_blast_ref()].
+#' @export
+fetch_blast_refs <- function(accessions, out_dir = ".", blast_species = NULL,
+                             blast_evalue = NULL) {
+  accessions <- unique(accessions[nzchar(accessions)])
+  if (length(accessions) == 0) return(invisible(NULL))
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+  acc_paths <- function(acc) {
+    d <- file.path(out_dir, paste0("ref_", acc))
+    list(
+      dir  = d,
+      ann  = file.path(d, "blast_ref_annotations.csv"),
+      seq  = file.path(d, "blast_ref_sequence.txt"),
+      gc   = file.path(d, "blast_ref_genetic_code.txt"),
+      json = file.path(d, "remote_blast_ref.json")
+    )
+  }
+
+  written <- character(0)
+  written <- tryCatch(
+    .fetch_blast_refs_batched(accessions, acc_paths),
+    error = function(e) {
+      message("[fetch_blast_refs] batched fetch failed (", conditionMessage(e),
+              ") - falling back to per-accession")
+      character(0)
+    }
+  )
+
+  # Per-accession fallback for anything the batch did not produce.
+  for (acc in setdiff(accessions, written)) {
+    p <- acc_paths(acc)
+    dir.create(p$dir, showWarnings = FALSE, recursive = TRUE)
+    ok <- tryCatch({
+      fetch_blast_ref(acc, p$ann, p$seq, p$gc, p$json)
+      TRUE
+    }, error = function(e) {
+      message("[fetch_blast_refs] per-accession fallback failed for ", acc, ": ",
+              conditionMessage(e))
+      FALSE
+    })
+    if (!ok) unlink(p$dir, recursive = TRUE)
+  }
   invisible(NULL)
 }
 
@@ -759,6 +877,7 @@ normalize_pcg <- function(n, product = NA_character_) {
     # ATP synthase
     "atp6"="atp6", "atpase6"="atp6", "atp synthase 6"="atp6",
     "atp8"="atp8", "atpase8"="atp8", "atp synthase 8"="atp8",
+    "atp9"="atp9", "atpase9"="atp9", "atp synthase 9"="atp9",
     # Cytochrome b
     "cob"="cob", "cytb"="cob", "cyb"="cob", "cytob"="cob",
     "cytochromeb"="cob"
@@ -887,8 +1006,9 @@ normalize_trna <- function(n, product = NA_character_) {
     s <- sub("(?i)\\btransfer\\s*rna\\b", "trna", s, perl = TRUE)
     # Strip codon-family parens like "(CUN)", "(UUR)", "(AGY)"
     s <- sub("\\s*\\([^)]*\\)\\s*$", "", s, perl = TRUE)
-    # Strip all-uppercase 3-letter anticodon suffix "trnA-UGC"
-    s <- sub("[-_][A-Z]{3}$", "", s, perl = TRUE)
+    # Strip a trailing 3-letter nucleotide anticodon suffix "trnA-UGC"
+    # (restricted to ACGTU so uppercase AA names like "tRNA-SER" are not stripped)
+    s <- sub("[-_][ACGTU]{3}$", "", s, perl = TRUE)
     # Strip trailing isoacceptor number "trnL1" -> "trnL"
     s_stripped <- sub("[0-9]+$", "", s)
 

@@ -76,7 +76,7 @@ annotate_aragorn <- function(
     if (length(m) == 0) next
 
     aa_type    <- m[2]
-    anticodon  <- m[3]
+    anticodon  <- toupper(m[3])  # match MITOS2/tRNAscan case for cross-tool tRNA_ID dedup
     complement <- m[4]   # "c" = minus strand, "" = plus strand
     start      <- as.integer(m[5])
     end        <- as.integer(m[6])

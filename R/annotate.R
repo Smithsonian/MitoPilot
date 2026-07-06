@@ -87,6 +87,7 @@ annotate <- function(
   }
 
   # Load coverage stats (always, when available - used for trimming and output)
+  coverage <- NULL
   if (length(coverage_fn) == 1L && file.exists(coverage_fn)) {
     coverage <- read.csv(coverage_fn) |>
       dplyr::arrange(SeqId, Position) |>
@@ -381,7 +382,7 @@ annotate <- function(
 
   # Update coverage if rotated ----
   rotate <- assembly@metadata[["rotate_to"]]
-  if (!is.null(rotate) && rotate > 0) {
+  if (!is.null(coverage) && !is.null(rotate) && rotate > 0) {
     coverage <- dplyr::bind_rows(
       coverage[rotate:nrow(coverage), ],
       coverage[1:(rotate - 1), ]
@@ -390,7 +391,7 @@ annotate <- function(
         Position = dplyr::row_number()
       )
   }
-  if (!is.null(rotate) && rotate < 0) {
+  if (!is.null(coverage) && !is.null(rotate) && rotate < 0) {
     coverage <- dplyr::bind_rows(
       coverage[abs(rotate):1, ],
       coverage[nrow(coverage):(abs(rotate) + 1), ]
@@ -402,14 +403,18 @@ annotate <- function(
   }
 
   ## Fix D-loop annotations ----
-  # Filter spurious OH annotations
+  # Drop a spurious OH only when another feature on the same contig fully
+  # contains it (an OH called inside a real gene).
   oh_idx <- which(annotations$gene == "OH") |> rev()
   to_remove <- NULL
   for (idx in oh_idx) {
-    # Check if overlapping other gene
     containing <- annotations |>
-      dplyr::filter(!idx) |>
-      dplyr::filter(pos1 >= annotations$pos1[idx] | pos2 <= annotations$pos2[idx])
+      dplyr::filter(dplyr::row_number() != idx) |>
+      dplyr::filter(
+        contig == annotations$contig[idx] &
+          pos1 <= annotations$pos1[idx] &
+          pos2 >= annotations$pos2[idx]
+      )
     if (nrow(containing) > 0L) {
       to_remove <- c(to_remove, idx)
     }
@@ -428,7 +433,7 @@ annotate <- function(
     }
 
     if (idx == max(which(annotations$contig == annotations$contig[idx]))) {
-      annotations$pos2[idx] <- assembly[stringr::str_detect(names(assembly), paste(annotations$contig[idx], "\\w.*"))]@ranges@width
+      annotations$pos2[idx] <- contig_lens[annotations$contig[idx]]
     } else {
       annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
     }
@@ -447,13 +452,9 @@ annotate <- function(
     )
   )
 
-  # Enforce the annotations primary key (ID/path/scaffold/gene/pos1 in the DB):
-  # two features of the same gene starting at the same position are redundant
-  # (e.g. a MitoFinder call duplicating a MITOS one that the overlap filter
-  # missed). The DB write would silently keep one while the validation summary
-  # counts both -> a phantom "extra" gene. Collapse them here, keeping the
-  # longest (most complete) feature. Genuine multi-copy genes (e.g. duplicated
-  # tRNAs) sit at different pos1 and are untouched.
+  # Enforce the annotations primary key (contig/gene/pos1): collapse same-gene
+  # features at the same start (e.g. a MitoFinder call duplicating a MITOS one),
+  # keeping the longest. Genuine multi-copy genes sit at different pos1.
   annotations <- annotations |>
     dplyr::group_by(contig, gene, pos1) |>
     dplyr::slice_max(order_by = length, n = 1, with_ties = FALSE) |>

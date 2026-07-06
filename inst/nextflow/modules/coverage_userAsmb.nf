@@ -40,7 +40,7 @@ process coverage_userAsmb {
     Rscript -e "MitoPilot::coverage('!{outDir}/!{id}_assembly_1.fasta', '!{reads[0]}', '!{reads[1]}', 'NA', !{task.cpus}, '!{outDir}')"
     
     # cleanup
-    rm !{outDir}/*_working.fasta*
+    rm -f !{outDir}/*_working.fasta*
 
     ### work dir info for troubleshooting ####
     echo "Nextflow coverage working directory:" > !{outDir}/NF_work_dir_coverage.txt

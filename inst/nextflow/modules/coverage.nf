@@ -30,7 +30,7 @@ process coverage {
     output_name = assembly.baseName
     '''
     # Unzip reads
-    if [ !{assembler} == "GetOrganelle" ]; then
+    if [ "!{assembler}" = "GetOrganelle" ]; then
         tar -xzf !{reads} --strip-components=2  
         # Concatenate unpaired reads
         cat extended_*_unpaired.fq >> unpaired.fq  

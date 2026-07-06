@@ -215,7 +215,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(ID, type) |>
     dplyr::collect() |>
     dplyr::group_by(ID) |>
-    dplyr::summarise(ORFCount = sum(type == "ORF"))
+    dplyr::summarise(ORFCount = sum(type == "ORF", na.rm = TRUE))
   orf_enabled <- dplyr::tbl(db, "annotate") |>
     dplyr::select(ID, orf_opts) |>
     dplyr::left_join(dplyr::tbl(db, "orf_opts"), by = "orf_opts") |>
@@ -225,13 +225,13 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
   out <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, blast_accession, blast_species, blast_lineage,
-                  dplyr::any_of("poor_blast_ref")) |>
+                  dplyr::any_of(c("blast_accession_auto", "poor_blast_ref"))) |>
     dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(
       ID, blast_accession, blast_species, blast_lineage, curate_opts, topology,
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
-      dplyr::any_of(c("poor_blast_ref", "partial"))
+      dplyr::any_of(c("blast_accession_auto", "poor_blast_ref", "partial"))
     ) |>
     dplyr::left_join(
       dplyr::tbl(db, "curate_opts") |>

@@ -21,31 +21,34 @@ process blast_ref_fetch {
         opts ?: null
     }
 
-    // 'ignore' keeps other accessions running when this one times out. Failed tasks are
-    // NOT cached as successful, so -resume re-executes this step. A dropped accession
-    // produces no fan-out, so every sample whose top hit was that accession is flagged
-    // as a fetch failure downstream (see the all_top_ids join in the workflow).
+    // 'ignore' keeps other batches running when this one times out. Failed tasks are
+    // NOT cached as successful, so -resume re-executes this step. Within a batch,
+    // fetch_blast_refs writes one ref_<accession>/ dir per accession it can fetch and
+    // simply omits the rest, so a dropped accession produces no fan-out and every
+    // sample whose top hit was that accession is flagged as a fetch failure downstream
+    // (see the all_top_ids join in the workflow).
     errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
     maxRetries 3
 
-    tag "${blast_accession}"
+    // No task tag: with a tag, Nextflow's ANSI progress truncates this process's
+    // name differently in the tagged (running) frame vs the untagged placeholder
+    // frame, which the app's progress parser then keys as two separate lines.
+    // Omitting the tag keeps a single, consistently-named progress line.
 
     input:
-        val(blast_accession)
+        tuple val(id), val(opts_id), val(accessions)
 
     output:
-        tuple val(blast_accession), path("${outDir}/blast_ref_annotations.csv"), path("${outDir}/blast_ref_sequence.txt"), path("${outDir}/blast_ref_genetic_code.txt"), path("${outDir}/remote_blast_ref.json")
+        tuple val(id), val(opts_id), path("ref_*", type: 'dir', optional: true)
 
     shell:
-    outDir = "ref_${blast_accession}"
+    // One Rscript per SAMPLE: fetch_blast_refs makes 1 GFF3 + 1 FASTA request for
+    // the sample's accessions (+ one taxonomy request per unique taxid), writing
+    // one ref_<accession>/ dir each. Per-sample batching keeps each sample's fetch
+    // independent (streams + re-runs cleanly). Any accession the batch can't fetch
+    // falls back to a per-accession request inside fetch_blast_refs.
+    acc_csv = accessions.join(',')
     '''
-    mkdir -p !{outDir}
-
-    ann="!{outDir}/blast_ref_annotations.csv"
-    seq="!{outDir}/blast_ref_sequence.txt"
-    gc="!{outDir}/blast_ref_genetic_code.txt"
-    json="!{outDir}/remote_blast_ref.json"
-
     # Back off on retries to give NCBI EFetch time to recover from rate limits
     if [ "!{task.attempt}" -gt 1 ]; then
         sleep $(( (!{task.attempt} - 1) * 30 ))
@@ -55,7 +58,7 @@ process blast_ref_fetch {
     export NCBI_API_KEY='!{params.ncbi_api_key ?: ""}'
     # Accession-derived data only; per-sample blast_species/blast_evalue are stamped
     # later by blast_ref_stamp via MitoPilot::patch_blast_ref_meta.
-    Rscript -e "MitoPilot::fetch_blast_ref('!{blast_accession}', '$ann', '$seq', '$gc', '$json')"
+    Rscript -e "MitoPilot::fetch_blast_refs(strsplit('!{acc_csv}', ',')[[1]], '.')"
     '''
 }
 

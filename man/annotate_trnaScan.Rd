@@ -14,11 +14,11 @@ annotate_trnaScan(
 )
 }
 \arguments{
-\item{assembly}{text string of the assembly to annotate}
+\item{assembly}{a DNAStringSet of the assembly to annotate}
 
-\item{rotate}{should the assembly be rotated? default = TRUE}
+\item{rotate}{unused; rotation now runs after tRNAscan and MITOS2 complete}
 
-\item{trnaScan_opts}{command line options for tRNAscan-SE (defatult = `-M vert -X 20`)}
+\item{trnaScan_opts}{command line options for tRNAscan-SE (default = `-M vert -X 20`)}
 
 \item{cpus}{number of cpus to use (default = 4)}
 

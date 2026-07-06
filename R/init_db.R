@@ -5,8 +5,10 @@
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
-#' @param genetic_code Translation table for your organisms. See NCBI website
-#'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+#' @param genetic_code Optional NCBI translation table override. Default `NULL`
+#'   auto-selects from the curation ruleset (`curate_target`); a number sets an
+#'   override on the default curate_opts set.
+#'   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
 #' @param seeds_db Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db.
@@ -25,6 +27,8 @@
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
+#' @param curate_ref_db Default curation reference database (default =
+#'   "Metazoa_RefSeq235", the only bundled DB with rRNA BLAST references)
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #' @param linear_complete Treat linear assemblies as complete genomes for the
 #'   export "completeness" field? By default only circular assemblies are
@@ -59,7 +63,7 @@ new_db <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
-    genetic_code = 2,
+    genetic_code = NULL,
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 24,
@@ -93,6 +97,7 @@ new_db <- function(
     curate_cpus = 4,
     curate_memory = 8,
     curate_target = "fish_mito",
+    curate_ref_db = "Metazoa_RefSeq235",
     max_blast_hits = 10,
     linear_complete = FALSE,
     curate_params = NULL,
@@ -159,6 +164,12 @@ new_db <- function(
     curate_params <- do.call(paste0("params_", curate_target), list())
   }
 
+  # Genetic code auto-selects from the curation ruleset (curate_target). A
+  # non-NULL genetic_code arg is stored as an explicit override on the default
+  # curate_opts set; NULL means auto-from-ruleset.
+  gc_override <- if (is.null(genetic_code)) NA_integer_ else as.integer(genetic_code)
+  resolved_genetic_code <- resolve_genetic_code(curate_target, gc_override)
+
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db_path)
   on.exit(DBI::dbDisconnect(con))
@@ -168,7 +179,7 @@ new_db <- function(
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
-      genetic_code = genetic_code,
+      genetic_code = resolved_genetic_code,
       export_group = NA_character_
     )
   glue::glue_sql(
@@ -258,11 +269,13 @@ new_db <- function(
       assemble_opts TEXT,
       blast_opts TEXT,
       blast_accession TEXT,
+      blast_accession_auto TEXT,
       blast_species TEXT,
       blast_pident REAL,
       blast_qcovs REAL,
       blast_evalue REAL,
       blast_lineage TEXT,
+      synteny_accession TEXT,
       poor_blast_ref TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
@@ -341,16 +354,18 @@ new_db <- function(
       run_blast INTEGER,
       entrez_query TEXT,
       extra_opts TEXT,
+      max_target_seqs INTEGER,
       PRIMARY KEY (blast_opts)
     );"
   )
   dplyr::tbl(con, "blast_opts") |>
     dplyr::rows_upsert(
       data.frame(
-        blast_opts    = "default",
-        run_blast     = 1L,
-        entrez_query  = "mitochondrion[Location]",
-        extra_opts    = ""
+        blast_opts      = "default",
+        run_blast       = 1L,
+        entrez_query    = "mitochondrion[Location]",
+        extra_opts      = "",
+        max_target_seqs = 5L
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -546,6 +561,7 @@ new_db <- function(
       ref_db TEXT,
       ref_dir TEXT,
       linear_complete INTEGER,
+      genetic_code INTEGER,
       params JSON,
       PRIMARY KEY (curate_opts)
     );"
@@ -558,9 +574,10 @@ new_db <- function(
         memory = curate_memory,
         target = curate_target,
         max_blast_hits = 10,
-        ref_db = annotate_ref_db,
+        ref_db = curate_ref_db,
         ref_dir = annotate_ref_dir,
         linear_complete = as.integer(isTRUE(linear_complete)),
+        genetic_code = gc_override,
         params = jsonlite::toJSON(curate_params)
       ),
       in_place = TRUE,
@@ -655,7 +672,7 @@ new_db <- function(
   DBI::dbExecute(
     con,
     "CREATE TABLE blast_ref_annotations (
-      ID TEXT NOT NULL,
+      accession TEXT NOT NULL,
       gene TEXT NOT NULL,
       type TEXT,
       pos1 INTEGER,
@@ -663,7 +680,26 @@ new_db <- function(
       direction TEXT,
       ref_length INTEGER,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, gene, pos1)
+      PRIMARY KEY (accession, gene, pos1)
+    );"
+  )
+
+  # One row per sample per retained BLAST candidate reference (rank 1 = top hit).
+  # Drives the reference picker in the annotate-details synteny plot.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_candidates (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL,
+      scaffold INTEGER NOT NULL,
+      rank INTEGER,
+      accession TEXT NOT NULL,
+      species TEXT,
+      pident REAL,
+      qcovs REAL,
+      evalue REAL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold, accession)
     );"
   )
 
@@ -675,23 +711,25 @@ new_db <- function(
       sequence TEXT NOT NULL,
       ref_length INTEGER,
       genetic_code INTEGER,
+      lineage TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (accession)
     );"
   )
 
-  # One row per sample; stores pre-computed whole-genome pairwise alignment
-  # aligned_sample / aligned_ref are the gap-character strings from pwalign
+  # One row per sample per candidate reference; pre-computed whole-genome
+  # pairwise alignment. aligned_sample / aligned_ref are gap-character strings from pwalign
   DBI::dbExecute(
     con,
     "CREATE TABLE blast_ref_alignment (
       ID TEXT NOT NULL,
+      accession TEXT NOT NULL,
       aligned_sample TEXT NOT NULL,
       aligned_ref TEXT NOT NULL,
       rotation INTEGER NOT NULL DEFAULT 0,
       ref_length INTEGER NOT NULL,
       time_stamp INTEGER,
-      PRIMARY KEY (ID)
+      PRIMARY KEY (ID, accession)
     );"
   )
 

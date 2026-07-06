@@ -126,6 +126,7 @@ backwards_compatibility <- function(
       "ref_db" %in% names(curate_opts_table) &&
       "ref_dir" %in% names(curate_opts_table) &&
       "linear_complete" %in% names(curate_opts_table) &&
+      "genetic_code" %in% names(curate_opts_table) &&
       "assembler" %in% names(assemble_opts_table) &&
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
@@ -138,6 +139,10 @@ backwards_compatibility <- function(
       "blast_accession" %in% names(assemble_table) &&
       "blast_opts" %in% names(assemble_table) &&
       "blast_opts" %in% DBI::dbListTables(con) &&
+      isTRUE(tryCatch(
+        "max_target_seqs" %in% DBI::dbListFields(con, "blast_opts"),
+        error = function(e) FALSE
+      )) &&
       "use_mitos_best" %in% names(annotate_opts_table) &&
       "use_aragorn" %in% names(annotate_opts_table) &&
       "aragorn_opts" %in% names(annotate_opts_table) &&
@@ -161,7 +166,7 @@ backwards_compatibility <- function(
       "assembly_blast" %in% DBI::dbListTables(con) &&
       "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
       isTRUE(tryCatch(
-        "genetic_code" %in% names(DBI::dbReadTable(con, "blast_ref_sequences")),
+        all(c("genetic_code", "lineage") %in% names(DBI::dbReadTable(con, "blast_ref_sequences"))),
         error = function(e) FALSE
       )) &&
       isTRUE(tryCatch(
@@ -169,6 +174,21 @@ backwards_compatibility <- function(
         error = function(e) FALSE
       )) &&
       "export_opts" %in% DBI::dbListTables(con) &&
+      "synteny_accession" %in% names(assemble_table) &&
+      "blast_accession_auto" %in% names(assemble_table) &&
+      "blast_ref_candidates" %in% DBI::dbListTables(con) &&
+      isTRUE(tryCatch(
+        all(c("path", "scaffold") %in% DBI::dbListFields(con, "blast_ref_candidates")),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "accession" %in% DBI::dbListFields(con, "blast_ref_annotations"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "accession" %in% DBI::dbListFields(con, "blast_ref_alignment"),
+        error = function(e) FALSE
+      )) &&
       export_default_current)
   {
     message("nothing to update")
@@ -218,11 +238,13 @@ backwards_compatibility <- function(
       }
     }
 
-    sql_add_ref_dir <- "ALTER TABLE curate_opts ADD COLUMN ref_dir TEXT;"
-    sql_add_ref_db <- "ALTER TABLE curate_opts ADD COLUMN ref_db TEXT;"
-
-    DBI::dbExecute(con, sql_add_ref_dir)
-    DBI::dbExecute(con, sql_add_ref_db)
+    curate_opts_fields <- DBI::dbListFields(con, "curate_opts")
+    if (!("ref_dir" %in% curate_opts_fields)) {
+      DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN ref_dir TEXT;")
+    }
+    if (!("ref_db" %in% curate_opts_fields)) {
+      DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN ref_db TEXT;")
+    }
 
     dplyr::tbl(con, "curate_opts") |> # update SQL database
       dplyr::rows_upsert(
@@ -263,10 +285,19 @@ backwards_compatibility <- function(
   # be rebuilt with INTEGER affinity.
   if (!genetic_code_numeric) {
     message("rebuilt TEXT 'genetic_code' column in samples table as integer")
-    DBI::dbExecute(con, "ALTER TABLE samples RENAME COLUMN genetic_code TO genetic_code_old")
-    DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN genetic_code INTEGER")
-    DBI::dbExecute(con, "UPDATE samples SET genetic_code = CAST(genetic_code_old AS INTEGER)")
-    DBI::dbExecute(con, "ALTER TABLE samples DROP COLUMN genetic_code_old")
+    # Wrap the multi-step rebuild so a mid-sequence failure rolls back cleanly
+    # instead of leaving a half-migrated table.
+    DBI::dbBegin(con)
+    tryCatch({
+      DBI::dbExecute(con, "ALTER TABLE samples RENAME COLUMN genetic_code TO genetic_code_old")
+      DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN genetic_code INTEGER")
+      DBI::dbExecute(con, "UPDATE samples SET genetic_code = CAST(genetic_code_old AS INTEGER)")
+      DBI::dbExecute(con, "ALTER TABLE samples DROP COLUMN genetic_code_old")
+      DBI::dbCommit(con)
+    }, error = function(e) {
+      DBI::dbRollback(con)
+      stop(e)
+    })
   }
 
   # if poor_blast_ref column doesn't exist on assemble, add it (TEXT: good/poor/failed/NULL)
@@ -417,6 +448,34 @@ backwards_compatibility <- function(
     message("added 'linear_complete' column to curate_opts table")
     DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN linear_complete INTEGER")
     DBI::dbExecute(con, "UPDATE curate_opts SET linear_complete = 0")
+  }
+  # genetic_code override column on curate_opts. Genetic code now auto-selects
+  # from the curation ruleset, but PRESERVE existing projects: freeze the
+  # project's current code (uniform in the old single-code model) as an explicit
+  # override on every curate_opts set so re-running curate/annotate does not
+  # change translations. Read it from .config, falling back to the samples table.
+  if(!("genetic_code" %in% DBI::dbListFields(con, "curate_opts"))){
+    message("added 'genetic_code' override column to curate_opts table")
+    DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN genetic_code INTEGER")
+    config_gc <- suppressWarnings(as.integer(stringr::str_trim(
+      stringr::str_split(
+        grep("genetic_code =", conf, value = TRUE)[1],
+        "="
+      )[[1]][2]
+    )))
+    if (length(config_gc) != 1 || is.na(config_gc)) {
+      config_gc <- suppressWarnings(as.integer(
+        DBI::dbGetQuery(
+          con,
+          "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL LIMIT 1"
+        )$genetic_code[1]
+      ))
+    }
+    if (length(config_gc) != 1 || is.na(config_gc)) config_gc <- 2L
+    DBI::dbExecute(
+      con,
+      glue::glue_sql("UPDATE curate_opts SET genetic_code = {config_gc}", .con = con)
+    )
   }
   # if use_arwen column doesn't exist, add it (default off)
   if(!("use_arwen" %in% names(annotate_opts_table))){
@@ -797,8 +856,8 @@ backwards_compatibility <- function(
 
   # if max_blast_hits column doesn't exist, add it
   if(!("max_blast_hits" %in% names(curate_opts_table))){
-    message("added 'max_blast_hits' column to annotate_opts table")
-    curate_opts_table$max_blast_hits <- rep(10, nrow(curate_opts_table)) # add ID_verified column
+    message("added 'max_blast_hits' column to curate_opts table")
+    curate_opts_table$max_blast_hits <- rep(10, nrow(curate_opts_table))
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE curate_opts
@@ -817,7 +876,7 @@ backwards_compatibility <- function(
 
   # if ref_dir column doesn't exist, add it
   if(!("ref_dir" %in% names(curate_opts_table))){
-    message("added 'ref_dir' column to annotate_opts table")
+    message("added 'ref_dir' column to curate_opts table")
     curate_opts_table$ref_dir <- rep("/ref_dbs/Mitos2", nrow(curate_opts_table))
     # add new columns to database
     glue::glue_sql(
@@ -837,7 +896,7 @@ backwards_compatibility <- function(
 
   # if ref_db column doesn't exist, add it
   if(!("ref_db" %in% names(curate_opts_table))){
-    message("added 'ref_db' column to annotate_opts table")
+    message("added 'ref_db' column to curate_opts table")
     curate_opts_table$ref_db <- rep("Chordata", nrow(curate_opts_table))
     # add new columns to database
     glue::glue_sql(
@@ -857,8 +916,8 @@ backwards_compatibility <- function(
 
   # if assembler column doesn't exist, add it
   if(!("assembler" %in% names(assemble_opts_table))){
-    message("added 'assembler' column to annotate_opts table")
-    assemble_opts_table$assembler <- rep("GetOrganelle", nrow(assemble_opts_table)) # add assembler column
+    message("added 'assembler' column to assemble_opts table")
+    assemble_opts_table$assembler <- rep("GetOrganelle", nrow(assemble_opts_table))
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE assemble_opts
@@ -877,9 +936,9 @@ backwards_compatibility <- function(
 
   # if mitofinder_db column doesn't exist, add it
   if(!("mitofinder_db" %in% names(assemble_opts_table))){
-    message("added 'mitofinder_db' column to annotate_opts table")
+    message("added 'mitofinder_db' column to assemble_opts table")
     assemble_opts_table$mitofinder_db <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/devel-DJM/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
-                                             nrow(assemble_opts_table)) # add mitofinder_db column
+                                             nrow(assemble_opts_table))
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE assemble_opts
@@ -899,8 +958,8 @@ backwards_compatibility <- function(
 
   # if mitofinder column doesn't exist, add it
   if(!("mitofinder" %in% names(assemble_opts_table))){
-    message("added 'mitofinder' column to annotate_opts table")
-    assemble_opts_table$mitofinder <- rep("--megahit", nrow(assemble_opts_table)) # add mitofinder column
+    message("added 'mitofinder' column to assemble_opts table")
+    assemble_opts_table$mitofinder <- rep("--megahit", nrow(assemble_opts_table))
     # add new columns to database
     glue::glue_sql(
       "ALTER TABLE assemble_opts
@@ -985,6 +1044,26 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_lineage TEXT")
   }
 
+  # Remember the automatic (rank-1) BLAST top hit so a user-set reference override
+  # (which overwrites blast_accession) can be flagged in the sample tables.
+  # Initialize to the current blast_accession (the auto value at migration time).
+  # Placed after the blast_accession add above so the UPDATE column exists.
+  if (!("blast_accession_auto" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'blast_accession_auto' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_accession_auto TEXT")
+    DBI::dbExecute(
+      con,
+      "UPDATE assemble SET blast_accession_auto = blast_accession
+         WHERE blast_accession_auto IS NULL"
+    )
+  }
+
+  # user-selected synteny-plot reference accession (NULL falls back to top hit)
+  if (!("synteny_accession" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'synteny_accession' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN synteny_accession TEXT")
+  }
+
   # if tool column doesn't exist in annotations table, add it
   annotations_cols <- DBI::dbListFields(con, "annotations")
   if (!("tool" %in% annotations_cols)) {
@@ -998,7 +1077,7 @@ backwards_compatibility <- function(
     message("created blast_ref_annotations table")
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_annotations (
-        ID TEXT NOT NULL,
+        accession TEXT NOT NULL,
         gene TEXT NOT NULL,
         type TEXT,
         pos1 INTEGER,
@@ -1006,9 +1085,92 @@ backwards_compatibility <- function(
         direction TEXT,
         ref_length INTEGER,
         time_stamp INTEGER,
-        PRIMARY KEY (ID, gene, pos1)
+        PRIMARY KEY (accession, gene, pos1)
       );"
     )
+  } else if (!("accession" %in% DBI::dbListFields(con, "blast_ref_annotations"))) {
+    # Migrate ID-keyed table to accession-keyed: map each sample's rows to its
+    # blast_accession (annotations are a property of the reference genome).
+    message("re-keyed blast_ref_annotations table by accession")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_annotations_new (
+        accession TEXT NOT NULL,
+        gene TEXT NOT NULL,
+        type TEXT,
+        pos1 INTEGER,
+        pos2 INTEGER,
+        direction TEXT,
+        ref_length INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (accession, gene, pos1)
+      );"
+    )
+    DBI::dbExecute(con,
+      "INSERT OR IGNORE INTO blast_ref_annotations_new
+         (accession, gene, type, pos1, pos2, direction, ref_length, time_stamp)
+       SELECT a.blast_accession, r.gene, r.type, r.pos1, r.pos2, r.direction, r.ref_length, r.time_stamp
+       FROM blast_ref_annotations r
+       JOIN assemble a ON r.ID = a.ID
+       WHERE a.blast_accession IS NOT NULL"
+    )
+    DBI::dbExecute(con, "DROP TABLE blast_ref_annotations")
+    DBI::dbExecute(con, "ALTER TABLE blast_ref_annotations_new RENAME TO blast_ref_annotations")
+  }
+
+  # max_target_seqs moved out of the nextflow .config into the blast_opts table
+  # so it can be edited per parameter-set in the app. Add the column + backfill
+  # the previous default (5) for existing projects.
+  if ("blast_opts" %in% DBI::dbListTables(con) &&
+      !("max_target_seqs" %in% DBI::dbListFields(con, "blast_opts"))) {
+    message("added max_target_seqs column to blast_opts table")
+    DBI::dbExecute(con, "ALTER TABLE blast_opts ADD COLUMN max_target_seqs INTEGER")
+    DBI::dbExecute(con, "UPDATE blast_opts SET max_target_seqs = 5 WHERE max_target_seqs IS NULL")
+  }
+
+  # Per-SCAFFOLD candidate references (rank 1 = that scaffold's top hit). Kept
+  # separate per (ID, path, scaffold) so divergent scaffolds/paths never merge
+  # into one ranked list. Legacy tables (per-sample, PK (ID, accession)) are
+  # rebuilt; seed each scaffold's existing best hit as rank 1 from assemblies so
+  # the in-app picker shows something before a re-run.
+  .create_scaffold_candidates <- function() {
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_candidates (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL,
+        scaffold INTEGER NOT NULL,
+        rank INTEGER,
+        accession TEXT NOT NULL,
+        species TEXT,
+        pident REAL,
+        qcovs REAL,
+        evalue REAL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold, accession)
+      );"
+    )
+    # Seed the per-scaffold best hit from assemblies, but only if that table and
+    # its per-scaffold BLAST columns already exist (an old project may not have an
+    # assemblies table yet - it is created later in this migration - in which case
+    # the candidates table is simply left empty for the pipeline to populate).
+    asm_fields <- tryCatch(DBI::dbListFields(con, "assemblies"), error = function(e) character(0))
+    if (all(c("path", "scaffold", "blast_accession", "blast_species",
+              "blast_pident", "blast_qcovs", "blast_evalue") %in% asm_fields)) {
+      DBI::dbExecute(con,
+        "INSERT OR IGNORE INTO blast_ref_candidates
+           (ID, path, scaffold, rank, accession, species, pident, qcovs, evalue, time_stamp)
+         SELECT ID, path, scaffold, 1, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp
+         FROM assemblies
+         WHERE blast_accession IS NOT NULL AND blast_accession != 'NO HIT'"
+      )
+    }
+  }
+  if (!("blast_ref_candidates" %in% DBI::dbListTables(con))) {
+    message("created blast_ref_candidates table (per-scaffold)")
+    .create_scaffold_candidates()
+  } else if (!all(c("path", "scaffold") %in% DBI::dbListFields(con, "blast_ref_candidates"))) {
+    message("migrated blast_ref_candidates to per-scaffold schema")
+    DBI::dbExecute(con, "DROP TABLE blast_ref_candidates")
+    .create_scaffold_candidates()
   }
 
   if (!("blast_ref_sequences" %in% existing_tables)) {
@@ -1019,6 +1181,7 @@ backwards_compatibility <- function(
         sequence TEXT NOT NULL,
         ref_length INTEGER,
         genetic_code INTEGER,
+        lineage TEXT,
         time_stamp INTEGER,
         PRIMARY KEY (accession)
       );"
@@ -1029,6 +1192,10 @@ backwards_compatibility <- function(
       message("added 'genetic_code' column to blast_ref_sequences table")
       DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN genetic_code INTEGER")
     }
+    if (!("lineage" %in% ref_seq_cols)) {
+      message("added 'lineage' column to blast_ref_sequences table")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN lineage TEXT")
+    }
   }
 
   if (!("blast_ref_alignment" %in% existing_tables)) {
@@ -1036,14 +1203,41 @@ backwards_compatibility <- function(
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_alignment (
         ID TEXT NOT NULL,
+        accession TEXT NOT NULL,
         aligned_sample TEXT NOT NULL,
         aligned_ref TEXT NOT NULL,
         rotation INTEGER NOT NULL DEFAULT 0,
         ref_length INTEGER NOT NULL,
         time_stamp INTEGER,
-        PRIMARY KEY (ID)
+        PRIMARY KEY (ID, accession)
       );"
     )
+  } else if (!("accession" %in% DBI::dbListFields(con, "blast_ref_alignment"))) {
+    # Migrate single-ref (ID-keyed) alignment to (ID, accession): the existing
+    # alignment is against the sample's current top hit.
+    message("re-keyed blast_ref_alignment table by (ID, accession)")
+    DBI::dbExecute(con,
+      "CREATE TABLE blast_ref_alignment_new (
+        ID TEXT NOT NULL,
+        accession TEXT NOT NULL,
+        aligned_sample TEXT NOT NULL,
+        aligned_ref TEXT NOT NULL,
+        rotation INTEGER NOT NULL DEFAULT 0,
+        ref_length INTEGER NOT NULL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, accession)
+      );"
+    )
+    DBI::dbExecute(con,
+      "INSERT OR IGNORE INTO blast_ref_alignment_new
+         (ID, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+       SELECT al.ID, a.blast_accession, al.aligned_sample, al.aligned_ref, al.rotation, al.ref_length, al.time_stamp
+       FROM blast_ref_alignment al
+       JOIN assemble a ON al.ID = a.ID
+       WHERE a.blast_accession IS NOT NULL"
+    )
+    DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+    DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
   }
 
   # if blast_opts column doesn't exist in assemble table, add it
@@ -1103,16 +1297,18 @@ backwards_compatibility <- function(
         run_blast INTEGER,
         entrez_query TEXT,
         extra_opts TEXT,
+        max_target_seqs INTEGER,
         PRIMARY KEY (blast_opts)
       );"
     )
     dplyr::tbl(con, "blast_opts") |>
       dplyr::rows_upsert(
         data.frame(
-          blast_opts   = "default",
-          run_blast    = 1L,
-          entrez_query = "mitochondrion[Location]",
-          extra_opts   = ""
+          blast_opts      = "default",
+          run_blast       = 1L,
+          entrez_query    = "mitochondrion[Location]",
+          extra_opts      = "",
+          max_target_seqs = 5L
         ),
         in_place = TRUE,
         copy = TRUE,

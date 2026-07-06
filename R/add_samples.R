@@ -66,13 +66,10 @@ add_samples <- function(
     }
   }
 
-  # get genetic_code from .config
-  conf <- readLines(file.path(path, ".config"))
-  index <- grep("genetic_code =", conf)
-  if (length(index) != 1) {
-    stop("Could not find genetic_code in Nextflow .config, you may need to update your project with `backwards_compatibility()`")
-  }
-  genetic_code <- stringr::str_trim(stringr::str_split(conf[index], "=")[[1]][2])
+  # genetic_code auto-selects from each sample's curation ruleset; it is filled
+  # in below by .sync_sample_genetic_codes() after the annotate rows (which carry
+  # the curate_opts assignment) are inserted. Use a placeholder for now.
+  genetic_code <- NA_integer_
 
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
@@ -215,5 +212,9 @@ add_samples <- function(
       by = "ID",
       conflict = "ignore"
     )
+
+  # Fill samples.genetic_code for the new samples from their curation ruleset
+  # (default curate_opts target + optional override).
+  .sync_sample_genetic_codes(con, ids = mapping$ID)
 
 }

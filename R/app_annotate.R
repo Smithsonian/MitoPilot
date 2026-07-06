@@ -370,11 +370,12 @@ annotate_server <- function(id) {
           ),
           blast_accession = colDef(
             show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Top Hit",
+            name = "BLAST Reference",
             html = TRUE,
             width = 120,
-            cell = rt_ncbi_link()
+            cell = rt_ncbi_link(auto_col = "blast_accession_auto")
           ),
+          blast_accession_auto = colDef(show = FALSE),
           blast_species = colDef(
             show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
             name = "BLAST Species",
@@ -860,7 +861,7 @@ annotate_server <- function(id) {
           choices = MITO_GENE_CHOICES,
           selected = cur$start_gene %||% character(0),
           options = list(
-            create = TRUE,
+            create = FALSE,
             maxItems = 1
           )
         )
@@ -1049,7 +1050,7 @@ annotate_server <- function(id) {
           inputId = "target",
           selected = cur$target,
           options = list(
-            create = TRUE,
+            create = FALSE,
             maxItems = 1
           )
         )
@@ -1101,6 +1102,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("curate_ref_dir", condition = input$edit_curate_opts)
       shinyjs::toggleState("curate_ref_db", condition = input$edit_curate_opts)
       shinyjs::toggleState("target", condition = input$edit_curate_opts)
+      shinyjs::toggleState("genetic_code", condition = input$edit_curate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
       shinyjs::toggleState("linear_complete", condition = input$edit_curate_opts)
       # Check if editing opts that apply beyond selection
@@ -1135,8 +1137,19 @@ annotate_server <- function(id) {
       }
     })
     observeEvent(input$target, {
+      # Guard against partial/invalid entries (e.g. while typing): only known
+      # rulesets dispatch to params_<target>/curate_<target> functions.
+      req(input$target %in% names(RULESET_MAP))
       rv$params <- do.call(paste0("params_", input$target), list()) |>
         jsonlite::toJSON(auto_unbox = TRUE)
+      # Refresh the "Auto" label to show the code this target resolves to,
+      # keeping any explicit override the user already selected.
+      updateSelectizeInput(
+        session,
+        "genetic_code",
+        choices = gcode_choices(input$target),
+        selected = input$genetic_code %||% "auto"
+      )
       output$params <- listviewer::renderReactjson({
         listviewer::reactjson(
           req(rv$params),
@@ -1168,6 +1181,16 @@ annotate_server <- function(id) {
     observeEvent(input$update_curate_opts, {
       ## Add to params table if new or editing ----
       if (input$edit_curate_opts) {
+        # Target must be a known ruleset (dispatches to params_<target>); block
+        # save on a cleared/invalid selection rather than erroring.
+        if (!isTRUE(input$target %in% names(RULESET_MAP))) {
+          shinyWidgets::show_alert(
+            title = "Invalid target",
+            text = "Please select a valid curation ruleset before saving.",
+            type = "error"
+          )
+          return()
+        }
         params <- do.call(paste0("params_", input$target), list()) |>
           jsonlite::toJSON(auto_unbox = TRUE)
         dplyr::tbl(session$userData$con, "curate_opts") |>
@@ -1180,7 +1203,14 @@ annotate_server <- function(id) {
               ref_dir = req(input$curate_ref_dir),
               ref_db = req(input$curate_ref_db),
               target = req(input$target),
-              linear_complete = as.integer(isTRUE(input$linear_complete))
+              linear_complete = as.integer(isTRUE(input$linear_complete)),
+              # "auto" (or empty) = auto-from-ruleset (NA); a number is an override.
+              genetic_code = if (is.null(input$genetic_code) ||
+                                 input$genetic_code %in% c("", "auto")) {
+                NA_integer_
+              } else {
+                as.integer(input$genetic_code)
+              }
             ),
             in_place = TRUE,
             copy = TRUE,
@@ -1214,6 +1244,10 @@ annotate_server <- function(id) {
           update,
           by = "ID"
         )
+      # Genetic code follows the curation ruleset: recompute the per-sample
+      # samples.genetic_code cache for the samples whose curate_opts (target or
+      # override) may have changed.
+      .sync_sample_genetic_codes(session$userData$con, ids = update$ID)
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
@@ -1367,7 +1401,7 @@ annotate_server <- function(id) {
     annotations_details_server(ns("annotations"), rv)
 
     # CSV Export ----
-    .export_cols_drop <- c("output", "view", "poor_blast_ref", "warnings_details")
+    .export_cols_drop <- c("output", "view", "poor_blast_ref", "warnings_details", "blast_accession_auto")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)

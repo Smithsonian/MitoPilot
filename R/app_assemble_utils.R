@@ -82,7 +82,10 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(-n_total, -n_kept, -length_per_scaffold,
                   -dplyr::any_of(paste0(blast_cols, "_kept"))) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
-    dplyr::mutate(blast_ref_status = poor_blast_ref)
+    dplyr::mutate(
+      blast_ref_status = poor_blast_ref,
+      blast_hits = dplyr::if_else(assemble_switch > 1, "All BLAST Hits", NA_character_)
+    )
 
   out |>
     dplyr::relocate(
@@ -107,6 +110,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       blast_qcovs,
       blast_evalue,
       blast_lineage,
+      blast_hits,
       time_stamp,
       assemble_notes
     ) |>
@@ -285,12 +289,12 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             style = "flex: 1",
             selectizeInput(
               ns("assembler"),
-              label = "Assembler:",
+              label = NULL,
               choices = c("GetOrganelle", "MitoFinder"),
               selected = current$assembler %||% character(0),
               width = "100%",
               options = list(
-                create = TRUE,
+                create = FALSE,
                 maxItems = 1
               )
             ) |> shinyjs::disabled()
@@ -303,54 +307,62 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
                   tags$a(href = "https://github.com/RemiAllio/MitoFinder",
                          target = "_blank", rel = "noopener", "MitoFinder"),
                   "; the relevant tool options appear below."),
+        # Each tool's help line is appended INSIDE its input's container (not as a
+        # standalone <p>), so it shows/hides together with the field: shinyjs::hide
+        # on the input hides its .shiny-input-container, and the help with it.
         textInput(
           ns("mitofinder"),
           label = tagList("MitoFinder options", tool_help_icon("mitofinder")),
           value = current$mitofinder %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Extra command-line flags passed to MitoFinder.",
-                  href = "https://github.com/RemiAllio/MitoFinder",
-                  id = ns("help_mitofinder")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Extra command-line flags passed to MitoFinder.",
+            href = "https://github.com/RemiAllio/MitoFinder",
+            id = ns("help_mitofinder"), nested = TRUE)),
         textInput(
           ns("mf_db"),
           label = "MitoFinder Database:",
           value = current$mitofinder_db %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Path to the MitoFinder reference database (GenBank .gb format) ",
-                  "used to seed the assembly.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-                  id = ns("help_mf_db")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Path to the MitoFinder reference database (GenBank .gb format) ",
+            "used to seed the assembly.",
+            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+            id = ns("help_mf_db"), nested = TRUE)),
         textInput(
           ns("getOrganelle"),
           label = tagList("getOrganelle options", tool_help_icon("getOrganelle")),
           value = current$getOrganelle %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Extra command-line flags passed to GetOrganelle.",
-                  href = "https://github.com/Kinggerm/GetOrganelle/wiki",
-                  id = ns("help_getOrganelle")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Extra command-line flags passed to GetOrganelle.",
+            href = "https://github.com/Kinggerm/GetOrganelle/wiki",
+            id = ns("help_getOrganelle"), nested = TRUE)),
         textInput(
           ns("seeds_db"),
           label = "getOrganelle Seeds:",
           value = current$seeds_db %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Seed database: reference sequences GetOrganelle uses to start ",
-                  "recruiting mitochondrial reads.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-                  id = ns("help_seeds_db")),
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Seed database: reference sequences GetOrganelle uses to start ",
+            "recruiting mitochondrial reads.",
+            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+            id = ns("help_seeds_db"), nested = TRUE)),
         textInput(
           ns("labels_db"),
           label = "getOrganelle Labels:",
           value = current$labels_db %||% character(0),
           width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Label database: reference genes GetOrganelle uses to identify ",
-                  "and extend mitochondrial contigs.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-                  id = ns("help_labels_db"))
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Label database: reference genes GetOrganelle uses to identify ",
+            "and extend mitochondrial contigs.",
+            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+            id = ns("help_labels_db"), nested = TRUE))
         ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
@@ -423,18 +435,16 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       )
     )
 
+    # Hide the non-selected assembler's inputs. Each help line lives inside its
+    # input's container, so hiding the input hides its help too - do NOT hide the
+    # help_* ids separately, or showing the input later won't bring the help back.
     if(current$assembler == "GetOrganelle"){
       shinyjs::hide(id = "mitofinder")
-      shinyjs::hide(id = "help_mitofinder")
       shinyjs::hide(id = "mf_db")
-      shinyjs::hide(id = "help_mf_db")
     } else if(current$assembler == "MitoFinder"){
       shinyjs::hide(id = "getOrganelle")
-      shinyjs::hide(id = "help_getOrganelle")
       shinyjs::hide(id = "seeds_db")
-      shinyjs::hide(id = "help_seeds_db")
       shinyjs::hide(id = "labels_db")
-      shinyjs::hide(id = "help_labels_db")
     }
   } else {
     shinyWidgets::show_alert(
@@ -514,12 +524,24 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                     "Entrez filter (default limits hits to mitochondrial sequences).")
         ),
         div(
+          id = ns("blast_mts_group"),
+          tags$label("Candidate reference mitogenomes to retain"),
+          numericInput(
+            ns("max_target_seqs"),
+            label = NULL,
+            value = as.integer(current$max_target_seqs %||% 5L),
+            min = 1, max = 50, step = 1, width = "120px"
+          ) |> shinyjs::disabled(),
+          opts_help("Number of top BLAST hits kept per sample (-max_target_seqs).")
+        ),
+        div(
           id = ns("blast_extra_group"),
           tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",
-            "Extra flags passed to blastn. Cannot override: -outfmt, -max_target_seqs, -max_hsps."
+            "Extra flags passed to blastn. Cannot override: -outfmt, -max_hsps, or ",
+            "-max_target_seqs."
           ),
           textAreaInput(
             ns("extra_opts"),
@@ -539,6 +561,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
 
     if (!as.logical(current$run_blast %||% 1L)) {
       shinyjs::hide(id = "blast_entrez_group")
+      shinyjs::hide(id = "blast_mts_group")
       shinyjs::hide(id = "blast_extra_group")
     }
 
@@ -550,6 +573,102 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
       closeOnClickOutside = FALSE
     )
   }
+}
+
+#' Modal listing all BLAST hits for one sample, kept separate per scaffold/path
+#'
+#' Opened from the "All BLAST Hits" table button. BLAST hits are stored per
+#' (ID, path, scaffold) - never merged across scaffolds/paths - so the modal
+#' shows one collapsible, ranked candidate list per path/scaffold (accession,
+#' species, percents, e-value, per-accession lineage from blast_ref_sequences).
+#' Accessions are hyperlinks to NCBI. Header mirrors the assembly-details modal.
+#'
+#' @param rv the local reactive vals object (uses rv$updating$ID / $Taxon)
+#' @param session current shiny session
+#' @noRd
+blast_hits_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+  con <- session$userData$con
+  id <- rv$updating$ID[1]
+  taxon <- rv$updating$Taxon[1] %|NA|% "NA"
+
+  cand <- tryCatch(
+    dplyr::tbl(con, "blast_ref_candidates") |>
+      dplyr::filter(ID == !!id) |>
+      dplyr::left_join(
+        dplyr::tbl(con, "blast_ref_sequences") |>
+          dplyr::select(accession, lineage),
+        by = "accession"
+      ) |>
+      dplyr::select(path, scaffold, rank, accession, species, pident, qcovs, evalue, lineage) |>
+      dplyr::collect() |>
+      dplyr::arrange(path, scaffold, rank),
+    error = function(e) data.frame()
+  )
+
+  cand_cols <- list(
+    rank = reactable::colDef(name = "Rank", maxWidth = 60, align = "center"),
+    accession = reactable::colDef(
+      name = "BLAST Hit", html = TRUE, minWidth = 120, cell = rt_ncbi_link()
+    ),
+    species = reactable::colDef(
+      name = "BLAST Species", html = TRUE, minWidth = 160, cell = rt_longtext()
+    ),
+    pident = reactable::colDef(name = "% Ident", maxWidth = 90, align = "center"),
+    qcovs = reactable::colDef(name = "% Cov", maxWidth = 90, align = "center"),
+    evalue = reactable::colDef(name = "E-value", maxWidth = 100, align = "center"),
+    lineage = reactable::colDef(
+      name = "BLAST Lineage", html = TRUE, minWidth = 220, cell = rt_longtext()
+    )
+  )
+
+  body <- if (nrow(cand) == 0) {
+    div(
+      style = "padding: 8px; color: #555;",
+      "No BLAST hits are available for this sample yet."
+    )
+  } else {
+    combos <- unique(cand[, c("path", "scaffold")])
+    combos <- combos[order(combos$path, combos$scaffold), , drop = FALSE]
+    multi <- nrow(combos) > 1
+    lapply(seq_len(nrow(combos)), function(i) {
+      p <- combos$path[i]; s <- combos$scaffold[i]
+      sub <- cand[cand$path == p & cand$scaffold == s,
+                  c("rank", "accession", "species", "pident", "qcovs", "evalue", "lineage")]
+      tbl <- reactable::reactable(
+        sub, defaultExpanded = TRUE, bordered = TRUE, highlight = TRUE,
+        compact = TRUE, wrap = FALSE,
+        defaultColDef = reactable::colDef(align = "left"),
+        columns = cand_cols
+      )
+      # One collapsible section per (path, scaffold). Open by default so the
+      # embedded table sizes correctly. For a single scaffold, no wrapper.
+      if (!multi) return(tbl)
+      tags$details(
+        open = NA,
+        style = "margin-top: 12px;",
+        tags$summary(
+          style = "cursor: pointer; font-weight: bold;",
+          stringr::str_glue("Path {p} / Scaffold {s} ({nrow(sub)} hits)")
+        ),
+        div(style = "margin-top: 8px;", tbl)
+      )
+    })
+  }
+
+  showModal(modalDialog(
+    title = tagList(
+      div(stringr::str_glue("All BLAST hits for ID: {id}")),
+      div(
+        style = "font-size: 0.85em; font-weight: normal; color: #555; margin-top: 4px;",
+        stringr::str_glue("Taxon: {taxon}")
+      )
+    ),
+    size = "l",
+    body,
+    easyClose = TRUE,
+    footer = modalButton("Close")
+  ))
 }
 
 #' Get assembly from database

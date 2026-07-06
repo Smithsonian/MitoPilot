@@ -35,7 +35,6 @@ params {
     asmbDir = '<<ASMB_DIR>>'                // Directory containing user-supplied mitogenomes
     publishDir = 'out'                      // Directory to publish pipeline outputs
     minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
-    genetic_code = <<GENETIC_CODE>>
     ncbi_api_key = '<<NCBI_API_KEY>>'       // Optional NCBI API key for BLAST + GenBank fetch (https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
     mitos_condaenv = 'mitos'
     trnaScan_condaenv = 'trnascan-se'

@@ -12,7 +12,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
   assemble <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, blast_accession, blast_species, blast_lineage, blast_pident, blast_qcovs,
-                  dplyr::any_of("poor_blast_ref"))
+                  dplyr::any_of(c("blast_accession_auto", "poor_blast_ref")))
 
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon)
@@ -61,6 +61,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       topology,
       scaffolds,
       blast_accession,
+      dplyr::any_of("blast_accession_auto"),
       blast_species,
       blast_lineage,
       blast_pident,
@@ -230,7 +231,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               selected = current$start_gene %||% character(0),
               width = "100%",
               options = list(
-                create = TRUE,
+                create = FALSE,
                 maxItems = 1
               )
             ) |> shinyjs::disabled()
@@ -577,16 +578,19 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             ns("target"),
             label = "Target:",
             # Values = full keys (dispatch); labels = "Scientific (common)".
+            # Ordered alphabetically by the displayed label.
             choices = local({
-              tg <- sort(names(RULESET_MAP))
-              stats::setNames(tg, vapply(tg, function(k)
+              tg <- names(RULESET_MAP)
+              labs <- vapply(tg, function(k)
                 paste0(RULESET_MAP[[k]]$ncbi, " (", RULESET_MAP[[k]]$label, ")"),
-                character(1)))
+                character(1))
+              ord <- order(labs)
+              stats::setNames(tg[ord], labs[ord])
             }),
             selected = current$target %||% character(0),
             width = "100%",
             options = list(
-              create = TRUE,
+              create = FALSE,
               maxItems = 1
             )
           ) |> shinyjs::disabled()
@@ -594,6 +598,25 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         opts_help("Taxonomic ruleset of expected genes and naming conventions used ",
                   "to curate annotations; pick the clade closest to your samples.",
                   href = "https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html"),
+        div(
+          style = "flex: 1",
+          selectizeInput(
+            ns("genetic_code"),
+            label = "Genetic code:",
+            # "auto" = auto-from-ruleset; explicit values override the ruleset default.
+            choices = gcode_choices(current$target %||% "fish_mito"),
+            selected = if (is.null(current$genetic_code) || is.na(current$genetic_code)) {
+              "auto"
+            } else {
+              as.character(current$genetic_code)
+            },
+            width = "100%",
+            options = list(maxItems = 1)
+          ) |> shinyjs::disabled()
+        ),
+        opts_help("NCBI translation table used for protien-coding genes. 'Auto' to sets the genetic code based on selected ",
+                  "ruleset. Or pick a specific table to override it for these samples.",
+                  href = "https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi"),
         div(
           class = "form-group shiny-input-container",
           shinyWidgets::prettyCheckbox(
@@ -713,8 +736,8 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                 href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
       helpText(
         "The genetic code (-g) and minimum length (-ml) are set automatically",
-        "from the project genetic code and the Min ORF length above; do not set",
-        "them here."
+        "from the sample's curation ruleset (genetic code) and the Min ORF length",
+        "above; do not set them here."
       )
     )
     if (!orf_on) orf_param_opts <- shinyjs::hidden(orf_param_opts)

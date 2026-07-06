@@ -1,3 +1,15 @@
+#' Codon length treating NA/"" as 0
+#'
+#' `nchar(NA_character_)` returns 2, which would silently trim 2 bp when a
+#' start/stop codon is unknown. This returns 0 for NA or empty strings.
+#'
+#' @noRd
+.codon_len <- function(x) {
+  n <- nchar(x)
+  n[is.na(x) | x == ""] <- 0L
+  as.integer(n)
+}
+
 #' Pairwise comparison of AA sequences
 #'
 #' @param query The focal sequence
@@ -10,7 +22,6 @@
 compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "BLOSUM80") {
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  #data(list=subMx, package = "pwalign")
   alignment <- pwalign::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
 
   # Return query-centric percent identity
@@ -19,8 +30,9 @@ compare_aa <- function(query, target, type = c("pctId", "similarity"), subMx = "
   }
 
   if (type[1] == "similarity") {
-    data(list=subMx, package = "pwalign")
-    max_score <- sum(diag(BLOSUM80)[match(strsplit(query, NULL)[[1]], rownames(BLOSUM80))])
+    data(list = subMx, package = "pwalign", envir = environment())
+    mx <- get(subMx, envir = environment())
+    max_score <- sum(diag(mx)[match(strsplit(query, NULL)[[1]], rownames(mx))])
     res <- 100 * BiocGenerics::score(alignment) / max_score
     return(res)
   }
@@ -151,6 +163,26 @@ circ_overlap_len <- function(p1, p2, q1, q2, L) {
   total
 }
 
+#' Extract a possibly wrap-around region [p1, p2] from a sequence
+#'
+#' When p1 > p2 the region spans the circular origin, so it is reconstructed as
+#' `[p1, end] + [1, p2]`. Returns the same type as `subseq(seq, p1, p2)` would.
+#'
+#' @param seq a DNAString/DNAStringSet
+#' @param p1,p2 start/end (p1 > p2 indicates wrap-around)
+#'
+#' @noRd
+extract_circ_region <- function(seq, p1, p2) {
+  if (p1 <= p2) {
+    return(Biostrings::subseq(seq, start = p1, end = p2))
+  }
+  w <- if (methods::is(seq, "XStringSet")) Biostrings::width(seq)[1] else length(seq)
+  Biostrings::xscat(
+    Biostrings::subseq(seq, start = p1, end = w),
+    Biostrings::subseq(seq, start = 1L, end = p2)
+  )
+}
+
 #' Get top BLASTP hits
 #'
 #' @param ref_db reference database
@@ -220,13 +252,13 @@ get_top_hits <- function(
     }) |>
     dplyr::arrange(eval) |>
     dplyr::transmute(
-      acc = stringr::str_extract(hit, "^[^:]+"),
+      acc = stringr::str_extract(hit, "^\\S+"),
       Taxon = stringr::str_remove(hit, "^\\S+ "),
       eval = eval
     ) |>
     dplyr::rowwise() |>
     dplyr::mutate(
-      target = as.character(ref_seqs[stringr::str_extract(names(ref_seqs), "^[^:]+") == acc])[1]
+      target = as.character(ref_seqs[stringr::str_extract(names(ref_seqs), "^\\S+") == acc])[1]
     ) |>
     dplyr::mutate(
       pctid = compare_aa(query, target, "pctId"),
@@ -543,22 +575,16 @@ count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx 
   seqs <- Biostrings::AAStringSet(list(s1, s2))
   aln <- DECIPHER::AlignSeqs(seqs, verbose = FALSE)
   if (end == "leading") {
-    return({
+    return(
       nchar(stringr::str_extract(as.character(aln[1]), "^-*")) -
         nchar(stringr::str_extract(as.character(aln[2]), "^-*"))
-      # old code for pwalign::pairwiseAlignment() results
-      #nchar(stringr::str_extract(as.character(pwalign::alignedSubject(aln)), "^-*")) -
-      #  nchar(stringr::str_extract(as.character(pwalign::alignedPattern(aln)), "^-*"))
-    })
+    )
   }
   if (end == "trailing") {
-    return({
+    return(
       nchar(stringr::str_extract(as.character(aln[1]), "-*$")) -
         nchar(stringr::str_extract(as.character(aln[2]), "-*$"))
-      # old code for pwalign::pairwiseAlignment() results
-      #nchar(stringr::str_extract(as.character(pwalign::alignedSubject(aln)), "-*$")) -
-      #  nchar(stringr::str_extract(as.character(pwalign::alignedPattern(aln)), "-*$"))
-    })
+    )
   }
 }
 
@@ -594,5 +620,102 @@ guess_orf_gene <- function(refHits_json, threshold = ORF_ASSIGN_SIM_THRESHOLD) {
     gene = best$gene,
     similarity = as.numeric(best$similarity),
     taxon = if ("Taxon" %in% names(hits)) best$Taxon else NA_character_
+  )
+}
+
+#' Splice a joined gene's segments into one CDS
+#'
+#' Concatenates a join group's segment (exon) sequences in 5'->3' order and
+#' translates them, matching the export-time splice logic so the manual editor
+#' and the exported feature table agree. Used both by [export()] and by the
+#' annotate-details editor's spliced-CDS preview / alignment.
+#'
+#' @param members data frame of the group's annotation rows. Requires columns
+#'   pos1, pos2, direction, start_codon, stop_codon, partial_start, partial_stop.
+#' @param seq the scaffold assembly sequence (DNAString/DNAStringSet) the members
+#'   belong to.
+#' @param genetic_code a resolved Biostrings genetic-code vector (e.g.
+#'   `session$userData$gcode` or `Biostrings::getGeneticCode("2")`).
+#'
+#' @return list with `dna`, `translation` (terminal stop stripped), `start_codon`,
+#'   `stop_codon`, `partial_start`, `partial_stop`, `pos1`, `pos2`, `length`,
+#'   `direction`, and `segments`: a data frame (one row per exon, ordered 5'->3')
+#'   with `member_row` (index into `members`), `pos1`, `pos2`, `aa_start`, `aa_end`.
+#' @keywords internal
+splice_join_cds <- function(members, seq, genetic_code) {
+  members$.__row <- seq_len(nrow(members))
+  exons <- members[order(members$pos1), ]            # ascending coordinate
+  direction <- exons$direction[1]
+  n <- nrow(exons)
+
+  # Single DNAString + contig length, for circular-origin-aware extraction.
+  s <- if (methods::is(seq, "XStringSet")) seq[[1]] else seq
+  L <- length(s)
+  wraps <- exons$pos1 > exons$pos2            # exon crosses the origin (pos1 > pos2)
+  if (any(wraps) && n > 1L) {
+    # A multi-exon gene straddling the origin has ambiguous 5'->3' ordering; the
+    # ascending-pos1 sort may be wrong. Extract each exon correctly but warn.
+    warning("splice_join_cds: multi-exon gene crosses the circular origin; exon order may be approximate")
+  }
+  read_exon <- function(p1, p2) {
+    if (p1 <= p2) {
+      as.character(Biostrings::subseq(s, start = p1, end = p2))
+    } else {
+      paste0(
+        as.character(Biostrings::subseq(s, start = p1, end = L)),
+        as.character(Biostrings::subseq(s, start = 1L, end = p2))
+      )
+    }
+  }
+  exon_seqs <- vapply(seq_len(n), function(i) {
+    read_exon(exons$pos1[i], exons$pos2[i])
+  }, character(1))
+  merged <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = ""))
+  if (direction == "-") merged <- Biostrings::reverseComplement(merged)
+
+  translation <- Biostrings::translate(merged, genetic.code = genetic_code) |>
+    as.character()
+  translation <- sub("\\*$", "", translation)
+  aa_len <- nchar(translation)
+
+  # biological 5'->3' order: + strand ascending pos1, - strand descending
+  fivep <- if (direction == "-") rev(seq_len(n)) else seq_len(n)
+  exons_53 <- exons[fivep, ]
+  seg_len <- mapply(circ_len, exons_53$pos1, exons_53$pos2, MoreArgs = list(L = L))
+  cum_end <- cumsum(seg_len)
+  cum_start <- cum_end - seg_len + 1
+  segments <- data.frame(
+    member_row = exons_53$.__row,
+    pos1 = exons_53$pos1,
+    pos2 = exons_53$pos2,
+    aa_start = pmin(floor((cum_start - 1) / 3) + 1, aa_len),
+    aa_end = pmin(ceiling(cum_end / 3), aa_len),
+    stringsAsFactors = FALSE
+  )
+
+  if (direction == "-") {
+    start_codon <- exons$start_codon[n]
+    stop_codon <- exons$stop_codon[1]
+    partial_start <- exons$partial_start[n]
+    partial_stop <- exons$partial_stop[1]
+  } else {
+    start_codon <- exons$start_codon[1]
+    stop_codon <- exons$stop_codon[n]
+    partial_start <- exons$partial_start[1]
+    partial_stop <- exons$partial_stop[n]
+  }
+
+  list(
+    dna = as.character(merged),
+    translation = translation,
+    start_codon = start_codon,
+    stop_codon = stop_codon,
+    partial_start = partial_start,
+    partial_stop = partial_stop,
+    pos1 = min(exons$pos1),
+    pos2 = max(exons$pos2),
+    length = sum(seg_len),
+    direction = direction,
+    segments = segments
   )
 }

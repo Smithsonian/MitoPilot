@@ -63,15 +63,33 @@ rt_longtext <- function() {
 #' Render an NCBI GenBank accession as a clickable hyperlink
 #'
 #' @noRd
-rt_ncbi_link <- function() {
-  htmlwidgets::JS(
+#' @param auto_col optional name of a sibling column holding the automatic
+#'   (rank-1) accession. When the displayed value differs from it, append a
+#'   subtle "*" marker with a tooltip naming the original top hit, so a manually
+#'   set reference override is visible at a glance.
+rt_ncbi_link <- function(auto_col = NULL) {
+  marker <- if (is.null(auto_col)) {
+    ""
+  } else {
+    sprintf(
+      "var auto = cellInfo.row['%s'];
+       if (auto && auto !== 'NO HIT' && auto !== text) {
+         out += `<span title='manually set; top BLAST hit was ${auto}' style='color:#c07a00; font-weight:bold; cursor:help;'> *</span>`
+       }",
+      auto_col
+    )
+  }
+  htmlwidgets::JS(sprintf(
     "function(cellInfo) {
       var text = cellInfo.value ? cellInfo.value : ''
       if (!text || text === 'NO HIT') return text
       var url = 'https://www.ncbi.nlm.nih.gov/nuccore/' + text
-      return `<a href='${url}' target='_blank' rel='noopener noreferrer'>${text}</a>`
-    }"
-  )
+      var out = `<a href='${url}' target='_blank' rel='noopener noreferrer'>${text}</a>`
+      %s
+      return out
+    }",
+    marker
+  ))
 }
 
 #' Render a yes/no text column as a colored badge

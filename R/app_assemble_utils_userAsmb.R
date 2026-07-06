@@ -20,7 +20,10 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
-    dplyr::mutate(blast_ref_status = poor_blast_ref)
+    dplyr::mutate(
+      blast_ref_status = poor_blast_ref,
+      blast_hits = dplyr::if_else(assemble_switch > 1, "All BLAST Hits", NA_character_)
+    )
 
   out |>
     dplyr::relocate(
@@ -45,6 +48,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       blast_qcovs,
       blast_evalue,
       blast_lineage,
+      blast_hits,
       time_stamp,
       assemble_notes
     ) |>
@@ -240,12 +244,24 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                     "Entrez filter (default limits hits to mitochondrial sequences).")
         ),
         div(
+          id = ns("blast_mts_group"),
+          tags$label("Candidate reference mitogenomes to retain"),
+          numericInput(
+            ns("max_target_seqs"),
+            label = NULL,
+            value = as.integer(current$max_target_seqs %||% 5L),
+            min = 1, max = 50, step = 1, width = "120px"
+          ) |> shinyjs::disabled(),
+          opts_help("Number of top BLAST hits kept per sample (-max_target_seqs).")
+        ),
+        div(
           id = ns("blast_extra_group"),
           tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
           tags$p(
             class = "text-muted",
             style = "margin-bottom: 4px; font-size: 0.85em;",
-            "Extra flags passed to blastn. Cannot override: -outfmt, -max_target_seqs, -max_hsps."
+            "Extra flags passed to blastn. Cannot override: -outfmt, -max_hsps, or ",
+            "-max_target_seqs."
           ),
           textAreaInput(
             ns("extra_opts"),
@@ -265,6 +281,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
 
     if (!as.logical(current$run_blast %||% 1L)) {
       shinyjs::hide(id = "blast_entrez_group")
+      shinyjs::hide(id = "blast_mts_group")
       shinyjs::hide(id = "blast_extra_group")
     }
 

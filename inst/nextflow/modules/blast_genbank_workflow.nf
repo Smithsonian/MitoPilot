@@ -27,7 +27,9 @@ def appendTaggedNoteSql(String tag, String msg) {
 params.blastNoOutputMsg = "BLAST produced no output after all retries (possible NCBI connection or rate-limit issue). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
 params.blastNoHitMsg = "No significant BLAST hits found in GenBank for this assembly. The assembly may be non-target, too fragmented, or from a taxon not represented in the database."
 
-params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
+// blast_accession_auto mirrors the automatic rank-1 hit so a later user override
+// of blast_accession can be flagged in the tables; set both from the same values.
+params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_accession_auto = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ? WHERE ID = ?'
 // blast_lineage is NOT set here: ref fetch hasn't run yet so the subquery would
 // resolve to NULL, and this deferred commit could clobber the lineage written
 // later by BLAST_REF_FETCH. Lineage is handled solely in blast_ref_fetch_workflow.nf.
@@ -49,9 +51,11 @@ params.sqlWriteBlastNoHit = "UPDATE assemble SET " +
     "WHERE ID = ? AND assemble_switch = 4"
 params.sqlWriteAssemblyBlast = 'INSERT OR REPLACE INTO assembly_blast (ID, path, blast_opts, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
 params.sqlDeleteAssemblyBlast = 'DELETE FROM assembly_blast WHERE ID = ? AND time_stamp != ?'
+params.sqlWriteCandidate = 'INSERT OR REPLACE INTO blast_ref_candidates (ID, path, scaffold, rank, accession, species, pident, qcovs, evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+params.sqlDeleteCandidates = 'DELETE FROM blast_ref_candidates WHERE ID = ? AND time_stamp != ?'
 
 params.sqlReadBlastOpts =
-    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts ' +
+    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts, b.max_target_seqs ' +
     'FROM assemble a ' +
     'JOIN blast_opts b ON a.blast_opts = b.blast_opts'
 
@@ -68,11 +72,20 @@ workflow BLAST_GENBANK {
         input
 
     main:
-        // Read per-sample BLAST opts from DB; filter to run_blast == 1
+        // Read per-sample BLAST opts from DB; filter to run_blast == 1.
+        // max_target_seqs is now a per-parameter-set DB value (was a .config
+        // param); it sets both the blastn -max_target_seqs flag and the number
+        // of candidate references retained (N_CAND below). Default 5.
         channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
             .filter { row -> row[1] as Integer == 1 }
-            .map { row -> tuple(row[0], row[2], row[3] ?: '') }
-            .set { blast_opts_ch }  // (id, entrez_query, extra_opts)
+            .map { row -> tuple(row[0], row[2], row[3] ?: '', (row[4] == null ? 5 : (row[4] as Integer))) }
+            .set { blast_opts_ch }  // (id, entrez_query, extra_opts, max_target_seqs)
+
+        // Per-sample max_target_seqs, used to bound the retained candidate list.
+        channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
+            .filter { row -> row[1] as Integer == 1 }
+            .map { row -> tuple(row[0], (row[4] == null ? 5 : (row[4] as Integer))) }
+            .set { mts_ch }  // (id, max_target_seqs)
 
         input
             // Normalize: wrap single Path in a list so downstream logic is uniform
@@ -128,14 +141,26 @@ workflow BLAST_GENBANK {
             }
             // Join with blast opts; samples with run_blast = 0 have no entry and are dropped
             .combine(blast_opts_ch, by: 0)
-            .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts ->
-                tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts)
+            .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
+                tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
             }
-            .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts ->
-                process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts)
+            .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
+                process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
                 ids:     tuple(id, true)
+                pathkey: id
             }
             .set { blast_in_split }
+
+        // Number of BLAST paths per sample. The blast inputs are produced up front
+        // (fast, local), so this completes well before any BLAST finishes and can
+        // size the per-sample groupKey below so a sample's candidates + ref fetch
+        // emit as soon as *its* paths finish BLAST (streaming, like the pre-wf1
+        // per-path behavior) instead of waiting for the whole cohort.
+        blast_in_split.pathkey
+            .map { id -> tuple(id, 1) }
+            .groupTuple()
+            .map { id, ones -> tuple(id, ones.size()) }
+            .set { path_count_ch }  // (id, n_paths)
 
         // Clear stale per-path rows before re-inserting. Time-stamp gating mirrors
         // the assemblies-table delete pattern so this is safe regardless of channel
@@ -146,11 +171,109 @@ workflow BLAST_GENBANK {
 
         blast_genbank(blast_in_split.process)
             .multiMap { id, path_idx, result_file ->
-                state:     tuple(id, result_file)
-                parse:     tuple(id, path_idx, result_file)
-                succeeded: tuple(id, true)
+                state:      tuple(id, result_file)
+                parse:      tuple(id, path_idx, result_file)
+                perpath:    tuple(id, path_idx, result_file)
+                candidates: tuple(id, path_idx, result_file)
+                succeeded:  tuple(id, true)
             }
             .set { blast_out }
+
+        // Per-SCAFFOLD candidate references: for each scaffold (BLAST query), its
+        // own top-N hits, ranked and keyed by (ID, path, scaffold). Hits are NEVER
+        // merged across scaffolds/paths, so a divergent scaffold keeps its own
+        // reference list. blastn already caps hits per query at max_target_seqs.
+        blast_out.candidates
+            .flatMap { id, path_idx, result_file ->
+                def lines = result_file.readLines().findAll { it.trim() }
+                def per_scaffold = [:]
+                lines.each { line ->
+                    def parts = line.split('\t')
+                    if (parts.size() >= 6) {
+                        def rec = [
+                            parts[1],
+                            parts[2],
+                            Math.round(parts[3].toFloat() * 100) / 100.0,
+                            Math.round(parts[4].toFloat() * 100) / 100.0,
+                            parts[5].toDouble()
+                        ]
+                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
+                        per_scaffold[parts[0]] << rec
+                    }
+                }
+                def out = []
+                per_scaffold.each { qseqid, hits ->
+                    def toks = qseqid.split(/\./)
+                    if (toks.size() < 3) return
+                    def path = toks[-2]; def scaffold = toks[-1]
+                    // Dedup accessions within THIS scaffold (best pident*qcovs), rank.
+                    def byacc = [:]
+                    hits.each { v ->
+                        def acc = v[0]
+                        if (acc != null && acc != 'NO HIT') {
+                            def score = (v[2] ?: 0) * (v[3] ?: 0)
+                            if (!byacc.containsKey(acc) || score > byacc[acc].score) {
+                                byacc[acc] = [rec: v, score: score]
+                            }
+                        }
+                    }
+                    byacc.values().toList().sort { -it.score }.eachWithIndex { info, i ->
+                        def v = info.rec
+                        out << tuple(id, path as Integer, scaffold as Integer, i + 1,
+                                     v[0], v[1], v[2], v[3], v[4], params.ts)
+                    }
+                }
+                out
+            }
+            .set { scaffold_candidates }  // (id, path, scaffold, rank, acc, species, pident, qcovs, evalue, ts)
+
+        // Per-path candidate + scaffold-accession summary (exactly one tuple per
+        // blasted path, empty lists allowed) parsed from the same BLAST result.
+        // Aggregated per-sample below with groupKey so ref fetch streams.
+        blast_out.perpath
+            .map { id, path_idx, result_file ->
+                def opts_id = result_file.parent.name
+                def lines = result_file.readLines().findAll { it.trim() }
+                def per_scaffold = [:]
+                lines.each { line ->
+                    def parts = line.split('\t')
+                    if (parts.size() >= 6) {
+                        def rec = [
+                            parts[1],
+                            parts[2],
+                            Math.round(parts[3].toFloat() * 100) / 100.0,
+                            Math.round(parts[4].toFloat() * 100) / 100.0,
+                            parts[5].toDouble()
+                        ]
+                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
+                        per_scaffold[parts[0]] << rec
+                    }
+                }
+                // Candidate list: every distinct accession across all hits, keeping
+                // its best pident*qcovs (matches the old per-path 'cand' rows).
+                def byacc = [:]
+                per_scaffold.values().each { hits ->
+                    hits.each { v ->
+                        def acc = v[0]
+                        if (acc != null && acc != 'NO HIT') {
+                            def score = (v[2] ?: 0) * (v[3] ?: 0)
+                            if (!byacc.containsKey(acc) || score > byacc[acc].score) {
+                                byacc[acc] = [rec: v, score: score]
+                            }
+                        }
+                    }
+                }
+                def candList = byacc.values().collect {
+                    [opts_id, it.rec[0], it.rec[1], it.rec[2], it.rec[3], it.rec[4]]
+                }
+                // Each scaffold's best-hit accession (for per-scaffold lineage fetch).
+                def scaffAccs = per_scaffold.values()
+                    .collect { it[0][0] }
+                    .findAll { it != null && it != 'NO HIT' }
+                    .unique()
+                tuple(id, opts_id, candList, scaffAccs)
+            }
+            .set { perpath_ch }  // (id, opts_id, [candRec...], [scaffAcc...])
 
         // Write state=4 (BLAST done, ref fetch pending); BLAST_REF_FETCH writes
         // state=2 once the ref fetch completes. Redundant per-id updates are safe.
@@ -188,23 +311,30 @@ workflow BLAST_GENBANK {
                         }
                     }
                 }
-                def per_scaffold = [:] // qseqid -> [accession, species, pident, qcovs, evalue]
+                // qseqid -> ordered list of hits [accession, species, pident, qcovs, evalue]
+                // (blastn outfmt 6 returns hits best-first per query). With
+                // -max_target_seqs > 1 each scaffold can return multiple hits; the
+                // extra hits widen the per-sample candidate-reference pool.
+                def per_scaffold = [:]
                 lines.each { line ->
                     def parts = line.split('\t')
-                    if (parts.size() >= 6 && !per_scaffold.containsKey(parts[0])) {
-                        per_scaffold[parts[0]] = [
+                    if (parts.size() >= 6) {
+                        def rec = [
                             parts[1],
                             parts[2],
                             Math.round(parts[3].toFloat() * 100) / 100.0,
                             Math.round(parts[4].toFloat() * 100) / 100.0,
                             parts[5].toDouble()
                         ]
+                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
+                        per_scaffold[parts[0]] << rec
                     }
                 }
                 def out = []
-                // Per-scaffold rows (assemblies table)
+                // Per-scaffold rows (assemblies table): each scaffold's BEST hit only
                 queried.each { qseqid ->
-                    def hit = per_scaffold[qseqid]
+                    def hits = per_scaffold[qseqid]
+                    def hit  = hits ? hits[0] : null
                     def toks = qseqid.split(/\./)
                     if (toks.size() < 3) return
                     def path     = toks[-2]
@@ -215,8 +345,10 @@ workflow BLAST_GENBANK {
                         out << tuple('scaffold', id, opts_id, path, scaffold, 'NO HIT', null, null, null, null)
                     }
                 }
-                // Per-path best hit (assembly_blast): lowest evalue, tie-broken by highest pident
-                def top = per_scaffold.values().toList()
+                // Per-path best hit (assembly_blast): best hit per scaffold, then
+                // lowest evalue, tie-broken by highest pident
+                def allBest = per_scaffold.values().collect { it[0] }
+                def top = allBest
                     .sort { a, b -> (a[4] <=> b[4]) ?: -(a[2] <=> b[2]) }
                     .find { true }
                 if (top) {
@@ -224,20 +356,25 @@ workflow BLAST_GENBANK {
                 } else {
                     out << tuple('path', id, opts_id, path_idx, null, 'NO HIT', null, null, null, null)
                 }
-                // Per-path deduped ref-fetch rows (one per unique accession in this path).
-                // kind = 'reffetch_top' marks the accession matching the path top hit
-                // (drives is_top downstream); 'reffetch_dup' marks the rest.
-                def top_accession = top ? top[0] : null
-                def seen = [:] as LinkedHashMap
-                per_scaffold.values().each { v ->
-                    def acc = v[0]
-                    if (acc != null && acc != 'NO HIT' && !seen.containsKey(acc)) {
-                        seen[acc] = [species: v[1], evalue: v[4]]
+                // Per-path candidate rows: every distinct accession in this path
+                // (across ALL hits, not just the best per scaffold), keeping its best
+                // pident*qcovs. Aggregated per-sample downstream into the top-N
+                // candidate reference list. scaffold='cand' marker uses arity 10.
+                def byacc = [:]
+                per_scaffold.values().each { hits ->
+                    hits.each { v ->
+                        def acc = v[0]
+                        if (acc != null && acc != 'NO HIT') {
+                            def score = (v[2] ?: 0) * (v[3] ?: 0)
+                            if (!byacc.containsKey(acc) || score > byacc[acc].score) {
+                                byacc[acc] = [rec: v, score: score]
+                            }
+                        }
                     }
                 }
-                seen.each { acc, info ->
-                    def kind_str = (acc == top_accession) ? 'reffetch_top' : 'reffetch_dup'
-                    out << tuple(kind_str, id, opts_id, path_idx, null, acc, info.species, null, null, info.evalue)
+                byacc.each { acc, info ->
+                    def v = info.rec
+                    out << tuple('cand', id, opts_id, path_idx, null, acc, v[1], v[2], v[3], v[4])
                 }
                 return out
             }
@@ -264,50 +401,13 @@ workflow BLAST_GENBANK {
             }
             .sqlInsert(statement: params.sqlWriteBlastHitScaffold, db: 'sqlite')
 
-        // Per-path rows: insert into assembly_blast + carry forward for id-level rollup
+        // Per-path rows: insert into assembly_blast (one row per path)
         blast_records
             .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'path' }
-            .multiMap { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue ->
-                db_path: tuple(id, path_idx, opts_id, accession, species, pident, qcovs, evalue, params.ts)
-                group:   tuple(id, [path_idx, opts_id, accession, species, pident, qcovs, evalue])
+            .map { kind, id, opts_id, path_idx, scaffold, accession, species, pident, qcovs, evalue ->
+                tuple(id, path_idx, opts_id, accession, species, pident, qcovs, evalue, params.ts)
             }
-            .set { blast_path }
-
-        // Per-path insert into assembly_blast
-        blast_path.db_path
             .sqlInsert(statement: params.sqlWriteAssemblyBlast, db: 'sqlite')
-
-        // Group per-id to compute "representative" hit for the assemble table (best by
-        // pident*qcovs across paths) and write a single row per id.
-        blast_path.group
-            .groupTuple()
-            .map { id, rows ->
-                def best = rows
-                    .findAll { it[2] != 'NO HIT' && it[2] != null }
-                    .max { (it[4] ?: 0) * (it[5] ?: 0) }
-                if (best == null) best = rows[0]
-                tuple(id, best[0], best[1], best[2], best[3], best[4], best[5], best[6])
-            }
-            .map { id, path_idx, opts_id, accession, species, pident, qcovs, evalue ->
-                tuple(accession, species, pident, qcovs, evalue, id)
-            }
-            .set { blast_rep_assemble }
-
-        // Representative hit into assemble table (one row per id)
-        blast_rep_assemble
-            .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')
-
-        // Per-path ref-fetch inputs already deduped inside the flatMap above. Filter to
-        // the reffetch_* rows and map to the shape BLAST_REF_FETCH expects. No
-        // groupTuple here, so items flow through as each path's BLAST_GENBANK completes.
-        blast_records
-            .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                kind == 'reffetch_top' || kind == 'reffetch_dup'
-            }
-            .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                tuple(id, accession, species, evalue, opts_id, kind == 'reffetch_top')
-            }
-            .set { ref_fetch_input }
 
         // Per-scaffold (id, path, scaffold) -> accession map for real hits. Lets
         // BLAST_REF_FETCH write each scaffold its own ref lineage keyed on the same
@@ -321,6 +421,110 @@ workflow BLAST_GENBANK {
                 tuple(id, path as Integer, scaffold as Integer, accession)
             }
             .set { scaffold_accession }
+
+        // Per-sample aggregation of the per-path summaries. groupKey(id, n_paths)
+        // makes groupTuple emit a sample as soon as all *its* paths finish BLAST
+        // (streaming) instead of waiting for the whole cohort. Candidates are
+        // deduped by accession (best pident*qcovs), ranked, and capped at the
+        // per-sample blast_opts.max_target_seqs (default 5, joined from mts_ch).
+        perpath_ch
+            .combine(path_count_ch, by: 0)
+            .map { id, opts_id, candList, scaffAccs, n_paths ->
+                tuple(groupKey(id, n_paths), [id, opts_id, candList, scaffAccs]) }
+            .groupTuple()
+            .map { gk, items ->
+                def id = items[0][0]
+                def opts_id = items[0][1]
+                def allCands = items.collectMany { it[2] ?: [] }
+                def allScaffs = items.collectMany { it[3] ?: [] }.unique()
+                tuple(id, opts_id, allCands, allScaffs)
+            }
+            .join(mts_ch, by: 0)
+            .map { id, opts_id, allCands, allScaffs, mts ->
+                def n_cand = (mts ?: 5) as Integer
+                allCands = allCands ?: []
+                def byacc = [:]
+                allCands.each { r ->
+                    def acc = r[1]
+                    def score = (r[3] ?: 0) * (r[4] ?: 0)
+                    if (acc != null && acc != 'NO HIT' && (!byacc.containsKey(acc) || score > byacc[acc].score)) {
+                        byacc[acc] = [row: r, score: score]
+                    }
+                }
+                // All candidate accessions for this sample (union across paths),
+                // ranked by score. NOT capped: every per-scaffold candidate must
+                // get a fetched reference (+lineage), and rank-1 is the sample's
+                // representative hit. Per-scaffold separation lives in the
+                // blast_ref_candidates table (written from scaffold_candidates).
+                def ranked = byacc.values().toList().sort { -it.score }.collect { it.row }
+                tuple(id, opts_id, ranked, (allScaffs ?: []).unique())
+            }
+            .set { sample_agg }  // (id, opts_id, ranked, [scaffAcc...])
+
+        // Candidate list for the SQL writes (samples with at least one candidate).
+        sample_agg
+            .filter { id, opts_id, ranked, scaffs -> ranked != null && ranked.size() > 0 }
+            .map { id, opts_id, ranked, scaffs -> tuple(id, opts_id, ranked) }
+            .set { candidates_ch }  // (id, opts_id, [ [opts_id, acc, species, pident, qcovs, evalue], ... ])
+
+        // Representative hit for the assemble table = the rank-1 candidate. Derived
+        // from the same ranking as the candidate list and is_top below, so
+        // assemble.blast_accession, the fetched top hit, and the picker default all
+        // agree on one accession.
+        candidates_ch
+            .map { id, opts_id, ranked ->
+                def r = ranked ? ranked[0] : null
+                // acc bound twice: blast_accession and blast_accession_auto (the
+                // remembered rank-1 top hit, used to flag user overrides).
+                r ? tuple(r[1], r[1], r[2], r[3], r[4], r[5], id) : null
+            }
+            .filter { it != null }
+            .sqlInsert(statement: params.sqlWriteBlastHit, db: 'sqlite')
+
+        // Clear stale candidate rows before re-inserting (time-stamp gated, mirrors
+        // the assembly_blast delete pattern).
+        normalized_input
+            .map { id, asmb_list, opts_id -> tuple(id, params.ts) }
+            .sqlInsert(statement: params.sqlDeleteCandidates, db: 'sqlite')
+
+        // Per-scaffold candidate rows (kept separate per ID/path/scaffold).
+        scaffold_candidates
+            .sqlInsert(statement: params.sqlWriteCandidate, db: 'sqlite')
+
+        // BLAST_REF_FETCH input: fetch the union of (a) the top-N candidate accessions
+        // and (b) every scaffold's best-hit accession (needed for per-scaffold lineage
+        // even when that hit ranks below N). is_top marks the per-sample rank-1 hit.
+        // Streams per-sample from sample_agg (no cohort-wide groupTuple).
+        sample_agg
+            .flatMap { id, opts_id, ranked, scaffaccs ->
+                ranked = ranked ?: []
+                scaffaccs = (scaffaccs ?: []).unique()
+                def topAcc = ranked ? ranked[0][1] : null
+                def meta = [:]
+                ranked.each { r -> meta[r[1]] = [species: r[2], evalue: r[5]] }
+                def out = []
+                (ranked.collect { it[1] } + scaffaccs).unique().each { acc ->
+                    if (acc != null && acc != 'NO HIT') {
+                        def m = meta[acc] ?: [species: null, evalue: null]
+                        out << tuple(id, acc, m.species, m.evalue, opts_id, acc == topAcc)
+                    }
+                }
+                out
+            }
+            .set { ref_fetch_input }
+
+        // Per-sample accession BATCH for BLAST_REF_FETCH: this sample's unique real
+        // hit accessions (top-N candidates + per-scaffold best hits). Streams per
+        // sample (from sample_agg's groupKey) so each sample's reference fetch is
+        // batched on its own and starts / re-runs independently of other samples.
+        sample_agg
+            .map { id, opts_id, ranked, scaffaccs ->
+                def accs = ((ranked ?: []).collect { it[1] } + (scaffaccs ?: []))
+                    .findAll { it != null && it != 'NO HIT' }.unique()
+                tuple(id, opts_id, accs)
+            }
+            .filter { id, opts_id, accs -> accs.size() > 0 }
+            .set { ref_fetch_batches }
 
         // Per-id list of "scaffold|accession|pident" for the assembled scaffolds,
         // passed to SCAFFOLD_JOIN so the reference choice / multi-ref mapping /
@@ -340,6 +544,8 @@ workflow BLAST_GENBANK {
         // Downstream BLAST_REF_FETCH consumes this; filtered to real hits only.
         ref_input = ref_fetch_input
             .filter{ id, accession, species, evalue, opts_id, is_top -> accession != 'NO HIT' && accession != null }
+        // Per-sample accession batch (id, opts_id, [accessions]) for the fetch step.
+        ref_batches = ref_fetch_batches
         // (id, path, scaffold, accession) for per-scaffold lineage assignment.
         scaffold_map = scaffold_accession
         // Consumed by SCAFFOLD_JOIN (per-scaffold hits as a ';'-joined string).

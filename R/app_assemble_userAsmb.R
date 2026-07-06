@@ -318,6 +318,16 @@ assemble_server_userAsmb <- function(id) {
               minWidth = 200,
               cell = rt_longtext()
             ),
+            blast_hits = colDef(
+              show = TRUE,
+              name = "",
+              filterable = FALSE,
+              sortable = FALSE,
+              html = TRUE,
+              width = 140,
+              align = "center",
+              cell = rt_icon_bttn_text(ns("all_blast_hits"), "fas fa-list", "All BLAST Hits")
+            ),
             blast_pident = colDef(
               show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
               name = "% Ident",
@@ -385,6 +395,10 @@ assemble_server_userAsmb <- function(id) {
             ),
             view = dplyr::case_when(
               assemble_switch > 1 ~ "details",
+              .default = NA_character_
+            ),
+            blast_hits = dplyr::case_when(
+              assemble_switch > 1 ~ "All BLAST Hits",
               .default = NA_character_
             )
           ),
@@ -690,20 +704,24 @@ assemble_server_userAsmb <- function(id) {
           value = as.logical(cur$run_blast)
         )
         updateTextInput(inputId = "entrez_query", value = cur$entrez_query %||% "")
+        updateNumericInput(inputId = "max_target_seqs", value = as.integer(cur$max_target_seqs %||% 5L))
         updateTextAreaInput(inputId = "extra_opts", value = cur$extra_opts %||% "")
         if (as.logical(cur$run_blast)) {
           shinyjs::show(id = "blast_entrez_group")
+          shinyjs::show(id = "blast_mts_group")
           shinyjs::show(id = "blast_extra_group")
         } else {
           shinyjs::hide(id = "blast_entrez_group")
+          shinyjs::hide(id = "blast_mts_group")
           shinyjs::hide(id = "blast_extra_group")
         }
       }
     })
     observeEvent(input$edit_blast_opts, ignoreInit = T, {
-      shinyjs::toggleState("run_blast",    condition = input$edit_blast_opts)
-      shinyjs::toggleState("entrez_query", condition = input$edit_blast_opts)
-      shinyjs::toggleState("extra_opts",   condition = input$edit_blast_opts)
+      shinyjs::toggleState("run_blast",       condition = input$edit_blast_opts)
+      shinyjs::toggleState("entrez_query",    condition = input$edit_blast_opts)
+      shinyjs::toggleState("max_target_seqs", condition = input$edit_blast_opts)
+      shinyjs::toggleState("extra_opts",      condition = input$edit_blast_opts)
       if (input$edit_blast_opts && input$blast_opts %in% rv$data$blast_opts) {
         rv$updating_indirect <- rv$data |>
           dplyr::filter(blast_opts == input$blast_opts) |>
@@ -738,9 +756,11 @@ assemble_server_userAsmb <- function(id) {
     observeEvent(input$run_blast, ignoreInit = T, {
       if (isTRUE(input$run_blast)) {
         shinyjs::show(id = "blast_entrez_group")
+        shinyjs::show(id = "blast_mts_group")
         shinyjs::show(id = "blast_extra_group")
       } else {
         shinyjs::hide(id = "blast_entrez_group")
+        shinyjs::hide(id = "blast_mts_group")
         shinyjs::hide(id = "blast_extra_group")
       }
     })
@@ -749,10 +769,11 @@ assemble_server_userAsmb <- function(id) {
         dplyr::tbl(session$userData$con, "blast_opts") |>
           dplyr::rows_upsert(
             data.frame(
-              blast_opts   = req(input$blast_opts),
-              run_blast    = as.integer(isTRUE(input$run_blast)),
-              entrez_query = input$entrez_query %||% "mitochondrion[Location]",
-              extra_opts   = input$extra_opts %||% ""
+              blast_opts      = req(input$blast_opts),
+              run_blast       = as.integer(isTRUE(input$run_blast)),
+              entrez_query    = input$entrez_query %||% "mitochondrion[Location]",
+              max_target_seqs = as.integer(input$max_target_seqs %||% 5L),
+              extra_opts      = input$extra_opts %||% ""
             ),
             in_place = TRUE,
             copy = TRUE,
@@ -798,5 +819,11 @@ assemble_server_userAsmb <- function(id) {
       trigger("coverage_modal")
     })
     assembly_coverage_details_server(ns("coverage_details"), rv)
+
+    # Open All BLAST Hits ----
+    observeEvent(input$all_blast_hits, ignoreInit = T, {
+      rv$updating <- rv$data |> dplyr::slice(as.numeric(input$all_blast_hits))
+      blast_hits_modal(rv)
+    })
   })
 }

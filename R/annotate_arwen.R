@@ -70,10 +70,10 @@ annotate_arwen <- function(
     complement <- m[3]   # "c" = minus strand, "" = plus strand
     start     <- as.integer(m[4])
     end       <- as.integer(m[5])
-    anticodon <- m[6]
+    anticodon <- toupper(m[6])  # match MITOS2/tRNAscan case for cross-tool tRNA_ID dedup
 
     aa_clean <- sub("[12]$", "", aa_type)
-    if (aa_clean == "iMet") aa_clean <- "Met"
+    if (aa_clean %in% c("iMet", "fMet")) aa_clean <- "Met"
     gene <- trnA_key[[aa_clean]]
     if (is.null(gene)) next
 
