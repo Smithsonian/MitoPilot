@@ -35,6 +35,7 @@ Imports:
     jsonlite,
     later,
     listviewer,
+    methods,
     msaR,
     patchwork,
     processx,

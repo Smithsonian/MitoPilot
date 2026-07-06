@@ -450,37 +450,32 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "UPDATE curate_opts SET linear_complete = 0")
   }
   # genetic_code override column on curate_opts. Genetic code now auto-selects
-  # from the curation ruleset, but PRESERVE existing projects: freeze each set's
-  # current code as an explicit override so re-running curate/annotate does not
-  # change translations. Use the code of the samples pointing at each set (they
-  # are historically uniform); fall back to the .config value for empty sets.
+  # from the curation ruleset, but PRESERVE existing projects: freeze the
+  # project's current code (uniform in the old single-code model) as an explicit
+  # override on every curate_opts set so re-running curate/annotate does not
+  # change translations. Read it from .config, falling back to the samples table.
   if(!("genetic_code" %in% DBI::dbListFields(con, "curate_opts"))){
     message("added 'genetic_code' override column to curate_opts table")
     DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN genetic_code INTEGER")
-    DBI::dbExecute(con, "
-      UPDATE curate_opts SET genetic_code = (
-        SELECT s.genetic_code
-        FROM annotate a
-        JOIN samples s ON a.ID = s.ID
-        WHERE a.curate_opts = curate_opts.curate_opts
-          AND s.genetic_code IS NOT NULL
-        LIMIT 1
-      )")
     config_gc <- suppressWarnings(as.integer(stringr::str_trim(
       stringr::str_split(
         grep("genetic_code =", conf, value = TRUE)[1],
         "="
       )[[1]][2]
     )))
-    if (length(config_gc) == 1 && !is.na(config_gc)) {
-      DBI::dbExecute(
-        con,
-        glue::glue_sql(
-          "UPDATE curate_opts SET genetic_code = {config_gc} WHERE genetic_code IS NULL",
-          .con = con
-        )
-      )
+    if (length(config_gc) != 1 || is.na(config_gc)) {
+      config_gc <- suppressWarnings(as.integer(
+        DBI::dbGetQuery(
+          con,
+          "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL LIMIT 1"
+        )$genetic_code[1]
+      ))
     }
+    if (length(config_gc) != 1 || is.na(config_gc)) config_gc <- 2L
+    DBI::dbExecute(
+      con,
+      glue::glue_sql("UPDATE curate_opts SET genetic_code = {config_gc}", .con = con)
+    )
   }
   # if use_arwen column doesn't exist, add it (default off)
   if(!("use_arwen" %in% names(annotate_opts_table))){
