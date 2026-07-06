@@ -428,13 +428,34 @@ pipeline_server_userAsmb <- function(id) {
         prog_executor <- process_out[max(which(executor_lines))]
         remaining[executor_lines] <- F
       }
-      for(key in na.omit(unique(keys[,'key']))){
-        process_update <- keys[which(keys[,'key'] == key),]
-        if(is.null(dim(process_update))){
-          prog_process[[key]] <- process_update[1]
-        }else{
-          prog_process[[key]] <- process_update[nrow(process_update), 1]
+      # Key each process by its stable simple name. Nextflow truncates the
+      # workflow-path prefix with an ellipsis and varies the name-column width
+      # between redraws, so the raw "WF..." token is unstable and the pending
+      # board (full names) would never collapse onto the running board. Reduce
+      # to the process simple name (text after the last ':' or ellipsis).
+      process_key <- function(token) {
+        k <- sub("^.*:", "", token)                 # drop path prefix up to last ':'
+        sub("^.*(\u2026|\\.\\.\\.)", "", k)          # drop leading ellipsis truncation
+      }
+      for(raw_key in na.omit(unique(keys[,'key']))){
+        rows <- which(keys[,'key'] == raw_key)
+        line <- keys[rows[length(rows)], 1]          # latest full line for this token
+        simple <- process_key(raw_key)
+        # Suffix-merge names that Nextflow truncated into (e.g. 'st_genbank' and
+        # 'blast_genbank') so both redraws land on one row, keyed by the fuller name.
+        existing <- names(prog_process)
+        match_k <- existing[vapply(existing, function(e)
+          endsWith(e, simple) || endsWith(simple, e), logical(1))]
+        canonical <- simple
+        if (length(match_k) > 0) {
+          canonical <- match_k[which.max(nchar(match_k))]
+          if (nchar(simple) > nchar(canonical)) {
+            prog_process[[simple]] <- prog_process[[canonical]]
+            prog_process[[canonical]] <- NULL
+            canonical <- simple
+          }
         }
+        prog_process[[canonical]] <- line
       }
       remaining[!is.na(keys[,1])] <- F
       remaining <- process_out[remaining] |> collapse_empty_lines()
