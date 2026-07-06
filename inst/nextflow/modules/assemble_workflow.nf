@@ -56,8 +56,8 @@ workflow ASSEMBLE {
                 )
                 min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
-                run_blast_lookup:  tuple(it[0], it[14] == null ? 1 : (it[14] as Integer))   // ID, run_blast (NULL → 1, i.e. BLAST by default)
-                join_lookup:       tuple(it[0], it[15] == null ? 0 : (it[15] as Integer))   // ID, join_scaffolds toggle (NULL → 0, off)
+                run_blast_lookup:  tuple(it[0], it[14] == null ? 1 : (it[14] as Integer))   // ID, run_blast (NULL -> 1, i.e. BLAST by default)
+                join_lookup:       tuple(it[0], it[15] == null ? 0 : (it[15] as Integer))   // ID, join_scaffolds toggle (NULL -> 0, off)
             }
             .set { query_ch }
 
@@ -298,10 +298,10 @@ workflow ASSEMBLE {
 
     emit:
         // Two named channels with different gating:
-        //   cov   — usable assemblies (status 4, or status 2 from run_blast=0).
+        //   cov   - usable assemblies (status 4, or status 2 from run_blast=0).
         //           COVERAGE runs for no_blast samples too so depth/gc/errors and
         //           coverageStats.csv get populated for ANNOTATE.
-        //   blast — status=4 only (excludes no_blast and failed assemblies).
+        //   blast - status=4 only (excludes no_blast and failed assemblies).
         cov   = pass_ch.downstream
                     .filter { raw, status -> status == '4' || status == '2' }
                     .map    { raw, status -> raw }

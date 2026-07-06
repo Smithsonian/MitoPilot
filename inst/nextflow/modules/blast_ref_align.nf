@@ -30,7 +30,7 @@ process blast_ref_align {
     outFile = "blast_ref_alignment_${accession}.csv"
     '''
     mkdir -p !{outDir}
-    # Write sequences to files — avoids Rscript -e expression length limits
+    # Write sequences to files - avoids Rscript -e expression length limits
     printf '%s\n' '!{assembly_seq}' > _assembly.txt
     printf '%s\n' '!{ref_seq}'      > _ref.txt
     Rscript -e "MitoPilot::compute_blast_ref_alignment( \

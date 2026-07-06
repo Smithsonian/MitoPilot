@@ -252,16 +252,16 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  # assemble — still missing blast cols in 1.3.10
+  # assemble - still missing blast cols in 1.3.10
   expect_cols(con, "assemble",
               c("blast_accession", "blast_species", "blast_pident",
                 "blast_qcovs", "blast_evalue", "blast_lineage", "blast_opts"))
 
-  # annotate_opts — missing mitos_best / aragorn trio in 1.3.10
+  # annotate_opts - missing mitos_best / aragorn trio in 1.3.10
   expect_cols(con, "annotate_opts",
               c("use_mitos_best", "use_aragorn", "aragorn_opts"))
 
-  # assemble_opts — max_paths / max_scaffolds added in this release
+  # assemble_opts - max_paths / max_scaffolds added in this release
   expect_cols(con, "assemble_opts", c("max_paths", "max_scaffolds"))
 
   # annotations
@@ -276,7 +276,7 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   expect_true("assemblies"            %in% tables)
   expect_cols(con, "assemblies", "length_raw")
 
-  # .config — only blast_gb and container missing in 1.3.10
+  # .config - only blast_gb and container missing in 1.3.10
   conf <- readLines(file.path(td, ".config"))
   expect_true(any(grepl("blast_gb", conf)))
   current_ver <- as.character(utils::packageVersion("MitoPilot"))

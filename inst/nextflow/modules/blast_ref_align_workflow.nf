@@ -35,7 +35,7 @@ params.sqlReadRef =
 // Backfill: samples already validated in a prior run (assemblies.sequence is the
 // rotated post-curate sequence) that are missing an alignment row. annotate_switch = 2
 // is the post-VALIDATE state and is the only safe signal that the stored sequence
-// has been rotated to start_gene — for userAsmb projects, assemblies.sequence is
+// has been rotated to start_gene - for userAsmb projects, assemblies.sequence is
 // pre-populated with the unrotated user FASTA in WF1_userAsmb and only becomes
 // rotated after CURATE runs in WF2.
 params.sqlBackfill =
@@ -72,7 +72,7 @@ params.sqlWriteBlastRefAlignFailed = "UPDATE assemble SET " +
 
 workflow BLAST_REF_ALIGN {
     take:
-        validated   // (id, path) — gates timing: only fires after VALIDATE completes
+        validated   // (id, path) - gates timing: only fires after VALIDATE completes
         curate_out  // (id, path, annotations, assembly_fasta, coverage, work_dir)
 
     main:
