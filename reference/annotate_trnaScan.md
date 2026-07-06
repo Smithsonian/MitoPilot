@@ -19,15 +19,15 @@ annotate_trnaScan(
 
 - assembly:
 
-  text string of the assembly to annotate
+  a DNAStringSet of the assembly to annotate
 
 - rotate:
 
-  should the assembly be rotated? default = TRUE
+  unused; rotation now runs after tRNAscan and MITOS2 complete
 
 - trnaScan_opts:
 
-  command line options for tRNAscan-SE (defatult = \`-M vert -X 20\`)
+  command line options for tRNAscan-SE (default = \`-M vert -X 20\`)
 
 - cpus:
 

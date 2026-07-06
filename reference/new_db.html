@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,7 +53,7 @@
 <span>  mapping_fn <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mapping_id <span class="op">=</span> <span class="st">"ID"</span>,</span>
 <span>  mapping_taxon <span class="op">=</span> <span class="st">"Taxon"</span>,</span>
-<span>  genetic_code <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  genetic_code <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  assemble_cpus <span class="op">=</span> <span class="fl">6</span>,</span>
 <span>  assemble_memory <span class="op">=</span> <span class="fl">24</span>,</span>
 <span>  assembler <span class="op">=</span> <span class="st">"GetOrganelle"</span>,</span>
@@ -81,6 +81,7 @@
 <span>  curate_cpus <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  curate_memory <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  curate_target <span class="op">=</span> <span class="st">"fish_mito"</span>,</span>
+<span>  curate_ref_db <span class="op">=</span> <span class="st">"Metazoa_RefSeq235"</span>,</span>
 <span>  max_blast_hits <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  linear_complete <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  curate_params <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -114,8 +115,10 @@ identifier (eg, species name)</p></dd>
 
 
 <dt id="arg-genetic-code">genetic_code<a class="anchor" aria-label="anchor" href="#arg-genetic-code"></a></dt>
-<dd><p>Translation table for your organisms. See NCBI website
-for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi</p></dd>
+<dd><p>Optional NCBI translation table override. Default `NULL`
+auto-selects from the curation ruleset (`curate_target`); a number sets an
+override on the default curate_opts set.
+https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi</p></dd>
 
 
 <dt id="arg-assemble-cpus">assemble_cpus<a class="anchor" aria-label="anchor" href="#arg-assemble-cpus"></a></dt>
@@ -214,6 +217,11 @@ but flagged as ignored (default = 500).</p></dd>
 
 <dt id="arg-curate-target">curate_target<a class="anchor" aria-label="anchor" href="#arg-curate-target"></a></dt>
 <dd><p>Default target database for curation</p></dd>
+
+
+<dt id="arg-curate-ref-db">curate_ref_db<a class="anchor" aria-label="anchor" href="#arg-curate-ref-db"></a></dt>
+<dd><p>Default curation reference database (default =
+"Metazoa_RefSeq235", the only bundled DB with rRNA BLAST references)</p></dd>
 
 
 <dt id="arg-max-blast-hits">max_blast_hits<a class="anchor" aria-label="anchor" href="#arg-max-blast-hits"></a></dt>

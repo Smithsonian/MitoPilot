@@ -11,7 +11,7 @@ new_project(
   mapping_id = "ID",
   data_path = NULL,
   min_depth = 2e+06,
-  genetic_code = 2,
+  genetic_code = NULL,
   executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
     "NOAA_SEDNA"),
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
@@ -57,7 +57,10 @@ new_project(
 
 - genetic_code:
 
-  Translation table for your organisms. See NCBI website for more info
+  Optional NCBI translation table override. Default \`NULL\`
+  auto-selects the genetic code from each sample's curation ruleset.
+  Supplying a number sets a project-wide override on the default
+  curation options. See
   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 
 - executor:

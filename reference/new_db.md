@@ -10,7 +10,7 @@ new_db(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
-  genetic_code = 2,
+  genetic_code = NULL,
   assemble_cpus = 6,
   assemble_memory = 24,
   assembler = "GetOrganelle",
@@ -38,6 +38,7 @@ new_db(
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
+  curate_ref_db = "Metazoa_RefSeq235",
   max_blast_hits = 10,
   linear_complete = FALSE,
   curate_params = NULL,
@@ -71,7 +72,9 @@ new_db(
 
 - genetic_code:
 
-  Translation table for your organisms. See NCBI website for more info
+  Optional NCBI translation table override. Default \`NULL\`
+  auto-selects from the curation ruleset (\`curate_target\`); a number
+  sets an override on the default curate_opts set.
   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 
 - assemble_cpus:
@@ -176,6 +179,11 @@ new_db(
 - curate_target:
 
   Default target database for curation
+
+- curate_ref_db:
+
+  Default curation reference database (default = "Metazoa_RefSeq235",
+  the only bundled DB with rRNA BLAST references)
 
 - max_blast_hits:
 

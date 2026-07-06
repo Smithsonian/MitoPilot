@@ -61,6 +61,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_db_to_csv.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_files.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_ref.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_refs.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/flag_PCG_outliers.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/generate_config.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/get_assembly.html</loc></url>
@@ -115,7 +116,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_app.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/scaffold_join.html</loc></url>
-<url><loc>https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/splice_join_cds.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/tunnel_instructions.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_seqdata.html</loc></url>

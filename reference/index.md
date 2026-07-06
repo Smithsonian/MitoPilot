@@ -154,6 +154,10 @@
   : Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST
   top hit
 
+- [`fetch_blast_refs()`](https://smithsonian.github.io/MitoPilot/reference/fetch_blast_refs.md)
+  : Fetch NCBI references for many accessions using batched EFetch
+  requests
+
 - [`flag_PCG_outliers()`](https://smithsonian.github.io/MitoPilot/reference/flag_PCG_outliers.md)
   : Flag outlier PCG annotations in an export group
 
@@ -333,9 +337,6 @@
 
 - [`scaffold_join`](https://smithsonian.github.io/MitoPilot/reference/scaffold_join.md)
   : Multi-scaffold assembly joining
-
-- [`tbl_to_gff3()`](https://smithsonian.github.io/MitoPilot/reference/tbl_to_gff3.md)
-  : Convert a GenBank 5-column feature table to GFF3 format.
 
 - [`tunnel_instructions()`](https://smithsonian.github.io/MitoPilot/reference/tunnel_instructions.md)
   : Print SSH tunnel instructions for a headless GUI session
