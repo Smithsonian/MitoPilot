@@ -19,6 +19,8 @@
 #' @param curate_cpus Default # cpus for curation
 #' @param curate_memory Default memory (GB) for curation
 #' @param curate_target Default target database for curation
+#' @param curate_ref_db Default curation reference database (default =
+#'   "Metazoa_RefSeq235", the only bundled DB with rRNA BLAST references)
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
 #' @param linear_complete Treat linear assemblies as complete genomes for the
 #'   export "completeness" field? By default only circular assemblies are
@@ -54,6 +56,7 @@ new_db_userAsmb <- function(
     curate_cpus = 4,
     curate_memory = 8,
     curate_target = "fish_mito",
+    curate_ref_db = "Metazoa_RefSeq235",
     max_blast_hits = 10,
     linear_complete = FALSE,
     curate_params = NULL,
@@ -516,7 +519,7 @@ new_db_userAsmb <- function(
         memory = curate_memory,
         target = curate_target,
         max_blast_hits = 10,
-        ref_db = annotate_ref_db,
+        ref_db = curate_ref_db,
         ref_dir = annotate_ref_dir,
         linear_complete = as.integer(isTRUE(linear_complete)),
         genetic_code = gc_override,

@@ -22,6 +22,7 @@ new_db_userAsmb(
   curate_cpus = 4,
   curate_memory = 8,
   curate_target = "fish_mito",
+  curate_ref_db = "Metazoa_RefSeq235",
   max_blast_hits = 10,
   linear_complete = FALSE,
   curate_params = NULL,
@@ -68,6 +69,9 @@ default curate_opts set. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cg
 \item{curate_memory}{Default memory (GB) for curation}
 
 \item{curate_target}{Default target database for curation}
+
+\item{curate_ref_db}{Default curation reference database (default =
+"Metazoa_RefSeq235", the only bundled DB with rRNA BLAST references)}
 
 \item{max_blast_hits}{Maximum number of top BLAST hits to retain (default = 10)}
 
