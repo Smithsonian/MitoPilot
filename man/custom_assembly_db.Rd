@@ -18,6 +18,7 @@ custom_assembly_db(
   drop_no_product = TRUE,
   retain_genbank = FALSE,
   overwrite = FALSE,
+  resume = FALSE,
   api_key = NULL
 )
 }
@@ -58,6 +59,12 @@ Ignored when a MitoFinder database is built (the .gb file is the MitoFinder data
 
 \item{overwrite}{If TRUE, replace the dated output directory if it already exists and is
 non-empty. If FALSE (default), an existing non-empty output directory is an error.}
+
+\item{resume}{If TRUE, continue an interrupted download instead of starting over: an
+existing output directory for this clade (any date) is reused and only the records not
+yet present in its \code{genbank.gb} are downloaded. Any partial trailing record is
+trimmed first. Best used soon after an interruption, while the NCBI result set is
+unchanged. Default FALSE. Ignored (treated as a fresh run) when no prior download exists.}
 
 \item{api_key}{Optional NCBI API key (raises the rate limit). Defaults to the
 \code{NCBI_API_KEY} or \code{ENTREZ_KEY} environment variable if set.}
