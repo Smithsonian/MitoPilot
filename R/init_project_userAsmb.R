@@ -139,19 +139,12 @@ new_project_userAsmb <- function(
     stop("Config file not found.")
     return()
   }
-  # Genetic code in .config is only a project-level fallback; the per-sample
-  # value auto-selects from each sample's curation ruleset.
-  gc_override <- if (is.null(genetic_code)) NA_integer_ else as.integer(genetic_code)
-  config_genetic_code <- resolve_genetic_code(
-    list(...)[["curate_target"]] %||% "fish_mito", gc_override
-  )
   readLines(config) |>
     fill_config(list(
       CONTAINER_ID = container,
       RAW_DIR = data_path,
       ASMB_DIR = assembly_path,
       MIN_DEPTH = format(2000000, scientific = FALSE),
-      GENETIC_CODE = format(config_genetic_code, scientific = FALSE),
       NCBI_API_KEY = ncbi_api_key %||% ""
     )) |>
     writeLines(file.path(path, ".config"))

@@ -124,8 +124,8 @@ extract_container_engine <- function(lines) {
 #'
 #' @param path Project directory containing `.config`.
 #' @param executor Executor / profile name (see [list_configs()]).
-#' @param con Optional open DB connection, used to default `genetic_code` from
-#'   the samples table when the old config does not set it.
+#' @param con Optional open DB connection (currently unused; retained for
+#'   call-site compatibility).
 #' @param profile_dir Directory searched for saved profiles (see
 #'   [mitopilot_config_dir()]).
 #'
@@ -143,7 +143,6 @@ migrate_config <- function(path, executor, con = NULL,
   raw_dir   <- config_get_param(old, "rawDir")
   asmb_dir  <- config_get_param(old, "asmbDir") %||% "NA"
   min_depth <- config_get_param(old, "minDepth")
-  gcode     <- config_get_param(old, "genetic_code")
   api_key   <- config_get_param(old, "ncbi_api_key")
   queue     <- config_get_param(old, "queue")
   penv      <- config_get_param(old, "penv")
@@ -156,17 +155,6 @@ migrate_config <- function(path, executor, con = NULL,
   if (!is.null(cluster_options) && grepl("[{}]", cluster_options)) {
     cluster_options <- NULL
     cluster_options_closure <- TRUE
-  }
-
-  # Default genetic_code from the (already-migrated) samples table if absent.
-  if (is.null(gcode) && !is.null(con)) {
-    gcode <- tryCatch({
-      v <- DBI::dbGetQuery(
-        con,
-        "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL LIMIT 1"
-      )$genetic_code
-      if (length(v) == 1) as.character(as.integer(v)) else NULL
-    }, error = function(e) NULL)
   }
 
   engine_repl <- NULL
@@ -186,7 +174,6 @@ migrate_config <- function(path, executor, con = NULL,
     RAW_DIR          = raw_dir %||% "NA",
     ASMB_DIR         = asmb_dir,
     MIN_DEPTH        = min_depth %||% "2000000",
-    GENETIC_CODE     = gcode %||% "2",
     NCBI_API_KEY     = api_key %||% "",
     QUEUE            = queue,
     PENV             = penv %||% "mthread",
@@ -295,7 +282,7 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 #' use it automatically, filling in the remaining per-project values.
 #'
 #' Per-project placeholders (`<<CONTAINER_ID>>`, `<<RAW_DIR>>`, `<<ASMB_DIR>>`,
-#' `<<MIN_DEPTH>>`, `<<GENETIC_CODE>>`, `<<NCBI_API_KEY>>`) are intentionally
+#' `<<MIN_DEPTH>>`, `<<NCBI_API_KEY>>`) are intentionally
 #' left in the saved profile for the project-init step to complete.
 #'
 #' @param name Profile name. Saved as `config.<name>`; pass this as the

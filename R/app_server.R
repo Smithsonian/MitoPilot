@@ -65,10 +65,16 @@ app_server <- function(input, output, session) {
     stringr::str_extract("^[^'|^\"]+")
   session$userData$dir_out <- file.path(dirname(db), dir_out)
   # Genetic code ----
-  session$userData$genetic_code <- readLines(file.path(dirname(db), ".config")) |>
-    stringr::str_extract("genetic_code.*") |>
-    na.omit() |>
-    stringr::str_extract("[0-9]+$")
+  # Per-sample genetic codes live in samples.genetic_code (auto-selected from
+  # each sample's curation ruleset) and drive translation. This project-level
+  # value only backstops the annotation editor when a sample's code is missing.
+  session$userData$genetic_code <- tryCatch({
+    v <- DBI::dbGetQuery(
+      session$userData$con,
+      "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL LIMIT 1"
+    )$genetic_code
+    if (length(v) == 1) as.character(as.integer(v)) else "2"
+  }, error = function(e) "2")
   # Cache the genetic code lookup table once; called ~30x during codon edits.
   session$userData$gcode <- Biostrings::getGeneticCode(session$userData$genetic_code)
 

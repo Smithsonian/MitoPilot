@@ -58,7 +58,7 @@ process annotate {
         assembly_fn = '!{assembly}', \
         coverage_fn = '!{coverage}', \
         cpus = !{task.cpus}, \
-        genetic_code = '!{opts.genetic_code ?: params.genetic_code}', \
+        genetic_code = '!{opts.genetic_code}', \
         ref_db = '!{ref_db_clean}', \
         ref_dir = '.', \
         use_mitos = !{opts.use_mitos == 1 ? "TRUE" : "FALSE"}, \
