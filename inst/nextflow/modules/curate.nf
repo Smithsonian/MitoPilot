@@ -44,7 +44,7 @@ process curate {
         annotations_fn = '!{annotations}', \
         assembly_fn = '!{assembly}', \
         coverage_fn = '!{coverage}', \
-        genetic_code = !{params.genetic_code}, \
+        genetic_code = !{opts.genetic_code ?: params.genetic_code}, \
         params = '!{opts.params}', \
         out_dir = '!{dir}', \
         max_blast_hits = '!{opts.max_blast_hits}', \

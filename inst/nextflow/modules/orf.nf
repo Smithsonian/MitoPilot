@@ -43,7 +43,7 @@ process orf {
     Rscript -e "MitoPilot::orf_finder( \
         annotations_fn = '!{annotations}', \
         assembly_fn = '!{assembly}', \
-        genetic_code = '!{params.genetic_code}', \
+        genetic_code = '!{opts.genetic_code ?: params.genetic_code}', \
         orffinder_opts = '!{opts.orffinder_opts}', \
         orffinder_condaenv = '!{params.orffinder_condaenv}', \
         orf_min_len = !{opts.orf_min_len}, \

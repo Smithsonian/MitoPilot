@@ -9,7 +9,7 @@ new_db_userAsmb(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
-  genetic_code = 2,
+  genetic_code = NULL,
   annotate_cpus = 6,
   annotate_memory = 36,
   annotate_ref_db = "Chordata",
@@ -43,8 +43,9 @@ new_db_userAsmb(
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
 
-\item{genetic_code}{Translation table for your organisms. See NCBI website
-for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
+\item{genetic_code}{Optional NCBI translation table override. Default `NULL`
+auto-selects from the curation ruleset; a number sets an override on the
+default curate_opts set. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{annotate_cpus}{Default # cpus for annotation}
 

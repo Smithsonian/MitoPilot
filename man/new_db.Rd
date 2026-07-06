@@ -9,7 +9,7 @@ new_db(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
-  genetic_code = 2,
+  genetic_code = NULL,
   assemble_cpus = 6,
   assemble_memory = 24,
   assembler = "GetOrganelle",
@@ -57,8 +57,10 @@ new_db(
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
 
-\item{genetic_code}{Translation table for your organisms. See NCBI website
-for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
+\item{genetic_code}{Optional NCBI translation table override. Default `NULL`
+auto-selects from the curation ruleset (`curate_target`); a number sets an
+override on the default curate_opts set.
+https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{assemble_cpus}{Default # cpus for assembly}
 

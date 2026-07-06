@@ -126,6 +126,7 @@ backwards_compatibility <- function(
       "ref_db" %in% names(curate_opts_table) &&
       "ref_dir" %in% names(curate_opts_table) &&
       "linear_complete" %in% names(curate_opts_table) &&
+      "genetic_code" %in% names(curate_opts_table) &&
       "assembler" %in% names(assemble_opts_table) &&
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
@@ -447,6 +448,39 @@ backwards_compatibility <- function(
     message("added 'linear_complete' column to curate_opts table")
     DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN linear_complete INTEGER")
     DBI::dbExecute(con, "UPDATE curate_opts SET linear_complete = 0")
+  }
+  # genetic_code override column on curate_opts. Genetic code now auto-selects
+  # from the curation ruleset, but PRESERVE existing projects: freeze each set's
+  # current code as an explicit override so re-running curate/annotate does not
+  # change translations. Use the code of the samples pointing at each set (they
+  # are historically uniform); fall back to the .config value for empty sets.
+  if(!("genetic_code" %in% DBI::dbListFields(con, "curate_opts"))){
+    message("added 'genetic_code' override column to curate_opts table")
+    DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN genetic_code INTEGER")
+    DBI::dbExecute(con, "
+      UPDATE curate_opts SET genetic_code = (
+        SELECT s.genetic_code
+        FROM annotate a
+        JOIN samples s ON a.ID = s.ID
+        WHERE a.curate_opts = curate_opts.curate_opts
+          AND s.genetic_code IS NOT NULL
+        LIMIT 1
+      )")
+    config_gc <- suppressWarnings(as.integer(stringr::str_trim(
+      stringr::str_split(
+        grep("genetic_code =", conf, value = TRUE)[1],
+        "="
+      )[[1]][2]
+    )))
+    if (length(config_gc) == 1 && !is.na(config_gc)) {
+      DBI::dbExecute(
+        con,
+        glue::glue_sql(
+          "UPDATE curate_opts SET genetic_code = {config_gc} WHERE genetic_code IS NULL",
+          .con = con
+        )
+      )
+    }
   }
   # if use_arwen column doesn't exist, add it (default off)
   if(!("use_arwen" %in% names(annotate_opts_table))){

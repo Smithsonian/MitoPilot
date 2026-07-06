@@ -596,6 +596,26 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                   "to curate annotations; pick the clade closest to your samples.",
                   href = "https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html"),
         div(
+          style = "flex: 1",
+          selectizeInput(
+            ns("genetic_code"),
+            label = "Genetic code:",
+            # "" = auto-from-ruleset; explicit values override the ruleset default.
+            choices = gcode_choices(current$target %||% "fish_mito"),
+            selected = if (is.null(current$genetic_code) || is.na(current$genetic_code)) {
+              ""
+            } else {
+              as.character(current$genetic_code)
+            },
+            width = "100%",
+            options = list(maxItems = 1)
+          ) |> shinyjs::disabled()
+        ),
+        opts_help("NCBI translation table used to translate coding genes during ",
+                  "curation. Leave on 'Auto' to use the code defined by the selected ",
+                  "ruleset, or pick a specific table to override it for these samples.",
+                  href = "https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi"),
+        div(
           class = "form-group shiny-input-container",
           shinyWidgets::prettyCheckbox(
             ns("linear_complete"),
@@ -714,8 +734,8 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                 href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
       helpText(
         "The genetic code (-g) and minimum length (-ml) are set automatically",
-        "from the project genetic code and the Min ORF length above; do not set",
-        "them here."
+        "from the sample's curation ruleset (genetic code) and the Min ORF length",
+        "above; do not set them here."
       )
     )
     if (!orf_on) orf_param_opts <- shinyjs::hidden(orf_param_opts)

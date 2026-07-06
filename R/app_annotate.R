@@ -1138,6 +1138,14 @@ annotate_server <- function(id) {
     observeEvent(input$target, {
       rv$params <- do.call(paste0("params_", input$target), list()) |>
         jsonlite::toJSON(auto_unbox = TRUE)
+      # Refresh the "Auto" label to show the code this target resolves to,
+      # keeping any explicit override the user already selected.
+      updateSelectizeInput(
+        session,
+        "genetic_code",
+        choices = gcode_choices(input$target),
+        selected = input$genetic_code %||% ""
+      )
       output$params <- listviewer::renderReactjson({
         listviewer::reactjson(
           req(rv$params),
@@ -1181,7 +1189,13 @@ annotate_server <- function(id) {
               ref_dir = req(input$curate_ref_dir),
               ref_db = req(input$curate_ref_db),
               target = req(input$target),
-              linear_complete = as.integer(isTRUE(input$linear_complete))
+              linear_complete = as.integer(isTRUE(input$linear_complete)),
+              # "" = auto-from-ruleset (NA); a number is an explicit override.
+              genetic_code = if (is.null(input$genetic_code) || !nzchar(input$genetic_code)) {
+                NA_integer_
+              } else {
+                as.integer(input$genetic_code)
+              }
             ),
             in_place = TRUE,
             copy = TRUE,
@@ -1215,6 +1229,10 @@ annotate_server <- function(id) {
           update,
           by = "ID"
         )
+      # Genetic code follows the curation ruleset: recompute the per-sample
+      # samples.genetic_code cache for the samples whose curate_opts (target or
+      # override) may have changed.
+      .sync_sample_genetic_codes(session$userData$con, ids = update$ID)
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")

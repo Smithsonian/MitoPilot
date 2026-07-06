@@ -10,7 +10,7 @@ new_project_userAsmb(
   mapping_id = "ID",
   data_path = NULL,
   assembly_path = "NA",
-  genetic_code = 2,
+  genetic_code = NULL,
   executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
     "NOAA_SEDNA"),
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
@@ -43,8 +43,9 @@ a AWS s3 bucket even if not using AWS for pipeline execution.}
 \item{assembly_path}{Path to the directory where the mitogenome assemblies are located. Can be
 a AWS s3 bucket even if not using AWS for pipeline execution.}
 
-\item{genetic_code}{Translation table for your organisms. See NCBI website
-for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
+\item{genetic_code}{Optional NCBI translation table override. Default `NULL`
+auto-selects from each sample's curation ruleset; a number sets a
+project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{executor}{The executor to use for running the nextflow pipeline. May be
 a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",

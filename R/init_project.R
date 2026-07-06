@@ -13,8 +13,10 @@
 #'   a AWS s3 bucket even if not using AWS for pipeline execution..
 #' @param min_depth Minimum number of paired sequences after pre-processing to proceed
 #'   with assembly (default: 2000000 reads)
-#' @param genetic_code Translation table for your organisms. See NCBI website
-#'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+#' @param genetic_code Optional NCBI translation table override. Default `NULL`
+#'   auto-selects the genetic code from each sample's curation ruleset. Supplying
+#'   a number sets a project-wide override on the default curation options. See
+#'   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param executor The executor to use for running the nextflow pipeline. May be
 #'   a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
 #'   "lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a saved cluster profile
@@ -47,7 +49,7 @@ new_project <- function(
     mapping_id = "ID",
     data_path = NULL,
     min_depth = 2000000,
-    genetic_code = 2,
+    genetic_code = NULL,
     executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     custom_seeds_db = NULL,
@@ -136,13 +138,20 @@ new_project <- function(
     stop("Config file not found.")
     return()
   }
+  # Genetic code in .config is only a project-level fallback; the per-sample
+  # value (samples.genetic_code) auto-selects from each sample's curation
+  # ruleset. Resolve the fallback from the default ruleset + optional override.
+  gc_override <- if (is.null(genetic_code)) NA_integer_ else as.integer(genetic_code)
+  config_genetic_code <- resolve_genetic_code(
+    list(...)[["curate_target"]] %||% "fish_mito", gc_override
+  )
   readLines(config) |>
     fill_config(list(
       CONTAINER_ID = container,
       RAW_DIR = data_path,
       ASMB_DIR = "NA",
       MIN_DEPTH = format(min_depth, scientific = FALSE),
-      GENETIC_CODE = format(genetic_code, scientific = FALSE),
+      GENETIC_CODE = format(config_genetic_code, scientific = FALSE),
       NCBI_API_KEY = ncbi_api_key %||% ""
     )) |>
     writeLines(file.path(path, ".config"))

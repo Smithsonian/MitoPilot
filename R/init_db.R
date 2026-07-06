@@ -5,8 +5,10 @@
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
-#' @param genetic_code Translation table for your organisms. See NCBI website
-#'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+#' @param genetic_code Optional NCBI translation table override. Default `NULL`
+#'   auto-selects from the curation ruleset (`curate_target`); a number sets an
+#'   override on the default curate_opts set.
+#'   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
 #' @param seeds_db Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db.
@@ -59,7 +61,7 @@ new_db <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
-    genetic_code = 2,
+    genetic_code = NULL,
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 24,
@@ -159,6 +161,12 @@ new_db <- function(
     curate_params <- do.call(paste0("params_", curate_target), list())
   }
 
+  # Genetic code auto-selects from the curation ruleset (curate_target). A
+  # non-NULL genetic_code arg is stored as an explicit override on the default
+  # curate_opts set; NULL means auto-from-ruleset.
+  gc_override <- if (is.null(genetic_code)) NA_integer_ else as.integer(genetic_code)
+  resolved_genetic_code <- resolve_genetic_code(curate_target, gc_override)
+
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db_path)
   on.exit(DBI::dbDisconnect(con))
@@ -168,7 +176,7 @@ new_db <- function(
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
-      genetic_code = genetic_code,
+      genetic_code = resolved_genetic_code,
       export_group = NA_character_
     )
   glue::glue_sql(
@@ -550,6 +558,7 @@ new_db <- function(
       ref_db TEXT,
       ref_dir TEXT,
       linear_complete INTEGER,
+      genetic_code INTEGER,
       params JSON,
       PRIMARY KEY (curate_opts)
     );"
@@ -565,6 +574,7 @@ new_db <- function(
         ref_db = annotate_ref_db,
         ref_dir = annotate_ref_dir,
         linear_complete = as.integer(isTRUE(linear_complete)),
+        genetic_code = gc_override,
         params = jsonlite::toJSON(curate_params)
       ),
       in_place = TRUE,

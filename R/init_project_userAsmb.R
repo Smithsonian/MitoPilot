@@ -15,8 +15,9 @@
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
 #' @param assembly_path Path to the directory where the mitogenome assemblies are located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
-#' @param genetic_code Translation table for your organisms. See NCBI website
-#'   for more info https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+#' @param genetic_code Optional NCBI translation table override. Default `NULL`
+#'   auto-selects from each sample's curation ruleset; a number sets a
+#'   project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 #' @param executor The executor to use for running the nextflow pipeline. May be
 #'   a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
 #'   "lsf", "NMNH_Hydra", "NOAA_SEDNA") or the name of a saved cluster profile
@@ -47,7 +48,7 @@ new_project_userAsmb <- function(
     mapping_id = "ID",
     data_path = NULL,
     assembly_path = "NA",
-    genetic_code = 2,
+    genetic_code = NULL,
     executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     config = NULL,
@@ -138,13 +139,19 @@ new_project_userAsmb <- function(
     stop("Config file not found.")
     return()
   }
+  # Genetic code in .config is only a project-level fallback; the per-sample
+  # value auto-selects from each sample's curation ruleset.
+  gc_override <- if (is.null(genetic_code)) NA_integer_ else as.integer(genetic_code)
+  config_genetic_code <- resolve_genetic_code(
+    list(...)[["curate_target"]] %||% "fish_mito", gc_override
+  )
   readLines(config) |>
     fill_config(list(
       CONTAINER_ID = container,
       RAW_DIR = data_path,
       ASMB_DIR = assembly_path,
       MIN_DEPTH = format(2000000, scientific = FALSE),
-      GENETIC_CODE = format(genetic_code, scientific = FALSE),
+      GENETIC_CODE = format(config_genetic_code, scientific = FALSE),
       NCBI_API_KEY = ncbi_api_key %||% ""
     )) |>
     writeLines(file.path(path, ".config"))
