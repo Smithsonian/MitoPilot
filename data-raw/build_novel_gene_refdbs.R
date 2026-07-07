@@ -44,6 +44,8 @@ specs <- list(
   ),
   orf167 = list(status = "manual", taxids = c(Demospongiae = 6042), name = NA),
   orf1535 = list(status = "manual", taxids = c(Demospongiae = 6042), name = NA),
+  # orf314: built separately from cnidarian mito CDS features, see
+  # data-raw/build_orf314_refdb.R (by-name protein query does not work for it).
   orf314 = list(status = "manual", taxids = c(Hydrozoa = 6074), name = NA),
   orf = list(status = "manual", taxids = c(Nemertea = 6217, Pycnogonida = 57294), name = NA)
 )

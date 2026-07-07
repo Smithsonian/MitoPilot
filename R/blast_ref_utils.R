@@ -880,7 +880,14 @@ normalize_pcg <- function(n, product = NA_character_) {
     "atp9"="atp9", "atpase9"="atp9", "atp synthase 9"="atp9",
     # Cytochrome b
     "cob"="cob", "cytb"="cob", "cyb"="cob", "cytob"="cob",
-    "cytochromeb"="cob"
+    "cytochromeb"="cob",
+    # DNA polymerase B accessory ORF at the medusozoan linear-mtDNA termini.
+    # dpo / polB / dnaB are the same gene under inconsistent GenBank names (the
+    # "dnaB / replication helicase" label is a misannotation); all -> dpo so they
+    # share one reference DB + ruleset rule.
+    "dpo"="dpo", "polb"="dpo", "dnapolymerase"="dpo", "dnapolymeraseb"="dpo",
+    "dnapolymerasetypeb"="dpo", "dnab"="dpo", "dnahelicase"="dpo",
+    "replicationhelicasesubunit"="dpo"
   )
 
   key <- tolower(trimws(n))

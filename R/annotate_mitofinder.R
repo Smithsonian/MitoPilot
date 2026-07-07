@@ -323,7 +323,10 @@ normalize_mitofinder_gene <- function(x) {
     co1 = "cox1", co2 = "cox2", co3 = "cox3",
     cytb = "cob", cob = "cob", cyb = "cob",
     atp6 = "atp6", atp8 = "atp8", atp9 = "atp9",
-    atpase6 = "atp6", atpase8 = "atp8"
+    atpase6 = "atp6", atpase8 = "atp8",
+    # dpo / polB / dnaB = one gene (medusozoan terminal DNA polymerase B ORF),
+    # inconsistently named in references; collapse to dpo. See normalize_pcg().
+    dpo = "dpo", polb = "dpo", dnab = "dpo"
   )
   rrna_map <- c(
     rrnl = "rrnL", rrns = "rrnS",

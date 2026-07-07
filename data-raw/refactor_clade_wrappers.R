@@ -31,6 +31,7 @@ clades <- tibble::tribble(
   "homoscleromorpha", 4,   TRUE,   "homoscleromorph sponge",
   "malacostraca",     5,   TRUE,   "malacostracan",
   "hydrozoa",         4,   TRUE,   "hydrozoan",
+  "scyphozoa",        4,   TRUE,   "scyphozoan",
   "nemertea",         5,   TRUE,   "nemertean",
   "ophiuroidea",      9,   TRUE,   "brittle star",
   "platyhelminthes",  9,   TRUE,   "flatworm",
