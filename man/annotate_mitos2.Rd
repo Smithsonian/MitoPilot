@@ -12,7 +12,7 @@ annotate_mitos2(
   mitos_opts = "--best --intron 0 --oril 0",
   out = NULL,
   condaenv = "mitos",
-  rescue_no_trna = FALSE
+  rescue_no_trna = TRUE
 )
 }
 \arguments{
@@ -32,7 +32,7 @@ annotate_mitos2(
 
 \item{rescue_no_trna}{Run MITOS2 a second time with tRNA prediction disabled
 (`--trna 0`) and add any PCGs/rRNAs it uniquely recovers to the full-run
-annotations (default: FALSE). MITOS2 discards rRNAs/PCGs whose locus overlaps
+annotations (default: TRUE). MITOS2 discards rRNAs/PCGs whose locus overlaps
 a predicted tRNA; the tRNA-free run recovers them (e.g. scyphozoan rrnS).}
 }
 \description{

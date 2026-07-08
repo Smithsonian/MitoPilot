@@ -9,7 +9,7 @@
 #' @param condaenv Conda environment to run MITOS2 (default: "mitos")
 #' @param rescue_no_trna Run MITOS2 a second time with tRNA prediction disabled
 #'   (`--trna 0`) and add any PCGs/rRNAs it uniquely recovers to the full-run
-#'   annotations (default: FALSE). MITOS2 discards rRNAs/PCGs whose locus overlaps
+#'   annotations (default: TRUE). MITOS2 discards rRNAs/PCGs whose locus overlaps
 #'   a predicted tRNA; the tRNA-free run recovers them (e.g. scyphozoan rrnS).
 #'
 #' @export
@@ -22,7 +22,7 @@ annotate_mitos2 <- function(
     mitos_opts = "--best --intron 0 --oril 0",
     out = NULL,
     condaenv = "mitos",
-    rescue_no_trna = FALSE) {
+    rescue_no_trna = TRUE) {
   genetic_code <- as.character(genetic_code)
   # write MITOS2 output into the local work dir so it is retained for inspection
   out <- out %||% "MITOS2_temp"

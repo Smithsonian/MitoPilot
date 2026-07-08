@@ -475,7 +475,7 @@ new_db_userAsmb <- function(
         use_mitos = 1L,
         mitos_opts = mitos_opts,
         use_mitos_best = 1L,
-        rescue_no_trna = 0L,
+        rescue_no_trna = 1L,
         use_trnaScan = 1L,
         trnaScan_opts = trnaScan_opts,
         arwen_opts = arwen_opts,

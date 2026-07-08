@@ -539,7 +539,7 @@ backwards_compatibility <- function(
   # if rescue_no_trna column doesn't exist, add it (default off)
   if(!("rescue_no_trna" %in% names(annotate_opts_table))){
     message("added 'rescue_no_trna' column to annotate_opts table")
-    annotate_opts_table$rescue_no_trna <- rep(0L, nrow(annotate_opts_table))
+    annotate_opts_table$rescue_no_trna <- rep(1L, nrow(annotate_opts_table))
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN rescue_no_trna INTEGER",

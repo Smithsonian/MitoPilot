@@ -286,15 +286,14 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           style = "display: flex; flex-flow: row nowrap; align-items: center; margin-bottom: 8px;",
           shinyWidgets::prettyCheckbox(
             ns("rescue_no_trna"),
-            label = "Recover rRNAs/PCGs dropped by tRNA overlap (second MITOS2 pass)",
-            value = isTRUE(as.logical(current$rescue_no_trna %||% 0L)),
+            label = "Rescue rRNAs/PCGs lost to tRNA overlap",
+            value = isTRUE(as.logical(current$rescue_no_trna %||% 1L)),
             status = "primary"
           ) |> shinyjs::disabled()
         ),
-        opts_help("Run MITOS2 a second time with tRNA prediction disabled and add ",
-                  "any PCGs/rRNAs it uniquely recovers. MITOS2 discards rRNAs/PCGs ",
-                  "whose locus overlaps a predicted tRNA (e.g. scyphozoan rrnS wedged ",
-                  "against nad5). Doubles MITOS2 runtime."),
+        opts_help("Runs MITOS2 a second time without tRNA prediction to recover ",
+                  "rRNAs or PCGs that MITOS2 drops when a tRNA overlaps them. ",
+                  "Adds some runtime."),
         div(
           id = ns("mitos_ref_box"),
           div(

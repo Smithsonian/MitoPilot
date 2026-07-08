@@ -23,7 +23,7 @@ annotate(
   aragorn_condaenv = "aragorn",
   use_aragorn = FALSE,
   use_mitos_best = TRUE,
-  rescue_no_trna = FALSE,
+  rescue_no_trna = TRUE,
   use_mitofinder = FALSE,
   mitofinder_db = NULL,
   mitofinder_new_genes = FALSE,
@@ -77,7 +77,7 @@ annotate(
 \item{use_mitos_best}{logical; whether to pass --best to MITOS2 (default: FALSE).}
 
 \item{rescue_no_trna}{logical; run a second MITOS2 pass with tRNA prediction
-disabled and add any PCGs/rRNAs it uniquely recovers (default: FALSE).}
+disabled and add any PCGs/rRNAs it uniquely recovers (default: TRUE).}
 
 \item{use_mitofinder}{logical; whether to run MitoFinder annotation (lowest priority; default: FALSE).}
 

@@ -23,7 +23,7 @@
 #' @param aragorn_condaenv Conda environment containing ARAGORN (default: "aragorn").
 #' @param use_mitos_best logical; whether to pass --best to MITOS2 (default: FALSE).
 #' @param rescue_no_trna logical; run a second MITOS2 pass with tRNA prediction
-#'   disabled and add any PCGs/rRNAs it uniquely recovers (default: FALSE).
+#'   disabled and add any PCGs/rRNAs it uniquely recovers (default: TRUE).
 #' @param use_mitofinder logical; whether to run MitoFinder annotation (lowest priority; default: FALSE).
 #' @param mitofinder_db path to a MitoFinder reference database (GenBank .gb).
 #' @param mitofinder_new_genes logical; pass --new-genes to MitoFinder (default: FALSE).
@@ -62,7 +62,7 @@ annotate <- function(
   aragorn_condaenv = "aragorn",
   use_aragorn = FALSE,
   use_mitos_best = TRUE,
-  rescue_no_trna = FALSE,
+  rescue_no_trna = TRUE,
   use_mitofinder = FALSE,
   mitofinder_db = NULL,
   mitofinder_new_genes = FALSE,

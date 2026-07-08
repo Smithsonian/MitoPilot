@@ -810,7 +810,7 @@ annotate_server <- function(id) {
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "rescue_no_trna",
-          value = isTRUE(as.logical(cur$rescue_no_trna %||% 0L))
+          value = isTRUE(as.logical(cur$rescue_no_trna %||% 1L))
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "use_arwen",

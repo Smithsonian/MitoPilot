@@ -62,7 +62,7 @@ workflow ANNOTATE {
                     use_mitos: it[23] != null ? it[23] as Integer : 1,      // use_mitos toggle (default on)
                     use_trnaScan: it[24] != null ? it[24] as Integer : 1,   // use_trnaScan toggle (default on)
                     genetic_code: it[25],                                   // per-sample genetic code (from samples table)
-                    rescue_no_trna: it[26] != null ? it[26] as Integer : 0  // second MITOS2 pass without tRNA prediction (default off)
+                    rescue_no_trna: it[26] != null ? it[26] as Integer : 1  // second MITOS2 pass without tRNA prediction (default on)
                 ],
                 file(it[6] + "/" + it[5]),                              // curation ref dir + clade
                 it[5].replaceFirst(/\.tar\.gz$/, ''),               // ref_db without ".tar.gz"
