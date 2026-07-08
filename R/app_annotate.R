@@ -7,6 +7,7 @@ ANNOTATE_COL_GROUPS <- list(
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
   Review   = c("ID_verified", "reviewed", "problematic", "partial", "warnings"),
+  Export   = c("export_group", "export_time_stamp"),
   Metadata = c("time_stamp", "annotate_notes")
 )
 ANNOTATE_COL_GROUP_LOOKUP <- {
@@ -28,6 +29,7 @@ ANNOTATE_STATE_CHOICES <- c(
   "Success"      = "2",
   "Failed"       = "3"
 )
+ANNOTATE_EXPORT_CHOICES <- c("Not Exported" = "0", "Exported" = "1")
 
 #' annotate UI Function
 #'
@@ -76,6 +78,21 @@ annotate_ui <- function(id) {
           )
         ),
         shinyWidgets::pickerInput(
+          inputId  = ns("export_filter"),
+          width    = "140px",
+          label    = "Exported:",
+          choices  = ANNOTATE_EXPORT_CHOICES,
+          selected = ANNOTATE_EXPORT_CHOICES,
+          multiple = TRUE,
+          options  = list(
+            `actions-box`          = TRUE,
+            `select-all-text`      = "All",
+            `deselect-all-text`    = "None",
+            `selected-text-format` = "count > 0",
+            width                  = "140px"
+          )
+        ),
+        shinyWidgets::pickerInput(
           inputId  = ns("col_groups"),
           width    = "150px",
           label    = "Show columns:",
@@ -89,6 +106,15 @@ annotate_ui <- function(id) {
             `selected-text-format` = "count > 0",
             width                  = "150px"
           )
+        ),
+        shinyWidgets::airDatepickerInput(
+          inputId    = ns("date_filter"),
+          label      = "Updated between:",
+          range      = TRUE,
+          clearButton = TRUE,
+          value      = NULL,
+          width      = "220px",
+          placeholder = "any time"
         ),
         uiOutput(ns("warnings_select"))
       ),
@@ -177,7 +203,7 @@ annotate_server <- function(id) {
     filtered_data <- reactive({
       req(rv$data)
       selected <- input$warning_filters
-      rv$data |> dplyr::mutate(
+      out <- rv$data |> dplyr::mutate(
         warnings = purrr::map_int(warnings_details, function(wd) {
           # if (is.na(wd) || length(selected) == 0) return(0)
           wd_list <- strsplit(as.character(wd), ";")[[1]] |>
@@ -185,7 +211,25 @@ annotate_server <- function(id) {
           sum(wd_list %in% selected)
         })
       )
+      # Date-range filter on "Last Updated" (time_stamp is epoch seconds). Empty
+      # picker = no filter; end day is inclusive. Unlike the lock/state CSS
+      # filters this subsets the rows, so selection may reset when the range changes.
+      dr <- input$date_filter
+      if (!is.null(dr) && length(dr) == 2 && all(!is.na(dr))) {
+        lo <- as.numeric(as.POSIXct(as.Date(dr[1])))
+        hi <- as.numeric(as.POSIXct(as.Date(dr[2]) + 1))
+        out <- out |>
+          dplyr::filter(!is.na(time_stamp) & time_stamp >= lo & time_stamp < hi)
+      }
+      out
     })
+
+    # Refresh the table when the date-range filter changes (ignoreNULL = FALSE so
+    # clearing the range restores all rows).
+    observeEvent(input$date_filter, {
+      req(rv$data)
+      updateReactable("table", data = filtered_data())
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
@@ -203,6 +247,10 @@ annotate_server <- function(id) {
     state_filter_rv <- reactiveVal(unname(ANNOTATE_STATE_CHOICES))
     observeEvent(input$state_filter, {
       state_filter_rv(input$state_filter %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+    export_filter_rv <- reactiveVal(unname(ANNOTATE_EXPORT_CHOICES))
+    observeEvent(input$export_filter, {
+      export_filter_rv(input$export_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
     # CSS class for a togglable column. Added to both body cells and the
@@ -223,13 +271,15 @@ annotate_server <- function(id) {
       hidden_grp   <- setdiff(names(ANNOTATE_COL_GROUPS), col_groups_rv())
       hidden_lock  <- setdiff(unname(ANNOTATE_LOCK_CHOICES), lock_filter_rv())
       hidden_state <- setdiff(unname(ANNOTATE_STATE_CHOICES), state_filter_rv())
+      hidden_exp   <- setdiff(unname(ANNOTATE_EXPORT_CHOICES), export_filter_rv())
       # Scope to THIS module's table so rules don't hit the shared mp-lock /
       # mp-state / mp-grp classes on the assemble, userAsmb, and export tables.
       sel <- paste0("#", ns("table"), " ")
       rules <- c(
         if (length(hidden_grp))   paste0(sel, ".mp-grp-",   hidden_grp,   " { display: none !important; }"),
         if (length(hidden_lock))  paste0(sel, ".mp-lock-",  hidden_lock,  " { display: none !important; }"),
-        if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }")
+        if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }"),
+        if (length(hidden_exp))   paste0(sel, ".mp-exp-",   hidden_exp,   " { display: none !important; }")
       )
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
@@ -260,8 +310,11 @@ annotate_server <- function(id) {
         rowStyle = rt_highlight_row(),
         rowClass = JS("function(rowInfo) {
           if (!rowInfo || !rowInfo.values) return '';
+          var ets = rowInfo.values['export_time_stamp'];
+          var exp = (ets != null && ets !== '') ? '1' : '0';
           return 'mp-lock-' + rowInfo.values['annotate_lock'] +
-                 ' mp-state-' + rowInfo.values['annotate_switch'];
+                 ' mp-state-' + rowInfo.values['annotate_switch'] +
+                 ' mp-exp-' + exp;
         }"),
         defaultColDef = colDef(align = "left", show = FALSE),
         columns = list(
@@ -370,7 +423,7 @@ annotate_server <- function(id) {
           ),
           blast_accession = colDef(
             show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Reference",
+            name = "BLAST Hit",
             html = TRUE,
             width = 120,
             cell = rt_ncbi_link(auto_col = "blast_accession_auto")
@@ -434,6 +487,35 @@ annotate_server <- function(id) {
             align = "center",
             width = 100,
             cell = rt_bool_badge(invert = TRUE, hide_no = FALSE)
+          ),
+          export_group = colDef(
+            show = TRUE, class = .grp("export_group"), headerClass = .grp("export_group"),
+            name = "Export Group",
+            align = "left",
+            minWidth = 120,
+            cell = function(value) if (is.na(value) || !nzchar(value)) "" else value
+          ),
+          export_time_stamp = colDef(
+            show = TRUE, class = .grp("export_time_stamp"), headerClass = .grp("export_time_stamp"),
+            name = "Exported",
+            filterable = FALSE,
+            html = TRUE,
+            width = 170,
+            # JS cell so it re-renders on updateReactable(); shows a green check +
+            # export date + the group the sample was exported under.
+            cell = htmlwidgets::JS("
+              function(cellInfo) {
+                var v = cellInfo.value;
+                if (v == null || v === '') return '';
+                var opts = { year: 'numeric', month: 'numeric', day: 'numeric' };
+                var date = new Date(1000*v).toLocaleDateString('en-US', opts);
+                if (date === 'Invalid Date') return '';
+                var row = cellInfo.row || {};
+                var g = row.export_group;
+                var grp = (g == null || g === '' || g === 'NA') ? '' : ' (' + g + ')';
+                return '<span style=\"color:#3d9140;font-weight:bold;\">&#10003;</span> ' + date + grp;
+              }
+            ")
           ),
           time_stamp = colDef(
             show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
@@ -518,8 +600,10 @@ annotate_server <- function(id) {
     selected <- reactive({
       sel <- reactable::getReactableState("table", "selected")
       if (is.null(sel) || length(sel) == 0) return(sel)
+      exp_code <- ifelse(is.na(rv$data$export_time_stamp), "0", "1")
       visible <- as.character(rv$data$annotate_lock)   %in% lock_filter_rv() &
-                 as.character(rv$data$annotate_switch) %in% state_filter_rv()
+                 as.character(rv$data$annotate_switch) %in% state_filter_rv() &
+                 exp_code %in% export_filter_rv()
       intersect(sel, which(visible))
     })
 
@@ -538,11 +622,13 @@ annotate_server <- function(id) {
     # they never persist in reactable's state to reappear when later revealed.
     observeEvent(
       list(reactable::getReactableState("table", "selected"),
-           lock_filter_rv(), state_filter_rv()), {
+           lock_filter_rv(), state_filter_rv(), export_filter_rv()), {
       sel <- reactable::getReactableState("table", "selected")
       if (is.null(sel) || length(sel) == 0) return()
+      exp_code <- ifelse(is.na(rv$data$export_time_stamp), "0", "1")
       visible <- as.character(rv$data$annotate_lock)   %in% lock_filter_rv() &
-                 as.character(rv$data$annotate_switch) %in% state_filter_rv()
+                 as.character(rv$data$annotate_switch) %in% state_filter_rv() &
+                 exp_code %in% export_filter_rv()
       keep <- intersect(sel, which(visible))
       if (length(keep) != length(sel)) {
         reactable::updateReactable("table", selected = keep)

@@ -15,7 +15,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
                   dplyr::any_of(c("blast_accession_auto", "poor_blast_ref")))
 
   taxa <- dplyr::tbl(db, "samples") |>
-    dplyr::select(ID, Taxon)
+    dplyr::select(ID, Taxon, export_group, export_time_stamp)
 
   annotations <- dplyr::tbl(db, "annotations") |>
     dplyr::select(ID, type, warnings) |>
@@ -78,6 +78,8 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       problematic,
       partial,
       time_stamp,
+      export_group,
+      export_time_stamp,
       annotate_notes,
       warnings_details,
       use_orffinder,

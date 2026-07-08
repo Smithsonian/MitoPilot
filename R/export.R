@@ -1060,6 +1060,16 @@ export_files <- function(
     utils::write.csv(summary_df, summary_fn, row.names = FALSE)
   }
 
+  # Mark the exported samples with the export time so the Annotate tab can flag /
+  # highlight samples that have already been exported (NULL = never exported).
+  if (length(group) == 1) {
+    DBI::dbExecute(
+      con,
+      "UPDATE samples SET export_time_stamp = ? WHERE export_group = ?",
+      params = list(as.integer(Sys.time()), group)
+    )
+  }
+
   db_path <- file.path(dirname(out_dir), ".sqlite")
 
   if (length(group) == 1 && length(IDs) > 1 && generateAAalignments) {

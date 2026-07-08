@@ -143,7 +143,8 @@ new_db_userAsmb <- function(
       genetic_code = resolved_genetic_code,
       topology = .data[["Topology"]],
       assembly = .data[["Assembly"]],
-      export_group = NA_character_
+      export_group = NA_character_,
+      export_time_stamp = NA_integer_
     ) |>
     dplyr::select(-Topology, -Assembly)
   glue::glue_sql(

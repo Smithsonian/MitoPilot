@@ -158,6 +158,7 @@ assembly_coverage_details_server <- function(id, rv) {
           defaultColDef = colDef(align = "center"),
           columns = list(
             ignore = colDef(
+              name = "Ignore",
               width = 60,
               html = TRUE, align = "center",
               cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
@@ -201,6 +202,9 @@ assembly_coverage_details_server <- function(id, rv) {
             ),
             blast_qcovs = colDef(
               name = "% Cov", width = 80, align = "center"
+            ),
+            blast_evalue = colDef(
+              name = "E-value", width = 90, align = "center"
             ),
             blast_lineage = colDef(
               name = "BLAST Lineage", minWidth = 200, resizable = TRUE, align = "left", html = TRUE,
@@ -1098,16 +1102,16 @@ assembly_coverage_details_server <- function(id, rv) {
         defaultColDef = colDef(align = "center"),
         columns = list(
           block_id  = colDef(name = "Block", width = 70),
-          label     = colDef(name = "Likely cause", minWidth = 180, align = "left",
+          label     = colDef(name = "Likely Cause", minWidth = 180, align = "left",
                              html = TRUE, cell = rt_longtext()),
           aln_start = colDef(name = "Start"),
           aln_end   = colDef(name = "End"),
           len       = colDef(name = "Length"),
           n_snps    = colDef(name = "SNPs"),
           n_indels  = colDef(name = "Indels"),
-          min_depth  = colDef(name = "Min depth"),
-          mean_depth = colDef(name = "Mean depth"),
-          max_error  = colDef(name = "Max error rate")
+          min_depth  = colDef(name = "Min Depth"),
+          mean_depth = colDef(name = "Mean Depth"),
+          max_error  = colDef(name = "Max Error Rate")
         )
       )
     })
