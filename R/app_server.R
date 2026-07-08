@@ -71,9 +71,10 @@ app_server <- function(input, output, session) {
   session$userData$genetic_code <- tryCatch({
     v <- DBI::dbGetQuery(
       session$userData$con,
-      "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL LIMIT 1"
+      "SELECT genetic_code FROM samples WHERE genetic_code IS NOT NULL AND TRIM(genetic_code) != '' LIMIT 1"
     )$genetic_code
-    if (length(v) == 1) as.character(as.integer(v)) else "2"
+    gc <- suppressWarnings(as.integer(v))
+    if (length(gc) == 1L && !is.na(gc)) as.character(gc) else "2"
   }, error = function(e) "2")
   # Cache the genetic code lookup table once; called ~30x during codon edits.
   session$userData$gcode <- Biostrings::getGeneticCode(session$userData$genetic_code)
