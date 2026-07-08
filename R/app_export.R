@@ -787,7 +787,7 @@ export_server <- function(id) {
               style = paste(
                 "min-width: 0; background: #000; color: #fff;",
                 "font-family: monospace; font-size: 0.8em; padding: 0.5em 0.6em; border-radius: 4px;",
-                "white-space: normal; word-break: break-all; text-align: left;"
+                "white-space: normal; word-break: break-all; text-align: center;"
               ),
               path
             ),
