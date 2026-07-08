@@ -73,6 +73,15 @@ assemble_ui_userAsmb <- function(id) {
           `selected-text-format` = "count > 0",
           width                  = "150px"
         )
+      ),
+      shinyWidgets::airDatepickerInput(
+        inputId     = ns("date_filter"),
+        label       = "Updated between:",
+        range       = TRUE,
+        clearButton = TRUE,
+        value       = NULL,
+        width       = "220px",
+        placeholder = "any time"
       )
     ),
     div(class = "mp-table-resize", reactableOutput(ns("table"))),
@@ -103,13 +112,34 @@ assemble_server_userAsmb <- function(id) {
       updating = NULL
     )
 
+    # Date-range filter on "Last Updated" (time_stamp is epoch seconds). Empty
+    # picker = no filter; end day is inclusive. Unlike the lock/state CSS filters
+    # this subsets the rows, so selection may reset when the range changes.
+    filtered_data <- reactive({
+      req(rv$data)
+      out <- rv$data
+      dr <- input$date_filter
+      if (!is.null(dr) && length(dr) == 2 && all(!is.na(dr))) {
+        lo <- as.numeric(as.POSIXct(as.Date(dr[1])))
+        hi <- as.numeric(as.POSIXct(as.Date(dr[2]) + 1))
+        out <- out |>
+          dplyr::filter(!is.na(time_stamp) & time_stamp >= lo & time_stamp < hi)
+      }
+      out
+    })
+
+    observeEvent(input$date_filter, {
+      req(rv$data)
+      trigger("update_assemble_table")
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
     # Refresh ----
     init("refresh_assemble")
     on("refresh_assemble", {
       rv$data <- fetch_assemble_data_userAsmb()
       updateReactable(
         "table",
-        data = rv$data
+        data = filtered_data()
       )
     })
 
@@ -157,7 +187,7 @@ assemble_server_userAsmb <- function(id) {
 
     # Render table ----
     output$table <- renderReactable({
-      isolate(req(rv$data)) |>
+      isolate(req(filtered_data())) |>
         reactable(
           resizable = TRUE,
           filterable = TRUE,
@@ -387,7 +417,7 @@ assemble_server_userAsmb <- function(id) {
     on("update_assemble_table", {
       reactable::updateReactable(
         "table",
-        data = rv$data |>
+        data = filtered_data() |>
           dplyr::mutate(
             output = dplyr::case_when(
               assemble_switch > 1 ~ "output",

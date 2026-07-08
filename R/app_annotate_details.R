@@ -441,6 +441,7 @@ annotations_details_server <- function(id, rv) {
           columns = list(
             type = colDef(
               show = T,
+              name = "Type",
               align = "left",
               html = TRUE,
               # JS (not R) cell renderer so the badge re-renders client-side on
@@ -466,15 +467,16 @@ annotations_details_server <- function(id, rv) {
               ")
             ),
             gene = colDef(show = T,
+                          name = "Gene",
                           align = "left",
                           maxWidth = 300,
                           resizable = TRUE,
                           html = T,
                           cell = rt_longtext()),
-            pos1 = colDef(show = T),
-            pos2 = colDef(show = T),
-            length = colDef(show = T),
-            direction = colDef(show = T),
+            pos1 = colDef(show = T, name = "Start"),
+            pos2 = colDef(show = T, name = "End"),
+            length = colDef(show = T, name = "Length"),
+            direction = colDef(show = T, name = "Direction"),
             partial_start = colDef(
               show = T,
               name = "Partial",
@@ -500,12 +502,13 @@ annotations_details_server <- function(id, rv) {
             ),
             tool = colDef(
               show = T,
-              name = "tool",
+              name = "Tool",
               align = "left",
               maxWidth = 100
             ),
             notes = colDef(
               show = T,
+              name = "Notes",
               maxWidth = 1000,
               html = T,
               cell = rt_longtext(),
@@ -514,6 +517,7 @@ annotations_details_server <- function(id, rv) {
             ),
             warnings = colDef(
               show = T,
+              name = "Warnings",
               maxWidth = 1000,
               html = T,
               cell = rt_longtext(),
@@ -3385,6 +3389,9 @@ annotations_details_server <- function(id, rv) {
       if (!is.null(rv$alignment)) {
         rv$alignment$partial <- partial_label(selected())
       }
+      # Refresh the feature table so the "Partial" (5'/3') badge reflects the
+      # toggle immediately; keep the current selection so editing continues.
+      reactable::updateReactable("table", data = rv$annotations, selected = selected())
     })
     observeEvent(input$toggle_partial_stop, {
       req(rv$editing, length(selected()) == 1)
@@ -3393,6 +3400,7 @@ annotations_details_server <- function(id, rv) {
       if (!is.null(rv$alignment)) {
         rv$alignment$partial <- partial_label(selected())
       }
+      reactable::updateReactable("table", data = rv$annotations, selected = selected())
     })
 
     ## rRNA nucleotide-boundary editor ----

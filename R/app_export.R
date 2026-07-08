@@ -42,19 +42,37 @@ export_ui <- function(id) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("col_css")),
-    shinyWidgets::pickerInput(
-      inputId  = ns("col_groups"),
-      width    = "150px",
-      label    = "Show columns:",
-      choices  = names(EXPORT_COL_GROUPS),
-      selected = names(EXPORT_COL_GROUPS),
-      multiple = TRUE,
-      options  = list(
-        `actions-box`          = TRUE,
-        `select-all-text`      = "All",
-        `deselect-all-text`    = "None",
-        `selected-text-format` = "count > 0",
-        width                  = "150px"
+    div(
+      style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
+      shinyWidgets::pickerInput(
+        inputId  = ns("col_groups"),
+        width    = "150px",
+        label    = "Show columns:",
+        choices  = names(EXPORT_COL_GROUPS),
+        selected = names(EXPORT_COL_GROUPS),
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "150px"
+        )
+      ),
+      shinyWidgets::pickerInput(
+        inputId  = ns("export_filter"),
+        width    = "140px",
+        label    = "Exported:",
+        choices  = ANNOTATE_EXPORT_CHOICES,
+        selected = ANNOTATE_EXPORT_CHOICES,
+        multiple = TRUE,
+        options  = list(
+          `actions-box`          = TRUE,
+          `select-all-text`      = "All",
+          `deselect-all-text`    = "None",
+          `selected-text-format` = "count > 0",
+          width                  = "140px"
+        )
       )
     ),
     div(class = "mp-table-resize", reactableOutput(ns("table"))),
@@ -113,24 +131,32 @@ export_server <- function(id) {
     observeEvent(input$col_groups, {
       col_groups_rv(input$col_groups %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
+    # Exported Yes/No filter. Rows are tagged with mp-exp-<0/1> (see rowClass)
+    # so unselected states hide via CSS, same mechanism as the column picker.
+    export_filter_rv <- reactiveVal(unname(ANNOTATE_EXPORT_CHOICES))
+    observeEvent(input$export_filter, {
+      export_filter_rv(input$export_filter %||% character(0))
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
     .grp <- function(col) {
       g <- EXPORT_COL_GROUP_LOOKUP[col]
       if (is.na(g)) NULL else paste0("mp-grp-", g)
     }
 
-    # CSS hide for unselected groups; keeps DOM intact so filter/sort/page
-    # state survives toggling.
+    # CSS hide for unselected groups / exported states; keeps DOM intact so
+    # filter/sort/page state survives toggling.
     output$col_css <- renderUI({
-      hidden <- setdiff(names(EXPORT_COL_GROUPS), col_groups_rv())
-      if (length(hidden) == 0) return(NULL)
-      # Scope to THIS module's table so rules don't hit the shared mp-grp
-      # classes on the assemble, userAsmb, and annotate tables.
+      hidden     <- setdiff(names(EXPORT_COL_GROUPS), col_groups_rv())
+      hidden_exp <- setdiff(unname(ANNOTATE_EXPORT_CHOICES), export_filter_rv())
+      # Scope to THIS module's table so rules don't hit the shared mp-grp /
+      # mp-exp classes on the assemble, userAsmb, and annotate tables.
       sel <- paste0("#", ns("table"), " ")
-      rules <- paste0(sel, ".mp-grp-", hidden,
-                      " { display: none !important; }",
-                      collapse = "\n")
-      tags$style(HTML(rules))
+      rules <- c(
+        if (length(hidden))     paste0(sel, ".mp-grp-", hidden, " { display: none !important; }"),
+        if (length(hidden_exp)) paste0(sel, ".mp-exp-", hidden_exp, " { display: none !important; }")
+      )
+      if (length(rules) == 0) return(NULL)
+      tags$style(HTML(paste(rules, collapse = "\n")))
     })
 
     # Render table ----
@@ -153,14 +179,26 @@ export_server <- function(id) {
         pageSizeOptions = c(25, 50, 100, 200, 500),
         striped = TRUE,
         rowStyle = rt_highlight_row(),
-        defaultColDef = colDef(align = "left"),
+        # Tag rows exported (mp-exp-1) vs not (mp-exp-0) so the Exported picker
+        # can hide unselected states via CSS.
+        rowClass = htmlwidgets::JS("function(rowInfo) {
+          if (!rowInfo || !rowInfo.values) return '';
+          var ets = rowInfo.values['export_time_stamp'];
+          return 'mp-exp-' + ((ets != null && ets !== '') ? '1' : '0');
+        }"),
+        # Hide by default so only the explicitly-named columns below show; the
+        # data carries extra internal columns (genetic_code, counts, etc.) that
+        # would otherwise render with raw names.
+        defaultColDef = colDef(align = "left", show = FALSE),
         columns = list(
           ID = colDef(show = T, minWidth = 120, sticky = "left"),
+          Taxon = colDef(show = T, name = "Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
           curate_opts = colDef(
             show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
             name = "Curate Opts.",
             width = 110
           ),
+          genetic_code = colDef(show = T, name = "Genetic Code", align = "center", width = 110),
           poor_blast_ref = colDef(show = FALSE),
           partial = colDef(show = FALSE),
           completeness = colDef(show = FALSE),
@@ -177,7 +215,7 @@ export_server <- function(id) {
           ),
           blast_accession = colDef(
             show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Reference",
+            name = "BLAST Hit",
             html = TRUE,
             width = 120,
             cell = rt_ncbi_link(auto_col = "blast_accession_auto")
@@ -205,8 +243,18 @@ export_server <- function(id) {
             show = T, class = .grp("structure"), headerClass = .grp("structure"),
             name = "Structure"
           ),
-          ORFCount = colDef(name = "# ORFs", align = "center"),
-          export_group = colDef(name = "Group", sticky = "right")
+          PCGCount = colDef(show = T, name = "# PCGs", align = "center"),
+          tRNACount = colDef(show = T, name = "# tRNAs", align = "center"),
+          rRNACount = colDef(show = T, name = "# rRNAs", align = "center"),
+          ORFCount = colDef(show = T, name = "# ORFs", align = "center"),
+          missing = colDef(show = T, name = "Missing", align = "left", html = TRUE, cell = rt_longtext()),
+          extra = colDef(show = T, name = "Extra", align = "left", html = TRUE, cell = rt_longtext()),
+          warnings = colDef(show = T, name = "Warnings", align = "left", html = TRUE, cell = rt_longtext()),
+          export_time_stamp = colDef(
+            show = T, name = "Exported", html = TRUE, width = 150,
+            filterable = FALSE, cell = rt_ts_date()
+          ),
+          export_group = colDef(show = T, name = "Export Group", sticky = "right")
         )
       )
     })
@@ -223,7 +271,15 @@ export_server <- function(id) {
     })
 
     # table selection ----
-    selected <- reactive(reactable::getReactableState("table", "selected"))
+    # Rows hidden by the Exported filter stay mounted, so drop them from the
+    # selection so bulk export only touches visible samples.
+    selected <- reactive({
+      sel <- reactable::getReactableState("table", "selected")
+      if (is.null(sel) || length(sel) == 0) return(sel)
+      exp_code <- ifelse(is.na(rv$data$export_time_stamp), "0", "1")
+      visible <- exp_code %in% export_filter_rv()
+      intersect(sel, which(visible))
+    })
 
     output$n_selected <- renderText({
       paste0(length(selected()), " selected")
@@ -748,6 +804,8 @@ export_server <- function(id) {
         stop_aa = rv$review_stop,
         ident_pct = rv$review_ident
       )
+      # Refresh the table so the newly-written export_time_stamp shows up.
+      trigger("refresh_export")
     }
 
     # Finish a reviewed export: write files (now that all edits are committed to
