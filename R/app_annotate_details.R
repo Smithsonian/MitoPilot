@@ -475,6 +475,29 @@ annotations_details_server <- function(id, rv) {
             pos2 = colDef(show = T),
             length = colDef(show = T),
             direction = colDef(show = T),
+            partial_start = colDef(
+              show = T,
+              name = "Partial",
+              html = T,
+              align = "center",
+              maxWidth = 90,
+              # JS cell (re-renders on updateReactable) reading the stored 5'/3'
+              # partial flags (partial_start/partial_stop are 5'/3' in the gene's
+              # orientation) so partiality is visible without entering edit mode.
+              cell = htmlwidgets::JS("
+                function(cellInfo) {
+                  var row = cellInfo.row || {};
+                  function pill(t) {
+                    return '<span style=\"background:#FAA34A30;color:#111111;border:1px solid #FAA34A;' +
+                      'border-radius:3px;padding:1px 4px;font-size:11px;white-space:nowrap;\">' + t + '</span>';
+                  }
+                  var out = [];
+                  if (row.partial_start == 1) out.push(pill(\"5'\"));
+                  if (row.partial_stop == 1) out.push(pill(\"3'\"));
+                  return out.join(' ');
+                }
+              ")
+            ),
             tool = colDef(
               show = T,
               name = "tool",

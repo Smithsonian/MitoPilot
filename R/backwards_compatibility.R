@@ -134,6 +134,7 @@ backwards_compatibility <- function(
       "problematic" %in% names(annotate_table) &&
       "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
+      "export_time_stamp" %in% names(samples_table) &&
       "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
@@ -277,6 +278,13 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "ID"
       )
+  }
+
+  # if export_time_stamp column doesn't exist, add it (marks when a sample was
+  # last exported; NULL = never exported)
+  if(!("export_time_stamp" %in% names(samples_table))){
+    message("added 'export_time_stamp' column to samples table")
+    DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN export_time_stamp INTEGER")
   }
 
   # normalize any legacy TEXT genetic_code to INTEGER (idempotent). Projects

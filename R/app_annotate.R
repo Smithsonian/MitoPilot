@@ -7,6 +7,7 @@ ANNOTATE_COL_GROUPS <- list(
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
   Review   = c("ID_verified", "reviewed", "problematic", "partial", "warnings"),
+  Export   = c("export_group", "export_time_stamp"),
   Metadata = c("time_stamp", "annotate_notes")
 )
 ANNOTATE_COL_GROUP_LOOKUP <- {
@@ -89,6 +90,15 @@ annotate_ui <- function(id) {
             `selected-text-format` = "count > 0",
             width                  = "150px"
           )
+        ),
+        shinyWidgets::airDatepickerInput(
+          inputId    = ns("date_filter"),
+          label      = "Updated between:",
+          range      = TRUE,
+          clearButton = TRUE,
+          value      = NULL,
+          width      = "220px",
+          placeholder = "any time"
         ),
         uiOutput(ns("warnings_select"))
       ),
@@ -177,7 +187,7 @@ annotate_server <- function(id) {
     filtered_data <- reactive({
       req(rv$data)
       selected <- input$warning_filters
-      rv$data |> dplyr::mutate(
+      out <- rv$data |> dplyr::mutate(
         warnings = purrr::map_int(warnings_details, function(wd) {
           # if (is.na(wd) || length(selected) == 0) return(0)
           wd_list <- strsplit(as.character(wd), ";")[[1]] |>
@@ -185,7 +195,25 @@ annotate_server <- function(id) {
           sum(wd_list %in% selected)
         })
       )
+      # Date-range filter on "Last Updated" (time_stamp is epoch seconds). Empty
+      # picker = no filter; end day is inclusive. Unlike the lock/state CSS
+      # filters this subsets the rows, so selection may reset when the range changes.
+      dr <- input$date_filter
+      if (!is.null(dr) && length(dr) == 2 && all(!is.na(dr))) {
+        lo <- as.numeric(as.POSIXct(as.Date(dr[1])))
+        hi <- as.numeric(as.POSIXct(as.Date(dr[2]) + 1))
+        out <- out |>
+          dplyr::filter(!is.na(time_stamp) & time_stamp >= lo & time_stamp < hi)
+      }
+      out
     })
+
+    # Refresh the table when the date-range filter changes (ignoreNULL = FALSE so
+    # clearing the range restores all rows).
+    observeEvent(input$date_filter, {
+      req(rv$data)
+      updateReactable("table", data = filtered_data())
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
@@ -257,7 +285,17 @@ annotate_server <- function(id) {
         height = "100%",
         wrap = FALSE,
         pageSizeOptions = c(25, 50, 100, 200, 500),
-        rowStyle = rt_highlight_row(),
+        # Selection takes precedence; otherwise tint rows for samples that have
+        # already been exported (export_time_stamp not null).
+        rowStyle = htmlwidgets::JS("
+          function(rowInfo) {
+            if (typeof rowInfo === 'undefined') return
+            if (rowInfo.selected) return { background: '#D3BEC2' }
+            var v = (rowInfo.values || {})['export_time_stamp']
+            if (v != null && v !== '') return { background: '#EAF5EA' }
+            return { background: '#FFFFFF' }
+          }
+        "),
         rowClass = JS("function(rowInfo) {
           if (!rowInfo || !rowInfo.values) return '';
           return 'mp-lock-' + rowInfo.values['annotate_lock'] +
@@ -434,6 +472,35 @@ annotate_server <- function(id) {
             align = "center",
             width = 100,
             cell = rt_bool_badge(invert = TRUE, hide_no = FALSE)
+          ),
+          export_group = colDef(
+            show = TRUE, class = .grp("export_group"), headerClass = .grp("export_group"),
+            name = "Export Group",
+            align = "left",
+            minWidth = 120,
+            cell = function(value) if (is.na(value) || !nzchar(value)) "" else value
+          ),
+          export_time_stamp = colDef(
+            show = TRUE, class = .grp("export_time_stamp"), headerClass = .grp("export_time_stamp"),
+            name = "Exported",
+            filterable = FALSE,
+            html = TRUE,
+            width = 170,
+            # JS cell so it re-renders on updateReactable(); shows a green check +
+            # export date + the group the sample was exported under.
+            cell = htmlwidgets::JS("
+              function(cellInfo) {
+                var v = cellInfo.value;
+                if (v == null || v === '') return '';
+                var opts = { year: 'numeric', month: 'numeric', day: 'numeric' };
+                var date = new Date(1000*v).toLocaleDateString('en-US', opts);
+                if (date === 'Invalid Date') return '';
+                var row = cellInfo.row || {};
+                var g = row.export_group;
+                var grp = (g == null || g === '' || g === 'NA') ? '' : ' (' + g + ')';
+                return '<span style=\"color:#3d9140;font-weight:bold;\">&#10003;</span> ' + date + grp;
+              }
+            ")
           ),
           time_stamp = colDef(
             show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),

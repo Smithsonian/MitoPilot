@@ -180,7 +180,8 @@ new_db <- function(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code,
-      export_group = NA_character_
+      export_group = NA_character_,
+      export_time_stamp = NA_integer_
     )
   glue::glue_sql(
     "CREATE TABLE samples (
