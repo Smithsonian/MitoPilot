@@ -60,10 +60,16 @@ EXTRA_PCG_SYNONYMS <- c(
   atp9 = "atp9", atpase9 = "atp9", atpsynthasef0subunit9 = "atp9",
   mttb = "mttb", trimethylaminemethyltransferase = "mttb",
   msh1 = "msh1", muts = "msh1", mutshomolog = "msh1", mismatchrepairprotein = "msh1",
+  # dpo / polB / dnaB are ONE gene here: the protein-primed DNA polymerase B ORF
+  # at the medusozoan linear-mtDNA termini. GenBank labels it inconsistently
+  # (dpo, polB, or the misleading "dnaB / replication helicase"), but the CDS are
+  # empirically homologous (congeneric dpo vs dnaB reach ~97% aa id). Collapse all
+  # to dpo so they share one reference file + ruleset rule.
   dpo = "dpo", polb = "dpo", dnapolymerase = "dpo", dnapolymeraseb = "dpo",
+  dnab = "dpo", dnahelicase = "dpo", replicativednahelicase = "dpo",
+  replicationhelicasesubunit = "dpo",
   lagli = "lagli", laglidadg = "lagli", homingendonuclease = "lagli",
-  rvt = "rvt", reversetranscriptase = "rvt",
-  dnab = "dnaB", dnahelicase = "dnaB", replicativednahelicase = "dnaB"
+  rvt = "rvt", reversetranscriptase = "rvt"
 )
 # A non-standard (non-canonical, non-accessory) gene is kept only if it occurs in
 # at least this many distinct references, so per-species junk ORFs / singletons
@@ -306,6 +312,10 @@ for (cl in names(clades)) {
       db = name, set = "featureNuc", gene = gene, nonstd = FALSE, n = n)
   }
 
+  # NOTE: this rebuilds the bundle from RefSeq only. Curated non-RefSeq
+  # additions are NOT regenerated here and must be re-applied afterwards:
+  # featureProt/orf314.fas (+ index) and MANIFEST.txt. See
+  # data-raw/novel_gene_refdbs/README.md (orf314) and build_orf314_refdb.R.
   tarball <- file.path(STAGE, paste0(name, ".tar.gz"))
   conda_run(BLASTENV,
             sprintf("tar -czf %s -C %s %s", shQuote(tarball), shQuote(STAGE), shQuote(name)),

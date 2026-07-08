@@ -20,12 +20,17 @@ def appendTaggedNoteSql(String tag, String msg) {
 
 // Reference sequence and rotation per candidate reference for newly-curated
 // samples (gated on curate_out). One row per (ID, candidate accession). rank=1 is
-// the top hit. Rotation is computed from that accession's own annotations.
+// the top hit. Rotation is computed from that accession's own annotations, but
+// ONLY for references that are truly circular (s.topology = 'circular'); a linear
+// GenBank reference keeps its native coordinates (rotation 0) so the synteny plot
+// is not artificially rotated to the start gene.
 // Assembly sequence comes from the curate output FASTA (already rotated to start_gene).
 params.sqlReadRef =
     'SELECT c.ID, c.accession, c.rank, s.sequence, ' +
-        'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
-                  'WHERE r.accession = c.accession AND r.gene = d.start_gene), 0) ' +
+        'CASE WHEN s.topology = \'circular\' THEN ' +
+            'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
+                      'WHERE r.accession = c.accession AND r.gene = d.start_gene), 0) ' +
+        'ELSE 0 END ' +
     'FROM (SELECT ID, accession, MIN(rank) AS rank FROM blast_ref_candidates ' +
          'GROUP BY ID, accession) c ' +
     'JOIN annotate a     ON c.ID = a.ID ' +
@@ -40,8 +45,10 @@ params.sqlReadRef =
 // rotated after CURATE runs in WF2.
 params.sqlBackfill =
     'SELECT b.ID, cd.accession, cd.rank, a.sequence, s.sequence, ' +
-        'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
-                  'WHERE r.accession = cd.accession AND r.gene = d.start_gene), 0) ' +
+        'CASE WHEN s.topology = \'circular\' THEN ' +
+            'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
+                      'WHERE r.accession = cd.accession AND r.gene = d.start_gene), 0) ' +
+        'ELSE 0 END ' +
     'FROM assemble b ' +
     'JOIN (SELECT ID, accession, MIN(rank) AS rank FROM blast_ref_candidates ' +
          'GROUP BY ID, accession) cd ON cd.ID = b.ID ' +

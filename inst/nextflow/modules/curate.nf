@@ -50,7 +50,9 @@ process curate {
         max_blast_hits = '!{opts.max_blast_hits}', \
         ref_dir = '!{ref_db_clean}', \
         blast_ref_file = '!{(blast_ref_files instanceof List ? blast_ref_files : [blast_ref_files]).join(" ")}', \
-        feature_trim = !{opts.feature_trim == 1 ? "TRUE" : "FALSE"} \
+        feature_trim = !{opts.feature_trim == 1 ? "TRUE" : "FALSE"}, \
+        ref_based_rc = !{opts.ref_based_rc == 1 ? "TRUE" : "FALSE"}, \
+        blast_accession = '!{opts.blast_accession}' \
         )"
     mv !{dir}/*_annotations_*.csv !{id}/
     ### work dir info for troubleshooting ####

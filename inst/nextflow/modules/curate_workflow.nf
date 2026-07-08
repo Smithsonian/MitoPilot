@@ -3,7 +3,7 @@ include {curate} from './curate.nf'
 
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
-                    'd.ref_dir, d.ref_db, e.feature_trim, b.blast_accession, f.genetic_code ' +
+                    'd.ref_dir, d.ref_db, e.feature_trim, b.blast_accession, f.genetic_code, e.ref_based_rc ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
                     'JOIN annotate c ON a.ID = c.ID ' +
@@ -58,9 +58,9 @@ workflow CURATE {
                 tuple(
                     it[0],                                          // ID
                     it[1],                                          // path
-                    it[14],                                          // Annotations
-                    it[15],                                          // Assembly
-                    it[16],                                          // Coverage
+                    it[15],                                          // Annotations
+                    it[16],                                          // Assembly
+                    it[17],                                          // Coverage
                     [
                         cpus:  it[4],                                      // cpus
                         memory: it[5],                                     // memory
@@ -68,7 +68,9 @@ workflow CURATE {
                         params: encodedParams,                              // params
                         max_blast_hits: it[8],                             // maximum retained blast hits
                         genetic_code: it[13],                              // per-sample genetic code (from samples table)
-                        feature_trim: it[11] != null ? it[11] as Integer : 1   // trim un-annotated ends (default on)
+                        feature_trim: it[11] != null ? it[11] as Integer : 1,  // trim un-annotated ends (default on)
+                        ref_based_rc: it[14] != null ? it[14] as Integer : 0,   // reference-based RC (default off)
+                        blast_accession: it[12] ?: ''                           // top BLAST hit (orientation ref)
                     ],
                     file(it[9] + "/" + it[10]),                              // curation ref dir + clade
                     it[10],                                                   // ref clade
