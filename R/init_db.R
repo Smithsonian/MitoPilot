@@ -499,6 +499,7 @@ new_db <- function(
       use_mitos INTEGER,
       mitos_opts TEXT,
       use_mitos_best INTEGER,
+      rescue_no_trna INTEGER,
       use_trnaScan INTEGER,
       trnaScan_opts TEXT,
       arwen_opts TEXT,
@@ -513,6 +514,7 @@ new_db <- function(
       start_gene TEXT,
       coverage_trim INTEGER,
       feature_trim INTEGER,
+      ref_based_rc INTEGER,
       retain_low_conf_trna INTEGER,
       PRIMARY KEY (annotate_opts)
     );"
@@ -528,6 +530,7 @@ new_db <- function(
         use_mitos = 1L,
         mitos_opts = mitos_opts,
         use_mitos_best = 1L,
+        rescue_no_trna = 0L,
         use_trnaScan = 1L,
         trnaScan_opts = trnaScan_opts,
         arwen_opts = arwen_opts,
@@ -542,6 +545,7 @@ new_db <- function(
         start_gene = "trnF",
         coverage_trim = 1L,
         feature_trim = 1L,
+        ref_based_rc = 0L,
         retain_low_conf_trna = 0L
       ),
       in_place = TRUE,
@@ -712,6 +716,7 @@ new_db <- function(
       ref_length INTEGER,
       genetic_code INTEGER,
       lineage TEXT,
+      topology TEXT,
       time_stamp INTEGER,
       PRIMARY KEY (accession)
     );"

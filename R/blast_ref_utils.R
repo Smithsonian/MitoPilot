@@ -65,7 +65,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
 
   .write_ref_files(accession, g$result, g$genetic_code_num, organism, tax$lineage,
                    seq_str, blast_species, blast_evalue,
-                   output_file, sequence_file, genetic_code_file, json_file)
+                   output_file, sequence_file, genetic_code_file, json_file,
+                   topology = g$topology)
 
   # Signal a transient FASTA failure to Nextflow so the process can retry.
   if (isTRUE(fasta_failed)) {
@@ -182,6 +183,14 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     if (!is.na(org) && nzchar(org)) org else NULL
   } else NULL
 
+  # Topology from the region feature's `Is_circular` attribute. NCBI GFF3 marks
+  # circular genomes with `Is_circular=true`; linear records omit it. Used to
+  # gate reference rotation: only truly circular references may be rotated to a
+  # start gene (a linear GenBank record must keep its native coordinates).
+  is_circular <- length(region_attrs) > 0L && !is.na(region_attrs[1]) &&
+    isTRUE(tolower(get_attr(region_attrs[1], "Is_circular")) == "true")
+  topology <- if (is_circular) "circular" else "linear"
+
   taxid <- tryCatch({
     dbxref <- if (length(region_attrs) > 0L && !is.na(region_attrs[1])) {
       get_attr(region_attrs[1], "Dbxref")
@@ -221,7 +230,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
   result$ref_length <- ref_length
 
   list(result = result, taxid = taxid, gff_organism = gff_organism,
-       genetic_code_num = genetic_code_num, ref_length = ref_length)
+       genetic_code_num = genetic_code_num, ref_length = ref_length,
+       topology = topology)
 }
 
 # Parse taxonomy XML (a single <Taxon> record) into species + condensed lineage.
@@ -263,7 +273,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
 # Write the four per-accession output files from parsed pieces.
 .write_ref_files <- function(accession, result, genetic_code_num, organism, lineage,
                              seq_str, blast_species, blast_evalue,
-                             output_file, sequence_file, genetic_code_file, json_file) {
+                             output_file, sequence_file, genetic_code_file, json_file,
+                             topology = "linear") {
   if (!is.null(genetic_code_file)) writeLines(as.character(genetic_code_num), genetic_code_file)
   write.csv(result, output_file, row.names = FALSE)
   if (!is.null(sequence_file)) writeLines(seq_str, sequence_file)
@@ -277,6 +288,7 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
       lineage = lineage,
       sequence = seq_str,
       genetic_code = genetic_code_num,
+      topology = topology,
       pcg = pcg
     )
     jsonlite::write_json(ref_json, json_file, auto_unbox = TRUE, null = "null")
@@ -382,7 +394,8 @@ fetch_blast_ref <- function(accession, output_file, sequence_file = NULL,
     dir.create(p$dir, showWarnings = FALSE, recursive = TRUE)
     ok <- tryCatch({
       .write_ref_files(acc, g$result, g$genetic_code_num, organism, tax$lineage,
-                       seq_str, NULL, NULL, p$ann, p$seq, p$gc, p$json)
+                       seq_str, NULL, NULL, p$ann, p$seq, p$gc, p$json,
+                       topology = g$topology)
       TRUE
     }, error = function(e) {
       message("[fetch_blast_refs] write failed for ", acc, ": ", conditionMessage(e))

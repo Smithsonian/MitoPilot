@@ -7,6 +7,10 @@
 #' @param mitos_opts Additional command line options for MITOS2
 #' @param out output directory
 #' @param condaenv Conda environment to run MITOS2 (default: "mitos")
+#' @param rescue_no_trna Run MITOS2 a second time with tRNA prediction disabled
+#'   (`--trna 0`) and add any PCGs/rRNAs it uniquely recovers to the full-run
+#'   annotations (default: FALSE). MITOS2 discards rRNAs/PCGs whose locus overlaps
+#'   a predicted tRNA; the tRNA-free run recovers them (e.g. scyphozoan rrnS).
 #'
 #' @export
 #'
@@ -17,7 +21,8 @@ annotate_mitos2 <- function(
     ref_db = "Chordata",
     mitos_opts = "--best --intron 0 --oril 0",
     out = NULL,
-    condaenv = "mitos") {
+    condaenv = "mitos",
+    rescue_no_trna = FALSE) {
   genetic_code <- as.character(genetic_code)
   # write MITOS2 output into the local work dir so it is retained for inspection
   out <- out %||% "MITOS2_temp"
@@ -28,43 +33,49 @@ annotate_mitos2 <- function(
   names(assembly) <- stringr::str_extract(names(assembly), "^\\S+")
   Biostrings::writeXStringSet(assembly, fasta)
 
-  process_args <- list(
-    cmd = "runmitos",
-    args = stringr::str_glue(
-      "--input {fasta}",
-      "--outdir {out}",
-      "--code {genetic_code}",
-      "--refseqver {ref_db}",
-      "--refdir .",
-      "{ifelse(topology != 'circular', '--linear', '')}",
-      "{mitos_opts}",
-      "--noplots",
-      .sep = " "
-    ) |>
-      stringr::str_squish()
-  )
-  if (!is.null(condaenv)) {
-    process <- reticulate::conda_run2
-    process_args$envname <- condaenv
-    process_args$echo <- FALSE
-  } else {
-    process <- "system2"
+  # Run MITOS2 into `out_dir`, appending `extra_opts` (e.g. "--trna 0") to the
+  # configured mitos_opts.
+  run_mitos <- function(out_dir, extra_opts = "") {
+    dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+    process_args <- list(
+      cmd = "runmitos",
+      args = stringr::str_glue(
+        "--input {fasta}",
+        "--outdir {out_dir}",
+        "--code {genetic_code}",
+        "--refseqver {ref_db}",
+        "--refdir .",
+        "{ifelse(topology != 'circular', '--linear', '')}",
+        "{mitos_opts}",
+        "{extra_opts}",
+        "--noplots",
+        .sep = " "
+      ) |>
+        stringr::str_squish()
+    )
+    if (!is.null(condaenv)) {
+      process <- reticulate::conda_run2
+      process_args$envname <- condaenv
+      process_args$echo <- FALSE
+    } else {
+      process <- "system2"
+    }
+    do.call(process, process_args)
   }
 
   message("starting MITOS2")
   message(paste("MITOS2 out dir:", out))
-
-  do.call(process, process_args)
-
+  run_mitos(out)
   message("finished MITOS2")
 
   contig_len <- length(assembly[[1]]) # NOTE: this will be problematic when we deal with fragmented assemblies
 
   # Format Mitos Output ----
-  annotations_mitos <- list.files(out,
-                                  recursive = T,
-                                  full.names = T,
-                                  pattern = "result.fas") |>
+  parse_mitos_dir <- function(dir) {
+    list.files(dir,
+               recursive = T,
+               full.names = T,
+               pattern = "result.fas") |>
     purrr::map_dfr( ~ {
       annotations <- Biostrings::readDNAStringSet(.x) |>
         {
@@ -295,6 +306,30 @@ annotate_mitos2 <- function(
       ###################
 
     })
+  }
+
+  annotations_mitos <- parse_mitos_dir(out)
+
+  # Optional rescue run: MITOS2 discards rRNAs/PCGs whose locus overlaps a
+  # predicted tRNA (e.g. a scyphozoan rrnS wedged against nad5 with a tRNA in its
+  # span). A second MITOS2 run with tRNA prediction disabled recovers them. Keep
+  # every feature from the full run and add only the PCGs/rRNAs the tRNA-free run
+  # uniquely found; tRNAs still come from the full run (and tRNAscan-SE).
+  if (isTRUE(rescue_no_trna)) {
+    out_nt <- paste0(out, "_noTRNA")
+    message("starting MITOS2 rescue run (--trna 0)")
+    run_mitos(out_nt, extra_opts = "--trna 0")
+    message("finished MITOS2 rescue run")
+    rescue_extra <- parse_mitos_dir(out_nt) |>
+      dplyr::filter(type %in% c("PCG", "rRNA") & !(gene %in% annotations_mitos$gene))
+    if (nrow(rescue_extra) > 0) {
+      message(sprintf("MITOS2 rescue run recovered: %s",
+                      paste(rescue_extra$gene, collapse = ", ")))
+      annotations_mitos <- dplyr::bind_rows(annotations_mitos, rescue_extra)
+    }
+  }
+
+  annotations_mitos
 }
 
 # PCG key for full metazoan dataset ----

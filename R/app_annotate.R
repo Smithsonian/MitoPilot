@@ -809,6 +809,10 @@ annotate_server <- function(id) {
           value = isTRUE(as.logical(cur$use_mitos_best %||% 1L))
         )
         shinyWidgets::updatePrettyCheckbox(
+          inputId = "rescue_no_trna",
+          value = isTRUE(as.logical(cur$rescue_no_trna %||% 0L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
           inputId = "use_arwen",
           value = isTRUE(as.logical(cur$use_arwen))
         )
@@ -853,6 +857,10 @@ annotate_server <- function(id) {
           value = isTRUE(as.logical(cur$feature_trim %||% 1L))
         )
         shinyWidgets::updatePrettyCheckbox(
+          inputId = "ref_based_rc",
+          value = isTRUE(as.logical(cur$ref_based_rc %||% 0L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
           inputId = "retain_low_conf_trna",
           value = isTRUE(as.logical(cur$retain_low_conf_trna %||% 0L))
         )
@@ -873,6 +881,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("use_mitos", condition = input$edit_annotate_opts)
       shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_mitos_best", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("rescue_no_trna", condition = input$edit_annotate_opts)
       # shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
       shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
       shinyjs::toggleState("use_trnaScan", condition = input$edit_annotate_opts)
@@ -888,6 +897,7 @@ annotate_server <- function(id) {
       shinyjs::toggleState("mitofinder_opts", condition = input$edit_annotate_opts)
       shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
       shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
+      shinyjs::toggleState("ref_based_rc", condition = input$edit_annotate_opts)
       shinyjs::toggleState("retain_low_conf_trna", condition = input$edit_annotate_opts)
       shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
       # Check if editing opts that apply beyond selection
@@ -964,6 +974,7 @@ annotate_server <- function(id) {
               use_mitos = as.integer(isTRUE(input$use_mitos)),
               mitos_opts = req(input$mitos_opts),
               use_mitos_best = as.integer(isTRUE(input$use_mitos_best)),
+              rescue_no_trna = as.integer(isTRUE(input$rescue_no_trna)),
               ref_dir = req(input$mitos_ref_dir),
               ref_db = req(input$mitos_ref_db),
               use_trnaScan = as.integer(isTRUE(input$use_trnaScan)),
@@ -980,6 +991,7 @@ annotate_server <- function(id) {
               start_gene = req(input$start_gene),
               coverage_trim = as.integer(isTRUE(input$coverage_trim)),
               feature_trim = as.integer(isTRUE(input$feature_trim)),
+              ref_based_rc = as.integer(isTRUE(input$ref_based_rc)),
               retain_low_conf_trna = as.integer(isTRUE(input$retain_low_conf_trna))
             ),
             in_place = TRUE,

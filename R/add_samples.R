@@ -187,6 +187,7 @@ add_samples <- function(
           assemble_lock = 0,
           hide_switch = 0,
           assemble_opts = "default",
+          blast_opts = "default",
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -204,6 +205,10 @@ add_samples <- function(
         annotate_opts = "default",
         curate_opts = "default",
         orf_opts = "default",
+        reviewed = "no",
+        problematic = "no",
+        partial = "no",
+        ID_verified = "no",
         annotate_switch = 1,
         annotate_lock = 0
       ),

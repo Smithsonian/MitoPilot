@@ -51,8 +51,8 @@ params.sqlWriteBlastRef = '''INSERT OR REPLACE INTO blast_ref_annotations
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
 
 params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
-    (accession, sequence, ref_length, genetic_code, lineage, time_stamp)
-    VALUES (?, ?, ?, ?, ?, ?)'''
+    (accession, sequence, ref_length, genetic_code, lineage, topology, time_stamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?)'''
 
 // Written when the top-hit ref fetch fails after all retries. Guarded WHERE
 // assemble_switch = 4 so terminal state=3 rows are untouched. Strips any prior
@@ -167,12 +167,14 @@ workflow BLAST_REF_FETCH {
                 def gc_str = gc_file.text.trim()
                 def gc = gc_str.isInteger() ? gc_str.toInteger() : 2
                 def lineage = null
+                def topology = null
                 try {
                     def j = new JsonSlurper().parse(json_file)
                     lineage = j?.lineage ?: null
-                } catch (ignored) { lineage = null }
+                    topology = j?.topology ?: null
+                } catch (ignored) { lineage = null; topology = null }
                 def ts = java.time.Instant.now().getEpochSecond()
-                tuple(accession, seq, seq.length() as Long, gc, lineage, ts)
+                tuple(accession, seq, seq.length() as Long, gc, lineage, topology, ts)
             }
             .filter { it != null }
             .sqlInsert(statement: params.sqlWriteRefSeq, db: 'sqlite')

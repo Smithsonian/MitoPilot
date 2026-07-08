@@ -122,6 +122,7 @@ backwards_compatibility <- function(
       "arwen_opts" %in% names(annotate_opts_table) &&
       "use_arwen" %in% names(annotate_opts_table) &&
       "start_gene" %in% names(annotate_opts_table) &&
+      "ref_based_rc" %in% names(annotate_opts_table) &&
       "max_blast_hits" %in% names(curate_opts_table) &&
       "ref_db" %in% names(curate_opts_table) &&
       "ref_dir" %in% names(curate_opts_table) &&
@@ -144,6 +145,7 @@ backwards_compatibility <- function(
         error = function(e) FALSE
       )) &&
       "use_mitos_best" %in% names(annotate_opts_table) &&
+      "rescue_no_trna" %in% names(annotate_opts_table) &&
       "use_aragorn" %in% names(annotate_opts_table) &&
       "aragorn_opts" %in% names(annotate_opts_table) &&
       "max_paths" %in% names(assemble_opts_table) &&
@@ -166,7 +168,7 @@ backwards_compatibility <- function(
       "assembly_blast" %in% DBI::dbListTables(con) &&
       "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
       isTRUE(tryCatch(
-        all(c("genetic_code", "lineage") %in% names(DBI::dbReadTable(con, "blast_ref_sequences"))),
+        all(c("genetic_code", "lineage", "topology") %in% names(DBI::dbReadTable(con, "blast_ref_sequences"))),
         error = function(e) FALSE
       )) &&
       isTRUE(tryCatch(
@@ -534,6 +536,25 @@ backwards_compatibility <- function(
       )
   }
 
+  # if rescue_no_trna column doesn't exist, add it (default off)
+  if(!("rescue_no_trna" %in% names(annotate_opts_table))){
+    message("added 'rescue_no_trna' column to annotate_opts table")
+    annotate_opts_table$rescue_no_trna <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN rescue_no_trna INTEGER",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
   # if use_mitos column doesn't exist, add it (default on, matching prior behaviour)
   if(!("use_mitos" %in% names(annotate_opts_table))){
     message("added 'use_mitos' column to annotate_opts table")
@@ -730,6 +751,24 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE annotate_opts
        ADD COLUMN feature_trim INTEGER",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+    dplyr::tbl(con, "annotate_opts") |>
+      dplyr::rows_upsert(
+        annotate_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "annotate_opts"
+      )
+  }
+
+  # if ref_based_rc column doesn't exist, add it (default off)
+  if (!("ref_based_rc" %in% names(annotate_opts_table))) {
+    message("added 'ref_based_rc' column to annotate_opts table")
+    annotate_opts_table$ref_based_rc <- rep(0L, nrow(annotate_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE annotate_opts
+       ADD COLUMN ref_based_rc INTEGER",
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
     dplyr::tbl(con, "annotate_opts") |>
@@ -1182,6 +1221,7 @@ backwards_compatibility <- function(
         ref_length INTEGER,
         genetic_code INTEGER,
         lineage TEXT,
+        topology TEXT,
         time_stamp INTEGER,
         PRIMARY KEY (accession)
       );"
@@ -1195,6 +1235,10 @@ backwards_compatibility <- function(
     if (!("lineage" %in% ref_seq_cols)) {
       message("added 'lineage' column to blast_ref_sequences table")
       DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN lineage TEXT")
+    }
+    if (!("topology" %in% ref_seq_cols)) {
+      message("added 'topology' column to blast_ref_sequences table")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN topology TEXT")
     }
   }
 

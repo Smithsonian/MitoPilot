@@ -64,6 +64,7 @@ process annotate {
         use_mitos = !{opts.use_mitos == 1 ? "TRUE" : "FALSE"}, \
         mitos_opts = '!{opts.mitos}', \
         use_mitos_best = !{opts.use_mitos_best == 1 ? "TRUE" : "FALSE"}, \
+        rescue_no_trna = !{opts.rescue_no_trna == 1 ? "TRUE" : "FALSE"}, \
         mitos_condaenv = '!{params.mitos_condaenv}', \
         use_trnaScan = !{opts.use_trnaScan == 1 ? "TRUE" : "FALSE"}, \
         trnaScan_opts = '!{opts.trnaScan}', \
