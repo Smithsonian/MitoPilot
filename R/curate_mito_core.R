@@ -20,6 +20,12 @@
 #'   on the minus strand so annotations are reported on the plus strand
 #'   (default = TRUE). Diptera mitogenomes legitimately carry minus-strand
 #'   rRNAs, so the diptera wrapper passes FALSE.
+#' @param ref_based_rc Reverse-complement each contig to match the strand of the
+#'   top BLAST reference when the RC aligns better than the forward orientation
+#'   (default = FALSE). Off by default because the rRNA / start-gene heuristics
+#'   usually orient correctly; enable for taxa they cannot resolve (e.g.
+#'   scyphozoan genomes with rRNAs on opposite strands). Runs after the
+#'   rRNA-strand flip, so it is the final orientation authority.
 #'
 #' @noRd
 #'
@@ -34,7 +40,9 @@ curate_mito_core <- function(
     ref_dir = NULL,
     blast_ref_file = NULL,
     feature_trim = TRUE,
-    flip_rRNA_minus_strand = TRUE) {
+    flip_rRNA_minus_strand = TRUE,
+    ref_based_rc = FALSE,
+    blast_accession = NULL) {
   # Prepare environment ----
 
   ## load annotations ----
@@ -164,6 +172,52 @@ curate_mito_core <- function(
           coverage |> dplyr::filter(SeqId != seqid),
           coverage_flip
         )
+      }
+    }
+  }
+
+  ## reference-based reverse-complement (optional) ----
+  # Ensure each contig matches the strand of the top BLAST reference: align the
+  # contig forward and reverse-complemented against the reference and flip the
+  # contig (sequence + annotations + coverage) when the RC aligns materially
+  # better. Off by default; runs AFTER the rRNA-strand flip so it is the final
+  # orientation authority, and it inspects the current (already-flipped) state so
+  # it simply converges to the reference orientation without double-flipping.
+  # Intended for taxa the rRNA/start-gene heuristics cannot orient (e.g.
+  # scyphozoan genomes with rRNAs on opposite strands).
+  if (isTRUE(ref_based_rc)) {
+    # Orient against the top BLAST hit (blast_accession). This is the designated
+    # reference and the highest-similarity hit; using it (rather than the longest
+    # candidate) matters when references disagree on strand, which is common for
+    # linear mitogenomes where strand choice at deposition is arbitrary.
+    ref_seq_str <- tryCatch(
+      .best_blast_ref_sequence(blast_ref_file, prefer_accession = blast_accession),
+      error = function(e) NULL)
+    if (!is.null(ref_seq_str) && nzchar(ref_seq_str)) {
+      ref_dna <- Biostrings::DNAString(
+        gsub("[^ACGTNacgtnRYSWKMBDHVryswkmbdhv]", "N", toupper(ref_seq_str))
+      )
+      # baseOnly = FALSE: the full IUPAC matrix scores N / ambiguity codes.
+      # baseOnly = TRUE has no key for N and errors ("key 15 not in lookup
+      # table") on any reference or contig carrying an ambiguity base, which the
+      # tryCatch below would otherwise swallow into a silent no-flip.
+      subMx <- pwalign::nucleotideSubstitutionMatrix(match = 1, mismatch = -1, baseOnly = FALSE)
+      for (seqid in unique(annotations$contig)) {
+        ctg <- tryCatch(assembly[[contig_key[seqid]]], error = function(e) NULL)
+        if (is.null(ctg)) next
+        score <- function(s) tryCatch(
+          pwalign::pairwiseAlignment(s, ref_dna, substitutionMatrix = subMx,
+                                     gapOpening = 10, gapExtension = 4,
+                                     type = "local", scoreOnly = TRUE),
+          error = function(e) NA_real_
+        )
+        fwd_score <- score(ctg)
+        rc_score  <- score(Biostrings::reverseComplement(ctg))
+        if (is.na(fwd_score) || is.na(rc_score) || rc_score <= fwd_score) next
+        flipped <- .rc_contig_flip(seqid, assembly, annotations, coverage, contig_key)
+        assembly    <- flipped$assembly
+        annotations <- flipped$annotations
+        coverage    <- flipped$coverage
       }
     }
   }
@@ -822,4 +876,84 @@ curate_mito_core <- function(
   }
 
   return(invisible(annotations))
+}
+
+# Return the nucleotide sequence of the reference to orient against from the
+# whitespace-separated `blast_ref_file` JSON list, or NULL if none carry a usable
+# sequence. When `prefer_accession` (the top BLAST hit) matches a JSON with a
+# usable sequence it wins outright - the top hit is the designated reference and,
+# for linear mitogenomes whose candidates disagree on strand, the only one whose
+# orientation curation should match. Otherwise falls back to lowest blast_evalue,
+# breaking ties by longest sequence (prefer a complete genome over a partial;
+# evalues are frequently all 0 for strong hits). Used by the reference-based RC step.
+# @noRd
+.best_blast_ref_sequence <- function(blast_ref_file, prefer_accession = NULL) {
+  if (is.null(blast_ref_file) || !nzchar(blast_ref_file)) return(NULL)
+  files <- strsplit(trimws(blast_ref_file), "\\s+")[[1]]
+  files <- files[nzchar(files) & file.exists(files)]
+  if (length(files) == 0) return(NULL)
+  prefer_accession <- if (is.null(prefer_accession) || is.na(prefer_accession) ||
+                          !nzchar(prefer_accession)) NULL else trimws(prefer_accession)
+  usable <- function(s) is.character(s) && length(s) == 1 && nzchar(s)
+  best_seq <- NULL
+  best_eval <- Inf
+  best_len <- -1L
+  for (f in files) {
+    j <- tryCatch(jsonlite::fromJSON(f), error = function(e) NULL)
+    if (is.null(j)) next
+    seq_str <- j$sequence %||% ""
+    if (!usable(seq_str)) next
+    # Top BLAST hit wins outright.
+    if (!is.null(prefer_accession) && identical(as.character(j$accession %||% ""), prefer_accession)) {
+      return(seq_str)
+    }
+    ev <- suppressWarnings(as.numeric(j$blast_evalue %||% NA))
+    if (is.na(ev)) ev <- Inf
+    len <- nchar(seq_str)
+    if (ev < best_eval || (ev == best_eval && len > best_len)) {
+      best_eval <- ev
+      best_len <- len
+      best_seq <- seq_str
+    }
+  }
+  best_seq
+}
+
+# Reverse-complement one contig and propagate the flip to its annotations
+# (pos1/pos2 mirrored about the contig width, direction toggled) and coverage
+# (row order reversed, bases re-called from the flipped sequence). Mirrors the
+# rRNA-strand flip block. Returns the updated assembly, annotations, coverage.
+# @noRd
+.rc_contig_flip <- function(seqid, assembly, annotations, coverage, contig_key) {
+  wdth <- assembly[contig_key[seqid]]@ranges@width
+  annotations_updated <- annotations |>
+    dplyr::filter(contig == !!seqid) |>
+    dplyr::mutate(
+      pos1_old = pos1,
+      pos2_old = pos2,
+      pos1 = wdth - pos2_old + 1,
+      pos2 = wdth - pos1_old + 1,
+      direction = dplyr::case_match(direction, "+" ~ "-", "-" ~ "+")
+    ) |>
+    dplyr::select(-pos1_old, -pos2_old)
+  annotations <- annotations |>
+    dplyr::filter(contig != seqid) |>
+    dplyr::bind_rows(annotations_updated) |>
+    dplyr::arrange(contig, pos1)
+  assembly[contig_key[seqid]] <- assembly[contig_key[seqid]] |>
+    Biostrings::reverseComplement()
+  if (!is.null(coverage)) {
+    coverage_flip <- coverage |>
+      dplyr::filter(SeqId == !!seqid) |>
+      dplyr::arrange(desc(Position)) |>
+      dplyr::mutate(
+        Position = dplyr::row_number(),
+        Call = as.character(assembly[contig_key[seqid]]) |> stringr::str_split("") |> unlist()
+      )
+    coverage <- dplyr::bind_rows(
+      coverage |> dplyr::filter(SeqId != seqid),
+      coverage_flip
+    )
+  }
+  list(assembly = assembly, annotations = annotations, coverage = coverage)
 }

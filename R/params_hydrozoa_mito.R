@@ -91,7 +91,9 @@ params_hydrozoa_mito <- function(alt = list()) {
       cob = list(
         type = "PCG"
       ),
-      dnaB = list(
+      # dpo = medusozoan terminal DNA polymerase B ORF. GenBank synonyms polB /
+      # dnaB (previously this rule) are normalized to dpo.
+      dpo = list(
         type = "PCG"
       ),
       orf314 = list(

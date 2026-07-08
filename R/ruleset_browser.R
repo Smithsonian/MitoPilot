@@ -24,6 +24,7 @@ RULESET_MAP <- list(
   homoscleromorpha_mito = list(label = "Homoscleromorph sponges", ncbi = "Homoscleromorpha", taxid = "80999"),
   malacostraca_mito    = list(label = "Malacostracans",  ncbi = "Malacostraca",     taxid = "6681"),
   hydrozoa_mito        = list(label = "Hydrozoans",      ncbi = "Hydrozoa",         taxid = "6074"),
+  scyphozoa_mito       = list(label = "True jellyfishes", ncbi = "Scyphozoa",       taxid = "6142"),
   nemertea_mito        = list(label = "Ribbon worms",    ncbi = "Nemertea",         taxid = "6217"),
   ophiuroidea_mito     = list(label = "Brittle stars",   ncbi = "Ophiuroidea",      taxid = "7618"),
   platyhelminthes_mito = list(label = "Flatworms",       ncbi = "Platyhelminthes",  taxid = "6157"),

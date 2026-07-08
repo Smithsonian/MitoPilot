@@ -27,9 +27,13 @@ MITO_TRNA_GENES <- c(
 #' Additional protein-coding genes used by some clade rulesets beyond the
 #' standard 13 (extra mitochondrial ORFs / accessory genes found in
 #' invertebrate and sponge mitogenomes).
+#'
+#' Note: `dpo` covers the medusozoan linear-mtDNA terminal DNA polymerase B ORF.
+#' Its GenBank synonyms `polB` and `dnaB` (the "replication helicase" label is a
+#' misannotation) are normalized to `dpo`, so they are not listed separately.
 #' @noRd
 MITO_EXTRA_PCG_GENES <- c(
-  "atp9", "mttb", "msh1", "dpo", "lagli", "rvt", "dnaB", "im"
+  "atp9", "mttb", "msh1", "dpo", "lagli", "rvt", "im"
 )
 
 #' Flat list of canonical mitochondrial gene names (rRNA, PCG, tRNA), ordered for

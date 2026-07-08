@@ -282,6 +282,19 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
                   "top-scoring of overlapping predictions.",
                   href = "http://mitos2.bioinf.uni-leipzig.de/index.py"),
         div(
+          id = ns("rescue_no_trna_box"),
+          style = "display: flex; flex-flow: row nowrap; align-items: center; margin-bottom: 8px;",
+          shinyWidgets::prettyCheckbox(
+            ns("rescue_no_trna"),
+            label = "Rescue rRNAs/PCGs lost to tRNA overlap",
+            value = isTRUE(as.logical(current$rescue_no_trna %||% 1L)),
+            status = "primary"
+          ) |> shinyjs::disabled()
+        ),
+        opts_help("Runs MITOS2 a second time without tRNA prediction to recover ",
+                  "rRNAs or PCGs that MITOS2 drops when a tRNA overlaps them. ",
+                  "Adds some runtime."),
+        div(
           id = ns("mitos_ref_box"),
           div(
             style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
@@ -430,6 +443,16 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         opts_help("Trim linear contig ends that extend past the outermost annotated ",
                   "gene features."),
+        shinyWidgets::prettyCheckbox(
+          ns("ref_based_rc"),
+          label = "Reverse-complement assembly to match reference orientation",
+          value = isTRUE(as.logical(current$ref_based_rc %||% 0L)),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        opts_help("Reverse-complement each contig when it aligns better to the top ",
+                  "BLAST reference reversed. Off by default; the rRNA and start-gene ",
+                  "heuristics usually orient correctly. Enable for taxa they cannot ",
+                  "resolve, e.g. scyphozoan jellyfish with rRNAs on opposite strands."),
         shinyWidgets::prettyCheckbox(
           ns("retain_low_conf_trna"),
           label = "Retain low-confidence (NNN anticodon) tRNAs",
