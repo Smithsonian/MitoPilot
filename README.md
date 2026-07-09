@@ -24,34 +24,36 @@ outputs. Currently the pipeline expects paired-end Illumina reads as the
 raw input and performs the following steps.
 
 1.  Mitogenome assembly
-    - [fastp](https://github.com/OpenGene/fastp) for quality control and
-      adapter trimming
-    - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (default)
-      or [MitoFinder](https://github.com/RemiAllio/MitoFinder) for
-      mitogenome assembly
-    - [bowtie2](https://github.com/BenLangmead/bowtie2) for read mapping
-      to calculate coverage and error rates.
-    - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) remotely
-      fetch closest match from GenBank for automatic and manual curation
+      - [fastp](https://github.com/OpenGene/fastp) for quality control
+        and adapter trimming
+      - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle)
+        (default) or
+        [MitoFinder](https://github.com/RemiAllio/MitoFinder) for
+        mitogenome assembly
+      - [bowtie2](https://github.com/BenLangmead/bowtie2) for read
+        mapping to calculate coverage and error rates.
+      - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) remotely
+        fetch closest match from GenBank for automatic and manual
+        curation
 2.  Mitogenome annotation
-    - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA
-      annotation
-    - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for
-      tRNA annotation
-    - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
-      annotation (optional)
-    - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA annotation
-      (optional)
-    - [ORFfinder](https://www.ncbi.nlm.nih.gov/orffinder/) identify
-      additional open reading frames (ORFs) (optional)
-    - Custom scripts for gene boundary refinement and annotation file
-      formatting
-    - Validation to flag possible issues or known errors that would be
-      rejected by NCBI GenBank
-    - Manual curation of annotations using the integrated Shiny App
+      - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA
+        annotation
+      - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for
+        tRNA annotation
+      - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
+        annotation (optional)
+      - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA
+        annotation (optional)
+      - [ORFfinder](https://www.ncbi.nlm.nih.gov/orffinder/) identify
+        additional open reading frames (ORFs) (optional)
+      - Custom scripts for gene boundary refinement and annotation file
+        formatting
+      - Validation to flag possible issues or known errors that would be
+        rejected by NCBI GenBank
+      - Manual curation of annotations using the integrated Shiny App
 3.  Data export
-    - Custom scripts to export data in a format suitable for submission
-      to NCBI GenBank
+      - Custom scripts to export data in a format suitable for
+        submission to NCBI GenBank
 
 Optionally, MitoPilot can proceed straight to annotation and curation if
 the user supplies mitogenome assemblies with the
@@ -87,68 +89,70 @@ the future.
 Currently, MitoPilot has curation/validation rulesets for the following
 groups of organisms:
 
-- [Actinopterygii - Ray-finned
-  fishes](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
-- [Asteroidea - Sea
-  stars](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
-- [Octocorallia -
-  Octocorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
-- [Hexacorallia -
-  Hexacorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
-- [Diptera - True
-  flies](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
-- [Testudines -
-  Turtles](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
-- [Copepoda - Copepods (testing in
-  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
-- [Ctenophora - Ctenophores (testing in
-  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
-- [Annelida - Annelids (testing in
-  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
-- [Mammalia - Mammals
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
-- [Lepidosauria - Lizards and snakes
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
-- [Aves - Birds
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
-- [Ascidiacea - Sea squirts
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
-- [Bivalvia - Bivalves
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
-- [Bryozoa - Bryozoans
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
-- [Crinoidea - Crinoids
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
-- [Demospongiae - Demosponges
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
-- [Echinoidea - Sea urchins
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
-- [Gastropoda - Gastropods
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
-- [Holothuroidea - Sea cucumbers
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
-- [Homoscleromorpha - Homoscleromorph sponges
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
-- [Malacostraca - Malacostracans
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
-- [Hydrozoa - Hydrozoans
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
-- [Nemertea - Ribbon worms
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
-- [Ophiuroidea - Brittle stars
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
-- [Platyhelminthes - Flatworms
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/)
-- [Polychaeta - Polychaetes
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
-- [Pycnogonida - Sea spiders
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
-- [Sipuncula - Peanut worms
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
-- [Thaliacea - Salps
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
-- [Thecostraca - Barnacles
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/)
+  - [Actinopterygii - Ray-finned
+    fishes](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
+  - [Annelida - Annelids (testing in
+    progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
+  - [Ascidiacea - Sea squirts
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
+  - [Asteroidea - Sea
+    stars](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
+  - [Aves - Birds
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
+  - [Bivalvia - Bivalves
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
+  - [Bryozoa - Bryozoans
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
+  - [Copepoda - Copepods (testing in
+    progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
+  - [Crinoidea - Crinoids
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
+  - [Ctenophora - Ctenophores (testing in
+    progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
+  - [Demospongiae - Demosponges
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
+  - [Diptera - True
+    flies](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
+  - [Echinoidea - Sea urchins
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
+  - [Gastropoda - Gastropods
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
+  - [Hexacorallia -
+    Hexacorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
+  - [Holothuroidea - Sea cucumbers
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
+  - [Homoscleromorpha - Homoscleromorph sponges
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
+  - [Hydrozoa - Hydrozoans
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
+  - [Lepidosauria - Lizards and snakes
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
+  - [Malacostraca - Malacostracans
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
+  - [Mammalia - Mammals
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
+  - [Nemertea - Ribbon worms
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
+  - [Octocorallia -
+    Octocorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
+  - [Ophiuroidea - Brittle stars
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
+  - [Platyhelminthes - Flatworms
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/)
+  - [Polychaeta - Polychaetes
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
+  - [Pycnogonida - Sea spiders
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
+  - [Scyphozoa - True jellyfish (testing in
+    progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6142/)
+  - [Sipuncula - Peanut worms
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
+  - [Testudines -
+    Turtles](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
+  - [Thaliacea - Salps
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
+  - [Thecostraca - Barnacles
+    (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/)
 
 See the [curation ruleset
 browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
@@ -180,10 +184,10 @@ BLAST results into the curation databases.
 We provide detailed installation instructions for the following
 computing clusters:
 
-- [Smithsonian NMNH
-  Hydra](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
-- [NOAA
-  SEDNA](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html)
+  - [Smithsonian NMNH
+    Hydra](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
+  - [NOAA
+    SEDNA](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html)
 
 To use MitoPilot, you will need [R
 (\>=4.4.0)](https://www.r-project.org/) and
@@ -238,66 +242,68 @@ MitoPilot::new_project(
 )
 ```
 
-- Path
-  - The path specifies where the new project directory will be created.
-    If no path is provided, the project will be created in the current
-    working directory.
-- Mapping File
-  - The mapping file should be in CSV format and must contain the
-    following columns:
-    - `ID` (a unique identifier for each sample)
-    - `R1` and `R2` (specifying the forward and reverse file names for
-      the raw Illumina paired end data)
-    - `Taxon` (e.g. species or genus name, no required format)
-  - In addition to the required columns, any other sample metadata can
-    be included in the mapping file. These columns can also be used when
-    exporting files for NCBI GenBank Submissions, so metadata that is
-    important for submission (e.g., BioSample ID) can be included here.
-- Data Path
-  - Full path to the data directory, which should contain the raw
-    Illumina paired-end reads specified in the mapping file.
-- Executor
-  - The executor specifies where the computational work will be
-    performed by Nextflow. For example choosing `local` will run the
-    pipeline on the local machine, while `awsbatch` will run the
-    pipeline on AWS Batch. Running `new_project()` will generate a
-    executor-specific .config file in the project directory.
-
-  - MitoPilot ships built-in templates for `local`, `awsbatch`, the
-    Smithsonian Hydra cluster (`NMNH_Hydra`), the NOAA SEDNA cluster
-    (`NOAA_SEDNA`), and **generic schedulers**: `slurm`, `sge`, `pbs`,
-    and `lsf`.
-
-  - To run on your own HPC cluster, use `MitoPilot::generate_config()`
-    to build a custom configuration. This creates a named profile
-    (partition, account, container engine, etc.) that
-    `new_project(executor = "<name>")`finds automatically:
-
-    ``` r
-    # configure once
-    MitoPilot::generate_config(
-      name = "my_cluster",
-      scheduler = "slurm",
-      queue = "general",
-      account = "my_allocation",
-      container_engine = "apptainer"
-    )
-
-    # reuse for any project
-    MitoPilot::new_project(..., executor = "my_cluster")
-
-    # see all available configs
-    MitoPilot::list_configs()
-    ```
-
-  - You can also pass a fully custom Nextflow config with
-    `config = "path/to/.config"`.
-- NCBI Api Key
-  - We highly recommended [generating a NCBI API
-    key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
-    and providing it here during project initialization. This will
-    increase the efficiency of the remote BLAST search and corresponding
-    GenBank downloads during the Assemble module.
+  - Path
+      - The path specifies where the new project directory will be
+        created. If no path is provided, the project will be created in
+        the current working directory.
+  - Mapping File
+      - The mapping file should be in CSV format and must contain the
+        following columns:
+          - `ID` (a unique identifier for each sample)
+          - `R1` and `R2` (specifying the forward and reverse file names
+            for the raw Illumina paired end data)
+          - `Taxon` (e.g. species or genus name, no required format)
+      - In addition to the required columns, any other sample metadata
+        can be included in the mapping file. These columns can also be
+        used when exporting files for NCBI GenBank Submissions, so
+        metadata that is important for submission (e.g., BioSample ID)
+        can be included here.
+  - Data Path
+      - Full path to the data directory, which should contain the raw
+        Illumina paired-end reads specified in the mapping file.
+  - Executor
+      - The executor specifies where the computational work will be
+        performed by Nextflow. For example choosing `local` will run the
+        pipeline on the local machine, while `awsbatch` will run the
+        pipeline on AWS Batch. Running `new_project()` will generate a
+        executor-specific .config file in the project directory.
+    
+      - MitoPilot ships built-in templates for `local`, `awsbatch`, the
+        Smithsonian Hydra cluster (`NMNH_Hydra`), the NOAA SEDNA cluster
+        (`NOAA_SEDNA`), and **generic schedulers**: `slurm`, `sge`,
+        `pbs`, and `lsf`.
+    
+      - To run on your own HPC cluster, use
+        `MitoPilot::generate_config()` to build a custom configuration.
+        This creates a named profile (partition, account, container
+        engine, etc.) that `new_project(executor = "<name>")`finds
+        automatically:
+        
+        ``` r
+        # configure once
+        MitoPilot::generate_config(
+          name = "my_cluster",
+          scheduler = "slurm",
+          queue = "general",
+          account = "my_allocation",
+          container_engine = "apptainer"
+        )
+        
+        # reuse for any project
+        MitoPilot::new_project(..., executor = "my_cluster")
+        
+        # see all available configs
+        MitoPilot::list_configs()
+        ```
+    
+      - You can also pass a fully custom Nextflow config with `config =
+        "path/to/.config"`.
+  - NCBI Api Key
+      - We highly recommended [generating a NCBI API
+        key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
+        and providing it here during project initialization. This will
+        increase the efficiency of the remote BLAST search and
+        corresponding GenBank downloads during the Assemble module.
 
 **NOTE**: If running MitoPilot via RStudio Server on a computing
 cluster, you likely need to specify `Rproj = FALSE` when calling the
@@ -315,13 +321,13 @@ tool.
 To use your own mitogenome assemblies, you will need a mapping file with
 two additional columns:
 
-- `Assembly`
-  - Contains the names of your mitogenome FASTA files. Ideally, each
-    FASTA file should contain a single contig or scaffold representing
-    the complete mitogenome. The format of the FASTA file names and
-    sequence headers does not matter.
-- `Topology`
-  - Indicate whether the assembly is “linear” or “circular”.
+  - `Assembly`
+      - Contains the names of your mitogenome FASTA files. Ideally, each
+        FASTA file should contain a single contig or scaffold
+        representing the complete mitogenome. The format of the FASTA
+        file names and sequence headers does not matter.
+  - `Topology`
+      - Indicate whether the assembly is “linear” or “circular”.
 
 All of your mitogenome FASTA files must be located in a single
 directory, which you will supply to the `assembly_path` argument of the
@@ -362,14 +368,14 @@ MitoPilot runs each processing step inside a container (Docker locally,
 or Singularity/Apptainer on most HPC clusters). The container image is
 fairly large, so on first use it must be downloaded and, for
 Singularity/Apptainer, converted to a single `.sif` file. By default
-Nextflow caches this image inside each project's `work/` directory, which
-means every new project re-downloads and rebuilds the same image. On
-shared cluster filesystems this can be slow enough to exceed the default
-pull timeout and cause the run to fail.
+Nextflow caches this image inside each project’s `work/` directory,
+which means every new project re-downloads and rebuilds the same image.
+On shared cluster filesystems this can be slow enough to exceed the
+default pull timeout and cause the run to fail.
 
 To download the image once and reuse it across all projects, point
 Nextflow at a single, persistent cache directory by setting an
-environment variable before launching MitoPilot (e.g. in your
+environment variable before launching MitoPilot (e.g. in your
 `~/.bashrc` or job submission script):
 
 ``` bash
@@ -381,10 +387,10 @@ export NXF_APPTAINER_CACHEDIR=/path/to/persistent/apptainer_cache
 # Docker manages its own image cache, so no setting is required.
 ```
 
-Choose a location with enough space that persists between sessions (not a
-per-project or temporary scratch directory). If image pulls still time
-out on a slow filesystem, increase `pullTimeout` in the
-`singularity { }` block of the `.config` file.
+Choose a location with enough space that persists between sessions (not
+a per-project or temporary scratch directory). If image pulls still time
+out on a slow filesystem, increase `pullTimeout` in the `singularity {
+}` block of the `.config` file.
 
 ### Database Creation
 
@@ -448,13 +454,12 @@ represents a sample in the project.
 If you are working on an HPC cluster without RStudio Server, you can run
 the app headless. “Headless” means the app runs as a plain web server on
 a cluster node, with no browser or graphical desktop on the cluster
-itself. Launch it on a cluster node with
-`MitoPilot(host = "0.0.0.0", port = 7591, launch.browser = FALSE)`, then
-open an SSH tunnel from your local computer (the app prints the exact
-`ssh` command on startup) and use the full interface in your local
-browser at `http://localhost:7591`. The computation still runs on the
-cluster; only the interface is forwarded to you. See [Running MitoPilot
-headless over an SSH
+itself. Launch it on a cluster node with `MitoPilot(host = "0.0.0.0",
+port = 7591, launch.browser = FALSE)`, then open an SSH tunnel from your
+local computer (the app prints the exact `ssh` command on startup) and
+use the full interface in your local browser at `http://localhost:7591`.
+The computation still runs on the cluster; only the interface is
+forwarded to you. See [Running MitoPilot headless over an SSH
 tunnel](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html#accessing-the-mitopilot-app-over-an-ssh-tunnel)
 for the full walkthrough.
 
@@ -518,32 +523,35 @@ correct scheduler directives for your project’s executor, that you can
 submit to your scheduler directly from the app or save and submit
 yourself.
 
-## Exporting Complete vs. Partial Mitogenomes
+## Exporting Complete vs. Partial Mitogenomes
 
-When exporting for NCBI GenBank submission, MitoPilot sets each
-sample’s title via the `{completeness}` field, which defaults to
-“complete genome” for circular assemblies and “partial genome” for
-linear assemblies. You can override a sample with the “Mark Partial”
-button in the Annotate module (useful for an incomplete circular
-assembly), and projects whose taxa have genuinely linear mitogenomes
-can set the `linear_complete` curation option so linear assemblies are
-still exported as complete. A single GenBank submission cannot mix
-complete and partial mitogenomes, so the export popup will warn you and
-offer to split a group into complete and partial sets.
+When exporting for NCBI GenBank submission, MitoPilot sets each sample’s
+title via the `{completeness}` field, which defaults to “complete
+genome” for circular assemblies and “partial genome” for linear
+assemblies. You can override a sample with the “Mark Partial” button in
+the Annotate module (useful for an incomplete circular assembly), and
+projects whose taxa have genuinely linear mitogenomes can set the
+`linear_complete` curation option so linear assemblies are still
+exported as complete. A single GenBank submission cannot mix complete
+and partial mitogenomes, so the export popup will warn you and offer to
+split a group into complete and partial sets.
 
 # Development Notes
 
-- This package uses [{renv}]() for package management. After cloning the
-  repository, run `renv::restore()` to install the necessary packages.
-- To work from the package repository, but reference a MitoPilot project
-  in a different directory, set the `MitoPilot.db` option to the
-  location of the `.sqlite` database for the project
-  (e.g. `options("MitoPilot.db" = "~/Jonah/MitoPilot-testing/.sqlite")`).
-- When modifying the underlying R-package functions references in the
-  Nextflow pipeline, or modifying / adding reference databases specified
-  in `docker/Dockerfile`, the docker image should be rebuilt. The
-  `docker/deploy-local.sh` script can be used to build a local image, or
-  the `docker/deploy-aws.sh` and `docker/deploy-dockerhub.sh` scripts
-  can be modified to deploy a remote image to your account. In any case,
-  the Nextflow `.config` file should be modified such that one or more
-  of the processing steps reference the new image.
+  - This package uses [{renv}]() for package management. After cloning
+    the repository, run `renv::restore()` to install the necessary
+    packages.
+  - To work from the package repository, but reference a MitoPilot
+    project in a different directory, set the `MitoPilot.db` option to
+    the location of the `.sqlite` database for the project
+    (e.g. `options("MitoPilot.db" =
+    "~/Jonah/MitoPilot-testing/.sqlite")`).
+  - When modifying the underlying R-package functions references in the
+    Nextflow pipeline, or modifying / adding reference databases
+    specified in `docker/Dockerfile`, the docker image should be
+    rebuilt. The `docker/deploy-local.sh` script can be used to build a
+    local image, or the `docker/deploy-aws.sh` and
+    `docker/deploy-dockerhub.sh` scripts can be modified to deploy a
+    remote image to your account. In any case, the Nextflow `.config`
+    file should be modified such that one or more of the processing
+    steps reference the new image.
