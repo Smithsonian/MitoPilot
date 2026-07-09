@@ -17,7 +17,9 @@ curate_copepod_mito(
   params = NULL,
   ref_dir = NULL,
   blast_ref_file = NULL,
-  feature_trim = TRUE
+  feature_trim = TRUE,
+  ref_based_rc = FALSE,
+  blast_accession = NULL
 )
 ```
 
@@ -64,3 +66,13 @@ curate_copepod_mito(
 - feature_trim:
 
   Trim feature coordinates to assembly boundaries (default = TRUE)
+
+- ref_based_rc:
+
+  Reverse-complement contigs to match the top BLAST reference strand
+  (default = FALSE)
+
+- blast_accession:
+
+  Accession of the top BLAST hit, used as the orientation reference for
+  ref_based_rc (default = NULL)

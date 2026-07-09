@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.11</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,6 +93,8 @@
 <li>
 <a href="https://github.com/UCSC-LoweLab/tRNAscan-SE" class="external-link">tRNAscan-SE</a> for tRNA annotation</li>
 <li>
+<a href="https://github.com/RemiAllio/MitoFinder" class="external-link">MitoFinder</a> for rRNA and PCG annotation (optional)</li>
+<li>
 <a href="https://doi.org/10.1093/bioinformatics/btm573" class="external-link">ARWEN</a> for tRNA annotation (optional)</li>
 <li>
 <a href="https://doi.org/10.1093/nar/gkh152" class="external-link">ARAGORN</a> for tRNA annotation (optional)</li>
@@ -121,39 +123,40 @@
 <p>Currently, MitoPilot has curation/validation rulesets for the following groups of organisms:</p>
 <ul>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/" class="external-link">Actinopterygii - Ray-finned fishes</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/" class="external-link">Asteroidea - Sea stars</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/" class="external-link">Octocorallia - Octocorals</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/" class="external-link">Hexacorallia - Hexacorals</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/" class="external-link">Diptera - True flies</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/" class="external-link">Testudines - Turtles</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/" class="external-link">Copepoda - Copepods (testing in progress)</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/" class="external-link">Ctenophora - Ctenophores (testing in progress)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/" class="external-link">Annelida - Annelids (testing in progress)</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/" class="external-link">Mammalia - Mammals (untested)</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/" class="external-link">Lepidosauria - Lizards and snakes (untested)</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/" class="external-link">Aves - Birds (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/" class="external-link">Ascidiacea - Sea squirts (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/" class="external-link">Asteroidea - Sea stars</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/" class="external-link">Aves - Birds (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/" class="external-link">Bivalvia - Bivalves (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/" class="external-link">Bryozoa - Bryozoans (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/" class="external-link">Copepoda - Copepods (testing in progress)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/" class="external-link">Crinoidea - Crinoids (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/" class="external-link">Ctenophora - Ctenophores (testing in progress)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/" class="external-link">Demospongiae - Demosponges (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/" class="external-link">Diptera - True flies</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/" class="external-link">Echinoidea - Sea urchins (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/" class="external-link">Gastropoda - Gastropods (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/" class="external-link">Hexacorallia - Hexacorals</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/" class="external-link">Holothuroidea - Sea cucumbers (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/" class="external-link">Homoscleromorpha - Homoscleromorph sponges (untested)</a></li>
-<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/" class="external-link">Malacostraca - Malacostracans (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/" class="external-link">Hydrozoa - Hydrozoans (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/" class="external-link">Lepidosauria - Lizards and snakes (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/" class="external-link">Malacostraca - Malacostracans (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/" class="external-link">Mammalia - Mammals (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/" class="external-link">Nemertea - Ribbon worms (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/" class="external-link">Octocorallia - Octocorals</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/" class="external-link">Ophiuroidea - Brittle stars (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/" class="external-link">Platyhelminthes - Flatworms (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/" class="external-link">Polychaeta - Polychaetes (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/" class="external-link">Pycnogonida - Sea spiders (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6142/" class="external-link">Scyphozoa - True jellyfish (testing in progress)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/" class="external-link">Sipuncula - Peanut worms (untested)</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/" class="external-link">Testudines - Turtles</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/" class="external-link">Thaliacea - Salps (untested)</a></li>
 <li><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/" class="external-link">Thecostraca - Barnacles (untested)</a></li>
 </ul>
 <p>See the <a href="https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html">curation ruleset browser</a> for a detailed description of each curation ruleset.</p>
-<p>The custom logic in the annotation curation and validation scripts needs to be tweaked for optimal performance with other taxonomic groups. All of the curation rulesets are contained in the underlying Docker image (currently hosted at <a href="https://hub.docker.com/repository/docker/macguigand/mitopilot" class="external-link">macguigand/MitoPilot</a>). Adding rulesets for new taxa will involve updating the Docker image appropriately and specifying the new image in the Nextflow configuration file.</p>
+<p>The custom logic in the annotation curation and validation scripts needs to be tweaked for optimal performance with other taxonomic groups. All of the curation rulesets are contained in the underlying Docker image (currently hosted at <a href="https://hub.docker.com/repository/docker/macguigand/mitopilot" class="external-link">macguigand/MitoPilot</a>).</p>
 <p>If you have a group of organisms that you would like to try with MitoPilot, feel free to post an <a href="https://github.com/Smithsonian/MitoPilot/issues" class="external-link">issue</a> or reach out to Dan MacGuigan directly at <a href="mailto:daniel.macguigan@noaa.gov" class="email">daniel.macguigan@noaa.gov</a>.</p>
 <p>Curation reference databases can be specified independently of the annotation reference databases. We have provided curation databases for chordates and metazoans (RefSeq 89 or RefSeq 231). Users can also provide custom databases to improve the automatic curation step. Additionally, MitoPilot will automatically incorporate the assembly BLAST results into the curation databases.</p>
 </div>
@@ -391,7 +394,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

@@ -123,6 +123,9 @@
 - [`curate_pycnogonida_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_pycnogonida_mito.md)
   : Annotation curation for sea spider mitogenomes
 
+- [`curate_scyphozoa_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_scyphozoa_mito.md)
+  : Annotation curation for scyphozoan mitogenomes
+
 - [`curate_sipuncula_mito()`](https://smithsonian.github.io/MitoPilot/reference/curate_sipuncula_mito.md)
   : Annotation curation for peanut worm mitogenomes
 
@@ -301,6 +304,10 @@
   : Default curation and validation parameters for Pycnogonida
   mitochondria
 
+- [`params_scyphozoa_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_scyphozoa_mito.md)
+  : Default curation and validation parameters for Scyphozoa
+  mitochondria
+
 - [`params_sipuncula_mito()`](https://smithsonian.github.io/MitoPilot/reference/params_sipuncula_mito.md)
   : Default curation and validation parameters for Sipuncula
   mitochondria
@@ -424,6 +431,9 @@
 
 - [`validate_pycnogonida_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_pycnogonida_mito.md)
   : Annotation validation for sea spider mitogenomes
+
+- [`validate_scyphozoa_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_scyphozoa_mito.md)
+  : Annotation validation for scyphozoan mitogenomes
 
 - [`validate_sipuncula_mito()`](https://smithsonian.github.io/MitoPilot/reference/validate_sipuncula_mito.md)
   : Annotation validation for peanut worm mitogenomes

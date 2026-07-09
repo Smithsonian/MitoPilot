@@ -28,6 +28,8 @@ raw input and performs the following steps.
       annotation
     - [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE) for
       tRNA annotation
+    - [MitoFinder](https://github.com/RemiAllio/MitoFinder) for rRNA and
+      PCG annotation (optional)
     - [ARWEN](https://doi.org/10.1093/bioinformatics/btm573) for tRNA
       annotation (optional)
     - [ARAGORN](https://doi.org/10.1093/nar/gkh152) for tRNA annotation
@@ -81,52 +83,50 @@ groups of organisms:
 
 - [Actinopterygii - Ray-finned
   fishes](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/)
-- [Asteroidea - Sea
-  stars](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
-- [Octocorallia -
-  Octocorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
-- [Hexacorallia -
-  Hexacorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
-- [Diptera - True
-  flies](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
-- [Testudines -
-  Turtles](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
-- [Copepoda - Copepods (testing in
-  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
-- [Ctenophora - Ctenophores (testing in
-  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
 - [Annelida - Annelids (testing in
   progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/)
-- [Mammalia - Mammals
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
-- [Lepidosauria - Lizards and snakes
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
-- [Aves - Birds
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
 - [Ascidiacea - Sea squirts
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/)
+- [Asteroidea - Sea
+  stars](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/)
+- [Aves - Birds
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/)
 - [Bivalvia - Bivalves
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/)
 - [Bryozoa - Bryozoans
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/)
+- [Copepoda - Copepods (testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/)
 - [Crinoidea - Crinoids
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/)
+- [Ctenophora - Ctenophores (testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/)
 - [Demospongiae - Demosponges
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/)
+- [Diptera - True
+  flies](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/)
 - [Echinoidea - Sea urchins
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/)
 - [Gastropoda - Gastropods
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/)
+- [Hexacorallia -
+  Hexacorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/)
 - [Holothuroidea - Sea cucumbers
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/)
 - [Homoscleromorpha - Homoscleromorph sponges
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/)
-- [Malacostraca - Malacostracans
-  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
 - [Hydrozoa - Hydrozoans
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/)
+- [Lepidosauria - Lizards and snakes
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/)
+- [Malacostraca - Malacostracans
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/)
+- [Mammalia - Mammals
+  (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/)
 - [Nemertea - Ribbon worms
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/)
+- [Octocorallia -
+  Octocorals](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/)
 - [Ophiuroidea - Brittle stars
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/)
 - [Platyhelminthes - Flatworms
@@ -135,8 +135,12 @@ groups of organisms:
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/)
 - [Pycnogonida - Sea spiders
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/)
+- [Scyphozoa - True jellyfish (testing in
+  progress)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6142/)
 - [Sipuncula - Peanut worms
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/)
+- [Testudines -
+  Turtles](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/)
 - [Thaliacea - Salps
   (untested)](https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/)
 - [Thecostraca - Barnacles
@@ -151,9 +155,6 @@ to be tweaked for optimal performance with other taxonomic groups. All
 of the curation rulesets are contained in the underlying Docker image
 (currently hosted at
 [macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)).
-Adding rulesets for new taxa will involve updating the Docker image
-appropriately and specifying the new image in the Nextflow configuration
-file.
 
 If you have a group of organisms that you would like to try with
 MitoPilot, feel free to post an
