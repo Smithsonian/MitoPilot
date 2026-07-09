@@ -16,7 +16,13 @@ process scaffold_join {
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, mode: 'copy'
 
-    errorStrategy 'ignore'
+    // Retry transient failures (notably SGE submission rejections during bursts)
+    // before ignoring. A submission failure that is ignored on the first attempt
+    // leaves this process's mandatory 'mappings' output channel unclosed, which
+    // hangs every downstream operator and stalls the whole workflow. Retrying
+    // absorbs the transient qsub errors that trigger it.
+    errorStrategy { task.attempt <= (params.scaffold_join.maxRetries instanceof Integer ? params.scaffold_join.maxRetries : 3) ? 'retry' : 'ignore' }
+    maxRetries { params.scaffold_join.maxRetries instanceof Integer ? params.scaffold_join.maxRetries : 3 }
 
     tag "${id}"
 
