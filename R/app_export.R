@@ -186,10 +186,7 @@ export_server <- function(id) {
           var ets = rowInfo.values['export_time_stamp'];
           return 'mp-exp-' + ((ets != null && ets !== '') ? '1' : '0');
         }"),
-        # Hide by default so only the explicitly-named columns below show; the
-        # data carries extra internal columns (genetic_code, counts, etc.) that
-        # would otherwise render with raw names.
-        defaultColDef = colDef(align = "left", show = FALSE),
+        defaultColDef = colDef(align = "left"),
         columns = list(
           ID = colDef(show = T, minWidth = 120, sticky = "left"),
           Taxon = colDef(show = T, name = "Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
