@@ -40,8 +40,21 @@ process orf {
         echo "Input ref_db not .tar.gz"
     fi
 
+    # Merge the per-scaffold validated annotation TSVs into one per-path file so
+    # ORFfinder avoids overlaps against every existing annotation on the path.
+    merged_annotations=merged_validated_annotations.tsv
+    first=1
+    for f in !{annotations}; do
+        if [ "$first" = "1" ]; then
+            cat "$f" > "$merged_annotations"
+            first=0
+        else
+            tail -n +2 "$f" >> "$merged_annotations"
+        fi
+    done
+
     Rscript -e "MitoPilot::orf_finder( \
-        annotations_fn = '!{annotations}', \
+        annotations_fn = '$merged_annotations', \
         assembly_fn = '!{assembly}', \
         genetic_code = '!{opts.genetic_code}', \
         orffinder_opts = '!{opts.orffinder_opts}', \

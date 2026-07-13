@@ -16,7 +16,19 @@ params.sqlUpsertJoined = '''INSERT OR REPLACE INTO assemblies
 
 params.sqlIgnoreOriginals = 'UPDATE assemblies SET ignore = 1 WHERE ID = ? AND path > 0'
 
-params.sqlSyncAnnotateJoin = 'UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, time_stamp = ? WHERE ID = ?'
+// annotate is keyed (ID, path, scaffold); the joined consensus is unit (ID,0,0).
+// Upsert that unit (inheriting the sample's option sets from an existing row) so
+// it becomes the single non-ignored annotation unit. The original path>0 units'
+// annotate rows are left in place but never selected (their assemblies rows are
+// set to ignore=1 above and the app filters children on ignore=0).
+params.sqlSyncAnnotateJoin = '''INSERT OR REPLACE INTO annotate
+    (ID, path, scaffold, scaffolds, topology, length, partial,
+     annotate_opts, curate_opts, orf_opts, annotate_switch, annotate_lock, reviewed, time_stamp)
+    VALUES (?, 0, 0, 1, ?, ?, ?,
+     (SELECT annotate_opts FROM annotate WHERE ID = ? ORDER BY path, scaffold LIMIT 1),
+     (SELECT curate_opts FROM annotate WHERE ID = ? ORDER BY path, scaffold LIMIT 1),
+     (SELECT orf_opts FROM annotate WHERE ID = ? ORDER BY path, scaffold LIMIT 1),
+     1, 0, "no", ?)'''
 
 // Precomputed scaffold->reference mappings (one row per ID/scaffold/ref) so the
 // in-app manual join editor needs no minimap2. Replace any stale rows first.
@@ -66,6 +78,8 @@ workflow SCAFFOLD_JOIN {
             .sqlInsert(statement: params.sqlIgnoreOriginals, db: 'sqlite')
 
         joined_rows
-            .map { r -> tuple('0', 1, r.topology, r.length as Integer, params.ts, r.ID) }
+            .map { r -> tuple(r.ID, r.topology, r.length as Integer,
+                              (r.topology == 'circular') ? 'no' : 'yes',
+                              r.ID, r.ID, r.ID, params.ts) }
             .sqlInsert(statement: params.sqlSyncAnnotateJoin, db: 'sqlite')
 }

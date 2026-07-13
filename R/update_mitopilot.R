@@ -27,6 +27,9 @@ nextflow_cmd <- function(
       #"-ansi-log", "false",
       "-c", "{file.path(path, '.config')}",
       "-entry", "{ifelse(workflow == 'assemble', 'WF1_userAsmb', 'WF2')}",
+      # userAsmb assemblies are a single user-provided genome: WF2 validates all
+      # their contigs together as one unit (no per-scaffold split).
+      "--userAsmb", "true",
       "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
     ) |> purrr::map_chr(~ stringr::str_glue(.x))
 

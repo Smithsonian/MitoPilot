@@ -17,18 +17,25 @@ process validate {
     tag "${id}"
 
     input:
-    tuple val(id), val(path), path(annotations), path(coverage), val(opts)
+    tuple val(id), val(path), val(scaffold), path(annotations), path(coverage), val(opts)
 
     output:
-    tuple val(id), val(path), path("${id}/annotate/${id}_annotations_*.tsv"), path("${id}/annotate/${id}_summary_*.csv"), path("${id}/annotate/NF_work_dir_validate.txt")
+    tuple val(id), val(path), val(scaffold), path("${id}/annotate/${id}_annotations_*.tsv"), path("${id}/annotate/${id}_summary_*.csv"), path("${id}/annotate/NF_work_dir_validate.txt")
 
     shell:
     dir = "${id}/annotate"
+    scafArg = params.userAsmb ? 'all' : "${scaffold}"
+    outCsv  = params.userAsmb ? "${id}_annotations_${path}.csv" : "${id}_annotations_${path}.${scaffold}.csv"
     '''
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
+    # Subset the per-path curated annotations to this unit. The standard flow keeps
+    # only this scaffold so gene-count validation never pools separate genomes;
+    # userAsmb keeps every contig (one genome per sample). The output filename
+    # propagates to the validate outputs (annotations tsv + summary csv).
+    Rscript -e "ann <- utils::read.csv('!{annotations}'); sc <- '!{scafArg}'; keep <- if (identical(sc, 'all')) rep(TRUE, nrow(ann)) else sub('^.*[.]', '', as.character(ann[['contig']])) == sc; utils::write.csv(ann[keep, , drop = FALSE], '!{outCsv}', row.names = FALSE)"
     Rscript -e "MitoPilot::validate_!{opts.target}( \
-        annotations_fn = '!{annotations}', \
+        annotations_fn = '!{outCsv}', \
         coverage_fn = '!{coverage}', \
         params = '!{opts.params}', \
         out_dir = '!{dir}'
@@ -60,10 +67,10 @@ process write_curated_result {
     tag "${id}"
 
     input:
-    tuple val(id), val(path), val(coverage_fn), val(annotations_fn), val(summary_fn), val(assembly_fn)
+    tuple val(id), val(path), val(scaffold), val(coverage_fn), val(annotations_fn), val(summary_fn), val(assembly_fn)
 
     output:
-    tuple val(id), val(path)
+    tuple val(id), val(path), val(scaffold)
 
     exec:
     def ts = params.ts as String
@@ -103,10 +110,14 @@ process write_curated_result {
             def f = line.split(',', -1)
             (groups[f[ci['SeqId']]] = (groups[f[ci['SeqId']]] ?: [])) << f
         }
+        // This writer runs per (id, path, scaffold); the curate coverage is
+        // per-path, so update only this unit's scaffold row.
+        def targetSid = "${id}.${path}.${scaffold}".toString()
         def updAsm = conn.prepareStatement(
             "UPDATE assemblies SET sequence = ?, length = ?, depth = ?, gc = ?, errors = ?, " +
             "time_stamp = ? WHERE ID = ? AND path = ? AND scaffold = ?")
         groups.each { sid, rows ->
+            if (!params.userAsmb && sid != targetSid) return  // standard: only this unit; userAsmb: all contigs
             rows.sort { a, b -> (a[ci['Position']] as int) <=> (b[ci['Position']] as int) }
             def seq    = rows.collect { it[ci['Call']] }.join('')
             def depth  = rows.collect { it[ci['MeanDepth']] }.join(' ')
@@ -123,8 +134,17 @@ process write_curated_result {
         updAsm.close()
 
         // ---- annotations: clear stale rows, insert validated coordinates ----
-        def del = conn.prepareStatement("DELETE FROM annotations WHERE ID = ? AND path = ? AND time_stamp != ?")
-        del.setString(1, id.toString()); del.setInt(2, path as int); del.setString(3, ts)
+        // Standard: scoped to this scaffold unit so a sibling unit of the same
+        // path is not wiped (the validated TSV holds only this scaffold's rows).
+        // userAsmb: whole path (all contigs validated together).
+        def del
+        if (params.userAsmb) {
+            del = conn.prepareStatement("DELETE FROM annotations WHERE ID = ? AND path = ? AND time_stamp != ?")
+            del.setString(1, id.toString()); del.setInt(2, path as int); del.setString(3, ts)
+        } else {
+            del = conn.prepareStatement("DELETE FROM annotations WHERE ID = ? AND path = ? AND scaffold = ? AND time_stamp != ?")
+            del.setString(1, id.toString()); del.setInt(2, path as int); del.setInt(3, scaffold as int); del.setString(4, ts)
+        }
         del.executeUpdate(); del.close()
 
         def annLines = new File(annotations_fn.toString()).readLines()
@@ -161,9 +181,12 @@ process write_curated_result {
             } else { cur.append(l.trim()) }
         }
         if (started) lengths << cur.length()
-        def scaffolds = descs.size()
-        def totLen = (lengths.sum() ?: 0) as int
-        def topology = descs.collect { d -> def p = d.split(/\s+/, 2); p.length > 1 ? p[1] : '' }.join(';')
+        // Restrict the summary to this scaffold unit (assembly FASTA is per-path);
+        // userAsmb summarizes all contigs of the path together.
+        def selIdx = params.userAsmb ? (0..<descs.size()).toList() : (0..<descs.size()).findAll { descs[it].split(/\s+/, 2)[0] == targetSid }
+        def scaffolds = selIdx.size()
+        def totLen = (selIdx.collect { lengths[it] }.sum() ?: 0) as int
+        def topology = selIdx.collect { def p = descs[it].split(/\s+/, 2); p.length > 1 ? p[1] : '' }.join(';')
 
         // summary is CSV; its fields never contain commas (structure joins with
         // '|', missing/extra with ';', the rest are integers)
@@ -180,8 +203,9 @@ process write_curated_result {
         try {
             def lq = conn.prepareStatement(
                 "SELECT d.linear_complete FROM annotate c " +
-                "JOIN curate_opts d ON c.curate_opts = d.curate_opts WHERE c.ID = ?")
-            lq.setString(1, id.toString())
+                "JOIN curate_opts d ON c.curate_opts = d.curate_opts " +
+                "WHERE c.ID = ? AND c.path = ? AND c.scaffold = ?")
+            lq.setString(1, id.toString()); lq.setInt(2, path as int); lq.setInt(3, scaffold as int)
             def lrs = lq.executeQuery()
             if (lrs.next()) linComplete = (lrs.getInt(1) == 1)
             lrs.close(); lq.close()
@@ -193,8 +217,8 @@ process write_curated_result {
         // (the other "; "-delimited segments). NULL when nothing remains.
         String cleanedNotes = null
         try {
-            def nq = conn.prepareStatement("SELECT annotate_notes FROM annotate WHERE ID = ?")
-            nq.setString(1, id.toString())
+            def nq = conn.prepareStatement("SELECT annotate_notes FROM annotate WHERE ID = ? AND path = ? AND scaffold = ?")
+            nq.setString(1, id.toString()); nq.setInt(2, path as int); nq.setInt(3, scaffold as int)
             def nrs = nq.executeQuery()
             if (nrs.next()) {
                 def raw = nrs.getString(1)
@@ -207,27 +231,31 @@ process write_curated_result {
             nrs.close(); nq.close()
         } catch (Exception ignored) {}
 
+        // Per-unit summary write; keyed by (ID, path, scaffold) so sibling units
+        // of the same path are not clobbered (path/scaffold are the key, not SET).
         def updAnn = conn.prepareStatement(
-            "UPDATE annotate SET path = ?, scaffolds = ?, topology = ?, length = ?, structure = ?, " +
+            "UPDATE annotate SET scaffolds = ?, topology = ?, length = ?, structure = ?, " +
             "PCGCount = ?, tRNACount = ?, rRNACount = ?, missing = ?, extra = ?, warnings = ?, " +
-            "partial = ?, annotate_notes = ?, annotate_switch = 2, time_stamp = ? WHERE ID = ?")
-        updAnn.setInt(1, path as int)
-        updAnn.setInt(2, scaffolds)
-        setStr(updAnn, 3, topology)
-        updAnn.setInt(4, totLen)
-        setStr(updAnn, 5, g('structure'))
-        setStr(updAnn, 6, g('PCGCount'))
-        setStr(updAnn, 7, g('tRNACount'))
-        setStr(updAnn, 8, g('rRNACount'))
-        setStr(updAnn, 9, g('missing'))
-        setStr(updAnn, 10, g('extra'))
-        setStr(updAnn, 11, g('warnings'))
-        updAnn.setString(12, partial)
-        setStr(updAnn, 13, cleanedNotes)
-        updAnn.setString(14, ts)
-        updAnn.setString(15, id.toString())
+            "partial = ?, annotate_notes = ?, annotate_switch = 2, time_stamp = ? " +
+            "WHERE ID = ? AND path = ? AND scaffold = ?")
+        updAnn.setInt(1, scaffolds)
+        setStr(updAnn, 2, topology)
+        updAnn.setInt(3, totLen)
+        setStr(updAnn, 4, g('structure'))
+        setStr(updAnn, 5, g('PCGCount'))
+        setStr(updAnn, 6, g('tRNACount'))
+        setStr(updAnn, 7, g('rRNACount'))
+        setStr(updAnn, 8, g('missing'))
+        setStr(updAnn, 9, g('extra'))
+        setStr(updAnn, 10, g('warnings'))
+        updAnn.setString(11, partial)
+        setStr(updAnn, 12, cleanedNotes)
+        updAnn.setString(13, ts)
+        updAnn.setString(14, id.toString())
+        updAnn.setInt(15, path as int)
+        updAnn.setInt(16, scaffold as int)
         def na = updAnn.executeUpdate()
-        if (na != 1) throw new RuntimeException("annotate UPDATE matched ${na} rows (expected 1) for ID '${id}'")
+        if (na != 1) throw new RuntimeException("annotate UPDATE matched ${na} rows (expected 1) for unit '${id}.${path}.${scaffold}'")
         updAnn.close()
 
         conn.commit()

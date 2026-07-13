@@ -283,18 +283,33 @@ workflow ASSEMBLE {
             )
           }
           .set { update_ids }
-        // Seed topology + partial from the assembly so linear assemblies show
-        // partial = "yes" on first arrival (matches validate.nf's rule:
-        // circular or linear_complete -> "no", else "yes"). VALIDATE later
-        // recomputes both from the selected path.
+        // Seed one annotate row PER non-ignored unit (ID, path, scaffold). Each
+        // retained scaffold is its own annotation unit; topology/partial come
+        // from that scaffold (partial rule matches validate: circular or
+        // linear_complete -> "no", else "yes"). Options (annotate/curate/orf)
+        // are inherited from the sample's existing annotate rows (min-path row)
+        // so a re-assembly preserves the user's option choices. VALIDATE later
+        // recomputes topology/partial per unit.
+        // Collect the just-assembled IDs into a single list so the per-unit seed
+        // query (which emits multiple rows per ID) can be filtered without a
+        // duplicate-key .join.
+        update_ids
+            .map { it[0] }
+            .collect()
+            .map { ids -> [ids] }
+            .set { updated_id_list }
         channel.fromQuery(
-                'SELECT a.ID, a.annotate_opts, a.curate_opts, a.orf_opts, asm.topology, ' +
-                "CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1 THEN 'no' ELSE 'yes' END " +
-                'FROM annotate a ' +
-                'JOIN assemble asm ON a.ID = asm.ID ' +
-                'LEFT JOIN curate_opts co ON a.curate_opts = co.curate_opts;', db: 'sqlite')
-            .join(update_ids)
-            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, orf_opts, topology, partial, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, ?, ?, ?, 1, 0, "no")', db: 'sqlite')
+                'SELECT asm.ID, asm.path, asm.scaffold, asm.topology, ' +
+                "CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1 THEN 'no' ELSE 'yes' END, " +
+                'an.annotate_opts, an.curate_opts, an.orf_opts ' +
+                'FROM assemblies asm ' +
+                'LEFT JOIN (SELECT ID, annotate_opts, curate_opts, orf_opts, MIN(path) FROM annotate GROUP BY ID) an ON an.ID = asm.ID ' +
+                'LEFT JOIN curate_opts co ON co.curate_opts = an.curate_opts ' +
+                'WHERE asm.ignore = 0;', db: 'sqlite')
+            .combine(updated_id_list)
+            .filter { row -> (row[-1] as List).contains(row[0]) }
+            .map { row -> row[0..(row.size() - 2)] }
+            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, "no")', db: 'sqlite')
 
     emit:
         // Two named channels with different gating:

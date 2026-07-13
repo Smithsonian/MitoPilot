@@ -33,8 +33,7 @@ params.sqlReadRef =
         'ELSE 0 END ' +
     'FROM (SELECT ID, accession, MIN(rank) AS rank FROM blast_ref_candidates ' +
          'GROUP BY ID, accession) c ' +
-    'JOIN annotate a     ON c.ID = a.ID ' +
-    'JOIN annotate_opts d ON a.annotate_opts = d.annotate_opts ' +
+    'JOIN annotate_opts d ON d.annotate_opts = (SELECT an.annotate_opts FROM annotate an WHERE an.ID = c.ID ORDER BY an.path, an.scaffold LIMIT 1) ' +
     'JOIN blast_ref_sequences s ON c.accession = s.accession'
 
 // Backfill: samples already validated in a prior run (assemblies.sequence is the
@@ -49,21 +48,22 @@ params.sqlBackfill =
             'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
                       'WHERE r.accession = cd.accession AND r.gene = d.start_gene), 0) ' +
         'ELSE 0 END ' +
+    'a.path ' +
     'FROM assemble b ' +
     'JOIN (SELECT ID, accession, MIN(rank) AS rank FROM blast_ref_candidates ' +
          'GROUP BY ID, accession) cd ON cd.ID = b.ID ' +
     'JOIN assemblies a   ON b.ID = a.ID AND a.ignore = 0 ' +
         'AND a.scaffold = (SELECT MIN(scaffold) FROM assemblies a2 WHERE a2.ID = a.ID AND a2.ignore = 0) ' +
-    'JOIN annotate c     ON b.ID = c.ID ' +
+    'JOIN annotate c     ON c.ID = a.ID AND c.path = a.path AND c.scaffold = a.scaffold ' +
     'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
     'JOIN blast_ref_sequences s ON cd.accession = s.accession ' +
     'WHERE a.sequence IS NOT NULL ' +
       'AND c.annotate_switch = 2 ' +
-      'AND NOT EXISTS (SELECT 1 FROM blast_ref_alignment al WHERE al.ID = b.ID AND al.accession = cd.accession)'
+      'AND NOT EXISTS (SELECT 1 FROM blast_ref_alignment al WHERE al.ID = b.ID AND al.path = a.path AND al.accession = cd.accession)'
 
 params.sqlWriteAlignment = '''INSERT OR REPLACE INTO blast_ref_alignment
-    (ID, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?)'''
+    (ID, path, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
 
 // Mark the 'BLAST Ref Align' field (poor_blast_ref) = 'failed' and add an [align]
 // note when blast_ref_align fails for a sample (errorStrategy 'ignore' suppresses
@@ -94,6 +94,8 @@ workflow BLAST_REF_ALIGN {
         // VALIDATE completes. Pull the rotated assembly FASTA from curate_out.
         // combine(by:0) fans each sample's assembly across all its candidate refs.
         validated
+            .map { tuple(it[0], it[1]) }
+            .unique()
             .join(curate_out, by: [0, 1])
             .map { id, path, annotations, assembly_fasta, coverage, work_dir ->
                 tuple(id, path, assembly_fasta)
@@ -103,7 +105,7 @@ workflow BLAST_REF_ALIGN {
                 def seq = assembly_fasta.readLines()
                     .findAll { !it.startsWith('>') }
                     .join('')
-                tuple(id, accession, is_top, seq, ref_seq, rotation)
+                tuple(id, path, accession, is_top, seq, ref_seq, rotation)
             }
             .set { new_align_in }
 
@@ -116,7 +118,7 @@ workflow BLAST_REF_ALIGN {
                 def ref_seq   = row[4]?.toString()
                 if (!accession || !asm_seq || !ref_seq) return null
                 if (!ref_seq.matches('[ACGTNacgtnRYSWKMBDHVryswkmbdhv]+')) return null
-                tuple(row[0], accession, is_top, asm_seq, ref_seq, row[5] as Long)
+                tuple(row[0], row[6], accession, is_top, asm_seq, ref_seq, row[5] as Long)
             }
             .filter { it != null }
             .set { backfill_ch }
@@ -127,19 +129,19 @@ workflow BLAST_REF_ALIGN {
         // can flag the sample. Non-top candidate failures only lose that candidate's
         // 3-track view and are not surfaced as sample-level failures.
         align_in
-            .filter { id, accession, is_top, assembly_seq, ref_seq, rotation -> is_top }
-            .map    { id, accession, is_top, assembly_seq, ref_seq, rotation -> tuple("${id}|${accession}".toString(), id) }
+            .filter { id, path, accession, is_top, assembly_seq, ref_seq, rotation -> is_top }
+            .map    { id, path, accession, is_top, assembly_seq, ref_seq, rotation -> tuple("${id}|${path}|${accession}".toString(), id) }
             .set { top_align_keys }
 
         blast_ref_align(
-            align_in.map { id, accession, is_top, assembly_seq, ref_seq, rotation ->
-                tuple(id, accession, assembly_seq, ref_seq, rotation)
+            align_in.map { id, path, accession, is_top, assembly_seq, ref_seq, rotation ->
+                tuple(id, path, accession, assembly_seq, ref_seq, rotation)
             }
         ).set { align_out }
 
         // Parse the one-row CSV and write to blast_ref_alignment table
         align_out
-            .map { id, accession, csv_file ->
+            .map { id, path, accession, csv_file ->
                 def lines = csv_file.readLines()
                 if (lines.size() < 2) return null
                 // CSV columns: aligned_sample, aligned_ref, rotation, ref_length
@@ -148,6 +150,7 @@ workflow BLAST_REF_ALIGN {
                 def ts = java.time.Instant.now().getEpochSecond()
                 tuple(
                     id,
+                    path,
                     accession,
                     parts[0],           // aligned_sample
                     parts[1],           // aligned_ref
@@ -159,10 +162,10 @@ workflow BLAST_REF_ALIGN {
             .filter { it != null }
             .sqlInsert(statement: params.sqlWriteAlignment, db: 'sqlite')
 
-        // Detect TOP-ref align failures: top (id, accession) that entered but produced
-        // no CSV output. Keyed on "id|accession" so only the top candidate counts.
+        // Detect TOP-ref align failures: top (id, path, accession) that entered but
+        // produced no CSV output. Keyed on "id|path|accession" so only the top counts.
         align_out
-            .map { id, accession, csv_file -> tuple("${id}|${accession}".toString(), true) }
+            .map { id, path, accession, csv_file -> tuple("${id}|${path}|${accession}".toString(), true) }
             .set { succeeded_align_keys }
 
         top_align_keys

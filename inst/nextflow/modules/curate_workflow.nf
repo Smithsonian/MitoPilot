@@ -1,16 +1,19 @@
 import java.util.Base64
 include {curate} from './curate.nf'
 
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, c.curate_opts, ' +
+// CURATE runs per (ID, path) (hybrid model). annotate is keyed
+// (ID, path, scaffold), so curate_opts/annotate_opts are sourced via a per-path
+// subquery and the path is gated by EXISTS (any unit wants annotation).
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, b.assemble_opts, d.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
                     'd.ref_dir, d.ref_db, e.feature_trim, b.blast_accession, f.genetic_code, e.ref_based_rc ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate c ON a.ID = c.ID ' +
-                    'JOIN curate_opts d ON c.curate_opts = d.curate_opts ' +
-                    'JOIN annotate_opts e ON c.annotate_opts = e.annotate_opts ' +
+                    'JOIN curate_opts d ON d.curate_opts = (SELECT an.curate_opts FROM annotate an WHERE an.ID = a.ID AND an.path = a.path ORDER BY an.scaffold LIMIT 1) ' +
+                    'JOIN annotate_opts e ON e.annotate_opts = (SELECT an.annotate_opts FROM annotate an WHERE an.ID = a.ID AND an.path = a.path ORDER BY an.scaffold LIMIT 1) ' +
                     'JOIN samples f ON a.ID = f.ID ' +
-                    'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
+                    'WHERE b.assemble_lock = 1 AND a.ignore = 0 ' +
+                    'AND EXISTS (SELECT 1 FROM annotate an WHERE an.ID = a.ID AND an.path = a.path AND an.annotate_switch = 1 AND an.annotate_lock = 0)'
 
 workflow CURATE {
     take:

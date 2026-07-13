@@ -4,17 +4,22 @@ include {orf} from './orf.nf'
 // curate_opts via annotate.curate_opts), not stored in orf_opts.
 // assemble_opts + blast_accession (cols 12, 13) locate the staged remote BLAST
 // reference so ORFs can also BLAST against the closest-relative reference genes.
+// ORF runs per (ID, path): it must see the whole path's validated annotations to
+// avoid overlapping existing genes, so the per-scaffold validated TSVs are
+// grouped back per path below. annotate is keyed (ID, path, scaffold), so the
+// orf/curate option sets are sourced via a per-path subquery and the path is
+// gated by EXISTS (any unit wants annotation).
 params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' +
                     'd.use_orffinder, ' +
                     'd.cpus, d.memory, d.orffinder_opts, d.orf_min_len, d.orf_max_overlap, d.orf_nested, e.max_blast_hits, ' +
                     'e.ref_dir, e.ref_db, b.assemble_opts, b.blast_accession, f.genetic_code ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate c ON a.ID = c.ID ' +
-                    'JOIN orf_opts d ON c.orf_opts = d.orf_opts ' +
-                    'JOIN curate_opts e ON c.curate_opts = e.curate_opts ' +
+                    'JOIN orf_opts d ON d.orf_opts = (SELECT an.orf_opts FROM annotate an WHERE an.ID = a.ID AND an.path = a.path ORDER BY an.scaffold LIMIT 1) ' +
+                    'JOIN curate_opts e ON e.curate_opts = (SELECT an.curate_opts FROM annotate an WHERE an.ID = a.ID AND an.path = a.path ORDER BY an.scaffold LIMIT 1) ' +
                     'JOIN samples f ON a.ID = f.ID ' +
-                    'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
+                    'WHERE b.assemble_lock = 1 AND a.ignore = 0 ' +
+                    'AND EXISTS (SELECT 1 FROM annotate an WHERE an.ID = a.ID AND an.path = a.path AND an.annotate_switch = 1 AND an.annotate_lock = 0)'
 
 // Append ORFs to the annotations table (rows produced by the orf process). Uses
 // the same INSERT OR REPLACE statement and run timestamp as VALIDATE so ORFs are
@@ -26,18 +31,25 @@ params.sqlWriteAnnotations =    'INSERT OR REPLACE INTO annotations ' +
 
 workflow ORF {
     take:
-        validatedAnnotations   // (id, path, validated annotations tsv)
+        validatedAnnotations   // (id, path, scaffold, validated annotations tsv) [per unit]
         curateOut              // curate output tuple (id, path, annotations, assembly, coverage, workdir)
 
     main:
 
-        // post-curate assembly per sample
+        // post-curate assembly per (id, path)
         curateOut
             .map { it -> tuple(it[0], it[1], it[3]) }
             .set { curate_assembly }
 
+        // ORF runs per (id, path); group the per-scaffold validated tsvs back so
+        // ORFfinder sees every existing annotation on the path.
+        validatedAnnotations
+            .map { it -> tuple(it[0], it[1], it[3]) }
+            .groupTuple(by: [0, 1])
+            .set { validated_by_path }
+
         channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .join(validatedAnnotations, by: [0, 1])   // append validated annotations tsv (index 15)
+            .join(validated_by_path, by: [0, 1])       // append list of validated tsvs (index 15)
             .join(curate_assembly, by: [0, 1])         // append assembly (index 16)
             .branch { it ->
                 on:  (it[2] as Integer) == 1

@@ -1,5 +1,11 @@
 include {annotate} from './annotate.nf'
 
+// ANNOTATE runs per (ID, path): MITOS/tRNAscan annotate every non-ignored
+// scaffold of the path independently (no cross-contamination), so annotation
+// stays per-path in the hybrid model. Per-scaffold gating/validation happens
+// downstream in VALIDATE. annotate is now keyed (ID, path, scaffold), so
+// annotate_opts is sourced via a per-path subquery (first scaffold's opts) and
+// the path is gated by whether ANY of its units wants annotation (EXISTS).
 params.sqlRead =    'SELECT a.ID, a.path, b.assemble_opts, ' +
                         'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, ' +
                         'd.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, ' +
@@ -7,10 +13,10 @@ params.sqlRead =    'SELECT a.ID, a.path, b.assemble_opts, ' +
                         'd.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan, f.genetic_code, d.rescue_no_trna ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate c ON a.ID = c.ID ' +
-                    'JOIN annotate_opts d ON c.annotate_opts = d.annotate_opts ' +
+                    'JOIN annotate_opts d ON d.annotate_opts = (SELECT an.annotate_opts FROM annotate an WHERE an.ID = a.ID AND an.path = a.path ORDER BY an.scaffold LIMIT 1) ' +
                     'JOIN samples f ON a.ID = f.ID ' +
-                    'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 ' +
+                    'WHERE b.assemble_lock = 1 ' +
+                    'AND EXISTS (SELECT 1 FROM annotate an WHERE an.ID = a.ID AND an.path = a.path AND an.annotate_switch = 1 AND an.annotate_lock = 0) ' +
                     'GROUP BY a.ID, a.path, b.assemble_opts, d.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, d.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, d.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan, f.genetic_code, d.rescue_no_trna ' +
                     'HAVING SUM(CASE WHEN a.ignore = 0 THEN 1 ELSE 0 END) > 0'
 
