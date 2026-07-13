@@ -1255,41 +1255,71 @@ backwards_compatibility <- function(
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_alignment (
         ID TEXT NOT NULL,
+        path INTEGER NOT NULL DEFAULT 1,
         accession TEXT NOT NULL,
         aligned_sample TEXT NOT NULL,
         aligned_ref TEXT NOT NULL,
         rotation INTEGER NOT NULL DEFAULT 0,
         ref_length INTEGER NOT NULL,
         time_stamp INTEGER,
-        PRIMARY KEY (ID, accession)
+        PRIMARY KEY (ID, path, accession)
       );"
     )
-  } else if (!("accession" %in% DBI::dbListFields(con, "blast_ref_alignment"))) {
-    # Migrate single-ref (ID-keyed) alignment to (ID, accession): the existing
-    # alignment is against the sample's current top hit.
-    message("re-keyed blast_ref_alignment table by (ID, accession)")
-    DBI::dbExecute(con,
-      "CREATE TABLE blast_ref_alignment_new (
-        ID TEXT NOT NULL,
-        accession TEXT NOT NULL,
-        aligned_sample TEXT NOT NULL,
-        aligned_ref TEXT NOT NULL,
-        rotation INTEGER NOT NULL DEFAULT 0,
-        ref_length INTEGER NOT NULL,
-        time_stamp INTEGER,
-        PRIMARY KEY (ID, accession)
-      );"
-    )
-    DBI::dbExecute(con,
-      "INSERT OR IGNORE INTO blast_ref_alignment_new
-         (ID, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
-       SELECT al.ID, a.blast_accession, al.aligned_sample, al.aligned_ref, al.rotation, al.ref_length, al.time_stamp
-       FROM blast_ref_alignment al
-       JOIN assemble a ON al.ID = a.ID
-       WHERE a.blast_accession IS NOT NULL"
-    )
-    DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
-    DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
+  } else {
+    bra_fields <- DBI::dbListFields(con, "blast_ref_alignment")
+    if (!("accession" %in% bra_fields)) {
+      # Migrate single-ref (ID-keyed) alignment to (ID, path, accession): the
+      # existing alignment is against the sample's current top hit, path 1.
+      message("re-keyed blast_ref_alignment table by (ID, path, accession)")
+      DBI::dbExecute(con,
+        "CREATE TABLE blast_ref_alignment_new (
+          ID TEXT NOT NULL,
+          path INTEGER NOT NULL DEFAULT 1,
+          accession TEXT NOT NULL,
+          aligned_sample TEXT NOT NULL,
+          aligned_ref TEXT NOT NULL,
+          rotation INTEGER NOT NULL DEFAULT 0,
+          ref_length INTEGER NOT NULL,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, path, accession)
+        );"
+      )
+      DBI::dbExecute(con,
+        "INSERT OR IGNORE INTO blast_ref_alignment_new
+           (ID, path, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+         SELECT al.ID, 1, a.blast_accession, al.aligned_sample, al.aligned_ref, al.rotation, al.ref_length, al.time_stamp
+         FROM blast_ref_alignment al
+         JOIN assemble a ON al.ID = a.ID
+         WHERE a.blast_accession IS NOT NULL"
+      )
+      DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
+    } else if (!("path" %in% bra_fields)) {
+      # Add path to the key: (ID, accession) -> (ID, path, accession). Legacy
+      # single-path alignments map to path 1.
+      message("re-keyed blast_ref_alignment table by (ID, path, accession)")
+      DBI::dbExecute(con,
+        "CREATE TABLE blast_ref_alignment_new (
+          ID TEXT NOT NULL,
+          path INTEGER NOT NULL DEFAULT 1,
+          accession TEXT NOT NULL,
+          aligned_sample TEXT NOT NULL,
+          aligned_ref TEXT NOT NULL,
+          rotation INTEGER NOT NULL DEFAULT 0,
+          ref_length INTEGER NOT NULL,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, path, accession)
+        );"
+      )
+      DBI::dbExecute(con,
+        "INSERT OR IGNORE INTO blast_ref_alignment_new
+           (ID, path, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+         SELECT ID, 1, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp
+         FROM blast_ref_alignment"
+      )
+      DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
+    }
   }
 
   # if blast_opts column doesn't exist in assemble table, add it
@@ -1425,6 +1455,64 @@ backwards_compatibility <- function(
       "UPDATE export_opts SET fasta_header = ? WHERE fasta_header = ?",
       params = list(DEFAULT_FASTA_HEADER, old_export_default)
     )
+  }
+
+  # Re-key annotate from (ID) to (ID, path, scaffold): each retained scaffold is
+  # its own annotation unit. Legacy rows had exactly one advancing unit (the old
+  # lock guard enforced it), so map each to the first non-ignored scaffold of its
+  # stored path (fallback path/scaffold = 1). Placed after assemblies is ensured.
+  annotate_fields <- DBI::dbListFields(con, "annotate")
+  if (!("scaffold" %in% annotate_fields)) {
+    message("re-keyed annotate table by (ID, path, scaffold)")
+    path_expr <- if ("path" %in% annotate_fields) "COALESCE(CAST(an.path AS INTEGER), 1)" else "1"
+    DBI::dbExecute(con,
+      "CREATE TABLE annotate_new (
+        ID TEXT NOT NULL,
+        ID_verified TEXT,
+        path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
+        scaffolds INTEGER,
+        annotate_opts TEXT,
+        curate_opts TEXT,
+        orf_opts TEXT,
+        annotate_switch INTEGER,
+        annotate_lock INTEGER,
+        annotate_notes TEXT,
+        PCGCount INTEGER,
+        tRNACount INTEGER,
+        rRNACount INTEGER,
+        missing TEXT,
+        extra TEXT,
+        warnings INTEGER,
+        reviewed TEXT,
+        problematic TEXT,
+        partial TEXT,
+        structure TEXT,
+        length INTEGER,
+        topology TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+    DBI::dbExecute(con, sprintf(
+      "INSERT OR IGNORE INTO annotate_new
+         (ID, path, scaffold, ID_verified, scaffolds, annotate_opts, curate_opts,
+          orf_opts, annotate_switch, annotate_lock, annotate_notes, PCGCount,
+          tRNACount, rRNACount, missing, extra, warnings, reviewed, problematic,
+          partial, structure, length, topology, time_stamp)
+       SELECT an.ID, %s,
+         COALESCE((SELECT MIN(s.scaffold) FROM assemblies s
+                   WHERE s.ID = an.ID AND s.path = %s AND s.ignore = 0), 1),
+         an.ID_verified, an.scaffolds, an.annotate_opts, an.curate_opts,
+         an.orf_opts, an.annotate_switch, an.annotate_lock, an.annotate_notes,
+         an.PCGCount, an.tRNACount, an.rRNACount, an.missing, an.extra,
+         an.warnings, an.reviewed, an.problematic, an.partial, an.structure,
+         an.length, an.topology, an.time_stamp
+       FROM annotate an",
+      path_expr, path_expr
+    ))
+    DBI::dbExecute(con, "DROP TABLE annotate")
+    DBI::dbExecute(con, "ALTER TABLE annotate_new RENAME TO annotate")
   }
 
   # Regenerate the .config from the chosen executor's template (port project

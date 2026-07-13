@@ -403,7 +403,8 @@ new_db_userAsmb <- function(
     "CREATE TABLE annotate (
       ID TEXT NOT NULL,
       ID_verified TEXT,
-      path TEXT,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
       scaffolds INTEGER,
       annotate_opts TEXT,
       curate_opts TEXT,
@@ -424,13 +425,15 @@ new_db_userAsmb <- function(
       length INTEGER,
       topology TEXT,
       time_stamp INTEGER,
-      PRIMARY KEY (ID)
+      PRIMARY KEY (ID, path, scaffold)
     );"
   )
   dplyr::tbl(con, "annotate") |>
     dplyr::rows_upsert(
       data.frame(
         ID = mapping$ID,
+        path = 1L,
+        scaffold = 1L,
         annotate_opts = "default",
         curate_opts = "default",
         orf_opts = "default",
@@ -443,7 +446,7 @@ new_db_userAsmb <- function(
       ),
       in_place = TRUE,
       copy = TRUE,
-      by = "ID"
+      by = c("ID", "path", "scaffold")
     )
 
   ## Annotate options ----
@@ -682,13 +685,14 @@ new_db_userAsmb <- function(
     con,
     "CREATE TABLE blast_ref_alignment (
       ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
       accession TEXT NOT NULL,
       aligned_sample TEXT NOT NULL,
       aligned_ref TEXT NOT NULL,
       rotation INTEGER NOT NULL DEFAULT 0,
       ref_length INTEGER NOT NULL,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, accession)
+      PRIMARY KEY (ID, path, accession)
     );"
   )
 
