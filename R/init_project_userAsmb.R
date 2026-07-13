@@ -12,7 +12,12 @@
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param data_path Path to the directory where the raw data is located. Can be
-#'   a AWS s3 bucket even if not using AWS for pipeline execution.
+#'   a AWS s3 bucket even if not using AWS for pipeline execution. Not required
+#'   when `no_raw_data = TRUE`.
+#' @param no_raw_data (logical) Run without raw sequence data (default = FALSE).
+#'   When TRUE, the read-mapping coverage step is skipped: `data_path` is
+#'   ignored, coverage/depth statistics are left empty, and annotation coverage
+#'   trimming is disabled. Use this to annotate an assembly you already have.
 #' @param assembly_path Path to the directory where the mitogenome assemblies are located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
@@ -47,6 +52,7 @@ new_project_userAsmb <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     data_path = NULL,
+    no_raw_data = FALSE,
     assembly_path = "NA",
     genetic_code = NULL,
     executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
@@ -65,8 +71,15 @@ new_project_userAsmb <- function(
   }
   path <- normalizePath(path)
 
+  # No raw data mode: skip reads/coverage. data_path is not needed; RAW_DIR is
+  # pinned to the "NA" sentinel so the pipeline runs the no-reads coverage path.
+  if (no_raw_data) {
+    data_path <- "NA"
+    message("no_raw_data = TRUE: skipping read mapping and coverage calculation.")
+  }
+
   # Normalize data path (if provided)----
-  if(length(data_path)==1){
+  if(!no_raw_data && length(data_path)==1){
     data_path <- normalizePath(data_path)
   }
 
@@ -127,6 +140,7 @@ new_project_userAsmb <- function(
     genetic_code = genetic_code,
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
+    no_raw_data = no_raw_data,
     ...
   )
 

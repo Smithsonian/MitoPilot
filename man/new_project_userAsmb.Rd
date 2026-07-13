@@ -9,6 +9,7 @@ new_project_userAsmb(
   mapping_fn = NULL,
   mapping_id = "ID",
   data_path = NULL,
+  no_raw_data = FALSE,
   assembly_path = "NA",
   genetic_code = NULL,
   executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
@@ -38,7 +39,13 @@ and a `Topology` column containing information about the assembly topology
 the unique sample identifiers (default = "ID").}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be
-a AWS s3 bucket even if not using AWS for pipeline execution.}
+a AWS s3 bucket even if not using AWS for pipeline execution. Not required
+when `no_raw_data = TRUE`.}
+
+\item{no_raw_data}{(logical) Run without raw sequence data (default = FALSE).
+When TRUE, the read-mapping coverage step is skipped: `data_path` is
+ignored, coverage/depth statistics are left empty, and annotation coverage
+trimming is disabled. Use this to annotate an assembly you already have.}
 
 \item{assembly_path}{Path to the directory where the mitogenome assemblies are located. Can be
 a AWS s3 bucket even if not using AWS for pipeline execution.}

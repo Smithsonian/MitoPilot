@@ -35,6 +35,9 @@
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
 #' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
+#' @param no_raw_data (logical) Initialize a project with no raw reads (default =
+#'   FALSE). When TRUE, annotation coverage trimming (`coverage_trim`) is disabled
+#'   since no read-depth information is available.
 #' @export
 #'
 new_db_userAsmb <- function(
@@ -68,7 +71,9 @@ new_db_userAsmb <- function(
     orf_max_overlap = 0.1,
     # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
     # set per-scaffold ignore flags; matches the regular pipeline default)
-    min_assembly_length = 500) {
+    min_assembly_length = 500,
+    # Skip read-mapping coverage (no raw data). Disables annotate coverage trim.
+    no_raw_data = FALSE) {
   # Read mapping file
   if (is.null(mapping_fn)) {
     mapping_fn <- "./mapping.csv"
@@ -162,6 +167,12 @@ new_db_userAsmb <- function(
       copy = TRUE,
       by = "ID"
     )
+
+  # No raw reads: R1/R2 are not needed, so tolerate their absence in the mapping.
+  if (no_raw_data) {
+    if (!"R1" %in% colnames(mapping)) mapping$R1 <- NA_character_
+    if (!"R2" %in% colnames(mapping)) mapping$R2 <- NA_character_
+  }
 
   # Preprocessing table ----
   DBI::dbExecute(
@@ -489,7 +500,7 @@ new_db_userAsmb <- function(
         mitofinder_allow_introns = 0L,
         mitofinder_opts = "",
         start_gene = "trnF",
-        coverage_trim = 1L,
+        coverage_trim = if (no_raw_data) 0L else 1L,
         feature_trim = 1L,
         ref_based_rc = 0L,
         retain_low_conf_trna = 0L

@@ -1,4 +1,4 @@
-include {coverage_userAsmb} from './coverage_userAsmb.nf'
+include {coverage_userAsmb; coverage_userAsmb_noReads} from './coverage_userAsmb.nf'
 
 params.sqlRead =  'SELECT s.ID, s.assembly, s.topology, ' +
                   'a.assemble_opts, opts.min_assembly_length ' +
@@ -21,48 +21,17 @@ params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?,
                             'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'
 
 
-workflow COVERAGE_userAsmb {
+// Shared writer: parse coverageStats -> assemblies/assemble DB writes + emit the
+// BLAST input. Lives in one place so the (data-loss-sensitive) DB write logic is
+// identical for the read-based and no-reads coverage workflows.
+workflow COVERAGE_userAsmb_WRITE {
     take:
-        input
+        coverage_out
+        min_len_lookup
+        min_len_summary
 
     main:
-        // sample info channel from DB
-        channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .multiMap { it ->
-                info: tuple(
-                    it[0],                                          // ID
-                    file(params.asmbDir + "/" + it[1]),             // assembly
-                    it[2],                                          // topology
-                    it[3]                                          // assemble opts dummy var
-                )
-                min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
-                min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
-            }
-            .set { query_ch }
-
-        query_ch.info.set { sample_info }
-        query_ch.min_len_scaffolds.set { min_len_lookup }
-        query_ch.min_len_summary.set { min_len_summary }
-
-        // Coverage Input Channel
-        input
-            // cross with sample info
-            .cross(sample_info)
-            .map{ it ->
-                tuple(
-                    it[0][0],                                                   // ID
-                    it[0][1],                                                   // trimmed reads in
-                    it[1][1],                                                   // assembly
-                    it[1][2],                                                   // topology
-                    it[1][3],                                                   // assemble opts dummy var
-                )
-            }
-            .set { coverage_in }
-
-        // Coverage
-        coverage_userAsmb(coverage_in).set { coverage_out }
-
-        // Coverage output
+        // Coverage output -> depth/gc/errors
         coverage_out
             .flatten()
             .filter{ it =~ /(.*coverageStats.csv)$/ }
@@ -164,5 +133,88 @@ workflow COVERAGE_userAsmb {
     emit:
         // tuple(id, assembly, opts_id) for single-contig BLAST search
         blast_in = coverage_out.map{ it -> tuple(it[2], it[3], it[4]) }
+}
 
+
+workflow COVERAGE_userAsmb {
+    take:
+        input
+
+    main:
+        // sample info channel from DB
+        channel.fromQuery(params.sqlRead, db: 'sqlite')
+            .multiMap { it ->
+                info: tuple(
+                    it[0],                                          // ID
+                    file(params.asmbDir + "/" + it[1]),             // assembly
+                    it[2],                                          // topology
+                    it[3]                                          // assemble opts dummy var
+                )
+                min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
+                min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
+            }
+            .set { query_ch }
+
+        query_ch.info.set { sample_info }
+        query_ch.min_len_scaffolds.set { min_len_lookup }
+        query_ch.min_len_summary.set { min_len_summary }
+
+        // Coverage Input Channel
+        input
+            // cross with sample info
+            .cross(sample_info)
+            .map{ it ->
+                tuple(
+                    it[0][0],                                                   // ID
+                    it[0][1],                                                   // trimmed reads in
+                    it[1][1],                                                   // assembly
+                    it[1][2],                                                   // topology
+                    it[1][3],                                                   // assemble opts dummy var
+                )
+            }
+            .set { coverage_in }
+
+        // Coverage
+        coverage_userAsmb(coverage_in).set { coverage_out }
+
+        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary)
+
+    emit:
+        blast_in = COVERAGE_userAsmb_WRITE.out.blast_in
+}
+
+
+// No-reads variant: user-provided assembly, no raw data. Samples come straight
+// from the DB (no PREPROCESS) and coverage() runs in its no-reads mode, deriving
+// GC from the sequence and leaving depth/error stats empty.
+workflow COVERAGE_userAsmb_noReads {
+    main:
+        channel.fromQuery(params.sqlRead, db: 'sqlite')
+            .multiMap { it ->
+                info: tuple(
+                    it[0],                                          // ID
+                    file(params.asmbDir + "/" + it[1]),             // assembly
+                    it[2],                                          // topology
+                    it[3]                                          // assemble opts dummy var
+                )
+                min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
+                min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
+            }
+            .set { query_ch }
+
+        query_ch.info.set { sample_info }
+        query_ch.min_len_scaffolds.set { min_len_lookup }
+        query_ch.min_len_summary.set { min_len_summary }
+
+        // No reads to cross in; feed the assembly straight to the no-reads process
+        sample_info
+            .map{ it -> tuple(it[0], it[1], it[2], it[3]) }
+            .set { coverage_in }
+
+        coverage_userAsmb_noReads(coverage_in).set { coverage_out }
+
+        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary)
+
+    emit:
+        blast_in = COVERAGE_userAsmb_WRITE.out.blast_in
 }

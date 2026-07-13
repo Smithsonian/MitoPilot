@@ -25,6 +25,26 @@ coverage <- function(
   names(assembly_len) <- ids
   basename_prefix <- basename(assembly_fn) |> stringr::str_remove("\\.[^\\.]+$")
 
+  # Create output directory
+  if (!dir.exists(outDir)) {
+    dir.create(outDir, showWarnings = FALSE, recursive = TRUE)
+  }
+  coverage_fn <- file.path(outDir, paste0(basename_prefix, "_coverage.csv"))
+
+  # No raw reads: build a per-base coverage table straight from the assembly so
+  # the coverageStats.csv schema matches the read-based path. Depth/Correct/
+  # ErrorRate are unknown (NA); GC is derived from Call in the shared tail below.
+  no_reads <- identical(as.character(paired_reads_1), "NA")
+  if (no_reads) {
+    coverage <- purrr::map_dfr(seq_along(assembly), function(i) {
+      calls <- stringr::str_split(as.character(assembly[[i]]), "")[[1]]
+      data.frame(
+        SeqId = names(assembly)[i], Position = seq_along(calls), Call = calls,
+        Depth = NA_real_, Correct = NA_real_, ErrorRate = NA_real_
+      )
+    })
+  } else {
+
   # If the assembly is circular and only has one sequence, add a 500bp overlap for mapping
   if (circular && length(seq_ids) == 1) {
     assembly <- Biostrings::xscat(assembly, Biostrings::subseq(assembly, start = 1, end = 500)) |>
@@ -34,11 +54,6 @@ coverage <- function(
     stringr::str_remove("\\.[^\\.]+$") |>
     paste0("_working.fasta")
   Biostrings::writeXStringSet(assembly, assembly_working)
-
-  # Create output directory
-  if (!dir.exists(outDir)) {
-    dir.create(outDir, showWarnings = FALSE, recursive = TRUE)
-  }
 
   # Map Reads
   mapped_fn <- file.path(outDir, paste0(basename_prefix, ".bam"))
@@ -62,7 +77,6 @@ coverage <- function(
   }
 
   # Get coverage stats
-  coverage_fn <- file.path(outDir, paste0(basename_prefix, "_coverage.csv"))
   stringr::str_glue(
     "conda run -n bam-readcount bam-readcount -w1 -f {assembly_working} {mapped_fn} > {coverage_fn}"
   ) |> system()
@@ -139,6 +153,8 @@ coverage <- function(
       coverage <- dplyr::bind_rows(to_add, coverage)
     }
   }
+  }
+
   coverage <- coverage |>
     dplyr::arrange(SeqId, Position)
 
@@ -177,7 +193,9 @@ coverage <- function(
     dplyr::filter(Val == 1)
 
   # Coverage plot - one PDF per scaffold ----
-  for (seq_id in unique(stats_long$SeqId)) {
+  # Skipped with no raw reads: depth/error are empty, so only a GC track would
+  # remain (not worth a PDF, and the empty depth facets break faceting).
+  for (seq_id in if (no_reads) character(0) else unique(stats_long$SeqId)) {
     scaffold_num <- stringr::str_extract(seq_id, "[0-9]+$")
 
     scaf_stats <- stats_long |>

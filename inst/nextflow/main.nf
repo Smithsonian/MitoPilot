@@ -7,6 +7,11 @@ import java.time.Instant
 // Time stamp
 params.ts = workflow.start.toInstant().getEpochSecond().toString()
 
+// User-supplied-assembly projects with no raw reads: skip PREPROCESS + read
+// mapping and derive coverage stats from the assembly itself. Signalled by the
+// project .config setting rawDir = 'NA' (see new_project_userAsmb(no_raw_data)).
+params.noRawData = (params.rawDir == 'NA')
+
 // Modules
 include {PREPROCESS} from './modules/preprocess_workflow.nf'
 include {ASSEMBLE} from './modules/assemble_workflow.nf'
@@ -15,7 +20,7 @@ include {ANNOTATE} from './modules/annotate_workflow.nf'
 include {CURATE} from './modules/curate_workflow.nf'
 include {VALIDATE} from './modules/validate_workflow.nf'
 include {ORF} from './modules/orf_workflow.nf'
-include {COVERAGE_userAsmb} from './modules/coverage_userAsmb_workflow.nf'
+include {COVERAGE_userAsmb; COVERAGE_userAsmb_noReads} from './modules/coverage_userAsmb_workflow.nf'
 include {BLAST_GENBANK} from './modules/blast_genbank_workflow.nf'
 include {BLAST_REF_FETCH} from './modules/blast_ref_fetch_workflow.nf'
 include {BLAST_REF_ALIGN} from './modules/blast_ref_align_workflow.nf'
@@ -48,9 +53,18 @@ workflow WF1 {
 // ASSEMBLY WORKFLOW - user provided assemblies
 workflow WF1_userAsmb {
 
-    PREPROCESS()
-    COVERAGE_userAsmb(PREPROCESS.out[0])
-    BLAST_GENBANK(COVERAGE_userAsmb.out.blast_in)
+    // No-reads projects skip PREPROCESS entirely and pull samples straight from
+    // the DB; read-based projects preprocess then map reads for coverage. Either
+    // path emits the same blast_in, so BLAST is invoked once.
+    if (params.noRawData) {
+        COVERAGE_userAsmb_noReads()
+        blast_in = COVERAGE_userAsmb_noReads.out.blast_in
+    } else {
+        PREPROCESS()
+        COVERAGE_userAsmb(PREPROCESS.out[0])
+        blast_in = COVERAGE_userAsmb.out.blast_in
+    }
+    BLAST_GENBANK(blast_in)
     BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map, BLAST_GENBANK.out.ref_batches)
 
 }
