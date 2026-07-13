@@ -83,9 +83,10 @@ $( document ).ready(function(){
 
 // Mousewheel -> horizontal scroll for the annotate-details alignment views.
 // The coverage map and synteny PNGs sit in overflow-x:auto containers
-// (coverageDiv / syntenyScrollDiv); the MSA viewer scrolls its own
-// .biojs_msa_rheader element. Translate vertical wheel delta into horizontal
-// scroll (down = right, up = left) and suppress page scroll over these views.
+// (coverageDiv / syntenyScrollDiv). Translate vertical wheel delta into
+// horizontal scroll (down = right, up = left) and suppress page scroll over
+// these views. The MSA viewer is intentionally excluded: it needs vertical
+// wheel for scrolling alignment rows up/down.
 $( document ).ready(function(){
   document.addEventListener('wheel', function(e) {
     if (!e.target.closest) return;
@@ -97,17 +98,6 @@ $( document ).ready(function(){
       box.scrollLeft += delta;
       e.preventDefault();
       return;
-    }
-
-    var msa = e.target.closest('.msaR');
-    if (msa) {
-      var header = msa.querySelector('.biojs_msa_rheader')
-                || document.getElementsByClassName('biojs_msa_rheader')[0];
-      if (header) {
-        header.scrollLeft += delta;
-        header.dispatchEvent(new Event('scroll'));
-        e.preventDefault();
-      }
     }
   }, { passive: false });
 });
