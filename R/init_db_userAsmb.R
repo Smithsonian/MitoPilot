@@ -126,6 +126,14 @@ new_db_userAsmb <- function(
     stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
   }
 
+  # No raw reads: R1/R2 are not needed, so tolerate their absence in the mapping.
+  # Added here (before samples/preprocess are built) so both tables carry the
+  # columns as NA, matching the read-based schema the app/export code expects.
+  if (no_raw_data) {
+    if (!"R1" %in% colnames(mapping)) mapping$R1 <- NA_character_
+    if (!"R2" %in% colnames(mapping)) mapping$R2 <- NA_character_
+  }
+
   # Load default curation parameters
   if (is.null(curate_params)) {
     curate_params <- do.call(paste0("params_", curate_target), list())
@@ -167,12 +175,6 @@ new_db_userAsmb <- function(
       copy = TRUE,
       by = "ID"
     )
-
-  # No raw reads: R1/R2 are not needed, so tolerate their absence in the mapping.
-  if (no_raw_data) {
-    if (!"R1" %in% colnames(mapping)) mapping$R1 <- NA_character_
-    if (!"R2" %in% colnames(mapping)) mapping$R2 <- NA_character_
-  }
 
   # Preprocessing table ----
   DBI::dbExecute(
