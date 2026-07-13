@@ -30,6 +30,12 @@ app_server_userAsmb <- function(input, output, session) {
     stringr::str_remove("^[^'|^\"]+['\"]") |>
     stringr::str_extract("^[^'|^\"]+")
   session$userData$dir_out <- file.path(dirname(db), dir_out)
+  # No-raw-data mode ----
+  # rawDir = 'NA' in .config signals an assembly-only project (no reads/coverage).
+  # Used to hide read-derived columns in the Assemble table.
+  session$userData$no_raw_data <- readLines(file.path(dirname(db), ".config")) |>
+    stringr::str_detect("rawDir\\s*=\\s*['\"]NA['\"]") |>
+    any()
   # Genetic code ----
   # Per-sample genetic codes live in samples.genetic_code (auto-selected from
   # each sample's curation ruleset) and drive translation. This project-level

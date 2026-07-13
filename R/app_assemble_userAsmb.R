@@ -166,6 +166,10 @@ assemble_server_userAsmb <- function(id) {
       if (is.na(g)) NULL else paste0("mp-grp-", g)
     }
 
+    # No-raw-data projects have no reads/coverage, so hide the read-derived
+    # columns (preprocess opts, read count, read length) entirely.
+    no_raw <- isTRUE(session$userData$no_raw_data)
+
     # Hide unselected column groups and lock/state codes via CSS. Hiding (not
     # removing) keeps columns/rows mounted, so filters, sort, page, and
     # selection survive toggling.
@@ -274,7 +278,7 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_longtext()
             ),
             pre_opts = colDef(
-              show = T, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
+              show = !no_raw, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
               name = "Preprocess Opts.",
               html = T,
               width = 130,
@@ -288,13 +292,13 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_link(ns("set_blast_opts"))
             ),
             trimmed_reads = colDef(
-              show = T, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
+              show = !no_raw, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
               name = "Reads",
               filterable = FALSE,
               minWidth = 100
             ),
             mean_length = colDef(
-              show = T, class = .grp("mean_length"), headerClass = .grp("mean_length"),
+              show = !no_raw, class = .grp("mean_length"), headerClass = .grp("mean_length"),
               name = "Read Length",
               filterable = FALSE,
               minWidth = 100
