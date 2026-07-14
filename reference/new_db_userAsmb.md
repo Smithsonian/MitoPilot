@@ -32,7 +32,8 @@ new_db_userAsmb(
   orffinder_opts = "-s 1",
   orf_min_len = 300,
   orf_max_overlap = 0.1,
-  min_assembly_length = 500
+  min_assembly_length = 500,
+  no_raw_data = FALSE
 )
 ```
 
@@ -152,3 +153,9 @@ new_db_userAsmb(
 - min_assembly_length:
 
   Minimum scaffold length to include in analysis (default = 500)
+
+- no_raw_data:
+
+  (logical) Initialize a project with no raw reads (default = FALSE).
+  When TRUE, annotation coverage trimming (\`coverage_trim\`) is
+  disabled since no read-depth information is available.

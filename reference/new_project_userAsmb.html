@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.11</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,6 +53,7 @@
 <span>  mapping_fn <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mapping_id <span class="op">=</span> <span class="st">"ID"</span>,</span>
 <span>  data_path <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  no_raw_data <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  assembly_path <span class="op">=</span> <span class="st">"NA"</span>,</span>
 <span>  genetic_code <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  executor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"local"</span>, <span class="st">"awsbatch"</span>, <span class="st">"slurm"</span>, <span class="st">"sge"</span>, <span class="st">"pbs"</span>, <span class="st">"lsf"</span>, <span class="st">"NMNH_Hydra"</span>,</span>
@@ -93,7 +94,15 @@ the unique sample identifiers (default = "ID").</p></dd>
 
 <dt id="arg-data-path">data_path<a class="anchor" aria-label="anchor" href="#arg-data-path"></a></dt>
 <dd><p>Path to the directory where the raw data is located. Can be
-a AWS s3 bucket even if not using AWS for pipeline execution.</p></dd>
+a AWS s3 bucket even if not using AWS for pipeline execution. Not required
+when `no_raw_data = TRUE`.</p></dd>
+
+
+<dt id="arg-no-raw-data">no_raw_data<a class="anchor" aria-label="anchor" href="#arg-no-raw-data"></a></dt>
+<dd><p>(logical) Run without raw sequence data (default = FALSE).
+When TRUE, the read-mapping coverage step is skipped: `data_path` is
+ignored, coverage/depth statistics are left empty, and annotation coverage
+trimming is disabled. Use this to annotate an assembly you already have.</p></dd>
 
 
 <dt id="arg-assembly-path">assembly_path<a class="anchor" aria-label="anchor" href="#arg-assembly-path"></a></dt>

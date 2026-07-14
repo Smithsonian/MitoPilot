@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.11</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -282,6 +282,20 @@
 <span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="at">ncbi_api_key =</span> <span class="st">"MY_NCBI_API_KEY"</span></span>
 <span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>)</span></code></pre></div>
 <p>Note that all samples in a MitoPilot project created with <code><a href="reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> must have user-supplied assemblies. You cannot have MitoPilot project with mixed samples (i.e. some assembled, some unassembled).</p>
+<div class="section level4">
+<h4 id="running-without-raw-sequence-data">Running without raw sequence data<a class="anchor" aria-label="anchor" href="#running-without-raw-sequence-data"></a>
+</h4>
+<p>If you do not have the raw reads for your assemblies, set <code>no_raw_data = TRUE</code>. MitoPilot will then skip read mapping and coverage calculation entirely: <code>data_path</code> is not required, your mapping file does not need <code>R1</code>/<code>R2</code> columns, and coverage/depth statistics will be left empty (warnings and contig trimming based on coverage are disabled automatically). The assembly, annotation, and curation features work as usual.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project_userAsmb.html">new_project_userAsmb</a></span><span class="op">(</span></span>
+<span>  path <span class="op">=</span> <span class="st">"path/to/project"</span>,</span>
+<span>  mapping_fn <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
+<span>  assembly_path <span class="op">=</span> <span class="st">"path/to/mitogenome/assembly/fasta/files"</span>,</span>
+<span>  no_raw_data <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>
+<span>  ncbi_api_key <span class="op">=</span> <span class="st">"MY_NCBI_API_KEY"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
 </div>
 <div class="section level3">
 <h3 id="nextflow-configuration-file">Nextflow Configuration File<a class="anchor" aria-label="anchor" href="#nextflow-configuration-file"></a>
@@ -293,12 +307,12 @@
 </h3>
 <p>MitoPilot runs each processing step inside a container (Docker locally, or Singularity/Apptainer on most HPC clusters). The container image is fairly large, so on first use it must be downloaded and, for Singularity/Apptainer, converted to a single <code>.sif</code> file. By default Nextflow caches this image inside each project’s <code>work/</code> directory, which means every new project re-downloads and rebuilds the same image. On shared cluster filesystems this can be slow enough to exceed the default pull timeout and cause the run to fail.</p>
 <p>To download the image once and reuse it across all projects, point Nextflow at a single, persistent cache directory by setting an environment variable before launching MitoPilot (e.g. in your <code>~/.bashrc</code> or job submission script):</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co"># Singularity / Apptainer (most HPC clusters)</span></span>
-<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_SINGULARITY_CACHEDIR</span><span class="op">=</span>/path/to/persistent/singularity_cache</span>
-<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_APPTAINER_CACHEDIR</span><span class="op">=</span>/path/to/persistent/apptainer_cache</span>
-<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
-<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co"># Docker (local)</span></span>
-<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co"># Docker manages its own image cache, so no setting is required.</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Singularity / Apptainer (most HPC clusters)</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_SINGULARITY_CACHEDIR</span><span class="op">=</span>/path/to/persistent/singularity_cache</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_APPTAINER_CACHEDIR</span><span class="op">=</span>/path/to/persistent/apptainer_cache</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co"># Docker (local)</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co"># Docker manages its own image cache, so no setting is required.</span></span></code></pre></div>
 <p>Choose a location with enough space that persists between sessions (not a per-project or temporary scratch directory). If image pulls still time out on a slow filesystem, increase <code>pullTimeout</code> in the <code>singularity { }</code> block of the <code>.config</code> file.</p>
 </div>
 <div class="section level3">
@@ -306,7 +320,7 @@
 </h3>
 <p>MitoPilot makes use of the Nextflow plugin <a href="https://github.com/nextflow-io/nf-sqldb" class="external-link">nf-sqldb</a> to store and retrieve processing parameters and information about the samples and their processing status. The database (<code>.sqlite</code>) is created automatically when the project is initialized and is stored in the project directory.</p>
 <p>The interactive MitoPilot GUI also interacts with this database to allow you run the pipeline, modify parameters, and view the results. When initializing a new project, default processing parameters for the pipeline modules are stored in the database, but any processing parameters can also be passed to the <code><a href="reference/new_project.html">new_project()</a></code> function to modify the initial defaults. For example, the following options would modify the allocated memory and GetOrganelle command line options :</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">MitoPilot</span><span class="fu">::</span><span class="fu"><a href="reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  mapping <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
 <span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>

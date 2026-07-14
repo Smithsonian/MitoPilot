@@ -348,6 +348,28 @@ Note that all samples in a MitoPilot project created with
 must have user-supplied assemblies. You cannot have MitoPilot project
 with mixed samples (i.e. some assembled, some unassembled).
 
+#### Running without raw sequence data
+
+If you do not have the raw reads for your assemblies, set
+`no_raw_data = TRUE`. MitoPilot will then skip read mapping and coverage
+calculation entirely: `data_path` is not required, your mapping file
+does not need `R1`/`R2` columns, and coverage/depth statistics will be
+left empty (warnings and contig trimming based on coverage are disabled
+automatically). The assembly, annotation, and curation features work as
+usual.
+
+``` r
+
+MitoPilot::new_project_userAsmb(
+  path = "path/to/project",
+  mapping_fn = "path/to/mapping_file.csv",
+  assembly_path = "path/to/mitogenome/assembly/fasta/files",
+  no_raw_data = TRUE,
+  executor = "local",
+  ncbi_api_key = "MY_NCBI_API_KEY"
+)
+```
+
 ### Nextflow Configuration File
 
 Initializing a new project will populate the `.config` file in the
