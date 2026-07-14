@@ -408,7 +408,8 @@ pipeline_server_userAsmb <- function(id) {
     process_key <- function(token) {
       k <- sub("^.*:", "", token)                      # drop path prefix up to last ':'
       stripped <- sub("^.*(\u2026|\\.\\.\\.)", "", k)  # drop leading ellipsis truncation
-      if (nchar(stripped) >= 3) stripped else token
+      frag <- if (nchar(stripped) >= 3) stripped else token
+      canonical_process_key(frag)
     }
     progress_update <- function(process_out, prog_header, prog_executor, prog_process, prog_frame, prog_footer) {
       remaining <- rep(T, length(process_out))
@@ -522,7 +523,7 @@ pipeline_server_userAsmb <- function(id) {
       # very first frame, before any redraw has committed a complete one).
       board <- prog_process()
       if (length(board) == 0) board <- prog_frame()
-      paste(board, collapse = "\n")
+      paste(order_progress_board(board), collapse = "\n")
     })
     output$progress_footer <- renderText({
       req(prog_footer())

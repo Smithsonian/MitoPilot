@@ -1,6 +1,41 @@
 #' run_pipeline Server Functions
 #'
 #' @noRd
+
+# Canonical process order (WF1 then WF2, plus userAsmb), by leaf process name, so
+# the progress board renders in workflow order instead of Nextflow's emission
+# order. Keys are the process simple names produced by process_key(). Unknown
+# processes are appended in the order Nextflow first listed them.
+MITOPILOT_PROCESS_ORDER <- c(
+  # WF1 (Assemble)
+  "preprocess", "assemble", "coverage", "coverage_userAsmb",
+  "blast_genbank", "blast_ref_fetch", "blast_ref_stamp", "scaffold_join",
+  # WF2 (Annotate)
+  "annotate", "curate", "validate", "write_curated_result", "orf",
+  "blast_ref_align"
+)
+
+# Resolve a (possibly ellipsis-truncated) Nextflow process fragment to its
+# canonical leaf-process name. Nextflow shrinks the name column when task tags
+# widen a row, so the same process is emitted full ("assemble") early and
+# truncated ("semble") later; without this they become two different board keys,
+# so stale rows accumulate and ordering breaks. Match the known process whose
+# name ends with the fragment; require a unique match, else return the fragment.
+canonical_process_key <- function(frag) {
+  hits <- MITOPILOT_PROCESS_ORDER[endsWith(MITOPILOT_PROCESS_ORDER, frag)]
+  if (length(hits) == 1) hits else frag
+}
+
+# Reorder a progress board (named list keyed by process simple name) into
+# workflow order; unknown keys keep their first-seen order after the known ones.
+order_progress_board <- function(board) {
+  if (length(board) == 0) return(board)
+  ord <- match(names(board), MITOPILOT_PROCESS_ORDER)
+  n_known <- length(MITOPILOT_PROCESS_ORDER)
+  ord[is.na(ord)] <- n_known + seq_len(sum(is.na(ord)))
+  board[order(ord)]
+}
+
 pipeline_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -511,15 +546,17 @@ pipeline_server <- function(id) {
     prog_process <- reactiveVal(list())   # last complete board (what we render)
     prog_frame <- reactiveVal(list())     # board currently being reprinted
     prog_footer <- reactiveVal()
-    # Reduce a Nextflow board token to a stable key: the process simple name.
+    # Reduce a Nextflow board token to a stable key: the canonical process name.
     # Nextflow truncates the workflow-path prefix with an ellipsis and varies the
-    # name-column width between redraws. When a long task tag truncates the name
-    # away entirely, fall back to the raw token so distinct processes stay
-    # distinct within a frame instead of collapsing to an empty/1-char key.
+    # name-column width between redraws, so the full ("assemble") and truncated
+    # ("semble") forms must collapse to one key (see canonical_process_key). When
+    # a long task tag truncates the name away entirely, fall back to the raw token
+    # so distinct processes stay distinct within a frame.
     process_key <- function(token) {
       k <- sub("^.*:", "", token)                      # drop path prefix up to last ':'
       stripped <- sub("^.*(\u2026|\\.\\.\\.)", "", k)  # drop leading ellipsis truncation
-      if (nchar(stripped) >= 3) stripped else token
+      frag <- if (nchar(stripped) >= 3) stripped else token
+      canonical_process_key(frag)
     }
     progress_update <- function(process_out,
                                 prog_header,
@@ -651,7 +688,7 @@ pipeline_server <- function(id) {
       # very first frame, before any redraw has committed a complete one).
       board <- prog_process()
       if (length(board) == 0) board <- prog_frame()
-      paste(board, collapse = "\n")
+      paste(order_progress_board(board), collapse = "\n")
     })
     output$progress_footer <- renderText({
       req(prog_footer())
