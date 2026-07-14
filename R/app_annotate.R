@@ -158,14 +158,25 @@ annotate_server <- function(id) {
         dplyr::collect(),
       orf_opts = dplyr::tbl(session$userData$con, "orf_opts") |>
         dplyr::collect(),
-      data = fetch_annotate_data(),
+      data = NULL,
+      children = NULL,
       updating = NULL
     )
+
+    # Populate parent (rolled-up) + per-unit child frames from a single fetch so
+    # child_uid stays consistent between the embedded children_json and rv$children.
+    local({
+      units <- fetch_annotate_units()
+      rv$children <- units
+      rv$data <- rollup_annotate_parent(units)
+    })
 
     # Refresh ----
     init("refresh_annotate")
     on("refresh_annotate", {
-      rv$data <- fetch_annotate_data()
+      units <- fetch_annotate_units()
+      rv$children <- units
+      rv$data <- rollup_annotate_parent(units)
       updateReactable(
         "table",
         data = filtered_data()
@@ -285,6 +296,48 @@ annotate_server <- function(id) {
       tags$style(HTML(paste(rules, collapse = "\n")))
     })
 
+    # Expandable child rows for multi-unit (multi-assembly) samples. Runs
+    # client-side (survives updateReactable) and reads the units embedded in the
+    # parent row's children_json. Returns undefined for single-unit rows so they
+    # get no expander. Each child row's "details" button opens the per-unit editor
+    # by pushing that unit's child_uid to input$unit_details.
+    child_details_js <- JS(sprintf(
+      "function(rowInfo) {
+        var vals = rowInfo.values || {};
+        var n = vals['n_units'];
+        if (!n || n <= 1) return;
+        var data;
+        try { data = JSON.parse(vals['children_json']); } catch (e) { return; }
+        if (!data || !data.length) return;
+        var cols = [['path','Path'],['scaffold','Scaf'],['topology','Topology'],
+          ['length','Length'],['PCGCount','PCG'],['tRNACount','tRNA'],
+          ['rRNACount','rRNA'],['ORFCount','ORF'],['reviewed','Rev'],
+          ['problematic','Prob'],['partial','Part']];
+        var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+        var html = '<div style=\"padding:8px 12px;\">';
+        html += '<table style=\"border-collapse:collapse; font-size:0.85em;\">';
+        html += '<thead><tr>';
+        cols.forEach(function(c){ html += '<th style=\"text-align:left; padding:2px 10px; border-bottom:1px solid #ccc; color:#555;\">'+c[1]+'</th>'; });
+        html += '<th style=\"border-bottom:1px solid #ccc;\"></th></tr></thead><tbody>';
+        data.forEach(function(u){
+          var locked = (u['annotate_lock']==1);
+          html += '<tr>';
+          cols.forEach(function(c){
+            var v = u[c[0]]; v = (v===null||v===undefined) ? '' : esc(v);
+            html += '<td style=\"padding:2px 10px;\">'+v+'</td>';
+          });
+          var uid = u['child_uid'];
+          html += '<td style=\"padding:2px 10px;\"><button class=\"icon-bttn-text grow\" ' +
+            'onclick=\"event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, '+uid+', {priority: &#39;event&#39;})\">' +
+            '<i class=\"fas fa-square-arrow-up-right fa-xs\" style=\"margin-right:4px;\"></i><small>details</small></button></td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        return React.createElement('div', { dangerouslySetInnerHTML: { __html: html } });
+      }",
+      ns("unit_details")
+    ))
+
     # Render table ----
     output$table <- renderReactable({
       # isolate(req(rv$data)) |>
@@ -299,6 +352,7 @@ annotate_server <- function(id) {
         defaultPageSize = 100,
         resizable = TRUE,
         showPageSizeOptions = TRUE,
+        details = child_details_js,
         onClick = "select",
         selection = "multiple",
         searchable = TRUE,
@@ -534,6 +588,27 @@ annotate_server <- function(id) {
             # maxWidth = 400,
             cell = rt_longtext()
           ),
+          # "N units" badge for multi-assembly samples (blank for single-unit).
+          units = colDef(
+            show = TRUE,
+            name = "Units",
+            filterable = FALSE,
+            html = TRUE,
+            width = 70,
+            align = "center",
+            cell = JS(
+              "function(cellInfo) {
+                var v = cellInfo.value;
+                if (!v) return '';
+                return '<span style=\"background:#e2e3f0; color:#3b3f66; border-radius:3px; ' +
+                       'padding:1px 6px; font-size:0.85em;\">' + v + '</span>';
+              }"
+            )
+          ),
+          # Hidden support columns for the child-row renderer. children_json must
+          # not be searchable (it holds the units' JSON blob).
+          children_json = colDef(show = FALSE, searchable = FALSE, filterable = FALSE),
+          n_units = colDef(show = FALSE, searchable = FALSE, filterable = FALSE),
           view = colDef(
             show = TRUE,
             sticky = "right",
@@ -583,8 +658,10 @@ annotate_server <- function(id) {
               annotate_switch > 1 ~ "output",
               .default = NA_character_
             ),
+            # Parent details button only for single-unit samples; multi-unit rows
+            # expand to per-unit child rows instead.
             view = dplyr::case_when(
-              annotate_switch > 1 ~ "details",
+              annotate_switch > 1 & n_units == 1L ~ "details",
               .default = NA_character_
             )
           ),
@@ -1479,9 +1556,25 @@ annotate_server <- function(id) {
     })
 
     # Open annotation details ----
+    # Parent "details" button (single-unit samples only). The editor operates on
+    # a single (ID, path, scaffold) unit, so resolve the parent row to its one
+    # child unit in rv$children.
     observeEvent(input$details, {
       session$userData$in_outlier_review <- FALSE
-      rv$updating <- filtered_data() |> dplyr::slice(as.numeric(input$details))
+      id <- filtered_data()$ID[as.numeric(input$details)]
+      unit <- rv$children |> dplyr::filter(ID == !!id)
+      req(nrow(unit) > 0)
+      rv$updating <- unit |> dplyr::slice(1)
+      trigger("annotations_modal")
+    })
+
+    # Child-row "details" button (per-unit). child_uid identifies the exact unit.
+    observeEvent(input$unit_details, {
+      session$userData$in_outlier_review <- FALSE
+      uid <- as.numeric(input$unit_details)
+      unit <- rv$children |> dplyr::filter(child_uid == !!uid)
+      req(nrow(unit) > 0)
+      rv$updating <- unit |> dplyr::slice(1)
       trigger("annotations_modal")
     })
 
@@ -1489,7 +1582,11 @@ annotate_server <- function(id) {
     on("goto_annotate", {
       target <- session$userData$goto_annotate_target
       req(target, target$ID)
-      hit <- rv$data |> dplyr::filter(ID == target$ID)
+      hit <- rv$children |> dplyr::filter(ID == target$ID)
+      # If the jump specifies a unit, honour it; else take the first unit.
+      if (!is.null(target$path) && !is.null(target$scaffold)) {
+        hit <- hit |> dplyr::filter(path == target$path, scaffold == target$scaffold)
+      }
       req(nrow(hit) > 0)
       session$userData$in_outlier_review <- TRUE
       rv$updating <- hit |> dplyr::slice(1)

@@ -1,10 +1,14 @@
-#' Populate annotate table
+#' Per-unit annotate frame (one row per (ID, path, scaffold) annotation unit)
 #'
-#' @param db database connection
+#' Multi-assembly: a locked sample can carry more than one annotation unit. This
+#' returns one row per non-ignored unit, with the full per-unit detail the
+#' annotation editor needs. The Annotate table itself shows the rolled-up parent
+#' (see [rollup_annotate_parent]); these rows populate the expandable child rows
+#' and are the source of `rv$updating` when the per-unit editor opens.
+#'
 #' @param session reactive session
-#'
 #' @noRd
-fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
+fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
   db <- session$userData$con
 
   annotate <- dplyr::tbl(db, "annotate")
@@ -17,40 +21,46 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon, export_group, export_time_stamp)
 
+  # Per-unit annotations rollup (warnings + ORF count) keyed on the unit.
   annotations <- dplyr::tbl(db, "annotations") |>
-    dplyr::select(ID, type, warnings) |>
+    dplyr::select(ID, path, scaffold, type, warnings) |>
     dplyr::collect() |>
-    dplyr::group_by(ID) |>
+    dplyr::group_by(ID, path, scaffold) |>
     dplyr::summarise(
       warnings_details = warnings[!is.na(warnings) & warnings != ""] |>
         paste(collapse = "; "),
-      ORFCount = sum(type == "ORF")
+      ORFCount = sum(type == "ORF"),
+      .groups = "drop"
     )
 
   # use_orffinder per sample, to blank the ORF count when ORF finding is off
   orf_enabled <- dplyr::tbl(db, "annotate") |>
-    dplyr::select(ID, orf_opts) |>
+    dplyr::select(ID, path, scaffold, orf_opts) |>
     dplyr::left_join(dplyr::tbl(db, "orf_opts"), by = "orf_opts") |>
-    dplyr::select(ID, use_orffinder) |>
+    dplyr::select(ID, path, scaffold, use_orffinder) |>
     dplyr::collect()
 
+  # Per-unit raw length; the inner join also gates units to a non-ignored
+  # assembly (annotate can retain stale rows after a Path-0 join, whose
+  # assemblies are ignore=1 - those must not surface as children).
   assemblies_length <- dplyr::tbl(db, "assemblies") |>
     dplyr::filter(ignore != 1) |>
-    dplyr::group_by(ID, path) |>
+    dplyr::group_by(ID, path, scaffold) |>
     dplyr::summarise(length_raw = sum(length_raw, na.rm = TRUE), .groups = "drop") |>
-    dplyr::collect() |>
-    dplyr::mutate(path = as.character(path))
+    dplyr::collect()
 
-  dplyr::left_join(assemble, annotate, by = "ID") |>
+  dplyr::inner_join(annotate, assemble, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
-    dplyr::left_join(annotations, by = "ID") |>
-    dplyr::left_join(orf_enabled, by = "ID") |>
-    dplyr::left_join(assemblies_length, by = c("ID", "path")) |>
+    dplyr::inner_join(assemblies_length, by = c("ID", "path", "scaffold")) |>
+    dplyr::left_join(annotations, by = c("ID", "path", "scaffold")) |>
+    dplyr::left_join(orf_enabled, by = c("ID", "path", "scaffold")) |>
     dplyr::select(
       annotate_lock,
       annotate_switch,
       ID,
+      path,
+      scaffold,
       Taxon,
       ID_verified,
       annotate_opts,
@@ -94,20 +104,121 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
       )
     ) |>
     dplyr::select(-use_orffinder) |>
-    dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::arrange(ID, path, scaffold) |>
     dplyr::mutate(blast_ref_status = poor_blast_ref) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession) |>
     dplyr::mutate(
       ID_verified = dplyr::coalesce(ID_verified, "no"),
+      # Global stable id used by the child-row "details" button to look the unit
+      # back up in rv$children (avoids parsing ID.path.scaffold strings, which
+      # break on sample IDs containing ".").
+      child_uid = dplyr::row_number()
+    )
+}
+
+#' Roll a per-unit annotate frame up to one parent row per sample
+#'
+#' Multi-assembly: the Annotate table shows one row per sample. Per-sample
+#' columns pass through; status flags roll up (all-locked, all-verified,
+#' any-problematic, any-partial, all-reviewed); per-unit-varying display columns
+#' (length, topology, gene counts, ...) are shown only when the sample has a
+#' single unit and otherwise blanked in favour of a "N units" badge and the
+#' expandable child rows. The units are embedded as `children_json` so the
+#' client-side child-row renderer needs no side channel.
+#'
+#' @param units output of [fetch_annotate_units]
+#' @noRd
+rollup_annotate_parent <- function(units) {
+  # Columns shown in the expandable child sub-table (compact display subset).
+  child_cols <- c("child_uid", "path", "scaffold", "topology", "length",
+                  "PCGCount", "tRNACount", "rRNACount", "ORFCount",
+                  "missing", "extra", "reviewed", "problematic", "partial",
+                  "annotate_lock", "annotate_switch", "warnings_details")
+
+  first_ <- function(x) x[1]
+  any_yes <- function(x) any(x == "yes", na.rm = TRUE)
+  all_yes <- function(x) length(x) > 0 && all(x == "yes")
+  # max() over an all-NA vector warns and returns -Inf; coalesce to NA instead.
+  safe_max <- function(x) if (all(is.na(x))) x[NA_integer_] else max(x, na.rm = TRUE)
+
+  units |>
+    dplyr::group_by(ID) |>
+    dplyr::group_modify(function(g, key) {
+      n <- nrow(g)
+      one <- n == 1L
+      # per-unit-varying display value: keep for single-unit, blank otherwise
+      keepv <- function(col, na) if (one) g[[col]][1] else na
+      data.frame(
+        annotate_lock   = as.integer(all(g$annotate_lock == 1)),
+        annotate_switch = safe_max(g$annotate_switch),
+        Taxon           = first_(g$Taxon),
+        ID_verified     = if (all_yes(g$ID_verified)) "yes" else "no",
+        annotate_opts   = first_(g$annotate_opts),
+        curate_opts     = first_(g$curate_opts),
+        orf_opts        = first_(g$orf_opts),
+        length_raw      = if (one) g$length_raw[1] else sum(g$length_raw, na.rm = TRUE),
+        length          = keepv("length", NA_integer_),
+        topology        = keepv("topology", NA_character_),
+        scaffolds       = keepv("scaffolds", NA_integer_),
+        blast_accession = first_(g$blast_accession),
+        blast_ref_status = first_(g$blast_ref_status),
+        blast_species   = first_(g$blast_species),
+        blast_lineage   = first_(g$blast_lineage),
+        blast_pident    = first_(g$blast_pident),
+        blast_qcovs     = first_(g$blast_qcovs),
+        structure       = keepv("structure", NA_character_),
+        PCGCount        = keepv("PCGCount", NA_integer_),
+        tRNACount       = keepv("tRNACount", NA_integer_),
+        rRNACount       = keepv("rRNACount", NA_integer_),
+        ORFCount        = keepv("ORFCount", NA_integer_),
+        missing         = keepv("missing", NA_character_),
+        extra           = keepv("extra", NA_character_),
+        reviewed        = if (all_yes(g$reviewed)) "yes" else "no",
+        problematic     = if (any_yes(g$problematic)) "yes" else NA_character_,
+        partial         = if (any_yes(g$partial)) "yes" else "no",
+        time_stamp      = safe_max(g$time_stamp),
+        export_group    = first_(g$export_group),
+        export_time_stamp = first_(g$export_time_stamp),
+        annotate_notes  = first_(g$annotate_notes),
+        warnings_details = paste(g$warnings_details[!is.na(g$warnings_details) &
+                                                      g$warnings_details != ""],
+                                 collapse = "; "),
+        blast_accession_auto = if ("blast_accession_auto" %in% names(g)) first_(g$blast_accession_auto) else NA_character_,
+        poor_blast_ref  = if ("poor_blast_ref" %in% names(g)) first_(g$poor_blast_ref) else NA_character_,
+        n_units         = n,
+        # single-unit path/scaffold so the parent "details" button can open the
+        # editor directly; NA for multi-unit (user expands to a child instead).
+        u_path          = if (one) g$path[1] else NA_integer_,
+        u_scaffold      = if (one) g$scaffold[1] else NA_integer_,
+        children_json   = jsonlite::toJSON(g[, intersect(child_cols, names(g))],
+                                           dataframe = "rows", na = "null"),
+        stringsAsFactors = FALSE
+      )
+    }) |>
+    dplyr::ungroup() |>
+    dplyr::arrange(dplyr::desc(time_stamp)) |>
+    dplyr::mutate(
+      warnings_details = dplyr::na_if(warnings_details, ""),
+      units = dplyr::if_else(n_units > 1L, paste0(n_units, " units"), NA_character_),
       output = dplyr::case_when(
         annotate_switch > 1 ~ "output",
         .default = NA_character_
       ),
+      # Parent opens the editor only for single-unit samples; multi-unit rows
+      # expose per-unit "details" buttons inside the expanded child rows.
       view = dplyr::case_when(
-        annotate_switch > 1 ~ "details",
+        annotate_switch > 1 & n_units == 1L ~ "details",
         .default = NA_character_
       )
     )
+}
+
+#' Populate annotate table (parent rows) - thin wrapper over the per-unit fetch
+#'
+#' @param session reactive session
+#' @noRd
+fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
+  rollup_annotate_parent(fetch_annotate_units(session))
 }
 
 #' Get top BLASTP hits

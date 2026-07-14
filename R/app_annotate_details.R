@@ -144,6 +144,43 @@ annotations_details_server <- function(id, rv) {
     # already in the db); set TRUE right before each load, see update_counts().
     skip_count_update <- FALSE
 
+    # Persist rv$annotations to the DB. Delete is scoped to the exact
+    # (ID, path, scaffold) units currently loaded (never the whole ID) so
+    # sibling annotation units of a multi-assembly sample are never wiped.
+    persist_annotations <- function() {
+      units <- dplyr::distinct(rv$annotations[, c("ID", "path", "scaffold")])
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_delete(
+          units,
+          by = c("ID", "path", "scaffold"),
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_insert(
+          rv$annotations |> dplyr::select(-faa, -fas),
+          by = "ID",
+          conflict = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+    }
+
+    # Write the given columns of rv$updating to this unit's annotate row. Keyed on
+    # (ID, path, scaffold) so a multi-assembly sample's sibling units are never
+    # touched (a by="ID" write would clobber every unit).
+    update_annotate_unit <- function(cols) {
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating[, c("ID", "path", "scaffold", cols)],
+          by = c("ID", "path", "scaffold"),
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+    }
+
     # Outlier-review flag for the sample we jumped in to fix (NULL otherwise),
     # used to render a reminder banner of what to edit.
     outlier_flag <- reactiveVal(NULL)
@@ -234,7 +271,9 @@ annotations_details_server <- function(id, rv) {
       ## Load annotations ----
       skip_count_update <<- TRUE  # this load carries validated counts; don't recompute
       rv$annotations <- dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::filter(ID == !!rv$updating$ID) |>
+        dplyr::filter(ID == !!rv$updating$ID,
+                      path == !!rv$updating$path,
+                      scaffold == !!rv$updating$scaffold) |>
         dplyr::arrange(pos1) |>
         dplyr::collect() |>
         dplyr::mutate(
@@ -257,13 +296,19 @@ annotations_details_server <- function(id, rv) {
 
       ## Load coverage ----
       # TODO - get from db (need to fix NA="" issue)
-      rv$coverage <- file.path(
-        session$userData$dir_out,
-        rv$updating$ID,
-        "annotate"
-      ) |>
-        list.files(pattern = "coverageStats", full.names = T) |>
-        read.csv()
+      # Coverage stats are written per path (ID_coverageStats_<path>.csv), so pick
+      # this unit's path file (multi-assembly samples have several).
+      rv$coverage <- local({
+        dir <- file.path(session$userData$dir_out, rv$updating$ID, "annotate")
+        f <- file.path(dir, paste0(rv$updating$ID, "_coverageStats_",
+                                   rv$updating$path, ".csv"))
+        if (!file.exists(f)) {
+          # Fall back to whatever coverageStats file exists (single-unit legacy).
+          alt <- list.files(dir, pattern = "coverageStats", full.names = TRUE)
+          f <- if (length(alt) > 0) alt[1] else f
+        }
+        read.csv(f)
+      })
 
       ## Load BLAST candidate references (rank-ordered; rank 1 = top hit) ----
       # Candidates are stored per (ID, path, scaffold) - never merged. The
@@ -280,11 +325,18 @@ annotations_details_server <- function(id, rv) {
         if (nrow(all_cand) == 0) {
           NULL
         } else {
+          # Prefer this unit's own (path, scaffold) candidate list (multi-assembly:
+          # each unit shows its own scaffold's hits, not the sample-level ref's).
+          src <- all_cand[all_cand$path == rv$updating$path &
+                            all_cand$scaffold == rv$updating$scaffold,
+                          c("path", "scaffold"), drop = FALSE]
           # NULL-safe: blast_accession may be absent from rv$updating, and %|NA|%
           # errors on a NULL (is.na(NULL) is length 0). Coalesce to "".
           ref_acc <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
-          src <- all_cand[!is.na(all_cand$accession) & all_cand$accession == ref_acc,
-                          c("path", "scaffold"), drop = FALSE]
+          if (nrow(src) == 0) {
+            src <- all_cand[!is.na(all_cand$accession) & all_cand$accession == ref_acc,
+                            c("path", "scaffold"), drop = FALSE]
+          }
           if (nrow(src) == 0) {
             # No match: pick the best-scoring scaffold's list (its rank-1 score).
             r1 <- all_cand[all_cand$rank == 1, , drop = FALSE]
@@ -746,14 +798,7 @@ annotations_details_server <- function(id, rv) {
       rv$updating$PCGCount = sum(retained_annotations$type == "PCG")
       rv$updating$tRNACount = sum(retained_annotations$type == "tRNA")
       rv$updating$rRNACount = sum(retained_annotations$type == "rRNA")
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating[, c("ID", "PCGCount", "tRNACount", "rRNACount")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      update_annotate_unit(c("PCGCount", "tRNACount", "rRNACount"))
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating[, c("ID", "PCGCount", "tRNACount", "rRNACount")], by = "ID")
       rv$annotations <- NULL
@@ -765,6 +810,9 @@ annotations_details_server <- function(id, rv) {
       ref_msa_cache$msa <- NULL
       ref_msa_cache$key <- NULL
       trigger("update_annotate_table")
+      # Re-fetch so a multi-assembly sample's parent row re-rolls correctly (the
+      # in-place rv$data writes above are per-ID and cannot roll up sibling units).
+      trigger("refresh_annotate")
       removeModal()
       # If we arrived here from the export outlier review, hop back to it
       if (isTRUE(session$userData$return_to_review)) {
@@ -797,14 +845,7 @@ annotations_details_server <- function(id, rv) {
       }
       if (as.numeric(rv$updating$annotate_lock) != 1) {
         rv$updating$annotate_lock <- 1
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "annotate_lock")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("annotate_lock")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "annotate_lock")], by = "ID")
       }
@@ -2332,17 +2373,18 @@ annotations_details_server <- function(id, rv) {
       # Persist without mutating rv$updating: writing notes into rv$updating would
       # invalidate every figure that reads it (coverage/synteny), reloading them on
       # each keystroke.
-      notes_df <- data.frame(ID = rv$updating$ID, annotate_notes = cleaned)
+      notes_df <- data.frame(ID = rv$updating$ID, path = rv$updating$path,
+                             scaffold = rv$updating$scaffold, annotate_notes = cleaned)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           notes_df,
-          by = "ID",
+          by = c("ID", "path", "scaffold"),
           unmatched = "ignore",
           copy = TRUE,
           in_place = TRUE
         )
       rv$data <- rv$data |>
-        dplyr::rows_update(notes_df, by = "ID")
+        dplyr::rows_update(notes_df[, c("ID", "annotate_notes")], by = "ID")
       trigger("update_annotate_table")
     })
 
@@ -2382,23 +2424,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::slice(-selected()) |>
         dplyr::bind_rows(update) |>
         dplyr::arrange(pos1)
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |>
-            dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
       reactable::updateReactable(
         "table",
         data = rv$annotations
@@ -2499,23 +2525,7 @@ annotations_details_server <- function(id, rv) {
               pos2 < start ~ assembly@ranges@width - start + pos2 + 1
             )
           )
-        dplyr::tbl(session$userData$con, "annotations") |>
-          dplyr::rows_delete(
-            rv$updating[, c("ID")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
-        dplyr::tbl(session$userData$con, "annotations") |>
-          dplyr::rows_insert(
-            rv$annotations |>
-              dplyr::select(-faa, -fas),
-            by = "ID",
-            conflict = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        persist_annotations()
 
         reactable::updateReactable(
           "table",
@@ -2560,13 +2570,7 @@ annotations_details_server <- function(id, rv) {
         inputId = "notes",
         value = rv$updating$annotate_notes
       )
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating[, c("ID", "topology", "annotate_notes")],
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      update_annotate_unit(c("topology", "annotate_notes"))
       rv$data <- rv$data |>
         dplyr::rows_update(
           rv$updating[, c("ID", "topology", "annotate_notes")],
@@ -2579,40 +2583,19 @@ annotations_details_server <- function(id, rv) {
       if(is.na(rv$updating$ID_verified)) {
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "ID_verified")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
       } else if(as.character(rv$updating$ID_verified) == "no"){
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "ID_verified")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
       } else {
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "no"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "ID_verified")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
       }
@@ -2623,27 +2606,13 @@ annotations_details_server <- function(id, rv) {
       if (as.character(rv$updating$reviewed) == "no") {
         updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "reviewed")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("reviewed")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       } else {
         updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "no"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "reviewed")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("reviewed")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
       }
@@ -2654,27 +2623,13 @@ annotations_details_server <- function(id, rv) {
       if (is.na(rv$updating$problematic)) {
         updateActionButton(session, "problematic")
         rv$updating$problematic <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "problematic")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("problematic")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
       } else {
         updateActionButton(session, "problematic")
         rv$updating$problematic <- NA_character_
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "problematic")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("problematic")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
       }
@@ -2684,14 +2639,7 @@ annotations_details_server <- function(id, rv) {
     apply_partial <- function(value) {
       updateActionButton(session, "partial")
       rv$updating$partial <- value
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating[, c("ID", "partial")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      update_annotate_unit("partial")
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating[, c("ID", "partial")], by = "ID")
     }
@@ -2950,8 +2898,11 @@ annotations_details_server <- function(id, rv) {
       }
       rv$editing$params <- dplyr::left_join(
         dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::select(ID, curate_opts) |>
-          dplyr::filter(ID == !!rv$updating$ID),
+          dplyr::select(ID, path, scaffold, curate_opts) |>
+          dplyr::filter(ID == !!rv$updating$ID,
+                        path == !!rv$updating$path,
+                        scaffold == !!rv$updating$scaffold) |>
+          dplyr::select(ID, curate_opts),
         dplyr::tbl(session$userData$con, "curate_opts"),
         by = "curate_opts"
       ) |>
@@ -3667,23 +3618,7 @@ annotations_details_server <- function(id, rv) {
             rv$annotations$refHits[hits_idx] <- json_string(hits)
           }
 
-          dplyr::tbl(session$userData$con, "annotations") |>
-            dplyr::rows_delete(
-              dplyr::distinct(rv$annotations[, c("ID")]),
-              by = "ID",
-              unmatched = "ignore",
-              copy = TRUE,
-              in_place = TRUE
-            )
-          dplyr::tbl(session$userData$con, "annotations") |>
-            dplyr::rows_insert(
-              rv$annotations |>
-                dplyr::select(-faa, -fas),
-              by = "ID",
-              conflict = "ignore",
-              copy = TRUE,
-              in_place = TRUE
-            )
+          persist_annotations()
           shinyjs::hide("edit_mode_ctrls")
           shinyjs::hide("discard_edits")
           shinyjs::hide("save_edits")
@@ -3728,8 +3663,11 @@ annotations_details_server <- function(id, rv) {
       req(!is.null(rv$local_hits))
       max_blast_hits <- dplyr::left_join(
         dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::select(ID, curate_opts) |>
-          dplyr::filter(ID == !!rv$updating$ID),
+          dplyr::select(ID, path, scaffold, curate_opts) |>
+          dplyr::filter(ID == !!rv$updating$ID,
+                        path == !!rv$updating$path,
+                        scaffold == !!rv$updating$scaffold) |>
+          dplyr::select(ID, curate_opts),
         dplyr::tbl(session$userData$con, "curate_opts"),
         by = "curate_opts") |>
         dplyr::pull(max_blast_hits)
@@ -3814,24 +3752,9 @@ annotations_details_server <- function(id, rv) {
       )
     })
 
-    # Persist rv$annotations to the DB (delete this sample's rows, re-insert).
+    # Persist rv$annotations to the DB (delete this unit's rows, re-insert).
     save_annotations <- function() {
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |> dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
     }
 
     # Tag selected rows as a join group instead of collapsing them. Segments stay
@@ -4002,22 +3925,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::bind_rows(merged) |>
         dplyr::bind_rows(deleted_rows) |>
         dplyr::arrange(pos1)
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |> dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
       shinyjs::hide("merge_select_div")
       reactable::updateReactable(
         "table",
@@ -4031,8 +3939,11 @@ annotations_details_server <- function(id, rv) {
       rules <- tryCatch(
         dplyr::left_join(
           dplyr::tbl(session$userData$con, "annotate") |>
-            dplyr::select(ID, curate_opts) |>
-            dplyr::filter(ID == !!rv$updating$ID),
+            dplyr::select(ID, path, scaffold, curate_opts) |>
+            dplyr::filter(ID == !!rv$updating$ID,
+                          path == !!rv$updating$path,
+                          scaffold == !!rv$updating$scaffold) |>
+            dplyr::select(ID, curate_opts),
           dplyr::tbl(session$userData$con, "curate_opts"),
           by = "curate_opts"
         ) |>
@@ -4077,22 +3988,7 @@ annotations_details_server <- function(id, rv) {
 
     # Restore Annotation ----
     restore_do_save <- function() {
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |> dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
       reactable::updateReactable("table", data = rv$annotations)
     }
 
