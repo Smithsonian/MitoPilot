@@ -348,10 +348,11 @@ unassembled).
 
 If you do not have the raw reads for your assemblies, set
 `no_raw_data = TRUE`. MitoPilot will then skip read mapping and coverage
-calculation entirely: `data_path` is not required, your mapping file does
-not need `R1`/`R2` columns, and coverage/depth statistics will be left
-empty (annotation coverage trimming is disabled automatically). The
-assembly, annotation, and curation features work as usual.
+calculation entirely: `data_path` is not required, your mapping file
+does not need `R1`/`R2` columns, and coverage/depth statistics will be
+left empty (warnings and contig trimming based on coverage are disabled
+automatically). The assembly, annotation, and curation features work as
+usual.
 
 ``` r
 MitoPilot::new_project_userAsmb(
