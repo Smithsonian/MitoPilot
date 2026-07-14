@@ -105,11 +105,16 @@ workflow BLAST_GENBANK {
         // FASTA preserving original headers ">{id}.{path}.{scaffold} topology" so qseqid
         // (the first whitespace-delimited token) parses back to (path, scaffold)
         // downstream. One BLAST job per qualifying path (carries path_idx).
+        //
+        // Built PER SAMPLE (one emit per sample, targets bundled in a list) rather
+        // than flat per-path, so the sample's BLAST-path count is known in the same
+        // step and can be streamed to path_count_ch without a cohort-wide groupTuple
+        // (see below). ASSEMBLE.out.blast already delivers one item per sample.
         normalized_input
             .join(min_len_ch, by: 0)
-            .flatMap { id, asmb_list, opts_id, min_len ->
+            .map { id, asmb_list, opts_id, min_len ->
                 def realFiles = asmb_list.findAll { !(it.name =~ /assembly_0\.fasta$/) }
-                def out = []
+                def targets = []
                 for (def f : realFiles) {
                     def m = (f.name =~ /assembly_(\d+)\.fasta$/)
                     def path_idx = m ? (m[0][1] as Integer) : 0
@@ -135,11 +140,18 @@ workflow BLAST_GENBANK {
                     new File(targetDirStr).mkdirs()
                     def targetFasta = new File("${targetDirStr}/${id}.${path_idx}.blast_target.fasta")
                     targetFasta.text = qualifying.collect { "${it.header}\n${it.seq}" }.join('\n') + '\n'
-                    out << tuple(id, path_idx, targetFasta.toPath(), opts_id)
+                    targets << [path_idx, targetFasta.toPath()]
                 }
-                return out
+                tuple(id, opts_id, targets)
             }
-            // Join with blast opts; samples with run_blast = 0 have no entry and are dropped
+            .set { per_sample_blast_targets }  // (id, opts_id, [[path_idx, fasta], ...])
+
+        // Expand to one entry per qualifying path, then join blast opts; samples
+        // with run_blast = 0 have no blast_opts entry and are dropped here.
+        per_sample_blast_targets
+            .flatMap { id, opts_id, targets ->
+                targets.collect { t -> tuple(id, t[0], t[1], opts_id) }
+            }
             .combine(blast_opts_ch, by: 0)
             .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
                 tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
@@ -151,15 +163,18 @@ workflow BLAST_GENBANK {
             }
             .set { blast_in_split }
 
-        // Number of BLAST paths per sample. The blast inputs are produced up front
-        // (fast, local), so this completes well before any BLAST finishes and can
-        // size the per-sample groupKey below so a sample's candidates + ref fetch
-        // emit as soon as *its* paths finish BLAST (streaming, like the pre-wf1
-        // per-path behavior) instead of waiting for the whole cohort.
-        blast_in_split.pathkey
-            .map { id -> tuple(id, 1) }
-            .groupTuple()
-            .map { id, ones -> tuple(id, ones.size()) }
+        // Number of BLAST paths per sample, emitted ONCE PER SAMPLE as soon as its
+        // assembly is processed (target build above is local/fast). The previous
+        // bare groupTuple over blast_in_split could not emit until the whole
+        // cohort's assemblies had finished, so the per-sample ref-fetch batch
+        // (sample_agg, sized by groupKey(id, n_paths)) stalled behind the slowest
+        // assembly. Streaming the count per sample lets each sample's ref fetch
+        // start as soon as ITS own paths finish BLAST. blast_opts_ch is one row per
+        // run_blast=1 sample, so this pre-join count equals the post-join blast task
+        // count for every sample that reaches sample_agg (run_blast=0 samples never
+        // do, so a spurious count for them is harmless).
+        per_sample_blast_targets
+            .map { id, opts_id, targets -> tuple(id, targets.size()) }
             .set { path_count_ch }  // (id, n_paths)
 
         // Clear stale per-path rows before re-inserting. Time-stamp gating mirrors
