@@ -228,6 +228,7 @@ pipeline_server_userAsmb <- function(id) {
       prog_header(NULL)
       prog_executor(NULL)
       prog_pos(0L)
+      prog_frame_open(FALSE)
       prog_board(list())
       prog_footer(NULL)
       shinyjs::hide("start_button_ui") # Hide the container with the start buttons
@@ -403,12 +404,14 @@ pipeline_server_userAsmb <- function(id) {
     # each `executor` line), immune to Nextflow's unpredictable name truncation.
     # See app_run_pipline.R for the full rationale.
     prog_pos <- reactiveVal(0L)
+    prog_frame_open <- reactiveVal(FALSE)
     prog_board <- reactiveVal(list())
     prog_footer <- reactiveVal()
-    progress_update <- function(process_out, prog_header, prog_executor, prog_pos, prog_board, prog_footer) {
+    progress_update <- function(process_out, prog_header, prog_executor, prog_pos, prog_frame_open, prog_board, prog_footer) {
       process_out <- cli::ansi_strip(process_out) # clean up ansi encoded output
       n <- length(process_out)
       is_exec <- stringr::str_detect(process_out, "^executor")
+      is_blank <- grepl("^\\s*$", process_out)
       keys <- stringr::str_match(
         process_out,
         "^(?<prefix>\\[.+?\\]) (?<key>WF\\S*) +(?<suffix>.*)"
@@ -431,15 +434,23 @@ pipeline_server_userAsmb <- function(id) {
           routed[seq_len(hstop)] <- TRUE
         }
       }
-      # Single ordered pass: `executor` line resets position; each progress line
-      # advances position and upserts the board at that stable position.
+      # Single ordered pass: a frame starts at an `executor` line OR the first
+      # progress line after a blank (pre-submit redraws have no executor line);
+      # either resets position. Each progress line advances position and upserts
+      # the board at that stable position. A blank line closes the current frame.
       for (i in seq_len(n)) {
+        if (is_blank[i]) prog_frame_open <- FALSE
         if (routed[i]) next
         if (is_exec[i]) {
           prog_executor <- process_out[i]
           prog_pos <- 0L
+          prog_frame_open <- TRUE
           routed[i] <- TRUE
         } else if (is_prog[i]) {
+          if (!prog_frame_open) {
+            prog_pos <- 0L          # first process line of a new (executor-less) frame
+            prog_frame_open <- TRUE
+          }
           prog_pos <- prog_pos + 1L
           nm <- resolve_process_name(keys[i, "key"])
           prev <- if (prog_pos <= length(prog_board)) prog_board[[prog_pos]] else NULL
@@ -456,6 +467,7 @@ pipeline_server_userAsmb <- function(id) {
         prog_header = prog_header,
         prog_executor = prog_executor,
         prog_pos = prog_pos,
+        prog_frame_open = prog_frame_open,
         prog_board = prog_board,
         prog_footer = prog_footer
       )
@@ -474,10 +486,11 @@ pipeline_server_userAsmb <- function(id) {
     }
     apply_progress <- function(new_output) {
       if (length(new_output) == 0) return(invisible())
-      update <- progress_update(new_output, prog_header(), prog_executor(), prog_pos(), prog_board(), prog_footer())
+      update <- progress_update(new_output, prog_header(), prog_executor(), prog_pos(), prog_frame_open(), prog_board(), prog_footer())
       prog_header(update$prog_header)
       prog_executor(update$prog_executor)
       prog_pos(update$prog_pos)
+      prog_frame_open(update$prog_frame_open)
       prog_board(update$prog_board)
       prog_footer(update$prog_footer)
     }

@@ -273,6 +273,7 @@ pipeline_server <- function(id) {
       prog_header(NULL)
       prog_executor(NULL)
       prog_pos(0L)
+      prog_frame_open(FALSE)
       prog_board(list())
       prog_footer(NULL)
       shinyjs::hide("start_button_ui") # Hide the container with the start buttons
@@ -548,23 +549,30 @@ pipeline_server <- function(id) {
     # Monitor progress ----
     prog_header <- reactiveVal()
     prog_executor <- reactiveVal()
-    # Position-keyed board: identity is the process's ORDINAL within a redraw
-    # (reset at each `executor` line), NOT its displayed name (which Nextflow
-    # truncates unpredictably, even to 1-2 ambiguous chars). prog_pos carries the
-    # running ordinal across observer ticks (reads can split a frame). prog_board
-    # is an ordered list; element = list(line=, name=).
+    # Position-keyed board: identity is the process's ORDINAL within a redraw,
+    # NOT its displayed name (which Nextflow truncates unpredictably, even to 1-2
+    # ambiguous chars). The counter resets at the START OF EACH FRAME: an
+    # `executor` line, OR the first process line after a blank (Nextflow reprints
+    # the whole board every ~200ms; BEFORE the first task submits those redraws
+    # have NO executor line, so they must be delimited by the blank separator or
+    # they accumulate). prog_pos carries the running ordinal across observer ticks
+    # (reads can split a frame); prog_frame_open tracks whether we are mid-frame.
+    # prog_board is an ordered list; element = list(line=, name=).
     prog_pos <- reactiveVal(0L)
+    prog_frame_open <- reactiveVal(FALSE)
     prog_board <- reactiveVal(list())
     prog_footer <- reactiveVal()
     progress_update <- function(process_out,
                                 prog_header,
                                 prog_executor,
                                 prog_pos,
+                                prog_frame_open,
                                 prog_board,
                                 prog_footer) {
       process_out <- cli::ansi_strip(process_out) # clean up ansi encoded output
       n <- length(process_out)
       is_exec <- stringr::str_detect(process_out, "^executor")
+      is_blank <- grepl("^\\s*$", process_out)
       keys <- stringr::str_match(process_out,
                                  "^(?<prefix>\\[.+?\\]) (?<key>WF\\S*) +(?<suffix>.*)")
       is_prog <- !is.na(keys[, 1])
@@ -581,17 +589,25 @@ pipeline_server <- function(id) {
           routed[seq_len(hstop)] <- TRUE
         }
       }
-      # Single ordered pass. Each `executor` line starts a fresh redraw -> reset
-      # the position counter. Each progress line advances the counter and upserts
-      # the board AT THAT POSITION, so the same process (row i) is overwritten in
-      # place every redraw regardless of how its name is truncated.
+      # Single ordered pass. A frame starts at an `executor` line OR at the first
+      # progress line after a blank (pre-submit redraws have no executor line);
+      # either resets the position counter. Each progress line advances the
+      # counter and upserts the board AT THAT POSITION, so the same process (row i)
+      # is overwritten in place every redraw regardless of how its name is
+      # truncated. A blank line closes the current frame.
       for (i in seq_len(n)) {
+        if (is_blank[i]) prog_frame_open <- FALSE
         if (routed[i]) next
         if (is_exec[i]) {
           prog_executor <- process_out[i]
           prog_pos <- 0L
+          prog_frame_open <- TRUE
           routed[i] <- TRUE
         } else if (is_prog[i]) {
+          if (!prog_frame_open) {
+            prog_pos <- 0L          # first process line of a new (executor-less) frame
+            prog_frame_open <- TRUE
+          }
           prog_pos <- prog_pos + 1L
           nm <- resolve_process_name(keys[i, "key"])
           prev <- if (prog_pos <= length(prog_board)) prog_board[[prog_pos]] else NULL
@@ -609,6 +625,7 @@ pipeline_server <- function(id) {
         prog_header = prog_header,
         prog_executor = prog_executor,
         prog_pos = prog_pos,
+        prog_frame_open = prog_frame_open,
         prog_board = prog_board,
         prog_footer = prog_footer
       )
@@ -633,12 +650,14 @@ pipeline_server <- function(id) {
         prog_header(),
         prog_executor(),
         prog_pos(),
+        prog_frame_open(),
         prog_board(),
         prog_footer()
       )
       prog_header(update$prog_header)
       prog_executor(update$prog_executor)
       prog_pos(update$prog_pos)
+      prog_frame_open(update$prog_frame_open)
       prog_board(update$prog_board)
       prog_footer(update$prog_footer)
     }
