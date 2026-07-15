@@ -203,16 +203,8 @@ export_files <- function(
       dat$topology <- kept$topology[1]
     }
     # Reference for the note, resolved per unit via the same helper the synteny view
-    # defaults to, so the note always names the reference the user was shown.
-    blast_acc <- resolve_unit_blast_ref(
-      con, .x, .path, .scaffold,
-      blast_accession = dat$blast_accession[1],
-      blast_accession_auto = if ("blast_accession_auto" %in% names(dat)) {
-        dat$blast_accession_auto[1]
-      } else {
-        NA_character_
-      }
-    )
+    # and both tables use, so the note always names the reference the user was shown.
+    blast_acc <- resolve_unit_blast_ref(con, .x, .path, .scaffold)
     blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) &&
                       blast_acc != "NO HIT" &&
                       !isTRUE(dat$poor_blast_ref[1] %in% c("poor", "failed"))) {

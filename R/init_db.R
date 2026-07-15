@@ -744,6 +744,21 @@ new_db <- function(
     );"
   )
 
+  # User's chosen reference per assembly unit ("Set as best reference"), overriding
+  # that scaffold's own BLAST top hit. Its own table for the same reason as `export`:
+  # the pipeline rewrites assemblies/annotate rows wholesale and would drop it.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_override (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
+      accession TEXT NOT NULL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
+    );"
+  )
+
   # Export state, one row per assembly unit. Deliberately its own table rather than
   # columns on annotate/assemblies: the pipeline writes those with INSERT OR REPLACE
   # and an explicit column list, which would null anything it does not name.

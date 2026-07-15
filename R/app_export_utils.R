@@ -265,15 +265,21 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(ID, path, scaffold, use_orffinder) |>
     dplyr::collect()
 
+  # Resolved per-unit reference (override, else this scaffold's own BLAST top hit),
+  # the same source the Annotate table, synteny default and export note use. Each
+  # unit is independent: a scaffold with no hit must not inherit a sibling's
+  # accession, which is what reading the sample-level assemble.blast_* did.
+  assemblies_unit <- unit_ref_facts(db) |>
+    dplyr::select(ID, path, scaffold, blast_accession, blast_accession_auto,
+                  blast_species, blast_lineage)
+
   out <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID, blast_accession, blast_species, blast_lineage,
-                  dplyr::any_of(c("blast_accession_auto", "poor_blast_ref"))) |>
+    dplyr::select(ID, dplyr::any_of("poor_blast_ref")) |>
     dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(
-      ID, path, scaffold,
-      blast_accession, blast_species, blast_lineage, curate_opts, topology,
+      ID, path, scaffold, curate_opts, topology,
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
       dplyr::any_of(c("blast_accession_auto", "poor_blast_ref", "partial"))
     ) |>
@@ -288,6 +294,11 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
     dplyr::collect() |>
+    # inner_join: gates rows to a non-ignored assembly, as assemblies_unit is
+    # already filtered on ignore.
+    dplyr::inner_join(assemblies_unit, by = unit_key) |>
+    dplyr::relocate(blast_accession, blast_accession_auto, blast_species,
+                    blast_lineage, .after = Taxon) |>
     dplyr::left_join(orf_counts, by = unit_key) |>
     dplyr::left_join(orf_enabled, by = unit_key)
 
@@ -297,7 +308,12 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
 
   out |>
     dplyr::mutate(
-      blast_ref_status = poor_blast_ref,
+      # Ref-align status is only meaningful when this unit has a real BLAST hit
+      # (mirrors the Annotate table).
+      blast_ref_status = dplyr::if_else(
+        is.na(blast_accession) | blast_accession == "NO HIT",
+        NA_character_, poor_blast_ref
+      ),
       # Auto-derive completeness from topology; per-sample "partial" forces
       # partial; project-level linear_complete forces linear -> complete.
       completeness = dplyr::case_when(

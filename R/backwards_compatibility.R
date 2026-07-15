@@ -142,6 +142,7 @@ backwards_compatibility <- function(
       "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
       "export" %in% DBI::dbListTables(con) &&
+      "blast_ref_override" %in% DBI::dbListTables(con) &&
       !any(c("export_group", "export_time_stamp") %in% names(samples_table)) &&
       "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
@@ -1568,6 +1569,43 @@ backwards_compatibility <- function(
     ))
     DBI::dbExecute(con, "DROP TABLE annotate")
     DBI::dbExecute(con, "ALTER TABLE annotate_new RENAME TO annotate")
+  }
+
+  # Per-unit reference override. "Set as best reference" is chosen from ONE
+  # scaffold's candidate list, so it belongs to that unit; it used to overwrite the
+  # sample-level assemble.blast_accession (stashing the original in
+  # blast_accession_auto), which relabelled sibling scaffolds that never hit that
+  # accession. Carry any existing override onto that sample's units - the old model
+  # applied it sample-wide, so that is what it meant at the time.
+  if (!DBI::dbExistsTable(con, "blast_ref_override")) {
+    message("created 'blast_ref_override' table (per-unit reference selection)")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE blast_ref_override (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
+        accession TEXT NOT NULL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+    asm_fields <- DBI::dbListFields(con, "assemble")
+    if (all(c("blast_accession", "blast_accession_auto") %in% asm_fields)) {
+      n <- DBI::dbExecute(con, sprintf(
+        "INSERT OR IGNORE INTO blast_ref_override (ID, path, scaffold, accession, time_stamp)
+         SELECT a.ID, a.path, a.scaffold, b.blast_accession, %d
+         FROM assemblies a
+         JOIN assemble b ON b.ID = a.ID
+         WHERE a.ignore = 0
+           AND b.blast_accession IS NOT NULL AND b.blast_accession != ''
+           AND b.blast_accession != 'NO HIT'
+           AND b.blast_accession_auto IS NOT NULL
+           AND b.blast_accession != b.blast_accession_auto",
+        as.integer(Sys.time())
+      ))
+      if (n > 0) message("carried ", n, " reference override(s) onto assembly units")
+    }
   }
 
   # Move export state off samples (PK ID) onto a per-unit table: with multi-assembly

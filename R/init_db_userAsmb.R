@@ -697,6 +697,20 @@ new_db_userAsmb <- function(
     );"
   )
 
+  # User's chosen reference per assembly unit. See init_db() for why this is its own
+  # table and not columns on annotate/assemblies.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_override (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
+      accession TEXT NOT NULL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
+    );"
+  )
+
   # Export state, one row per assembly unit. See init_db() for why this is its own
   # table and not columns on annotate/assemblies.
   DBI::dbExecute(

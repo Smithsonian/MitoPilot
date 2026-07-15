@@ -51,11 +51,12 @@ fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
   # stale rows after a Path-0 join, whose assemblies are ignore=1).
   assemblies_unit <- dplyr::tbl(db, "assemblies") |>
     dplyr::filter(ignore != 1) |>
-    dplyr::select(ID, path, scaffold, length_raw,
-                  asm_topology = topology,
-                  blast_accession, blast_species, blast_lineage,
-                  blast_pident, blast_qcovs) |>
-    dplyr::collect()
+    dplyr::select(ID, path, scaffold, length_raw, asm_topology = topology) |>
+    dplyr::collect() |>
+    # Resolved reference: the user's per-unit override if set, else this scaffold's
+    # own BLAST top hit. Shared with the Export table, synteny default and export
+    # note so all four name the same reference.
+    dplyr::left_join(unit_ref_facts(db), by = c("ID", "path", "scaffold"))
 
   dplyr::inner_join(annotate, assemble, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
@@ -82,6 +83,9 @@ fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
       topology,
       scaffolds,
       blast_accession,
+      # this scaffold's own BLAST top hit; the table marks the cell when it differs
+      # from the displayed (overridden) accession
+      blast_accession_auto,
       blast_species,
       blast_lineage,
       blast_pident,

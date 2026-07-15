@@ -350,27 +350,13 @@ annotations_details_server <- function(id, rv) {
         }
       }, error = function(e) NULL)
 
-      ## Active synteny reference, resolved per unit: a "Set as reference" override,
-      ## else THIS scaffold's rank-1 candidate (the top of the picker's own list),
-      ## else none. Shared with the export note so the plot and the submission always
-      ## name the same reference. rv$updating$blast_accession is deliberately not used
-      ## here: it is the scaffold's raw best-by-pident hit from `assemblies`, which
-      ## can rank below the candidate list's first entry, and it never reflects the
-      ## sample-level override (which is written to `assemble`).
-      ref_row <- tryCatch(
-        DBI::dbGetQuery(
-          session$userData$con,
-          "SELECT blast_accession, blast_accession_auto FROM assemble WHERE ID = ?",
-          params = list(rv$updating$ID)
-        ),
-        error = function(e) NULL
-      )
-      has_ref_row <- !is.null(ref_row) && nrow(ref_row) > 0
+      ## Active synteny reference, resolved per unit: this unit's "Set as best
+      ## reference" override, else THIS scaffold's own BLAST top hit, else none.
+      ## Shared with the Annotate/Export tables and the export note so every surface
+      ## names the same reference.
       acc0 <- resolve_unit_blast_ref(
         session$userData$con,
-        rv$updating$ID, rv$updating$path, rv$updating$scaffold,
-        blast_accession = if (has_ref_row) ref_row$blast_accession[1] else NA_character_,
-        blast_accession_auto = if (has_ref_row) ref_row$blast_accession_auto[1] else NA_character_
+        rv$updating$ID, rv$updating$path, rv$updating$scaffold
       )
       active_ref_acc(acc0)
       load_blast_ref(acc0)
@@ -2833,11 +2819,12 @@ annotations_details_server <- function(id, rv) {
       load_blast_ref(acc)
     })
 
-    # "Set as reference genome": make the currently-viewed candidate the sample's
-    # reference. Overwrites assemble.blast_accession (+ its metadata) from the
-    # candidate row; blast_accession_auto keeps the original rank-1 hit so the
-    # tables can flag the override. This drives the .tbl export note and the synteny
-    # default on reopen. Does not re-curate.
+    # "Set as reference genome": make the currently-viewed candidate THIS unit's
+    # reference. Written per unit to blast_ref_override, not to the sample-level
+    # assemble.blast_accession: the candidate list you pick from is this scaffold's
+    # own, so a sample-level write would relabel sibling scaffolds that never hit the
+    # accession. Drives the Annotate/Export tables, the export note and the synteny
+    # default. Does not re-curate.
     observeEvent(input$synteny_set_ref, ignoreInit = TRUE, {
       acc <- active_ref_acc()
       req(acc, !is.na(acc), nzchar(acc))
@@ -2848,31 +2835,46 @@ annotations_details_server <- function(id, rv) {
       species <- if (!is.null(crow) && nrow(crow) > 0) crow$species[1] else NA_character_
       pident  <- if (!is.null(crow) && nrow(crow) > 0) crow$pident[1]  else NA_real_
       qcovs   <- if (!is.null(crow) && nrow(crow) > 0) crow$qcovs[1]   else NA_real_
-      evalue  <- if (!is.null(crow) && nrow(crow) > 0) crow$evalue[1]  else NA_real_
       lineage <- tryCatch({
         l <- dplyr::tbl(session$userData$con, "blast_ref_sequences") |>
           dplyr::filter(accession == !!acc) |>
           dplyr::pull(lineage)
         if (length(l) > 0) l[1] else NA_character_
       }, error = function(e) NA_character_)
+      # This scaffold's own BLAST top hit: choosing it again clears the override
+      # rather than storing one that just restates the automatic answer.
+      auto_acc <- tryCatch(
+        dplyr::tbl(session$userData$con, "assemblies") |>
+          dplyr::filter(ID == !!rv$updating$ID & path == !!rv$updating$path &
+                          scaffold == !!rv$updating$scaffold) |>
+          dplyr::pull("blast_accession"),
+        error = function(e) character(0)
+      )
+      is_auto <- length(auto_acc) > 0 && identical(as.character(auto_acc[1]), acc)
 
       ok <- tryCatch({
-        DBI::dbExecute(
-          session$userData$con,
-          # COALESCE captures the pre-override blast_accession as the auto value the
-          # first time (SQLite evaluates RHS against the old row before assigning).
-          "UPDATE assemble SET
-             blast_accession_auto = COALESCE(blast_accession_auto, blast_accession),
-             blast_accession = ?, blast_species = ?, blast_pident = ?,
-             blast_qcovs = ?, blast_evalue = ?, blast_lineage = ?
-           WHERE ID = ?",
-          params = list(acc, species, pident, qcovs, evalue, lineage, rv$updating$ID)
-        )
+        if (is_auto) {
+          DBI::dbExecute(
+            session$userData$con,
+            "DELETE FROM blast_ref_override WHERE ID = ? AND path = ? AND scaffold = ?",
+            params = list(rv$updating$ID, rv$updating$path, rv$updating$scaffold)
+          )
+        } else {
+          DBI::dbExecute(
+            session$userData$con,
+            "INSERT OR REPLACE INTO blast_ref_override
+               (ID, path, scaffold, accession, time_stamp)
+             VALUES (?, ?, ?, ?, ?)",
+            params = list(rv$updating$ID, rv$updating$path, rv$updating$scaffold,
+                          acc, as.integer(Sys.time()))
+          )
+        }
         TRUE
       }, error = function(e) { showNotification(paste("Failed to set reference:", conditionMessage(e)), type = "error"); FALSE })
       req(ok)
 
-      # Reflect in the modal (fig_ctx / picker) and the Annotate table (rv$data).
+      # Reflect in the modal (fig_ctx / picker) and the Annotate table (rv$data), for
+      # THIS unit only.
       rv$updating$blast_accession <- acc
       if ("blast_species" %in% names(rv$updating)) rv$updating$blast_species <- species
       if ("blast_pident"  %in% names(rv$updating)) rv$updating$blast_pident  <- pident
@@ -2883,8 +2885,10 @@ annotations_details_server <- function(id, rv) {
       set_cols <- set_cols[intersect(names(set_cols), names(rv$data))]
       rv$data <- rv$data |>
         dplyr::rows_update(
-          data.frame(ID = rv$updating$ID, set_cols, stringsAsFactors = FALSE),
-          by = "ID", unmatched = "ignore"
+          data.frame(ID = rv$updating$ID, path = rv$updating$path,
+                     scaffold = rv$updating$scaffold, set_cols,
+                     stringsAsFactors = FALSE),
+          by = c("ID", "path", "scaffold"), unmatched = "ignore"
         )
       showNotification(paste0("Reference set to ", acc, " for ", rv$updating$ID), type = "message")
     })

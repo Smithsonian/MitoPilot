@@ -1,41 +1,36 @@
 #' Resolve the reference accession for one assembly unit
 #'
 #' Single source of truth for "which reference is this scaffold compared against",
-#' shared by the synteny view's default and the .tbl/FASTA export note so the two
-#' cannot drift apart. Precedence:
+#' shared by the Annotate table, the Export table, the synteny view's default and
+#' the export note, so they cannot name different references. Precedence:
 #' \enumerate{
-#'   \item an explicit "Set as reference genome" override, which is sample-level by
-#'     design (it stashes the original hit in \code{blast_accession_auto}), so it
-#'     applies to every unit of that sample;
-#'   \item otherwise this unit's own rank-1 candidate from \code{blast_ref_candidates},
-#'     i.e. the top of the list the reference picker shows for this scaffold;
-#'   \item otherwise \code{NA} - a scaffold with no BLAST hit has no reference, and
-#'     callers should show/claim nothing rather than borrow a sibling's.
+#'   \item the user's per-unit "Set as best reference" choice, if any;
+#'   \item otherwise this scaffold's own BLAST top hit
+#'     (\code{assemblies.blast_accession}, which is the first row blastn returned);
+#'   \item otherwise \code{NA} - a scaffold with no hit has no reference, and callers
+#'     should show/claim nothing rather than borrow a sibling's.
 #' }
-#' Deliberately not \code{assemblies.blast_accession}: that is the raw best-by-pident
-#' hit and can rank below the candidate list's first entry, which made the picker
-#' open on its own rank-3 row.
+#' Deliberately NOT \code{blast_ref_candidates} rank 1: that rank is a synthetic
+#' pident*qcovs sort rather than BLAST's own ordering, so on projects predating the
+#' ranking fix it can name a different accession than the search actually preferred.
 #'
 #' @param con database connection
 #' @param id,pth,scf the unit key (ID, path, scaffold)
-#' @param blast_accession,blast_accession_auto sample-level values from `assemble`;
-#'   an override is present when they differ.
 #'
 #' @return single accession string, or `NA_character_`
 #' @noRd
-resolve_unit_blast_ref <- function(con, id, pth, scf,
-                                   blast_accession = NA_character_,
-                                   blast_accession_auto = NA_character_) {
-  a  <- as.character((blast_accession %||% NA)[1])
-  au <- as.character((blast_accession_auto %||% NA)[1])
-  if (!is.na(a) && nzchar(a) && a != "NO HIT" &&
-      !is.na(au) && !identical(a, au)) {
-    return(a)
-  }
-  hit <- tryCatch(
-    dplyr::tbl(con, "blast_ref_candidates") |>
-      dplyr::filter(ID == !!id & path == !!pth & scaffold == !!scf & rank == 1) |>
+resolve_unit_blast_ref <- function(con, id, pth, scf) {
+  ovr <- tryCatch(
+    dplyr::tbl(con, "blast_ref_override") |>
+      dplyr::filter(ID == !!id & path == !!pth & scaffold == !!scf) |>
       dplyr::pull("accession"),
+    error = function(e) character(0)
+  )
+  if (length(ovr) > 0 && !is.na(ovr[1]) && nzchar(ovr[1])) return(ovr[1])
+  hit <- tryCatch(
+    dplyr::tbl(con, "assemblies") |>
+      dplyr::filter(ID == !!id & path == !!pth & scaffold == !!scf) |>
+      dplyr::pull("blast_accession"),
     error = function(e) character(0)
   )
   if (length(hit) > 0 && !is.na(hit[1]) && nzchar(hit[1]) && hit[1] != "NO HIT") {
@@ -43,6 +38,91 @@ resolve_unit_blast_ref <- function(con, id, pth, scf,
   } else {
     NA_character_
   }
+}
+
+#' Per-unit reference facts for every non-ignored assembly unit
+#'
+#' Vectorised form of [resolve_unit_blast_ref] that also carries the metadata
+#' describing the resolved accession. When a unit is overridden, species/pident/qcovs
+#' are taken from that accession's candidate row and the lineage from
+#' \code{blast_ref_sequences}: otherwise the columns would keep describing the
+#' scaffold's original BLAST hit while displaying the overridden accession.
+#'
+#' `blast_accession_auto` is kept alongside as the scaffold's own BLAST top hit, so
+#' the tables can flag an override (they mark the cell when auto differs from the
+#' displayed accession) and name what the search actually preferred.
+#'
+#' @param db database connection
+#' @return data.frame: ID, path, scaffold, blast_accession, blast_accession_auto,
+#'   blast_species, blast_lineage, blast_pident, blast_qcovs, ref_override
+#' @noRd
+unit_ref_facts <- function(db) {
+  out <- dplyr::tbl(db, "assemblies") |>
+    dplyr::filter(ignore != 1) |>
+    dplyr::select(
+      ID, path, scaffold,
+      auto_accession = blast_accession, auto_species = blast_species,
+      auto_lineage = blast_lineage, auto_pident = blast_pident,
+      auto_qcovs = blast_qcovs
+    ) |>
+    dplyr::collect()
+
+  empty_ovr <- data.frame(
+    ID = character(0), path = integer(0), scaffold = integer(0),
+    ovr_accession = character(0), stringsAsFactors = FALSE
+  )
+  ovr <- tryCatch(
+    dplyr::tbl(db, "blast_ref_override") |>
+      dplyr::select(ID, path, scaffold, ovr_accession = accession) |>
+      dplyr::collect(),
+    error = function(e) empty_ovr
+  )
+  out <- dplyr::left_join(out, ovr, by = c("ID", "path", "scaffold"))
+
+  cand <- tryCatch(
+    dplyr::tbl(db, "blast_ref_candidates") |>
+      dplyr::select(ID, path, scaffold, ovr_accession = accession,
+                    cand_species = species, cand_pident = pident,
+                    cand_qcovs = qcovs) |>
+      dplyr::collect(),
+    error = function(e) NULL
+  )
+  if (!is.null(cand) && nrow(cand) > 0) {
+    out <- dplyr::left_join(out, cand, by = c("ID", "path", "scaffold", "ovr_accession"))
+  } else {
+    out$cand_species <- NA_character_
+    out$cand_pident  <- NA_real_
+    out$cand_qcovs   <- NA_real_
+  }
+
+  refseq <- tryCatch(
+    dplyr::tbl(db, "blast_ref_sequences") |>
+      dplyr::select(ovr_accession = accession, ref_lineage = lineage) |>
+      dplyr::collect(),
+    error = function(e) NULL
+  )
+  if (!is.null(refseq) && nrow(refseq) > 0) {
+    out <- dplyr::left_join(out, refseq, by = "ovr_accession")
+  } else {
+    out$ref_lineage <- NA_character_
+  }
+
+  out |>
+    dplyr::mutate(
+      ref_override    = !is.na(ovr_accession),
+      blast_accession = dplyr::coalesce(ovr_accession, auto_accession),
+      # This scaffold's own BLAST top hit, kept so the tables can mark an override
+      # and say what the search preferred. Per unit, not the sample-level
+      # assemble.blast_accession_auto, which names a different scaffold's hit.
+      blast_accession_auto = auto_accession,
+      blast_species   = dplyr::if_else(ref_override, cand_species, auto_species),
+      blast_lineage   = dplyr::if_else(ref_override, ref_lineage, auto_lineage),
+      blast_pident    = dplyr::if_else(ref_override, cand_pident, auto_pident),
+      blast_qcovs     = dplyr::if_else(ref_override, cand_qcovs, auto_qcovs)
+    ) |>
+    dplyr::select(ID, path, scaffold, blast_accession, blast_accession_auto,
+                  blast_species, blast_lineage, blast_pident, blast_qcovs,
+                  ref_override)
 }
 
 #' Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST top hit
