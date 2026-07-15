@@ -158,25 +158,14 @@ annotate_server <- function(id) {
         dplyr::collect(),
       orf_opts = dplyr::tbl(session$userData$con, "orf_opts") |>
         dplyr::collect(),
-      data = NULL,
-      children = NULL,
+      data = fetch_annotate_data(),
       updating = NULL
     )
-
-    # Populate parent (rolled-up) + per-unit child frames from a single fetch so
-    # child_uid stays consistent between the embedded children_json and rv$children.
-    local({
-      units <- fetch_annotate_units()
-      rv$children <- units
-      rv$data <- rollup_annotate_parent(units)
-    })
 
     # Refresh ----
     init("refresh_annotate")
     on("refresh_annotate", {
-      units <- fetch_annotate_units()
-      rv$children <- units
-      rv$data <- rollup_annotate_parent(units)
+      rv$data <- fetch_annotate_data()
       updateReactable(
         "table",
         data = filtered_data()
@@ -283,10 +272,18 @@ annotate_server <- function(id) {
       hidden_lock  <- setdiff(unname(ANNOTATE_LOCK_CHOICES), lock_filter_rv())
       hidden_state <- setdiff(unname(ANNOTATE_STATE_CHOICES), state_filter_rv())
       hidden_exp   <- setdiff(unname(ANNOTATE_EXPORT_CHOICES), export_filter_rv())
+      # Hide the Path / Scaffold columns when every unit shares value 1 (single
+      # path/scaffold everywhere -> no extra info). Reactive on rv$data so the
+      # columns appear as soon as a multi-unit sample is locked, no app restart.
+      d <- rv$data
+      hide_path     <- !is.null(d) && nrow(d) > 0 && all(d$path == 1, na.rm = TRUE)
+      hide_scaffold <- !is.null(d) && nrow(d) > 0 && all(d$scaffold == 1, na.rm = TRUE)
       # Scope to THIS module's table so rules don't hit the shared mp-lock /
       # mp-state / mp-grp classes on the assemble, userAsmb, and export tables.
       sel <- paste0("#", ns("table"), " ")
       rules <- c(
+        if (hide_path)            paste0(sel, ".mp-col-path { display: none !important; }"),
+        if (hide_scaffold)        paste0(sel, ".mp-col-scaffold { display: none !important; }"),
         if (length(hidden_grp))   paste0(sel, ".mp-grp-",   hidden_grp,   " { display: none !important; }"),
         if (length(hidden_lock))  paste0(sel, ".mp-lock-",  hidden_lock,  " { display: none !important; }"),
         if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }"),
@@ -295,48 +292,6 @@ annotate_server <- function(id) {
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
     })
-
-    # Expandable child rows for multi-unit (multi-assembly) samples. Runs
-    # client-side (survives updateReactable) and reads the units embedded in the
-    # parent row's children_json. Returns undefined for single-unit rows so they
-    # get no expander. Each child row's "details" button opens the per-unit editor
-    # by pushing that unit's child_uid to input$unit_details.
-    child_details_js <- JS(sprintf(
-      "function(rowInfo) {
-        var vals = rowInfo.values || {};
-        var n = vals['n_units'];
-        if (!n || n <= 1) return;
-        var data;
-        try { data = JSON.parse(vals['children_json']); } catch (e) { return; }
-        if (!data || !data.length) return;
-        var cols = [['path','Path'],['scaffold','Scaf'],['topology','Topology'],
-          ['length','Length'],['PCGCount','PCG'],['tRNACount','tRNA'],
-          ['rRNACount','rRNA'],['ORFCount','ORF'],['reviewed','Rev'],
-          ['problematic','Prob'],['partial','Part']];
-        var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-        var html = '<div style=\"padding:8px 12px;\">';
-        html += '<table style=\"border-collapse:collapse; font-size:0.85em;\">';
-        html += '<thead><tr>';
-        cols.forEach(function(c){ html += '<th style=\"text-align:left; padding:2px 10px; border-bottom:1px solid #ccc; color:#555;\">'+c[1]+'</th>'; });
-        html += '<th style=\"border-bottom:1px solid #ccc;\"></th></tr></thead><tbody>';
-        data.forEach(function(u){
-          var locked = (u['annotate_lock']==1);
-          html += '<tr>';
-          cols.forEach(function(c){
-            var v = u[c[0]]; v = (v===null||v===undefined) ? '' : esc(v);
-            html += '<td style=\"padding:2px 10px;\">'+v+'</td>';
-          });
-          var uid = u['child_uid'];
-          html += '<td style=\"padding:2px 10px;\"><button class=\"icon-bttn-text grow\" ' +
-            'onclick=\"event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, '+uid+', {priority: &#39;event&#39;})\">' +
-            '<i class=\"fas fa-square-arrow-up-right fa-xs\" style=\"margin-right:4px;\"></i><small>details</small></button></td>';
-          html += '</tr>';
-        });
-        html += '</tbody></table></div>';
-        return React.createElement('div', { dangerouslySetInnerHTML: { __html: html } });
-      }",
-      ns("unit_details")
-    ))
 
     # Render table ----
     output$table <- renderReactable({
@@ -352,7 +307,6 @@ annotate_server <- function(id) {
         defaultPageSize = 100,
         resizable = TRUE,
         showPageSizeOptions = TRUE,
-        details = child_details_js,
         onClick = "select",
         selection = "multiple",
         searchable = TRUE,
@@ -411,6 +365,16 @@ annotate_server <- function(id) {
             sticky = "left",
             html = TRUE,
             cell = rt_longtext()
+          ),
+          # Per-unit key: each (ID, path, scaffold) is its own row. The classes let
+          # col_css hide a column when every unit shares value 1 (no extra info).
+          path = colDef(
+            show = TRUE, name = "Path", sticky = "left", class = "mp-col-path",
+            headerClass = "mp-col-path", width = 55, align = "center", filterable = FALSE
+          ),
+          scaffold = colDef(
+            show = TRUE, name = "Scaffold", sticky = "left", class = "mp-col-scaffold",
+            headerClass = "mp-col-scaffold", width = 75, align = "center", filterable = FALSE
           ),
           Taxon = colDef(
             show = TRUE,
@@ -588,27 +552,6 @@ annotate_server <- function(id) {
             # maxWidth = 400,
             cell = rt_longtext()
           ),
-          # "N units" badge for multi-assembly samples (blank for single-unit).
-          units = colDef(
-            show = TRUE,
-            name = "Units",
-            filterable = FALSE,
-            html = TRUE,
-            width = 70,
-            align = "center",
-            cell = JS(
-              "function(cellInfo) {
-                var v = cellInfo.value;
-                if (!v) return '';
-                return '<span style=\"background:#e2e3f0; color:#3b3f66; border-radius:3px; ' +
-                       'padding:1px 6px; font-size:0.85em;\">' + v + '</span>';
-              }"
-            )
-          ),
-          # Hidden support columns for the child-row renderer. children_json must
-          # not be searchable (it holds the units' JSON blob).
-          children_json = colDef(show = FALSE, searchable = FALSE, filterable = FALSE),
-          n_units = colDef(show = FALSE, searchable = FALSE, filterable = FALSE),
           view = colDef(
             show = TRUE,
             sticky = "right",
@@ -658,10 +601,8 @@ annotate_server <- function(id) {
               annotate_switch > 1 ~ "output",
               .default = NA_character_
             ),
-            # Parent details button only for single-unit samples; multi-unit rows
-            # expand to per-unit child rows instead.
             view = dplyr::case_when(
-              annotate_switch > 1 & n_units == 1L ~ "details",
+              annotate_switch > 1 ~ "details",
               .default = NA_character_
             )
           ),
@@ -719,7 +660,7 @@ annotate_server <- function(id) {
       req(selected())
       req(all(filtered_data()$annotate_lock[req(selected())] == 0))
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, annotate_switch) |>
+        dplyr::select(ID, path, scaffold, annotate_switch) |>
         dplyr::slice(selected())
       current <- character(0)
       if (length(unique(rv$updating$annotate_switch)) == 1) {
@@ -752,12 +693,12 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
         dplyr::rows_update(
           rv$updating,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       trigger("update_annotate_table")
       removeModal()
@@ -769,7 +710,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, annotate_lock) |>
+        dplyr::select(ID, path, scaffold, annotate_lock) |>
         dplyr::slice(selected())
       lock_current <- as.numeric(names(which.max(table(rv$updating$annotate_lock))))
       rv$updating$annotate_lock <- as.numeric(!lock_current)
@@ -779,10 +720,10 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
       trigger("refresh_export")
     })
@@ -793,7 +734,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, ID_verified) |>
+        dplyr::select(ID, path, scaffold, ID_verified) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$ID_verified))[1]
       if (is.na(ID_current)) {
@@ -809,10 +750,10 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     })
 
@@ -822,7 +763,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, problematic) |>
+        dplyr::select(ID, path, scaffold, problematic) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$problematic))[1]
       if (is.na(ID_current)) {
@@ -836,26 +777,26 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     })
 
     # Toggle partial
     apply_partial_update <- function(upd) {
-      rv$updating <- upd |> dplyr::select(ID, partial)
+      rv$updating <- upd |> dplyr::select(ID, path, scaffold, partial)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           rv$updating,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     }
     init("partial_top")
@@ -863,7 +804,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       upd <- filtered_data() |>
-        dplyr::select(ID, partial, topology) |>
+        dplyr::select(ID, path, scaffold, partial, topology) |>
         dplyr::slice(selected())
       is_on <- any(upd$partial == "yes", na.rm = TRUE)
       if (!is_on) {
@@ -1067,7 +1008,7 @@ annotate_server <- function(id) {
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
         rv$updating_indirect <- filtered_data() |>
           dplyr::filter(annotate_opts == input$annotate_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
+          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
           shinyWidgets::sendSweetAlert(
@@ -1165,23 +1106,25 @@ annotate_server <- function(id) {
           dplyr::collect()
       }
       ## Update Annotate Table ----
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        annotate_opts = input$annotate_opts,
-        annotate_switch = 1
+      # Per-unit: target the exact (ID, path, scaffold) units (selected + indirect).
+      update <- dplyr::bind_rows(
+        rv$updating[, c("ID", "path", "scaffold")],
+        rv$updating_indirect[, c("ID", "path", "scaffold")]
       )
+      update$annotate_opts <- input$annotate_opts
+      update$annotate_switch <- 1
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           update,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
         dplyr::rows_update(
           update,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
@@ -1284,7 +1227,7 @@ annotate_server <- function(id) {
       if (input$edit_curate_opts && input$curate_opts %in% filtered_data()$curate_opts) {
         rv$updating_indirect <- filtered_data() |>
           dplyr::filter(curate_opts == input$curate_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
+          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
           shinyWidgets::sendSweetAlert(
@@ -1401,23 +1344,24 @@ annotate_server <- function(id) {
           dplyr::collect()
       }
       ## Update Annotate Table ----
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        curate_opts = input$curate_opts,
-        annotate_switch = 1
+      update <- dplyr::bind_rows(
+        rv$updating[, c("ID", "path", "scaffold")],
+        rv$updating_indirect[, c("ID", "path", "scaffold")]
       )
+      update$curate_opts <- input$curate_opts
+      update$annotate_switch <- 1
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           update,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
         dplyr::rows_update(
           update,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       # Genetic code follows the curation ruleset: recompute the per-sample
       # samples.genetic_code cache for the samples whose curate_opts (target or
@@ -1476,7 +1420,7 @@ annotate_server <- function(id) {
       if (input$edit_orf_opts && input$orf_opts %in% filtered_data()$orf_opts) {
         rv$updating_indirect <- filtered_data() |>
           dplyr::filter(orf_opts == input$orf_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
+          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
           shinyWidgets::sendSweetAlert(
             title = "Attempting to edit locked samples",
@@ -1526,21 +1470,22 @@ annotate_server <- function(id) {
         rv$orf_opts <- dplyr::tbl(session$userData$con, "orf_opts") |>
           dplyr::collect()
       }
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        orf_opts = input$orf_opts,
-        annotate_switch = 1
+      update <- dplyr::bind_rows(
+        rv$updating[, c("ID", "path", "scaffold")],
+        rv$updating_indirect[, c("ID", "path", "scaffold")]
       )
+      update$orf_opts <- input$orf_opts
+      update$annotate_switch <- 1
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           update,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(update, by = "ID")
+        dplyr::rows_update(update, by = c("ID", "path", "scaffold"))
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
@@ -1556,25 +1501,11 @@ annotate_server <- function(id) {
     })
 
     # Open annotation details ----
-    # Parent "details" button (single-unit samples only). The editor operates on
-    # a single (ID, path, scaffold) unit, so resolve the parent row to its one
-    # child unit in rv$children.
+    # Each table row is one (ID, path, scaffold) unit, so the clicked row is the
+    # unit to edit.
     observeEvent(input$details, {
       session$userData$in_outlier_review <- FALSE
-      id <- filtered_data()$ID[as.numeric(input$details)]
-      unit <- rv$children |> dplyr::filter(ID == !!id)
-      req(nrow(unit) > 0)
-      rv$updating <- unit |> dplyr::slice(1)
-      trigger("annotations_modal")
-    })
-
-    # Child-row "details" button (per-unit). child_uid identifies the exact unit.
-    observeEvent(input$unit_details, {
-      session$userData$in_outlier_review <- FALSE
-      uid <- as.numeric(input$unit_details)
-      unit <- rv$children |> dplyr::filter(child_uid == !!uid)
-      req(nrow(unit) > 0)
-      rv$updating <- unit |> dplyr::slice(1)
+      rv$updating <- filtered_data() |> dplyr::slice(as.numeric(input$details))
       trigger("annotations_modal")
     })
 
@@ -1582,7 +1513,7 @@ annotate_server <- function(id) {
     on("goto_annotate", {
       target <- session$userData$goto_annotate_target
       req(target, target$ID)
-      hit <- rv$children |> dplyr::filter(ID == target$ID)
+      hit <- rv$data |> dplyr::filter(ID == target$ID)
       # If the jump specifies a unit, honour it; else take the first unit.
       if (!is.null(target$path) && !is.null(target$scaffold)) {
         hit <- hit |> dplyr::filter(path == target$path, scaffold == target$scaffold)

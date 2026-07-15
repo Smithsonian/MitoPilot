@@ -800,7 +800,7 @@ annotations_details_server <- function(id, rv) {
       rv$updating$rRNACount = sum(retained_annotations$type == "rRNA")
       update_annotate_unit(c("PCGCount", "tRNACount", "rRNACount"))
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "PCGCount", "tRNACount", "rRNACount")], by = "ID")
+        dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "PCGCount", "tRNACount", "rRNACount")], by = c("ID", "path", "scaffold"))
       rv$annotations <- NULL
       rv$coverage <- NULL
       rv$table_filter <- NULL
@@ -847,7 +847,7 @@ annotations_details_server <- function(id, rv) {
         rv$updating$annotate_lock <- 1
         update_annotate_unit("annotate_lock")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "annotate_lock")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "annotate_lock")], by = c("ID", "path", "scaffold"))
       }
       shinyjs::click("close")
     })
@@ -2384,7 +2384,7 @@ annotations_details_server <- function(id, rv) {
           in_place = TRUE
         )
       rv$data <- rv$data |>
-        dplyr::rows_update(notes_df[, c("ID", "annotate_notes")], by = "ID")
+        dplyr::rows_update(notes_df[, c("ID", "path", "scaffold", "annotate_notes")], by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     })
 
@@ -2573,8 +2573,8 @@ annotations_details_server <- function(id, rv) {
       update_annotate_unit(c("topology", "annotate_notes"))
       rv$data <- rv$data |>
         dplyr::rows_update(
-          rv$updating[, c("ID", "topology", "annotate_notes")],
-          by = "ID"
+          rv$updating[, c("ID", "path", "scaffold", "topology", "annotate_notes")],
+          by = c("ID", "path", "scaffold")
         )
     }) # END LINEARIZE
 
@@ -2585,19 +2585,19 @@ annotations_details_server <- function(id, rv) {
         rv$updating$ID_verified <- "yes"
         update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
       } else if(as.character(rv$updating$ID_verified) == "no"){
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "yes"
         update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
       } else {
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "no"
         update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
       }
     }) # END ID VERIFIED
 
@@ -2608,13 +2608,13 @@ annotations_details_server <- function(id, rv) {
         rv$updating$reviewed <- "yes"
         update_annotate_unit("reviewed")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
       } else {
         updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "no"
         update_annotate_unit("reviewed")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
       }
     }) # END REVIEWED
 
@@ -2625,13 +2625,13 @@ annotations_details_server <- function(id, rv) {
         rv$updating$problematic <- "yes"
         update_annotate_unit("problematic")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
       } else {
         updateActionButton(session, "problematic")
         rv$updating$problematic <- NA_character_
         update_annotate_unit("problematic")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
       }
     }) # END PROBLEMATIC
 
@@ -2641,7 +2641,7 @@ annotations_details_server <- function(id, rv) {
       rv$updating$partial <- value
       update_annotate_unit("partial")
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "partial")], by = "ID")
+        dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "partial")], by = c("ID", "path", "scaffold"))
     }
     observeEvent(input$partial, {
       if (!isTRUE(rv$updating$partial == "yes")) {
@@ -4024,29 +4024,33 @@ annotations_details_server <- function(id, rv) {
     update_counts <- function() {
       con <- session$userData$con
       id <- rv$updating$ID
+      p  <- rv$updating$path
+      s  <- rv$updating$scaffold
       req(length(id) == 1)
       retained <- rv$annotations |>
         dplyr::filter(!stringr::str_detect(gene, "_DELETED_"))
       pcg  <- sum(retained$type == "PCG",  na.rm = TRUE)
       trna <- sum(retained$type == "tRNA", na.rm = TRUE)
       rrna <- sum(retained$type == "rRNA", na.rm = TRUE)
-      # missing/extra from the sample's curation count rules
+      # missing/extra from this unit's curation count rules
       me <- tryCatch({
         co <- dplyr::tbl(con, "annotate") |>
-          dplyr::filter(ID == !!id) |> dplyr::pull(curate_opts)
+          dplyr::filter(ID == !!id, path == !!p, scaffold == !!s) |>
+          dplyr::pull(curate_opts)
         pj <- dplyr::tbl(con, "curate_opts") |>
           dplyr::filter(curate_opts == !!co) |> dplyr::pull(params)
         params <- jsonlite::fromJSON(pj)
         compute_missing_extra(retained, params$rules, params$default_rules)
       }, error = function(e) list(missing = NA_character_, extra = NA_character_))
+      # This unit's row in rv$data (per-unit table).
+      i <- which(rv$data$ID == id & rv$data$path == p & rv$data$scaffold == s)[1]
       # ORF count is derived in the table; keep blank when ORF finding is off
-      orf_blank <- "ORFCount" %in% names(rv$data) &&
-        isTRUE(is.na(rv$data$ORFCount[match(id, rv$data$ID)]))
+      orf_blank <- "ORFCount" %in% names(rv$data) && !is.na(i) &&
+        isTRUE(is.na(rv$data$ORFCount[i]))
       orf <- if (orf_blank) NA_integer_ else as.integer(sum(retained$type == "ORF", na.rm = TRUE))
       # Short-circuit if nothing the count/missing/extra columns track changed
       # (e.g. position-only codon edits) to avoid needless writes/refreshes.
       same <- function(a, b) (is.na(a) && is.na(b)) || (!is.na(a) && !is.na(b) && a == b)
-      i <- match(id, rv$data$ID)
       if (!is.na(i) &&
           identical(as.integer(rv$data$PCGCount[i]), as.integer(pcg)) &&
           identical(as.integer(rv$data$tRNACount[i]), as.integer(trna)) &&
@@ -4056,14 +4060,15 @@ annotations_details_server <- function(id, rv) {
           same(rv$data$extra[i], me$extra %||% NA_character_)) {
         return(invisible(NULL))
       }
-      # Persist the stored count columns to the annotate table
+      # Persist the stored count columns to this unit's annotate row
       upd <- data.frame(
-        ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+        ID = id, path = p, scaffold = s,
+        PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
         missing = me$missing %||% NA_character_, extra = me$extra %||% NA_character_,
         stringsAsFactors = FALSE
       )
       dplyr::tbl(con, "annotate") |>
-        dplyr::rows_update(upd, by = "ID", unmatched = "ignore",
+        dplyr::rows_update(upd, by = c("ID", "path", "scaffold"), unmatched = "ignore",
                            in_place = TRUE, copy = TRUE)
       # Keep rv$updating in sync (the close handler reads these counts)
       rv$updating$PCGCount  <- pcg
@@ -4071,10 +4076,11 @@ annotations_details_server <- function(id, rv) {
       rv$updating$rRNACount <- rrna
       rv$data <- rv$data |>
         dplyr::rows_update(
-          data.frame(ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+          data.frame(ID = id, path = p, scaffold = s,
+                     PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
                      ORFCount = orf, missing = upd$missing, extra = upd$extra,
                      stringsAsFactors = FALSE),
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       trigger("update_annotate_table")
       trigger("refresh_export")
