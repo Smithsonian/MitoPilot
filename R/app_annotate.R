@@ -366,20 +366,20 @@ annotate_server <- function(id) {
             html = TRUE,
             cell = rt_longtext()
           ),
-          # Per-unit key: each (ID, path, scaffold) is its own row. The classes let
-          # col_css hide a column when every unit shares value 1 (no extra info).
+          # Per-unit key: each (ID, path, scaffold) is its own row. Not sticky (only
+          # lock/state/ID stay frozen). The classes let col_css hide a column when
+          # every unit shares value 1 (no extra info).
           path = colDef(
-            show = TRUE, name = "Path", sticky = "left", class = "mp-col-path",
+            show = TRUE, name = "Path", class = "mp-col-path",
             headerClass = "mp-col-path", width = 55, align = "center", filterable = FALSE
           ),
           scaffold = colDef(
-            show = TRUE, name = "Scaffold", sticky = "left", class = "mp-col-scaffold",
+            show = TRUE, name = "Scaffold", class = "mp-col-scaffold",
             headerClass = "mp-col-scaffold", width = 75, align = "center", filterable = FALSE
           ),
           Taxon = colDef(
             show = TRUE,
             minWidth = 140,
-            sticky = "left",
             html = TRUE,
             cell = rt_longtext()
           ),
