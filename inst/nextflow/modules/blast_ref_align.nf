@@ -30,6 +30,11 @@ process blast_ref_align {
     outFile = "blast_ref_alignment_${path}_${scaffold}_${accession}.csv"
     '''
     mkdir -p !{outDir}
+    # blast_ref_align output contract v2: CSV has 6 columns
+    # (aligned_sample, aligned_ref, rotation, ref_length, ref_start, strand).
+    # This version string is part of the task script, so bumping it invalidates
+    # the Nextflow -resume cache: a changed aligner output format cannot be
+    # silently reused across package upgrades (downstream parser needs 6 cols).
     # Write sequences to files - avoids Rscript -e expression length limits
     printf '%s\n' '!{assembly_seq}' > _assembly.txt
     printf '%s\n' '!{ref_seq}'      > _ref.txt
