@@ -162,7 +162,15 @@ migrate_config <- function(path, executor, con = NULL,
     engine_repl <- extract_container_engine(old)
   }
 
+  # Only the official image can be version-bumped; a custom container (local dev
+  # build, private registry) has no version to bump to, so carry it over as-is.
+  old_container <- config_get_param(old, "container")
   new_container <- paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
+  if (!is.null(old_container) &&
+      !grepl("^macguigand/mitopilot:", old_container) &&
+      !identical(old_container, "process.container")) {
+    new_container <- old_container
+  }
 
   # Drop the queue directive if the old config had no queue (mirror generate_config).
   if (is.null(queue)) {
