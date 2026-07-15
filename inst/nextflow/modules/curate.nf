@@ -16,13 +16,13 @@ process curate {
 
     errorStrategy 'ignore'
 
-    tag "${id}"
+    tag "${id}.${path}.${scaffold}"
 
     input:
-    tuple val(id), val(path), path(annotations), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean), path(blast_ref_files, stageAs: 'blast_ref_*.json')
+    tuple val(id), val(path), val(scaffold), path(annotations), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean), path(blast_ref_files, stageAs: 'blast_ref_*.json')
 
     output:
-    tuple val(id), val(path), path("${id}/${id}_annotations_*.csv"), path("${id}/annotate/${id}_assembly_*.fasta"), path("${id}/annotate/${id}_coverageStats_*.csv"), path("${id}/annotate/NF_work_dir_curate.txt")
+    tuple val(id), val(path), val(scaffold), path("${id}/${id}_annotations_*.csv"), path("${id}/annotate/${id}_assembly_*.fasta"), path("${id}/annotate/${id}_coverageStats_*.csv"), path("${id}/annotate/NF_work_dir_curate.txt")
 
     shell:
     dir = "${id}/annotate"

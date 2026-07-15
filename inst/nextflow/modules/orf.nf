@@ -16,13 +16,13 @@ process orf {
 
     errorStrategy 'ignore'
 
-    tag "${id}"
+    tag "${id}.${path}.${scaffold}"
 
     input:
-    tuple val(id), val(path), path(annotations), path(assembly), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean), path(blast_ref_file)
+    tuple val(id), val(path), val(scaffold), path(annotations), path(assembly), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean), path(blast_ref_file)
 
     output:
-    tuple val(id), val(path), path("${id}/annotate/${id}_ORFannotations_*.tsv"), path("${id}/annotate/NF_work_dir_orf.txt")
+    tuple val(id), val(path), val(scaffold), path("${id}/annotate/${id}_ORFannotations_*.tsv"), path("${id}/annotate/NF_work_dir_orf.txt")
 
     shell:
     dir = "${id}/annotate"

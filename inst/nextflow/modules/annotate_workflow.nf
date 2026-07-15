@@ -1,24 +1,24 @@
 include {annotate} from './annotate.nf'
 
-// ANNOTATE runs per (ID, path): MITOS/tRNAscan annotate every non-ignored
-// scaffold of the path independently (no cross-contamination), so annotation
-// stays per-path in the hybrid model. Per-scaffold gating/validation happens
-// downstream in VALIDATE. annotate is now keyed (ID, path, scaffold), so
-// annotate_opts is sourced via a per-path subquery (first scaffold's opts) and
-// the path is gated by whether ANY of its units wants annotation (EXISTS).
-params.sqlRead =    'SELECT a.ID, a.path, b.assemble_opts, ' +
+// ANNOTATE runs per (ID, path, scaffold): each non-ignored scaffold is its own
+// annotation unit, annotated independently through the original MitoPilot flow
+// (its own MITOS/tRNAscan run + its own output files ID_annotations_<path>_<scaffold>.csv).
+// annotate() processes only this unit's scaffold by ignoring every OTHER scaffold
+// of the path (ignore_scaffolds subquery). annotate_opts is the unit's own set;
+// the unit is gated on annotate_switch=1 AND annotate_lock=0.
+params.sqlRead =    'SELECT a.ID, a.path, a.scaffold, b.assemble_opts, ' +
                         'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, ' +
                         'd.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, ' +
-                        "GROUP_CONCAT(CASE WHEN a.ignore = 1 THEN a.scaffold END, ',') AS ignore_scaffolds, " +
+                        "(SELECT GROUP_CONCAT(a2.scaffold, ',') FROM assemblies a2 WHERE a2.ID = a.ID AND a2.path = a.path AND a2.scaffold != a.scaffold) AS ignore_scaffolds, " +
                         'd.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan, f.genetic_code, d.rescue_no_trna ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate_opts d ON d.annotate_opts = (SELECT an.annotate_opts FROM annotate an WHERE an.ID = a.ID AND an.path = a.path ORDER BY an.scaffold LIMIT 1) ' +
+                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold ' +
+                    'JOIN annotate_opts d ON d.annotate_opts = an.annotate_opts ' +
                     'JOIN samples f ON a.ID = f.ID ' +
                     'WHERE b.assemble_lock = 1 ' +
-                    'AND EXISTS (SELECT 1 FROM annotate an WHERE an.ID = a.ID AND an.path = a.path AND an.annotate_switch = 1 AND an.annotate_lock = 0) ' +
-                    'GROUP BY a.ID, a.path, b.assemble_opts, d.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, d.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, d.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan, f.genetic_code, d.rescue_no_trna ' +
-                    'HAVING SUM(CASE WHEN a.ignore = 0 THEN 1 ELSE 0 END) > 0'
+                    'AND a.ignore = 0 ' +
+                    'AND an.annotate_switch = 1 AND an.annotate_lock = 0'
 
 workflow ANNOTATE {
 
@@ -26,53 +26,54 @@ workflow ANNOTATE {
         .map{ it ->
 
             // Check if refDir is a GitHub link
-            if (it[6]?.contains('githubusercontent')) {
-                if (!it[5].endsWith('.tar.gz')) {
-                    it[5] = it[5] + '.tar.gz'
+            if (it[7]?.contains('githubusercontent')) {
+                if (!it[6].endsWith('.tar.gz')) {
+                    it[6] = it[6] + '.tar.gz'
                 }
             }
 
             tuple(
                 it[0],                                          // ID
                 it[1],                                          // path
-                file(                                           // Assembly
+                it[2],                                          // scaffold
+                file(                                           // Assembly (per-path; annotate() isolates this scaffold)
                     params.publishDir + '/' +
-                    it[0] + '/assemble/' + it[2] + '/' +
+                    it[0] + '/assemble/' + it[3] + '/' +
                     it[0] + '_assembly_' + it[1] + '.fasta'
                 ),
-                file(                                           // Coverage
+                file(                                           // Coverage (per-path; subset to this scaffold)
                     params.publishDir + '/' +
-                    it[0] + '/assemble/' + it[2] + '/' +
+                    it[0] + '/assemble/' + it[3] + '/' +
                     it[0] + '_assembly_' + it[1] + '_coverageStats.csv'
                 ),
                 [
-                    cpus:  it[3],                                      // cpus
-                    memory: it[4],                                     // memory
-                    ref_db: it[5],                                     // mitos_ref_db
-                    ref_dir: it[6],                                    // mitos_ref_dir
-                    mitos: it[7],                                      // mitos_opts
-                    use_mitos_best: it[8],                             // use_mitos_best toggle
-                    trnaScan: it[9],                                   // trnaScan_opts
-                    start_gene: it[10],                                // starting gene for rotation
-                    arwen: it[11],                                     // arwen_opts
-                    use_arwen: it[12],                                 // use_arwen toggle
-                    aragorn: it[13],                                   // aragorn_opts
-                    use_aragorn: it[14],                               // use_aragorn toggle
-                    use_mitofinder: it[15] != null ? it[15] as Integer : 0,  // use_mitofinder toggle (default off)
-                    mitofinder_new_genes: it[17] != null ? it[17] as Integer : 0,   // --new-genes toggle
-                    mitofinder_allow_introns: it[18] != null ? it[18] as Integer : 0, // --allow-intron toggle
-                    mitofinder_opts: it[19] ?: '',                     // free-form MitoFinder options
-                    ignore_scaffolds: it[20] ?: '',                    // comma-separated scaffold numbers to drop
-                    coverage_trim: it[21] != null ? it[21] as Integer : 1,  // coverage trimming toggle (default on)
-                    retain_low_conf_trna: it[22] != null ? it[22] as Integer : 0,  // retain low-conf (NNN) tRNAs (default off)
-                    use_mitos: it[23] != null ? it[23] as Integer : 1,      // use_mitos toggle (default on)
-                    use_trnaScan: it[24] != null ? it[24] as Integer : 1,   // use_trnaScan toggle (default on)
-                    genetic_code: it[25],                                   // per-sample genetic code (from samples table)
-                    rescue_no_trna: it[26] != null ? it[26] as Integer : 1  // second MITOS2 pass without tRNA prediction (default on)
+                    cpus:  it[4],                                      // cpus
+                    memory: it[5],                                     // memory
+                    ref_db: it[6],                                     // mitos_ref_db
+                    ref_dir: it[7],                                    // mitos_ref_dir
+                    mitos: it[8],                                      // mitos_opts
+                    use_mitos_best: it[9],                             // use_mitos_best toggle
+                    trnaScan: it[10],                                  // trnaScan_opts
+                    start_gene: it[11],                                // starting gene for rotation
+                    arwen: it[12],                                     // arwen_opts
+                    use_arwen: it[13],                                 // use_arwen toggle
+                    aragorn: it[14],                                   // aragorn_opts
+                    use_aragorn: it[15],                               // use_aragorn toggle
+                    use_mitofinder: it[16] != null ? it[16] as Integer : 0,  // use_mitofinder toggle (default off)
+                    mitofinder_new_genes: it[18] != null ? it[18] as Integer : 0,   // --new-genes toggle
+                    mitofinder_allow_introns: it[19] != null ? it[19] as Integer : 0, // --allow-intron toggle
+                    mitofinder_opts: it[20] ?: '',                     // free-form MitoFinder options
+                    ignore_scaffolds: it[21] ?: '',                    // every OTHER scaffold of the path (isolate this unit)
+                    coverage_trim: it[22] != null ? it[22] as Integer : 1,  // coverage trimming toggle (default on)
+                    retain_low_conf_trna: it[23] != null ? it[23] as Integer : 0,  // retain low-conf (NNN) tRNAs (default off)
+                    use_mitos: it[24] != null ? it[24] as Integer : 1,      // use_mitos toggle (default on)
+                    use_trnaScan: it[25] != null ? it[25] as Integer : 1,   // use_trnaScan toggle (default on)
+                    genetic_code: it[26],                                   // per-sample genetic code (from samples table)
+                    rescue_no_trna: it[27] != null ? it[27] as Integer : 1  // second MITOS2 pass without tRNA prediction (default on)
                 ],
-                file(it[6] + "/" + it[5]),                              // curation ref dir + clade
-                it[5].replaceFirst(/\.tar\.gz$/, ''),               // ref_db without ".tar.gz"
-                file((it[16] != null && it[16].toString().trim()) ? it[16] : "${projectDir}/assets/NO_FILE")  // MitoFinder reference .gb (or placeholder)
+                file(it[7] + "/" + it[6]),                              // curation ref dir + clade
+                it[6].replaceFirst(/\.tar\.gz$/, ''),               // ref_db without ".tar.gz"
+                file((it[17] != null && it[17].toString().trim()) ? it[17] : "${projectDir}/assets/NO_FILE")  // MitoFinder reference .gb (or placeholder)
             )
         }
         .set { annotate_in }

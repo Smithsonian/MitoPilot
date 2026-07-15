@@ -79,8 +79,8 @@ params.sqlWriteBlastRefAlignFailed = "UPDATE assemble SET " +
 
 workflow BLAST_REF_ALIGN {
     take:
-        validated   // (id, path) - gates timing: only fires after VALIDATE completes
-        curate_out  // (id, path, annotations, assembly_fasta, coverage, work_dir)
+        validated   // (id, path, scaffold) - gates timing: fires after VALIDATE completes
+        curate_out  // (id, path, scaffold, annotations, assembly_fasta, coverage, work_dir) [per unit]
 
     main:
         // Reference data (sequence + rotation) available at WF2 startup from WF1.
@@ -92,12 +92,20 @@ workflow BLAST_REF_ALIGN {
 
         // Newly-validated samples: gate on `validated` so alignment runs after
         // VALIDATE completes. Pull the rotated assembly FASTA from curate_out.
-        // combine(by:0) fans each sample's assembly across all its candidate refs.
+        // NOTE (multi-assembly): blast_ref_alignment is keyed per (ID, path,
+        // accession), so for now we align one representative scaffold per path
+        // (the first curate_out unit). Per-scaffold whole-genome alignment needs a
+        // blast_ref_alignment schema change (add scaffold) - a follow-up.
+        curate_out
+            .map { tuple(it[0], it[1], it[4]) }        // (id, path, assembly_fasta)
+            .groupTuple(by: [0, 1])
+            .map { id, path, asms -> tuple(id, path, asms[0]) }
+            .set { curate_assembly_by_path }
         validated
             .map { tuple(it[0], it[1]) }
             .unique()
-            .join(curate_out, by: [0, 1])
-            .map { id, path, annotations, assembly_fasta, coverage, work_dir ->
+            .join(curate_assembly_by_path, by: [0, 1])
+            .map { id, path, assembly_fasta ->
                 tuple(id, path, assembly_fasta)
             }
             .combine(ref_ch, by: 0)

@@ -296,14 +296,13 @@ annotations_details_server <- function(id, rv) {
 
       ## Load coverage ----
       # TODO - get from db (need to fix NA="" issue)
-      # Coverage stats are written per path (ID_coverageStats_<path>.csv), so pick
-      # this unit's path file (multi-assembly samples have several).
+      # Coverage stats are written per unit (ID_coverageStats_<path>_<scaffold>.csv).
       rv$coverage <- local({
         dir <- file.path(session$userData$dir_out, rv$updating$ID, "annotate")
         f <- file.path(dir, paste0(rv$updating$ID, "_coverageStats_",
-                                   rv$updating$path, ".csv"))
+                                   rv$updating$path, "_", rv$updating$scaffold, ".csv"))
         if (!file.exists(f)) {
-          # Fall back to whatever coverageStats file exists (single-unit legacy).
+          # Fall back to whatever coverageStats file exists (legacy naming).
           alt <- list.files(dir, pattern = "coverageStats", full.names = TRUE)
           f <- if (length(alt) > 0) alt[1] else f
         }
@@ -2506,7 +2505,8 @@ annotations_details_server <- function(id, rv) {
             session$userData$dir_out,
             rv$updating$ID,
             "annotate",
-            paste0(rv$updating$ID, "_coverageStats_", rv$annotations$path[selected()], ".csv")
+            paste0(rv$updating$ID, "_coverageStats_", rv$annotations$path[selected()],
+                 "_", rv$annotations$scaffold[selected()], ".csv")
           ),
           quote = "none"
         )
@@ -2554,7 +2554,8 @@ annotations_details_server <- function(id, rv) {
           session$userData$dir_out,
           rv$updating$ID,
           "annotate",
-          paste0(rv$updating$ID, "_assembly_", rv$annotations$path[selected()], ".fasta")
+          paste0(rv$updating$ID, "_assembly_", rv$annotations$path[selected()],
+                 "_", rv$annotations$scaffold[selected()], ".fasta")
         )
       )
 

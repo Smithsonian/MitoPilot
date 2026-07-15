@@ -2,10 +2,9 @@ import java.util.Base64
 include {validate} from './validate.nf'
 include {write_curated_result} from './validate.nf'
 
-// VALIDATE runs per (ID, path, scaffold): each retained scaffold is validated,
-// warned, and summarized on its own so gene-count/duplicate/missing logic never
-// pools separate genomes. CURATE still emits per (ID, path); its per-path files
-// are fanned across the path's scaffold units with combine(by:[0,1]).
+// VALIDATE runs per (ID, path, scaffold): each unit is validated, warned, and
+// summarized on its own. CURATE now emits per (ID, path, scaffold) too, so its
+// files join the validate query directly by (id, path, scaffold).
 //
 // userAsmb projects are the exception: a user-supplied assembly is one genome, so
 // all its contigs are validated together as a single unit (scaffold literal 1,
@@ -35,7 +34,7 @@ workflow VALIDATE {
     main:
 
         channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .combine(input, by: [0, 1])
+            .join(input, by: [0, 1, 2])
             .map { it ->
                 def jsonParams = it[7].toString()
                 def encodedParams = Base64.encoder.encodeToString(jsonParams.bytes)
@@ -65,7 +64,7 @@ workflow VALIDATE {
         // transaction. File paths are passed as values (read directly in the
         // driver) to avoid native-exec staging.
         validate_out
-            .combine(input, by: [0, 1])
+            .join(input, by: [0, 1, 2])
             .map { it ->
                 tuple(
                     it[0],                 // ID

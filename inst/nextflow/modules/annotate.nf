@@ -16,18 +16,25 @@ process annotate {
 
     errorStrategy 'ignore'
 
-    tag "${id}"
+    tag "${id}.${path}.${scaffold}"
 
     input:
-    tuple val(id), val(path), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_db_clean), path(mitofinder_db)
+    tuple val(id), val(path), val(scaffold), path(assembly), path(coverage), val(opts), path(ref_dir_full), val(ref_db_clean), path(mitofinder_db)
 
     output:
-    tuple val(id), val(path), path("${id}/annotate/${id}_annotations_*.csv"), path("${id}/annotate/${id}_assembly_*.fasta"), path("${id}/annotate/${id}_coverageStats_*.csv"), path("${id}/annotate/NF_work_dir_annotate.txt")
+    tuple val(id), val(path), val(scaffold), path("${id}/annotate/${id}_annotations_*.csv"), path("${id}/annotate/${id}_assembly_*.fasta"), path("${id}/annotate/${id}_coverageStats_*.csv"), path("${id}/annotate/NF_work_dir_annotate.txt")
 
     shell:
     dir = "${id}/annotate/"
+    // Per-unit FASTA name so annotate() derives per-scaffold output filenames
+    // (ID_annotations_<path>_<scaffold>.csv, ...). ignore_scaffolds drops every
+    // other scaffold of the path, so only this unit's scaffold is annotated.
+    unit_assembly = "${id}_assembly_${path}_${scaffold}.fasta"
     '''
     mkdir -p !{dir}
+
+    # Name the assembly per unit; annotate() isolates this scaffold via ignore_scaffolds.
+    cp !{assembly} !{unit_assembly}
 
     # Check if ref database is gzip-compressed file
     MIME_TYPE=$(file --mime-type -b "!{opts.ref_db}")
@@ -55,7 +62,7 @@ process annotate {
     fi
 
     Rscript -e "MitoPilot::annotate( \
-        assembly_fn = '!{assembly}', \
+        assembly_fn = '!{unit_assembly}', \
         coverage_fn = '!{coverage}', \
         cpus = !{task.cpus}, \
         genetic_code = '!{opts.genetic_code}', \
