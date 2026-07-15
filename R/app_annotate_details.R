@@ -1053,6 +1053,45 @@ annotations_details_server <- function(id, rv) {
     # Gene-block coords (alignment-space %) stashed by the synteny image render,
     # consumed by the sticky-label overlay (output$synteny_labels).
     synteny_overlay <- reactiveVal(NULL)
+    # Overview canvas width, shared by the UI container, the image render and the
+    # click->column mapping (they must agree or labels and clicks misalign).
+    # With an alignment the x-axis spans alignment columns, and the aligner pads
+    # the window out to the full reference, so a short scaffold still needs a
+    # reference-width canvas: sizing by the scaffold squeezes every reference gene
+    # label into a few hundred px (a 928 bp scaffold vs a 21 kb reference is ~23x).
+    synteny_plot_w <- reactive({
+      aln <- rv$blast_ref_aln
+      n <- if (!is.null(aln) && nrow(aln) > 0 && isTRUE(nzchar(aln$aligned_sample[1]))) {
+        nchar(aln$aligned_sample[1])
+      } else {
+        fig_ctx()$length %||% 800L
+      }
+      max(as.integer(n), 800L)
+    })
+    # Sample position (original coords) -> canvas px on the overview. The x-axis is
+    # alignment-column space whenever an alignment is shown, so a plain
+    # pos/sample_len mapping lands in the wrong place (and ignores strand); mirror
+    # the projection the plot itself uses.
+    synteny_proj <- reactive({
+      w   <- synteny_plot_w()
+      aln <- rv$blast_ref_aln
+      if (is.null(aln) || nrow(aln) == 0 || !isTRUE(nzchar(aln$aligned_sample[1]))) {
+        sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
+        sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
+        return(function(pos) as.numeric(pos) / sample_len * w)
+      }
+      s_chars  <- strsplit(aln$aligned_sample[1], "")[[1]]
+      aln_len  <- length(s_chars)
+      s_nongap <- which(s_chars != "-")
+      n_s      <- length(s_nongap)
+      strand   <- aln$strand[1] %||% "+"
+      function(pos) {
+        idx <- as.integer(pos)
+        if (identical(strand, "-")) idx <- n_s - idx + 1L
+        idx <- pmin(pmax(idx, 1L), n_s)
+        s_nongap[idx] / aln_len * w
+      }
+    })
     output$synteny_ui <- renderUI({
       ctx <- req(fig_ctx())
       # Need at least one candidate BLAST reference for this sample. The picker is
@@ -1064,7 +1103,7 @@ annotations_details_server <- function(id, rv) {
       req(!is.null(active_acc), !is.na(active_acc), nzchar(active_acc))
 
       has_ref    <- !is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0
-      w          <- max(ctx$length %||% 800L, 800L)
+      w          <- synteny_plot_w()
       sample_lbl <- ctx$ID
       cand_row   <- cand[cand$accession == active_acc, ]
       ref_lbl    <- if (nrow(cand_row) > 0 && !is.na(cand_row$species[1]) && nzchar(cand_row$species[1])) {
@@ -1192,8 +1231,13 @@ annotations_details_server <- function(id, rv) {
         },
         if (has_aln) {
           div(
-            style = "display: flex; margin: 0; padding: 0; line-height: 1;",
-            div(style = "flex-shrink: 0; width: 160px;"),
+            style = "display: flex; align-items: center; margin: 0; padding: 0; line-height: 1;",
+            # The zoom control lives here, with the plot it drives. It must not sit
+            # in the annotation action-button group: that group is hidden until a
+            # gene row is selected, which suspends this output and leaves the
+            # checkbox out of the DOM, so click-to-zoom could never open it.
+            div(style = "flex-shrink: 0; width: 160px;",
+                uiOutput(ns("synteny_zoom_ctrl"))),
             div(style = "flex: 1; text-align: center; font-size: 11px; color: #888; margin: 0; padding: 0;",
                 "click to zoom")
           )
@@ -1247,7 +1291,7 @@ annotations_details_server <- function(id, rv) {
         ))),
         shinyWidgets::prettyCheckbox(
           ns("synteny_zoom"),
-          label = "Zoom to selected gene",
+          label = "Zoom",
           status = "primary",
           inline = TRUE
         )
@@ -1258,7 +1302,7 @@ annotations_details_server <- function(id, rv) {
       req(rv$blast_ref, rv$annotations, rv$coverage, fig_ctx())
       req(nrow(rv$blast_ref) > 0)
 
-      img_w <- max(fig_ctx()$length %||% 800L, 800L)
+      img_w <- synteny_plot_w()
       ref_length   <- rv$blast_ref$ref_length[1]
       sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
       sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
@@ -1611,21 +1655,34 @@ annotations_details_server <- function(id, rv) {
       aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
       aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
       aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
+      # On the reverse strand aligned_sample is the scaffold's reverse-complement,
+      # so a sample position P (original coords) is the (n_s - P + 1)-th non-gap
+      # base and gene orientation is flipped (mirrors the overview plot).
+      aln_strand <- rv$blast_ref_aln$strand[1] %||% "+"
       s_chars <- strsplit(aligned_sample, "")[[1]]
       r_chars <- strsplit(aligned_ref,    "")[[1]]
       aln_len <- length(s_chars)
       s_nongap <- which(s_chars != "-")
       r_nongap <- which(r_chars != "-")
+      n_s <- length(s_nongap)
+      # Sample original position -> alignment column (RC order on reverse strand)
+      s_pos_to_col <- function(pos) {
+        idx <- as.integer(pos)
+        if (identical(aln_strand, "-")) idx <- n_s - idx + 1L
+        idx <- pmin(pmax(idx, 1L), n_s)
+        s_nongap[idx]
+      }
 
       win <- zoom_window_rv()
-      anchor_bp <- if (!is.null(click_col)) {
-        # Sample bp position at the clicked alignment column
-        as.integer(cumsum(s_chars != "-")[click_col])
+      # Anchor alignment column: the clicked column, or the selected gene's start
+      # column (strand-aware). Back off ~20 non-gap bases upstream (aln order).
+      anchor_col <- if (!is.null(click_col)) {
+        as.integer(click_col)
       } else {
-        as.integer(rv$annotations$pos1[sel_idx])
+        s_pos_to_col(rv$annotations$pos1[sel_idx])
       }
-      # Window starts 20 bp upstream of anchor (clamped to sequence bounds)
-      start_idx <- pmin(pmax(anchor_bp - 20L, 1L), length(s_nongap))
+      anchor_ng <- as.integer(cumsum(s_chars != "-")[anchor_col])
+      start_idx <- pmin(pmax(anchor_ng - 20L, 1L), n_s)
       win_start <- max(1L, s_nongap[start_idx])
       win_end   <- min(aln_len, win_start + win - 1L)
       win_start <- max(1L, win_end - win + 1L)
@@ -1683,17 +1740,21 @@ annotations_details_server <- function(id, rv) {
       to_local <- function(aln_col) aln_col - win_start + 1L
 
       # Sample genes overlapping the window - project pos1/pos2 to alignment cols
+      # (strand-aware). On the reverse strand pos1 maps above pos2 in alignment
+      # order, so take min/max for the block and flip the arrow direction.
       sg <- rv$annotations |> dplyr::filter(pos1 > 0)
-      sg_aln1 <- s_nongap[pmin(pmax(as.integer(sg$pos1), 1L), length(s_nongap))]
-      sg_aln2 <- s_nongap[pmin(pmax(as.integer(sg$pos2), 1L), length(s_nongap))]
-      sg_in <- sg_aln2 >= win_start & sg_aln1 <= win_end
+      sg_c1 <- s_pos_to_col(sg$pos1)
+      sg_c2 <- s_pos_to_col(sg$pos2)
+      sg_lo <- pmin(sg_c1, sg_c2)
+      sg_hi <- pmax(sg_c1, sg_c2)
+      sg_in <- sg_hi >= win_start & sg_lo <= win_end
       sample_gene_df <- if (any(sg_in)) {
         data.frame(
-          xmin = to_local(pmax(sg_aln1[sg_in], win_start)) - 0.5,
-          xmax = to_local(pmin(sg_aln2[sg_in], win_end)) + 0.5,
+          xmin = to_local(pmax(sg_lo[sg_in], win_start)) - 0.5,
+          xmax = to_local(pmin(sg_hi[sg_in], win_end)) + 0.5,
           gene = sg$gene[sg_in],
           fill = type_color(sg$type[sg_in]),
-          forward = sg$direction[sg_in] == "+",
+          forward = if (identical(aln_strand, "-")) sg$direction[sg_in] != "+" else sg$direction[sg_in] == "+",
           stringsAsFactors = FALSE
         )
       } else NULL
@@ -1824,7 +1885,7 @@ annotations_details_server <- function(id, rv) {
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1]))
       if (!has_aln) return()
       aln_len   <- nchar(rv$blast_ref_aln$aligned_sample[1])
-      plot_w_px <- max(rv$updating$length %||% 800L, 800L)
+      plot_w_px <- synteny_plot_w()
       px <- if (!is.null(ev$coords_css$x)) {
         ev$coords_css$x
       } else {
@@ -1850,14 +1911,29 @@ annotations_details_server <- function(id, rv) {
         "hScroll", list(id = ns("coverageDiv"), px = as.numeric(rv$annotations$pos1[selected()]))
       )
       if (!is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0 && !is.null(rv$coverage)) {
-        sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
-        sample_len <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
-        w <- max(rv$updating$length %||% 800L, 800L)
-        scroll_px <- as.numeric(rv$annotations$pos1[selected()]) / sample_len * w
+        scroll_px <- synteny_proj()(rv$annotations$pos1[selected()])
         session$sendCustomMessage(
           "hScroll", list(id = ns("syntenyScrollDiv"), px = scroll_px)
         )
       }
+    })
+
+    # Scroll the overview to the scaffold's aligned window. On a reference-width
+    # canvas a short scaffold occupies a small slice (a 928 bp scaffold is ~4% of a
+    # 21 kb reference) that would otherwise sit off-screen. onFlushed defers the
+    # scroll until the plot container exists.
+    observeEvent(rv$blast_ref_aln, {
+      aln <- rv$blast_ref_aln
+      req(!is.null(aln), nrow(aln) > 0, isTRUE(nzchar(aln$aligned_sample[1])))
+      s_chars <- strsplit(aln$aligned_sample[1], "")[[1]]
+      nz <- which(s_chars != "-")
+      req(length(nz) > 0)
+      px <- max(0, (nz[1] - 1L) / length(s_chars) * synteny_plot_w() - 50)
+      session$onFlushed(function() {
+        session$sendCustomMessage(
+          "hScroll", list(id = ns("syntenyScrollDiv"), px = px)
+        )
+      }, once = TRUE)
     })
 
     # MSA ----
@@ -4534,8 +4610,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                 id = ns("assign_gene_btn"),
                 actionButton(ns("assign_gene"), "Assign gene name")
               )
-            ),
-            uiOutput(ns("synteny_zoom_ctrl"))
+            )
           )
         ),
         shinyjs::hidden(

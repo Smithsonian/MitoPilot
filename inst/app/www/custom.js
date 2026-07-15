@@ -3,7 +3,7 @@ $( document ).ready(function(){
   Shiny.addCustomMessageHandler('hScroll', function(params) {
     // console.log(params.id)
     var elmnt = document.getElementById(params.id);
-    elmnt.scrollLeft = params.px;
+    if (elmnt) elmnt.scrollLeft = params.px;
   });
 });
 
