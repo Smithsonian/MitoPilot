@@ -227,8 +227,8 @@ pipeline_server_userAsmb <- function(id) {
     start_nf_process <- function() {
       prog_header(NULL)
       prog_executor(NULL)
-      prog_process(list())
-      prog_frame(list())
+      prog_pos(0L)
+      prog_board(list())
       prog_footer(NULL)
       shinyjs::hide("start_button_ui") # Hide the container with the start buttons
       shinyjs::show("stop")
@@ -399,63 +399,64 @@ pipeline_server_userAsmb <- function(id) {
     # Monitor progress ----
     prog_header <- reactiveVal()
     prog_executor <- reactiveVal()
-    prog_process <- reactiveVal(list())   # last complete board (what we render)
-    prog_frame <- reactiveVal(list())     # board currently being reprinted
+    # Position-keyed board (identity = process ordinal within a redraw, reset at
+    # each `executor` line), immune to Nextflow's unpredictable name truncation.
+    # See app_run_pipline.R for the full rationale.
+    prog_pos <- reactiveVal(0L)
+    prog_board <- reactiveVal(list())
     prog_footer <- reactiveVal()
-    # Reduce a Nextflow board token to a stable key: the process simple name.
-    # When a long task tag truncates the name away entirely, fall back to the raw
-    # token so distinct processes stay distinct within a frame.
-    process_key <- function(token) {
-      k <- sub("^.*:", "", token)                      # drop path prefix up to last ':'
-      stripped <- sub("^.*(\u2026|\\.\\.\\.)", "", k)  # drop leading ellipsis truncation
-      frag <- if (nchar(stripped) >= 3) stripped else token
-      canonical_process_key(frag)
-    }
-    progress_update <- function(process_out, prog_header, prog_executor, prog_process, prog_frame, prog_footer) {
-      remaining <- rep(T, length(process_out))
+    progress_update <- function(process_out, prog_header, prog_executor, prog_pos, prog_board, prog_footer) {
       process_out <- cli::ansi_strip(process_out) # clean up ansi encoded output
-      executor_lines <- stringr::str_detect(process_out, "^executor")
+      n <- length(process_out)
+      is_exec <- stringr::str_detect(process_out, "^executor")
       keys <- stringr::str_match(
         process_out,
         "^(?<prefix>\\[.+?\\]) (?<key>WF\\S*) +(?<suffix>.*)"
       )
-      progress_lines <- !is.na(keys[,1])
+      is_prog <- !is.na(keys[,1])
+      routed <- rep(FALSE, n)
       # Header = the Nextflow banner before the first executor/progress line;
       # captured once, before any executor line has been seen.
       if (is.null(prog_executor)) {
-        header_stop <- which(executor_lines|progress_lines)
-        header_stop <- ifelse(length(header_stop)==0, length(process_out), min(header_stop) - 1)
-        if (header_stop >= 1) {
+        stop_at <- which(is_exec | is_prog)
+        hstop <- if (length(stop_at)) min(stop_at) - 1L else n
+        if (hstop >= 1) {
           prog_header <- paste(
             na.omit(c(
               prog_header,
-              collapse_empty_lines(process_out[seq_len(header_stop)])
+              collapse_empty_lines(process_out[seq_len(hstop)])
             )),
             collapse = "\n"
           )
-          remaining[seq_len(header_stop)] <- F
+          routed[seq_len(hstop)] <- TRUE
         }
       }
-      if(any(executor_lines)){
-        prog_executor <- process_out[max(which(executor_lines))]
-        remaining[executor_lines] <- F
+      # Single ordered pass: `executor` line resets position; each progress line
+      # advances position and upserts the board at that stable position.
+      for (i in seq_len(n)) {
+        if (routed[i]) next
+        if (is_exec[i]) {
+          prog_executor <- process_out[i]
+          prog_pos <- 0L
+          routed[i] <- TRUE
+        } else if (is_prog[i]) {
+          prog_pos <- prog_pos + 1L
+          nm <- resolve_process_name(keys[i, "key"])
+          prev <- if (prog_pos <= length(prog_board)) prog_board[[prog_pos]] else NULL
+          if (is.na(nm) && !is.null(prev)) nm <- prev$name   # sticky name
+          prog_board[[prog_pos]] <- list(line = keys[i, 1], name = nm)
+          routed[i] <- TRUE
+        }
       }
-      # process_key is now a stable canonical name, so keep one row per process
-      # and update it in place to its latest line (no frame-commit lag, no stale
-      # duplicate rows). See app_run_pipline.R.
-      for (i in which(progress_lines)) {
-        prog_process[[process_key(keys[i, 'key'])]] <- keys[i, 1]   # full line
-      }
-      remaining[progress_lines] <- F
-      remaining <- process_out[remaining] |> collapse_empty_lines()
-      if(any(nchar(remaining)>0)){
-        prog_footer <- paste(na.omit(c(prog_footer, remaining)),collapse = "\n")
+      rest <- collapse_empty_lines(process_out[!routed])
+      if(any(nchar(rest)>0)){
+        prog_footer <- paste(na.omit(c(prog_footer, rest)),collapse = "\n")
       }
       list(
         prog_header = prog_header,
         prog_executor = prog_executor,
-        prog_process = prog_process,
-        prog_frame = prog_process,
+        prog_pos = prog_pos,
+        prog_board = prog_board,
         prog_footer = prog_footer
       )
     }
@@ -471,31 +472,24 @@ pipeline_server_userAsmb <- function(id) {
       keep <- !is_empty | (is_empty & c(TRUE, !is_empty[-length(is_empty)]))
       x[keep]
     }
+    apply_progress <- function(new_output) {
+      if (length(new_output) == 0) return(invisible())
+      update <- progress_update(new_output, prog_header(), prog_executor(), prog_pos(), prog_board(), prog_footer())
+      prog_header(update$prog_header)
+      prog_executor(update$prog_executor)
+      prog_pos(update$prog_pos)
+      prog_board(update$prog_board)
+      prog_footer(update$prog_footer)
+    }
     observe({
       req(process())
       invalidateLater(100)
       p <- process()
       if (p$is_alive()) {
-        new_output <- p$read_output_lines()
-        if (length(new_output) > 0) {
-          update <- progress_update(new_output, prog_header(), prog_executor(), prog_process(), prog_frame(), prog_footer())
-          prog_header(update$prog_header)
-          prog_executor(update$prog_executor)
-          prog_process(update$prog_process)
-          prog_frame(update$prog_frame)
-          prog_footer(update$prog_footer)
-        }
+        apply_progress(p$read_output_lines())
       } else {
-        final_output <- p$read_output_lines()
-        if (length(final_output) > 0) {
-          update <- progress_update(final_output, prog_header(), prog_executor(), prog_process(), prog_frame(), prog_footer())
-          prog_header(update$prog_header)
-          prog_executor(update$prog_executor)
-          prog_frame(update$prog_frame)
-          prog_footer(update$prog_footer)
-          # Run finished: show the last (uncommitted) board as the final board.
-          prog_process(if (length(update$prog_frame)) update$prog_frame else update$prog_process)
-        }
+        # Board is upserted live, so the final read leaves it already correct.
+        apply_progress(p$read_output_lines())
         process(NULL)
         shinyjs::hide("stop")
         shinyjs::show("start")
@@ -512,11 +506,7 @@ pipeline_server_userAsmb <- function(id) {
       req(prog_executor())
     })
     output$progress_process <- renderText({
-      # Render the last complete board; fall back to the board being built (the
-      # very first frame, before any redraw has committed a complete one).
-      board <- prog_process()
-      if (length(board) == 0) board <- prog_frame()
-      paste(order_progress_board(board), collapse = "\n")
+      paste(render_progress_board(prog_board()), collapse = "\n")
     })
     output$progress_footer <- renderText({
       req(prog_footer())
