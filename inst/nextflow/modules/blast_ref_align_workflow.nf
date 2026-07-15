@@ -47,7 +47,7 @@ params.sqlBackfill =
         'CASE WHEN s.topology = \'circular\' THEN ' +
             'COALESCE((SELECT MIN(r.pos1) - 1 FROM blast_ref_annotations r ' +
                       'WHERE r.accession = cd.accession AND r.gene = d.start_gene), 0) ' +
-        'ELSE 0 END ' +
+        'ELSE 0 END, ' +
     'a.path ' +
     'FROM assemble b ' +
     'JOIN (SELECT ID, accession, MIN(rank) AS rank FROM blast_ref_candidates ' +
