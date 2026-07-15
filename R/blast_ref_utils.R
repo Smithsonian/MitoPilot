@@ -1095,7 +1095,9 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
     aligned_sample = character(),
     aligned_ref    = character(),
     rotation       = integer(),
-    ref_length     = integer()
+    ref_length     = integer(),
+    ref_start      = integer(),
+    strand         = character()
   )
 
   # Quick guard: first character must be a valid IUPAC nucleotide.
@@ -1116,7 +1118,7 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
     ref_dna    <- Biostrings::DNAString(clean(ref_seq))
     ref_len    <- length(ref_dna)
 
-    # Rotate the reference so anchor gene aligns with sample start
+    # Rotate the reference so anchor gene aligns with sample start (circular refs).
     if (rotation > 0L && rotation < ref_len) {
       ref_dna <- Biostrings::xscat(
         Biostrings::subseq(ref_dna, rotation + 1L, ref_len),
@@ -1127,23 +1129,51 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
     subMx <- pwalign::nucleotideSubstitutionMatrix(
       match = 1, mismatch = -1, baseOnly = TRUE
     )
-    aln <- pwalign::pairwiseAlignment(
-      pattern            = sample_dna,
-      subject            = ref_dna,
-      substitutionMatrix = subMx,
-      gapOpening         = 10,
-      gapExtension       = 4,
-      type               = "global"
-    )
+    # Fitting alignment: pattern (sample) global, subject (reference) LOCAL, so a
+    # short scaffold maps to just its homologous WINDOW of the reference instead of
+    # being force-fit across the whole genome (which would be mostly gaps and
+    # end-biased). Try both strands and keep the higher-scoring orientation - a
+    # global alignment is reverse-complement-blind and silently misses a
+    # reverse-strand fragment. For a near-complete scaffold the window spans (near)
+    # the whole reference, so this degenerates to the old global behaviour.
+    fit <- function(pat) {
+      pwalign::pairwiseAlignment(
+        pattern = pat, subject = ref_dna, substitutionMatrix = subMx,
+        gapOpening = 10, gapExtension = 4, type = "global-local"
+      )
+    }
+    aln_fwd <- fit(sample_dna)
+    aln_rev <- fit(Biostrings::reverseComplement(sample_dna))
+    if (pwalign::score(aln_rev) > pwalign::score(aln_fwd)) {
+      aln <- aln_rev; strand <- "-"
+    } else {
+      aln <- aln_fwd; strand <- "+"
+    }
 
-    aligned_sample <- as.character(pwalign::alignedPattern(aln))
-    aligned_ref    <- as.character(pwalign::alignedSubject(aln))
+    # Reference window that the scaffold maps to (1-based, rotated-ref coords).
+    # Qualify start/end: inside the package namespace the bare generics resolve to
+    # stats::start/end (length-2), not the Biostrings AlignedXStringSet methods.
+    ws <- BiocGenerics::start(pwalign::subject(aln))
+    we <- BiocGenerics::end(pwalign::subject(aln))
+    aln_samp_win <- as.character(pwalign::alignedPattern(aln))
+    aln_ref_win  <- as.character(pwalign::alignedSubject(aln))
+
+    # Pad the window back to a full-length alignment so aligned_ref (ungapped)
+    # still equals the whole reference: the synteny plot projects reference genes
+    # by counting non-gap ref bases, so it needs the full reference present. The
+    # scaffold's own bases occupy only [ws, we]; everything else is a sample gap.
+    lead_ref  <- if (ws > 1L) as.character(Biostrings::subseq(ref_dna, 1L, ws - 1L)) else ""
+    trail_ref <- if (we < ref_len) as.character(Biostrings::subseq(ref_dna, we + 1L, ref_len)) else ""
+    aligned_ref    <- paste0(lead_ref, aln_ref_win, trail_ref)
+    aligned_sample <- paste0(strrep("-", ws - 1L), aln_samp_win, strrep("-", ref_len - we))
 
     result <- data.frame(
       aligned_sample = aligned_sample,
       aligned_ref    = aligned_ref,
       rotation       = rotation,
       ref_length     = ref_len,
+      ref_start      = ws - 1L,   # 0-based window start in rotated-ref coords
+      strand         = strand,
       stringsAsFactors = FALSE
     )
     write.csv(result, output_file, row.names = FALSE)

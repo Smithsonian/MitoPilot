@@ -240,7 +240,10 @@ annotations_details_server <- function(id, rv) {
       )
       rv$blast_ref_aln <- tryCatch(
         dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
-          dplyr::filter(ID == !!rv$updating$ID, accession == !!acc) |>
+          dplyr::filter(ID == !!rv$updating$ID,
+                        path == !!rv$updating$path,
+                        scaffold == !!rv$updating$scaffold,
+                        accession == !!acc) |>
           dplyr::collect(),
         error = function(e) NULL
       )
@@ -880,6 +883,9 @@ annotations_details_server <- function(id, rv) {
       req(rv$coverage, fig_ctx())
       # Split features that wrap the circular origin (pos1 > pos2) into two arrows.
       cov_seq_len <- max(rv$coverage$Position)
+      # 1 kb axis ticks; empty for short scaffolds (seq(1000, <1000, by=1000)
+      # errors "wrong sign in 'by'").
+      xbreaks <- if (cov_seq_len >= 1000) seq(1000, cov_seq_len, by = 1000) else numeric(0)
       genes_df <- rv$annotations |>
         dplyr::filter(pos1 > 0) |>
         dplyr::mutate(
@@ -903,8 +909,8 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = seq(1000, max(rv$coverage$Position), by = 1000),
-          labels = format(seq(1000, max(rv$coverage$Position), by = 1000), big.mark = ",")
+          breaks = xbreaks,
+          labels = format(xbreaks, big.mark = ",")
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
@@ -922,9 +928,11 @@ annotations_details_server <- function(id, rv) {
         )
 
       y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
-      cov_max  <- max(rv$coverage$Position)
-      minor_tick_x <- setdiff(seq(50, cov_max, by = 50), seq(1000, cov_max, by = 1000))
-      major_tick_x <- seq(1000, cov_max, by = 1000)
+      cov_max  <- cov_seq_len
+      minor_tick_x <- setdiff(
+        if (cov_max >= 50) seq(50, cov_max, by = 50) else numeric(0), xbreaks
+      )
+      major_tick_x <- xbreaks
       depth_rng    <- range(rv$coverage$Depth)
       y_bottom     <- depth_rng[1]
       y_tick_minor <- depth_rng[1] + diff(depth_rng) * 0.04
@@ -1288,6 +1296,10 @@ annotations_details_server <- function(id, rv) {
         aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
         aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
         aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
+        # When the scaffold aligned on the reverse strand, aligned_sample is the
+        # scaffold's reverse-complement, so a sample position P (original coords)
+        # is the (n - P + 1)-th non-gap base and gene orientation is flipped.
+        aln_strand     <- rv$blast_ref_aln$strand[1] %||% "+"
         s_chars <- strsplit(aligned_sample, "")[[1]]
         r_chars <- strsplit(aligned_ref,    "")[[1]]
         aln_len <- length(s_chars)
@@ -1295,10 +1307,13 @@ annotations_details_server <- function(id, rv) {
         # Non-gap index: s_nongap[i] = alignment column for sample position i
         s_nongap <- which(s_chars != "-")
         r_nongap <- which(r_chars != "-")
+        n_s <- length(s_nongap)
 
         # Project sample position (original coords) -> 0-100 in alignment space
         s_to_pct <- function(pos) {
-          idx <- pmin(pmax(as.integer(pos), 1L), length(s_nongap))
+          idx <- as.integer(pos)
+          if (identical(aln_strand, "-")) idx <- n_s - idx + 1L
+          idx <- pmin(pmax(idx, 1L), n_s)
           s_nongap[idx] / aln_len * 100
         }
         # Project ref position (original coords) -> rotate -> 0-100 in alignment space
@@ -1310,12 +1325,24 @@ annotations_details_server <- function(id, rv) {
 
         # Gene data frames in alignment coordinates. Features that wrap the
         # circular origin (or straddle the rotation point in the reference) map
-        # to xmin > xmax; split them into two arcs at the 0/100 boundary.
+        # to xmin > xmax; split them into two arcs at the 0/100 boundary. On the
+        # reverse strand, s_to_pct reverses coordinate order, so take min/max and
+        # flip arrow direction (a '+' scaffold gene points '-' vs the reference).
         sample_df <- sample_genes |>
-          dplyr::mutate(
-            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
-            xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
-          ) |>
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
+        if (identical(aln_strand, "-")) {
+          sample_df <- sample_df |>
+            dplyr::mutate(
+              .x1 = s_to_pct(pos1), .x2 = s_to_pct(pos2),
+              xmin = pmin(.x1, .x2), xmax = pmax(.x1, .x2),
+              direction = ifelse(direction == "+", "-", "+")
+            ) |>
+            dplyr::select(-.x1, -.x2)
+        } else {
+          sample_df <- sample_df |>
+            dplyr::mutate(xmin = s_to_pct(pos1), xmax = s_to_pct(pos2))
+        }
+        sample_df <- sample_df |>
           split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_df <- rv$blast_ref |>
           dplyr::mutate(

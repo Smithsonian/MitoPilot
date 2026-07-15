@@ -192,6 +192,10 @@ backwards_compatibility <- function(
         "accession" %in% DBI::dbListFields(con, "blast_ref_alignment"),
         error = function(e) FALSE
       )) &&
+      isTRUE(tryCatch(
+        "scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"),
+        error = function(e) FALSE
+      )) &&
       export_default_current)
   {
     message("nothing to update")
@@ -1256,13 +1260,16 @@ backwards_compatibility <- function(
       "CREATE TABLE blast_ref_alignment (
         ID TEXT NOT NULL,
         path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
         accession TEXT NOT NULL,
         aligned_sample TEXT NOT NULL,
         aligned_ref TEXT NOT NULL,
         rotation INTEGER NOT NULL DEFAULT 0,
         ref_length INTEGER NOT NULL,
+        ref_start INTEGER NOT NULL DEFAULT 0,
+        strand TEXT NOT NULL DEFAULT '+',
         time_stamp INTEGER,
-        PRIMARY KEY (ID, path, accession)
+        PRIMARY KEY (ID, path, scaffold, accession)
       );"
     )
   } else {
@@ -1319,6 +1326,34 @@ backwards_compatibility <- function(
       )
       DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
       DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
+    }
+    # Add scaffold to the key + ref_start/strand columns:
+    # (ID, path, accession) -> (ID, path, scaffold, accession). Legacy rows are
+    # per-path whole-genome alignments computed the OLD way (global, no scaffold,
+    # a representative sequence) and cannot be reliably attributed to one scaffold,
+    # so drop them; blast_ref_align's backfill recomputes one correct per-scaffold
+    # alignment on the next WF2 run (a cheap LOCAL pairwise, no remote BLAST).
+    # Re-read fields: the branches above may have rebuilt the table in this pass.
+    bra_fields <- DBI::dbListFields(con, "blast_ref_alignment")
+    if (!("scaffold" %in% bra_fields)) {
+      message("re-keyed blast_ref_alignment table by (ID, path, scaffold, accession); cleared legacy alignments for per-scaffold recompute")
+      DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+      DBI::dbExecute(con,
+        "CREATE TABLE blast_ref_alignment (
+          ID TEXT NOT NULL,
+          path INTEGER NOT NULL DEFAULT 1,
+          scaffold INTEGER NOT NULL DEFAULT 1,
+          accession TEXT NOT NULL,
+          aligned_sample TEXT NOT NULL,
+          aligned_ref TEXT NOT NULL,
+          rotation INTEGER NOT NULL DEFAULT 0,
+          ref_length INTEGER NOT NULL,
+          ref_start INTEGER NOT NULL DEFAULT 0,
+          strand TEXT NOT NULL DEFAULT '+',
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, path, scaffold, accession)
+        );"
+      )
     }
   }
 

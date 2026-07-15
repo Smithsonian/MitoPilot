@@ -686,13 +686,16 @@ new_db_userAsmb <- function(
     "CREATE TABLE blast_ref_alignment (
       ID TEXT NOT NULL,
       path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
       accession TEXT NOT NULL,
       aligned_sample TEXT NOT NULL,
       aligned_ref TEXT NOT NULL,
       rotation INTEGER NOT NULL DEFAULT 0,
       ref_length INTEGER NOT NULL,
+      ref_start INTEGER NOT NULL DEFAULT 0,
+      strand TEXT NOT NULL DEFAULT '+',
       time_stamp INTEGER,
-      PRIMARY KEY (ID, path, accession)
+      PRIMARY KEY (ID, path, scaffold, accession)
     );"
   )
 
