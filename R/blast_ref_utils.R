@@ -1,3 +1,50 @@
+#' Resolve the reference accession for one assembly unit
+#'
+#' Single source of truth for "which reference is this scaffold compared against",
+#' shared by the synteny view's default and the .tbl/FASTA export note so the two
+#' cannot drift apart. Precedence:
+#' \enumerate{
+#'   \item an explicit "Set as reference genome" override, which is sample-level by
+#'     design (it stashes the original hit in \code{blast_accession_auto}), so it
+#'     applies to every unit of that sample;
+#'   \item otherwise this unit's own rank-1 candidate from \code{blast_ref_candidates},
+#'     i.e. the top of the list the reference picker shows for this scaffold;
+#'   \item otherwise \code{NA} - a scaffold with no BLAST hit has no reference, and
+#'     callers should show/claim nothing rather than borrow a sibling's.
+#' }
+#' Deliberately not \code{assemblies.blast_accession}: that is the raw best-by-pident
+#' hit and can rank below the candidate list's first entry, which made the picker
+#' open on its own rank-3 row.
+#'
+#' @param con database connection
+#' @param id,pth,scf the unit key (ID, path, scaffold)
+#' @param blast_accession,blast_accession_auto sample-level values from `assemble`;
+#'   an override is present when they differ.
+#'
+#' @return single accession string, or `NA_character_`
+#' @noRd
+resolve_unit_blast_ref <- function(con, id, pth, scf,
+                                   blast_accession = NA_character_,
+                                   blast_accession_auto = NA_character_) {
+  a  <- as.character((blast_accession %||% NA)[1])
+  au <- as.character((blast_accession_auto %||% NA)[1])
+  if (!is.na(a) && nzchar(a) && a != "NO HIT" &&
+      !is.na(au) && !identical(a, au)) {
+    return(a)
+  }
+  hit <- tryCatch(
+    dplyr::tbl(con, "blast_ref_candidates") |>
+      dplyr::filter(ID == !!id & path == !!pth & scaffold == !!scf & rank == 1) |>
+      dplyr::pull("accession"),
+    error = function(e) character(0)
+  )
+  if (length(hit) > 0 && !is.na(hit[1]) && nzchar(hit[1]) && hit[1] != "NO HIT") {
+    hit[1]
+  } else {
+    NA_character_
+  }
+}
+
 #' Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST top hit
 #'
 #' Downloads the GFF3 record and, optionally, the FASTA sequence for the given

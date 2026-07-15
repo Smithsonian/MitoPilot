@@ -179,9 +179,7 @@ new_db <- function(
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
-      genetic_code = resolved_genetic_code,
-      export_group = NA_character_,
-      export_time_stamp = NA_integer_
+      genetic_code = resolved_genetic_code
     )
   glue::glue_sql(
     "CREATE TABLE samples (
@@ -743,6 +741,21 @@ new_db <- function(
       strand TEXT NOT NULL DEFAULT '+',
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold, accession)
+    );"
+  )
+
+  # Export state, one row per assembly unit. Deliberately its own table rather than
+  # columns on annotate/assemblies: the pipeline writes those with INSERT OR REPLACE
+  # and an explicit column list, which would null anything it does not name.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE export (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
+      export_group TEXT,
+      export_time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
     );"
   )
 

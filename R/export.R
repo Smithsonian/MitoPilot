@@ -42,11 +42,11 @@ export_files <- function(
     group = NULL,
     IDs = NULL,
     fasta_header = paste(
-      "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
+      "{seqid} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
       "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"
     ),
     fasta_header_gene = paste(
-      "{ID} [organism={Taxon}] [mgcode={genetic_code}]",
+      "{seqid} [organism={Taxon}] [mgcode={genetic_code}]",
       "[location=mitochondrion] {Taxon}"
     ),
     out_dir = NULL,
@@ -62,10 +62,23 @@ export_files <- function(
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(dirname(out_dir), ".sqlite"))
   on.exit(DBI::dbDisconnect(con))
 
+  # Export runs per assembly unit (ID, path, scaffold): a fragmented sample
+  # contributes one GenBank record per non-ignored scaffold. assemblies is the
+  # authoritative unit list (the pipeline purges stale rows there); export_group
+  # lives on the per-unit `export` table.
+  unit_src <- dplyr::tbl(con, "assemblies") |>
+    dplyr::filter(ignore == 0) |>
+    dplyr::select(ID, path, scaffold)
+
   if (length(group) == 1) {
-    IDs <- dplyr::tbl(con, "samples") |>
-      dplyr::filter(export_group == !!group) |>
-      dplyr::pull("ID")
+    units <- unit_src |>
+      dplyr::inner_join(
+        dplyr::tbl(con, "export") |>
+          dplyr::filter(export_group == !!group) |>
+          dplyr::select(ID, path, scaffold),
+        by = c("ID", "path", "scaffold")
+      ) |>
+      dplyr::collect()
     group_pth <- file.path(out_dir, "export", group)
     unlink(group_pth, recursive = TRUE)
     group_gff_pth <- file.path(group_pth, "GFFs")
@@ -77,9 +90,22 @@ export_files <- function(
       group_genes_pth <- file.path(group_pth, "genes")
       dir.create(group_genes_pth, recursive = TRUE, showWarnings = FALSE)
     }
+  } else {
+    units <- unit_src |>
+      dplyr::filter(ID %in% !!IDs) |>
+      dplyr::collect()
   }
 
-  if (length(IDs) == 0) {
+  # SeqID: plain ID unless the sample contributes >1 record to this export.
+  units <- units |>
+    dplyr::arrange(ID, path, scaffold) |>
+    dplyr::group_by(ID) |>
+    dplyr::mutate(n_units = dplyr::n()) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(seqid = export_seqid(ID, path, scaffold, n_units))
+  IDs <- unique(units$ID)
+
+  if (nrow(units) == 0) {
     stop("No samples selected")
   }
 
@@ -88,7 +114,11 @@ export_files <- function(
     group_allgene_fasta  <- file.path(group_pth, "genes", paste0(group, "_PCGs.fasta"))
   }
 
-  purrr::walk(IDs, ~ {
+  purrr::walk(seq_len(nrow(units)), function(.i) {
+    .x        <- units$ID[.i]
+    .path     <- units$path[.i]
+    .scaffold <- units$scaffold[.i]
+    .seqid    <- units$seqid[.i]
 
     export_path <- file.path(
       out_dir,
@@ -96,19 +126,21 @@ export_files <- function(
       "export"
     )
 
-    dir.create(export_path, showWarnings = F)
+    dir.create(export_path, recursive = TRUE, showWarnings = F)
 
     # debugging help
-    message(paste0(.x, ":"))
+    message(paste0(.seqid, ":"))
 
+    # Per unit, not per ID: ignoring a scaffold deletes its annotate row but leaves
+    # its annotations rows, so an ID-only filter pulls in an ignored sibling's genes.
     annotations <- dplyr::tbl(con, "annotations") |>
-      dplyr::filter(ID == !!.x) |>
+      dplyr::filter(ID == !!.x & path == !!.path & scaffold == !!.scaffold) |>
       dplyr::arrange(path, pos1) |>
       dplyr::filter(pos1 > 0) |>
       dplyr::collect()
 
     curation_opts <-  dplyr::tbl(con, "annotate") |>
-      dplyr::filter(ID == !!.x) |>
+      dplyr::filter(ID == !!.x & path == !!.path & scaffold == !!.scaffold) |>
       dplyr::pull("curate_opts")
 
     curate_rules <- dplyr::tbl(con, "curate_opts") |>
@@ -129,48 +161,58 @@ export_files <- function(
     # check for duplicate gene names in annotations and rename
     annotations$gene_uniq <- make.unique(annotations$gene)
 
+    # One row: the annotate join is keyed on the unit, so topology/partial come from
+    # this scaffold rather than an arbitrary sibling. blast_accession/poor_blast_ref
+    # are genuinely sample-level (assemble is PK ID).
     dat <- dplyr::tbl(con, "samples") |>
       dplyr::select(-dplyr::any_of("topology")) |>
       dplyr::filter(ID == !!.x) |>
       dplyr::left_join(
         dplyr::tbl(con, "annotate") |>
-          dplyr::select(ID, topology, path, dplyr::any_of("partial")) |>
-          dplyr::distinct(),
+          dplyr::filter(path == !!.path & scaffold == !!.scaffold) |>
+          dplyr::select(ID, topology, path, scaffold, dplyr::any_of("partial")),
         by = "ID"
       ) |>
       dplyr::left_join(
         dplyr::tbl(con, "assemble") |>
-          dplyr::select(ID, blast_accession, dplyr::any_of("poor_blast_ref")),
+          dplyr::select(ID, blast_accession,
+                        dplyr::any_of(c("blast_accession_auto", "poor_blast_ref"))),
         by = "ID"
       ) |>
       dplyr::collect()
+    # SeqID for glue templates; the FASTA defline and the .tbl >Feature line must
+    # agree exactly or table2asn rejects the submission.
+    dat$seqid <- .seqid
 
     kept <- dplyr::tbl(con, "assemblies") |>
-      dplyr::filter(ID == !!.x & path == !!dat$path & ignore == 0) |>
+      dplyr::filter(ID == !!.x & path == !!.path & scaffold == !!.scaffold) |>
       dplyr::select(scaffold, topology) |>
       dplyr::collect()
     if (nrow(kept) == 0) {
-      warning(.x, ": No scaffolds remain after ignore filter. Skipping.")
-      return()
-    }
-    if (nrow(kept) > 1) {
-      warning(.x, ": Multiple non-ignored scaffolds found. Export not supported for fragmented assemblies. Mark all but one scaffold as ignore to export. Skipping.")
+      warning(.seqid, ": scaffold not found in assemblies. Skipping.")
       return()
     }
     seq <- MitoPilot::get_assembly(
       ID = .x,
-      path = dat$path,
-      scaffold = kept$scaffold,
+      path = .path,
+      scaffold = .scaffold,
       con = con
     )
     # Override fragmented topology with the kept scaffold's per-scaffold topology
     if (isTRUE(dat$topology == "fragmented") && !is.na(kept$topology[1])) {
       dat$topology <- kept$topology[1]
     }
-    # Reference = the sample's blast_accession (the rank-1 top hit unless the user
-    # set a different candidate via "Set as reference genome" in annotate details).
-    # Always a single accession in the note.
-    blast_acc <- dat$blast_accession[1]
+    # Reference for the note, resolved per unit via the same helper the synteny view
+    # defaults to, so the note always names the reference the user was shown.
+    blast_acc <- resolve_unit_blast_ref(
+      con, .x, .path, .scaffold,
+      blast_accession = dat$blast_accession[1],
+      blast_accession_auto = if ("blast_accession_auto" %in% names(dat)) {
+        dat$blast_accession_auto[1]
+      } else {
+        NA_character_
+      }
+    )
     blast_note <- if (!is.null(blast_acc) && !is.na(blast_acc) && nzchar(blast_acc) &&
                       blast_acc != "NO HIT" &&
                       !isTRUE(dat$poor_blast_ref[1] %in% c("poor", "failed"))) {
@@ -220,22 +262,22 @@ export_files <- function(
     }
 
     # Write FASTA
-    fasta_fn <- file.path(export_path, paste0(.x, ".fasta"))
+    fasta_fn <- file.path(export_path, paste0(.seqid, ".fasta"))
     Biostrings::writeXStringSet(seq, filepath = fasta_fn)
 
     # MAKE 4 column tab file
-    tbl_fn <- file.path(export_path, paste0(.x, ".tbl"))
+    tbl_fn <- file.path(export_path, paste0(.seqid, ".tbl"))
     if (file.exists(tbl_fn)) {
       file.remove(tbl_fn)
     }
     if ("GenBankAccession" %in% names(dat) && length(dat$GenBankAccession) > 0 && nchar(dat$GenBankAccession) > 4) {
       cat(paste(">Feature", paste0("gb|", dat$GenBankAccession, "|")), file = tbl_fn, sep = "\n")
     } else {
-      cat(paste(">Feature", .x), file = tbl_fn, sep = "\n")
+      cat(paste(">Feature", .seqid), file = tbl_fn, sep = "\n")
     }
 
     # MAKE GFF
-    gff_fn <- file.path(export_path, paste0(.x, ".gff"))
+    gff_fn <- file.path(export_path, paste0(.seqid, ".gff"))
     if (file.exists(gff_fn)) {
       file.remove(gff_fn)
     }
@@ -507,7 +549,7 @@ export_files <- function(
             names(gene) <- stringr::str_glue_data(dat, head)
 
             # write FASTA
-            gene_fn <- file.path(export_path, paste0(.x, "_", cur$gene, ".fasta"))
+            gene_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene, ".fasta"))
             Biostrings::writeXStringSet(gene, filepath = gene_fn)
 
             # fix the start and stop position
@@ -524,11 +566,11 @@ export_files <- function(
             }
 
             # write gene feature table
-            gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene, ".tbl"))
+            gene_tbl_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene, ".tbl"))
             if (file.exists(gene_tbl_fn)) {
               file.remove(gene_tbl_fn)
             }
-            cat(paste0(">Feature ", .x, "_", cur$gene), file = gene_tbl_fn, sep = "\n")
+            cat(paste0(">Feature ", .seqid, "_", cur$gene), file = gene_tbl_fn, sep = "\n")
             paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste0("\t\t\tgene\t", cur$gene) |>
@@ -692,7 +734,7 @@ export_files <- function(
             }
 
             # write FASTA
-            gene_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".fasta"))
+            gene_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene_uniq, ".fasta"))
             Biostrings::writeXStringSet(gene, filepath = gene_fn)
 
             # fix the start and stop position
@@ -709,11 +751,11 @@ export_files <- function(
             }
 
             # write gene feature table
-            gene_tbl_fn <- file.path(export_path, paste0(.x, "_", cur$gene_uniq, ".tbl"))
+            gene_tbl_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene_uniq, ".tbl"))
             if (file.exists(gene_tbl_fn)) {
               file.remove(gene_tbl_fn)
             }
-            cat(paste0(">Feature ", .x, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
+            cat(paste0(">Feature ", .seqid, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
             paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
               cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             paste0("\t\t\tgene\t", cur$gene_uniq) |>
@@ -889,7 +931,7 @@ export_files <- function(
           }
 
           # write FASTA
-          gene_fn <- file.path(export_path, paste0(.x, "_", rrna_gene_uniq, ".fasta"))
+          gene_fn <- file.path(export_path, paste0(.seqid, "_", rrna_gene_uniq, ".fasta"))
           Biostrings::writeXStringSet(gene, filepath = gene_fn)
 
           # fix the start and stop position; carry the 5'/3' partial markers
@@ -902,11 +944,11 @@ export_files <- function(
           if (isTRUE(as.integer(cur$partial_stop) == 1L)) gene_p2 <- paste0(">", gene_p2)
 
           # write gene feature table
-          gene_tbl_fn <- file.path(export_path, paste0(.x, "_", rrna_gene_uniq, ".tbl"))
+          gene_tbl_fn <- file.path(export_path, paste0(.seqid, "_", rrna_gene_uniq, ".tbl"))
           if (file.exists(gene_tbl_fn)) {
             file.remove(gene_tbl_fn)
           }
-          cat(paste0(">Feature ", .x, "_", rrna_gene_uniq), file = gene_tbl_fn, sep = "\n")
+          cat(paste0(">Feature ", .seqid, "_", rrna_gene_uniq), file = gene_tbl_fn, sep = "\n")
           paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
             cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
           paste0("\t\t\tgene\t", rrna_gene_uniq) |>
@@ -1044,7 +1086,10 @@ export_files <- function(
   # Per-sample summary CSV, dropped into the export directory
   if (isTRUE(summary_csv)) {
     drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts")
-    core <- c("ID", "Taxon", "topology", "completeness", "partial", "length",
+    # seqid/path/scaffold lead: a sample can contribute several records, so the row
+    # identity is the unit, not the ID.
+    core <- c("ID", "seqid", "path", "scaffold",
+              "Taxon", "topology", "completeness", "partial", "length",
               "structure", "PCGCount", "tRNACount", "rRNACount", "ORFCount",
               "missing", "extra", "warnings", "blast_accession", "blast_species",
               "blast_lineage", "export_group")
@@ -1060,19 +1105,21 @@ export_files <- function(
     utils::write.csv(summary_df, summary_fn, row.names = FALSE)
   }
 
-  # Mark the exported samples with the export time so the Annotate tab can flag /
-  # highlight samples that have already been exported (NULL = never exported).
+  # Mark the exported units with the export time so the Annotate tab can flag /
+  # highlight what has already been exported (NULL = never exported).
   if (length(group) == 1) {
     DBI::dbExecute(
       con,
-      "UPDATE samples SET export_time_stamp = ? WHERE export_group = ?",
+      "UPDATE export SET export_time_stamp = ? WHERE export_group = ?",
       params = list(as.integer(Sys.time()), group)
     )
   }
 
   db_path <- file.path(dirname(out_dir), ".sqlite")
 
-  if (length(group) == 1 && length(IDs) > 1 && generateAAalignments) {
+  # Units, not IDs: the AA alignment / outlier review compare records, and one
+  # sample can now contribute several.
+  if (length(group) == 1 && nrow(units) > 1 && generateAAalignments) {
     make_PCG_alignments(
       export_group = group,
       db = db_path,
@@ -1083,7 +1130,7 @@ export_files <- function(
     )
   }
 
-  if (review && length(group) == 1 && length(IDs) > 1) {
+  if (review && length(group) == 1 && nrow(units) > 1) {
     return(invisible(flag_PCG_outliers(
       group = group,
       db = db_path,
@@ -1154,28 +1201,48 @@ make_PCG_alignments <- function(
 #'
 #' @noRd
 get_export_PCG_annotations <- function(con, group) {
-  annotations <- dplyr::tbl(con, "samples") |>
-    dplyr::filter(export_group == !!group) |>
-    dplyr::select(ID) |>
+  # Units in the group, with the SeqID that labels each record downstream.
+  units <- dplyr::tbl(con, "assemblies") |>
+    dplyr::filter(ignore == 0) |>
+    dplyr::select(ID, path, scaffold) |>
+    dplyr::inner_join(
+      dplyr::tbl(con, "export") |>
+        dplyr::filter(export_group == !!group) |>
+        dplyr::select(ID, path, scaffold),
+      by = c("ID", "path", "scaffold")
+    ) |>
+    dplyr::collect() |>
+    dplyr::arrange(ID, path, scaffold) |>
+    dplyr::group_by(ID) |>
+    dplyr::mutate(n_units = dplyr::n()) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(seqid = export_seqid(ID, path, scaffold, n_units))
+
+  # PCGs per unit. Keyed on (ID, path, scaffold), not ID: two scaffolds of one
+  # sample can each carry a gene of the same name, and an ID-only join would make
+  # them look like two exons of one CDS - which the intron rule below would then
+  # splice together into a single translation.
+  annotations <- units |>
+    dplyr::select(ID, path, scaffold, seqid) |>
     dplyr::left_join(
       dplyr::tbl(con, "annotations") |>
-        dplyr::filter(pos1 > 0 & type == "PCG"),
-      by = "ID"
+        dplyr::filter(pos1 > 0 & type == "PCG") |>
+        dplyr::collect(),
+      by = c("ID", "path", "scaffold")
     ) |>
-    dplyr::collect()
-
-  # IDs in the group, used to drive per-sample exon merging
-  IDs <- dplyr::tbl(con, "samples") |>
-    dplyr::filter(export_group == !!group) |>
-    dplyr::pull("ID")
+    # A fragmented sample can have scaffolds carrying no PCG at all (e.g. an
+    # rRNA-only fragment); those join to NA and would otherwise surface as all-NA
+    # rows wherever `gene == <g>` is subset.
+    dplyr::filter(!is.na(gene))
 
   # Row indices of exons removed after being merged into their first exon
   rows_to_remove <- integer(0)
 
-  for (ID in IDs) {
-    # Get curation rules for the current ID
+  for (.i in seq_len(nrow(units))) {
+    u <- units[.i, ]
+    # Curation rules for the current unit
     curation_opts <- dplyr::tbl(con, "annotate") |>
-      dplyr::filter(ID == !!ID) |>
+      dplyr::filter(ID == !!u$ID & path == !!u$path & scaffold == !!u$scaffold) |>
       dplyr::pull("curate_opts")
 
     curate_rules <- dplyr::tbl(con, "curate_opts") |>
@@ -1183,36 +1250,26 @@ get_export_PCG_annotations <- function(con, group) {
       dplyr::pull("params") |>
       jsonlite::fromJSON()
 
-    # Get sample data
+    # Sample data (genetic_code); topology/path come from the unit itself
     dat <- dplyr::tbl(con, "samples") |>
       dplyr::select(-dplyr::any_of("topology")) |>
-      dplyr::filter(ID == !!ID) |>
-      dplyr::left_join(
-        dplyr::tbl(con, "annotate") |>
-          dplyr::select(ID, topology, path) |>
-          dplyr::distinct(),
-        by = "ID"
-      ) |>
+      dplyr::filter(ID == !!u$ID) |>
       dplyr::collect()
 
-    # Get mitogenome sequence (respecting per-scaffold ignore flag)
-    kept_scaffolds <- dplyr::tbl(con, "assemblies") |>
-      dplyr::filter(ID == !!ID & path == !!dat$path & ignore == 0) |>
-      dplyr::pull("scaffold")
     seq <- get_assembly(
-      ID = ID,
-      path = dat$path,
-      scaffold = kept_scaffolds,
+      ID = u$ID,
+      path = u$path,
+      scaffold = u$scaffold,
       con = con
     )
-    if (length(seq) > 1) {
-      stop("Multiple non-ignored scaffolds found. Export not supported for fragmented assemblies. Mark all but one scaffold as ignore to export.")
-    }
 
-    genes_in_id <- unique(annotations$gene[annotations$ID == ID])
+    unit_rows <- which(annotations$ID == u$ID &
+                         annotations$path == u$path &
+                         annotations$scaffold == u$scaffold)
+    genes_in_unit <- unique(annotations$gene[unit_rows])
 
-    for (current_gene in genes_in_id) {
-      exons_idx <- which(annotations$ID == ID & annotations$gene == current_gene)
+    for (current_gene in genes_in_unit) {
+      exons_idx <- unit_rows[which(annotations$gene[unit_rows] == current_gene)]
       if (any(exons_idx %in% rows_to_remove)) next
       if (length(exons_idx) <= 1) next
 
@@ -1224,7 +1281,7 @@ get_export_PCG_annotations <- function(con, group) {
         exons <- annotations[exons_idx, ]
         exon_seqs <- character(nrow(exons))
 
-        message(paste("Merged ", length(exon_seqs), " exons for gene ", cur$gene, " (", ID, ")", sep = ""))
+        message(paste("Merged ", length(exon_seqs), " exons for gene ", cur$gene, " (", u$seqid, ")", sep = ""))
 
         if (all(exons$direction == "+")) {
           for (i in 1:nrow(exons)) {
@@ -1249,7 +1306,8 @@ get_export_PCG_annotations <- function(con, group) {
         translation <- sub("\\*$", "", translation) # remove terminal stop codon
 
         annotations[exons_idx[1], "translation"] <- translation
-        annotations[exons_idx[1], "ID"] <- paste0("*", annotations[exons_idx[1], "ID"])
+        # Mark the merge on the label the report keys by (seqid), not the raw ID.
+        annotations[exons_idx[1], "seqid"] <- paste0("*", annotations[exons_idx[1], "seqid"])
         rows_to_remove <- c(rows_to_remove, exons_idx[-1])
       }
     }
@@ -1319,7 +1377,10 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
     sub <- annotations[annotations$gene == g, , drop = FALSE]
     if (nrow(sub) < 2) next
 
-    seqs <- Biostrings::AAStringSet(stats::setNames(sub$translation, sub$ID))
+    # Label by SeqID, not ID: a fragmented sample contributes one sequence per unit,
+    # and duplicate names here would make the row lookups below silently resolve to
+    # the first match, misattributing or dropping the siblings.
+    seqs <- Biostrings::AAStringSet(stats::setNames(sub$translation, sub$seqid))
 
     aln <- DECIPHER::AlignSeqs(seqs, processors = NULL, verbose = FALSE)
     dst <- DECIPHER::DistanceMatrix(
@@ -1379,9 +1440,9 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
       if (stop_flag) issues <- c(issues, if (stop_offset < 0) "stop too short" else "stop too long")
       if (identity_flag) issues <- c(issues, "low identity")
 
-      srow <- sub[match(label, sub$ID), ]
+      srow <- sub[match(label, sub$seqid), ]
       flag_rows[[length(flag_rows) + 1L]] <- dplyr::tibble(
-        ID = sub("^\\*", "", label),
+        ID = srow$ID,
         label = label,
         path = srow$path,
         scaffold = srow$scaffold,

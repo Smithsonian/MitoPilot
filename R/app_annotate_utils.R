@@ -18,7 +18,12 @@ fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID, dplyr::any_of("poor_blast_ref"))
 
   taxa <- dplyr::tbl(db, "samples") |>
-    dplyr::select(ID, Taxon, export_group, export_time_stamp)
+    dplyr::select(ID, Taxon)
+
+  # Export state is per unit, so a fragmented sample's scaffolds can legitimately
+  # carry different groups / export times rather than one broadcast sample value.
+  export_state <- dplyr::tbl(db, "export") |>
+    dplyr::select(ID, path, scaffold, export_group, export_time_stamp)
 
   # Per-unit annotations rollup (warnings + ORF count) keyed on the unit.
   annotations <- dplyr::tbl(db, "annotations") |>
@@ -54,6 +59,7 @@ fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
 
   dplyr::inner_join(annotate, assemble, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
+    dplyr::left_join(export_state, by = c("ID", "path", "scaffold")) |>
     dplyr::collect() |>
     dplyr::inner_join(assemblies_unit, by = c("ID", "path", "scaffold")) |>
     dplyr::left_join(annotations, by = c("ID", "path", "scaffold")) |>

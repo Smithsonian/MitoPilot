@@ -106,12 +106,19 @@ backwards_compatibility <- function(
   # on already-migrated projects.)
   old_ref_str <- any(grepl("/ref_dbs/Mitos2", curate_opts_table$params))
 
-  # the pre-{completeness} default export header, for detecting unmodified templates
-  old_export_default <- sub("{completeness}", "complete genome",
-                            DEFAULT_FASTA_HEADER, fixed = TRUE)
+  # Superseded default export headers, for detecting unmodified templates. Derived
+  # from the frozen {ID}-era template, NOT from DEFAULT_FASTA_HEADER: the default has
+  # since changed to {seqid}, so deriving from the current value would no longer match
+  # what is actually stored in older projects.
+  old_export_defaults <- c(
+    # pre-{completeness}
+    sub("{completeness}", "complete genome", LEGACY_FASTA_HEADER_ID, fixed = TRUE),
+    # pre-{seqid}
+    LEGACY_FASTA_HEADER_ID
+  )
   export_default_current <- tryCatch(
     !("export_opts" %in% DBI::dbListTables(con)) ||
-      !any(DBI::dbReadTable(con, "export_opts")$fasta_header == old_export_default,
+      !any(DBI::dbReadTable(con, "export_opts")$fasta_header %in% old_export_defaults,
            na.rm = TRUE),
     error = function(e) TRUE
   )
@@ -134,7 +141,8 @@ backwards_compatibility <- function(
       "problematic" %in% names(annotate_table) &&
       "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
-      "export_time_stamp" %in% names(samples_table) &&
+      "export" %in% DBI::dbListTables(con) &&
+      !any(c("export_group", "export_time_stamp") %in% names(samples_table)) &&
       "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
@@ -282,13 +290,6 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "ID"
       )
-  }
-
-  # if export_time_stamp column doesn't exist, add it (marks when a sample was
-  # last exported; NULL = never exported)
-  if(!("export_time_stamp" %in% names(samples_table))){
-    message("added 'export_time_stamp' column to samples table")
-    DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN export_time_stamp INTEGER")
   }
 
   # normalize any legacy TEXT genetic_code to INTEGER (idempotent). Projects
@@ -1483,12 +1484,21 @@ backwards_compatibility <- function(
         by = "export_opts"
       )
   } else if (!export_default_current) {
-    # migrate an unmodified default export template to use {completeness}
-    message("updated default export template to use {completeness}")
+    # Migrate unmodified default export templates to the current default. Only exact
+    # matches to a superseded default are touched; a customised template is left as
+    # the user wrote it, even though it may need {seqid} for fragmented samples.
+    message("updated default export template to use {seqid} / {completeness}")
+    for (old in old_export_defaults) {
+      DBI::dbExecute(
+        con,
+        "UPDATE export_opts SET fasta_header = ? WHERE fasta_header = ?",
+        params = list(DEFAULT_FASTA_HEADER, old)
+      )
+    }
     DBI::dbExecute(
       con,
-      "UPDATE export_opts SET fasta_header = ? WHERE fasta_header = ?",
-      params = list(DEFAULT_FASTA_HEADER, old_export_default)
+      "UPDATE export_opts SET fasta_header_gene = ? WHERE fasta_header_gene = ?",
+      params = list(DEFAULT_FASTA_HEADER_GENE, LEGACY_FASTA_HEADER_GENE_ID)
     )
   }
 
@@ -1558,6 +1568,54 @@ backwards_compatibility <- function(
     ))
     DBI::dbExecute(con, "DROP TABLE annotate")
     DBI::dbExecute(con, "ALTER TABLE annotate_new RENAME TO annotate")
+  }
+
+  # Move export state off samples (PK ID) onto a per-unit table: with multi-assembly
+  # each (ID, path, scaffold) is its own GenBank record and carries its own group.
+  # Must run after the annotate re-key above, which is what gives annotate path and
+  # scaffold to join on.
+  if (!DBI::dbExistsTable(con, "export")) {
+    message("created 'export' table (per-unit export state)")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE export (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
+        export_group TEXT,
+        export_time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+    legacy <- DBI::dbListFields(con, "samples")
+    grp <- if ("export_group" %in% legacy) "s.export_group" else "NULL"
+    ts  <- if ("export_time_stamp" %in% legacy) "s.export_time_stamp" else "NULL"
+    if (any(c("export_group", "export_time_stamp") %in% legacy)) {
+      # Legacy groups were sample-level, so every unit of a sample inherits the
+      # sample's group. annotate alone is not a safe unit source: superseded
+      # per-path rows survive a Path-0 join, so gate on assemblies.ignore = 0 the
+      # way fetch_annotate_units() does.
+      n <- DBI::dbExecute(con, sprintf(
+        "INSERT OR IGNORE INTO export (ID, path, scaffold, export_group, export_time_stamp)
+         SELECT an.ID, an.path, an.scaffold, %s, %s
+         FROM annotate an
+         JOIN assemblies a
+           ON a.ID = an.ID AND a.path = an.path AND a.scaffold = an.scaffold
+          AND a.ignore = 0
+         JOIN samples s ON s.ID = an.ID
+         WHERE %s IS NOT NULL OR %s IS NOT NULL",
+        grp, ts, grp, ts
+      ))
+      if (n > 0) message("carried ", n, " legacy export assignment(s) onto assembly units")
+    }
+  }
+  # Drop the legacy sample-level columns: two sources of truth for the same state is
+  # exactly what moving to the export table removes. Needs SQLite >= 3.35.
+  for (col in c("export_group", "export_time_stamp")) {
+    if (col %in% DBI::dbListFields(con, "samples")) {
+      message("dropped '", col, "' from samples table (now per-unit in 'export')")
+      DBI::dbExecute(con, paste0("ALTER TABLE samples DROP COLUMN ", col))
+    }
   }
 
   # Regenerate the .config from the chosen executor's template (port project

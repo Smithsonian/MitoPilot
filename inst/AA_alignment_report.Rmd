@@ -31,7 +31,7 @@ library(msaR)
 render_gene_aln <- function(gene) {
   gene_seqs <- annotations |>
     dplyr::filter(gene == !!gene) |>
-    dplyr::pull(translation, ID) |>
+    dplyr::pull(translation, seqid) |>
     Biostrings::AAStringSet()
   if (length(gene_seqs) < 2) {
     cat(paste0("_Gene **", gene, "** found in fewer than 2 samples, alignment skipped._\n"))

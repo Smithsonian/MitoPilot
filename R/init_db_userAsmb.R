@@ -155,9 +155,7 @@ new_db_userAsmb <- function(
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code,
       topology = .data[["Topology"]],
-      assembly = .data[["Assembly"]],
-      export_group = NA_character_,
-      export_time_stamp = NA_integer_
+      assembly = .data[["Assembly"]]
     ) |>
     dplyr::select(-Topology, -Assembly)
   glue::glue_sql(
@@ -696,6 +694,20 @@ new_db_userAsmb <- function(
       strand TEXT NOT NULL DEFAULT '+',
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold, accession)
+    );"
+  )
+
+  # Export state, one row per assembly unit. See init_db() for why this is its own
+  # table and not columns on annotate/assemblies.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE export (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
+      export_group TEXT,
+      export_time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
     );"
   )
 

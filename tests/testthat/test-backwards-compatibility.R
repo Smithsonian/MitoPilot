@@ -550,3 +550,70 @@ test_that("migrate_config fills PENV and does not inject a clusterOptions closur
   # backup written
   expect_true(length(list.files(td, pattern = "^\\.config\\.bak\\.", all.files = TRUE)) >= 1)
 })
+
+
+test_that("backwards_compatibility moves export state onto per-unit table", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10")
+
+  # Legacy sample-level export state, plus a second sample that was never grouped.
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN export_group TEXT")
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN export_time_stamp INTEGER")
+  DBI::dbExecute(con, "INSERT INTO samples (ID, sample, genetic_code) VALUES ('s2', 'Sample2', '2')")
+  DBI::dbExecute(con, "INSERT INTO assemble (ID, assembly) VALUES ('s2', 'ATCG')")
+  DBI::dbExecute(con, "INSERT INTO annotate (ID, gene) VALUES ('s2', 'cox1')")
+  DBI::dbExecute(con, "UPDATE samples SET export_group = 'grpA', export_time_stamp = 99 WHERE ID = 's1'")
+  DBI::dbDisconnect(con)
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, update_config = FALSE))
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  # Table exists with the unit key, and the legacy columns are gone from samples
+  expect_true("export" %in% DBI::dbListTables(con))
+  expect_cols(con, "export", c("ID", "path", "scaffold", "export_group", "export_time_stamp"))
+  expect_false(any(c("export_group", "export_time_stamp") %in%
+                     DBI::dbListFields(con, "samples")))
+
+  # The grouped sample's units carry the legacy group; the ungrouped one has no row
+  got <- DBI::dbGetQuery(con, "SELECT ID, export_group, export_time_stamp FROM export")
+  expect_true(all(got$ID == "s1"))
+  expect_true(all(got$export_group == "grpA"))
+  expect_true(all(got$export_time_stamp == 99))
+  expect_false("s2" %in% got$ID)
+
+  # Re-running is a no-op rather than re-migrating
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
+})
+
+
+test_that("export_seqid suffixes only samples with more than one exported unit", {
+  # Single exported unit -> plain ID, so single-scaffold projects keep their names
+  expect_identical(export_seqid("S1", 1, 1, 1), "S1")
+  # More than one -> disambiguated by path and scaffold
+  expect_identical(
+    export_seqid(rep("S1", 3), c(1, 1, 1), c(1, 2, 3), rep(3, 3)),
+    c("S1_p1_s1", "S1_p1_s2", "S1_p1_s3")
+  )
+  # Vectorised across a mixed set
+  expect_identical(
+    export_seqid(c("A", "B", "B"), c(1, 1, 1), c(1, 1, 2), c(1, 2, 2)),
+    c("A", "B_p1_s1", "B_p1_s2")
+  )
+  # Scalar n_units must recycle, not collapse every unit onto the first SeqID
+  # (ifelse() returns a result the length of its test).
+  expect_identical(
+    export_seqid(rep("S1", 3), 1, c(1, 2, 3), 3L),
+    c("S1_p1_s1", "S1_p1_s2", "S1_p1_s3")
+  )
+  expect_identical(export_seqid("S1", 1, 1, 1L), "S1")
+})

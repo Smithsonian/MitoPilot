@@ -350,10 +350,28 @@ annotations_details_server <- function(id, rv) {
         }
       }, error = function(e) NULL)
 
-      ## Active synteny reference = the sample's current reference (blast_accession,
-      ## possibly a user-set override of the rank-1 default) ----
-      acc0 <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
-      if (!nzchar(acc0)) acc0 <- NA_character_
+      ## Active synteny reference, resolved per unit: a "Set as reference" override,
+      ## else THIS scaffold's rank-1 candidate (the top of the picker's own list),
+      ## else none. Shared with the export note so the plot and the submission always
+      ## name the same reference. rv$updating$blast_accession is deliberately not used
+      ## here: it is the scaffold's raw best-by-pident hit from `assemblies`, which
+      ## can rank below the candidate list's first entry, and it never reflects the
+      ## sample-level override (which is written to `assemble`).
+      ref_row <- tryCatch(
+        DBI::dbGetQuery(
+          session$userData$con,
+          "SELECT blast_accession, blast_accession_auto FROM assemble WHERE ID = ?",
+          params = list(rv$updating$ID)
+        ),
+        error = function(e) NULL
+      )
+      has_ref_row <- !is.null(ref_row) && nrow(ref_row) > 0
+      acc0 <- resolve_unit_blast_ref(
+        session$userData$con,
+        rv$updating$ID, rv$updating$path, rv$updating$scaffold,
+        blast_accession = if (has_ref_row) ref_row$blast_accession[1] else NA_character_,
+        blast_accession_auto = if (has_ref_row) ref_row$blast_accession_auto[1] else NA_character_
+      )
       active_ref_acc(acc0)
       load_blast_ref(acc0)
 
