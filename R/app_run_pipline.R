@@ -588,19 +588,13 @@ pipeline_server <- function(id) {
         prog_executor <- process_out[max(which(executor_lines))]
         remaining[executor_lines] <- F
       }
-      # Frame reconstruction: Nextflow reprints the whole board on each redraw.
-      # Rather than accumulate rows across redraws (which piles up stale rows when
-      # a long task tag truncates a process name to an unstable stub), rebuild the
-      # current board. Within a frame each process is listed once in order, so a
-      # repeated key marks the next frame: commit the finished frame as the
-      # rendered board and start a fresh one.
+      # Nextflow reprints the whole board on each redraw. process_key is now a
+      # stable canonical name, so keep one row per process and update it in place
+      # to its latest line. This avoids the old frame-commit dance (which lagged
+      # one redraw behind, so a long task looked frozen) and never leaves stale
+      # duplicate rows from an ellipsis-truncated name.
       for (i in which(progress_lines)) {
-        key <- process_key(keys[i, 'key'])
-        if (key %in% names(prog_frame)) {
-          prog_process <- prog_frame
-          prog_frame <- list()
-        }
-        prog_frame[[key]] <- keys[i, 1]   # full line
+        prog_process[[process_key(keys[i, 'key'])]] <- keys[i, 1]   # full line
       }
       remaining[progress_lines] <- F
       remaining <- process_out[remaining] |> collapse_empty_lines()
@@ -611,7 +605,7 @@ pipeline_server <- function(id) {
         prog_header = prog_header,
         prog_executor = prog_executor,
         prog_process = prog_process,
-        prog_frame = prog_frame,
+        prog_frame = prog_process,
         prog_footer = prog_footer
       )
     }
