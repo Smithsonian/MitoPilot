@@ -221,19 +221,21 @@ workflow BLAST_GENBANK {
                     def toks = qseqid.split(/\./)
                     if (toks.size() < 3) return
                     def path = toks[-2]; def scaffold = toks[-1]
-                    // Dedup accessions within THIS scaffold (best pident*qcovs), rank.
+                    // Dedup accessions within THIS scaffold, keeping BLAST's own
+                    // ordering: blastn returns hits best-first per query, so the
+                    // first occurrence of an accession is its best HSP and rank 1 is
+                    // the hit the search itself preferred. Re-sorting on a derived
+                    // score (e.g. pident*qcovs) would promote a different accession
+                    // than the search's top hit, which is what assemblies.
+                    // blast_accession records.
                     def byacc = [:]
                     hits.each { v ->
                         def acc = v[0]
-                        if (acc != null && acc != 'NO HIT') {
-                            def score = (v[2] ?: 0) * (v[3] ?: 0)
-                            if (!byacc.containsKey(acc) || score > byacc[acc].score) {
-                                byacc[acc] = [rec: v, score: score]
-                            }
+                        if (acc != null && acc != 'NO HIT' && !byacc.containsKey(acc)) {
+                            byacc[acc] = v
                         }
                     }
-                    byacc.values().toList().sort { -it.score }.eachWithIndex { info, i ->
-                        def v = info.rec
+                    byacc.values().toList().eachWithIndex { v, i ->
                         out << tuple(id, path as Integer, scaffold as Integer, i + 1,
                                      v[0], v[1], v[2], v[3], v[4], params.ts)
                     }
@@ -458,20 +460,27 @@ workflow BLAST_GENBANK {
             .map { id, opts_id, allCands, allScaffs, mts ->
                 def n_cand = (mts ?: 5) as Integer
                 allCands = allCands ?: []
+                // Keep each accession's best hit, ranked the way BLAST ranks:
+                // lowest evalue first, ties broken by higher pident (the same
+                // ordering the per-path top hit uses above). A derived pident*qcovs
+                // score would make rank 1 an accession the search itself did not
+                // prefer, disagreeing with assemblies.blast_accession (= blastn's
+                // first row for that query).
+                def better = { a, b -> (a[5] <=> b[5]) ?: -(a[3] <=> b[3]) }
                 def byacc = [:]
                 allCands.each { r ->
                     def acc = r[1]
-                    def score = (r[3] ?: 0) * (r[4] ?: 0)
-                    if (acc != null && acc != 'NO HIT' && (!byacc.containsKey(acc) || score > byacc[acc].score)) {
-                        byacc[acc] = [row: r, score: score]
+                    if (acc != null && acc != 'NO HIT' &&
+                        (!byacc.containsKey(acc) || better(r, byacc[acc]) < 0)) {
+                        byacc[acc] = r
                     }
                 }
-                // All candidate accessions for this sample (union across paths),
-                // ranked by score. NOT capped: every per-scaffold candidate must
-                // get a fetched reference (+lineage), and rank-1 is the sample's
-                // representative hit. Per-scaffold separation lives in the
-                // blast_ref_candidates table (written from scaffold_candidates).
-                def ranked = byacc.values().toList().sort { -it.score }.collect { it.row }
+                // All candidate accessions for this sample (union across paths).
+                // NOT capped: every per-scaffold candidate must get a fetched
+                // reference (+lineage), and rank-1 is the sample's representative
+                // hit. Per-scaffold separation lives in the blast_ref_candidates
+                // table (written from scaffold_candidates).
+                def ranked = byacc.values().toList().sort(false, better)
                 tuple(id, opts_id, ranked, (allScaffs ?: []).unique())
             }
             .set { sample_agg }  // (id, opts_id, ranked, [scaffAcc...])
