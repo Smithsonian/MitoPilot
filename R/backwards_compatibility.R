@@ -1500,6 +1500,23 @@ backwards_compatibility <- function(
   if (!("scaffold" %in% annotate_fields)) {
     message("re-keyed annotate table by (ID, path, scaffold)")
     path_expr <- if ("path" %in% annotate_fields) "COALESCE(CAST(an.path AS INTEGER), 1)" else "1"
+    # Carry over whatever the old table actually has. Legacy annotate tables vary in
+    # shape (columns arrived across several releases, and `scaffolds` never had an
+    # ALTER migration at all), so select NULL for anything absent rather than
+    # assuming a fixed column set and failing the whole migration.
+    carry <- c("ID_verified", "scaffolds", "annotate_opts", "curate_opts",
+               "orf_opts", "annotate_switch", "annotate_lock", "annotate_notes",
+               "PCGCount", "tRNACount", "rRNACount", "missing", "extra",
+               "warnings", "reviewed", "problematic", "partial", "structure",
+               "length", "topology", "time_stamp")
+    carry_expr <- paste(
+      vapply(
+        carry,
+        function(cn) if (cn %in% annotate_fields) paste0("an.", cn) else "NULL",
+        character(1)
+      ),
+      collapse = ", "
+    )
     DBI::dbExecute(con,
       "CREATE TABLE annotate_new (
         ID TEXT NOT NULL,
@@ -1531,20 +1548,13 @@ backwards_compatibility <- function(
     )
     DBI::dbExecute(con, sprintf(
       "INSERT OR IGNORE INTO annotate_new
-         (ID, path, scaffold, ID_verified, scaffolds, annotate_opts, curate_opts,
-          orf_opts, annotate_switch, annotate_lock, annotate_notes, PCGCount,
-          tRNACount, rRNACount, missing, extra, warnings, reviewed, problematic,
-          partial, structure, length, topology, time_stamp)
+         (ID, path, scaffold, %s)
        SELECT an.ID, %s,
          COALESCE((SELECT MIN(s.scaffold) FROM assemblies s
                    WHERE s.ID = an.ID AND s.path = %s AND s.ignore = 0), 1),
-         an.ID_verified, an.scaffolds, an.annotate_opts, an.curate_opts,
-         an.orf_opts, an.annotate_switch, an.annotate_lock, an.annotate_notes,
-         an.PCGCount, an.tRNACount, an.rRNACount, an.missing, an.extra,
-         an.warnings, an.reviewed, an.problematic, an.partial, an.structure,
-         an.length, an.topology, an.time_stamp
+         %s
        FROM annotate an",
-      path_expr, path_expr
+      paste(carry, collapse = ", "), path_expr, path_expr, carry_expr
     ))
     DBI::dbExecute(con, "DROP TABLE annotate")
     DBI::dbExecute(con, "ALTER TABLE annotate_new RENAME TO annotate")
