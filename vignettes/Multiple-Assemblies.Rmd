@@ -19,13 +19,10 @@ What you see depends partly on the assembler. MitoPilot can assemble with
 option at project setup. GetOrganelle explores an assembly graph and can return
 several alternative **paths** through it, each possibly split into scaffolds.
 MitoFinder returns a **single path**, but can still report several **scaffolds**
-when it recovers more than one mitochondrial contig. So multiple paths are
-specific to GetOrganelle, while multiple scaffolds can arise with either
-assembler. The strategies below apply the same way regardless of which assembler
+when it recovers more than one mitochondrial contig. The strategies below apply the same way regardless of which assembler
 produced the sequences.
 
-The right strategy depends on what the extra sequences actually are, and the two
-cases are biologically opposite:
+The right strategy depends on what the extra sequences actually are, and the two cases have different biological meanings:
 
 - **Multiple paths** are usually *competing reconstructions of the same genome*
   from one tangled assembly graph. You want a single answer, so you resolve them
@@ -34,13 +31,14 @@ cases are biologically opposite:
   things. They may be fragments of one genome that an incomplete assembly failed
   to connect; they may be genuinely separate molecules that belong together, as
   in a naturally multi-chromosome mitogenome; or they may be unrelated sequence,
-  such as contamination or a numt. You join true fragments and keep genuinely
-  separate molecules apart.
+  such as contamination or a [NUMT](https://en.wikipedia.org/wiki/Nuclear_mitochondrial_DNA_segment). 
+  Fragments of the same mitogenome should be joined, while separate molecules should be kept apart.
 
 Each retained `(path, scaffold)` combination becomes its own row in the Annotate
 module and is annotated and validated independently. The number of paths and
 scaffolds kept per sample is capped by the **Max assembly paths** and **Max
-scaffolds** assembly options (default 10 each).
+scaffolds** assembly options (default 10 each); samples above that threshold will not
+be allowed to proceed to annotation.
 
 ## Resolving multiple paths
 
@@ -58,7 +56,7 @@ annotation.
 **Build a consensus (Path 0).** When the paths disagree only in a few regions,
 use **Trim to consensus** to reconcile them into a single sequence. MitoPilot
 aligns the paths, and for each block where they conflict you choose which path to
-use (or leave it N-masked); the agreed regions come from a chosen backbone path.
+use (or mask with ambiguity codes).
 The result is saved as **Path 0**, a single edited assembly that supersedes the
 alternatives.
 
@@ -71,16 +69,14 @@ as well. If the scaffolds are pieces of one fragmented mitogenome, join them; if
 they are separate molecules that genuinely coexist, keep them apart.
 
 **Join scaffolds (Path 0).** For any single-path sample with more than one
-scaffold, the assembly details automatically offer a *"Join scaffolds into one
-assembly"* editor. You do not need to turn anything on for it; MitoPilot computes
-the scaffold-to-reference mappings the editor needs for every eligible sample.
-Reference-guided layout (**Re-map to reference**) orders and orients the scaffolds
+scaffold, the assembly details window offers a *"Join scaffolds into one
+assembly"* editor. The reference-guided layout (**Re-map to reference**) orders and orients the scaffolds
 against a chosen BLAST reference; you can override the order and orientation and
 mark the assembly circular, then **Build joined assembly (Path 0)**. If the
 scaffolds carry different BLAST hits, MitoPilot warns you, because joining
 unrelated sequences produces poor overlaps and an unreliable assembly.
 
-The **Join scaffolds** assembly option is a separate, optional convenience rather
+The **Join scaffolds** button in the assembly options window is a separate, optional convenience rather
 than a switch for the editor. When it is enabled, the pipeline builds Path 0
 *automatically* during assembly for eligible samples, but only when their
 scaffolds map to the same reference, so you do not have to join each fragmented
@@ -92,7 +88,7 @@ separate rather than auto-joined.
 mitogenomes are naturally **multipartite**, with the genes distributed across
 several small circular or linear chromosomes, and those
 scaffolds are separate molecules of one real genome that must not be concatenated.
-Other times the scaffolds are unrelated: contamination, a nuclear region, or distinct
+Other times the scaffolds are unrelated: contamination, a [NUMT](https://en.wikipedia.org/wiki/Nuclear_mitochondrial_DNA_segment), or distinct
 heteroplasmic variants. In all of these cases, leave the scaffolds separate. Each
 is annotated and validated on its own, so a single-copy gene present once per
 molecule is not mistaken for a duplicate, and each is exported as its own record.
@@ -103,13 +99,12 @@ Export behaves differently for the two cases, matching the biology.
 
 **Multiple scaffolds export as separate records.** A sample contributing more
 than one scaffold produces one GenBank record per scaffold. To keep SeqIDs unique
-within a submission, MitoPilot suffixes them as `ID_p<path>_s<scaffold>` (a
+within a submission, MitoPilot add as suffix as `ID_p<path>_s<scaffold>` (a
 single-unit sample keeps its plain `ID`). Because a sample split across scaffolds
-*could* instead be one fragmented genome, export asks you to confirm; if that is
-the case, cancel and join the scaffolds into Path 0 first.
+*could* instead be one fragmented genome, export asks you to confirm.
 
 **Multiple paths cannot be exported.** Exporting every path would submit several
 near-identical records for one specimen, so MitoPilot blocks export of any sample
-that still has more than one assembly path and names the sample in the message.
-Resolve it first, by ignoring the extra paths or building a consensus Path 0, then
+that still has more than one assembly path and will emit a warning message.
+Resolve by ignoring the extra paths or building a consensus Path 0, then
 export.
