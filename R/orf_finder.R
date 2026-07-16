@@ -223,12 +223,16 @@ orf_finder <- function(
   orfs$warnings <- NA_character_
 
   # BLAST each ORF against the combined gene database ----
-  # Inject the closest-relative reference's genes into the per-gene FASTAs first
-  # (no-op when no blast ref is staged) so the combined DB also covers the remote
-  # reference, giving ORFs a better chance of a match.
+  # Inject the closest-relative reference's genes (no-op when no blast ref is
+  # staged) so the combined DB also covers the remote reference, giving ORFs a
+  # better chance of a match. They go to their own directory and are merged into
+  # the combined DB below, leaving ref_dir read-only.
+  remote_ref_dir <- file.path(tempdir(), "remote_refs_orf")
+  unlink(remote_ref_dir, recursive = TRUE)
   if (!is.null(blast_ref_file) && nzchar(blast_ref_file)) {
     tryCatch(
-      inject_remote_hits_into_blast_db(blast_ref_file, ref_dir),
+      inject_remote_hits_into_blast_db(blast_ref_file, ref_dir,
+                                       out_dir = remote_ref_dir),
       error = function(e) message("orf_finder: remote hit injection failed: ",
                                   conditionMessage(e))
     )
@@ -238,7 +242,8 @@ orf_finder <- function(
   # Combined DB with gene-labeled, unique headers so get_top_hits_orf can recover
   # each hit's gene + correct target from the gene-less per-gene FASTAs.
   combined <- build_combined_orf_db(
-    feature_dir, file.path(tempdir(), "_ORF_all.fas"), condaenv = blast_condaenv
+    c(feature_dir, remote_ref_dir), file.path(tempdir(), "_ORF_all.fas"),
+    condaenv = blast_condaenv
   )
   if (!is.null(combined)) {
     orfs$refHits <- orfs$translation |>

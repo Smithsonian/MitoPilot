@@ -779,23 +779,28 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
 #' the reference. The short \code{tag} marks the sequence as remote-derived to
 #' distinguish it from the curated local DB entries in the BLAST hits table.
 #'
-#' Designed to run inside a Nextflow curation task where the reference DB has
-#' been staged with \code{stageInMode 'copy'}; modifications are confined to
-#' the task's private copy and do not bleed across samples.
+#' The remote sequences are written to \code{out_dir} as their own small per-gene
+#' FASTAs rather than appended to \code{ref_dir}, which stays read-only. Callers
+#' then BLAST against both (\code{get_top_hits()} accepts several databases), so
+#' each task adds a few kB instead of rewriting a ~145 MB database it shares with
+#' every other task. Injections accumulate: repeated calls with different
+#' candidate references append to the same per-gene file.
 #'
 #' @param blast_ref_file path to remote BLAST hit JSON staged by Nextflow
 #' @param ref_dir path to the curation BLAST DB root (containing a
-#'   \code{featureProt/} subdirectory of per-gene FASTAs)
+#'   \code{featureProt/} subdirectory of per-gene FASTAs). Read-only; used to
+#'   decide which genes the local DB knows about.
+#' @param out_dir directory to write the remote-only per-gene FASTAs (and their
+#'   BLAST indexes) into. Created if absent. Must be task-private.
 #' @param tag short tag (default \code{"[remote]"}) prepended to the species
 #'   name in the FASTA header to indicate remote origin
 #' @param path_to_makeblastdb optional explicit path to the \code{makeblastdb}
 #'   executable; falls back to \code{Sys.which("makeblastdb")}
 #'
-#' @return Character vector of gene names whose FASTAs were modified
-#'   (invisible).
+#' @return Character vector of gene names whose FASTAs were written (invisible).
 #'
 #' @noRd
-inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
+inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir, out_dir,
                                               tag = "[remote]",
                                               path_to_makeblastdb = NULL) {
   if (is.null(blast_ref_file) || !nzchar(blast_ref_file) ||
@@ -811,6 +816,11 @@ inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
     message("inject_remote_hits: featureProt/ not found in ref_dir")
     return(invisible(character()))
   }
+  if (missing(out_dir) || is.null(out_dir) || !nzchar(out_dir)) {
+    message("inject_remote_hits: out_dir not supplied")
+    return(invisible(character()))
+  }
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
   ref_data <- tryCatch(
     jsonlite::fromJSON(blast_ref_file, simplifyDataFrame = TRUE),
@@ -912,7 +922,7 @@ inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
 
   modified <- character()
   for (gene in names(per_gene)) {
-    fas <- file.path(feature_prot_dir, paste0(gene, ".fas"))
+    fas <- file.path(out_dir, paste0(gene, ".fas"))
     set <- Biostrings::AAStringSet(
       setNames(per_gene[[gene]]$seqs, per_gene[[gene]]$headers)
     )
@@ -927,7 +937,7 @@ inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
 
   if (!is.null(mkdb)) {
     for (gene in modified) {
-      fas <- file.path(feature_prot_dir, paste0(gene, ".fas"))
+      fas <- file.path(out_dir, paste0(gene, ".fas"))
       system2(mkdb, args = c("-dbtype", "prot", "-in", fas),
               stdout = NULL, stderr = NULL)
     }

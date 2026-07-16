@@ -183,9 +183,26 @@ extract_circ_region <- function(seq, p1, p2) {
   )
 }
 
+#' Format one or more BLAST databases for a `-db` argument.
+#'
+#' BLAST+ takes several databases as a single space-separated, quoted value. Used
+#' so a read-only base DB and a small task-private DB of remote-derived sequences
+#' can be searched together without rewriting the base.
+#'
+#' @param ref_db character vector of database paths
+#'
+#' @noRd
+blast_db_arg <- function(ref_db) {
+  if (length(ref_db) > 1L) {
+    paste0("'", paste(ref_db, collapse = " "), "'")
+  } else {
+    as.character(ref_db)
+  }
+}
+
 #' Get top BLASTP hits
 #'
-#' @param ref_db reference database
+#' @param ref_db reference database; may be several paths, all searched together
 #' @param query query sequeencs
 #' @param condaenv Conda environment to use for running blastp
 #' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
@@ -197,14 +214,19 @@ get_top_hits <- function(
     query,
     max_blast_hits = 10,
     condaenv = "base") {
+  ref_db <- ref_db[nzchar(ref_db) & file.exists(ref_db)]
+  if (length(ref_db) == 0L) {
+    stop("get_top_hits: no reference database found", call. = FALSE)
+  }
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
+  db_arg <- blast_db_arg(ref_db)
 
   if (!is.null(condaenv)) {
     hits_refSeq <- stringr::str_glue(
       "run -n {condaenv}",
       "echo -e '{query}' |",
       "blastp ",
-      "-db {ref_db}",
+      "-db {db_arg}",
       "-best_hit_score_edge 0.01",
       "-max_hsps 1",
       #"-qcov_hsp_perc 80",
@@ -216,7 +238,7 @@ get_top_hits <- function(
       system2(reticulate::conda_binary(), args = _, stdout = TRUE)
   } else {
     hits_refSeq <- stringr::str_glue(
-      "-db {ref_db}",
+      "-db {db_arg}",
       "-best_hit_score_edge 0.01",
       "-max_hsps 1",
       #"-qcov_hsp_perc 50",
@@ -286,7 +308,10 @@ get_top_hits <- function(
 #' of a gene in one genome), writes the combined FASTA, and builds its index, so
 #' [get_top_hits_orf()] can recover the gene and a unique target per hit.
 #'
-#' @param feature_dir directory of per-gene `featureProt/*.fas` files
+#' @param feature_dir directory of per-gene `featureProt/*.fas` files. May be
+#'   several directories, e.g. the read-only base DB plus a task-private one of
+#'   remote-derived sequences; a gene's files are merged across them so the
+#'   per-gene hit numbering stays unique.
 #' @param out_fasta path to write the combined FASTA (index built alongside)
 #' @param condaenv conda env with makeblastdb (NULL = on PATH)
 #'
@@ -294,13 +319,21 @@ get_top_hits <- function(
 #'
 #' @noRd
 build_combined_orf_db <- function(feature_dir, out_fasta, condaenv = "base") {
-  fas <- list.files(feature_dir, pattern = "\\.fas$", full.names = TRUE)
+  feature_dir <- feature_dir[nzchar(feature_dir) & dir.exists(feature_dir)]
+  fas <- unlist(lapply(
+    feature_dir,
+    function(d) list.files(d, pattern = "\\.fas$", full.names = TRUE)
+  ), use.names = FALSE)
   if (length(fas) == 0) return(NULL)
+  genes <- sub("\\.fas$", "", basename(fas))
   all_seqs <- Biostrings::AAStringSet()
-  for (f in fas) {
-    gene <- sub("\\.fas$", "", basename(f))
-    s <- tryCatch(Biostrings::readAAStringSet(f), error = function(e) NULL)
-    if (is.null(s) || length(s) == 0) next
+  for (gene in unique(genes)) {
+    s <- Biostrings::AAStringSet()
+    for (f in fas[genes == gene]) {
+      part <- tryCatch(Biostrings::readAAStringSet(f), error = function(e) NULL)
+      if (!is.null(part) && length(part) > 0) s <- c(s, part)
+    }
+    if (length(s) == 0) next
     nm  <- names(s)
     acc <- sub("\\s.*$", "", nm)               # accession (first token)
     sp  <- sub("^\\S+\\s*", "", nm)             # species (rest; may be empty)
