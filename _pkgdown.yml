@@ -35,6 +35,7 @@ articles:
   navbar: ~
   contents:
   - 'FAQ'
+  - 'Troubleshooting'
 
 - title: "Nextflow Executors"
   navbar: ~
