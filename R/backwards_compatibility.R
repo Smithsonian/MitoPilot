@@ -90,10 +90,12 @@ backwards_compatibility <- function(
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
   containerVer <- any(grep(new_container, conf, fixed = TRUE))
 
-  # genetic_code must be numeric: assemble.nf calls genetic_code.intValue(),
-  # which throws on a TEXT value. Older migrations stored it as TEXT.
+  # genetic_code must be a plain INTEGER: assemble.nf calls genetic_code.intValue()
+  # and MITOS2's -c argparse rejects a float like '2.0'. Older projects stored it as
+  # TEXT ('2') or REAL (2.0); either must be rebuilt to INTEGER affinity. Only a
+  # genuine integer column is treated as current.
   genetic_code_numeric <- isTRUE(tryCatch(
-    !("text" %in% DBI::dbGetQuery(
+    !any(c("text", "real") %in% DBI::dbGetQuery(
       con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples"
     )$t),
     error = function(e) TRUE
@@ -105,6 +107,16 @@ backwards_compatibility <- function(
   # "/ref_dbs/Mitos2" so matching annotate_opts$ref_dir would re-fire the block
   # on already-migrated projects.)
   old_ref_str <- any(grepl("/ref_dbs/Mitos2", curate_opts_table$params))
+
+  # A Smithsonian/MitoPilot MITOS2 ref_dir pointing at any branch other than main
+  # is stale: feature/deleted branches 404 at prepare_ref_db (WF2). Only our own
+  # repo URLs are considered; custom hosts or local paths are left untouched.
+  stale_ref_branch <- {
+    vals <- c(annotate_opts_table$ref_dir, curate_opts_table$ref_dir)
+    vals <- vals[!is.na(vals)]
+    any(grepl("raw\\.githubusercontent\\.com/[Ss]mithsonian/MitoPilot/.+/ref_dbs/Mitos2$", vals) &
+        !grepl("/refs/heads/main/ref_dbs/Mitos2$", vals))
+  }
 
   # Superseded default export headers, for detecting unmodified templates. Derived
   # from the frozen {ID}-era template, NOT from DEFAULT_FASTA_HEADER: the default has
@@ -185,6 +197,15 @@ backwards_compatibility <- function(
         "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
         error = function(e) FALSE
       )) &&
+      isTRUE(tryCatch(
+        "blast_accession" %in% DBI::dbListFields(con, "assemblies"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "orf_nested" %in% DBI::dbListFields(con, "orf_opts"),
+        error = function(e) FALSE
+      )) &&
+      !stale_ref_branch &&
       "export_opts" %in% DBI::dbListTables(con) &&
       "synteny_accession" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
@@ -316,14 +337,13 @@ backwards_compatibility <- function(
       )
   }
 
-  # normalize any legacy TEXT genetic_code to INTEGER (idempotent). Projects
-  # migrated by older versions declared the column as TEXT, whose TEXT affinity
-  # stores values as strings and crashes the assemble step (assemble.nf calls
-  # genetic_code.intValue()). A plain UPDATE/CAST is not enough: the TEXT
-  # affinity coerces the result straight back to text, so the column itself must
-  # be rebuilt with INTEGER affinity.
+  # normalize any legacy TEXT/REAL genetic_code to INTEGER (idempotent). Older
+  # projects stored it as TEXT ('2', crashes assemble.nf's genetic_code.intValue())
+  # or REAL (2.0, which MITOS2's -c argparse rejects as an invalid int). A plain
+  # UPDATE/CAST is not enough: the column's affinity coerces the result straight
+  # back, so the column itself must be rebuilt with INTEGER affinity.
   if (!genetic_code_numeric) {
-    message("rebuilt TEXT 'genetic_code' column in samples table as integer")
+    message("rebuilt 'genetic_code' column in samples table as integer")
     # Wrap the multi-step rebuild so a mid-sequence failure rolls back cleanly
     # instead of leaving a half-migrated table.
     DBI::dbBegin(con)
@@ -882,6 +902,7 @@ backwards_compatibility <- function(
         orffinder_opts TEXT,
         orf_min_len INTEGER,
         orf_max_overlap REAL,
+        orf_nested INTEGER,
         PRIMARY KEY (orf_opts)
       );"
     )
@@ -894,7 +915,8 @@ backwards_compatibility <- function(
           memory = 8L,
           orffinder_opts = "-s 1 -n true",
           orf_min_len = 300L,
-          orf_max_overlap = 0.1
+          orf_max_overlap = 0.1,
+          orf_nested = 0L
         ),
         in_place = TRUE,
         copy = TRUE,
@@ -1464,6 +1486,22 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
   }
 
+  # if the per-scaffold BLAST result columns don't exist in assemblies, add them.
+  # A pre-existing assemblies table (created before these columns) never gets them
+  # from the create branch above, yet the app (unit_ref_facts, the annotate/export
+  # tables) and WF2 (CURATE/ORF select a.blast_accession) require them. NULLs are
+  # fine; the pipeline repopulates them on the next run.
+  asmb_blast_cols <- c(blast_accession = "TEXT", blast_species = "TEXT",
+                       blast_pident = "REAL", blast_qcovs = "REAL",
+                       blast_evalue = "REAL", blast_lineage = "TEXT")
+  asmb_fields <- DBI::dbListFields(con, "assemblies")
+  for (col in names(asmb_blast_cols)) {
+    if (!(col %in% asmb_fields)) {
+      message(paste0("added '", col, "' column to assemblies table"))
+      DBI::dbExecute(con, paste0("ALTER TABLE assemblies ADD COLUMN ", col, " ", asmb_blast_cols[[col]]))
+    }
+  }
+
   # if assembly_blast table doesn't exist, create it (per-path BLAST hits)
   if (!("assembly_blast" %in% DBI::dbListTables(con))) {
     message("created assembly_blast table")
@@ -1708,6 +1746,26 @@ backwards_compatibility <- function(
     }
   }
 
+  # Repoint any Smithsonian/MitoPilot MITOS2 ref_dir on a stale/non-main branch to
+  # main (idempotent). Guards against projects built off a feature branch whose ref
+  # URL 404s once that branch is deleted. Only our own repo URLs are rewritten;
+  # custom hosts and local paths are left untouched. Done last, as a direct UPDATE
+  # on the final table state, so earlier in-memory opts upserts cannot clobber it.
+  canonical_mitos_ref <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2"
+  for (ref_tbl in c("annotate_opts", "curate_opts")) {
+    fields <- tryCatch(DBI::dbListFields(con, ref_tbl), error = function(e) character(0))
+    if ("ref_dir" %in% fields) {
+      n <- DBI::dbExecute(
+        con,
+        paste0("UPDATE ", ref_tbl, " SET ref_dir = ? ",
+               "WHERE ref_dir LIKE 'https://raw.githubusercontent.com/%mithsonian/MitoPilot/%/ref_dbs/Mitos2' ",
+               "AND ref_dir <> ?"),
+        params = list(canonical_mitos_ref, canonical_mitos_ref)
+      )
+      if (n > 0) message(paste0("repointed ", n, " stale ", ref_tbl, ".ref_dir value(s) to main"))
+    }
+  }
+
   # Regenerate the .config from the chosen executor's template (port project
   # values, bump container, back up the old config). Gated on the container
   # being stale so an already-current config is left alone, and on the caller
@@ -1741,6 +1799,16 @@ schema_gaps <- function(con) {
   }
   if (!has("scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"))) {
     gaps <- c(gaps, "the blast_ref_alignment table is not keyed per scaffold")
+  }
+  if (!has("blast_accession" %in% DBI::dbListFields(con, "assemblies"))) {
+    gaps <- c(gaps, "the assemblies table lacks per-scaffold BLAST columns")
+  }
+  if (!has("orf_nested" %in% DBI::dbListFields(con, "orf_opts"))) {
+    gaps <- c(gaps, "the orf_opts table lacks the 'orf_nested' column")
+  }
+  if (has(any(c("text", "real") %in%
+              DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t))) {
+    gaps <- c(gaps, "the samples.genetic_code column is not stored as an integer")
   }
   gaps
 }

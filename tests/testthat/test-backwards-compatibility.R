@@ -316,6 +316,88 @@ test_that("schema_gaps flags a legacy database and passes a migrated one", {
   expect_equal(schema_gaps(con2), character(0))
 })
 
+test_that("backwards_compatibility adds per-scaffold BLAST columns to a pre-existing assemblies table", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)   # assemblies exists WITHOUT the BLAST columns
+  make_config(td, version = "1.3.10")
+
+  con0 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_false("blast_accession" %in% DBI::dbListFields(con0, "assemblies"))
+  # schema_gaps must catch it (the app/WF2 both SELECT these columns)
+  expect_true("the assemblies table lacks per-scaffold BLAST columns" %in% schema_gaps(con0))
+  DBI::dbDisconnect(con0)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_true(all(
+    c("blast_accession", "blast_species", "blast_pident",
+      "blast_qcovs", "blast_evalue", "blast_lineage") %in%
+      DBI::dbListFields(con, "assemblies")
+  ))
+})
+
+test_that("backwards_compatibility provisions orf_opts.orf_nested (created and altered paths)", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)   # no orf_opts table -> migration CREATEs it
+  make_config(td, version = "1.3.10")
+
+  con0 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_true("the orf_opts table lacks the 'orf_nested' column" %in% schema_gaps(con0))
+  DBI::dbDisconnect(con0)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_true("orf_nested" %in% DBI::dbListFields(con, "orf_opts"))
+  # seeded default row carries a concrete value (WF2 ORF reads it)
+  expect_equal(
+    DBI::dbGetQuery(con, "SELECT orf_nested FROM orf_opts WHERE orf_opts = 'default'")$orf_nested,
+    0L
+  )
+})
+
+test_that("backwards_compatibility repoints a stale non-main MITOS2 ref_dir to main (and leaves custom refs)", {
+  stale <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/scyphozoa-ruleset/ref_dbs/Mitos2"
+  main  <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2"
+
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.3.10")
+  con0 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  # stale branch on our own repo -> should be rewritten
+  DBI::dbExecute(con0, "UPDATE annotate_opts SET ref_dir = ?", params = list(stale))
+  # a custom (non-Smithsonian) ref_dir -> must be left untouched
+  DBI::dbExecute(con0, "UPDATE curate_opts SET ref_dir = ?",
+                 params = list("/data/local_refs/Mitos2"))
+  DBI::dbDisconnect(con0)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_equal(DBI::dbGetQuery(con, "SELECT ref_dir FROM annotate_opts")$ref_dir, main)
+  expect_equal(DBI::dbGetQuery(con, "SELECT ref_dir FROM curate_opts")$ref_dir,
+               "/data/local_refs/Mitos2")
+
+  # idempotent: a re-run reports nothing to update
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    regexp = "nothing to update"
+  )
+})
+
 
 test_that("backwards_compatibility migrates a v1.0.0 database to current schema", {
   td <- tempfile()
@@ -532,6 +614,39 @@ test_that("backwards_compatibility normalizes legacy TEXT genetic_code on re-run
   expect_false("text" %in% types)
   # value preserved
   expect_equal(DBI::dbGetQuery(con, "SELECT genetic_code FROM samples")$genetic_code, 2L)
+})
+
+
+test_that("backwards_compatibility normalizes REAL genetic_code to INTEGER (MITOS2 rejects '2.0')", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10")
+
+  # Rebuild samples so genetic_code is stored as REAL 2.0, as some old projects did
+  # (a numeric inserted into an affinity-less column). WF2 then passes '2.0' to
+  # runmitos.py -c, which argparse rejects.
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples RENAME TO samples_old")
+  DBI::dbExecute(con, "CREATE TABLE samples (ID TEXT NOT NULL PRIMARY KEY, sample TEXT, genetic_code)")
+  DBI::dbExecute(con, "INSERT INTO samples (ID, sample, genetic_code) SELECT ID, sample, 2.0 FROM samples_old")
+  DBI::dbExecute(con, "DROP TABLE samples_old")
+  expect_equal(
+    DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t, "real")
+  # schema_gaps must catch it, so the app forces migration before WF2 runs
+  expect_true("the samples.genetic_code column is not stored as an integer" %in% schema_gaps(con))
+  DBI::dbDisconnect(con)
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, update_config = FALSE))
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_equal(
+    DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t, "integer")
+  expect_equal(DBI::dbGetQuery(con, "SELECT genetic_code FROM samples")$genetic_code, 2L)
+  expect_false("the samples.genetic_code column is not stored as an integer" %in% schema_gaps(con))
 })
 
 
