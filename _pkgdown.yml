@@ -46,6 +46,7 @@ articles:
 - title: "Usage"
   navbar: ~
   contents:
+  - 'Multiple-Assemblies'
   - 'Ruleset-Browser'
   - 'Fish-Mitogenome-Curation'
   - 'custom_dbs'

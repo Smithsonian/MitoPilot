@@ -1,0 +1,115 @@
+---
+title: "Multiple Paths and Scaffolds"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Multiple-Assemblies}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+Assembly does not always produce one clean, circular mitogenome. A single sample
+can yield several **assembly paths**, and a path can be broken into several
+**scaffolds**. MitoPilot keeps every retained path and scaffold rather than
+discarding them silently, and gives you tools to decide what each one represents
+before annotation and export.
+
+What you see depends partly on the assembler. MitoPilot can assemble with
+[GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (the default) or
+[MitoFinder](https://github.com/RemiAllio/MitoFinder), set by the `assembler`
+option at project setup. GetOrganelle explores an assembly graph and can return
+several alternative **paths** through it, each possibly split into scaffolds.
+MitoFinder returns a **single path**, but can still report several **scaffolds**
+when it recovers more than one mitochondrial contig. So multiple paths are
+specific to GetOrganelle, while multiple scaffolds can arise with either
+assembler. The strategies below apply the same way regardless of which assembler
+produced the sequences.
+
+The right strategy depends on what the extra sequences actually are, and the two
+cases are biologically opposite:
+
+- **Multiple paths** are usually *competing reconstructions of the same genome*
+  from one tangled assembly graph. You want a single answer, so you resolve them
+  down to one.
+- **Multiple scaffolds** in one path are *pieces*, and they can mean different
+  things. They may be fragments of one genome that an incomplete assembly failed
+  to connect; they may be genuinely separate molecules that belong together, as
+  in a naturally multi-chromosome mitogenome; or they may be unrelated sequence,
+  such as contamination or a numt. You join true fragments and keep genuinely
+  separate molecules apart.
+
+Each retained `(path, scaffold)` combination becomes its own row in the Annotate
+module and is annotated and validated independently. The number of paths and
+scaffolds kept per sample is capped by the **Max assembly paths** and **Max
+scaffolds** assembly options (default 10 each).
+
+## Resolving multiple paths
+
+Multiple paths come only from GetOrganelle; MitoFinder always returns a single
+path. When a GetOrganelle sample assembles into more than one path, it is flagged
+in the Assemble module ("Unable to resolve single assembly from reads"). Open the
+assembly details to see each path. Because the paths are alternative hypotheses
+about one genome, you should reduce them to a single assembly before continuing.
+There are two ways to do this.
+
+**Ignore the extras.** If one path is clearly the correct mitogenome, use the
+ignore buttons to drop the others. Only the remaining path advances to
+annotation.
+
+**Build a consensus (Path 0).** When the paths disagree only in a few regions,
+use **Trim to consensus** to reconcile them into a single sequence. MitoPilot
+aligns the paths, and for each block where they conflict you choose which path to
+use (or leave it N-masked); the agreed regions come from a chosen backbone path.
+The result is saved as **Path 0**, a single edited assembly that supersedes the
+alternatives.
+
+Either way, the sample arrives at annotation as one assembly.
+
+## Joining or separating scaffolds
+
+A single path split across several scaffolds is handled in the assembly details
+as well. If the scaffolds are pieces of one fragmented mitogenome, join them; if
+they are separate molecules that genuinely coexist, keep them apart.
+
+**Join scaffolds (Path 0).** For any single-path sample with more than one
+scaffold, the assembly details automatically offer a *"Join scaffolds into one
+assembly"* editor. You do not need to turn anything on for it; MitoPilot computes
+the scaffold-to-reference mappings the editor needs for every eligible sample.
+Reference-guided layout (**Re-map to reference**) orders and orients the scaffolds
+against a chosen BLAST reference; you can override the order and orientation and
+mark the assembly circular, then **Build joined assembly (Path 0)**. If the
+scaffolds carry different BLAST hits, MitoPilot warns you, because joining
+unrelated sequences produces poor overlaps and an unreliable assembly.
+
+The **Join scaffolds** assembly option is a separate, optional convenience rather
+than a switch for the editor. When it is enabled, the pipeline builds Path 0
+*automatically* during assembly for eligible samples, but only when their
+scaffolds map to the same reference, so you do not have to join each fragmented
+sample by hand. It is off by default. Leave it off when your samples may be
+naturally multipartite or contaminated (see below), so their scaffolds are kept
+separate rather than auto-joined.
+
+**Keep them separate.** Not every fragmented sample should be joined. Some
+mitogenomes are naturally **multipartite**, with the genes distributed across
+several small circular or linear chromosomes, and those
+scaffolds are separate molecules of one real genome that must not be concatenated.
+Other times the scaffolds are unrelated: contamination, a nuclear region, or distinct
+heteroplasmic variants. In all of these cases, leave the scaffolds separate. Each
+is annotated and validated on its own, so a single-copy gene present once per
+molecule is not mistaken for a duplicate, and each is exported as its own record.
+
+## Exporting
+
+Export behaves differently for the two cases, matching the biology.
+
+**Multiple scaffolds export as separate records.** A sample contributing more
+than one scaffold produces one GenBank record per scaffold. To keep SeqIDs unique
+within a submission, MitoPilot suffixes them as `ID_p<path>_s<scaffold>` (a
+single-unit sample keeps its plain `ID`). Because a sample split across scaffolds
+*could* instead be one fragmented genome, export asks you to confirm; if that is
+the case, cancel and join the scaffolds into Path 0 first.
+
+**Multiple paths cannot be exported.** Exporting every path would submit several
+near-identical records for one specimen, so MitoPilot blocks export of any sample
+that still has more than one assembly path and names the sample in the message.
+Resolve it first, by ignoring the extra paths or building a consensus Path 0, then
+export.
