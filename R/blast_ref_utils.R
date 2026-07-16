@@ -1,3 +1,130 @@
+#' Resolve the reference accession for one assembly unit
+#'
+#' Single source of truth for "which reference is this scaffold compared against",
+#' shared by the Annotate table, the Export table, the synteny view's default and
+#' the export note, so they cannot name different references. Precedence:
+#' \enumerate{
+#'   \item the user's per-unit "Set as best reference" choice, if any;
+#'   \item otherwise this scaffold's own BLAST top hit
+#'     (\code{assemblies.blast_accession}, which is the first row blastn returned);
+#'   \item otherwise \code{NA} - a scaffold with no hit has no reference, and callers
+#'     should show/claim nothing rather than borrow a sibling's.
+#' }
+#' Deliberately NOT \code{blast_ref_candidates} rank 1: that rank is a synthetic
+#' pident*qcovs sort rather than BLAST's own ordering, so on projects predating the
+#' ranking fix it can name a different accession than the search actually preferred.
+#'
+#' @param con database connection
+#' @param id,pth,scf the unit key (ID, path, scaffold)
+#'
+#' @return single accession string, or `NA_character_`
+#' @noRd
+resolve_unit_blast_ref <- function(con, id, pth, scf) {
+  ovr <- tryCatch(
+    dplyr::tbl(con, "blast_ref_override") |>
+      dplyr::filter(ID == !!id & path == !!pth & scaffold == !!scf) |>
+      dplyr::pull("accession"),
+    error = function(e) character(0)
+  )
+  if (length(ovr) > 0 && !is.na(ovr[1]) && nzchar(ovr[1])) return(ovr[1])
+  hit <- tryCatch(
+    dplyr::tbl(con, "assemblies") |>
+      dplyr::filter(ID == !!id & path == !!pth & scaffold == !!scf) |>
+      dplyr::pull("blast_accession"),
+    error = function(e) character(0)
+  )
+  if (length(hit) > 0 && !is.na(hit[1]) && nzchar(hit[1]) && hit[1] != "NO HIT") {
+    hit[1]
+  } else {
+    NA_character_
+  }
+}
+
+#' Per-unit reference facts for every non-ignored assembly unit
+#'
+#' Vectorised form of [resolve_unit_blast_ref] that also carries the metadata
+#' describing the resolved accession. When a unit is overridden, species/pident/qcovs
+#' are taken from that accession's candidate row and the lineage from
+#' \code{blast_ref_sequences}: otherwise the columns would keep describing the
+#' scaffold's original BLAST hit while displaying the overridden accession.
+#'
+#' `blast_accession_auto` is kept alongside as the scaffold's own BLAST top hit, so
+#' the tables can flag an override (they mark the cell when auto differs from the
+#' displayed accession) and name what the search actually preferred.
+#'
+#' @param db database connection
+#' @return data.frame: ID, path, scaffold, blast_accession, blast_accession_auto,
+#'   blast_species, blast_lineage, blast_pident, blast_qcovs, ref_override
+#' @noRd
+unit_ref_facts <- function(db) {
+  out <- dplyr::tbl(db, "assemblies") |>
+    dplyr::filter(ignore != 1) |>
+    dplyr::select(
+      ID, path, scaffold,
+      auto_accession = blast_accession, auto_species = blast_species,
+      auto_lineage = blast_lineage, auto_pident = blast_pident,
+      auto_qcovs = blast_qcovs
+    ) |>
+    dplyr::collect()
+
+  empty_ovr <- data.frame(
+    ID = character(0), path = integer(0), scaffold = integer(0),
+    ovr_accession = character(0), stringsAsFactors = FALSE
+  )
+  ovr <- tryCatch(
+    dplyr::tbl(db, "blast_ref_override") |>
+      dplyr::select(ID, path, scaffold, ovr_accession = accession) |>
+      dplyr::collect(),
+    error = function(e) empty_ovr
+  )
+  out <- dplyr::left_join(out, ovr, by = c("ID", "path", "scaffold"))
+
+  cand <- tryCatch(
+    dplyr::tbl(db, "blast_ref_candidates") |>
+      dplyr::select(ID, path, scaffold, ovr_accession = accession,
+                    cand_species = species, cand_pident = pident,
+                    cand_qcovs = qcovs) |>
+      dplyr::collect(),
+    error = function(e) NULL
+  )
+  if (!is.null(cand) && nrow(cand) > 0) {
+    out <- dplyr::left_join(out, cand, by = c("ID", "path", "scaffold", "ovr_accession"))
+  } else {
+    out$cand_species <- NA_character_
+    out$cand_pident  <- NA_real_
+    out$cand_qcovs   <- NA_real_
+  }
+
+  refseq <- tryCatch(
+    dplyr::tbl(db, "blast_ref_sequences") |>
+      dplyr::select(ovr_accession = accession, ref_lineage = lineage) |>
+      dplyr::collect(),
+    error = function(e) NULL
+  )
+  if (!is.null(refseq) && nrow(refseq) > 0) {
+    out <- dplyr::left_join(out, refseq, by = "ovr_accession")
+  } else {
+    out$ref_lineage <- NA_character_
+  }
+
+  out |>
+    dplyr::mutate(
+      ref_override    = !is.na(ovr_accession),
+      blast_accession = dplyr::coalesce(ovr_accession, auto_accession),
+      # This scaffold's own BLAST top hit, kept so the tables can mark an override
+      # and say what the search preferred. Per unit, not the sample-level
+      # assemble.blast_accession_auto, which names a different scaffold's hit.
+      blast_accession_auto = auto_accession,
+      blast_species   = dplyr::if_else(ref_override, cand_species, auto_species),
+      blast_lineage   = dplyr::if_else(ref_override, ref_lineage, auto_lineage),
+      blast_pident    = dplyr::if_else(ref_override, cand_pident, auto_pident),
+      blast_qcovs     = dplyr::if_else(ref_override, cand_qcovs, auto_qcovs)
+    ) |>
+    dplyr::select(ID, path, scaffold, blast_accession, blast_accession_auto,
+                  blast_species, blast_lineage, blast_pident, blast_qcovs,
+                  ref_override)
+}
+
 #' Fetch and parse NCBI GFF3 annotations and FASTA sequence for a BLAST top hit
 #'
 #' Downloads the GFF3 record and, optionally, the FASTA sequence for the given
@@ -652,23 +779,28 @@ prepend_blast_hit_to_refhits <- function(annotations, blast_ref_file) {
 #' the reference. The short \code{tag} marks the sequence as remote-derived to
 #' distinguish it from the curated local DB entries in the BLAST hits table.
 #'
-#' Designed to run inside a Nextflow curation task where the reference DB has
-#' been staged with \code{stageInMode 'copy'}; modifications are confined to
-#' the task's private copy and do not bleed across samples.
+#' The remote sequences are written to \code{out_dir} as their own small per-gene
+#' FASTAs rather than appended to \code{ref_dir}, which stays read-only. Callers
+#' then BLAST against both (\code{get_top_hits()} accepts several databases), so
+#' each task adds a few kB instead of rewriting a ~145 MB database it shares with
+#' every other task. Injections accumulate: repeated calls with different
+#' candidate references append to the same per-gene file.
 #'
 #' @param blast_ref_file path to remote BLAST hit JSON staged by Nextflow
 #' @param ref_dir path to the curation BLAST DB root (containing a
-#'   \code{featureProt/} subdirectory of per-gene FASTAs)
+#'   \code{featureProt/} subdirectory of per-gene FASTAs). Read-only; used to
+#'   decide which genes the local DB knows about.
+#' @param out_dir directory to write the remote-only per-gene FASTAs (and their
+#'   BLAST indexes) into. Created if absent. Must be task-private.
 #' @param tag short tag (default \code{"[remote]"}) prepended to the species
 #'   name in the FASTA header to indicate remote origin
 #' @param path_to_makeblastdb optional explicit path to the \code{makeblastdb}
 #'   executable; falls back to \code{Sys.which("makeblastdb")}
 #'
-#' @return Character vector of gene names whose FASTAs were modified
-#'   (invisible).
+#' @return Character vector of gene names whose FASTAs were written (invisible).
 #'
 #' @noRd
-inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
+inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir, out_dir,
                                               tag = "[remote]",
                                               path_to_makeblastdb = NULL) {
   if (is.null(blast_ref_file) || !nzchar(blast_ref_file) ||
@@ -684,6 +816,11 @@ inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
     message("inject_remote_hits: featureProt/ not found in ref_dir")
     return(invisible(character()))
   }
+  if (missing(out_dir) || is.null(out_dir) || !nzchar(out_dir)) {
+    message("inject_remote_hits: out_dir not supplied")
+    return(invisible(character()))
+  }
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
   ref_data <- tryCatch(
     jsonlite::fromJSON(blast_ref_file, simplifyDataFrame = TRUE),
@@ -785,7 +922,7 @@ inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
 
   modified <- character()
   for (gene in names(per_gene)) {
-    fas <- file.path(feature_prot_dir, paste0(gene, ".fas"))
+    fas <- file.path(out_dir, paste0(gene, ".fas"))
     set <- Biostrings::AAStringSet(
       setNames(per_gene[[gene]]$seqs, per_gene[[gene]]$headers)
     )
@@ -800,7 +937,7 @@ inject_remote_hits_into_blast_db <- function(blast_ref_file, ref_dir,
 
   if (!is.null(mkdb)) {
     for (gene in modified) {
-      fas <- file.path(feature_prot_dir, paste0(gene, ".fas"))
+      fas <- file.path(out_dir, paste0(gene, ".fas"))
       system2(mkdb, args = c("-dbtype", "prot", "-in", fas),
               stdout = NULL, stderr = NULL)
     }
@@ -1095,7 +1232,9 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
     aligned_sample = character(),
     aligned_ref    = character(),
     rotation       = integer(),
-    ref_length     = integer()
+    ref_length     = integer(),
+    ref_start      = integer(),
+    strand         = character()
   )
 
   # Quick guard: first character must be a valid IUPAC nucleotide.
@@ -1116,7 +1255,7 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
     ref_dna    <- Biostrings::DNAString(clean(ref_seq))
     ref_len    <- length(ref_dna)
 
-    # Rotate the reference so anchor gene aligns with sample start
+    # Rotate the reference so anchor gene aligns with sample start (circular refs).
     if (rotation > 0L && rotation < ref_len) {
       ref_dna <- Biostrings::xscat(
         Biostrings::subseq(ref_dna, rotation + 1L, ref_len),
@@ -1124,26 +1263,58 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
       )
     }
 
+    # baseOnly = FALSE so the matrix includes IUPAC ambiguity codes (esp. N, code
+    # 15). Consensus/joined Path 0 assemblies carry N gap-spacers and ambiguity
+    # masks; with baseOnly = TRUE those hit "key 15 not in lookup table" and the
+    # whole alignment is silently dropped (errorStrategy 'ignore'), so no synteny.
     subMx <- pwalign::nucleotideSubstitutionMatrix(
-      match = 1, mismatch = -1, baseOnly = TRUE
+      match = 1, mismatch = -1, baseOnly = FALSE
     )
-    aln <- pwalign::pairwiseAlignment(
-      pattern            = sample_dna,
-      subject            = ref_dna,
-      substitutionMatrix = subMx,
-      gapOpening         = 10,
-      gapExtension       = 4,
-      type               = "global"
-    )
+    # Fitting alignment: pattern (sample) global, subject (reference) LOCAL, so a
+    # short scaffold maps to just its homologous WINDOW of the reference instead of
+    # being force-fit across the whole genome (which would be mostly gaps and
+    # end-biased). Try both strands and keep the higher-scoring orientation - a
+    # global alignment is reverse-complement-blind and silently misses a
+    # reverse-strand fragment. For a near-complete scaffold the window spans (near)
+    # the whole reference, so this degenerates to the old global behaviour.
+    fit <- function(pat) {
+      pwalign::pairwiseAlignment(
+        pattern = pat, subject = ref_dna, substitutionMatrix = subMx,
+        gapOpening = 10, gapExtension = 4, type = "global-local"
+      )
+    }
+    aln_fwd <- fit(sample_dna)
+    aln_rev <- fit(Biostrings::reverseComplement(sample_dna))
+    if (pwalign::score(aln_rev) > pwalign::score(aln_fwd)) {
+      aln <- aln_rev; strand <- "-"
+    } else {
+      aln <- aln_fwd; strand <- "+"
+    }
 
-    aligned_sample <- as.character(pwalign::alignedPattern(aln))
-    aligned_ref    <- as.character(pwalign::alignedSubject(aln))
+    # Reference window that the scaffold maps to (1-based, rotated-ref coords).
+    # Qualify start/end: inside the package namespace the bare generics resolve to
+    # stats::start/end (length-2), not the Biostrings AlignedXStringSet methods.
+    ws <- BiocGenerics::start(pwalign::subject(aln))
+    we <- BiocGenerics::end(pwalign::subject(aln))
+    aln_samp_win <- as.character(pwalign::alignedPattern(aln))
+    aln_ref_win  <- as.character(pwalign::alignedSubject(aln))
+
+    # Pad the window back to a full-length alignment so aligned_ref (ungapped)
+    # still equals the whole reference: the synteny plot projects reference genes
+    # by counting non-gap ref bases, so it needs the full reference present. The
+    # scaffold's own bases occupy only [ws, we]; everything else is a sample gap.
+    lead_ref  <- if (ws > 1L) as.character(Biostrings::subseq(ref_dna, 1L, ws - 1L)) else ""
+    trail_ref <- if (we < ref_len) as.character(Biostrings::subseq(ref_dna, we + 1L, ref_len)) else ""
+    aligned_ref    <- paste0(lead_ref, aln_ref_win, trail_ref)
+    aligned_sample <- paste0(strrep("-", ws - 1L), aln_samp_win, strrep("-", ref_len - we))
 
     result <- data.frame(
       aligned_sample = aligned_sample,
       aligned_ref    = aligned_ref,
       rotation       = rotation,
       ref_length     = ref_len,
+      ref_start      = ws - 1L,   # 0-based window start in rotated-ref coords
+      strand         = strand,
       stringsAsFactors = FALSE
     )
     write.csv(result, output_file, row.names = FALSE)

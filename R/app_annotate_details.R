@@ -144,6 +144,44 @@ annotations_details_server <- function(id, rv) {
     # already in the db); set TRUE right before each load, see update_counts().
     skip_count_update <- FALSE
 
+    # Persist rv$annotations to the DB. Delete and insert must BOTH be keyed on the
+    # unit, never on ID alone: with an ID-only insert key, dbplyr renders conflict =
+    # "ignore" as NOT EXISTS on ID, so a sibling unit's rows count as a conflict and
+    # the whole re-insert is silently dropped after the delete has already run.
+    persist_annotations <- function() {
+      units <- dplyr::distinct(rv$updating[, c("ID", "path", "scaffold")])
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_delete(
+          units,
+          by = c("ID", "path", "scaffold"),
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+      dplyr::tbl(session$userData$con, "annotations") |>
+        dplyr::rows_insert(
+          rv$annotations |> dplyr::select(-faa, -fas),
+          by = c("ID", "path", "scaffold", "gene", "pos1"),
+          conflict = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+    }
+
+    # Write the given columns of rv$updating to this unit's annotate row. Keyed on
+    # (ID, path, scaffold) so a multi-assembly sample's sibling units are never
+    # touched (a by="ID" write would clobber every unit).
+    update_annotate_unit <- function(cols) {
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating[, c("ID", "path", "scaffold", cols)],
+          by = c("ID", "path", "scaffold"),
+          unmatched = "ignore",
+          copy = TRUE,
+          in_place = TRUE
+        )
+    }
+
     # Outlier-review flag for the sample we jumped in to fix (NULL otherwise),
     # used to render a reminder banner of what to edit.
     outlier_flag <- reactiveVal(NULL)
@@ -203,7 +241,10 @@ annotations_details_server <- function(id, rv) {
       )
       rv$blast_ref_aln <- tryCatch(
         dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
-          dplyr::filter(ID == !!rv$updating$ID, accession == !!acc) |>
+          dplyr::filter(ID == !!rv$updating$ID,
+                        path == !!rv$updating$path,
+                        scaffold == !!rv$updating$scaffold,
+                        accession == !!acc) |>
           dplyr::collect(),
         error = function(e) NULL
       )
@@ -234,7 +275,9 @@ annotations_details_server <- function(id, rv) {
       ## Load annotations ----
       skip_count_update <<- TRUE  # this load carries validated counts; don't recompute
       rv$annotations <- dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::filter(ID == !!rv$updating$ID) |>
+        dplyr::filter(ID == !!rv$updating$ID,
+                      path == !!rv$updating$path,
+                      scaffold == !!rv$updating$scaffold) |>
         dplyr::arrange(pos1) |>
         dplyr::collect() |>
         dplyr::mutate(
@@ -257,13 +300,18 @@ annotations_details_server <- function(id, rv) {
 
       ## Load coverage ----
       # TODO - get from db (need to fix NA="" issue)
-      rv$coverage <- file.path(
-        session$userData$dir_out,
-        rv$updating$ID,
-        "annotate"
-      ) |>
-        list.files(pattern = "coverageStats", full.names = T) |>
-        read.csv()
+      # Coverage stats are written per unit (ID_coverageStats_<path>_<scaffold>.csv).
+      rv$coverage <- local({
+        dir <- file.path(session$userData$dir_out, rv$updating$ID, "annotate")
+        f <- file.path(dir, paste0(rv$updating$ID, "_coverageStats_",
+                                   rv$updating$path, "_", rv$updating$scaffold, ".csv"))
+        if (!file.exists(f)) {
+          # Fall back to whatever coverageStats file exists (legacy naming).
+          alt <- list.files(dir, pattern = "coverageStats", full.names = TRUE)
+          f <- if (length(alt) > 0) alt[1] else f
+        }
+        read.csv(f)
+      })
 
       ## Load BLAST candidate references (rank-ordered; rank 1 = top hit) ----
       # Candidates are stored per (ID, path, scaffold) - never merged. The
@@ -280,11 +328,18 @@ annotations_details_server <- function(id, rv) {
         if (nrow(all_cand) == 0) {
           NULL
         } else {
+          # Prefer this unit's own (path, scaffold) candidate list (multi-assembly:
+          # each unit shows its own scaffold's hits, not the sample-level ref's).
+          src <- all_cand[all_cand$path == rv$updating$path &
+                            all_cand$scaffold == rv$updating$scaffold,
+                          c("path", "scaffold"), drop = FALSE]
           # NULL-safe: blast_accession may be absent from rv$updating, and %|NA|%
           # errors on a NULL (is.na(NULL) is length 0). Coalesce to "".
           ref_acc <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
-          src <- all_cand[!is.na(all_cand$accession) & all_cand$accession == ref_acc,
-                          c("path", "scaffold"), drop = FALSE]
+          if (nrow(src) == 0) {
+            src <- all_cand[!is.na(all_cand$accession) & all_cand$accession == ref_acc,
+                            c("path", "scaffold"), drop = FALSE]
+          }
           if (nrow(src) == 0) {
             # No match: pick the best-scoring scaffold's list (its rank-1 score).
             r1 <- all_cand[all_cand$rank == 1, , drop = FALSE]
@@ -296,10 +351,14 @@ annotations_details_server <- function(id, rv) {
         }
       }, error = function(e) NULL)
 
-      ## Active synteny reference = the sample's current reference (blast_accession,
-      ## possibly a user-set override of the rank-1 default) ----
-      acc0 <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
-      if (!nzchar(acc0)) acc0 <- NA_character_
+      ## Active synteny reference, resolved per unit: this unit's "Set as best
+      ## reference" override, else THIS scaffold's own BLAST top hit, else none.
+      ## Shared with the Annotate/Export tables and the export note so every surface
+      ## names the same reference.
+      acc0 <- resolve_unit_blast_ref(
+        session$userData$con,
+        rv$updating$ID, rv$updating$path, rv$updating$scaffold
+      )
       active_ref_acc(acc0)
       load_blast_ref(acc0)
 
@@ -746,16 +805,9 @@ annotations_details_server <- function(id, rv) {
       rv$updating$PCGCount = sum(retained_annotations$type == "PCG")
       rv$updating$tRNACount = sum(retained_annotations$type == "tRNA")
       rv$updating$rRNACount = sum(retained_annotations$type == "rRNA")
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating[, c("ID", "PCGCount", "tRNACount", "rRNACount")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      update_annotate_unit(c("PCGCount", "tRNACount", "rRNACount"))
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "PCGCount", "tRNACount", "rRNACount")], by = "ID")
+        dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "PCGCount", "tRNACount", "rRNACount")], by = c("ID", "path", "scaffold"))
       rv$annotations <- NULL
       rv$coverage <- NULL
       rv$table_filter <- NULL
@@ -765,6 +817,9 @@ annotations_details_server <- function(id, rv) {
       ref_msa_cache$msa <- NULL
       ref_msa_cache$key <- NULL
       trigger("update_annotate_table")
+      # Re-fetch so a multi-assembly sample's parent row re-rolls correctly (the
+      # in-place rv$data writes above are per-ID and cannot roll up sibling units).
+      trigger("refresh_annotate")
       removeModal()
       # If we arrived here from the export outlier review, hop back to it
       if (isTRUE(session$userData$return_to_review)) {
@@ -797,16 +852,9 @@ annotations_details_server <- function(id, rv) {
       }
       if (as.numeric(rv$updating$annotate_lock) != 1) {
         rv$updating$annotate_lock <- 1
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "annotate_lock")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("annotate_lock")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "annotate_lock")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "annotate_lock")], by = c("ID", "path", "scaffold"))
       }
       shinyjs::click("close")
     })
@@ -840,6 +888,9 @@ annotations_details_server <- function(id, rv) {
       req(rv$coverage, fig_ctx())
       # Split features that wrap the circular origin (pos1 > pos2) into two arrows.
       cov_seq_len <- max(rv$coverage$Position)
+      # 1 kb axis ticks; empty for short scaffolds (seq(1000, <1000, by=1000)
+      # errors "wrong sign in 'by'").
+      xbreaks <- if (cov_seq_len >= 1000) seq(1000, cov_seq_len, by = 1000) else numeric(0)
       genes_df <- rv$annotations |>
         dplyr::filter(pos1 > 0) |>
         dplyr::mutate(
@@ -863,8 +914,8 @@ annotations_details_server <- function(id, rv) {
             1,
             max(c(rv$coverage$Position, rv$annotations$pos2))
           ),
-          breaks = seq(1000, max(rv$coverage$Position), by = 1000),
-          labels = format(seq(1000, max(rv$coverage$Position), by = 1000), big.mark = ",")
+          breaks = xbreaks,
+          labels = format(xbreaks, big.mark = ",")
         ) +
         ggplot2::coord_cartesian(clip = "off") +
         ggthemes::theme_tufte() +
@@ -882,9 +933,11 @@ annotations_details_server <- function(id, rv) {
         )
 
       y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
-      cov_max  <- max(rv$coverage$Position)
-      minor_tick_x <- setdiff(seq(50, cov_max, by = 50), seq(1000, cov_max, by = 1000))
-      major_tick_x <- seq(1000, cov_max, by = 1000)
+      cov_max  <- cov_seq_len
+      minor_tick_x <- setdiff(
+        if (cov_max >= 50) seq(50, cov_max, by = 50) else numeric(0), xbreaks
+      )
+      major_tick_x <- xbreaks
       depth_rng    <- range(rv$coverage$Depth)
       y_bottom     <- depth_rng[1]
       y_tick_minor <- depth_rng[1] + diff(depth_rng) * 0.04
@@ -1005,6 +1058,45 @@ annotations_details_server <- function(id, rv) {
     # Gene-block coords (alignment-space %) stashed by the synteny image render,
     # consumed by the sticky-label overlay (output$synteny_labels).
     synteny_overlay <- reactiveVal(NULL)
+    # Overview canvas width, shared by the UI container, the image render and the
+    # click->column mapping (they must agree or labels and clicks misalign).
+    # With an alignment the x-axis spans alignment columns, and the aligner pads
+    # the window out to the full reference, so a short scaffold still needs a
+    # reference-width canvas: sizing by the scaffold squeezes every reference gene
+    # label into a few hundred px (a 928 bp scaffold vs a 21 kb reference is ~23x).
+    synteny_plot_w <- reactive({
+      aln <- rv$blast_ref_aln
+      n <- if (!is.null(aln) && nrow(aln) > 0 && isTRUE(nzchar(aln$aligned_sample[1]))) {
+        nchar(aln$aligned_sample[1])
+      } else {
+        fig_ctx()$length %||% 800L
+      }
+      max(as.integer(n), 800L)
+    })
+    # Sample position (original coords) -> canvas px on the overview. The x-axis is
+    # alignment-column space whenever an alignment is shown, so a plain
+    # pos/sample_len mapping lands in the wrong place (and ignores strand); mirror
+    # the projection the plot itself uses.
+    synteny_proj <- reactive({
+      w   <- synteny_plot_w()
+      aln <- rv$blast_ref_aln
+      if (is.null(aln) || nrow(aln) == 0 || !isTRUE(nzchar(aln$aligned_sample[1]))) {
+        sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
+        sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
+        return(function(pos) as.numeric(pos) / sample_len * w)
+      }
+      s_chars  <- strsplit(aln$aligned_sample[1], "")[[1]]
+      aln_len  <- length(s_chars)
+      s_nongap <- which(s_chars != "-")
+      n_s      <- length(s_nongap)
+      strand   <- aln$strand[1] %||% "+"
+      function(pos) {
+        idx <- as.integer(pos)
+        if (identical(strand, "-")) idx <- n_s - idx + 1L
+        idx <- pmin(pmax(idx, 1L), n_s)
+        s_nongap[idx] / aln_len * w
+      }
+    })
     output$synteny_ui <- renderUI({
       ctx <- req(fig_ctx())
       # Need at least one candidate BLAST reference for this sample. The picker is
@@ -1016,7 +1108,7 @@ annotations_details_server <- function(id, rv) {
       req(!is.null(active_acc), !is.na(active_acc), nzchar(active_acc))
 
       has_ref    <- !is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0
-      w          <- max(ctx$length %||% 800L, 800L)
+      w          <- synteny_plot_w()
       sample_lbl <- ctx$ID
       cand_row   <- cand[cand$accession == active_acc, ]
       ref_lbl    <- if (nrow(cand_row) > 0 && !is.na(cand_row$species[1]) && nzchar(cand_row$species[1])) {
@@ -1144,8 +1236,13 @@ annotations_details_server <- function(id, rv) {
         },
         if (has_aln) {
           div(
-            style = "display: flex; margin: 0; padding: 0; line-height: 1;",
-            div(style = "flex-shrink: 0; width: 160px;"),
+            style = "display: flex; align-items: center; margin: 0; padding: 0; line-height: 1;",
+            # The zoom control lives here, with the plot it drives. It must not sit
+            # in the annotation action-button group: that group is hidden until a
+            # gene row is selected, which suspends this output and leaves the
+            # checkbox out of the DOM, so click-to-zoom could never open it.
+            div(style = "flex-shrink: 0; width: 160px;",
+                uiOutput(ns("synteny_zoom_ctrl"))),
             div(style = "flex: 1; text-align: center; font-size: 11px; color: #888; margin: 0; padding: 0;",
                 "click to zoom")
           )
@@ -1199,7 +1296,7 @@ annotations_details_server <- function(id, rv) {
         ))),
         shinyWidgets::prettyCheckbox(
           ns("synteny_zoom"),
-          label = "Zoom to selected gene",
+          label = "Zoom",
           status = "primary",
           inline = TRUE
         )
@@ -1210,7 +1307,7 @@ annotations_details_server <- function(id, rv) {
       req(rv$blast_ref, rv$annotations, rv$coverage, fig_ctx())
       req(nrow(rv$blast_ref) > 0)
 
-      img_w <- max(fig_ctx()$length %||% 800L, 800L)
+      img_w <- synteny_plot_w()
       ref_length   <- rv$blast_ref$ref_length[1]
       sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
       sample_len   <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
@@ -1248,6 +1345,10 @@ annotations_details_server <- function(id, rv) {
         aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
         aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
         aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
+        # When the scaffold aligned on the reverse strand, aligned_sample is the
+        # scaffold's reverse-complement, so a sample position P (original coords)
+        # is the (n - P + 1)-th non-gap base and gene orientation is flipped.
+        aln_strand     <- rv$blast_ref_aln$strand[1] %||% "+"
         s_chars <- strsplit(aligned_sample, "")[[1]]
         r_chars <- strsplit(aligned_ref,    "")[[1]]
         aln_len <- length(s_chars)
@@ -1255,10 +1356,13 @@ annotations_details_server <- function(id, rv) {
         # Non-gap index: s_nongap[i] = alignment column for sample position i
         s_nongap <- which(s_chars != "-")
         r_nongap <- which(r_chars != "-")
+        n_s <- length(s_nongap)
 
         # Project sample position (original coords) -> 0-100 in alignment space
         s_to_pct <- function(pos) {
-          idx <- pmin(pmax(as.integer(pos), 1L), length(s_nongap))
+          idx <- as.integer(pos)
+          if (identical(aln_strand, "-")) idx <- n_s - idx + 1L
+          idx <- pmin(pmax(idx, 1L), n_s)
           s_nongap[idx] / aln_len * 100
         }
         # Project ref position (original coords) -> rotate -> 0-100 in alignment space
@@ -1270,12 +1374,24 @@ annotations_details_server <- function(id, rv) {
 
         # Gene data frames in alignment coordinates. Features that wrap the
         # circular origin (or straddle the rotation point in the reference) map
-        # to xmin > xmax; split them into two arcs at the 0/100 boundary.
+        # to xmin > xmax; split them into two arcs at the 0/100 boundary. On the
+        # reverse strand, s_to_pct reverses coordinate order, so take min/max and
+        # flip arrow direction (a '+' scaffold gene points '-' vs the reference).
         sample_df <- sample_genes |>
-          dplyr::mutate(
-            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
-            xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
-          ) |>
+          dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
+        if (identical(aln_strand, "-")) {
+          sample_df <- sample_df |>
+            dplyr::mutate(
+              .x1 = s_to_pct(pos1), .x2 = s_to_pct(pos2),
+              xmin = pmin(.x1, .x2), xmax = pmax(.x1, .x2),
+              direction = ifelse(direction == "+", "-", "+")
+            ) |>
+            dplyr::select(-.x1, -.x2)
+        } else {
+          sample_df <- sample_df |>
+            dplyr::mutate(xmin = s_to_pct(pos1), xmax = s_to_pct(pos2))
+        }
+        sample_df <- sample_df |>
           split_wrapped_genes(x_lo = 0, x_hi = 100)
         ref_df <- rv$blast_ref |>
           dplyr::mutate(
@@ -1544,21 +1660,34 @@ annotations_details_server <- function(id, rv) {
       aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
       aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
       aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
+      # On the reverse strand aligned_sample is the scaffold's reverse-complement,
+      # so a sample position P (original coords) is the (n_s - P + 1)-th non-gap
+      # base and gene orientation is flipped (mirrors the overview plot).
+      aln_strand <- rv$blast_ref_aln$strand[1] %||% "+"
       s_chars <- strsplit(aligned_sample, "")[[1]]
       r_chars <- strsplit(aligned_ref,    "")[[1]]
       aln_len <- length(s_chars)
       s_nongap <- which(s_chars != "-")
       r_nongap <- which(r_chars != "-")
+      n_s <- length(s_nongap)
+      # Sample original position -> alignment column (RC order on reverse strand)
+      s_pos_to_col <- function(pos) {
+        idx <- as.integer(pos)
+        if (identical(aln_strand, "-")) idx <- n_s - idx + 1L
+        idx <- pmin(pmax(idx, 1L), n_s)
+        s_nongap[idx]
+      }
 
       win <- zoom_window_rv()
-      anchor_bp <- if (!is.null(click_col)) {
-        # Sample bp position at the clicked alignment column
-        as.integer(cumsum(s_chars != "-")[click_col])
+      # Anchor alignment column: the clicked column, or the selected gene's start
+      # column (strand-aware). Back off ~20 non-gap bases upstream (aln order).
+      anchor_col <- if (!is.null(click_col)) {
+        as.integer(click_col)
       } else {
-        as.integer(rv$annotations$pos1[sel_idx])
+        s_pos_to_col(rv$annotations$pos1[sel_idx])
       }
-      # Window starts 20 bp upstream of anchor (clamped to sequence bounds)
-      start_idx <- pmin(pmax(anchor_bp - 20L, 1L), length(s_nongap))
+      anchor_ng <- as.integer(cumsum(s_chars != "-")[anchor_col])
+      start_idx <- pmin(pmax(anchor_ng - 20L, 1L), n_s)
       win_start <- max(1L, s_nongap[start_idx])
       win_end   <- min(aln_len, win_start + win - 1L)
       win_start <- max(1L, win_end - win + 1L)
@@ -1616,17 +1745,21 @@ annotations_details_server <- function(id, rv) {
       to_local <- function(aln_col) aln_col - win_start + 1L
 
       # Sample genes overlapping the window - project pos1/pos2 to alignment cols
+      # (strand-aware). On the reverse strand pos1 maps above pos2 in alignment
+      # order, so take min/max for the block and flip the arrow direction.
       sg <- rv$annotations |> dplyr::filter(pos1 > 0)
-      sg_aln1 <- s_nongap[pmin(pmax(as.integer(sg$pos1), 1L), length(s_nongap))]
-      sg_aln2 <- s_nongap[pmin(pmax(as.integer(sg$pos2), 1L), length(s_nongap))]
-      sg_in <- sg_aln2 >= win_start & sg_aln1 <= win_end
+      sg_c1 <- s_pos_to_col(sg$pos1)
+      sg_c2 <- s_pos_to_col(sg$pos2)
+      sg_lo <- pmin(sg_c1, sg_c2)
+      sg_hi <- pmax(sg_c1, sg_c2)
+      sg_in <- sg_hi >= win_start & sg_lo <= win_end
       sample_gene_df <- if (any(sg_in)) {
         data.frame(
-          xmin = to_local(pmax(sg_aln1[sg_in], win_start)) - 0.5,
-          xmax = to_local(pmin(sg_aln2[sg_in], win_end)) + 0.5,
+          xmin = to_local(pmax(sg_lo[sg_in], win_start)) - 0.5,
+          xmax = to_local(pmin(sg_hi[sg_in], win_end)) + 0.5,
           gene = sg$gene[sg_in],
           fill = type_color(sg$type[sg_in]),
-          forward = sg$direction[sg_in] == "+",
+          forward = if (identical(aln_strand, "-")) sg$direction[sg_in] != "+" else sg$direction[sg_in] == "+",
           stringsAsFactors = FALSE
         )
       } else NULL
@@ -1757,7 +1890,7 @@ annotations_details_server <- function(id, rv) {
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1]))
       if (!has_aln) return()
       aln_len   <- nchar(rv$blast_ref_aln$aligned_sample[1])
-      plot_w_px <- max(rv$updating$length %||% 800L, 800L)
+      plot_w_px <- synteny_plot_w()
       px <- if (!is.null(ev$coords_css$x)) {
         ev$coords_css$x
       } else {
@@ -1783,14 +1916,29 @@ annotations_details_server <- function(id, rv) {
         "hScroll", list(id = ns("coverageDiv"), px = as.numeric(rv$annotations$pos1[selected()]))
       )
       if (!is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0 && !is.null(rv$coverage)) {
-        sample_genes <- rv$annotations |> dplyr::filter(pos1 > 0)
-        sample_len <- max(c(rv$coverage$Position, sample_genes$pos2), na.rm = TRUE)
-        w <- max(rv$updating$length %||% 800L, 800L)
-        scroll_px <- as.numeric(rv$annotations$pos1[selected()]) / sample_len * w
+        scroll_px <- synteny_proj()(rv$annotations$pos1[selected()])
         session$sendCustomMessage(
           "hScroll", list(id = ns("syntenyScrollDiv"), px = scroll_px)
         )
       }
+    })
+
+    # Scroll the overview to the scaffold's aligned window. On a reference-width
+    # canvas a short scaffold occupies a small slice (a 928 bp scaffold is ~4% of a
+    # 21 kb reference) that would otherwise sit off-screen. onFlushed defers the
+    # scroll until the plot container exists.
+    observeEvent(rv$blast_ref_aln, {
+      aln <- rv$blast_ref_aln
+      req(!is.null(aln), nrow(aln) > 0, isTRUE(nzchar(aln$aligned_sample[1])))
+      s_chars <- strsplit(aln$aligned_sample[1], "")[[1]]
+      nz <- which(s_chars != "-")
+      req(length(nz) > 0)
+      px <- max(0, (nz[1] - 1L) / length(s_chars) * synteny_plot_w() - 50)
+      session$onFlushed(function() {
+        session$sendCustomMessage(
+          "hScroll", list(id = ns("syntenyScrollDiv"), px = px)
+        )
+      }, once = TRUE)
     })
 
     # MSA ----
@@ -2332,17 +2480,18 @@ annotations_details_server <- function(id, rv) {
       # Persist without mutating rv$updating: writing notes into rv$updating would
       # invalidate every figure that reads it (coverage/synteny), reloading them on
       # each keystroke.
-      notes_df <- data.frame(ID = rv$updating$ID, annotate_notes = cleaned)
+      notes_df <- data.frame(ID = rv$updating$ID, path = rv$updating$path,
+                             scaffold = rv$updating$scaffold, annotate_notes = cleaned)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           notes_df,
-          by = "ID",
+          by = c("ID", "path", "scaffold"),
           unmatched = "ignore",
           copy = TRUE,
           in_place = TRUE
         )
       rv$data <- rv$data |>
-        dplyr::rows_update(notes_df, by = "ID")
+        dplyr::rows_update(notes_df[, c("ID", "path", "scaffold", "annotate_notes")], by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     })
 
@@ -2382,23 +2531,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::slice(-selected()) |>
         dplyr::bind_rows(update) |>
         dplyr::arrange(pos1)
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |>
-            dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
       reactable::updateReactable(
         "table",
         data = rv$annotations
@@ -2480,7 +2613,8 @@ annotations_details_server <- function(id, rv) {
             session$userData$dir_out,
             rv$updating$ID,
             "annotate",
-            paste0(rv$updating$ID, "_coverageStats_", rv$annotations$path[selected()], ".csv")
+            paste0(rv$updating$ID, "_coverageStats_", rv$annotations$path[selected()],
+                 "_", rv$annotations$scaffold[selected()], ".csv")
           ),
           quote = "none"
         )
@@ -2499,23 +2633,7 @@ annotations_details_server <- function(id, rv) {
               pos2 < start ~ assembly@ranges@width - start + pos2 + 1
             )
           )
-        dplyr::tbl(session$userData$con, "annotations") |>
-          dplyr::rows_delete(
-            rv$updating[, c("ID")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
-        dplyr::tbl(session$userData$con, "annotations") |>
-          dplyr::rows_insert(
-            rv$annotations |>
-              dplyr::select(-faa, -fas),
-            by = "ID",
-            conflict = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        persist_annotations()
 
         reactable::updateReactable(
           "table",
@@ -2544,7 +2662,8 @@ annotations_details_server <- function(id, rv) {
           session$userData$dir_out,
           rv$updating$ID,
           "annotate",
-          paste0(rv$updating$ID, "_assembly_", rv$annotations$path[selected()], ".fasta")
+          paste0(rv$updating$ID, "_assembly_", rv$annotations$path[selected()],
+                 "_", rv$annotations$scaffold[selected()], ".fasta")
         )
       )
 
@@ -2560,17 +2679,11 @@ annotations_details_server <- function(id, rv) {
         inputId = "notes",
         value = rv$updating$annotate_notes
       )
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating[, c("ID", "topology", "annotate_notes")],
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      update_annotate_unit(c("topology", "annotate_notes"))
       rv$data <- rv$data |>
         dplyr::rows_update(
-          rv$updating[, c("ID", "topology", "annotate_notes")],
-          by = "ID"
+          rv$updating[, c("ID", "path", "scaffold", "topology", "annotate_notes")],
+          by = c("ID", "path", "scaffold")
         )
     }) # END LINEARIZE
 
@@ -2579,42 +2692,21 @@ annotations_details_server <- function(id, rv) {
       if(is.na(rv$updating$ID_verified)) {
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "ID_verified")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
       } else if(as.character(rv$updating$ID_verified) == "no"){
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "ID_verified")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
       } else {
         updateActionButton(session, "ID_verified")
         rv$updating$ID_verified <- "no"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "ID_verified")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("ID_verified")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "ID_verified")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
       }
     }) # END ID VERIFIED
 
@@ -2623,29 +2715,15 @@ annotations_details_server <- function(id, rv) {
       if (as.character(rv$updating$reviewed) == "no") {
         updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "reviewed")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("reviewed")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
       } else {
         updateActionButton(session, "reviewed")
         rv$updating$reviewed <- "no"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "reviewed")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("reviewed")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "reviewed")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
       }
     }) # END REVIEWED
 
@@ -2654,29 +2732,15 @@ annotations_details_server <- function(id, rv) {
       if (is.na(rv$updating$problematic)) {
         updateActionButton(session, "problematic")
         rv$updating$problematic <- "yes"
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "problematic")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("problematic")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
       } else {
         updateActionButton(session, "problematic")
         rv$updating$problematic <- NA_character_
-        dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::rows_update(
-            rv$updating[, c("ID", "problematic")],
-            by = "ID",
-            unmatched = "ignore",
-            copy = TRUE,
-            in_place = TRUE
-          )
+        update_annotate_unit("problematic")
         rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "problematic")], by = "ID")
+          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
       }
     }) # END PROBLEMATIC
 
@@ -2684,16 +2748,9 @@ annotations_details_server <- function(id, rv) {
     apply_partial <- function(value) {
       updateActionButton(session, "partial")
       rv$updating$partial <- value
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating[, c("ID", "partial")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      update_annotate_unit("partial")
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "partial")], by = "ID")
+        dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "partial")], by = c("ID", "path", "scaffold"))
     }
     observeEvent(input$partial, {
       if (!isTRUE(rv$updating$partial == "yes")) {
@@ -2763,11 +2820,12 @@ annotations_details_server <- function(id, rv) {
       load_blast_ref(acc)
     })
 
-    # "Set as reference genome": make the currently-viewed candidate the sample's
-    # reference. Overwrites assemble.blast_accession (+ its metadata) from the
-    # candidate row; blast_accession_auto keeps the original rank-1 hit so the
-    # tables can flag the override. This drives the .tbl export note and the synteny
-    # default on reopen. Does not re-curate.
+    # "Set as reference genome": make the currently-viewed candidate THIS unit's
+    # reference. Written per unit to blast_ref_override, not to the sample-level
+    # assemble.blast_accession: the candidate list you pick from is this scaffold's
+    # own, so a sample-level write would relabel sibling scaffolds that never hit the
+    # accession. Drives the Annotate/Export tables, the export note and the synteny
+    # default. Does not re-curate.
     observeEvent(input$synteny_set_ref, ignoreInit = TRUE, {
       acc <- active_ref_acc()
       req(acc, !is.na(acc), nzchar(acc))
@@ -2778,31 +2836,46 @@ annotations_details_server <- function(id, rv) {
       species <- if (!is.null(crow) && nrow(crow) > 0) crow$species[1] else NA_character_
       pident  <- if (!is.null(crow) && nrow(crow) > 0) crow$pident[1]  else NA_real_
       qcovs   <- if (!is.null(crow) && nrow(crow) > 0) crow$qcovs[1]   else NA_real_
-      evalue  <- if (!is.null(crow) && nrow(crow) > 0) crow$evalue[1]  else NA_real_
       lineage <- tryCatch({
         l <- dplyr::tbl(session$userData$con, "blast_ref_sequences") |>
           dplyr::filter(accession == !!acc) |>
           dplyr::pull(lineage)
         if (length(l) > 0) l[1] else NA_character_
       }, error = function(e) NA_character_)
+      # This scaffold's own BLAST top hit: choosing it again clears the override
+      # rather than storing one that just restates the automatic answer.
+      auto_acc <- tryCatch(
+        dplyr::tbl(session$userData$con, "assemblies") |>
+          dplyr::filter(ID == !!rv$updating$ID & path == !!rv$updating$path &
+                          scaffold == !!rv$updating$scaffold) |>
+          dplyr::pull("blast_accession"),
+        error = function(e) character(0)
+      )
+      is_auto <- length(auto_acc) > 0 && identical(as.character(auto_acc[1]), acc)
 
       ok <- tryCatch({
-        DBI::dbExecute(
-          session$userData$con,
-          # COALESCE captures the pre-override blast_accession as the auto value the
-          # first time (SQLite evaluates RHS against the old row before assigning).
-          "UPDATE assemble SET
-             blast_accession_auto = COALESCE(blast_accession_auto, blast_accession),
-             blast_accession = ?, blast_species = ?, blast_pident = ?,
-             blast_qcovs = ?, blast_evalue = ?, blast_lineage = ?
-           WHERE ID = ?",
-          params = list(acc, species, pident, qcovs, evalue, lineage, rv$updating$ID)
-        )
+        if (is_auto) {
+          DBI::dbExecute(
+            session$userData$con,
+            "DELETE FROM blast_ref_override WHERE ID = ? AND path = ? AND scaffold = ?",
+            params = list(rv$updating$ID, rv$updating$path, rv$updating$scaffold)
+          )
+        } else {
+          DBI::dbExecute(
+            session$userData$con,
+            "INSERT OR REPLACE INTO blast_ref_override
+               (ID, path, scaffold, accession, time_stamp)
+             VALUES (?, ?, ?, ?, ?)",
+            params = list(rv$updating$ID, rv$updating$path, rv$updating$scaffold,
+                          acc, as.integer(Sys.time()))
+          )
+        }
         TRUE
       }, error = function(e) { showNotification(paste("Failed to set reference:", conditionMessage(e)), type = "error"); FALSE })
       req(ok)
 
-      # Reflect in the modal (fig_ctx / picker) and the Annotate table (rv$data).
+      # Reflect in the modal (fig_ctx / picker) and the Annotate table (rv$data), for
+      # THIS unit only.
       rv$updating$blast_accession <- acc
       if ("blast_species" %in% names(rv$updating)) rv$updating$blast_species <- species
       if ("blast_pident"  %in% names(rv$updating)) rv$updating$blast_pident  <- pident
@@ -2813,8 +2886,10 @@ annotations_details_server <- function(id, rv) {
       set_cols <- set_cols[intersect(names(set_cols), names(rv$data))]
       rv$data <- rv$data |>
         dplyr::rows_update(
-          data.frame(ID = rv$updating$ID, set_cols, stringsAsFactors = FALSE),
-          by = "ID", unmatched = "ignore"
+          data.frame(ID = rv$updating$ID, path = rv$updating$path,
+                     scaffold = rv$updating$scaffold, set_cols,
+                     stringsAsFactors = FALSE),
+          by = c("ID", "path", "scaffold"), unmatched = "ignore"
         )
       showNotification(paste0("Reference set to ", acc, " for ", rv$updating$ID), type = "message")
     })
@@ -2950,8 +3025,11 @@ annotations_details_server <- function(id, rv) {
       }
       rv$editing$params <- dplyr::left_join(
         dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::select(ID, curate_opts) |>
-          dplyr::filter(ID == !!rv$updating$ID),
+          dplyr::select(ID, path, scaffold, curate_opts) |>
+          dplyr::filter(ID == !!rv$updating$ID,
+                        path == !!rv$updating$path,
+                        scaffold == !!rv$updating$scaffold) |>
+          dplyr::select(ID, curate_opts),
         dplyr::tbl(session$userData$con, "curate_opts"),
         by = "curate_opts"
       ) |>
@@ -3667,23 +3745,7 @@ annotations_details_server <- function(id, rv) {
             rv$annotations$refHits[hits_idx] <- json_string(hits)
           }
 
-          dplyr::tbl(session$userData$con, "annotations") |>
-            dplyr::rows_delete(
-              dplyr::distinct(rv$annotations[, c("ID")]),
-              by = "ID",
-              unmatched = "ignore",
-              copy = TRUE,
-              in_place = TRUE
-            )
-          dplyr::tbl(session$userData$con, "annotations") |>
-            dplyr::rows_insert(
-              rv$annotations |>
-                dplyr::select(-faa, -fas),
-              by = "ID",
-              conflict = "ignore",
-              copy = TRUE,
-              in_place = TRUE
-            )
+          persist_annotations()
           shinyjs::hide("edit_mode_ctrls")
           shinyjs::hide("discard_edits")
           shinyjs::hide("save_edits")
@@ -3728,8 +3790,11 @@ annotations_details_server <- function(id, rv) {
       req(!is.null(rv$local_hits))
       max_blast_hits <- dplyr::left_join(
         dplyr::tbl(session$userData$con, "annotate") |>
-          dplyr::select(ID, curate_opts) |>
-          dplyr::filter(ID == !!rv$updating$ID),
+          dplyr::select(ID, path, scaffold, curate_opts) |>
+          dplyr::filter(ID == !!rv$updating$ID,
+                        path == !!rv$updating$path,
+                        scaffold == !!rv$updating$scaffold) |>
+          dplyr::select(ID, curate_opts),
         dplyr::tbl(session$userData$con, "curate_opts"),
         by = "curate_opts") |>
         dplyr::pull(max_blast_hits)
@@ -3814,24 +3879,9 @@ annotations_details_server <- function(id, rv) {
       )
     })
 
-    # Persist rv$annotations to the DB (delete this sample's rows, re-insert).
+    # Persist rv$annotations to the DB (delete this unit's rows, re-insert).
     save_annotations <- function() {
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |> dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
     }
 
     # Tag selected rows as a join group instead of collapsing them. Segments stay
@@ -4002,22 +4052,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::bind_rows(merged) |>
         dplyr::bind_rows(deleted_rows) |>
         dplyr::arrange(pos1)
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |> dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
       shinyjs::hide("merge_select_div")
       reactable::updateReactable(
         "table",
@@ -4031,8 +4066,11 @@ annotations_details_server <- function(id, rv) {
       rules <- tryCatch(
         dplyr::left_join(
           dplyr::tbl(session$userData$con, "annotate") |>
-            dplyr::select(ID, curate_opts) |>
-            dplyr::filter(ID == !!rv$updating$ID),
+            dplyr::select(ID, path, scaffold, curate_opts) |>
+            dplyr::filter(ID == !!rv$updating$ID,
+                          path == !!rv$updating$path,
+                          scaffold == !!rv$updating$scaffold) |>
+            dplyr::select(ID, curate_opts),
           dplyr::tbl(session$userData$con, "curate_opts"),
           by = "curate_opts"
         ) |>
@@ -4077,22 +4115,7 @@ annotations_details_server <- function(id, rv) {
 
     # Restore Annotation ----
     restore_do_save <- function() {
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_delete(
-          rv$updating[, c("ID")],
-          by = "ID",
-          unmatched = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
-      dplyr::tbl(session$userData$con, "annotations") |>
-        dplyr::rows_insert(
-          rv$annotations |> dplyr::select(-faa, -fas),
-          by = "ID",
-          conflict = "ignore",
-          copy = TRUE,
-          in_place = TRUE
-        )
+      persist_annotations()
       reactable::updateReactable("table", data = rv$annotations)
     }
 
@@ -4128,29 +4151,33 @@ annotations_details_server <- function(id, rv) {
     update_counts <- function() {
       con <- session$userData$con
       id <- rv$updating$ID
+      p  <- rv$updating$path
+      s  <- rv$updating$scaffold
       req(length(id) == 1)
       retained <- rv$annotations |>
         dplyr::filter(!stringr::str_detect(gene, "_DELETED_"))
       pcg  <- sum(retained$type == "PCG",  na.rm = TRUE)
       trna <- sum(retained$type == "tRNA", na.rm = TRUE)
       rrna <- sum(retained$type == "rRNA", na.rm = TRUE)
-      # missing/extra from the sample's curation count rules
+      # missing/extra from this unit's curation count rules
       me <- tryCatch({
         co <- dplyr::tbl(con, "annotate") |>
-          dplyr::filter(ID == !!id) |> dplyr::pull(curate_opts)
+          dplyr::filter(ID == !!id, path == !!p, scaffold == !!s) |>
+          dplyr::pull(curate_opts)
         pj <- dplyr::tbl(con, "curate_opts") |>
           dplyr::filter(curate_opts == !!co) |> dplyr::pull(params)
         params <- jsonlite::fromJSON(pj)
         compute_missing_extra(retained, params$rules, params$default_rules)
       }, error = function(e) list(missing = NA_character_, extra = NA_character_))
+      # This unit's row in rv$data (per-unit table).
+      i <- which(rv$data$ID == id & rv$data$path == p & rv$data$scaffold == s)[1]
       # ORF count is derived in the table; keep blank when ORF finding is off
-      orf_blank <- "ORFCount" %in% names(rv$data) &&
-        isTRUE(is.na(rv$data$ORFCount[match(id, rv$data$ID)]))
+      orf_blank <- "ORFCount" %in% names(rv$data) && !is.na(i) &&
+        isTRUE(is.na(rv$data$ORFCount[i]))
       orf <- if (orf_blank) NA_integer_ else as.integer(sum(retained$type == "ORF", na.rm = TRUE))
       # Short-circuit if nothing the count/missing/extra columns track changed
       # (e.g. position-only codon edits) to avoid needless writes/refreshes.
       same <- function(a, b) (is.na(a) && is.na(b)) || (!is.na(a) && !is.na(b) && a == b)
-      i <- match(id, rv$data$ID)
       if (!is.na(i) &&
           identical(as.integer(rv$data$PCGCount[i]), as.integer(pcg)) &&
           identical(as.integer(rv$data$tRNACount[i]), as.integer(trna)) &&
@@ -4160,14 +4187,15 @@ annotations_details_server <- function(id, rv) {
           same(rv$data$extra[i], me$extra %||% NA_character_)) {
         return(invisible(NULL))
       }
-      # Persist the stored count columns to the annotate table
+      # Persist the stored count columns to this unit's annotate row
       upd <- data.frame(
-        ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+        ID = id, path = p, scaffold = s,
+        PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
         missing = me$missing %||% NA_character_, extra = me$extra %||% NA_character_,
         stringsAsFactors = FALSE
       )
       dplyr::tbl(con, "annotate") |>
-        dplyr::rows_update(upd, by = "ID", unmatched = "ignore",
+        dplyr::rows_update(upd, by = c("ID", "path", "scaffold"), unmatched = "ignore",
                            in_place = TRUE, copy = TRUE)
       # Keep rv$updating in sync (the close handler reads these counts)
       rv$updating$PCGCount  <- pcg
@@ -4175,10 +4203,11 @@ annotations_details_server <- function(id, rv) {
       rv$updating$rRNACount <- rrna
       rv$data <- rv$data |>
         dplyr::rows_update(
-          data.frame(ID = id, PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
+          data.frame(ID = id, path = p, scaffold = s,
+                     PCGCount = pcg, tRNACount = trna, rRNACount = rrna,
                      ORFCount = orf, missing = upd$missing, extra = upd$extra,
                      stringsAsFactors = FALSE),
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       trigger("update_annotate_table")
       trigger("refresh_export")
@@ -4604,8 +4633,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                 id = ns("assign_gene_btn"),
                 actionButton(ns("assign_gene"), "Assign gene name")
               )
-            ),
-            uiOutput(ns("synteny_zoom_ctrl"))
+            )
           )
         ),
         shinyjs::hidden(

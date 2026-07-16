@@ -179,9 +179,7 @@ new_db <- function(
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
-      genetic_code = resolved_genetic_code,
-      export_group = NA_character_,
-      export_time_stamp = NA_integer_
+      genetic_code = resolved_genetic_code
     )
   glue::glue_sql(
     "CREATE TABLE samples (
@@ -445,7 +443,8 @@ new_db <- function(
     "CREATE TABLE annotate (
       ID TEXT NOT NULL,
       ID_verified TEXT,
-      path TEXT,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
       scaffolds INTEGER,
       annotate_opts TEXT,
       curate_opts TEXT,
@@ -466,13 +465,15 @@ new_db <- function(
       length INTEGER,
       topology TEXT,
       time_stamp INTEGER,
-      PRIMARY KEY (ID)
+      PRIMARY KEY (ID, path, scaffold)
     );"
   )
   dplyr::tbl(con, "annotate") |>
     dplyr::rows_upsert(
       data.frame(
         ID = mapping$ID,
+        path = 1L,
+        scaffold = 1L,
         annotate_opts = "default",
         curate_opts = "default",
         orf_opts = "default",
@@ -485,7 +486,7 @@ new_db <- function(
       ),
       in_place = TRUE,
       copy = TRUE,
-      by = "ID"
+      by = c("ID", "path", "scaffold")
     )
 
   ## Annotate options ----
@@ -729,13 +730,47 @@ new_db <- function(
     con,
     "CREATE TABLE blast_ref_alignment (
       ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
       accession TEXT NOT NULL,
       aligned_sample TEXT NOT NULL,
       aligned_ref TEXT NOT NULL,
       rotation INTEGER NOT NULL DEFAULT 0,
       ref_length INTEGER NOT NULL,
+      ref_start INTEGER NOT NULL DEFAULT 0,
+      strand TEXT NOT NULL DEFAULT '+',
       time_stamp INTEGER,
-      PRIMARY KEY (ID, accession)
+      PRIMARY KEY (ID, path, scaffold, accession)
+    );"
+  )
+
+  # User's chosen reference per assembly unit ("Set as best reference"), overriding
+  # that scaffold's own BLAST top hit. Its own table for the same reason as `export`:
+  # the pipeline rewrites assemblies/annotate rows wholesale and would drop it.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE blast_ref_override (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
+      accession TEXT NOT NULL,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
+    );"
+  )
+
+  # Export state, one row per assembly unit. Deliberately its own table rather than
+  # columns on annotate/assemblies: the pipeline writes those with INSERT OR REPLACE
+  # and an explicit column list, which would null anything it does not name.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE export (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL DEFAULT 1,
+      scaffold INTEGER NOT NULL DEFAULT 1,
+      export_group TEXT,
+      export_time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
     );"
   )
 

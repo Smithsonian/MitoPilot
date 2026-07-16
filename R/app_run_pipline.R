@@ -1,6 +1,46 @@
 #' run_pipeline Server Functions
 #'
 #' @noRd
+
+# Canonical workflow order (WF1 then WF2, plus userAsmb), by leaf process name.
+# Used ONLY to render the progress board in workflow order; process identity is
+# keyed by frame POSITION (see progress_update), never by this list.
+MITOPILOT_PROCESS_ORDER <- c(
+  # WF1 (Assemble)
+  "preprocess", "assemble", "coverage", "coverage_userAsmb",
+  "blast_genbank", "blast_ref_fetch", "blast_ref_stamp", "scaffold_join",
+  # WF2 (Annotate)
+  "annotate", "curate", "validate", "write_curated_result", "orf",
+  "blast_ref_align"
+)
+
+# Resolve a Nextflow board token to its canonical leaf-process name, or NA when it
+# can't be resolved unambiguously. Nextflow shrinks the name column when a long
+# task tag widens a row, so a name may arrive full ("WF2:ANNOTATE:annotate"),
+# truncated ("WF2...semble"), or collapsed to 1-2 chars ("WF2...te", ambiguous
+# between annotate/curate/validate). Only used for best-effort render ordering;
+# NA => keep frame position. Never used for row identity.
+resolve_process_name <- function(token) {
+  k <- sub("^.*:", "", token)                        # drop path prefix to last ':'
+  stripped <- sub("^.*(\u2026|\\.\\.\\.)", "", k)     # drop leading ellipsis truncation
+  if (nchar(stripped) < 3) return(NA_character_)
+  hits <- MITOPILOT_PROCESS_ORDER[endsWith(MITOPILOT_PROCESS_ORDER, stripped)]
+  if (length(hits) == 1) hits else NA_character_
+}
+
+# Render a position-keyed board (ordered list of list(line=, name=)) into workflow
+# order: resolved names sort by MITOPILOT_PROCESS_ORDER; unresolved rows keep their
+# frame (registration) position, which for our pipelines already equals workflow
+# order. Returns the display lines.
+render_progress_board <- function(board) {
+  if (!length(board)) return(character(0))
+  nm  <- vapply(board, function(x) x$name %||% NA_character_, character(1))
+  ord <- match(nm, MITOPILOT_PROCESS_ORDER)
+  na  <- is.na(ord)
+  ord[na] <- length(MITOPILOT_PROCESS_ORDER) + which(na)  # preserve position order
+  vapply(board[order(ord)], function(x) x$line, character(1))
+}
+
 pipeline_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -232,8 +272,9 @@ pipeline_server <- function(id) {
     start_nf_process <- function() {
       prog_header(NULL)
       prog_executor(NULL)
-      prog_process(list())
-      prog_frame(list())
+      prog_pos(0L)
+      prog_frame_open(FALSE)
+      prog_board(list())
       prog_footer(NULL)
       shinyjs::hide("start_button_ui") # Hide the container with the start buttons
       shinyjs::show("stop")
@@ -508,73 +549,84 @@ pipeline_server <- function(id) {
     # Monitor progress ----
     prog_header <- reactiveVal()
     prog_executor <- reactiveVal()
-    prog_process <- reactiveVal(list())   # last complete board (what we render)
-    prog_frame <- reactiveVal(list())     # board currently being reprinted
+    # Position-keyed board: identity is the process's ORDINAL within a redraw,
+    # NOT its displayed name (which Nextflow truncates unpredictably, even to 1-2
+    # ambiguous chars). The counter resets at the START OF EACH FRAME: an
+    # `executor` line, OR the first process line after a blank (Nextflow reprints
+    # the whole board every ~200ms; BEFORE the first task submits those redraws
+    # have NO executor line, so they must be delimited by the blank separator or
+    # they accumulate). prog_pos carries the running ordinal across observer ticks
+    # (reads can split a frame); prog_frame_open tracks whether we are mid-frame.
+    # prog_board is an ordered list; element = list(line=, name=).
+    prog_pos <- reactiveVal(0L)
+    prog_frame_open <- reactiveVal(FALSE)
+    prog_board <- reactiveVal(list())
     prog_footer <- reactiveVal()
-    # Reduce a Nextflow board token to a stable key: the process simple name.
-    # Nextflow truncates the workflow-path prefix with an ellipsis and varies the
-    # name-column width between redraws. When a long task tag truncates the name
-    # away entirely, fall back to the raw token so distinct processes stay
-    # distinct within a frame instead of collapsing to an empty/1-char key.
-    process_key <- function(token) {
-      k <- sub("^.*:", "", token)                      # drop path prefix up to last ':'
-      stripped <- sub("^.*(\u2026|\\.\\.\\.)", "", k)  # drop leading ellipsis truncation
-      if (nchar(stripped) >= 3) stripped else token
-    }
     progress_update <- function(process_out,
                                 prog_header,
                                 prog_executor,
-                                prog_process,
-                                prog_frame,
+                                prog_pos,
+                                prog_frame_open,
+                                prog_board,
                                 prog_footer) {
-      remaining <- rep(T, length(process_out))
       process_out <- cli::ansi_strip(process_out) # clean up ansi encoded output
-      executor_lines <- stringr::str_detect(process_out, "^executor")
+      n <- length(process_out)
+      is_exec <- stringr::str_detect(process_out, "^executor")
+      is_blank <- grepl("^\\s*$", process_out)
       keys <- stringr::str_match(process_out,
                                  "^(?<prefix>\\[.+?\\]) (?<key>WF\\S*) +(?<suffix>.*)")
-      progress_lines <- !is.na(keys[, 1])
+      is_prog <- !is.na(keys[, 1])
+      routed <- rep(FALSE, n)
       # Header = the Nextflow banner printed before the first executor/progress
       # line; captured once, before any executor line has been seen.
       if (is.null(prog_executor)) {
-        header_stop <- which(executor_lines | progress_lines)
-        header_stop <- ifelse(length(header_stop) == 0,
-                              length(process_out),
-                              min(header_stop) - 1)
-        if (header_stop >= 1) {
+        stop_at <- which(is_exec | is_prog)
+        hstop <- if (length(stop_at)) min(stop_at) - 1L else n
+        if (hstop >= 1) {
           prog_header <- paste(na.omit(c(
-            prog_header, collapse_empty_lines(process_out[seq_len(header_stop)])
+            prog_header, collapse_empty_lines(process_out[seq_len(hstop)])
           )), collapse = "\n")
-          remaining[seq_len(header_stop)] <- F
+          routed[seq_len(hstop)] <- TRUE
         }
       }
-      if (any(executor_lines)) {
-        prog_executor <- process_out[max(which(executor_lines))]
-        remaining[executor_lines] <- F
-      }
-      # Frame reconstruction: Nextflow reprints the whole board on each redraw.
-      # Rather than accumulate rows across redraws (which piles up stale rows when
-      # a long task tag truncates a process name to an unstable stub), rebuild the
-      # current board. Within a frame each process is listed once in order, so a
-      # repeated key marks the next frame: commit the finished frame as the
-      # rendered board and start a fresh one.
-      for (i in which(progress_lines)) {
-        key <- process_key(keys[i, 'key'])
-        if (key %in% names(prog_frame)) {
-          prog_process <- prog_frame
-          prog_frame <- list()
+      # Single ordered pass. A frame starts at an `executor` line OR at the first
+      # progress line after a blank (pre-submit redraws have no executor line);
+      # either resets the position counter. Each progress line advances the
+      # counter and upserts the board AT THAT POSITION, so the same process (row i)
+      # is overwritten in place every redraw regardless of how its name is
+      # truncated. A blank line closes the current frame.
+      for (i in seq_len(n)) {
+        if (is_blank[i]) prog_frame_open <- FALSE
+        if (routed[i]) next
+        if (is_exec[i]) {
+          prog_executor <- process_out[i]
+          prog_pos <- 0L
+          prog_frame_open <- TRUE
+          routed[i] <- TRUE
+        } else if (is_prog[i]) {
+          if (!prog_frame_open) {
+            prog_pos <- 0L          # first process line of a new (executor-less) frame
+            prog_frame_open <- TRUE
+          }
+          prog_pos <- prog_pos + 1L
+          nm <- resolve_process_name(keys[i, "key"])
+          prev <- if (prog_pos <= length(prog_board)) prog_board[[prog_pos]] else NULL
+          if (is.na(nm) && !is.null(prev)) nm <- prev$name   # sticky name
+          prog_board[[prog_pos]] <- list(line = keys[i, 1], name = nm)
+          routed[i] <- TRUE
         }
-        prog_frame[[key]] <- keys[i, 1]   # full line
       }
-      remaining[progress_lines] <- F
-      remaining <- process_out[remaining] |> collapse_empty_lines()
-      if (any(nchar(remaining) > 0)) {
-        prog_footer <- paste(na.omit(c(prog_footer, remaining)), collapse = "\n")
+      # Anything not header/executor/progress (warnings, completion summary) -> footer.
+      rest <- collapse_empty_lines(process_out[!routed])
+      if (any(nchar(rest) > 0)) {
+        prog_footer <- paste(na.omit(c(prog_footer, rest)), collapse = "\n")
       }
       list(
         prog_header = prog_header,
         prog_executor = prog_executor,
-        prog_process = prog_process,
-        prog_frame = prog_frame,
+        prog_pos = prog_pos,
+        prog_frame_open = prog_frame_open,
+        prog_board = prog_board,
         prog_footer = prog_footer
       )
     }
@@ -591,46 +643,33 @@ pipeline_server <- function(id) {
         (is_empty & c(TRUE, !is_empty[-length(is_empty)]))
       x[keep]
     }
+    apply_progress <- function(new_output) {
+      if (length(new_output) == 0) return(invisible())
+      update <- progress_update(
+        new_output,
+        prog_header(),
+        prog_executor(),
+        prog_pos(),
+        prog_frame_open(),
+        prog_board(),
+        prog_footer()
+      )
+      prog_header(update$prog_header)
+      prog_executor(update$prog_executor)
+      prog_pos(update$prog_pos)
+      prog_frame_open(update$prog_frame_open)
+      prog_board(update$prog_board)
+      prog_footer(update$prog_footer)
+    }
     observe({
       req(process())
       invalidateLater(100)
       p <- process()
       if (p$is_alive()) {
-        new_output <- p$read_output_lines()
-        if (length(new_output) > 0) {
-          update <- progress_update(
-            new_output,
-            prog_header(),
-            prog_executor(),
-            prog_process(),
-            prog_frame(),
-            prog_footer()
-          )
-          prog_header(update$prog_header)
-          prog_executor(update$prog_executor)
-          prog_process(update$prog_process)
-          prog_frame(update$prog_frame)
-          prog_footer(update$prog_footer)
-        }
+        apply_progress(p$read_output_lines())
       } else {
-        final_output <- p$read_output_lines()
-        if (length(final_output) > 0) {
-          update <- progress_update(
-            final_output,
-            prog_header(),
-            prog_executor(),
-            prog_process(),
-            prog_frame(),
-            prog_footer()
-          )
-          prog_header(update$prog_header)
-          prog_executor(update$prog_executor)
-          prog_frame(update$prog_frame)
-          prog_footer(update$prog_footer)
-          # Run finished: the last board sits in the in-progress frame with no
-          # following redraw to commit it, so show it as the final board.
-          prog_process(if (length(update$prog_frame)) update$prog_frame else update$prog_process)
-        }
+        # Board is upserted live, so the final read leaves it already correct.
+        apply_progress(p$read_output_lines())
         process(NULL)
         shinyjs::hide("stop")
         shinyjs::show("start_button_ui") # Show the button container again
@@ -647,11 +686,7 @@ pipeline_server <- function(id) {
       req(prog_executor())
     })
     output$progress_process <- renderText({
-      # Render the last complete board; fall back to the board being built (the
-      # very first frame, before any redraw has committed a complete one).
-      board <- prog_process()
-      if (length(board) == 0) board <- prog_frame()
-      paste(board, collapse = "\n")
+      paste(render_progress_board(prog_board()), collapse = "\n")
     })
     output$progress_footer <- renderText({
       req(prog_footer())

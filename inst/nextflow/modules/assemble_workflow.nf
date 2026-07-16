@@ -203,7 +203,10 @@ workflow ASSEMBLE {
         pass_ch.db_write
             .sqlInsert(statement: params.sqlWriteAssemble, db: 'sqlite')
 
-        // Per-scaffold INSERT into assemblies table (still live; no groupTuple)
+        // Per-scaffold rows (still live; no groupTuple). Kept in a channel because
+        // the annotate seed below needs the same per-unit records: they are written
+        // to assemblies by this run, and channel.fromQuery snapshots the database at
+        // session start, so a query would not see them until the NEXT run.
         pass_ch.fasta
             .map { id, files -> files }
             .flatten()
@@ -224,6 +227,10 @@ workflow ASSEMBLE {
                 it[8] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
                 return it
             }
+            .set { scaffold_rows }
+
+        // INSERT into assemblies table
+        scaffold_rows
             .sqlInsert(statement: params.sqlWriteAssemblies, db: 'sqlite')
 
         // FAIL (too many paths/scaffolds): write status=3 with reason, drop from downstream
@@ -275,26 +282,39 @@ workflow ASSEMBLE {
             }
             .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
 
-        // Reset annotation data for updated assemblies (all that produced output)
-        assemble_out[0]
-          .map { it ->
-            tuple(
-              it[0]
-            )
-          }
-          .set { update_ids }
-        // Seed topology + partial from the assembly so linear assemblies show
-        // partial = "yes" on first arrival (matches validate.nf's rule:
-        // circular or linear_complete -> "no", else "yes"). VALIDATE later
-        // recomputes both from the selected path.
+        // Seed one annotate row PER non-ignored unit (ID, path, scaffold). Each
+        // retained scaffold is its own annotation unit; topology/partial come
+        // from that scaffold (partial rule matches validate: circular or
+        // linear_complete -> "no", else "yes"). VALIDATE later recomputes
+        // topology/partial per unit.
+        //
+        // The unit list comes from scaffold_rows (this run's own records), NOT from
+        // a query on assemblies: fromQuery runs once at session ignition, before any
+        // task, so a query cannot see rows this run writes and the seed would lag a
+        // run behind, leaving every unit but the init-seeded (1,1) with no annotate
+        // row and silently dropped by WF2's inner join.
+        //
+        // Options (annotate/curate/orf) and linear_complete ARE safe to query: they
+        // are user-set before launch, so the session-start snapshot is current. They
+        // are inherited from the sample's existing annotate rows (min-path row) so a
+        // re-assembly preserves the user's option choices.
         channel.fromQuery(
-                'SELECT a.ID, a.annotate_opts, a.curate_opts, a.orf_opts, asm.topology, ' +
-                "CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1 THEN 'no' ELSE 'yes' END " +
-                'FROM annotate a ' +
-                'JOIN assemble asm ON a.ID = asm.ID ' +
-                'LEFT JOIN curate_opts co ON a.curate_opts = co.curate_opts;', db: 'sqlite')
-            .join(update_ids)
-            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, annotate_opts, curate_opts, orf_opts, topology, partial, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, ?, ?, ?, 1, 0, "no")', db: 'sqlite')
+                'SELECT an.ID, an.annotate_opts, an.curate_opts, an.orf_opts, ' +
+                'COALESCE(co.linear_complete, 0) ' +
+                'FROM (SELECT ID, annotate_opts, curate_opts, orf_opts, MIN(path) ' +
+                      'FROM annotate GROUP BY ID) an ' +
+                'LEFT JOIN curate_opts co ON co.curate_opts = an.curate_opts;', db: 'sqlite')
+            .set { unit_opts }
+
+        scaffold_rows
+            .filter { it[8] == 0 }                          // non-ignored units only
+            .map { tuple(it[0], it[1], it[2], it[5]) }      // ID, path, scaffold, topology
+            .combine(unit_opts, by: 0)                      // + opts, linear_complete
+            .map { id, path, scaffold, topology, annotate_opts, curate_opts, orf_opts, linear_complete ->
+                def partial = (topology == 'circular' || (linear_complete as Integer) == 1) ? 'no' : 'yes'
+                tuple(id, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts)
+            }
+            .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, "no")', db: 'sqlite')
 
     emit:
         // Two named channels with different gating:

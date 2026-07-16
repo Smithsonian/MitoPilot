@@ -202,6 +202,8 @@ add_samples <- function(
     dplyr::rows_insert(
       data.frame(
         ID = mapping$ID,
+        path = 1L,
+        scaffold = 1L,
         annotate_opts = "default",
         curate_opts = "default",
         orf_opts = "default",
@@ -214,7 +216,7 @@ add_samples <- function(
       ),
       in_place = TRUE,
       copy = TRUE,
-      by = "ID",
+      by = c("ID", "path", "scaffold"),
       conflict = "ignore"
     )
 

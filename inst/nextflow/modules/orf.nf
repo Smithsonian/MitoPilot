@@ -1,6 +1,8 @@
 process orf {
 
-    stageInMode 'copy'
+    // symlink, not copy: the ref DB is a shared pre-extracted, read-only directory
+    // and the other inputs are read-only too (see curate.nf).
+    stageInMode 'symlink'
 
     executor params.orf.executor
     container params.orf.container
@@ -16,13 +18,13 @@ process orf {
 
     errorStrategy 'ignore'
 
-    tag "${id}"
+    tag "${id}.${path}.${scaffold}"
 
     input:
-    tuple val(id), val(path), path(annotations), path(assembly), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean), path(blast_ref_file)
+    tuple val(id), val(path), val(scaffold), path(annotations), path(assembly), val(opts), path(ref_dir_full), val(ref_clade), val(ref_db_clean), path(blast_ref_file)
 
     output:
-    tuple val(id), val(path), path("${id}/annotate/${id}_ORFannotations_*.tsv"), path("${id}/annotate/NF_work_dir_orf.txt")
+    tuple val(id), val(path), val(scaffold), path("${id}/annotate/${id}_ORFannotations_*.tsv"), path("${id}/annotate/NF_work_dir_orf.txt")
 
     shell:
     dir = "${id}/annotate"
@@ -30,18 +32,34 @@ process orf {
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
 
-    # Check if ref database is gzip-compressed file
-    MIME_TYPE=$(file --mime-type -b "!{ref_clade}")
-    if [[ "$MIME_TYPE" == "application/gzip" || "$MIME_TYPE" == "application/x-gzip" ]]; then
-        echo "Decompressing !{ref_clade}..."
-        tar -xzf "!{ref_clade}"
-        echo "Decompression complete."
-    else
-        echo "Input ref_db not .tar.gz"
+    # Reference DB: a pre-extracted, shared directory named for the clade is
+    # normally staged (symlinked). Fall back to extracting a tarball if only that
+    # is present.
+    if [ ! -d "!{ref_db_clean}" ]; then
+        for tb in "!{ref_db_clean}.tar.gz" "!{ref_clade}"; do
+            if [ -f "$tb" ]; then
+                echo "Decompressing $tb..."
+                tar -xzf "$tb"
+                break
+            fi
+        done
     fi
 
+    # Merge the per-scaffold validated annotation TSVs into one per-path file so
+    # ORFfinder avoids overlaps against every existing annotation on the path.
+    merged_annotations=merged_validated_annotations.tsv
+    first=1
+    for f in !{annotations}; do
+        if [ "$first" = "1" ]; then
+            cat "$f" > "$merged_annotations"
+            first=0
+        else
+            tail -n +2 "$f" >> "$merged_annotations"
+        fi
+    done
+
     Rscript -e "MitoPilot::orf_finder( \
-        annotations_fn = '!{annotations}', \
+        annotations_fn = '$merged_annotations', \
         assembly_fn = '!{assembly}', \
         genetic_code = '!{opts.genetic_code}', \
         orffinder_opts = '!{opts.orffinder_opts}', \

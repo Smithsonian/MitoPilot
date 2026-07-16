@@ -148,10 +148,21 @@ export_server <- function(id) {
     output$col_css <- renderUI({
       hidden     <- setdiff(names(EXPORT_COL_GROUPS), col_groups_rv())
       hidden_exp <- setdiff(unname(ANNOTATE_EXPORT_CHOICES), export_filter_rv())
+      # Hide path/scaffold when every unit shares value 1 (no extra info), mirroring
+      # the Annotate table. Reactive on rv$data so they appear as soon as a
+      # multi-unit sample is locked.
+      d <- rv$data
+      hide_path     <- !is.null(d) && nrow(d) > 0 && all(d$path == 1, na.rm = TRUE)
+      hide_scaffold <- !is.null(d) && nrow(d) > 0 && all(d$scaffold == 1, na.rm = TRUE)
+      # SeqID only carries information once it diverges from the ID
+      hide_seqid    <- !is.null(d) && nrow(d) > 0 && all(d$seqid == d$ID, na.rm = TRUE)
       # Scope to THIS module's table so rules don't hit the shared mp-grp /
       # mp-exp classes on the assemble, userAsmb, and annotate tables.
       sel <- paste0("#", ns("table"), " ")
       rules <- c(
+        if (hide_path)          paste0(sel, ".mp-col-path { display: none !important; }"),
+        if (hide_scaffold)      paste0(sel, ".mp-col-scaffold { display: none !important; }"),
+        if (hide_seqid)         paste0(sel, ".mp-col-seqid { display: none !important; }"),
         if (length(hidden))     paste0(sel, ".mp-grp-", hidden, " { display: none !important; }"),
         if (length(hidden_exp)) paste0(sel, ".mp-exp-", hidden_exp, " { display: none !important; }")
       )
@@ -189,6 +200,22 @@ export_server <- function(id) {
         defaultColDef = colDef(align = "left"),
         columns = list(
           ID = colDef(show = T, minWidth = 120, sticky = "left"),
+          # One row per assembly unit; the classes let col_css hide these when every
+          # unit shares value 1.
+          path = colDef(
+            show = TRUE, name = "Path", class = "mp-col-path",
+            headerClass = "mp-col-path", width = 55, align = "center"
+          ),
+          scaffold = colDef(
+            show = TRUE, name = "Scaffold", class = "mp-col-scaffold",
+            headerClass = "mp-col-scaffold", width = 75, align = "center"
+          ),
+          # The GenBank record name this unit exports under; hidden when it is just
+          # the ID (no fragmented sample in the project).
+          seqid = colDef(
+            show = TRUE, name = "SeqID", class = "mp-col-seqid",
+            headerClass = "mp-col-seqid", minWidth = 130
+          ),
           Taxon = colDef(show = T, name = "Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
           curate_opts = colDef(
             show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
@@ -408,15 +435,19 @@ export_server <- function(id) {
     # of rv$updating.
     assign_export_group <- function(groups) {
       rv$updating$export_group <- groups
+      unit_key <- c("ID", "path", "scaffold")
+      upd <- rv$updating[, c(unit_key, "export_group")]
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "export_group")], by = "ID")
-      dplyr::tbl(session$userData$con, "samples") |>
-        dplyr::rows_update(
-          rv$updating[, c("ID", "export_group")],
-          unmatched = "ignore",
+        dplyr::rows_update(upd, by = unit_key)
+      # Export state is keyed per unit, so selecting several scaffolds of one sample
+      # yields distinct keys rather than duplicate IDs. Upsert, not update: a unit
+      # that has never been grouped has no export row yet.
+      dplyr::tbl(session$userData$con, "export") |>
+        dplyr::rows_upsert(
+          upd,
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = unit_key
         )
       trigger("update_export_table")
       removeModal()
@@ -736,8 +767,10 @@ export_server <- function(id) {
       group <- input$export_group
       # PCG review needs a multi-sample group; flag_PCG_outliers/export_files
       # only review when length(IDs) > 1.
-      n_samples <- sum(rv$data$export_group == group, na.rm = TRUE)
-      do_review <- isTRUE(input$review_outliers) && n_samples > 1
+      # Units, not samples: one sample can contribute several records, and the
+      # outlier review needs >1 record to compare.
+      n_units <- sum(rv$data$export_group == group, na.rm = TRUE)
+      do_review <- isTRUE(input$review_outliers) && n_units > 1
 
       # Remember params so "Back to Review" can recompute against fresh edits and
       # the deferred write (after review) uses the same options. Stashed because
@@ -789,18 +822,33 @@ export_server <- function(id) {
     write_export_files <- function() {
       p <- rv$export_params
       if (is.null(p)) return(invisible(NULL))
-      export_files(
-        group = rv$review_group,
-        fasta_header = p$fasta_header,
-        fasta_header_gene = p$fasta_header_gene,
-        generateAAalignments = p$generateAAalignments,
-        out_dir = session$userData$dir_out,
-        gene_export = p$gene_export,
-        review = FALSE,
-        start_aa = rv$review_start,
-        stop_aa = rv$review_stop,
-        ident_pct = rv$review_ident
-      )
+      # export_files() can stop() (e.g. a sample still has multiple assembly paths).
+      # Catch it so the app shows a clean alert instead of crashing the session.
+      ok <- tryCatch({
+        export_files(
+          group = rv$review_group,
+          fasta_header = p$fasta_header,
+          fasta_header_gene = p$fasta_header_gene,
+          generateAAalignments = p$generateAAalignments,
+          out_dir = session$userData$dir_out,
+          gene_export = p$gene_export,
+          review = FALSE,
+          start_aa = rv$review_start,
+          stop_aa = rv$review_stop,
+          ident_pct = rv$review_ident
+        )
+        TRUE
+      }, error = function(e) {
+        waiter::waiter_hide()
+        shinyWidgets::sendSweetAlert(
+          session = session,
+          title = "Export failed",
+          text = conditionMessage(e),
+          type = "error"
+        )
+        FALSE
+      })
+      if (!isTRUE(ok)) return(invisible(NULL))
       # Refresh the table so the newly-written export_time_stamp shows up.
       trigger("refresh_export")
     }
@@ -1003,10 +1051,33 @@ export_server <- function(id) {
       if (!is.null(input$ident_pct) && !is.na(input$ident_pct)) rv$opt_ident <- input$ident_pct
     })
 
-    observeEvent(input$export_data, ignoreInit = T, {
-      req(input$export_group)
-      # Block export if either header template is invalid (would crash str_glue_data)
-      if (!valid_headers_or_alert()) return()
+    # Samples in this group whose scaffolds would export as several records, i.e.
+    # ONE path split across multiple scaffolds. A single fragmented genome exported
+    # this way becomes several incomplete records, so we warn. Multi-PATH samples
+    # are a different, blocked case (multi_path_samples()) and are excluded here.
+    fragmented_samples <- function(group) {
+      d <- rv$data[!is.na(rv$data$export_group) & rv$data$export_group == group, ]
+      if (nrow(d) == 0) return(character(0))
+      by_id <- split(d, d$ID)
+      names(by_id)[vapply(
+        by_id,
+        function(x) nrow(x) > 1 && length(unique(x$path)) == 1,
+        logical(1)
+      )]
+    }
+
+    # Samples in this group contributing units from more than one assembly path.
+    # These cannot be exported (export_files() would reject them, since exporting
+    # each path submits duplicate records for one specimen), so they are blocked
+    # before export rather than warned about.
+    multi_path_samples <- function(group) {
+      d <- rv$data[!is.na(rv$data$export_group) & rv$data$export_group == group, ]
+      if (nrow(d) == 0) return(character(0))
+      by_id <- split(d$path, d$ID)
+      names(by_id)[vapply(by_id, function(p) length(unique(p)) > 1, logical(1))]
+    }
+
+    check_overwrite_then_export <- function() {
       export_path <- file.path(session$userData$dir_out, "export", input$export_group)
       if (dir.exists(export_path)) {
         shinyWidgets::confirmSweetAlert(
@@ -1023,6 +1094,63 @@ export_server <- function(id) {
         return()
       }
       run_export()
+    }
+
+    observeEvent(input$export_data, ignoreInit = T, {
+      req(input$export_group)
+      # Block export if either header template is invalid (would crash str_glue_data)
+      if (!valid_headers_or_alert()) return()
+      # Block (not warn) any sample with more than one assembly path: export_files()
+      # rejects these, so stop them here with a clear message instead of letting the
+      # error surface mid-write. Should be rare, since locking a multi-path sample
+      # for annotation is blocked upstream.
+      mp <- multi_path_samples(input$export_group)
+      if (length(mp) > 0) {
+        shown <- paste(utils::head(mp, 8), collapse = ", ")
+        if (length(mp) > 8) shown <- paste0(shown, ", and ", length(mp) - 8, " more")
+        shinyWidgets::sendSweetAlert(
+          session = session,
+          title = "Cannot export samples with multiple assembly paths",
+          text = stringr::str_glue(
+            "{length(mp)} sample(s) still have more than one assembly path: {shown}.\n\n",
+            "Assembly paths are alternative resolutions of the same genome, so ",
+            "exporting each would submit duplicate records for one specimen. In the ",
+            "Assemble module, open the assembly details and 'ignore' all but the ",
+            "correct path (or build a consensus Path 0), then export again."
+          ),
+          type = "error"
+        )
+        return()
+      }
+      frag <- fragmented_samples(input$export_group)
+      if (length(frag) > 0) {
+        shown <- paste(utils::head(frag, 5), collapse = ", ")
+        if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
+        shinyWidgets::confirmSweetAlert(
+          session = session,
+          inputId = ns("fragmented_confirm"),
+          title = "Some samples export as multiple records",
+          text = stringr::str_glue(
+            "{length(frag)} sample(s) have more than one assembly and will each ",
+            "produce a SEPARATE GenBank record: {shown}.\n\n",
+            "That is correct when the scaffolds really are different genomes. If a ",
+            "sample is instead ONE genome broken into fragments, each record will ",
+            "be submitted as an incomplete genome. Cancel and use consensus ",
+            "trimming / scaffold joining to combine them, or 'ignore' all but one ",
+            "scaffold."
+          ),
+          type = "warning",
+          btn_labels = c("Cancel", "Export anyway"),
+          btn_colors = c("#0056b3", "#d9534f")
+        )
+        return()
+      }
+      check_overwrite_then_export()
+    })
+
+    observeEvent(input$fragmented_confirm, ignoreInit = T, {
+      req(input$fragmented_confirm)
+      check_overwrite_then_export()
     })
 
     observeEvent(input$overwrite_confirm, ignoreInit = T, {
@@ -1251,8 +1379,11 @@ export_server <- function(id) {
     observeEvent(input$goto_annot, {
       fr <- current_flags()[as.integer(input$goto_annot), ]
       req(nrow(fr) == 1)
+      # Carry the unit: the flag belongs to one scaffold, and without path/scaffold
+      # the Annotate side falls back to the sample's first unit.
       session$userData$goto_annotate_target <- list(
-        ID = fr$ID, gene = fr$gene, issue = fr$issue,
+        ID = fr$ID, path = fr$path, scaffold = fr$scaffold,
+        gene = fr$gene, issue = fr$issue,
         start_offset = fr$start_offset, stop_offset = fr$stop_offset,
         pct_identity = fr$pct_identity
       )

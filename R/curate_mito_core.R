@@ -105,11 +105,29 @@ curate_mito_core <- function(
   # Augment local BLAST DB with translated remote BLAST hit gene sequences.
   # blast_ref_file may name multiple candidate-reference JSONs (whitespace
   # separated); inject each so all retained BLAST hits enrich the curation DB.
+  # The remote sequences land in their own small per-gene DBs and are searched
+  # alongside ref_dir, which stays read-only and can therefore be shared by every
+  # task rather than copied per task.
+  remote_ref_dir <- file.path(tempdir(), "remote_refs")
+  unlink(remote_ref_dir, recursive = TRUE)
   if (!is.null(blast_ref_file) && nzchar(blast_ref_file)) {
     ref_files <- strsplit(trimws(blast_ref_file), "\\s+")[[1]]
     for (rf in ref_files) {
-      if (nzchar(rf)) inject_remote_hits_into_blast_db(rf, ref_dir)
+      if (nzchar(rf)) {
+        inject_remote_hits_into_blast_db(rf, ref_dir, out_dir = remote_ref_dir)
+      }
     }
+  }
+
+  # Databases to BLAST a gene against: the read-only base DB plus this task's
+  # remote-derived sequences, if any were injected for that gene. EVERY refHits
+  # computation must go through here. refHits are recomputed after each boundary
+  # adjustment, and a call naming only the base silently drops the remote hits for
+  # exactly the genes that got adjusted.
+  gene_dbs <- function(gene) {
+    base <- as.character(stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]))
+    remote <- file.path(remote_ref_dir, paste0(gene, ".fas"))
+    c(base, if (file.exists(remote)) remote)
   }
 
   ## Prepare rules ----
@@ -261,16 +279,16 @@ curate_mito_core <- function(
 
   # PCGs ----
   ## Get top ref hits for each PCG ----
-  # Combined all-gene DB (built from every featureProt FASTA, which already
-  # include the remote reference genes injected above) for non-standard PCGs
-  # that have no per-gene featureProt FASTA. Built lazily on first need so the
-  # common all-standard-gene case pays nothing.
+  # Combined all-gene DB for non-standard PCGs that have no per-gene featureProt
+  # FASTA. Merges the base DB with the remote sequences injected above, which now
+  # live in their own directory. Built lazily on first need so the common
+  # all-standard-gene case pays nothing.
   combined_ref_db <- local({
     cache <- NULL; built <- FALSE
     function() {
       if (built) return(cache)
       cache <<- tryCatch(
-        build_combined_orf_db(file.path(ref_dir, "featureProt"),
+        build_combined_orf_db(c(file.path(ref_dir, "featureProt"), remote_ref_dir),
                               file.path(tempdir(), "_curate_all_genes.fas"),
                               condaenv = "base"),
         error = function(e) NULL
@@ -303,7 +321,7 @@ curate_mito_core <- function(
         return(out %||% '{}')
       }
 
-      out <- get_top_hits(ref_db, translation, max_blast_hits) |>
+      out <- get_top_hits(gene_dbs(gene), translation, max_blast_hits) |>
         json_string()
       out %||% '{}'
     })
@@ -392,7 +410,7 @@ curate_mito_core <- function(
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation,
             max_blast_hits
           )
@@ -430,7 +448,7 @@ curate_mito_core <- function(
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation,
             max_blast_hits
           )
@@ -484,7 +502,7 @@ curate_mito_core <- function(
           cur$stop_codon <- stop_codon <- new_stop_codon
           cur$translation <- translation
           refHits <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation,
             max_blast_hits
           )
@@ -538,7 +556,7 @@ curate_mito_core <- function(
           cur$stop_codon <- stop_codon <- new_stop_codon
           cur$translation <- translation
           refHits <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation,
             max_blast_hits
           )
@@ -574,7 +592,7 @@ curate_mito_core <- function(
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits_new <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation_new,
             max_blast_hits
           )
@@ -620,7 +638,7 @@ curate_mito_core <- function(
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits_new <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation_new,
             max_blast_hits
           )
@@ -674,7 +692,7 @@ curate_mito_core <- function(
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits_new <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation_new,
             max_blast_hits
           )
@@ -726,7 +744,7 @@ curate_mito_core <- function(
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits_new <- get_top_hits(
-            stringr::str_glue(ref_dbs[[gene]] %||% ref_dbs[["default"]]),
+            gene_dbs(gene),
             translation_new,
             max_blast_hits
           )

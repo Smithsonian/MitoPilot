@@ -1,10 +1,26 @@
 # Package-default FASTA header templates for the Export modal. Used to seed the
 # export_opts DB row and as the fallback when no custom template is stored.
+# The leading token is {seqid}, not {ID}: a fragmented sample emits one record per
+# scaffold and GenBank needs each SeqID unique within a submission. seqid is the
+# plain ID for single-unit samples, so this is a no-op for unfragmented projects.
 DEFAULT_FASTA_HEADER <- paste0(
-  "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
+  "{seqid} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
   "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"
 )
 DEFAULT_FASTA_HEADER_GENE <- paste0(
+  "{seqid} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
+  "[location=mitochondrion] {Taxon}"
+)
+# The {ID}-era defaults, frozen for migration matching. Spelled out rather than
+# derived from the current defaults: the default has changed twice ({completeness},
+# then {seqid}), so deriving from the current value would stop matching the older
+# ones. Only templates identical to a legacy default are migrated; custom templates
+# are the user's own.
+LEGACY_FASTA_HEADER_ID <- paste0(
+  "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
+  "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"
+)
+LEGACY_FASTA_HEADER_GENE_ID <- paste0(
   "{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}] ",
   "[location=mitochondrion] {Taxon}"
 )
@@ -175,6 +191,23 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
   row <- if (!is.null(data) && nrow(data) > 0) data[1, , drop = FALSE] else data.frame()
   tryCatch({
     stringr::str_glue_data(row, template)
+    # A template without {seqid} gives every unit of a multi-assembly sample the
+    # same defline, while the .tbl still carries the per-unit >Feature seqid. The
+    # two must agree exactly or table2asn rejects the submission. seqid is the
+    # plain ID for single-unit samples, so {seqid} is always the safe choice.
+    if (!grepl("\\{seqid\\}", template)) {
+      multi_unit <- !is.null(data) && "ID" %in% names(data) && any(duplicated(data$ID))
+      msg <- paste(
+        "Header does not use {seqid}. Samples with more than one assembly unit",
+        "will produce duplicate FASTA deflines that do not match the .tbl",
+        ">Feature line, and table2asn will reject the submission. Use {seqid}",
+        "instead of {ID}: it is the plain ID for single-unit samples."
+      )
+      if (multi_unit) {
+        return(err(msg))
+      }
+      return(list(ok = TRUE, level = "warn", message = msg))
+    }
     if (require_completeness && !grepl("\\{completeness\\}\\s*$", template)) {
       return(list(
         ok = TRUE, level = "warn",
@@ -198,6 +231,29 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
   })
 }
 
+#' GenBank SeqID for an assembly unit
+#'
+#' Plain `ID` when the sample contributes exactly one exported record, otherwise
+#' `ID_p<path>_s<scaffold>`. `n_units` counts only exported (non-ignored) units, so
+#' the suffix appears only where there is a sibling record to disambiguate from and
+#' single-scaffold projects keep their existing names.
+#'
+#' @param ID,path,scaffold unit key (vectorised).
+#' @param n_units number of exported units for that unit's sample.
+#'
+#' @noRd
+export_seqid <- function(ID, path, scaffold, n_units) {
+  # Recycle n_units explicitly: ifelse() returns a result the length of its test, so
+  # a scalar n_units (e.g. dplyr::n() inside a grouped mutate) would otherwise
+  # collapse every unit to the first one's SeqID.
+  n <- rep_len(as.integer(n_units), length(ID))
+  ifelse(
+    n > 1L,
+    paste0(ID, "_p", path, "_s", scaffold),
+    as.character(ID)
+  )
+}
+
 #' Populate export table
 #'
 #' @param db database connection
@@ -210,26 +266,37 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
   samples <- dplyr::tbl(db, "samples") |>
     dplyr::select(-dplyr::any_of("topology"))
 
-  # ORF count per sample, blanked when ORF finding is disabled
+  # ORF count per annotate unit, blanked when ORF finding is disabled. annotate and
+  # annotations are keyed (ID, path, scaffold), so both the grouping and the joins
+  # below must carry the full key: keying on ID alone would sum ORFs across a
+  # sample's scaffolds and fan each row out to one copy per scaffold.
+  unit_key <- c("ID", "path", "scaffold")
   orf_counts <- dplyr::tbl(db, "annotations") |>
-    dplyr::select(ID, type) |>
+    dplyr::select(ID, path, scaffold, type) |>
     dplyr::collect() |>
-    dplyr::group_by(ID) |>
-    dplyr::summarise(ORFCount = sum(type == "ORF", na.rm = TRUE))
+    dplyr::group_by(ID, path, scaffold) |>
+    dplyr::summarise(ORFCount = sum(type == "ORF", na.rm = TRUE), .groups = "drop")
   orf_enabled <- dplyr::tbl(db, "annotate") |>
-    dplyr::select(ID, orf_opts) |>
+    dplyr::select(ID, path, scaffold, orf_opts) |>
     dplyr::left_join(dplyr::tbl(db, "orf_opts"), by = "orf_opts") |>
-    dplyr::select(ID, use_orffinder) |>
+    dplyr::select(ID, path, scaffold, use_orffinder) |>
     dplyr::collect()
+
+  # Resolved per-unit reference (override, else this scaffold's own BLAST top hit),
+  # the same source the Annotate table, synteny default and export note use. Each
+  # unit is independent: a scaffold with no hit must not inherit a sibling's
+  # accession, which is what reading the sample-level assemble.blast_* did.
+  assemblies_unit <- unit_ref_facts(db) |>
+    dplyr::select(ID, path, scaffold, blast_accession, blast_accession_auto,
+                  blast_species, blast_lineage)
 
   out <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
-    dplyr::select(ID, blast_accession, blast_species, blast_lineage,
-                  dplyr::any_of(c("blast_accession_auto", "poor_blast_ref"))) |>
+    dplyr::select(ID, dplyr::any_of("poor_blast_ref")) |>
     dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
     dplyr::filter(annotate_lock == 1) |>
     dplyr::select(
-      ID, blast_accession, blast_species, blast_lineage, curate_opts, topology,
+      ID, path, scaffold, curate_opts, topology,
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
       dplyr::any_of(c("blast_accession_auto", "poor_blast_ref", "partial"))
     ) |>
@@ -239,11 +306,18 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
       by = "curate_opts"
     ) |>
     dplyr::left_join(samples, by = "ID") |>
+    # Export state is per unit; a unit with no row yet has never been grouped.
+    dplyr::left_join(dplyr::tbl(db, "export"), by = unit_key) |>
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
     dplyr::collect() |>
-    dplyr::left_join(orf_counts, by = "ID") |>
-    dplyr::left_join(orf_enabled, by = "ID")
+    # inner_join: gates rows to a non-ignored assembly, as assemblies_unit is
+    # already filtered on ignore.
+    dplyr::inner_join(assemblies_unit, by = unit_key) |>
+    dplyr::relocate(blast_accession, blast_accession_auto, blast_species,
+                    blast_lineage, .after = Taxon) |>
+    dplyr::left_join(orf_counts, by = unit_key) |>
+    dplyr::left_join(orf_enabled, by = unit_key)
 
   # these columns are absent on un-migrated DBs
   if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_
@@ -251,7 +325,12 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
 
   out |>
     dplyr::mutate(
-      blast_ref_status = poor_blast_ref,
+      # Ref-align status is only meaningful when this unit has a real BLAST hit
+      # (mirrors the Annotate table).
+      blast_ref_status = dplyr::if_else(
+        is.na(blast_accession) | blast_accession == "NO HIT",
+        NA_character_, poor_blast_ref
+      ),
       # Auto-derive completeness from topology; per-sample "partial" forces
       # partial; project-level linear_complete forces linear -> complete.
       completeness = dplyr::case_when(
@@ -269,6 +348,14 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
       )
     ) |>
     dplyr::select(-use_orffinder, -dplyr::any_of("linear_complete")) |>
+    # The SeqID this unit will export under. Counted within (ID, export_group) to
+    # mirror export_files(): a sample is only suffixed when it contributes more than
+    # one record to the same submission. Also what {seqid} resolves to when the
+    # Export modal previews a header template.
+    dplyr::group_by(ID, export_group) |>
+    dplyr::mutate(seqid = export_seqid(ID, path, scaffold, dplyr::n())) |>
+    dplyr::ungroup() |>
+    dplyr::relocate(path, scaffold, seqid, .after = ID) |>
     dplyr::relocate(ORFCount, .after = rRNACount) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession)
 }

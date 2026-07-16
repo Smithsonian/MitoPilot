@@ -3,6 +3,13 @@ process blast_genbank {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
+    // The BLAST target FASTA is a staged path input but is regenerated on every
+    // run (deterministic content), so its last-modified time changes each time.
+    // Default caching keys staged files on mtime, so -resume always re-ran this
+    // slow remote BLAST. Lenient caching hashes staged inputs by name + size only
+    // (ignoring mtime), so an unchanged target caches across resumes.
+    cache 'lenient'
+
     maxForks params.blast_gb.maxForks
 
     // Retry up to 3 times (default) before ignoring (empty output = possible connection failure).

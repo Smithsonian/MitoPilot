@@ -232,6 +232,40 @@ assembly_coverage_details_server <- function(id, rv) {
       shinyjs::toggle("msa_div", condition = !isTRUE(rv$asmb_multiscaffold) && length(selected()) > 1)
     })
 
+    # Keep the per-unit annotate row in sync when a scaffold's ignore flag is
+    # toggled (multi-assembly). Un-ignore seeds a row mirroring the assemble-time
+    # seed (opts inherited from the sample's min-path annotate row); ignore prunes
+    # it, so ignored units never carry a stale annotate/annotation unit.
+    reconcile_annotate_ignore <- function(ID, path, scaffold, ignore) {
+      con <- session$userData$con
+      if (as.integer(ignore) == 1L) {
+        DBI::dbExecute(
+          con,
+          "DELETE FROM annotate WHERE ID = ? AND path = ? AND scaffold = ?",
+          params = list(ID, path, scaffold)
+        )
+      } else {
+        DBI::dbExecute(
+          con,
+          paste0(
+            "INSERT OR IGNORE INTO annotate ",
+            "(ID, path, scaffold, topology, partial, annotate_opts, curate_opts, ",
+            "orf_opts, annotate_switch, annotate_lock, reviewed) ",
+            "SELECT asm.ID, asm.path, asm.scaffold, asm.topology, ",
+            "CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1 ",
+            "THEN 'no' ELSE 'yes' END, ",
+            "an.annotate_opts, an.curate_opts, an.orf_opts, 1, 0, 'no' ",
+            "FROM assemblies asm ",
+            "LEFT JOIN (SELECT ID, annotate_opts, curate_opts, orf_opts, MIN(path) ",
+            "FROM annotate GROUP BY ID) an ON an.ID = asm.ID ",
+            "LEFT JOIN curate_opts co ON co.curate_opts = an.curate_opts ",
+            "WHERE asm.ID = ? AND asm.path = ? AND asm.scaffold = ?"
+          ),
+          params = list(ID, path, scaffold)
+        )
+      }
+    }
+
     # Ignore bttn ----
     observeEvent(input$ignore, {
       row <- as.numeric(input$ignore)
@@ -249,6 +283,12 @@ assembly_coverage_details_server <- function(id, rv) {
           copy = TRUE,
           by = c("ID", "path", "scaffold")
         )
+      reconcile_annotate_ignore(
+        rv$focal_assembly$ID[row],
+        rv$focal_assembly$path[row],
+        rv$focal_assembly$scaffold[row],
+        rv$focal_assembly$ignore[row]
+      )
       reactable::updateReactable(
         "table",
         data = rv$focal_assembly,
@@ -1336,13 +1376,29 @@ assembly_coverage_details_server <- function(id, rv) {
     # are only set later by the curate step (curate_workflow.nf), leaving a freshly
     # built consensus blank in the Annotate table.
     sync_consensus_annotate <- function(ID, length, topology = "linear") {
-      ann <- data.frame(
-        ID = ID, path = "0", scaffolds = 1L, topology = topology,
-        length = as.integer(length), time_stamp = as.numeric(Sys.time())
+      # Mirror scaffold_join_workflow.nf's sqlSyncAnnotateJoin: upsert the single
+      # joined unit (ID,0,0), inheriting the sample's option sets from an existing
+      # annotate row. The original per-scaffold annotate rows are left in place but
+      # never selected (their assemblies are ignore=1 and children filter ignore=0).
+      # rows_update(by="ID") cannot be used: a multi-scaffold sample now has several
+      # annotate rows, and they must collapse to the one (0,0) unit.
+      DBI::dbExecute(
+        session$userData$con,
+        paste0(
+          "INSERT OR REPLACE INTO annotate ",
+          "(ID, path, scaffold, scaffolds, topology, length, partial, ",
+          "annotate_opts, curate_opts, orf_opts, annotate_switch, annotate_lock, ",
+          "reviewed, time_stamp) ",
+          "SELECT ?, 0, 0, 1, ?, ?, ",
+          "CASE WHEN ? = 'circular' OR co.linear_complete = 1 THEN 'no' ELSE 'yes' END, ",
+          "an.annotate_opts, an.curate_opts, an.orf_opts, 1, 0, 'no', ? ",
+          "FROM (SELECT annotate_opts, curate_opts, orf_opts FROM annotate ",
+          "WHERE ID = ? ORDER BY path, scaffold LIMIT 1) an ",
+          "LEFT JOIN curate_opts co ON co.curate_opts = an.curate_opts"
+        ),
+        params = list(ID, topology, as.integer(length), topology,
+                      as.numeric(Sys.time()), ID)
       )
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(ann, by = "ID", unmatched = "ignore",
-                           in_place = TRUE, copy = TRUE)
     }
 
     persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note, blast_row = NULL,

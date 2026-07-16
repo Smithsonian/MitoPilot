@@ -90,10 +90,12 @@ backwards_compatibility <- function(
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
   containerVer <- any(grep(new_container, conf, fixed = TRUE))
 
-  # genetic_code must be numeric: assemble.nf calls genetic_code.intValue(),
-  # which throws on a TEXT value. Older migrations stored it as TEXT.
+  # genetic_code must be a plain INTEGER: assemble.nf calls genetic_code.intValue()
+  # and MITOS2's -c argparse rejects a float like '2.0'. Older projects stored it as
+  # TEXT ('2') or REAL (2.0); either must be rebuilt to INTEGER affinity. Only a
+  # genuine integer column is treated as current.
   genetic_code_numeric <- isTRUE(tryCatch(
-    !("text" %in% DBI::dbGetQuery(
+    !any(c("text", "real") %in% DBI::dbGetQuery(
       con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples"
     )$t),
     error = function(e) TRUE
@@ -106,12 +108,29 @@ backwards_compatibility <- function(
   # on already-migrated projects.)
   old_ref_str <- any(grepl("/ref_dbs/Mitos2", curate_opts_table$params))
 
-  # the pre-{completeness} default export header, for detecting unmodified templates
-  old_export_default <- sub("{completeness}", "complete genome",
-                            DEFAULT_FASTA_HEADER, fixed = TRUE)
+  # A Smithsonian/MitoPilot MITOS2 ref_dir pointing at any branch other than main
+  # is stale: feature/deleted branches 404 at prepare_ref_db (WF2). Only our own
+  # repo URLs are considered; custom hosts or local paths are left untouched.
+  stale_ref_branch <- {
+    vals <- c(annotate_opts_table$ref_dir, curate_opts_table$ref_dir)
+    vals <- vals[!is.na(vals)]
+    any(grepl("raw\\.githubusercontent\\.com/[Ss]mithsonian/MitoPilot/.+/ref_dbs/Mitos2$", vals) &
+        !grepl("/refs/heads/main/ref_dbs/Mitos2$", vals))
+  }
+
+  # Superseded default export headers, for detecting unmodified templates. Derived
+  # from the frozen {ID}-era template, NOT from DEFAULT_FASTA_HEADER: the default has
+  # since changed to {seqid}, so deriving from the current value would no longer match
+  # what is actually stored in older projects.
+  old_export_defaults <- c(
+    # pre-{completeness}
+    sub("{completeness}", "complete genome", LEGACY_FASTA_HEADER_ID, fixed = TRUE),
+    # pre-{seqid}
+    LEGACY_FASTA_HEADER_ID
+  )
   export_default_current <- tryCatch(
     !("export_opts" %in% DBI::dbListTables(con)) ||
-      !any(DBI::dbReadTable(con, "export_opts")$fasta_header == old_export_default,
+      !any(DBI::dbReadTable(con, "export_opts")$fasta_header %in% old_export_defaults,
            na.rm = TRUE),
     error = function(e) TRUE
   )
@@ -134,7 +153,9 @@ backwards_compatibility <- function(
       "problematic" %in% names(annotate_table) &&
       "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
-      "export_time_stamp" %in% names(samples_table) &&
+      "export" %in% DBI::dbListTables(con) &&
+      "blast_ref_override" %in% DBI::dbListTables(con) &&
+      !any(c("export_group", "export_time_stamp") %in% names(samples_table)) &&
       "poor_blast_ref" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
@@ -176,6 +197,15 @@ backwards_compatibility <- function(
         "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
         error = function(e) FALSE
       )) &&
+      isTRUE(tryCatch(
+        "blast_accession" %in% DBI::dbListFields(con, "assemblies"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "orf_nested" %in% DBI::dbListFields(con, "orf_opts"),
+        error = function(e) FALSE
+      )) &&
+      !stale_ref_branch &&
       "export_opts" %in% DBI::dbListTables(con) &&
       "synteny_accession" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
@@ -192,11 +222,38 @@ backwards_compatibility <- function(
         "accession" %in% DBI::dbListFields(con, "blast_ref_alignment"),
         error = function(e) FALSE
       )) &&
+      isTRUE(tryCatch(
+        "scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"),
+        error = function(e) FALSE
+      )) &&
       export_default_current)
   {
     message("nothing to update")
     return(invisible(NULL))
   }
+
+  # Back up the database before any migration writes. Several steps below rebuild
+  # tables (DROP + RENAME) and drop columns, none of which SQLite can undo, and a
+  # migrated database cannot be reopened by an older MitoPilot. Mirrors the backup
+  # add_samples()/update_sample_metadata() already make.
+  backup_dir <- file.path(path, ".old_sqlite_dbs")
+  if (!dir.exists(backup_dir)) {
+    dir.create(backup_dir, recursive = TRUE)
+    num <- 1
+  } else {
+    backups <- list.files(backup_dir, pattern = "^\\.sqlite\\.[0-9]+$", all.files = TRUE)
+    num <- if (length(backups) == 0) {
+      1
+    } else {
+      max(as.numeric(sapply(strsplit(backups, "[.]"), "[", 3)), na.rm = TRUE) + 1
+    }
+  }
+  backup <- file.path(backup_dir, paste0(".sqlite.", num))
+  if (!file.copy(file.path(path, ".sqlite"), backup)) {
+    stop("Could not back up the project database to ", backup,
+         ". Refusing to migrate without a backup.", call. = FALSE)
+  }
+  message("Backed up project database to: ", backup)
 
   # update annotation and curation reference databases
   if(old_ref_str){
@@ -280,21 +337,13 @@ backwards_compatibility <- function(
       )
   }
 
-  # if export_time_stamp column doesn't exist, add it (marks when a sample was
-  # last exported; NULL = never exported)
-  if(!("export_time_stamp" %in% names(samples_table))){
-    message("added 'export_time_stamp' column to samples table")
-    DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN export_time_stamp INTEGER")
-  }
-
-  # normalize any legacy TEXT genetic_code to INTEGER (idempotent). Projects
-  # migrated by older versions declared the column as TEXT, whose TEXT affinity
-  # stores values as strings and crashes the assemble step (assemble.nf calls
-  # genetic_code.intValue()). A plain UPDATE/CAST is not enough: the TEXT
-  # affinity coerces the result straight back to text, so the column itself must
-  # be rebuilt with INTEGER affinity.
+  # normalize any legacy TEXT/REAL genetic_code to INTEGER (idempotent). Older
+  # projects stored it as TEXT ('2', crashes assemble.nf's genetic_code.intValue())
+  # or REAL (2.0, which MITOS2's -c argparse rejects as an invalid int). A plain
+  # UPDATE/CAST is not enough: the column's affinity coerces the result straight
+  # back, so the column itself must be rebuilt with INTEGER affinity.
   if (!genetic_code_numeric) {
-    message("rebuilt TEXT 'genetic_code' column in samples table as integer")
+    message("rebuilt 'genetic_code' column in samples table as integer")
     # Wrap the multi-step rebuild so a mid-sequence failure rolls back cleanly
     # instead of leaving a half-migrated table.
     DBI::dbBegin(con)
@@ -853,6 +902,7 @@ backwards_compatibility <- function(
         orffinder_opts TEXT,
         orf_min_len INTEGER,
         orf_max_overlap REAL,
+        orf_nested INTEGER,
         PRIMARY KEY (orf_opts)
       );"
     )
@@ -865,7 +915,8 @@ backwards_compatibility <- function(
           memory = 8L,
           orffinder_opts = "-s 1 -n true",
           orf_min_len = 300L,
-          orf_max_overlap = 0.1
+          orf_max_overlap = 0.1,
+          orf_nested = 0L
         ),
         in_place = TRUE,
         copy = TRUE,
@@ -1255,41 +1306,102 @@ backwards_compatibility <- function(
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_alignment (
         ID TEXT NOT NULL,
+        path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
         accession TEXT NOT NULL,
         aligned_sample TEXT NOT NULL,
         aligned_ref TEXT NOT NULL,
         rotation INTEGER NOT NULL DEFAULT 0,
         ref_length INTEGER NOT NULL,
+        ref_start INTEGER NOT NULL DEFAULT 0,
+        strand TEXT NOT NULL DEFAULT '+',
         time_stamp INTEGER,
-        PRIMARY KEY (ID, accession)
+        PRIMARY KEY (ID, path, scaffold, accession)
       );"
     )
-  } else if (!("accession" %in% DBI::dbListFields(con, "blast_ref_alignment"))) {
-    # Migrate single-ref (ID-keyed) alignment to (ID, accession): the existing
-    # alignment is against the sample's current top hit.
-    message("re-keyed blast_ref_alignment table by (ID, accession)")
-    DBI::dbExecute(con,
-      "CREATE TABLE blast_ref_alignment_new (
-        ID TEXT NOT NULL,
-        accession TEXT NOT NULL,
-        aligned_sample TEXT NOT NULL,
-        aligned_ref TEXT NOT NULL,
-        rotation INTEGER NOT NULL DEFAULT 0,
-        ref_length INTEGER NOT NULL,
-        time_stamp INTEGER,
-        PRIMARY KEY (ID, accession)
-      );"
-    )
-    DBI::dbExecute(con,
-      "INSERT OR IGNORE INTO blast_ref_alignment_new
-         (ID, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
-       SELECT al.ID, a.blast_accession, al.aligned_sample, al.aligned_ref, al.rotation, al.ref_length, al.time_stamp
-       FROM blast_ref_alignment al
-       JOIN assemble a ON al.ID = a.ID
-       WHERE a.blast_accession IS NOT NULL"
-    )
-    DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
-    DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
+  } else {
+    bra_fields <- DBI::dbListFields(con, "blast_ref_alignment")
+    if (!("accession" %in% bra_fields)) {
+      # Migrate single-ref (ID-keyed) alignment to (ID, path, accession): the
+      # existing alignment is against the sample's current top hit, path 1.
+      message("re-keyed blast_ref_alignment table by (ID, path, accession)")
+      DBI::dbExecute(con,
+        "CREATE TABLE blast_ref_alignment_new (
+          ID TEXT NOT NULL,
+          path INTEGER NOT NULL DEFAULT 1,
+          accession TEXT NOT NULL,
+          aligned_sample TEXT NOT NULL,
+          aligned_ref TEXT NOT NULL,
+          rotation INTEGER NOT NULL DEFAULT 0,
+          ref_length INTEGER NOT NULL,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, path, accession)
+        );"
+      )
+      DBI::dbExecute(con,
+        "INSERT OR IGNORE INTO blast_ref_alignment_new
+           (ID, path, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+         SELECT al.ID, 1, a.blast_accession, al.aligned_sample, al.aligned_ref, al.rotation, al.ref_length, al.time_stamp
+         FROM blast_ref_alignment al
+         JOIN assemble a ON al.ID = a.ID
+         WHERE a.blast_accession IS NOT NULL"
+      )
+      DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
+    } else if (!("path" %in% bra_fields)) {
+      # Add path to the key: (ID, accession) -> (ID, path, accession). Legacy
+      # single-path alignments map to path 1.
+      message("re-keyed blast_ref_alignment table by (ID, path, accession)")
+      DBI::dbExecute(con,
+        "CREATE TABLE blast_ref_alignment_new (
+          ID TEXT NOT NULL,
+          path INTEGER NOT NULL DEFAULT 1,
+          accession TEXT NOT NULL,
+          aligned_sample TEXT NOT NULL,
+          aligned_ref TEXT NOT NULL,
+          rotation INTEGER NOT NULL DEFAULT 0,
+          ref_length INTEGER NOT NULL,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, path, accession)
+        );"
+      )
+      DBI::dbExecute(con,
+        "INSERT OR IGNORE INTO blast_ref_alignment_new
+           (ID, path, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp)
+         SELECT ID, 1, accession, aligned_sample, aligned_ref, rotation, ref_length, time_stamp
+         FROM blast_ref_alignment"
+      )
+      DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+      DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
+    }
+    # Add scaffold to the key + ref_start/strand columns:
+    # (ID, path, accession) -> (ID, path, scaffold, accession). Legacy rows are
+    # per-path whole-genome alignments computed the OLD way (global, no scaffold,
+    # a representative sequence) and cannot be reliably attributed to one scaffold,
+    # so drop them; blast_ref_align's backfill recomputes one correct per-scaffold
+    # alignment on the next WF2 run (a cheap LOCAL pairwise, no remote BLAST).
+    # Re-read fields: the branches above may have rebuilt the table in this pass.
+    bra_fields <- DBI::dbListFields(con, "blast_ref_alignment")
+    if (!("scaffold" %in% bra_fields)) {
+      message("re-keyed blast_ref_alignment table by (ID, path, scaffold, accession); cleared legacy alignments for per-scaffold recompute")
+      DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
+      DBI::dbExecute(con,
+        "CREATE TABLE blast_ref_alignment (
+          ID TEXT NOT NULL,
+          path INTEGER NOT NULL DEFAULT 1,
+          scaffold INTEGER NOT NULL DEFAULT 1,
+          accession TEXT NOT NULL,
+          aligned_sample TEXT NOT NULL,
+          aligned_ref TEXT NOT NULL,
+          rotation INTEGER NOT NULL DEFAULT 0,
+          ref_length INTEGER NOT NULL,
+          ref_start INTEGER NOT NULL DEFAULT 0,
+          strand TEXT NOT NULL DEFAULT '+',
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, path, scaffold, accession)
+        );"
+      )
+    }
   }
 
   # if blast_opts column doesn't exist in assemble table, add it
@@ -1374,6 +1486,22 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
   }
 
+  # if the per-scaffold BLAST result columns don't exist in assemblies, add them.
+  # A pre-existing assemblies table (created before these columns) never gets them
+  # from the create branch above, yet the app (unit_ref_facts, the annotate/export
+  # tables) and WF2 (CURATE/ORF select a.blast_accession) require them. NULLs are
+  # fine; the pipeline repopulates them on the next run.
+  asmb_blast_cols <- c(blast_accession = "TEXT", blast_species = "TEXT",
+                       blast_pident = "REAL", blast_qcovs = "REAL",
+                       blast_evalue = "REAL", blast_lineage = "TEXT")
+  asmb_fields <- DBI::dbListFields(con, "assemblies")
+  for (col in names(asmb_blast_cols)) {
+    if (!(col %in% asmb_fields)) {
+      message(paste0("added '", col, "' column to assemblies table"))
+      DBI::dbExecute(con, paste0("ALTER TABLE assemblies ADD COLUMN ", col, " ", asmb_blast_cols[[col]]))
+    }
+  }
+
   # if assembly_blast table doesn't exist, create it (per-path BLAST hits)
   if (!("assembly_blast" %in% DBI::dbListTables(con))) {
     message("created assembly_blast table")
@@ -1418,13 +1546,224 @@ backwards_compatibility <- function(
         by = "export_opts"
       )
   } else if (!export_default_current) {
-    # migrate an unmodified default export template to use {completeness}
-    message("updated default export template to use {completeness}")
+    # Migrate unmodified default export templates to the current default. Only exact
+    # matches to a superseded default are touched; a customised template is left as
+    # the user wrote it, even though it may need {seqid} for fragmented samples.
+    message("updated default export template to use {seqid} / {completeness}")
+    for (old in old_export_defaults) {
+      DBI::dbExecute(
+        con,
+        "UPDATE export_opts SET fasta_header = ? WHERE fasta_header = ?",
+        params = list(DEFAULT_FASTA_HEADER, old)
+      )
+    }
     DBI::dbExecute(
       con,
-      "UPDATE export_opts SET fasta_header = ? WHERE fasta_header = ?",
-      params = list(DEFAULT_FASTA_HEADER, old_export_default)
+      "UPDATE export_opts SET fasta_header_gene = ? WHERE fasta_header_gene = ?",
+      params = list(DEFAULT_FASTA_HEADER_GENE, LEGACY_FASTA_HEADER_GENE_ID)
     )
+  }
+
+  # Re-key annotate from (ID) to (ID, path, scaffold): each retained scaffold is
+  # its own annotation unit. Legacy rows had exactly one advancing unit (the old
+  # lock guard enforced it), so map each to the first non-ignored scaffold of its
+  # stored path (fallback path/scaffold = 1). Placed after assemblies is ensured.
+  annotate_fields <- DBI::dbListFields(con, "annotate")
+  if (!("scaffold" %in% annotate_fields)) {
+    message("re-keyed annotate table by (ID, path, scaffold)")
+    path_expr <- if ("path" %in% annotate_fields) "COALESCE(CAST(an.path AS INTEGER), 1)" else "1"
+    # Carry over whatever the old table actually has. Legacy annotate tables vary in
+    # shape (columns arrived across several releases, and `scaffolds` never had an
+    # ALTER migration at all), so select NULL for anything absent rather than
+    # assuming a fixed column set and failing the whole migration.
+    carry <- c("ID_verified", "scaffolds", "annotate_opts", "curate_opts",
+               "orf_opts", "annotate_switch", "annotate_lock", "annotate_notes",
+               "PCGCount", "tRNACount", "rRNACount", "missing", "extra",
+               "warnings", "reviewed", "problematic", "partial", "structure",
+               "length", "topology", "time_stamp")
+    carry_expr <- paste(
+      vapply(
+        carry,
+        function(cn) if (cn %in% annotate_fields) paste0("an.", cn) else "NULL",
+        character(1)
+      ),
+      collapse = ", "
+    )
+    DBI::dbExecute(con,
+      "CREATE TABLE annotate_new (
+        ID TEXT NOT NULL,
+        ID_verified TEXT,
+        path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
+        scaffolds INTEGER,
+        annotate_opts TEXT,
+        curate_opts TEXT,
+        orf_opts TEXT,
+        annotate_switch INTEGER,
+        annotate_lock INTEGER,
+        annotate_notes TEXT,
+        PCGCount INTEGER,
+        tRNACount INTEGER,
+        rRNACount INTEGER,
+        missing TEXT,
+        extra TEXT,
+        warnings INTEGER,
+        reviewed TEXT,
+        problematic TEXT,
+        partial TEXT,
+        structure TEXT,
+        length INTEGER,
+        topology TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+    DBI::dbExecute(con, sprintf(
+      "INSERT OR IGNORE INTO annotate_new
+         (ID, path, scaffold, %s)
+       SELECT an.ID, %s,
+         COALESCE((SELECT MIN(s.scaffold) FROM assemblies s
+                   WHERE s.ID = an.ID AND s.path = %s AND s.ignore = 0), 1),
+         %s
+       FROM annotate an",
+      paste(carry, collapse = ", "), path_expr, path_expr, carry_expr
+    ))
+    DBI::dbExecute(con, "DROP TABLE annotate")
+    DBI::dbExecute(con, "ALTER TABLE annotate_new RENAME TO annotate")
+  }
+
+  # Seed an annotate row for every remaining non-ignored unit. The re-key above
+  # maps each legacy row to a single unit, which is right for a legacy LOCKED
+  # sample (the old lock guard refused to lock a sample with >1 non-ignored
+  # assembly row), but leaves the other units of an unlocked multi-scaffold
+  # sample with no annotate row at all. Those units are then silently dropped by
+  # WF2, whose unit list inner-joins assemblies to annotate. Only WF1 seeds units,
+  # and an upgrading user has no reason to re-assemble. INSERT OR IGNORE keeps the
+  # re-keyed legacy row untouched and seeds the rest ready to annotate, mirroring
+  # assemble_workflow.nf's seed.
+  n_seeded <- DBI::dbExecute(con,
+    "INSERT OR IGNORE INTO annotate
+       (ID, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts,
+        annotate_switch, annotate_lock, reviewed)
+     SELECT asm.ID, asm.path, asm.scaffold, asm.topology,
+            CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1
+                 THEN 'no' ELSE 'yes' END,
+            an.annotate_opts, an.curate_opts, an.orf_opts,
+            1, 0, 'no'
+     FROM assemblies asm
+     LEFT JOIN (SELECT ID, annotate_opts, curate_opts, orf_opts, MIN(path)
+                FROM annotate GROUP BY ID) an ON an.ID = asm.ID
+     LEFT JOIN curate_opts co ON co.curate_opts = an.curate_opts
+     WHERE asm.ignore = 0"
+  )
+  if (n_seeded > 0) {
+    message("seeded ", n_seeded, " additional annotation unit(s) from existing assemblies; ",
+            "re-run Annotate to populate them")
+  }
+
+  # Per-unit reference override. "Set as best reference" is chosen from ONE
+  # scaffold's candidate list, so it belongs to that unit; it used to overwrite the
+  # sample-level assemble.blast_accession (stashing the original in
+  # blast_accession_auto), which relabelled sibling scaffolds that never hit that
+  # accession. Carry any existing override onto that sample's units - the old model
+  # applied it sample-wide, so that is what it meant at the time.
+  if (!DBI::dbExistsTable(con, "blast_ref_override")) {
+    message("created 'blast_ref_override' table (per-unit reference selection)")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE blast_ref_override (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
+        accession TEXT NOT NULL,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+    asm_fields <- DBI::dbListFields(con, "assemble")
+    if (all(c("blast_accession", "blast_accession_auto") %in% asm_fields)) {
+      n <- DBI::dbExecute(con, sprintf(
+        "INSERT OR IGNORE INTO blast_ref_override (ID, path, scaffold, accession, time_stamp)
+         SELECT a.ID, a.path, a.scaffold, b.blast_accession, %d
+         FROM assemblies a
+         JOIN assemble b ON b.ID = a.ID
+         WHERE a.ignore = 0
+           AND b.blast_accession IS NOT NULL AND b.blast_accession != ''
+           AND b.blast_accession != 'NO HIT'
+           AND b.blast_accession_auto IS NOT NULL
+           AND b.blast_accession != b.blast_accession_auto",
+        as.integer(Sys.time())
+      ))
+      if (n > 0) message("carried ", n, " reference override(s) onto assembly units")
+    }
+  }
+
+  # Move export state off samples (PK ID) onto a per-unit table: with multi-assembly
+  # each (ID, path, scaffold) is its own GenBank record and carries its own group.
+  # Must run after the annotate re-key above, which is what gives annotate path and
+  # scaffold to join on.
+  if (!DBI::dbExistsTable(con, "export")) {
+    message("created 'export' table (per-unit export state)")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE export (
+        ID TEXT NOT NULL,
+        path INTEGER NOT NULL DEFAULT 1,
+        scaffold INTEGER NOT NULL DEFAULT 1,
+        export_group TEXT,
+        export_time_stamp INTEGER,
+        PRIMARY KEY (ID, path, scaffold)
+      );"
+    )
+    legacy <- DBI::dbListFields(con, "samples")
+    grp <- if ("export_group" %in% legacy) "s.export_group" else "NULL"
+    ts  <- if ("export_time_stamp" %in% legacy) "s.export_time_stamp" else "NULL"
+    if (any(c("export_group", "export_time_stamp") %in% legacy)) {
+      # Legacy groups were sample-level, so every unit of a sample inherits the
+      # sample's group. annotate alone is not a safe unit source: superseded
+      # per-path rows survive a Path-0 join, so gate on assemblies.ignore = 0 the
+      # way fetch_annotate_units() does.
+      n <- DBI::dbExecute(con, sprintf(
+        "INSERT OR IGNORE INTO export (ID, path, scaffold, export_group, export_time_stamp)
+         SELECT an.ID, an.path, an.scaffold, %s, %s
+         FROM annotate an
+         JOIN assemblies a
+           ON a.ID = an.ID AND a.path = an.path AND a.scaffold = an.scaffold
+          AND a.ignore = 0
+         JOIN samples s ON s.ID = an.ID
+         WHERE %s IS NOT NULL OR %s IS NOT NULL",
+        grp, ts, grp, ts
+      ))
+      if (n > 0) message("carried ", n, " legacy export assignment(s) onto assembly units")
+    }
+  }
+  # Drop the legacy sample-level columns: two sources of truth for the same state is
+  # exactly what moving to the export table removes. Needs SQLite >= 3.35.
+  for (col in c("export_group", "export_time_stamp")) {
+    if (col %in% DBI::dbListFields(con, "samples")) {
+      message("dropped '", col, "' from samples table (now per-unit in 'export')")
+      DBI::dbExecute(con, paste0("ALTER TABLE samples DROP COLUMN ", col))
+    }
+  }
+
+  # Repoint any Smithsonian/MitoPilot MITOS2 ref_dir on a stale/non-main branch to
+  # main (idempotent). Guards against projects built off a feature branch whose ref
+  # URL 404s once that branch is deleted. Only our own repo URLs are rewritten;
+  # custom hosts and local paths are left untouched. Done last, as a direct UPDATE
+  # on the final table state, so earlier in-memory opts upserts cannot clobber it.
+  canonical_mitos_ref <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2"
+  for (ref_tbl in c("annotate_opts", "curate_opts")) {
+    fields <- tryCatch(DBI::dbListFields(con, ref_tbl), error = function(e) character(0))
+    if ("ref_dir" %in% fields) {
+      n <- DBI::dbExecute(
+        con,
+        paste0("UPDATE ", ref_tbl, " SET ref_dir = ? ",
+               "WHERE ref_dir LIKE 'https://raw.githubusercontent.com/%mithsonian/MitoPilot/%/ref_dbs/Mitos2' ",
+               "AND ref_dir <> ?"),
+        params = list(canonical_mitos_ref, canonical_mitos_ref)
+      )
+      if (n > 0) message(paste0("repointed ", n, " stale ", ref_tbl, ".ref_dir value(s) to main"))
+    }
   }
 
   # Regenerate the .config from the chosen executor's template (port project
@@ -1435,4 +1774,41 @@ backwards_compatibility <- function(
     migrate_config(path, executor, con = con)
   }
 
+}
+
+#' Landmarks of the current project schema that an older database will lack.
+#'
+#' Returns a character vector of plain-language gaps, empty when the database is
+#' current. Lives beside the migration so the two stay in sync. Used by the app to
+#' refuse to open a stale project with a readable message rather than failing deep
+#' inside dbplyr with "no such column: path".
+#'
+#' @param con An open connection to a project database.
+#' @noRd
+schema_gaps <- function(con) {
+  has <- function(expr) isTRUE(tryCatch(expr, error = function(e) FALSE))
+  gaps <- character(0)
+  if (!has("scaffold" %in% DBI::dbListFields(con, "annotate"))) {
+    gaps <- c(gaps, "the annotate table is not keyed by (ID, path, scaffold)")
+  }
+  if (!has(DBI::dbExistsTable(con, "export"))) {
+    gaps <- c(gaps, "the per-unit 'export' table is missing")
+  }
+  if (!has(DBI::dbExistsTable(con, "blast_ref_override"))) {
+    gaps <- c(gaps, "the 'blast_ref_override' table is missing")
+  }
+  if (!has("scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"))) {
+    gaps <- c(gaps, "the blast_ref_alignment table is not keyed per scaffold")
+  }
+  if (!has("blast_accession" %in% DBI::dbListFields(con, "assemblies"))) {
+    gaps <- c(gaps, "the assemblies table lacks per-scaffold BLAST columns")
+  }
+  if (!has("orf_nested" %in% DBI::dbListFields(con, "orf_opts"))) {
+    gaps <- c(gaps, "the orf_opts table lacks the 'orf_nested' column")
+  }
+  if (has(any(c("text", "real") %in%
+              DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t))) {
+    gaps <- c(gaps, "the samples.genetic_code column is not stored as an integer")
+  }
+  gaps
 }

@@ -272,10 +272,18 @@ annotate_server <- function(id) {
       hidden_lock  <- setdiff(unname(ANNOTATE_LOCK_CHOICES), lock_filter_rv())
       hidden_state <- setdiff(unname(ANNOTATE_STATE_CHOICES), state_filter_rv())
       hidden_exp   <- setdiff(unname(ANNOTATE_EXPORT_CHOICES), export_filter_rv())
+      # Hide the Path / Scaffold columns when every unit shares value 1 (single
+      # path/scaffold everywhere -> no extra info). Reactive on rv$data so the
+      # columns appear as soon as a multi-unit sample is locked, no app restart.
+      d <- rv$data
+      hide_path     <- !is.null(d) && nrow(d) > 0 && all(d$path == 1, na.rm = TRUE)
+      hide_scaffold <- !is.null(d) && nrow(d) > 0 && all(d$scaffold == 1, na.rm = TRUE)
       # Scope to THIS module's table so rules don't hit the shared mp-lock /
       # mp-state / mp-grp classes on the assemble, userAsmb, and export tables.
       sel <- paste0("#", ns("table"), " ")
       rules <- c(
+        if (hide_path)            paste0(sel, ".mp-col-path { display: none !important; }"),
+        if (hide_scaffold)        paste0(sel, ".mp-col-scaffold { display: none !important; }"),
         if (length(hidden_grp))   paste0(sel, ".mp-grp-",   hidden_grp,   " { display: none !important; }"),
         if (length(hidden_lock))  paste0(sel, ".mp-lock-",  hidden_lock,  " { display: none !important; }"),
         if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }"),
@@ -358,10 +366,20 @@ annotate_server <- function(id) {
             html = TRUE,
             cell = rt_longtext()
           ),
+          # Per-unit key: each (ID, path, scaffold) is its own row. Not sticky (only
+          # lock/state/ID stay frozen). The classes let col_css hide a column when
+          # every unit shares value 1 (no extra info).
+          path = colDef(
+            show = TRUE, name = "Path", class = "mp-col-path",
+            headerClass = "mp-col-path", width = 55, align = "center", filterable = FALSE
+          ),
+          scaffold = colDef(
+            show = TRUE, name = "Scaffold", class = "mp-col-scaffold",
+            headerClass = "mp-col-scaffold", width = 75, align = "center", filterable = FALSE
+          ),
           Taxon = colDef(
             show = TRUE,
             minWidth = 140,
-            sticky = "left",
             html = TRUE,
             cell = rt_longtext()
           ),
@@ -642,7 +660,7 @@ annotate_server <- function(id) {
       req(selected())
       req(all(filtered_data()$annotate_lock[req(selected())] == 0))
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, annotate_switch) |>
+        dplyr::select(ID, path, scaffold, annotate_switch) |>
         dplyr::slice(selected())
       current <- character(0)
       if (length(unique(rv$updating$annotate_switch)) == 1) {
@@ -675,12 +693,12 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
         dplyr::rows_update(
           rv$updating,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       trigger("update_annotate_table")
       removeModal()
@@ -692,9 +710,52 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, annotate_lock) |>
+        dplyr::select(ID, path, scaffold, annotate_lock) |>
         dplyr::slice(selected())
       lock_current <- as.numeric(names(which.max(table(rv$updating$annotate_lock))))
+      locking <- as.numeric(!lock_current) == 1
+
+      # Only LOCKED units advance to Export (fetch_export_data filters
+      # annotate_lock == 1), and a sample cannot export more than one assembly path
+      # (paths are competing resolutions of one genome). Locking a single path is
+      # therefore the natural way to choose it; only locking MORE THAN ONE path of a
+      # sample is a problem. Block just that case, using the resulting locked state
+      # (this action applied on top of what is already locked), and name the samples.
+      if (locking) {
+        ids <- unique(rv$updating$ID)
+        locked_after <- dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::filter(ID %in% !!ids) |>
+          dplyr::select(ID, path, scaffold, annotate_lock) |>
+          dplyr::collect()
+        sel_key <- paste(rv$updating$ID, rv$updating$path, rv$updating$scaffold)
+        is_sel <- paste(locked_after$ID, locked_after$path, locked_after$scaffold) %in% sel_key
+        locked_after$annotate_lock[is_sel] <- 1L
+        locked_after <- locked_after[locked_after$annotate_lock == 1, , drop = FALSE]
+        multi_path <- names(which(
+          tapply(locked_after$path, locked_after$ID,
+                 function(p) length(unique(p))) > 1
+        ))
+        if (length(multi_path) > 0) {
+          shown <- paste(utils::head(multi_path, 8), collapse = ", ")
+          if (length(multi_path) > 8) {
+            shown <- paste0(shown, ", and ", length(multi_path) - 8, " more")
+          }
+          shinyWidgets::sendSweetAlert(
+            session = session,
+            title = "Only one assembly path can be locked per sample",
+            text = stringr::str_glue(
+              "{length(multi_path)} sample(s) would have more than one assembly path ",
+              "locked, but a sample can export only one: {shown}.\n\n",
+              "Assembly paths are alternative resolutions of the same genome. Lock ",
+              "just the correct path (leave the others unlocked), or 'ignore' the ",
+              "extra paths in the Assemble module."
+            ),
+            type = "warning"
+          )
+          req(FALSE)
+        }
+      }
+
       rv$updating$annotate_lock <- as.numeric(!lock_current)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
@@ -702,10 +763,10 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
       trigger("refresh_export")
     })
@@ -716,7 +777,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, ID_verified) |>
+        dplyr::select(ID, path, scaffold, ID_verified) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$ID_verified))[1]
       if (is.na(ID_current)) {
@@ -732,10 +793,10 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     })
 
@@ -745,7 +806,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       rv$updating <- filtered_data() |>
-        dplyr::select(ID, problematic) |>
+        dplyr::select(ID, path, scaffold, problematic) |>
         dplyr::slice(selected())
       ID_current <- sort(unique(rv$updating$problematic))[1]
       if (is.na(ID_current)) {
@@ -759,26 +820,26 @@ annotate_server <- function(id) {
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     })
 
     # Toggle partial
     apply_partial_update <- function(upd) {
-      rv$updating <- upd |> dplyr::select(ID, partial)
+      rv$updating <- upd |> dplyr::select(ID, path, scaffold, partial)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           rv$updating,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = "ID")
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
     }
     init("partial_top")
@@ -786,7 +847,7 @@ annotate_server <- function(id) {
       req(session$userData$mode == "Annotate")
       req(selected())
       upd <- filtered_data() |>
-        dplyr::select(ID, partial, topology) |>
+        dplyr::select(ID, path, scaffold, partial, topology) |>
         dplyr::slice(selected())
       is_on <- any(upd$partial == "yes", na.rm = TRUE)
       if (!is_on) {
@@ -990,7 +1051,7 @@ annotate_server <- function(id) {
       if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
         rv$updating_indirect <- filtered_data() |>
           dplyr::filter(annotate_opts == input$annotate_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
+          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
           shinyWidgets::sendSweetAlert(
@@ -1088,23 +1149,25 @@ annotate_server <- function(id) {
           dplyr::collect()
       }
       ## Update Annotate Table ----
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        annotate_opts = input$annotate_opts,
-        annotate_switch = 1
+      # Per-unit: target the exact (ID, path, scaffold) units (selected + indirect).
+      update <- dplyr::bind_rows(
+        rv$updating[, c("ID", "path", "scaffold")],
+        rv$updating_indirect[, c("ID", "path", "scaffold")]
       )
+      update$annotate_opts <- input$annotate_opts
+      update$annotate_switch <- 1
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           update,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
         dplyr::rows_update(
           update,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
@@ -1207,7 +1270,7 @@ annotate_server <- function(id) {
       if (input$edit_curate_opts && input$curate_opts %in% filtered_data()$curate_opts) {
         rv$updating_indirect <- filtered_data() |>
           dplyr::filter(curate_opts == input$curate_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
+          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
           shinyWidgets::sendSweetAlert(
@@ -1324,23 +1387,24 @@ annotate_server <- function(id) {
           dplyr::collect()
       }
       ## Update Annotate Table ----
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        curate_opts = input$curate_opts,
-        annotate_switch = 1
+      update <- dplyr::bind_rows(
+        rv$updating[, c("ID", "path", "scaffold")],
+        rv$updating_indirect[, c("ID", "path", "scaffold")]
       )
+      update$curate_opts <- input$curate_opts
+      update$annotate_switch <- 1
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           update,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
         dplyr::rows_update(
           update,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       # Genetic code follows the curation ruleset: recompute the per-sample
       # samples.genetic_code cache for the samples whose curate_opts (target or
@@ -1399,7 +1463,7 @@ annotate_server <- function(id) {
       if (input$edit_orf_opts && input$orf_opts %in% filtered_data()$orf_opts) {
         rv$updating_indirect <- filtered_data() |>
           dplyr::filter(orf_opts == input$orf_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
+          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
           shinyWidgets::sendSweetAlert(
             title = "Attempting to edit locked samples",
@@ -1449,21 +1513,22 @@ annotate_server <- function(id) {
         rv$orf_opts <- dplyr::tbl(session$userData$con, "orf_opts") |>
           dplyr::collect()
       }
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        orf_opts = input$orf_opts,
-        annotate_switch = 1
+      update <- dplyr::bind_rows(
+        rv$updating[, c("ID", "path", "scaffold")],
+        rv$updating_indirect[, c("ID", "path", "scaffold")]
       )
+      update$orf_opts <- input$orf_opts
+      update$annotate_switch <- 1
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
           update,
           unmatched = "ignore",
           in_place = TRUE,
           copy = TRUE,
-          by = "ID"
+          by = c("ID", "path", "scaffold")
         )
       rv$data <- filtered_data() |>
-        dplyr::rows_update(update, by = "ID")
+        dplyr::rows_update(update, by = c("ID", "path", "scaffold"))
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
@@ -1479,6 +1544,8 @@ annotate_server <- function(id) {
     })
 
     # Open annotation details ----
+    # Each table row is one (ID, path, scaffold) unit, so the clicked row is the
+    # unit to edit.
     observeEvent(input$details, {
       session$userData$in_outlier_review <- FALSE
       rv$updating <- filtered_data() |> dplyr::slice(as.numeric(input$details))
@@ -1490,6 +1557,10 @@ annotate_server <- function(id) {
       target <- session$userData$goto_annotate_target
       req(target, target$ID)
       hit <- rv$data |> dplyr::filter(ID == target$ID)
+      # If the jump specifies a unit, honour it; else take the first unit.
+      if (!is.null(target$path) && !is.null(target$scaffold)) {
+        hit <- hit |> dplyr::filter(path == target$path, scaffold == target$scaffold)
+      }
       req(nrow(hit) > 0)
       session$userData$in_outlier_review <- TRUE
       rv$updating <- hit |> dplyr::slice(1)
