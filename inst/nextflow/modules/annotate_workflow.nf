@@ -1,4 +1,5 @@
 include {annotate} from './annotate.nf'
+include {prepare_ref_db} from './prepare_ref_db.nf'
 
 // ANNOTATE runs per (ID, path, scaffold): each non-ignored scaffold is its own
 // annotation unit, annotated independently through the original MitoPilot flow
@@ -6,14 +7,27 @@ include {annotate} from './annotate.nf'
 // annotate() processes only this unit's scaffold by ignoring every OTHER scaffold
 // of the path (ignore_scaffolds subquery). annotate_opts is the unit's own set;
 // the unit is gated on annotate_switch=1 AND annotate_lock=0.
-params.sqlRead =    'SELECT a.ID, a.path, a.scaffold, b.assemble_opts, ' +
+// userAsmb projects are the exception: a user-supplied assembly is ONE genome, so
+// all of its contigs are annotated together as the single seeded unit (scaffold
+// literal 1), ignoring only the scaffolds actually flagged ignore = 1. Mirrors
+// VALIDATE's userAsmb branch, which already documents the same contract. Without
+// it the per-scaffold ignore_scaffolds drops every contig but the target, and the
+// seeded (ID, 1, 1) row does not even join when the FASTA's first passing contig
+// is not scaffold 1 (contigs are numbered by FASTA order).
+def scafSel   = params.userAsmb ? '1 AS scaffold' : 'a.scaffold'
+def scafJoin  = params.userAsmb ? 'an.scaffold = 1' : 'an.scaffold = a.scaffold'
+def ignoreSub = params.userAsmb ?
+                  "(SELECT GROUP_CONCAT(a2.scaffold, ',') FROM assemblies a2 WHERE a2.ID = a.ID AND a2.path = a.path AND a2.ignore = 1)" :
+                  "(SELECT GROUP_CONCAT(a2.scaffold, ',') FROM assemblies a2 WHERE a2.ID = a.ID AND a2.path = a.path AND a2.scaffold != a.scaffold)"
+
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' + scafSel + ', b.assemble_opts, ' +
                         'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, ' +
                         'd.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, ' +
-                        "(SELECT GROUP_CONCAT(a2.scaffold, ',') FROM assemblies a2 WHERE a2.ID = a.ID AND a2.path = a.path AND a2.scaffold != a.scaffold) AS ignore_scaffolds, " +
+                        ignoreSub + ' AS ignore_scaffolds, ' +
                         'd.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan, f.genetic_code, d.rescue_no_trna ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold ' +
+                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND ' + scafJoin + ' ' +
                     'JOIN annotate_opts d ON d.annotate_opts = an.annotate_opts ' +
                     'JOIN samples f ON a.ID = f.ID ' +
                     'WHERE b.assemble_lock = 1 ' +
@@ -71,10 +85,24 @@ workflow ANNOTATE {
                     genetic_code: it[26],                                   // per-sample genetic code (from samples table)
                     rescue_no_trna: it[27] != null ? it[27] as Integer : 1  // second MITOS2 pass without tRNA prediction (default on)
                 ],
-                file(it[7] + "/" + it[6]),                              // curation ref dir + clade
+                file(it[7] + "/" + it[6]),                              // MITOS ref dir + clade (tarball)
                 it[6].replaceFirst(/\.tar\.gz$/, ''),               // ref_db without ".tar.gz"
                 file((it[17] != null && it[17].toString().trim()) ? it[17] : "${projectDir}/assets/NO_FILE")  // MitoFinder reference .gb (or placeholder)
             )
+        }
+        .set { annotate_pre }
+
+    // Extract each unique MITOS ref DB tarball once (shared, read-only), then hand
+    // every unit the extracted directory in place of the tarball.
+    prepare_ref_db(
+        annotate_pre.map { t -> tuple(t[7], t[6]) }.unique { it[0] }
+    ).set { annotate_refdirs }
+
+    annotate_pre
+        .map { t -> tuple(t[7], t) }
+        .combine(annotate_refdirs, by: 0)
+        .map { clade, t, refdir ->
+            tuple(t[0], t[1], t[2], t[3], t[4], t[5], refdir, t[7], t[8])
         }
         .set { annotate_in }
 

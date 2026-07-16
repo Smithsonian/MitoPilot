@@ -1,14 +1,23 @@
 import java.util.Base64
 include {curate} from './curate.nf'
+include {prepare_ref_db} from './prepare_ref_db.nf'
 
 // CURATE runs per (ID, path, scaffold): each unit is curated independently using
 // its own curate_opts/annotate_opts and its own per-scaffold BLAST reference.
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, a.scaffold, b.assemble_opts, an.curate_opts, ' +
+// userAsmb projects curate the whole path as one unit (scaffold literal 1), so the
+// reference comes from the sample-level assemble row rather than a per-scaffold one
+// (a per-scaffold accession would vary across contigs and defeat the DISTINCT).
+// Mirrors VALIDATE's userAsmb branch.
+def scafSel  = params.userAsmb ? '1 AS scaffold' : 'a.scaffold'
+def scafJoin = params.userAsmb ? 'an.scaffold = 1' : 'an.scaffold = a.scaffold'
+def blastAcc = params.userAsmb ? 'b.blast_accession' : 'a.blast_accession'
+
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' + scafSel + ', b.assemble_opts, an.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
-                    'd.ref_dir, d.ref_db, e.feature_trim, a.blast_accession, f.genetic_code, e.ref_based_rc ' +
+                    'd.ref_dir, d.ref_db, e.feature_trim, ' + blastAcc + ', f.genetic_code, e.ref_based_rc ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold ' +
+                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND ' + scafJoin + ' ' +
                     'JOIN curate_opts d ON d.curate_opts = an.curate_opts ' +
                     'JOIN annotate_opts e ON e.annotate_opts = an.annotate_opts ' +
                     'JOIN samples f ON a.ID = f.ID ' +
@@ -76,12 +85,27 @@ workflow CURATE {
                         ref_based_rc: it[15] != null ? it[15] as Integer : 0,   // reference-based RC (default off)
                         blast_accession: it[13] ?: ''                           // this scaffold's BLAST hit (orientation ref)
                     ],
-                    file(it[10] + "/" + it[11]),                              // curation ref dir + clade
+                    file(it[10] + "/" + it[11]),                              // curation ref dir + clade (tarball)
                     it[11],                                                   // ref clade
                     it[11].replaceFirst(/\.tar\.gz$/, ''),                // ref_db without ".tar.gz"
                     blastRefFiles                                            // candidate-reference JSONs
 
                 )
+            }
+            .set { curate_pre }
+
+        // Extract each unique curation ref DB tarball once (shared, read-only), then
+        // hand every unit the extracted directory in place of the tarball so curate
+        // symlinks it instead of copying + extracting ~200 MB per task.
+        prepare_ref_db(
+            curate_pre.map { t -> tuple(t[9], t[7]) }.unique { it[0] }
+        ).set { curate_refdirs }
+
+        curate_pre
+            .map { t -> tuple(t[9], t) }
+            .combine(curate_refdirs, by: 0)
+            .map { clade, t, refdir ->
+                tuple(t[0], t[1], t[2], t[3], t[4], t[5], t[6], refdir, t[8], t[9], t[10])
             }
             .set { curate_in }
 

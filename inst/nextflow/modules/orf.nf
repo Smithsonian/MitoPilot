@@ -1,6 +1,8 @@
 process orf {
 
-    stageInMode 'copy'
+    // symlink, not copy: the ref DB is a shared pre-extracted, read-only directory
+    // and the other inputs are read-only too (see curate.nf).
+    stageInMode 'symlink'
 
     executor params.orf.executor
     container params.orf.container
@@ -30,14 +32,17 @@ process orf {
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
 
-    # Check if ref database is gzip-compressed file
-    MIME_TYPE=$(file --mime-type -b "!{ref_clade}")
-    if [[ "$MIME_TYPE" == "application/gzip" || "$MIME_TYPE" == "application/x-gzip" ]]; then
-        echo "Decompressing !{ref_clade}..."
-        tar -xzf "!{ref_clade}"
-        echo "Decompression complete."
-    else
-        echo "Input ref_db not .tar.gz"
+    # Reference DB: a pre-extracted, shared directory named for the clade is
+    # normally staged (symlinked). Fall back to extracting a tarball if only that
+    # is present.
+    if [ ! -d "!{ref_db_clean}" ]; then
+        for tb in "!{ref_db_clean}.tar.gz" "!{ref_clade}"; do
+            if [ -f "$tb" ]; then
+                echo "Decompressing $tb..."
+                tar -xzf "$tb"
+                break
+            fi
+        done
     fi
 
     # Merge the per-scaffold validated annotation TSVs into one per-path file so

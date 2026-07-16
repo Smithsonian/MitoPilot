@@ -1,6 +1,8 @@
 process annotate {
 
-    stageInMode 'copy'
+    // symlink, not copy: MITOS never writes into its ref DB (it uses MITOS2_temp*),
+    // so the shared pre-extracted directory can be symlinked read-only.
+    stageInMode 'symlink'
 
     executor params.annotate.executor
     container params.annotate.container
@@ -36,14 +38,17 @@ process annotate {
     # Name the assembly per unit; annotate() isolates this scaffold via ignore_scaffolds.
     cp !{assembly} !{unit_assembly}
 
-    # Check if ref database is gzip-compressed file
-    MIME_TYPE=$(file --mime-type -b "!{opts.ref_db}")
-    if [[ "$MIME_TYPE" == "application/gzip" ]]; then
-        echo "Decompressing !{opts.ref_db}..."
-        tar -xzf "!{opts.ref_db}"
-        echo "Decompression complete."
-    else
-        echo "Input ref_db not .tar.gz"
+    # Reference DB: a pre-extracted, shared directory named for the clade is
+    # normally staged (symlinked). Fall back to extracting a tarball if only that
+    # is present.
+    if [ ! -d "!{ref_db_clean}" ]; then
+        for tb in "!{ref_db_clean}.tar.gz" "!{opts.ref_db}"; do
+            if [ -f "$tb" ]; then
+                echo "Decompressing $tb..."
+                tar -xzf "$tb"
+                break
+            fi
+        done
     fi
 
     # Resolve MitoFinder reference db (decompress if gzip/tar.gz)

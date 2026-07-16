@@ -1,4 +1,5 @@
 include {orf} from './orf.nf'
+include {prepare_ref_db} from './prepare_ref_db.nf'
 
 // max_blast_hits, ref_dir and ref_db are shared with curation (sourced from
 // curate_opts via annotate.curate_opts), not stored in orf_opts.
@@ -7,13 +8,19 @@ include {orf} from './orf.nf'
 // ORF runs per (ID, path, scaffold): each unit's ORF search sees only its own
 // validated annotations and its own assembly. Option sets come from the unit's
 // annotate row; the unit is gated on annotate_switch=1 AND annotate_lock=0.
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, a.scaffold, ' +
+// userAsmb projects treat the whole path as one unit (scaffold literal 1) and take
+// the sample-level reference; see the matching branch in curate_workflow.nf.
+def scafSel  = params.userAsmb ? '1 AS scaffold' : 'a.scaffold'
+def scafJoin = params.userAsmb ? 'an.scaffold = 1' : 'an.scaffold = a.scaffold'
+def blastAcc = params.userAsmb ? 'b.blast_accession' : 'a.blast_accession'
+
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' + scafSel + ', ' +
                     'd.use_orffinder, ' +
                     'd.cpus, d.memory, d.orffinder_opts, d.orf_min_len, d.orf_max_overlap, d.orf_nested, e.max_blast_hits, ' +
-                    'e.ref_dir, e.ref_db, b.assemble_opts, a.blast_accession, f.genetic_code ' +
+                    'e.ref_dir, e.ref_db, b.assemble_opts, ' + blastAcc + ', f.genetic_code ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold ' +
+                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND ' + scafJoin + ' ' +
                     'JOIN orf_opts d ON d.orf_opts = an.orf_opts ' +
                     'JOIN curate_opts e ON e.curate_opts = an.curate_opts ' +
                     'JOIN samples f ON a.ID = f.ID ' +
@@ -91,11 +98,25 @@ workflow ORF {
                         max_blast_hits: it[10],                            // max BLAST hits per ORF
                         genetic_code: it[15]                               // per-sample genetic code (from samples table)
                     ],
-                    file(it[11] + "/" + it[12]),                           // curation ref dir + clade
+                    file(it[11] + "/" + it[12]),                           // curation ref dir + clade (tarball)
                     it[12],                                                // ref clade
                     it[12].replaceFirst(/\.tar\.gz$/, ''),             // ref_db without ".tar.gz"
                     blastRefFile                                           // staged remote BLAST ref json
                 )
+            }
+            .set { orf_pre }
+
+        // Extract each unique ref DB tarball once (shared, read-only), then hand
+        // every unit the extracted directory in place of the tarball.
+        prepare_ref_db(
+            orf_pre.map { t -> tuple(t[8], t[6]) }.unique { it[0] }
+        ).set { orf_refdirs }
+
+        orf_pre
+            .map { t -> tuple(t[8], t) }
+            .combine(orf_refdirs, by: 0)
+            .map { clade, t, refdir ->
+                tuple(t[0], t[1], t[2], t[3], t[4], t[5], refdir, t[7], t[8], t[9])
             }
             .set { orf_in }
 
