@@ -1,3 +1,32 @@
+#' Refuse to export a sample contributing units from more than one assembly path.
+#'
+#' GetOrganelle paths are competing resolutions of one tangled graph, i.e.
+#' alternative hypotheses about the SAME genome, so exporting them all would submit
+#' several near-identical mitogenomes for a single specimen. Separate scaffolds
+#' within one path are a different matter (they may be genuinely separate genomes),
+#' so they are allowed here and only warned about in the app.
+#'
+#' @param units A frame of export units with ID and path columns.
+#' @return Invisibly TRUE; errors listing the offending samples otherwise.
+#' @noRd
+check_single_path <- function(units) {
+  multi_path <- units |>
+    dplyr::distinct(ID, path) |>
+    dplyr::count(ID, name = "n_paths") |>
+    dplyr::filter(n_paths > 1)
+  if (nrow(multi_path) > 0) {
+    stop(
+      "Cannot export ", nrow(multi_path), " sample(s) with more than one assembly path: ",
+      paste(multi_path$ID, collapse = ", "),
+      ".\nAssembly paths are alternative resolutions of the same genome, so exporting ",
+      "each one would submit duplicate records for a single specimen. Open the ",
+      "assembly details and 'ignore' all but the correct path, then export again.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 # Map internal rRNA gene names to their export convention (rrnS -> rrn12,
 # rrnL -> rrn16). Operates on the prefix so make.unique suffixes are preserved
 # (rrnS.1 -> rrn12.1); non-rRNA names pass through unchanged.
@@ -108,6 +137,8 @@ export_files <- function(
   if (nrow(units) == 0) {
     stop("No samples selected")
   }
+
+  check_single_path(units)
 
   if (gene_export) {
     group_allgene_tbl_fn <- file.path(group_pth, "genes", paste0(group, "_PCGs.tbl"))

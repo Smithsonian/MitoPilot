@@ -191,6 +191,23 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
   row <- if (!is.null(data) && nrow(data) > 0) data[1, , drop = FALSE] else data.frame()
   tryCatch({
     stringr::str_glue_data(row, template)
+    # A template without {seqid} gives every unit of a multi-assembly sample the
+    # same defline, while the .tbl still carries the per-unit >Feature seqid. The
+    # two must agree exactly or table2asn rejects the submission. seqid is the
+    # plain ID for single-unit samples, so {seqid} is always the safe choice.
+    if (!grepl("\\{seqid\\}", template)) {
+      multi_unit <- !is.null(data) && "ID" %in% names(data) && any(duplicated(data$ID))
+      msg <- paste(
+        "Header does not use {seqid}. Samples with more than one assembly unit",
+        "will produce duplicate FASTA deflines that do not match the .tbl",
+        ">Feature line, and table2asn will reject the submission. Use {seqid}",
+        "instead of {ID}: it is the plain ID for single-unit samples."
+      )
+      if (multi_unit) {
+        return(err(msg))
+      }
+      return(list(ok = TRUE, level = "warn", message = msg))
+    }
     if (require_completeness && !grepl("\\{completeness\\}\\s*$", template)) {
       return(list(
         ok = TRUE, level = "warn",

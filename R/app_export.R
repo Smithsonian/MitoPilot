@@ -1036,10 +1036,18 @@ export_server <- function(id) {
       if (!is.null(input$ident_pct) && !is.na(input$ident_pct)) rv$opt_ident <- input$ident_pct
     })
 
-    observeEvent(input$export_data, ignoreInit = T, {
-      req(input$export_group)
-      # Block export if either header template is invalid (would crash str_glue_data)
-      if (!valid_headers_or_alert()) return()
+    # Samples in this group contributing more than one record. Multi-PATH samples
+    # are rejected outright by export_files(); this catches the other shape, a
+    # single genome fragmented across scaffolds, which would otherwise export as
+    # several incomplete records with no signal that anything is wrong.
+    fragmented_samples <- function(group) {
+      d <- rv$data[!is.na(rv$data$export_group) & rv$data$export_group == group, ]
+      if (nrow(d) == 0) return(character(0))
+      counts <- table(d$ID)
+      names(counts)[counts > 1]
+    }
+
+    check_overwrite_then_export <- function() {
       export_path <- file.path(session$userData$dir_out, "export", input$export_group)
       if (dir.exists(export_path)) {
         shinyWidgets::confirmSweetAlert(
@@ -1056,6 +1064,41 @@ export_server <- function(id) {
         return()
       }
       run_export()
+    }
+
+    observeEvent(input$export_data, ignoreInit = T, {
+      req(input$export_group)
+      # Block export if either header template is invalid (would crash str_glue_data)
+      if (!valid_headers_or_alert()) return()
+      frag <- fragmented_samples(input$export_group)
+      if (length(frag) > 0) {
+        shown <- paste(utils::head(frag, 5), collapse = ", ")
+        if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
+        shinyWidgets::confirmSweetAlert(
+          session = session,
+          inputId = ns("fragmented_confirm"),
+          title = "Some samples export as multiple records",
+          text = stringr::str_glue(
+            "{length(frag)} sample(s) have more than one assembly and will each ",
+            "produce a SEPARATE GenBank record: {shown}.\n\n",
+            "That is correct when the scaffolds really are different genomes. If a ",
+            "sample is instead ONE genome broken into fragments, each record will ",
+            "be submitted as an incomplete genome. Cancel and use consensus ",
+            "trimming / scaffold joining to combine them, or 'ignore' all but one ",
+            "scaffold."
+          ),
+          type = "warning",
+          btn_labels = c("Cancel", "Export anyway"),
+          btn_colors = c("#0056b3", "#d9534f")
+        )
+        return()
+      }
+      check_overwrite_then_export()
+    })
+
+    observeEvent(input$fragmented_confirm, ignoreInit = T, {
+      req(input$fragmented_confirm)
+      check_overwrite_then_export()
     })
 
     observeEvent(input$overwrite_confirm, ignoreInit = T, {
