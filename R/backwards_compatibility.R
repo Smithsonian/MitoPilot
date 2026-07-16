@@ -211,6 +211,29 @@ backwards_compatibility <- function(
     return(invisible(NULL))
   }
 
+  # Back up the database before any migration writes. Several steps below rebuild
+  # tables (DROP + RENAME) and drop columns, none of which SQLite can undo, and a
+  # migrated database cannot be reopened by an older MitoPilot. Mirrors the backup
+  # add_samples()/update_sample_metadata() already make.
+  backup_dir <- file.path(path, ".old_sqlite_dbs")
+  if (!dir.exists(backup_dir)) {
+    dir.create(backup_dir, recursive = TRUE)
+    num <- 1
+  } else {
+    backups <- list.files(backup_dir, pattern = "^\\.sqlite\\.[0-9]+$", all.files = TRUE)
+    num <- if (length(backups) == 0) {
+      1
+    } else {
+      max(as.numeric(sapply(strsplit(backups, "[.]"), "[", 3)), na.rm = TRUE) + 1
+    }
+  }
+  backup <- file.path(backup_dir, paste0(".sqlite.", num))
+  if (!file.copy(file.path(path, ".sqlite"), backup)) {
+    stop("Could not back up the project database to ", backup,
+         ". Refusing to migrate without a backup.", call. = FALSE)
+  }
+  message("Backed up project database to: ", backup)
+
   # update annotation and curation reference databases
   if(old_ref_str){
     message("updated the annotate_opts table with new ref_dir and ref_db values")
@@ -1571,6 +1594,35 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE annotate_new RENAME TO annotate")
   }
 
+  # Seed an annotate row for every remaining non-ignored unit. The re-key above
+  # maps each legacy row to a single unit, which is right for a legacy LOCKED
+  # sample (the old lock guard refused to lock a sample with >1 non-ignored
+  # assembly row), but leaves the other units of an unlocked multi-scaffold
+  # sample with no annotate row at all. Those units are then silently dropped by
+  # WF2, whose unit list inner-joins assemblies to annotate. Only WF1 seeds units,
+  # and an upgrading user has no reason to re-assemble. INSERT OR IGNORE keeps the
+  # re-keyed legacy row untouched and seeds the rest ready to annotate, mirroring
+  # assemble_workflow.nf's seed.
+  n_seeded <- DBI::dbExecute(con,
+    "INSERT OR IGNORE INTO annotate
+       (ID, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts,
+        annotate_switch, annotate_lock, reviewed)
+     SELECT asm.ID, asm.path, asm.scaffold, asm.topology,
+            CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1
+                 THEN 'no' ELSE 'yes' END,
+            an.annotate_opts, an.curate_opts, an.orf_opts,
+            1, 0, 'no'
+     FROM assemblies asm
+     LEFT JOIN (SELECT ID, annotate_opts, curate_opts, orf_opts, MIN(path)
+                FROM annotate GROUP BY ID) an ON an.ID = asm.ID
+     LEFT JOIN curate_opts co ON co.curate_opts = an.curate_opts
+     WHERE asm.ignore = 0"
+  )
+  if (n_seeded > 0) {
+    message("seeded ", n_seeded, " additional annotation unit(s) from existing assemblies; ",
+            "re-run Annotate to populate them")
+  }
+
   # Per-unit reference override. "Set as best reference" is chosen from ONE
   # scaffold's candidate list, so it belongs to that unit; it used to overwrite the
   # sample-level assemble.blast_accession (stashing the original in
@@ -1664,4 +1716,31 @@ backwards_compatibility <- function(
     migrate_config(path, executor, con = con)
   }
 
+}
+
+#' Landmarks of the current project schema that an older database will lack.
+#'
+#' Returns a character vector of plain-language gaps, empty when the database is
+#' current. Lives beside the migration so the two stay in sync. Used by the app to
+#' refuse to open a stale project with a readable message rather than failing deep
+#' inside dbplyr with "no such column: path".
+#'
+#' @param con An open connection to a project database.
+#' @noRd
+schema_gaps <- function(con) {
+  has <- function(expr) isTRUE(tryCatch(expr, error = function(e) FALSE))
+  gaps <- character(0)
+  if (!has("scaffold" %in% DBI::dbListFields(con, "annotate"))) {
+    gaps <- c(gaps, "the annotate table is not keyed by (ID, path, scaffold)")
+  }
+  if (!has(DBI::dbExistsTable(con, "export"))) {
+    gaps <- c(gaps, "the per-unit 'export' table is missing")
+  }
+  if (!has(DBI::dbExistsTable(con, "blast_ref_override"))) {
+    gaps <- c(gaps, "the 'blast_ref_override' table is missing")
+  }
+  if (!has("scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"))) {
+    gaps <- c(gaps, "the blast_ref_alignment table is not keyed per scaffold")
+  }
+  gaps
 }

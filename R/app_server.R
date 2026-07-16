@@ -23,6 +23,33 @@ app_server <- function(input, output, session) {
   register_app_lifecycle(session)
   message(paste("Database attached:", db))
 
+  # Refuse to open a project from an older MitoPilot. The Annotate module reads
+  # (path, scaffold) everywhere, so a stale database otherwise fails deep inside
+  # dbplyr with a raw "no such column" / "no such table" backtrace that gives the
+  # user nothing to act on. Migration is not run automatically: it rewrites tables
+  # in place, which is not something to do silently to someone's project.
+  gaps <- schema_gaps(session$userData$con)
+  if (length(gaps) > 0) {
+    shinyWidgets::sendSweetAlert(
+      session = session,
+      title = "Project database needs updating",
+      text = shiny::tags$div(
+        shiny::tags$p("This project was created with an older version of MitoPilot:"),
+        shiny::tags$ul(lapply(gaps, shiny::tags$li)),
+        shiny::tags$p("Close the app, run this in the project directory, then reopen it:"),
+        shiny::tags$pre('MitoPilot::backwards_compatibility(update_config = FALSE)'),
+        shiny::tags$p(
+          "That updates the database only. Pass executor = \"local\" (or your ",
+          "cluster profile) instead to also refresh the Nextflow config. Your ",
+          "database is copied to .old_sqlite_dbs/ before anything changes."
+        )
+      ),
+      html = TRUE,
+      type = "warning"
+    )
+    return(invisible(NULL))
+  }
+
   # Migrate: add BLAST result columns to assemble table for pre-existing databases
   existing_fields <- DBI::dbListFields(session$userData$con, "assemble")
   if (!"blast_accession" %in% existing_fields)

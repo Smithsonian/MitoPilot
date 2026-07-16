@@ -23,6 +23,30 @@ app_server_userAsmb <- function(input, output, session) {
   register_app_lifecycle(session)
   message(paste("Database attached:", db))
 
+  # Refuse to open a project from an older MitoPilot; see app_server() for why the
+  # migration is not run automatically here.
+  gaps <- schema_gaps(session$userData$con)
+  if (length(gaps) > 0) {
+    shinyWidgets::sendSweetAlert(
+      session = session,
+      title = "Project database needs updating",
+      text = shiny::tags$div(
+        shiny::tags$p("This project was created with an older version of MitoPilot:"),
+        shiny::tags$ul(lapply(gaps, shiny::tags$li)),
+        shiny::tags$p("Close the app, run this in the project directory, then reopen it:"),
+        shiny::tags$pre('MitoPilot::backwards_compatibility(update_config = FALSE)'),
+        shiny::tags$p(
+          "That updates the database only. Pass executor = \"local\" (or your ",
+          "cluster profile) instead to also refresh the Nextflow config. Your ",
+          "database is copied to .old_sqlite_dbs/ before anything changes."
+        )
+      ),
+      html = TRUE,
+      type = "warning"
+    )
+    return(invisible(NULL))
+  }
+
   # Publish / output directory ----
   dir_out <- readLines(file.path(dirname(db), ".config")) |>
     stringr::str_extract("publishDir.*") |>

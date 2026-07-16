@@ -170,6 +170,152 @@ create_v1310_db <- function(path) {
   DBI::dbExecute(con, "INSERT INTO annotations VALUES ('s1', 'cox1')")
 }
 
+# Helper: a legacy project whose sample was never locked and kept several
+# non-ignored scaffolds. The old lock guard refused to lock a sample with more
+# than one retained assembly row, so these unlocked fragmented projects are
+# exactly the ones users were waiting on multi-assembly for -- and the ones whose
+# extra units nothing else will ever seed (only WF1 seeds units, and an upgrading
+# user has no reason to re-assemble).
+create_multi_scaffold_db <- function(path) {
+  create_v1310_db(path)
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(path, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con))
+
+  DBI::dbExecute(con, "CREATE TABLE assemblies (
+    ID TEXT NOT NULL,
+    path INTEGER NOT NULL,
+    scaffold INTEGER NOT NULL,
+    topology TEXT,
+    length INTEGER,
+    sequence TEXT,
+    ignore INTEGER,
+    time_stamp INTEGER,
+    PRIMARY KEY (ID, path, scaffold)
+  )")
+  # three retained scaffolds, plus one already dropped as too short
+  DBI::dbExecute(con, "INSERT INTO assemblies VALUES
+    ('s1', 1, 1, 'linear', 5000, 'ACGT', 0, 1),
+    ('s1', 1, 2, 'linear', 4000, 'ACGT', 0, 1),
+    ('s1', 1, 3, 'linear', 3000, 'ACGT', 0, 1),
+    ('s1', 1, 4, 'linear',   80, 'ACGT', 1, 1)")
+}
+
+test_that("backwards_compatibility seeds an annotate unit for every retained scaffold", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.3.10")
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  # one unit per retained scaffold; the ignored scaffold gets none
+  units <- DBI::dbGetQuery(
+    con, "SELECT path, scaffold FROM annotate ORDER BY path, scaffold"
+  )
+  expect_equal(units$path, c(1, 1, 1))
+  expect_equal(units$scaffold, c(1, 2, 3))
+
+  # and every retained scaffold is reachable by the join WF2 uses to pick units,
+  # which is an inner join and would otherwise drop them silently
+  reachable <- DBI::dbGetQuery(con, "
+    SELECT COUNT(*) AS n
+    FROM assemblies a
+    JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold
+    WHERE a.ignore = 0")$n
+  expect_equal(reachable, 3)
+
+  # seeded units are ready to annotate, not silently marked done
+  seeded <- DBI::dbGetQuery(
+    con, "SELECT annotate_switch, annotate_lock, reviewed FROM annotate WHERE scaffold > 1"
+  )
+  expect_true(all(seeded$annotate_switch == 1))
+  expect_true(all(seeded$annotate_lock == 0))
+  expect_true(all(seeded$reviewed == "no"))
+})
+
+test_that("backwards_compatibility re-keys annotate by (ID, path, scaffold)", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.3.10")
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  pk <- DBI::dbGetQuery(con, "PRAGMA table_info(annotate)")
+  expect_equal(pk$name[pk$pk > 0][order(pk$pk[pk$pk > 0])], c("ID", "path", "scaffold"))
+})
+
+test_that("backwards_compatibility backs up the database before migrating", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.3.10")
+
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    regexp = "Backed up project database"
+  )
+  backups <- list.files(file.path(td, ".old_sqlite_dbs"), all.files = TRUE, no.. = TRUE)
+  expect_equal(backups, ".sqlite.1")
+
+  # the backup is the pre-migration database, i.e. still on the old schema
+  bak <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".old_sqlite_dbs", ".sqlite.1"))
+  on.exit(DBI::dbDisconnect(bak), add = TRUE)
+  expect_false("scaffold" %in% DBI::dbListFields(bak, "annotate"))
+
+  # a second, no-op migration must not litter another backup
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+  expect_equal(
+    list.files(file.path(td, ".old_sqlite_dbs"), all.files = TRUE, no.. = TRUE),
+    ".sqlite.1"
+  )
+})
+
+test_that("backwards_compatibility is idempotent on a multi-scaffold project", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.3.10")
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    regexp = "nothing to update"
+  )
+})
+
+test_that("schema_gaps flags a legacy database and passes a migrated one", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.3.10")
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_true(length(schema_gaps(con)) > 0)
+  DBI::dbDisconnect(con)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con2 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con2), add = TRUE)
+  expect_equal(schema_gaps(con2), character(0))
+})
+
 
 test_that("backwards_compatibility migrates a v1.0.0 database to current schema", {
   td <- tempfile()
