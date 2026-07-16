@@ -55,7 +55,17 @@ new_test_project <- function(
   if (full_size) {
     # TODO - make parallel
     message("Fetching test data. Go grab a coffee, this may take a while...")
-    purrr::pwalk(mapping, function(...) {
+    # Samples whose ID is not an SRA run accession have no ENA URL to fetch from
+    # (MULTISCAFF is built from two species' reads to exercise multi-scaffold
+    # assembly). Copy the packaged reads for those instead.
+    is_sra <- grepl("^[SED]RR[0-9]+$", mapping$ID)
+    purrr::pwalk(mapping[!is_sra, , drop = FALSE], function(...) {
+      cur <- list(...)
+      message(glue::glue("{cur$ID} - {cur$Taxon} (packaged)"))
+      file.copy(app_sys(file.path("test_data", cur$R1)), file.path(path, "data"))
+      file.copy(app_sys(file.path("test_data", cur$R2)), file.path(path, "data"))
+    })
+    purrr::pwalk(mapping[is_sra, , drop = FALSE], function(...) {
       cur <- list(...)
       message(glue::glue("{cur$ID} - {cur$Taxon}"))
       acc <- cur$ID
