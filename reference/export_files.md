@@ -9,9 +9,9 @@ export_files(
   group = NULL,
   IDs = NULL,
   fasta_header =
-    paste("{ID} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
+    paste("{seqid} [organism={Taxon}] [topology={topology}] [mgcode={genetic_code}]",
     "[location=mitochondrion] {Taxon} mitochondrion, {completeness}"),
-  fasta_header_gene = paste("{ID} [organism={Taxon}] [mgcode={genetic_code}]",
+  fasta_header_gene = paste("{seqid} [organism={Taxon}] [mgcode={genetic_code}]",
     "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
   generateAAalignments = T,

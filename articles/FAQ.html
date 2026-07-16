@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.12</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,9 +35,11 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/Multiple-Assemblies.html">Multiple Paths and Scaffolds</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
@@ -71,71 +73,10 @@
     
     
 <div class="section level2">
-<h2 id="how-do-i-fix-the-error-message">How do I fix the error message:<a class="anchor" aria-label="anchor" href="#how-do-i-fix-the-error-message"></a>
+<h2 id="how-do-i-fix-a-specific-error-message">How do I fix a specific error message?<a class="anchor" aria-label="anchor" href="#how-do-i-fix-a-specific-error-message"></a>
 </h2>
-<div class="section level3">
-<h3 id="exit-status-140">“exit status (140)”?<a class="anchor" aria-label="anchor" href="#exit-status-140"></a>
-</h3>
-<p>If your Nextflow log contains an error that looks something like
-this:</p>
-<pre><code>Caused by:
-  Process `WF2:ANNOTATE:annotate (SAMPLE_ID)` terminated with an error exit status (140)</code></pre>
-<p>Usually this indicates that the process ran out of memory (RAM).
-Sometimes this will happen for all samples, other times only certain
-difficult samples will need more RAM. Try using the R Shiny GUI to
-increase the requested memory for the process that failed, then rerun
-the workflow.</p>
-</div>
-<div class="section level3">
-<h3 id="exit-status-127">“exit status (127)”?<a class="anchor" aria-label="anchor" href="#exit-status-127"></a>
-</h3>
-<p>This indicates that MitoPilot was unable to find a file, directory,
-or executable. Double check that the paths you specified when creating
-your project are correct. Also make sure you’re using the correct
-execution environment. This error is commonly caused by using the
-“local” executor when running MitoPilot on a computing cluster.</p>
-</div>
-<div class="section level3">
-<h3 id="exit-status-255">“exit status (255)”<a class="anchor" aria-label="anchor" href="#exit-status-255"></a>
-</h3>
-<p>Often this indicates that one or more of your input FASTQ files could
-not be found. Double check the R1 and R2 columns of your map file and
-make sure all of the <code>data_path</code> contains all of your
-sequence read files.</p>
-</div>
-<div class="section level3">
-<h3 id="database-disk-image-is-malformed">“database disk image is malformed”<a class="anchor" aria-label="anchor" href="#database-disk-image-is-malformed"></a>
-</h3>
-<p>You may encounter an error message in your R Studio console that
-looks something like this:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Listening on http<span class="sc">:</span><span class="er">//</span><span class="dv">127</span>.<span class="dv">0</span>.<span class="fl">0.1</span><span class="sc">:</span><span class="dv">4329</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>Warning<span class="sc">:</span> Couldn<span class="st">'t set synchronous mode: database disk image is malformed</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="st">Use `synchronous` = NULL to turn off this warning.</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="st">Database attached: /pool/public/genomics/macguigand/MitoPilot/testing/turtle_test/run_01/.sqlite</span></span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="st">Warning: Error in db_query_fields.DBIConnection: Can'</span>t query fields.</span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>ℹ Using SQL<span class="sc">:</span> SELECT <span class="sc">*</span> FROM <span class="st">`</span><span class="at">pre_opts</span><span class="st">`</span> AS <span class="st">`</span><span class="at">q02</span><span class="st">`</span> <span class="fu">WHERE</span> (<span class="dv">0</span> <span class="ot">=</span> <span class="dv">1</span>)</span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>Caused by error<span class="sc">:</span></span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="sc">!</span> database disk image is malformed</span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>...</span></code></pre></div>
-<p>This indicates that your <code>.sqlite</code> database is corrupted.
-The exact cause of this error can be difficult to determine.
-Fortunately, you may be able to recover your database by running the
-following commands in your project directory.</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">mv</span> .sqlite .sqlite_corrupted </span>
-<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="ex">sqlite3</span> .sqlite_corrupted <span class="st">".recover"</span> <span class="kw">|</span> <span class="ex">sqlite3</span> .sqlite</span></code></pre></div>
-<p>Then try relaunching the MitoPilot app.</p>
-</div>
-<div class="section level3">
-<h3 id="insufficient-memory-for-the-java-runtime-environment">“Insufficient memory for the Java Runtime Environment”<a class="anchor" aria-label="anchor" href="#insufficient-memory-for-the-java-runtime-environment"></a>
-</h3>
-<p>This suggests that the Nextflow head process (which controls all
-other jobs) is running out of Java heap space. To fix, run the following
-command in the console or add it to your submission submission script
-before launching Nextflow.</p>
-<p>Alternatively, submit the Nextflow job with fewer samples at
-time.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">NXF_OPTS</span><span class="op">=</span><span class="st">"-Xms500m -Xmx8g"</span></span></code></pre></div>
-</div>
+<p>Please see the <a href="Troubleshooting.html">Troubleshooting</a>
+page.</p>
 </div>
 <div class="section level2">
 <h2 id="can-i-annotate-my-own-mitogenome-assemblies-with-mitopilot">Can I annotate my own mitogenome assemblies with MitoPilot?<a class="anchor" aria-label="anchor" href="#can-i-annotate-my-own-mitogenome-assemblies-with-mitopilot"></a>
@@ -235,9 +176,9 @@ directory, just in case you need them later.</p>
 <p>The safest option to save disk space is deleting sub-directories in
 <code>work</code> that contain failed processes. The following bash
 one-liner can help identify directories to remove.</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># list subdirectories in `work` that contain failed analyses</span></span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="cf">for</span> f <span class="kw">in</span> work/<span class="pp">*</span>/<span class="pp">*</span>/.exitcode<span class="kw">;</span> <span class="cf">do</span> <span class="bu">[</span> <span class="st">"</span><span class="va">$(</span><span class="fu">cat</span> <span class="st">"</span><span class="va">$f</span><span class="st">"</span><span class="va">)</span><span class="st">"</span> <span class="ot">!=</span> <span class="st">"0"</span> <span class="bu">]</span> <span class="kw">&amp;&amp;</span> <span class="bu">echo</span> <span class="st">"</span><span class="va">${f</span><span class="op">%</span>/.exitcode<span class="va">}</span><span class="st">"</span><span class="kw">;</span> <span class="cf">done</span></span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co"># then manually delete these directories</span></span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># list subdirectories in `work` that contain failed analyses</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="cf">for</span> f <span class="kw">in</span> work/<span class="pp">*</span>/<span class="pp">*</span>/.exitcode<span class="kw">;</span> <span class="cf">do</span> <span class="bu">[</span> <span class="st">"</span><span class="va">$(</span><span class="fu">cat</span> <span class="st">"</span><span class="va">$f</span><span class="st">"</span><span class="va">)</span><span class="st">"</span> <span class="ot">!=</span> <span class="st">"0"</span> <span class="bu">]</span> <span class="kw">&amp;&amp;</span> <span class="bu">echo</span> <span class="st">"</span><span class="va">${f</span><span class="op">%</span>/.exitcode<span class="va">}</span><span class="st">"</span><span class="kw">;</span> <span class="cf">done</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co"># then manually delete these directories</span></span></code></pre></div>
 <p>If you are completely done with your project, consider running <a href="https://www.nextflow.io/docs/latest/reference/cli.html#clean" class="external-link"><code>nextflow clean</code></a>.
 This command will delete all temporary folders and files in
 <code>work</code>. USE WITH CAUTION.</p>

@@ -4,6 +4,7 @@
 
 - [Frequently Asked
   Questions](https://smithsonian.github.io/MitoPilot/articles/FAQ.md):
+- [Troubleshooting](https://smithsonian.github.io/MitoPilot/articles/Troubleshooting.md):
 
 ### Nextflow Executors
 
@@ -16,6 +17,8 @@
 
 ### Usage
 
+- [Multiple Paths and
+  Scaffolds](https://smithsonian.github.io/MitoPilot/articles/Multiple-Assemblies.md):
 - [Curation Ruleset
   Browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.md):
 - [Fish Mitogenome
