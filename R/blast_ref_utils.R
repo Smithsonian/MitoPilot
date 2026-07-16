@@ -1263,8 +1263,12 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
       )
     }
 
+    # baseOnly = FALSE so the matrix includes IUPAC ambiguity codes (esp. N, code
+    # 15). Consensus/joined Path 0 assemblies carry N gap-spacers and ambiguity
+    # masks; with baseOnly = TRUE those hit "key 15 not in lookup table" and the
+    # whole alignment is silently dropped (errorStrategy 'ignore'), so no synteny.
     subMx <- pwalign::nucleotideSubstitutionMatrix(
-      match = 1, mismatch = -1, baseOnly = TRUE
+      match = 1, mismatch = -1, baseOnly = FALSE
     )
     # Fitting alignment: pattern (sample) global, subject (reference) LOCAL, so a
     # short scaffold maps to just its homologous WINDOW of the reference instead of
