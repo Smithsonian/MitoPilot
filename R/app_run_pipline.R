@@ -22,7 +22,7 @@ MITOPILOT_PROCESS_ORDER <- c(
 # NA => keep frame position. Never used for row identity.
 resolve_process_name <- function(token) {
   k <- sub("^.*:", "", token)                        # drop path prefix to last ':'
-  stripped <- sub("^.*(…|\\.\\.\\.)", "", k)     # drop leading ellipsis truncation
+  stripped <- sub("^.*(\u2026|\\.\\.\\.)", "", k)     # drop leading ellipsis truncation
   if (nchar(stripped) < 3) return(NA_character_)
   hits <- MITOPILOT_PROCESS_ORDER[endsWith(MITOPILOT_PROCESS_ORDER, stripped)]
   if (length(hits) == 1) hits else NA_character_

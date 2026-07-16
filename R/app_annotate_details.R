@@ -144,11 +144,12 @@ annotations_details_server <- function(id, rv) {
     # already in the db); set TRUE right before each load, see update_counts().
     skip_count_update <- FALSE
 
-    # Persist rv$annotations to the DB. Delete is scoped to the exact
-    # (ID, path, scaffold) units currently loaded (never the whole ID) so
-    # sibling annotation units of a multi-assembly sample are never wiped.
+    # Persist rv$annotations to the DB. Delete and insert must BOTH be keyed on the
+    # unit, never on ID alone: with an ID-only insert key, dbplyr renders conflict =
+    # "ignore" as NOT EXISTS on ID, so a sibling unit's rows count as a conflict and
+    # the whole re-insert is silently dropped after the delete has already run.
     persist_annotations <- function() {
-      units <- dplyr::distinct(rv$annotations[, c("ID", "path", "scaffold")])
+      units <- dplyr::distinct(rv$updating[, c("ID", "path", "scaffold")])
       dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::rows_delete(
           units,
@@ -160,7 +161,7 @@ annotations_details_server <- function(id, rv) {
       dplyr::tbl(session$userData$con, "annotations") |>
         dplyr::rows_insert(
           rv$annotations |> dplyr::select(-faa, -fas),
-          by = "ID",
+          by = c("ID", "path", "scaffold", "gene", "pos1"),
           conflict = "ignore",
           copy = TRUE,
           in_place = TRUE
