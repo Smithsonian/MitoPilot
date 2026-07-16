@@ -713,6 +713,49 @@ annotate_server <- function(id) {
         dplyr::select(ID, path, scaffold, annotate_lock) |>
         dplyr::slice(selected())
       lock_current <- as.numeric(names(which.max(table(rv$updating$annotate_lock))))
+      locking <- as.numeric(!lock_current) == 1
+
+      # Only LOCKED units advance to Export (fetch_export_data filters
+      # annotate_lock == 1), and a sample cannot export more than one assembly path
+      # (paths are competing resolutions of one genome). Locking a single path is
+      # therefore the natural way to choose it; only locking MORE THAN ONE path of a
+      # sample is a problem. Block just that case, using the resulting locked state
+      # (this action applied on top of what is already locked), and name the samples.
+      if (locking) {
+        ids <- unique(rv$updating$ID)
+        locked_after <- dplyr::tbl(session$userData$con, "annotate") |>
+          dplyr::filter(ID %in% !!ids) |>
+          dplyr::select(ID, path, scaffold, annotate_lock) |>
+          dplyr::collect()
+        sel_key <- paste(rv$updating$ID, rv$updating$path, rv$updating$scaffold)
+        is_sel <- paste(locked_after$ID, locked_after$path, locked_after$scaffold) %in% sel_key
+        locked_after$annotate_lock[is_sel] <- 1L
+        locked_after <- locked_after[locked_after$annotate_lock == 1, , drop = FALSE]
+        multi_path <- names(which(
+          tapply(locked_after$path, locked_after$ID,
+                 function(p) length(unique(p))) > 1
+        ))
+        if (length(multi_path) > 0) {
+          shown <- paste(utils::head(multi_path, 8), collapse = ", ")
+          if (length(multi_path) > 8) {
+            shown <- paste0(shown, ", and ", length(multi_path) - 8, " more")
+          }
+          shinyWidgets::sendSweetAlert(
+            session = session,
+            title = "Only one assembly path can be locked per sample",
+            text = stringr::str_glue(
+              "{length(multi_path)} sample(s) would have more than one assembly path ",
+              "locked, but a sample can export only one: {shown}.\n\n",
+              "Assembly paths are alternative resolutions of the same genome. Lock ",
+              "just the correct path (leave the others unlocked), or 'ignore' the ",
+              "extra paths in the Assemble module."
+            ),
+            type = "warning"
+          )
+          req(FALSE)
+        }
+      }
+
       rv$updating$annotate_lock <- as.numeric(!lock_current)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(

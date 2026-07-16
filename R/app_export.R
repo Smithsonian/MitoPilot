@@ -822,18 +822,33 @@ export_server <- function(id) {
     write_export_files <- function() {
       p <- rv$export_params
       if (is.null(p)) return(invisible(NULL))
-      export_files(
-        group = rv$review_group,
-        fasta_header = p$fasta_header,
-        fasta_header_gene = p$fasta_header_gene,
-        generateAAalignments = p$generateAAalignments,
-        out_dir = session$userData$dir_out,
-        gene_export = p$gene_export,
-        review = FALSE,
-        start_aa = rv$review_start,
-        stop_aa = rv$review_stop,
-        ident_pct = rv$review_ident
-      )
+      # export_files() can stop() (e.g. a sample still has multiple assembly paths).
+      # Catch it so the app shows a clean alert instead of crashing the session.
+      ok <- tryCatch({
+        export_files(
+          group = rv$review_group,
+          fasta_header = p$fasta_header,
+          fasta_header_gene = p$fasta_header_gene,
+          generateAAalignments = p$generateAAalignments,
+          out_dir = session$userData$dir_out,
+          gene_export = p$gene_export,
+          review = FALSE,
+          start_aa = rv$review_start,
+          stop_aa = rv$review_stop,
+          ident_pct = rv$review_ident
+        )
+        TRUE
+      }, error = function(e) {
+        waiter::waiter_hide()
+        shinyWidgets::sendSweetAlert(
+          session = session,
+          title = "Export failed",
+          text = conditionMessage(e),
+          type = "error"
+        )
+        FALSE
+      })
+      if (!isTRUE(ok)) return(invisible(NULL))
       # Refresh the table so the newly-written export_time_stamp shows up.
       trigger("refresh_export")
     }
@@ -1036,15 +1051,30 @@ export_server <- function(id) {
       if (!is.null(input$ident_pct) && !is.na(input$ident_pct)) rv$opt_ident <- input$ident_pct
     })
 
-    # Samples in this group contributing more than one record. Multi-PATH samples
-    # are rejected outright by export_files(); this catches the other shape, a
-    # single genome fragmented across scaffolds, which would otherwise export as
-    # several incomplete records with no signal that anything is wrong.
+    # Samples in this group whose scaffolds would export as several records, i.e.
+    # ONE path split across multiple scaffolds. A single fragmented genome exported
+    # this way becomes several incomplete records, so we warn. Multi-PATH samples
+    # are a different, blocked case (multi_path_samples()) and are excluded here.
     fragmented_samples <- function(group) {
       d <- rv$data[!is.na(rv$data$export_group) & rv$data$export_group == group, ]
       if (nrow(d) == 0) return(character(0))
-      counts <- table(d$ID)
-      names(counts)[counts > 1]
+      by_id <- split(d, d$ID)
+      names(by_id)[vapply(
+        by_id,
+        function(x) nrow(x) > 1 && length(unique(x$path)) == 1,
+        logical(1)
+      )]
+    }
+
+    # Samples in this group contributing units from more than one assembly path.
+    # These cannot be exported (export_files() would reject them, since exporting
+    # each path submits duplicate records for one specimen), so they are blocked
+    # before export rather than warned about.
+    multi_path_samples <- function(group) {
+      d <- rv$data[!is.na(rv$data$export_group) & rv$data$export_group == group, ]
+      if (nrow(d) == 0) return(character(0))
+      by_id <- split(d$path, d$ID)
+      names(by_id)[vapply(by_id, function(p) length(unique(p)) > 1, logical(1))]
     }
 
     check_overwrite_then_export <- function() {
@@ -1070,6 +1100,28 @@ export_server <- function(id) {
       req(input$export_group)
       # Block export if either header template is invalid (would crash str_glue_data)
       if (!valid_headers_or_alert()) return()
+      # Block (not warn) any sample with more than one assembly path: export_files()
+      # rejects these, so stop them here with a clear message instead of letting the
+      # error surface mid-write. Should be rare, since locking a multi-path sample
+      # for annotation is blocked upstream.
+      mp <- multi_path_samples(input$export_group)
+      if (length(mp) > 0) {
+        shown <- paste(utils::head(mp, 8), collapse = ", ")
+        if (length(mp) > 8) shown <- paste0(shown, ", and ", length(mp) - 8, " more")
+        shinyWidgets::sendSweetAlert(
+          session = session,
+          title = "Cannot export samples with multiple assembly paths",
+          text = stringr::str_glue(
+            "{length(mp)} sample(s) still have more than one assembly path: {shown}.\n\n",
+            "Assembly paths are alternative resolutions of the same genome, so ",
+            "exporting each would submit duplicate records for one specimen. In the ",
+            "Assemble module, open the assembly details and 'ignore' all but the ",
+            "correct path (or build a consensus Path 0), then export again."
+          ),
+          type = "error"
+        )
+        return()
+      }
       frag <- fragmented_samples(input$export_group)
       if (length(frag) > 0) {
         shown <- paste(utils::head(frag, 5), collapse = ", ")
