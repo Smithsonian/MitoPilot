@@ -9,7 +9,7 @@ vignette: >
 
 ## How do I fix a specific error message?
 
-Common error messages and their fixes have moved to the
+Please see the
 [Troubleshooting](Troubleshooting.html) page.
 
 ## Can I annotate my own mitogenome assemblies with MitoPilot?
