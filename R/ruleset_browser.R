@@ -35,6 +35,99 @@ RULESET_MAP <- list(
   thecostraca_mito     = list(label = "Barnacles",       ncbi = "Thecostraca",      taxid = "116172")
 )
 
+## Per-clade biological notes from the NCBI organelle-triage protocol. These are
+## clade-specific triage observations, distinct from the INSDC minimal standards
+## enforced during validation. ASCII only.
+RULESET_NOTES <- list(
+  fish_mito = c(
+    "Actinopterygii are highly conserved; BLASTP identity to references is typically very high.",
+    "Aprion has a G insertion in CYTB; annotate as a join over the G with a ribosomal_slippage exception."
+  ),
+  bird_mito = c(
+    "ND3 has an extra base skipped during translation (Mindell et al. 2003, PMID 12572620); annotate as a join with ribosomal_slippage.",
+    "ATP6 sometimes appears to lack a start codon; mark 5' partial if the length is correct."
+  ),
+  turtle_mito = c(
+    "ND3 has an extra base skipped during translation (Mindell et al. 2003, PMID 12572620); annotate as a join with ribosomal_slippage."
+  ),
+  mammal_mito = c(
+    "Human mtDNA carries a placeholder 'n' near position 3107 (preserves the Cambridge reference spans) that must be removed before submission."
+  ),
+  diptera_mito = c(
+    "5' partial COI is common (often starts like RWQ...).",
+    "ND5 usually uses a truncated TAA stop before tRNA-Phe."
+  ),
+  scyphozoa_mito = c(
+    "Medusozoan mtDNA may be linear and/or split into 2, 4, or 8 fragments.",
+    "Reduced tRNA set (typically tRNA-Met, sometimes tRNA-Trp).",
+    "Parts of COI may be repeated."
+  ),
+  hydrozoa_mito = c(
+    "Medusozoan mtDNA may be linear and/or split into 2, 4, or 8 fragments.",
+    "Reduced tRNA set (typically tRNA-Met, sometimes tRNA-Trp)."
+  ),
+  hexacoral_mito = c(
+    "Anthozoans typically have a single tRNA-Met.",
+    "Multi-exon ND5 (and sometimes COX1) occurs in some cnidarians."
+  ),
+  octocoral_mito = c(
+    "Anthozoans typically have a single tRNA-Met.",
+    "Non-standard genes (e.g. mtMutS/msh1) may be present."
+  ),
+  bivalvia_mito = c(
+    "Doubly-uniparental inheritance: male and female mitogenomes differ in size and may carry extra M-ORF/F-ORF genes.",
+    "ATP8 may be absent or hard to detect."
+  ),
+  gastropoda_mito = c(
+    "Gene content and copy number vary; extra ORFs may be present."
+  ),
+  ctenophore_mito = c(
+    "Highly compact genome; lacks ATP6 and ATP8.",
+    "Short rRNA genes and no tRNAs.",
+    "TGA is reassigned from tryptophan to serine in some species."
+  ),
+  demospongiae_mito = c(
+    "Highly variable in gene order, gene content, and gene boundaries.",
+    "cox1 introns occur in some taxa."
+  ),
+  homoscleromorpha_mito = c(
+    "Sponge mitogenomes may show variable gene order and content; watch for intronic ORFs."
+  ),
+  platyhelminthes_mito = c(
+    "tRNAs may all sit on one strand (trematodes are all plus-strand).",
+    "ATP8 may be absent."
+  ),
+  nemertea_mito = c(
+    "tRNAs may all sit on one strand.",
+    "ATP8 may be absent."
+  ),
+  malacostraca_mito = c(
+    "ATP8 is present but short and can be hard to detect."
+  ),
+  copepod_mito = c(
+    "Gene order can be highly rearranged."
+  ),
+  starfish_mito = c(
+    "Echinoderms may show significant gene-order variation (sea lilies, sea stars, urchins, cucumbers)."
+  ),
+  echinoidea_mito = c(
+    "Echinoderms may show significant gene-order variation."
+  ),
+  holothuroidea_mito = c(
+    "Echinoderms may show significant gene-order variation."
+  ),
+  ophiuroidea_mito = c(
+    "Echinoderms may show significant gene-order variation."
+  ),
+  crinoidea_mito = c(
+    "Echinoderms may show significant gene-order variation."
+  ),
+  ascidiacea_mito = c(
+    "Gene order varies.",
+    "ATP8 may be absent."
+  )
+)
+
 #' Interactive browser for MitoPilot curation rulesets
 #'
 #' Generates a self-contained, interactive HTML visualization of the taxon-specific
@@ -92,7 +185,7 @@ ruleset_browser <- function(output_file = tempfile(fileext = ".html"),
       params <- get(paste0("params_", tgt), mode = "function")()
       # Genetic code is the default arg of the matching curate_* function
       gcode <- resolve_genetic_code(tgt)
-      build_ruleset_display(params, ruleset_map[[tgt]]$label, ruleset_map[[tgt]]$ncbi, gcode, ruleset_map[[tgt]]$taxid)
+      build_ruleset_display(params, ruleset_map[[tgt]]$label, ruleset_map[[tgt]]$ncbi, gcode, ruleset_map[[tgt]]$taxid, RULESET_NOTES[[tgt]])
     }),
     names(ruleset_map)
   )
@@ -331,7 +424,7 @@ genetic_code_name <- function(code) {
 
 #' Format a MitoPilot params list into a display-ready structure
 #' @noRd
-build_ruleset_display <- function(params, label, ncbi, genetic_code = NA_integer_, taxid = NULL) {
+build_ruleset_display <- function(params, label, ncbi, genetic_code = NA_integer_, taxid = NULL, notes = NULL) {
   field_order <- c("count", "min_len", "max_len", "overlap",
                    "start_codons", "stop_codons", "intron")
 
@@ -409,6 +502,7 @@ build_ruleset_display <- function(params, label, ncbi, genetic_code = NA_integer
     label = label,
     ncbi = ncbi,
     taxid = taxid,
+    notes = as.list(notes),
     genetic_code = list(
       code = genetic_code,
       name = genetic_code_name(genetic_code),
@@ -587,6 +681,16 @@ ruleset_html_template <- function() {
     box-shadow: 0 4px 14px rgba(0,0,0,0.22); pointer-events: none; white-space: normal;
   }
   th .help:hover::after { left: auto; right: 0; }
+  .notes {
+    background: #fff8e6; border: 1px solid #f0dca0; border-radius: 8px;
+    padding: 12px 16px; margin: 0 0 22px;
+  }
+  .notes-title {
+    font-size: 12px; color: #8a6d1b; text-transform: uppercase;
+    letter-spacing: .04em; font-weight: 600; margin-bottom: 6px;
+  }
+  .notes-list { margin: 0; padding-left: 18px; }
+  .notes-list li { font-size: 13.5px; line-height: 1.5; margin: 2px 0; }
   .globals { display: flex; gap: 26px; margin: 0 0 22px; }
   .globals .g { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; }
   .globals .g .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -783,6 +887,16 @@ function selectRuleset(target, row) {
     globals.appendChild(g);
   });
   d.appendChild(globals);
+
+  // Clade notes (NCBI GenBank guidance), if any for this clade
+  if (data.notes && data.notes.length) {
+    var np = el("div", "notes");
+    np.appendChild(el("div", "notes-title", "Clade notes (NCBI GenBank guidance)"));
+    var nul = el("ul", "notes-list");
+    data.notes.forEach(function (n) { nul.appendChild(el("li", null, n)); });
+    np.appendChild(nul);
+    d.appendChild(np);
+  }
 
   // Type defaults: at the top, expanded by default
   if (data.defaults && data.defaults.length) {

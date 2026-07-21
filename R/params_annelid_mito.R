@@ -26,8 +26,8 @@ params_annelid_mito <- function(alt = list()) {
       ),
       tRNA = list(
         count = 1,
-        max_len = NA,
-        min_len = NA
+        max_len = 150,
+        min_len = 50
       )
     ),
     rules = list(

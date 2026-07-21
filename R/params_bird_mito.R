@@ -26,8 +26,8 @@ params_bird_mito <- function(alt = list()) {
       ),
       tRNA = list(
         count = 1,
-        max_len = NA,
-        min_len = NA
+        max_len = 150,
+        min_len = 50
       )
     ),
     rules = list(
@@ -36,13 +36,16 @@ params_bird_mito <- function(alt = list()) {
         type = "ctrl",
         min_len = 350
       ),
+      # Non-INSDC organelle-triage heuristic: vertebrate rRNAs exceed ~800 (12S) / ~1000 (16S) bp
       rrnL = list(
         type = "rRNA",
-        max_len = 1850
+        max_len = 1850,
+        min_len = 1000
       ),
       rrnS = list(
         type = "rRNA",
-        max_len = 1000
+        max_len = 1000,
+        min_len = 800
       ),
       nad1 = list(
         type = "PCG"

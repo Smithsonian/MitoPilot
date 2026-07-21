@@ -126,6 +126,19 @@ validate_mito_core <- function(
         annotations$warnings[annotations$gene == gene] <- semicolon_paste(annotations$warnings[annotations$gene == gene], "exons on opposite strands")
         total_warnings <- total_warnings + 1
       }
+      # INSDC: introns must be at least 10 bp long. For same-strand multi-exon
+      # genes, flag any inter-exon gap shorter than 10 bp.
+      if (nrow(gene_annotations) > 1 &&
+          (all(gene_annotations$direction == "+") || all(gene_annotations$direction == "-"))) {
+        ex_start <- pmin(gene_annotations$pos1, gene_annotations$pos2)
+        ex_end <- pmax(gene_annotations$pos1, gene_annotations$pos2)
+        ord <- order(ex_start)
+        introns <- ex_start[ord][-1] - ex_end[ord][-nrow(gene_annotations)] - 1L
+        if (any(introns > 0L & introns < 10L)) {
+          annotations$warnings[target_idx] <- semicolon_paste(annotations$warnings[target_idx], "intron shorter than 10 bp")
+          total_warnings <- total_warnings + 1
+        }
+      }
     }
   }
 
@@ -221,6 +234,23 @@ validate_mito_core <- function(
       }
     }
 
+    ## rRNA overlap ----
+    # INSDC: ribosomal RNA features must not overlap CDS features or other
+    # rRNAs. Strand-independent (interval overlap on the sequence).
+    if (type == "rRNA") {
+      rrna_overlaps <- annotations[-i, ] |>
+        dplyr::filter(contig == {{ contig }} & type %in% c("PCG", "rRNA")) |>
+        dplyr::rowwise() |>
+        dplyr::mutate(
+          overlap = length(intersect(seq(pos1, pos2), seq({{ pos1 }}, {{ pos2 }})))
+        ) |>
+        dplyr::filter(overlap > 0L)
+      if (nrow(rrna_overlaps) > 0L) {
+        annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "rRNA overlaps CDS or rRNA")
+        total_warnings <- total_warnings + 1
+      }
+    }
+
     ## Length limits ----
     if (!is.na(gene_rules$max_len %||% NA) && length > gene_rules$max_len) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max length")
@@ -258,6 +288,19 @@ validate_mito_core <- function(
     ## Internal Stop codons ----
     if (!is.na(translation) && stringr::str_detect(translation, "\\*")) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "internal stop codon")
+      total_warnings <- total_warnings + 1
+    }
+
+    ## Minimum CDS length ----
+    # INSDC: complete coding regions must be at least 30 amino acids long.
+    # Partial CDS are exempt (they are not "complete").
+    is_partial <- (("partial_start" %in% names(annotations)) &&
+                     isTRUE(as.integer(annotations$partial_start[i]) == 1L)) ||
+      (("partial_stop" %in% names(annotations)) &&
+         isTRUE(as.integer(annotations$partial_stop[i]) == 1L))
+    if (!is_partial && !is.na(translation) && nzchar(translation) &&
+        nchar(gsub("[^A-Za-z]", "", translation)) < 30L) {
+      annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "CDS shorter than 30 aa")
       total_warnings <- total_warnings + 1
     }
 
