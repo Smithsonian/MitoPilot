@@ -285,6 +285,9 @@ pipeline_server <- function(id) {
         process()$kill()
       }
 
+      # Pin the Nextflow engine to a MitoPilot-compatible version for this run.
+      nxf_pin <- nf_pin_version()
+
       p <- processx::process$new(
         "nextflow",
         args = c(nf_cmd(), "-ansi-log"),
@@ -292,6 +295,7 @@ pipeline_server <- function(id) {
         stderr = "|",
         env = c(
           "current",
+          if (!is.na(nxf_pin)) c(NXF_VER = nxf_pin),
           NXF_ANSI_SUMMARY = TRUE,
           # Keep Nextflow's ANSI log from truncating process names; stable, full
           # names keep the progress parser's per-process keys consistent.
@@ -498,6 +502,8 @@ pipeline_server <- function(id) {
             "source ~/.bashrc",
             "mamba activate MitoPilot_deps",
             "",
+            # Pin the Nextflow engine to a MitoPilot-compatible version.
+            if (!is.na(nf_pin_version())) paste0("export NXF_VER=", nf_pin_version()),
             full_nf_cmd,
             "",
             'echo "---"',

@@ -187,8 +187,8 @@ computing clusters:
   SEDNA](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html)
 
 To use MitoPilot, you will need [R
-(\>=4.4.0)](https://www.r-project.org/) and
-[Nextflow](https://www.nextflow.io/docs/latest/install.html). In
+(\>=4.4.0)](https://www.r-project.org/) and [Nextflow (\>= 24.10.x, \<=
+25.10.x)](https://www.nextflow.io/docs/latest/install.html). In
 addition, depending or where Nextflow will be executing the pipeline
 (e.g., locally or on a remote cluster), you may also need to install
 [Docker](https://docs.docker.com/engine/install/) or
@@ -210,6 +210,24 @@ locally from the project folder:
 ``` r
 devtools::install()
 ```
+
+## Nextflow version compatibility
+
+MitoPilot checks your Nextflow version when the package is loaded and
+when you create or launch a project. If your version is **too old**, the
+package refuses to load and prompts you to update. If it is **too new**,
+MitoPilot automatically sets the `NXF_VER` environment variable to a
+compatible version.
+
+The MitoPilot pipeline is tested and supported on **Nextflow 24.10.x
+through 25.10.x**. Versions outside this range are known to break it:
+
+- **Nextflow 26.0 and newer** removed an internal method (`NF.isDsl2()`)
+  that the [`nf-sqldb`](https://github.com/nextflow-io/nf-sqldb) plugin
+  calls at load time. No released `nf-sqldb` version currently supports
+  Nextflow 26+.
+- **Versions older than 24.10** silently ignore the pipeline’s
+  `workflow.failOnIgnore`
 
 # Usage
 
