@@ -2,11 +2,24 @@
   version <- nf_installed_version()
 
   if (is.na(version)) {
-    packageStartupMessage("A Nextflow installation is needed to run the MitoPilot pipeline.")
-    glue::glue(
-      "Please install Nextflow {nf_supported_label()} from ",
-      "{crayon::underline('https://www.nextflow.io/')}"
-    ) |> packageStartupMessage()
+    if (nf_on_path()) {
+      # Installed but `nextflow -version` produced no version: usually Java not on
+      # the session PATH, or a not-yet-finished first-run download.
+      packageStartupMessage(
+        "Nextflow was found but 'nextflow -version' did not report a version."
+      )
+      glue::glue(
+        "Run `nextflow -version` in a terminal to let it finish downloading, and ",
+        "ensure Java is on PATH in this R session. MitoPilot needs Nextflow ",
+        "{nf_supported_label()}."
+      ) |> packageStartupMessage()
+    } else {
+      packageStartupMessage("A Nextflow installation is needed to run the MitoPilot pipeline.")
+      glue::glue(
+        "Please install Nextflow {nf_supported_label()} from ",
+        "{crayon::underline('https://www.nextflow.io/')}"
+      ) |> packageStartupMessage()
+    }
     return(invisible())
   }
 

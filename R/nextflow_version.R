@@ -37,16 +37,31 @@ nf_supported_label <- function() {
 #'   not installed / not parseable.
 #' @noRd
 nf_installed_version <- function() {
-  out <- tryCatch(
-    system2("nextflow", args = "-version", stdout = TRUE, stderr = FALSE),
+  # Merge stderr and ignore the exit status: the first run of a freshly
+  # installed launcher prints "Downloading nextflow dependencies..." (and may
+  # exit non-zero) before the version banner, and some builds emit the banner on
+  # stderr. Parse the version from whatever the command produced.
+  out <- suppressWarnings(tryCatch(
+    system2("nextflow", args = "-version", stdout = TRUE, stderr = TRUE),
     error = function(e) character(0)
-  )
+  ))
   if (length(out) == 0) {
     return(NA_character_)
   }
   m <- stringr::str_match(out, "version\\s+([0-9]+\\.[0-9]+\\.[0-9]+)")
   v <- stats::na.omit(m[, 2])
   if (length(v) == 0) NA_character_ else v[1]
+}
+
+#' Is a `nextflow` executable on PATH?
+#'
+#' Lets callers tell "not installed" apart from "installed but `nextflow
+#' -version` failed" (e.g. Java missing from the session, or a failed first-run
+#' download), so the guidance can point at the real problem.
+#' @return `TRUE` if a `nextflow` binary is found on PATH.
+#' @noRd
+nf_on_path <- function() {
+  nzchar(Sys.which("nextflow"))
 }
 
 #' Classify a Nextflow version against the supported range
@@ -130,10 +145,20 @@ check_nextflow_version <- function(context = NULL, on_too_old = c("stop", "warn"
 
   switch(status,
     missing = warning(
-      glue::glue(
-        "Nextflow not found{ctx}. MitoPilot needs Nextflow {nf_supported_label()}. ",
-        "Install from https://www.nextflow.io/"
-      ),
+      if (nf_on_path()) {
+        glue::glue(
+          "A 'nextflow' executable was found but 'nextflow -version' did not ",
+          "report a version{ctx}. If you just installed Nextflow, run `nextflow ",
+          "-version` once in a terminal to let it finish downloading, and make ",
+          "sure Java is on PATH in this session. MitoPilot needs Nextflow ",
+          "{nf_supported_label()}."
+        )
+      } else {
+        glue::glue(
+          "Nextflow not found{ctx}. MitoPilot needs Nextflow ",
+          "{nf_supported_label()}. Install from https://www.nextflow.io/"
+        )
+      },
       call. = FALSE
     ),
     too_old = {
