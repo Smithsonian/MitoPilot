@@ -42,6 +42,9 @@ run_app <- function(
     launch.browser = NULL,
     ...) {
 
+  # Fail early on an unsupported Nextflow (see README "Nextflow compatibility").
+  check_nextflow_version("MitoPilot app")
+
   # assemble Shiny options from headless-friendly args
   if (is.null(options)) {
     options <- list()

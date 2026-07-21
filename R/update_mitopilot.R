@@ -94,7 +94,8 @@ read_config_executor <- function(path) {
 #'
 #' @return Character vector of script lines, ready for `writeLines()`.
 #' @noRd
-submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file) {
+submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
+                              nxf_ver = nf_pin_version()) {
   executor <- tolower(executor %||% "local")
   if (executor == "pbspro") executor <- "pbs"
 
@@ -147,6 +148,8 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file) 
     "# module load java",
     "# mamba activate MitoPilot_deps",
     "",
+    # Pin the Nextflow engine to a MitoPilot-compatible version.
+    if (!is.na(nxf_ver)) paste0("export NXF_VER=", nxf_ver),
     full_nf_cmd,
     "",
     'echo "--- MitoPilot job done: `date` ---"'
@@ -197,6 +200,15 @@ hydra_setup <- function() {
   cur <- cur[!cur %in% hydra_bins]
   Sys.setenv(PATH = paste(c(hydra_bins, cur), collapse = .Platform$path.sep))
 
+  # Now that Nextflow + Java resolve on PATH, warn on an unsupported version and
+  # pin NXF_VER for this session so app / submitted runs use a compatible engine.
+  check_nextflow_version("hydra_setup", on_too_old = "warn")
+  pin <- nf_pin_version()
+  if (!is.na(pin)) {
+    Sys.setenv(NXF_VER = pin)
+    message("Pinned NXF_VER=", pin, " for this session.")
+  }
+
   invisible(TRUE)
 }
 
@@ -210,7 +222,8 @@ hydra_setup <- function() {
 #' @param log_file Path to the combined stdout/stderr log file.
 #' @return Character vector of script lines.
 #' @noRd
-hydra_submission_script <- function(full_nf_cmd, job_name, log_file) {
+hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
+                                    nxf_ver = nf_pin_version()) {
   c(
     "#!/bin/sh",
     paste0("#$ -N ", job_name),
@@ -230,6 +243,8 @@ hydra_submission_script <- function(full_nf_cmd, job_name, log_file) {
     "module load tools/java/21.0.2",
     "",
     "export NXF_OPTS=\"-Xms512m -Xmx20g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
+    # Pin the Nextflow engine to a MitoPilot-compatible version.
+    if (!is.na(nxf_ver)) paste0("export NXF_VER=", nxf_ver),
     full_nf_cmd,
     "",
     'echo "---"',

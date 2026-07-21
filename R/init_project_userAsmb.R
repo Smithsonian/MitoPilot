@@ -64,6 +64,9 @@ new_project_userAsmb <- function(
     force = FALSE,
     ...) {
 
+  # Fail early on an unsupported Nextflow (see README "Nextflow compatibility").
+  check_nextflow_version("new_project_userAsmb")
+
   # Create directory if it doesn't exist ----
   if (!dir.exists(path)) {
     message("Creating project directory: ", path)
