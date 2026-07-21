@@ -8,10 +8,14 @@
       packageStartupMessage(
         "Nextflow was found but 'nextflow -version' did not report a version."
       )
+      err <- nf_probe_error()
+      if (nzchar(err)) {
+        packageStartupMessage(glue::glue("Nextflow reported:\n{err}"))
+      }
       glue::glue(
-        "Run `nextflow -version` in a terminal to let it finish downloading, and ",
-        "ensure Java is on PATH in this R session. MitoPilot needs Nextflow ",
-        "{nf_supported_label()}."
+        "Ensure Java 17+ is on PATH in this R session (or set NXF_JAVA_HOME); if ",
+        "you just installed Nextflow, run `nextflow -version` in a terminal to ",
+        "finish its download. MitoPilot needs Nextflow {nf_supported_label()}."
       ) |> packageStartupMessage()
     } else {
       packageStartupMessage("A Nextflow installation is needed to run the MitoPilot pipeline.")

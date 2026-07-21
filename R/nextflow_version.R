@@ -64,6 +64,26 @@ nf_on_path <- function() {
   nzchar(Sys.which("nextflow"))
 }
 
+#' Concise error output from a failed `nextflow -version`
+#'
+#' Surfaced in the "found but no version" message so the real cause (most often
+#' "Cannot find Java or it's a wrong version") is visible instead of a generic
+#' hint. Keeps the informative lines (ERROR / NOTE / Java), trimmed short.
+#' @return A short string, or "" if nothing useful was captured.
+#' @noRd
+nf_probe_error <- function() {
+  out <- suppressWarnings(tryCatch(
+    system2("nextflow", args = "-version", stdout = TRUE, stderr = TRUE),
+    error = function(e) character(0)
+  ))
+  if (length(out) == 0) {
+    return("")
+  }
+  hit <- out[grepl("ERROR|NOTE|Java|JAVA", out, ignore.case = TRUE)]
+  if (length(hit) == 0) hit <- out
+  paste(utils::head(trimws(hit), 4), collapse = "\n")
+}
+
 #' Classify a Nextflow version against the supported range
 #'
 #' @param version Version string (defaults to the installed Nextflow).
@@ -146,11 +166,14 @@ check_nextflow_version <- function(context = NULL, on_too_old = c("stop", "warn"
   switch(status,
     missing = warning(
       if (nf_on_path()) {
+        err <- nf_probe_error()
         glue::glue(
           "A 'nextflow' executable was found but 'nextflow -version' did not ",
-          "report a version{ctx}. If you just installed Nextflow, run `nextflow ",
-          "-version` once in a terminal to let it finish downloading, and make ",
-          "sure Java is on PATH in this session. MitoPilot needs Nextflow ",
+          "report a version{ctx}.",
+          if (nzchar(err)) "\nNextflow reported:\n{err}" else "",
+          "\nEnsure Java 17+ is on PATH in this R session (or set NXF_JAVA_HOME); ",
+          "if you just installed Nextflow, run `nextflow -version` once in a ",
+          "terminal to finish its download. MitoPilot needs Nextflow ",
           "{nf_supported_label()}."
         )
       } else {
