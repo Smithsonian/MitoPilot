@@ -53,8 +53,8 @@ update_sample_metadata <- function(
       Taxon = .data[[mapping_taxon]]
     )
   # convert everything to characters
-  mapping <- mapping %>%
-    dplyr::mutate(across(everything(), as.character))
+  mapping <- mapping |>
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
 
   # remove R1 and R2 columns from updated mapping
   if("R1" %in% colnames(mapping) | "R2" %in% colnames(mapping)){
@@ -73,8 +73,8 @@ update_sample_metadata <- function(
   # read existing sample table
   sample_table <- DBI::dbReadTable(con, "samples")
   # convert everything to characters
-  sample_table <- sample_table %>%
-    dplyr::mutate(across(everything(), as.character))
+  sample_table <- sample_table |>
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
 
   # check to make sure there are no new samples in the update database
   new_samples <- mapping$ID[which(!(mapping$ID %in% sample_table$ID))]

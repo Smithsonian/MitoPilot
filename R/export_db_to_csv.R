@@ -36,9 +36,9 @@ export_db_to_csv <- function(
   names(annot_table)[names(annot_table) == 'time_stamp'] <- 'time_stamp.annot'
 
   # join tables on ID
-  tbl <- sample_table %>%
-    dplyr::left_join(pre_table, by='ID') %>%
-    dplyr::left_join(asmb_table, by='ID') %>%
+  tbl <- sample_table |>
+    dplyr::left_join(pre_table, by='ID') |>
+    dplyr::left_join(asmb_table, by='ID') |>
     dplyr::left_join(annot_table, by='ID')
 
   # make new directory
