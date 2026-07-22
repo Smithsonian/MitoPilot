@@ -97,14 +97,14 @@ add_samples <- function(
   }
 
   # convert everything to characters
-  mapping <- mapping %>%
-    dplyr::mutate(across(everything(), as.character))
+  mapping <- mapping |>
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
 
   # read existing sample table
   sample_table <- DBI::dbReadTable(con, "samples")
   # convert everything to characters
-  sample_table <- sample_table %>%
-    dplyr::mutate(across(everything(), as.character))
+  sample_table <- sample_table |>
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
 
   # check to make sure there are no existing samples in the update database
   new_samples <- mapping$ID[which(mapping$ID %in% sample_table$ID)]

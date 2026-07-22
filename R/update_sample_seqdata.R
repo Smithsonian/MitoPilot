@@ -51,8 +51,8 @@ update_sample_seqdata <- function(
     )
 
   # convert everything to characters
-  mapping <- mapping %>%
-    dplyr::mutate(across(everything(), as.character))
+  mapping <- mapping |>
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
 
   # check that mapping file contains sequence data columns
   if(!("R1" %in% colnames(mapping)) | !("R2" %in% colnames(mapping))){
@@ -69,8 +69,8 @@ update_sample_seqdata <- function(
   # read existing sample table
   sample_table <- DBI::dbReadTable(con, "samples")
   # convert everything to characters
-  sample_table <- sample_table %>%
-    dplyr::mutate(across(everything(), as.character))
+  sample_table <- sample_table |>
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
 
   # check to make sure there are no new samples in the update database
   new_samples <- mapping$ID[which(!(mapping$ID %in% sample_table$ID))]
@@ -112,5 +112,17 @@ update_sample_seqdata <- function(
       in_place = TRUE,
       copy = TRUE,
       by = "ID"
+    )
+
+  # also update the preprocess table: R1/R2 there are the copy the PREPROCESS
+  # module actually reads (samples.R1/R2 is not consumed by the pipeline).
+  # Targeted update so pipeline-computed columns (reads, etc.) are untouched.
+  dplyr::tbl(con, "preprocess") |>
+    dplyr::rows_update(
+      dplyr::select(mapping, "ID", "R1", "R2"),
+      by = "ID",
+      in_place = TRUE,
+      copy = TRUE,
+      unmatched = "ignore"
     )
 }
