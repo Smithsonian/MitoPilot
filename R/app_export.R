@@ -1036,6 +1036,14 @@ export_server <- function(id) {
           ),
           finally = waiter::waiter_hide()
         )
+        # TEMP diagnostic: ungapped AA length per sequence straight from the fresh
+        # recompute (compare against "REVIEW RENDER" to localize any staleness).
+        if (!is.null(focal) && !is.null(res$alignments[[focal]])) {
+          message(
+            "RECOMPUTE gene=", focal,
+            " lens=", paste(nchar(gsub("-", "", as.character(res$alignments[[focal]]))), collapse = ",")
+          )
+        }
         # Scoped merge when we know the single edited gene and have cached state;
         # otherwise fall back to a full reload.
         if (!is.null(focal) && !is.null(rv$outliers)) {
@@ -1196,30 +1204,8 @@ export_server <- function(id) {
     on("outlier_modal", {
       req(length(rv$review_genes) > 0)
       highlight_label(NULL)
-      # Fresh output id for this open -> the shown gene's MSA rebuilds from scratch
-      # (no stale htmlwidget binding reuse). Register the renderer for that id here.
+      # Bump so review_aln_ui rebuilds the widget from scratch on every (re)open.
       aln_nonce(isolate(aln_nonce()) + 1L)
-      output[[paste0("review_aln_", isolate(aln_nonce()))]] <- msaR::renderMsaR({
-        g <- current_gene()
-        aln <- rv$alns[[g]]
-        req(aln)
-        # Move the picked sample to the top and mark it so it stands out
-        hl <- highlight_label()
-        if (!is.null(hl) && hl %in% names(aln)) {
-          aln <- aln[c(which(names(aln) == hl), which(names(aln) != hl))]
-          names(aln)[1] <- paste0(">> ", names(aln)[1])
-        }
-        msaR::msaR(
-          aln,
-          overviewbox = FALSE,
-          seqlogo = FALSE,
-          menu = FALSE,
-          conservation = TRUE,
-          labelNameLength = 150,
-          colorscheme = "zappo",
-          alignmentHeight = review_aln_height()
-        )
-      })
       modalDialog(
         title = "PCG Annotation Outlier Review",
         size = "l",
@@ -1262,19 +1248,45 @@ export_server <- function(id) {
     review_aln_height <- reactive({
       g <- current_gene()
       aln <- rv$alns[[g]]
-      # Do NOT req(aln) here: review_aln_ui depends on this, and a req-stop would
-      # skip emitting the fresh msaROutput div, leaving the previous (stale) widget
-      # on screen. Fall back to a default height so the div is always rebuilt.
       if (is.null(aln)) return(120L)
       min(400L, max(120L, as.integer(length(aln) * 18 + 40)))
     })
 
-    # Dynamic id (tracks aln_nonce) so each modal open binds a fresh msaR widget;
-    # the renderer for this id is registered in on("outlier_modal").
+    # Render the MSA as the uiOutput content itself (not a msaROutput placeholder
+    # filled by a separate renderMsaR). Returning the widget from renderUI makes
+    # Shiny REPLACE the container's innerHTML on every (re)open, so the old widget
+    # DOM is torn down and a fresh one built from the current rv$alns - the
+    # msaROutput+dynamic-renderMsaR pattern instead let htmlwidgets reuse a stale
+    # binding (and msaR::renderValue appends rather than clearing), which showed the
+    # pre-edit alignment after "Back to Review". aln_nonce() forces a rebuild even
+    # if the gene is unchanged.
     output$review_aln_ui <- renderUI({
-      msaR::msaROutput(
-        ns(paste0("review_aln_", aln_nonce())),
-        height = paste0(review_aln_height() + 10, "px")
+      aln_nonce()
+      g <- current_gene()
+      aln <- rv$alns[[g]]
+      if (is.null(aln)) {
+        return(div(style = "color:#666; padding:1em;", "No alignment for this gene."))
+      }
+      # Move the picked sample to the top and mark it so it stands out
+      hl <- highlight_label()
+      if (!is.null(hl) && hl %in% names(aln)) {
+        aln <- aln[c(which(names(aln) == hl), which(names(aln) != hl))]
+        names(aln)[1] <- paste0(">> ", names(aln)[1])
+      }
+      # TEMP diagnostic: ungapped AA length per sequence in the rendered alignment.
+      message(
+        "REVIEW RENDER gene=", g, " nonce=", isolate(aln_nonce()),
+        " lens=", paste(nchar(gsub("-", "", as.character(aln))), collapse = ",")
+      )
+      msaR::msaR(
+        aln,
+        overviewbox = FALSE,
+        seqlogo = FALSE,
+        menu = FALSE,
+        conservation = TRUE,
+        labelNameLength = 150,
+        colorscheme = "zappo",
+        alignmentHeight = review_aln_height()
       )
     })
 
