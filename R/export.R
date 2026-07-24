@@ -1375,7 +1375,11 @@ get_export_PCG_annotations <- function(con, group) {
 #'       `start_offset`, `stop_offset`, `start_flag`, `stop_flag`,
 #'       `identity_flag`, `issue`.}
 #'     \item{alignments}{A named list (by gene) of clustering-ordered aligned
-#'       `AAStringSet` objects, for every gene that has a flagged sample.}
+#'       `AAStringSet` objects, for every gene that has a flagged sample (plus any
+#'       explicitly requested via `genes`, even if their last flag was cleared).}
+#'     \item{samples}{A named list (by gene) of tibbles listing every unit in the
+#'       gene's alignment (`ID`, `label`, `path`, `scaffold`), flagged or not, so
+#'       the review UI can edit any sample of the gene.}
 #'   }
 #'
 #' @export
@@ -1395,6 +1399,9 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
   loop_genes <- if (!is.null(genes)) intersect(all_genes, genes) else all_genes
   flag_rows <- list()
   alignments <- list()
+  # Per-gene roster of every unit in the alignment (flagged or not), so the review
+  # UI can offer to edit any sample of the gene, not only the flagged ones.
+  samples <- list()
 
   for (g in loop_genes) {
     sub <- annotations[annotations$gene == g, , drop = FALSE]
@@ -1413,6 +1420,9 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
     clust <- stats::hclust(dst, "complete")
     aln <- aln[clust$order]
     alignments[[g]] <- aln
+    samples[[g]] <- dplyr::tibble(
+      ID = sub$ID, label = sub$seqid, path = sub$path, scaffold = sub$scaffold
+    )
 
     # Mean pairwise identity of each sample to the rest of the group
     dmat <- as.matrix(DECIPHER::DistanceMatrix(
@@ -1482,10 +1492,16 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
   }
 
   flags <- if (length(flag_rows) > 0) dplyr::bind_rows(flag_rows) else .empty_outlier_flags()
-  # Keep alignments only for genes that actually have a flagged sample
-  alignments <- alignments[names(alignments) %in% unique(flags$gene)]
+  # Keep alignments/rosters for genes that have a flagged sample. When a specific
+  # gene set was requested (a "Back to Review" recompute of an edited gene), also
+  # keep those genes even if the edit cleared their last flag, so the review can
+  # still show the corrected alignment instead of a stale one.
+  keep_genes <- unique(flags$gene)
+  if (!is.null(genes)) keep_genes <- union(keep_genes, intersect(names(alignments), genes))
+  alignments <- alignments[names(alignments) %in% keep_genes]
+  samples <- samples[names(samples) %in% keep_genes]
 
-  list(flags = flags, alignments = alignments)
+  list(flags = flags, alignments = alignments, samples = samples)
 }
 
 # Empty flags tibble with the canonical column types

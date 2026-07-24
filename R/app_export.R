@@ -105,6 +105,8 @@ export_server <- function(id) {
       updating = NULL,
       outliers = NULL,    # flags tibble from flag_PCG_outliers()
       alns = NULL,        # named list of aligned AAStringSet (by gene)
+      review_samples = NULL, # named list (by gene) of every unit in the alignment,
+                             # so any sample can be picked for editing (not just flagged)
       review_genes = NULL, # genes still pending review (drives navigation)
       review_idx = 1L,     # cursor into review_genes
       resolved = character(0), # "ID|gene" keys the user marked resolved;
@@ -957,6 +959,7 @@ export_server <- function(id) {
     present_review <- function(res, focus_gene = NULL) {
       rv$outliers <- res$flags
       rv$alns <- res$alignments
+      rv$review_samples <- res$samples
       flagged_genes <- unique(res$flags$gene)
       if (length(flagged_genes) > 0) {
         rv$review_genes <- flagged_genes
@@ -982,8 +985,12 @@ export_server <- function(id) {
         rv$outliers[rv$outliers$gene != gene, , drop = FALSE],
         res$flags
       )
-      # res$alignments has the gene only when it still has a flagged sample
+      # res$alignments/res$samples keep the recomputed gene even when the edit
+      # cleared its last flag (flag_PCG_outliers retains explicitly-requested
+      # genes), so the corrected alignment replaces the stale one instead of the
+      # panel freezing on the pre-edit view.
       rv$alns[[gene]] <- res$alignments[[gene]]
+      rv$review_samples[[gene]] <- res$samples[[gene]]
       # review_genes intentionally unchanged: genes stay in the list and are
       # marked resolved rather than removed.
       if (gene %in% rv$review_genes) {
@@ -1169,6 +1176,12 @@ export_server <- function(id) {
       g <- current_gene()
       rv$outliers[rv$outliers$gene == g, , drop = FALSE]
     })
+    # Every unit in the current gene's alignment (flagged or not), for the
+    # "edit any sample" picker.
+    current_samples <- reactive({
+      g <- current_gene()
+      rv$review_samples[[g]]
+    })
     # Sample (by label) to highlight in the MSA; cleared when the gene changes
     highlight_label <- reactiveVal(NULL)
 
@@ -1223,10 +1236,14 @@ export_server <- function(id) {
         uiOutput(ns("review_aln_ui")),
         tags$hr(),
         reactableOutput(ns("review_table")),
+        # Edit any sample of this gene, flagged or not (only this gene stays
+        # editable in the details modal, same as clicking a flagged sample's 'edit').
+        uiOutput(ns("review_sample_picker")),
         footer = tagList(
           actionButton(ns("review_prev"), "Prev"),
           actionButton(ns("review_next"), "Next"),
           actionButton(ns("skip_gene"), "Mark gene resolved", class = "btn-success"),
+          actionButton(ns("cancel_review"), "Cancel export", class = "btn-danger"),
           actionButton(ns("review_done"), "Done", class = "btn-primary")
         )
       ) |> showModal()
@@ -1245,7 +1262,10 @@ export_server <- function(id) {
     review_aln_height <- reactive({
       g <- current_gene()
       aln <- rv$alns[[g]]
-      req(aln)
+      # Do NOT req(aln) here: review_aln_ui depends on this, and a req-stop would
+      # skip emitting the fresh msaROutput div, leaving the previous (stale) widget
+      # on screen. Fall back to a default height so the div is always rebuilt.
+      if (is.null(aln)) return(120L)
       min(400L, max(120L, as.integer(length(aln) * 18 + 40)))
     })
 
@@ -1260,7 +1280,10 @@ export_server <- function(id) {
 
     output$review_table <- renderReactable({
       df <- current_flags()
-      req(nrow(df) > 0)
+      # Render even with 0 rows (reactable shows an empty table) rather than
+      # req(nrow>0)-stopping: after an edit clears a gene's last flag the table
+      # must refresh to empty, not freeze on the stale pre-edit rows.
+      req(!is.null(df))
       keys <- paste(df$ID, df$gene, sep = "|")
       df <- df |>
         dplyr::transmute(
@@ -1330,6 +1353,29 @@ export_server <- function(id) {
       )
     })
 
+    # Picker to edit ANY sample of the current gene, flagged or not. The table
+    # above only lists flagged samples; this offers the rest of the alignment.
+    output$review_sample_picker <- renderUI({
+      samp <- current_samples()
+      req(!is.null(samp), nrow(samp) > 0)
+      div(
+        style = "margin-top: 0.75em; display: flex; align-items: flex-end; gap: 0.5em;",
+        div(
+          style = "flex: 1;",
+          selectInput(
+            ns("edit_sample_label"),
+            label = sprintf("Edit any %s sample", toupper(current_gene())),
+            choices = sort(samp$label),
+            width = "100%"
+          )
+        ),
+        actionButton(
+          ns("edit_sample"), "edit",
+          class = "btn-primary", style = "margin-bottom: 15px;"
+        )
+      )
+    })
+
     # Toggle a (sample, gene) as resolved; kept in rv$resolved so it survives
     # alignment/flag recomputes (Back to Review).
     observeEvent(input$toggle_resolved, {
@@ -1389,6 +1435,38 @@ export_server <- function(id) {
       )
       removeModal()
       trigger("goto_annotate")
+    })
+
+    # Jump to the annotate details modal for any chosen sample of the current
+    # gene, flagged or not. Mirrors goto_annot; the unit comes from the sample
+    # roster and there are no outlier offsets (NA -> the editor shows a plain
+    # "editing <gene>" banner instead of offset values).
+    observeEvent(input$edit_sample, {
+      samp <- current_samples()
+      req(!is.null(samp))
+      row <- samp[samp$label == input$edit_sample_label, , drop = FALSE]
+      req(nrow(row) == 1)
+      session$userData$goto_annotate_target <- list(
+        ID = row$ID, path = row$path, scaffold = row$scaffold,
+        gene = current_gene(), issue = NA_character_,
+        start_offset = NA_integer_, stop_offset = NA_integer_,
+        pct_identity = NA_real_
+      )
+      removeModal()
+      trigger("goto_annotate")
+    })
+
+    # Abort the export: close the review modal and clear review state so no files
+    # are written and the modal does not reopen.
+    observeEvent(input$cancel_review, {
+      removeModal()
+      highlight_label(NULL)
+      rv$outliers <- NULL
+      rv$alns <- NULL
+      rv$review_samples <- NULL
+      rv$review_genes <- NULL
+      rv$review_idx <- 1L
+      rv$resolved <- character(0)
     })
   })
 }

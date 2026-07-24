@@ -188,6 +188,9 @@ annotations_details_server <- function(id, rv) {
     output$outlier_flag_banner <- renderUI({
       info <- outlier_flag()
       if (is.null(info)) return(NULL)
+      # A sample picked from the review's "edit any sample" list has no flag, so
+      # skip the issue/offset text and show a plain editing reminder.
+      flagged <- !is.null(info$issue) && !is.na(info$issue)
       div(
         style = paste(
           "background:#fff3cd; border:1px solid #ffe69c; color:#664d03;",
@@ -197,8 +200,8 @@ annotations_details_server <- function(id, rv) {
         icon("triangle-exclamation"),
         span(
           tags$b(stringr::str_glue("Outlier review - {toupper(info$gene)}: ")),
-          info$issue,
-          tags$span(
+          if (flagged) info$issue,
+          if (flagged) tags$span(
             style = "color:#8a6d3b; margin-left:6px;",
             stringr::str_glue(
               "(start {sprintf('%+d', info$start_offset)} aa, ",
