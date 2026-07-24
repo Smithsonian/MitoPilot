@@ -376,6 +376,9 @@ annotations_details_server <- function(id, rv) {
           identical(goto$ID, rv$updating$ID)) {
         # Remember the flag so the banner can remind the user what to edit
         outlier_flag(goto)
+        # Snapshot the focal gene's edit-relevant fields so the reopen handler can
+        # tell whether anything changed and skip the recompute if not.
+        session$userData$review_entry_sig <- focal_sig(rv$annotations, goto$gene)
         gidx <- which(rv$annotations$gene == goto$gene)
         if (length(gidx) > 0) {
           gidx <- gidx[[1]]
@@ -392,6 +395,7 @@ annotations_details_server <- function(id, rv) {
         session$userData$goto_annotate_target <- NULL
       } else {
         outlier_flag(NULL)
+        session$userData$review_entry_sig <- NULL
       }
     })
 
@@ -760,6 +764,20 @@ annotations_details_server <- function(id, rv) {
     # poly-A stop trim change partial_start/partial_stop/stop_codon/positions
     # without altering the translation, so a translation-only test would let the
     # user close/lock and silently drop those edits.
+    # Order-independent signature of a gene's annotation rows over the fields that
+    # drive the outlier recompute (translation for single-exon genes; pos/direction
+    # for multi-exon). Lets "Back to Review" skip the recompute when nothing changed.
+    focal_sig <- function(ann, gene) {
+      if (is.null(ann) || is.null(gene)) return(NULL)
+      rows <- ann[!is.na(ann$gene) & ann$gene == gene, , drop = FALSE]
+      if (nrow(rows) == 0) return("")
+      flds <- c("translation", "pos1", "pos2", "direction")
+      cols <- lapply(flds, function(f) {
+        if (f %in% names(rows)) as.character(rows[[f]]) else rep(NA_character_, nrow(rows))
+      })
+      paste(sort(do.call(paste, c(cols, sep = "|"))), collapse = ";")
+    }
+
     editing_unsaved <- function(idx = selected()) {
       if (is.null(rv$editing) || is.null(rv$editing$backup)) return(FALSE)
       bak <- rv$editing$backup
@@ -841,6 +859,10 @@ annotations_details_server <- function(id, rv) {
       info <- outlier_flag()
       if (!is.null(info) && !is.null(info$ID) && !is.null(info$gene)) {
         session$userData$resolve_on_return <- list(ID = info$ID, gene = info$gene)
+        # If the focal gene's annotation is unchanged vs the entry snapshot, the
+        # reopen handler can skip the alignment recompute entirely.
+        session$userData$review_annotation_changed <-
+          !identical(session$userData$review_entry_sig, focal_sig(rv$annotations, info$gene))
       }
       shinyjs::click("close")
     })

@@ -1011,8 +1011,23 @@ export_server <- function(id) {
       # navigate back to it.
       rr <- session$userData$resolve_on_return
       session$userData$resolve_on_return <- NULL
+      focal <- if (!is.null(rr)) rr$gene else NULL
+      # Only skip the recompute when the details modal reported NO change (explicit
+      # FALSE); an unset flag means recompute to be safe.
+      unchanged <- identical(session$userData$review_annotation_changed, FALSE)
+      session$userData$review_annotation_changed <- NULL
       if (!is.null(rr)) {
         rv$resolved <- union(rv$resolved, paste(rr$ID, rr$gene, sep = "|"))
+      }
+      # Nothing was edited: the cached flags/alignments are still valid, so just
+      # reopen at the focal gene and skip the (expensive) alignment recompute.
+      if (unchanged && !is.null(rv$outliers) && length(rv$review_genes) > 0) {
+        if (!is.null(focal) && focal %in% rv$review_genes) {
+          rv$review_idx <- which(rv$review_genes == focal)[1]
+        }
+        removeModal()
+        trigger("outlier_modal")
+        return()
       }
       # Show the overlay first, then defer the (blocking) recompute one tick so
       # the "hold tight" message actually paints before alignment starts.
@@ -1024,7 +1039,6 @@ export_server <- function(id) {
         color = "rgba(40,40,40,0.85)"
       )
       shinyjs::delay(100, {
-        focal <- if (!is.null(rr)) rr$gene else NULL
         res <- tryCatch(
           flag_PCG_outliers(
             group = rv$review_group,
