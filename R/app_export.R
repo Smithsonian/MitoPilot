@@ -105,6 +105,8 @@ export_server <- function(id) {
       updating = NULL,
       outliers = NULL,    # flags tibble from flag_PCG_outliers()
       alns = NULL,        # named list of aligned AAStringSet (by gene)
+      review_samples = NULL, # named list (by gene) of every unit in the alignment,
+                             # so any sample can be picked for editing (not just flagged)
       review_genes = NULL, # genes still pending review (drives navigation)
       review_idx = 1L,     # cursor into review_genes
       resolved = character(0), # "ID|gene" keys the user marked resolved;
@@ -957,6 +959,7 @@ export_server <- function(id) {
     present_review <- function(res, focus_gene = NULL) {
       rv$outliers <- res$flags
       rv$alns <- res$alignments
+      rv$review_samples <- res$samples
       flagged_genes <- unique(res$flags$gene)
       if (length(flagged_genes) > 0) {
         rv$review_genes <- flagged_genes
@@ -982,8 +985,12 @@ export_server <- function(id) {
         rv$outliers[rv$outliers$gene != gene, , drop = FALSE],
         res$flags
       )
-      # res$alignments has the gene only when it still has a flagged sample
+      # res$alignments/res$samples keep the recomputed gene even when the edit
+      # cleared its last flag (flag_PCG_outliers retains explicitly-requested
+      # genes), so the corrected alignment replaces the stale one instead of the
+      # panel freezing on the pre-edit view.
       rv$alns[[gene]] <- res$alignments[[gene]]
+      rv$review_samples[[gene]] <- res$samples[[gene]]
       # review_genes intentionally unchanged: genes stay in the list and are
       # marked resolved rather than removed.
       if (gene %in% rv$review_genes) {
@@ -1004,8 +1011,23 @@ export_server <- function(id) {
       # navigate back to it.
       rr <- session$userData$resolve_on_return
       session$userData$resolve_on_return <- NULL
+      focal <- if (!is.null(rr)) rr$gene else NULL
+      # Only skip the recompute when the details modal reported NO change (explicit
+      # FALSE); an unset flag means recompute to be safe.
+      unchanged <- identical(session$userData$review_annotation_changed, FALSE)
+      session$userData$review_annotation_changed <- NULL
       if (!is.null(rr)) {
         rv$resolved <- union(rv$resolved, paste(rr$ID, rr$gene, sep = "|"))
+      }
+      # Nothing was edited: the cached flags/alignments are still valid, so just
+      # reopen at the focal gene and skip the (expensive) alignment recompute.
+      if (unchanged && !is.null(rv$outliers) && length(rv$review_genes) > 0) {
+        if (!is.null(focal) && focal %in% rv$review_genes) {
+          rv$review_idx <- which(rv$review_genes == focal)[1]
+        }
+        removeModal()
+        trigger("outlier_modal")
+        return()
       }
       # Show the overlay first, then defer the (blocking) recompute one tick so
       # the "hold tight" message actually paints before alignment starts.
@@ -1017,7 +1039,6 @@ export_server <- function(id) {
         color = "rgba(40,40,40,0.85)"
       )
       shinyjs::delay(100, {
-        focal <- if (!is.null(rr)) rr$gene else NULL
         res <- tryCatch(
           flag_PCG_outliers(
             group = rv$review_group,
@@ -1029,6 +1050,14 @@ export_server <- function(id) {
           ),
           finally = waiter::waiter_hide()
         )
+        # TEMP diagnostic: ungapped AA length per sequence straight from the fresh
+        # recompute (compare against "REVIEW RENDER" to localize any staleness).
+        if (!is.null(focal) && !is.null(res$alignments[[focal]])) {
+          message(
+            "RECOMPUTE gene=", focal,
+            " lens=", paste(nchar(gsub("-", "", as.character(res$alignments[[focal]]))), collapse = ",")
+          )
+        }
         # Scoped merge when we know the single edited gene and have cached state;
         # otherwise fall back to a full reload.
         if (!is.null(focal) && !is.null(rv$outliers)) {
@@ -1169,6 +1198,12 @@ export_server <- function(id) {
       g <- current_gene()
       rv$outliers[rv$outliers$gene == g, , drop = FALSE]
     })
+    # Every unit in the current gene's alignment (flagged or not), for the
+    # "edit any sample" picker.
+    current_samples <- reactive({
+      g <- current_gene()
+      rv$review_samples[[g]]
+    })
     # Sample (by label) to highlight in the MSA; cleared when the gene changes
     highlight_label <- reactiveVal(NULL)
 
@@ -1183,30 +1218,8 @@ export_server <- function(id) {
     on("outlier_modal", {
       req(length(rv$review_genes) > 0)
       highlight_label(NULL)
-      # Fresh output id for this open -> the shown gene's MSA rebuilds from scratch
-      # (no stale htmlwidget binding reuse). Register the renderer for that id here.
+      # Bump so review_aln_ui rebuilds the widget from scratch on every (re)open.
       aln_nonce(isolate(aln_nonce()) + 1L)
-      output[[paste0("review_aln_", isolate(aln_nonce()))]] <- msaR::renderMsaR({
-        g <- current_gene()
-        aln <- rv$alns[[g]]
-        req(aln)
-        # Move the picked sample to the top and mark it so it stands out
-        hl <- highlight_label()
-        if (!is.null(hl) && hl %in% names(aln)) {
-          aln <- aln[c(which(names(aln) == hl), which(names(aln) != hl))]
-          names(aln)[1] <- paste0(">> ", names(aln)[1])
-        }
-        msaR::msaR(
-          aln,
-          overviewbox = FALSE,
-          seqlogo = FALSE,
-          menu = FALSE,
-          conservation = TRUE,
-          labelNameLength = 150,
-          colorscheme = "zappo",
-          alignmentHeight = review_aln_height()
-        )
-      })
       modalDialog(
         title = "PCG Annotation Outlier Review",
         size = "l",
@@ -1223,10 +1236,14 @@ export_server <- function(id) {
         uiOutput(ns("review_aln_ui")),
         tags$hr(),
         reactableOutput(ns("review_table")),
+        # Edit any sample of this gene, flagged or not (only this gene stays
+        # editable in the details modal, same as clicking a flagged sample's 'edit').
+        uiOutput(ns("review_sample_picker")),
         footer = tagList(
           actionButton(ns("review_prev"), "Prev"),
           actionButton(ns("review_next"), "Next"),
           actionButton(ns("skip_gene"), "Mark gene resolved", class = "btn-success"),
+          actionButton(ns("cancel_review"), "Cancel export", class = "btn-danger"),
           actionButton(ns("review_done"), "Done", class = "btn-primary")
         )
       ) |> showModal()
@@ -1245,22 +1262,54 @@ export_server <- function(id) {
     review_aln_height <- reactive({
       g <- current_gene()
       aln <- rv$alns[[g]]
-      req(aln)
+      if (is.null(aln)) return(120L)
       min(400L, max(120L, as.integer(length(aln) * 18 + 40)))
     })
 
-    # Dynamic id (tracks aln_nonce) so each modal open binds a fresh msaR widget;
-    # the renderer for this id is registered in on("outlier_modal").
+    # Render the MSA as the uiOutput content itself (not a msaROutput placeholder
+    # filled by a separate renderMsaR). Returning the widget from renderUI makes
+    # Shiny REPLACE the container's innerHTML on every (re)open, so the old widget
+    # DOM is torn down and a fresh one built from the current rv$alns - the
+    # msaROutput+dynamic-renderMsaR pattern instead let htmlwidgets reuse a stale
+    # binding (and msaR::renderValue appends rather than clearing), which showed the
+    # pre-edit alignment after "Back to Review". aln_nonce() forces a rebuild even
+    # if the gene is unchanged.
     output$review_aln_ui <- renderUI({
-      msaR::msaROutput(
-        ns(paste0("review_aln_", aln_nonce())),
-        height = paste0(review_aln_height() + 10, "px")
+      aln_nonce()
+      g <- current_gene()
+      aln <- rv$alns[[g]]
+      if (is.null(aln)) {
+        return(div(style = "color:#666; padding:1em;", "No alignment for this gene."))
+      }
+      # Move the picked sample to the top and mark it so it stands out
+      hl <- highlight_label()
+      if (!is.null(hl) && hl %in% names(aln)) {
+        aln <- aln[c(which(names(aln) == hl), which(names(aln) != hl))]
+        names(aln)[1] <- paste0(">> ", names(aln)[1])
+      }
+      # TEMP diagnostic: ungapped AA length per sequence in the rendered alignment.
+      message(
+        "REVIEW RENDER gene=", g, " nonce=", isolate(aln_nonce()),
+        " lens=", paste(nchar(gsub("-", "", as.character(aln))), collapse = ",")
+      )
+      msaR::msaR(
+        aln,
+        overviewbox = FALSE,
+        seqlogo = FALSE,
+        menu = FALSE,
+        conservation = TRUE,
+        labelNameLength = 150,
+        colorscheme = "zappo",
+        alignmentHeight = review_aln_height()
       )
     })
 
     output$review_table <- renderReactable({
       df <- current_flags()
-      req(nrow(df) > 0)
+      # Render even with 0 rows (reactable shows an empty table) rather than
+      # req(nrow>0)-stopping: after an edit clears a gene's last flag the table
+      # must refresh to empty, not freeze on the stale pre-edit rows.
+      req(!is.null(df))
       keys <- paste(df$ID, df$gene, sep = "|")
       df <- df |>
         dplyr::transmute(
@@ -1330,6 +1379,29 @@ export_server <- function(id) {
       )
     })
 
+    # Picker to edit ANY sample of the current gene, flagged or not. The table
+    # above only lists flagged samples; this offers the rest of the alignment.
+    output$review_sample_picker <- renderUI({
+      samp <- current_samples()
+      req(!is.null(samp), nrow(samp) > 0)
+      div(
+        style = "margin-top: 0.75em; display: flex; align-items: flex-end; gap: 0.5em;",
+        div(
+          style = "flex: 1;",
+          selectInput(
+            ns("edit_sample_label"),
+            label = sprintf("Edit any %s sample", toupper(current_gene())),
+            choices = sort(samp$label),
+            width = "100%"
+          )
+        ),
+        actionButton(
+          ns("edit_sample"), "edit",
+          class = "btn-primary", style = "margin-bottom: 15px;"
+        )
+      )
+    })
+
     # Toggle a (sample, gene) as resolved; kept in rv$resolved so it survives
     # alignment/flag recomputes (Back to Review).
     observeEvent(input$toggle_resolved, {
@@ -1389,6 +1461,38 @@ export_server <- function(id) {
       )
       removeModal()
       trigger("goto_annotate")
+    })
+
+    # Jump to the annotate details modal for any chosen sample of the current
+    # gene, flagged or not. Mirrors goto_annot; the unit comes from the sample
+    # roster and there are no outlier offsets (NA -> the editor shows a plain
+    # "editing <gene>" banner instead of offset values).
+    observeEvent(input$edit_sample, {
+      samp <- current_samples()
+      req(!is.null(samp))
+      row <- samp[samp$label == input$edit_sample_label, , drop = FALSE]
+      req(nrow(row) == 1)
+      session$userData$goto_annotate_target <- list(
+        ID = row$ID, path = row$path, scaffold = row$scaffold,
+        gene = current_gene(), issue = NA_character_,
+        start_offset = NA_integer_, stop_offset = NA_integer_,
+        pct_identity = NA_real_
+      )
+      removeModal()
+      trigger("goto_annotate")
+    })
+
+    # Abort the export: close the review modal and clear review state so no files
+    # are written and the modal does not reopen.
+    observeEvent(input$cancel_review, {
+      removeModal()
+      highlight_label(NULL)
+      rv$outliers <- NULL
+      rv$alns <- NULL
+      rv$review_samples <- NULL
+      rv$review_genes <- NULL
+      rv$review_idx <- 1L
+      rv$resolved <- character(0)
     })
   })
 }
