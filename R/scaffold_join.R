@@ -195,15 +195,25 @@ compute_scaffold_mappings <- function(scaffold_seqs, ref_seqs,
 #' @noRd
 load_scaffold_mappings <- function(con, ID, accession) {
   if (is.null(accession) || is.na(accession) || !nzchar(accession)) return(NULL)
+  # suppressWarnings: unmapped rows store empty strings in numeric columns, so
+  # SQLite fetches those columns as character and warns about mixed types; we
+  # coerce them back below.
   rows <- tryCatch(
-    DBI::dbGetQuery(con, paste0(
+    suppressWarnings(DBI::dbGetQuery(con, paste0(
       "SELECT scaffold, ref_start, ref_end, strand, nmatch, qcov, qstart, mapped ",
       "FROM scaffold_mappings WHERE ID = ? AND ref_accession = ?"),
-      params = list(ID, accession)),
+      params = list(ID, accession))),
     error = function(e) NULL)
   if (is.null(rows) || nrow(rows) == 0) return(NULL)
   rows$scaffold <- as.character(rows$scaffold)
   rows$mapped <- as.logical(rows$mapped)
+  # Unmapped scaffolds are stored as empty strings in these numeric columns, which
+  # makes SQLite return the whole column as character; coerce back so downstream
+  # ordering and gap arithmetic do not break.
+  for (col in c("ref_start", "ref_end", "qstart", "nmatch")) {
+    if (col %in% names(rows)) rows[[col]] <- suppressWarnings(as.integer(rows[[col]]))
+  }
+  rows$qcov <- suppressWarnings(as.numeric(rows$qcov))
   rows$qcov[is.na(rows$qcov)] <- 0
   rows
 }
@@ -285,6 +295,28 @@ parse_paf <- function(paf_lines) {
   )
 }
 
+#' Reduce one scaffold's same-strand blocks to a single colinear chain
+#'
+#' Blocks on one colinear alignment share a query-vs-reference diagonal
+#' (`ref_start - qstart` on the '+' strand, `ref_start + qend` on '-'). Anchoring
+#' on the largest-nmatch block and keeping only blocks within `tol` of its
+#' diagonal drops origin-wrap and distant repeat/secondary blocks that would
+#' otherwise balloon the reference extent in [collapse_scaffold_blocks()].
+#'
+#' @param gs single-strand PAF rows for one scaffold (columns `strand`,
+#'   `ref_start`, `qstart`, `qend`, `nmatch`, `qlen`).
+#' @param tol max diagonal deviation from the anchor; defaults to a scaffold-
+#'   relative slack that tolerates indels but not an origin wrap / distant repeat.
+#' @return the subset of `gs` on the anchor block's colinear diagonal.
+#' @noRd
+colinear_chain <- function(gs, tol = NULL) {
+  if (nrow(gs) <= 1L) return(gs)
+  dg <- ifelse(gs$strand == "-", gs$ref_start + gs$qend, gs$ref_start - gs$qstart)
+  anchor <- which.max(gs$nmatch)
+  if (is.null(tol)) tol <- max(1000L, as.integer(round(0.2 * gs$qlen[1])))
+  gs[abs(dg - dg[anchor]) <= tol, , drop = FALSE]
+}
+
 #' Collapse a scaffold's PAF alignment blocks to one placement row
 #'
 #' A scaffold crossing a duplication/rearrangement maps to the reference in
@@ -293,7 +325,8 @@ parse_paf <- function(paf_lines) {
 #' placement = the UNION extent (`min(ref_start)`..`max(ref_end)`) of that
 #' strand's blocks. `qstart`/`ref_start` are kept as a colinear pair (the block
 #' at min `ref_start`) so the zoom view can still map reference positions back to
-#' scaffold bases. `qcov` is the union of query intervals across ALL blocks.
+#' scaffold bases. `qcov` is the union of query intervals across the dominant
+#' strand's colinear chain (the same blocks used for the placement extent).
 #'
 #' @param rows parsed PAF rows (see [parse_paf()]) for one or more scaffolds.
 #' @return one row per scaffold: `scaffold, ref_start, ref_end, strand, nmatch,
@@ -304,6 +337,9 @@ collapse_scaffold_blocks <- function(rows) {
     by_strand <- tapply(g$nmatch, g$strand, sum)
     dom <- names(by_strand)[which.max(by_strand)]
     gs <- g[g$strand == dom, , drop = FALSE]
+    # Keep only the dominant strand's colinear chain so an origin-wrap or a
+    # distant repeat/secondary block cannot balloon the reference extent.
+    gs <- colinear_chain(gs)
     anchor <- gs[which.min(gs$ref_start), , drop = FALSE]
     data.frame(
       scaffold  = g$scaffold[1],
@@ -311,7 +347,7 @@ collapse_scaffold_blocks <- function(rows) {
       ref_end   = max(gs$ref_end),
       strand    = dom,
       nmatch    = sum(gs$nmatch),
-      qcov      = union_len(g$qstart, g$qend) / g$qlen[1],
+      qcov      = union_len(gs$qstart, gs$qend) / gs$qlen[1],
       qstart    = anchor$qstart,
       stringsAsFactors = FALSE
     )
@@ -462,9 +498,24 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
     inc <- inc[!subsumed, , drop = FALSE]
   }
 
+  # An origin-wrapping scaffold (maps near ref 0 AND near ref_len) can collapse to
+  # a ballooned extent spanning nearly the whole reference; its ref_end is then not
+  # a real right boundary, and deriving the next scaffold's gap from it manufactures
+  # a genome-scale negative gap that over-trims (or drops) a real scaffold. Skip
+  # such a predecessor's junction (NA -> N-gap). Gate on LOW density so a genuine
+  # dense full-length contig is not misread as a wrap (a real ballooned wrap unions
+  # disjoint blocks and so is sparse: nmatch/span < min_density).
+  wrap_thresh <- if (is.finite(ref_len) && ref_len > 0) 0.9 * ref_len else Inf
+  min_density <- 0.5
   gap_before <- rep(NA_real_, nrow(inc))
   if (nrow(inc) >= 2) {
     for (i in 2:nrow(inc)) {
+      prev_span <- inc$ref_end[i - 1] - inc$ref_start[i - 1]
+      prev_density <- if (!is.na(prev_span) && prev_span > 0)
+        inc$nmatch[i - 1] / prev_span else NA_real_
+      ballooned <- !is.na(prev_span) && prev_span >= wrap_thresh &&
+        !is.na(prev_density) && prev_density < min_density
+      if (ballooned) next
       gap_before[i] <- inc$ref_start[i] - inc$ref_end[i - 1]
     }
   }
@@ -499,6 +550,21 @@ rc_seq <- function(seq) {
   as.character(Biostrings::reverseComplement(Biostrings::DNAString(seq)))
 }
 
+#' Is an aligned overlap region low-complexity (homopolymer / short motif)?
+#'
+#' Counts distinct k-mers in the overlap; a homopolymer or short tandem repeat
+#' has very few, so it can clear the identity/length bar by chance and trim real
+#' bases. Used to reject such confirmations in [refine_overlap()].
+#' @noRd
+low_complexity_overlap <- function(s, k = 3L, min_distinct = 4L) {
+  s <- toupper(s)
+  n <- nchar(s)
+  if (n < k) return(TRUE)
+  starts <- seq_len(n - k + 1L)
+  kmers <- substring(s, starts, starts + k - 1L)
+  length(unique(kmers)) < min_distinct
+}
+
 #' Verify a scaffold-junction overlap by aligning the actual scaffold ends
 #'
 #' The reference coordinates only *suggest* an overlap of `est_overlap` bp; the
@@ -521,7 +587,11 @@ refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7,
                            min_overlap = 10L) {
   est <- max(as.integer(round(est_overlap)), 1L)
   slack <- max(50L, as.integer(round(est)))
-  L <- min(nchar(a_seq), nchar(b_seq), est + slack)
+  # Size the probe window from the scaffold lengths (capped) so large true
+  # overlaps are not missed when the reference under-predicts them; keep the
+  # wider window when the reference itself predicts a big overlap.
+  maxwin <- as.integer(getOption("MitoPilot.scaffold_overlap_maxwin", 5000L))
+  L <- min(nchar(a_seq), nchar(b_seq), max(est + slack, maxwin))
   out <- list(reliable = FALSE, trim_b = 0L, identity = NA_real_, overlap_len = 0L)
   if (L < 10L) return(out)
   a_tail <- substring(a_seq, nchar(a_seq) - L + 1L)
@@ -543,7 +613,17 @@ refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7,
   sub_rng <- pwalign::subject(aln)@range
   sub_start <- BiocGenerics::start(sub_rng)
   sub_end <- BiocGenerics::end(sub_rng)
-  if (ident >= min_identity && sub_start <= 2L) {
+  # The aligned pattern (a_tail) must also reach a's 3' terminus: a genuine
+  # junction overlap sits at BOTH a's suffix end and b's prefix start. Without
+  # this, a copy of b's prefix buried inside a's tail (an internal repeat, made
+  # reachable by the widened window) would falsely confirm and trim real bases.
+  pat_rng <- pwalign::pattern(aln)@range
+  pat_at_end <- (nchar(a_tail) - BiocGenerics::end(pat_rng)) <= 2L
+  # Reject low-complexity confirmations (homopolymer / short tandem motif at
+  # AT-rich termini) that clear identity/length by chance and would trim real
+  # bases from B.
+  ov_lc <- low_complexity_overlap(substring(b_head, 1L, sub_end))
+  if (ident >= min_identity && sub_start <= 2L && pat_at_end && !ov_lc) {
     out$reliable <- TRUE
     out$trim_b <- as.integer(sub_end)
     out$identity <- ident
@@ -793,9 +873,20 @@ stitch_coverage <- function(scaffold_cov, layout, joined) {
 
 #' Parse a space-separated numeric coverage string to a vector
 #' @noRd
-parse_cov_string <- function(x) {
-  if (is.null(x) || length(x) == 0 || is.na(x) || !nzchar(x)) return(numeric(0))
-  suppressWarnings(as.numeric(strsplit(trimws(x), "\\s+")[[1]]))
+parse_cov_string <- function(x, n = NULL) {
+  if (is.null(x) || length(x) == 0 || is.na(x) || !nzchar(x)) {
+    return(if (is.null(n)) numeric(0) else rep(NA_real_, n))
+  }
+  # Split on single spaces (do NOT trim/collapse) so empty cells stay as empty
+  # tokens -> NA and the position count is preserved. Strip any '#' outlier-mask
+  # prefix before numeric use, matching the auto (cov_string) path.
+  tok <- strsplit(x, " ", fixed = TRUE)[[1]]
+  v <- suppressWarnings(as.numeric(sub("^#", "", tok)))
+  if (!is.null(n)) {
+    if (length(v) < n) v <- c(v, rep(NA_real_, n - length(v)))
+    else if (length(v) > n) v <- v[seq_len(n)]
+  }
+  v
 }
 
 #' Build a joined assembly from per-scaffold sequence + coverage
@@ -882,6 +973,11 @@ rotate_to_reference <- function(seq, depth, gc, errors, ref_seq,
   rows <- rows[rows$strand == "+" & !is.na(rows$ref_start), , drop = FALSE]
   if (nrow(rows) == 0) return(out)
   best <- rows[which.min(rows$ref_start), , drop = FALSE]
+  # Rotate only when a block actually covers reference position 0. Extrapolating
+  # to ref 0 from a distant block is wrong across N-gaps / non-colinear scaffolds
+  # (the colinear offset is not constant), so skip when nothing spans the origin.
+  origin_tol <- as.integer(getOption("MitoPilot.scaffold_origin_tol", 50L))
+  if (best$ref_start > origin_tol) return(out)
   # Query base aligning to reference position 0 (mod n).
   rp <- ((best$qstart - best$ref_start) %% n + n) %% n
   if (rp == 0L) return(out)
@@ -911,9 +1007,10 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
   seqs <- stats::setNames(as.character(scaffolds_df$sequence),
                           as.character(scaffolds_df$scaffold))
   cov <- stats::setNames(lapply(seq_len(nrow(scaffolds_df)), function(i) {
-    list(depth = parse_cov_string(scaffolds_df$depth[i]),
-         gc = parse_cov_string(scaffolds_df$gc[i]),
-         err = parse_cov_string(scaffolds_df$errors[i]))
+    n_i <- nchar(as.character(scaffolds_df$sequence[i]))
+    list(depth = parse_cov_string(scaffolds_df$depth[i], n_i),
+         gc = parse_cov_string(scaffolds_df$gc[i], n_i),
+         err = parse_cov_string(scaffolds_df$errors[i], n_i))
   }), as.character(scaffolds_df$scaffold))
   depth_only <- lapply(cov, `[[`, "depth")
   joined <- join_scaffolds(seqs, layout, as.integer(gap_len), circular,
@@ -924,11 +1021,22 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
   depth <- stitched$depth; gc <- stitched$gc; errors <- stitched$errors
   circ_note <- character(0)
 
-  # Circularize: trim a redundant end if the molecule wraps the origin (a
-  # scaffold mapping to both ends of the reference), then rotate to the
-  # reference origin. Auto-detected; the `circular` arg forces rotation even
-  # when no redundant overlap is present.
-  cz <- circularize_sequence(seq, depth, gc, errors)
+  # Circularize when the caller asserts circular or a reference is present (the
+  # auto path). circularize_sequence detects the wrap by aligning the joined 3'
+  # end to its 5' start; the raised min_overlap plus refine_overlap's terminal-
+  # anchor and low-complexity guards reject the short AT-rich matches that used to
+  # falsely self-circularize linear joins, so no reference-coordinate gate is
+  # needed (and none would survive collapse_scaffold_blocks pruning the wrap
+  # block off the origin scaffold's extent). The app path (no ref_seq)
+  # circularizes only when the user asserts circular. The `circular` arg still
+  # forces rotation below.
+  has_ref <- !is.null(ref_seq) && length(ref_seq) == 1 && !is.na(ref_seq) && nzchar(ref_seq)
+  cz <- if (isTRUE(circular) || has_ref) {
+    circularize_sequence(seq, depth, gc, errors, min_overlap = 50L)
+  } else {
+    list(circular = FALSE, seq = seq, depth = depth, gc = gc,
+         errors = errors, overlap_len = 0L, identity = NA_real_)
+  }
   is_circular <- isTRUE(cz$circular) || isTRUE(circular)
   if (isTRUE(cz$circular)) {
     seq <- cz$seq; depth <- cz$depth; gc <- cz$gc; errors <- cz$errors

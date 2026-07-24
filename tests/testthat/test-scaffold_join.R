@@ -543,3 +543,250 @@ test_that("join_scaffolds keeps src_pos aligned after a partial overlap trim", {
   expect_false(any(is.na(res$src_pos)))
   expect_true(all(res$src_pos >= 1))
 })
+
+
+# =============================================================================
+# Adversarial-audit batch fixes (F3, F11, F12, F13, F15, F16, F17, F18, F24)
+# =============================================================================
+
+# --- F12 ---
+test_that("collapse_scaffold_blocks does not balloon an origin-wrap extent", {
+  rows <- data.frame(
+    scaffold = c("s", "s"),
+    qlen = c(8000L, 8000L),
+    qstart = c(0L, 4000L),
+    qend = c(4000L, 8000L),
+    strand = c("+", "+"),
+    ref_start = c(12000L, 0L),
+    ref_end = c(16000L, 4000L),
+    nmatch = c(3900L, 3800L),
+    cigar = NA_character_,
+    stringsAsFactors = FALSE
+  )
+  out <- collapse_scaffold_blocks(rows)
+  # Anchor block [12000,16000] kept; off-diagonal wrap block [0,4000] dropped.
+  expect_equal(out$ref_start, 12000)
+  expect_equal(out$ref_end, 16000)
+  expect_true(out$ref_end - out$ref_start <= 4000)
+})
+
+# --- F13 ---
+test_that("collapse_scaffold_blocks qcov uses dominant-strand blocks only", {
+  rows <- data.frame(
+    scaffold = c("s", "s"),
+    qlen = c(9000L, 9000L),
+    qstart = c(0L, 5000L),
+    qend = c(5000L, 9000L),
+    strand = c("+", "-"),
+    ref_start = c(0L, 8000L),
+    ref_end = c(5000L, 12000L),
+    nmatch = c(4000L, 3000L),
+    cigar = NA_character_,
+    stringsAsFactors = FALSE
+  )
+  out <- collapse_scaffold_blocks(rows)
+  expect_equal(out$strand, "+")
+  # dominant-only coverage 5000/9000, not the both-strand union 1.0
+  expect_lt(out$qcov, 0.99)
+  expect_equal(out$qcov, 5000 / 9000, tolerance = 1e-6)
+})
+
+# --- F11 ---
+test_that("refine_overlap confirms a large overlap beyond the est window", {
+  skip_if_not_installed("pwalign")
+  set.seed(1)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  x <- bp(800)
+  a <- paste0(bp(1200), x)
+  b <- paste0(x, bp(1500))
+  ov <- refine_overlap(a, b, est_overlap = 300, min_identity = 0.9, min_overlap = 20L)
+  expect_true(ov$reliable)
+  expect_equal(ov$trim_b, 800)
+})
+
+# --- F11 ---
+test_that("refine_overlap rejects a low-complexity (homopolymer) seam", {
+  skip_if_not_installed("pwalign")
+  set.seed(2)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  a <- paste0(bp(1000), strrep("A", 30))
+  b <- paste0(strrep("A", 40), bp(1000))
+  ov <- refine_overlap(a, b, est_overlap = 300, min_identity = 0.9, min_overlap = 20L)
+  expect_false(ov$reliable)
+})
+
+# --- F16 ---
+test_that("parse_cov_string strips '#' mask prefix and preserves position count", {
+  # F16: masked positions keep their value instead of becoming NA
+  expect_equal(parse_cov_string("250 #300 275 #280 260"), c(250, 300, 275, 280, 260))
+  # F15: empty cells map to NA and the count is preserved when n is supplied
+  raw <- "  0.4 0.5 0.6  "   # 7 positions: 2 leading NA, 3 values, 2 trailing NA
+  expect_equal(parse_cov_string(raw, n = 7), c(NA, NA, 0.4, 0.5, 0.6, NA, NA))
+  # strsplit drops the single final trailing empty when n is absent (documented)
+  expect_length(parse_cov_string(raw), 6)
+  # existing behavior preserved
+  expect_equal(parse_cov_string("1 2 3"), c(1, 2, 3))
+  expect_length(parse_cov_string(NA), 0)
+  expect_length(parse_cov_string(""), 0)
+})
+
+# --- F15 ---
+test_that("assemble_from_layout pads short GC/error tracks to sequence length", {
+  seq <- "ACGTACGTAC"                       # 10 bp; too short to self-circularize
+  df <- data.frame(
+    scaffold = "1", sequence = seq,
+    depth = paste(rep(5, 10), collapse = " "),
+    # GC with 2 leading + 2 trailing empty cells (rollapply NA ends), 10 positions
+    gc = "  0.4 0.5 0.6 0.5 0.4 0.5  ",
+    errors = paste(rep(0, 10), collapse = " "),
+    stringsAsFactors = FALSE)
+  lay <- data.frame(scaffold = "1", order = 1L, rc = FALSE,
+                    gap_before = NA_real_, mapped = TRUE, include = TRUE,
+                    stringsAsFactors = FALSE)
+  res <- assemble_from_layout(df, lay, gap_len = 100L, circular = FALSE, ref_seq = NULL)
+  expect_equal(length(res$gc), nchar(res$seq))
+  expect_equal(length(res$errors), nchar(res$seq))
+  expect_equal(length(res$depth), nchar(res$seq))
+})
+
+# --- F24 ---
+test_that("load_scaffold_mappings coerces numeric columns despite empty-string unmapped rows", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbExecute(con, "CREATE TABLE scaffold_mappings (
+    ID TEXT, ref_accession TEXT, scaffold INTEGER, ref_start INTEGER, ref_end INTEGER,
+    strand TEXT, nmatch INTEGER, qcov REAL, qstart INTEGER, mapped INTEGER)")
+  # Unmapped scaffold stored FIRST with empty strings: SQLite then returns the
+  # ref_start/ref_end columns as character without coercion.
+  DBI::dbExecute(con, "INSERT INTO scaffold_mappings VALUES
+    ('s1','NC_1',3,'','','','','','',0),
+    ('s1','NC_1',1,1,500,'+',480,0.96,0,1),
+    ('s1','NC_1',2,600,900,'-',280,0.9,0,1)")
+  m <- load_scaffold_mappings(con, "s1", "NC_1")
+  expect_type(m$ref_start, "integer")
+  expect_type(m$ref_end, "integer")
+  expect_type(m$qcov, "double")
+  # derive_scaffold_layout must not throw on the (previously character) columns
+  expect_silent(derive_scaffold_layout(m, ref_len = 1000, circular = FALSE))
+})
+
+# --- F3 ---
+test_that("derive_scaffold_layout does not derive a negative gap from an origin-wrapping predecessor", {
+  ref_len <- 16000L
+  mappings <- data.frame(
+    scaffold = c("wrap", "b"),
+    ref_start = c(0L, 4000L),
+    ref_end = c(16000L, 9000L),
+    strand = c("+", "+"),
+    nmatch = c(3000L, 4500L),   # wrap density 3000/16000 < 0.5 -> not a container
+    qcov = c(1, 1),
+    qstart = c(0L, 0L),
+    mapped = c(TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  lay <- derive_scaffold_layout(mappings, ref_len = ref_len, circular = TRUE,
+                                min_qcov = 0.5)
+  inc <- lay[lay$include, , drop = FALSE]
+  inc <- inc[order(inc$order), , drop = FALSE]
+  expect_equal(nrow(inc), 2L)                 # neither dropped/subsumed
+  gb_b <- inc$gap_before[inc$scaffold == "b"]
+  expect_true(is.na(gb_b))                    # ballooned predecessor -> unknown junction, no over-trim
+})
+
+# --- F3 ---
+test_that("derive_scaffold_layout keeps a real gap after a dense full-length predecessor", {
+  ref_len <- 16000L
+  mappings <- data.frame(
+    scaffold = c("a", "b"),
+    ref_start = c(0L, 15000L),
+    ref_end = c(14500L, 15800L),   # a spans >= 0.9*ref_len but is disjoint from b
+    strand = c("+", "+"),
+    nmatch = c(10000L, 700L),      # a density 10000/14500 = 0.69 >= 0.5 -> not a wrap
+    qcov = c(1, 1),
+    qstart = c(0L, 0L),
+    mapped = c(TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  lay <- derive_scaffold_layout(mappings, ref_len = ref_len, circular = FALSE,
+                                min_qcov = 0.5)
+  inc <- lay[lay$include, , drop = FALSE]
+  inc <- inc[order(inc$order), , drop = FALSE]
+  expect_equal(nrow(inc), 2L)                 # dense predecessor does not subsume b
+  gb_b <- inc$gap_before[inc$scaffold == "b"]
+  expect_equal(gb_b, 500)                     # 15000 - 14500, density guard not tripped
+})
+
+# --- F11 ---
+test_that("refine_overlap rejects a repeat buried inside A's tail (not at its 3' end)", {
+  skip_if_not_installed("pwalign")
+  set.seed(11)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  p <- bp(100)                       # b's prefix; a carries an internal copy of it
+  a <- paste0(bp(500), p, bp(200))   # p is buried, then 200 bp of distinct 3' end
+  b <- paste0(p, bp(800))
+  ov <- refine_overlap(a, b, est_overlap = 50, min_identity = 0.9, min_overlap = 20L)
+  expect_false(ov$reliable)          # internal repeat must not confirm a junction
+  expect_equal(ov$trim_b, 0L)
+})
+
+# --- F17 ---
+test_that("assemble_from_layout circularizes on the app path only when circular is asserted", {
+  skip_if_not_installed("pwalign")
+  set.seed(170)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  ov <- bp(60); core <- bp(300)
+  seq <- paste0(ov, core, ov)        # 420 bp with a 60 bp redundant end overlap
+  n <- nchar(seq)
+  df <- data.frame(scaffold = "1", sequence = seq,
+    depth = paste(rep(5, n), collapse = " "),
+    gc = paste(rep(0.4, n), collapse = " "),
+    errors = paste(rep(0, n), collapse = " "),
+    stringsAsFactors = FALSE)
+  lay <- data.frame(scaffold = "1", order = 1L, rc = FALSE, gap_before = NA_real_,
+                    mapped = TRUE, include = TRUE, stringsAsFactors = FALSE)
+  # App path: no reference, circular unchecked -> left linear, no end trim.
+  lin <- assemble_from_layout(df, lay, gap_len = 100L, circular = FALSE, ref_seq = NULL)
+  expect_equal(lin$topology, "linear")
+  expect_equal(nchar(lin$seq), n)
+  # Same input, Circular checked -> redundant overlap trimmed, marked circular.
+  cir <- assemble_from_layout(df, lay, gap_len = 100L, circular = TRUE, ref_seq = NULL)
+  expect_equal(cir$topology, "circular")
+  expect_equal(nchar(cir$seq), n - 60L)
+})
+
+# --- F17 ---
+test_that("circularize_sequence with raised min_overlap ignores a short spurious end match", {
+  set.seed(17)
+  core <- paste(sample(c("A", "C", "G", "T"), 400L, replace = TRUE), collapse = "")
+  motif <- paste(rep("AT", 15L), collapse = "")   # 30 bp AT-rich, < 50
+  seq <- paste0(motif, core, motif)
+  n <- nchar(seq); cov <- rep(1, n)
+  cz <- circularize_sequence(seq, cov, cov, cov, min_overlap = 50L)
+  expect_false(cz$circular)
+  expect_equal(nchar(cz$seq), n)                  # no real 3' bases trimmed
+})
+
+# --- F18 ---
+test_that("rotate_to_reference skips rotation when no block covers the reference origin", {
+  seq <- paste(rep("ACGT", 500L), collapse = "")   # 2000 bp
+  n <- nchar(seq); cov <- seq_len(n)
+  far_block <- data.frame(scaffold = "joined", qlen = n, qstart = 800L, qend = 1200L,
+    strand = "+", ref_start = 3000L, ref_end = 3400L, nmatch = 400L,
+    cigar = NA_character_, stringsAsFactors = FALSE)
+  testthat::local_mocked_bindings(run_minimap2_paf = function(...) far_block)
+  rt <- rotate_to_reference(seq, cov, cov, cov, ref_seq = seq)
+  expect_equal(rt$rotated, 0L)                     # min ref_start 3000 > tol -> no rotation
+  expect_identical(rt$seq, seq)
+})
+
+test_that("rotate_to_reference rotates to the block covering reference position 0", {
+  seq <- paste(rep("ACGT", 500L), collapse = "")
+  n <- nchar(seq); cov <- seq_len(n)
+  origin_block <- data.frame(scaffold = "joined", qlen = n, qstart = 120L, qend = 500L,
+    strand = "+", ref_start = 0L, ref_end = 380L, nmatch = 380L,
+    cigar = NA_character_, stringsAsFactors = FALSE)
+  testthat::local_mocked_bindings(run_minimap2_paf = function(...) origin_block)
+  rt <- rotate_to_reference(seq, cov, cov, cov, ref_seq = seq)
+  expect_equal(rt$rotated, 120L)                   # qstart of the origin-covering block
+})
+
