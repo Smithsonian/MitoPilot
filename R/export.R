@@ -1261,8 +1261,20 @@ get_export_PCG_annotations <- function(con, group) {
   # Row indices of exons removed after being merged into their first exon
   rows_to_remove <- integer(0)
 
-  for (.i in seq_len(nrow(units))) {
-    u <- units[.i, ]
+  # The per-unit loop below only does anything for units carrying a multi-exon
+  # (intron) gene: the curate/sample reads and the full-scaffold get_assembly read
+  # feed only the intron-merge branch, and every single-exon gene hits the
+  # length<=1 skip. Reading each unit's whole assembly regardless is the dominant
+  # cost of a "Back to Review" recompute, so visit only units that can merge.
+  # Output is unchanged: skipped units overwrite no translation and remove no rows.
+  merge_units <- annotations |>
+    dplyr::count(ID, path, scaffold, gene) |>
+    dplyr::filter(n > 1) |>
+    dplyr::distinct(ID, path, scaffold)
+  loop_units <- dplyr::semi_join(units, merge_units, by = c("ID", "path", "scaffold"))
+
+  for (.i in seq_len(nrow(loop_units))) {
+    u <- loop_units[.i, ]
     # Curation rules for the current unit
     curation_opts <- dplyr::tbl(con, "annotate") |>
       dplyr::filter(ID == !!u$ID & path == !!u$path & scaffold == !!u$scaffold) |>
