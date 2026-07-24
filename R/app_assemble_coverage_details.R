@@ -1630,12 +1630,15 @@ assembly_coverage_details_server <- function(id, rv) {
       rc_seed <- if (!is.null(lay)) lay$rc else rep(FALSE, length(scaffolds))
       inc_seed <- if (!is.null(lay) && "include" %in% names(lay)) lay$include else rep(TRUE, length(scaffolds))
       qcov <- if (!is.null(lay) && "qcov" %in% names(lay)) lay$qcov else rep(NA_real_, length(scaffolds))
+      reason_seed <- if (!is.null(lay) && "exclude_reason" %in% names(lay)) lay$exclude_reason else rep(NA_character_, length(scaffolds))
       tagList(
         div(style = "margin-top: 8px; font-weight: bold; color: #555;",
             "Scaffold layout (only included scaffolds go into Path 0)"),
         lapply(seq_along(scaffolds), function(i) {
           s <- scaffolds[i]
           qc <- if (!is.na(qcov[i])) sprintf(" (%.0f%% mapped)", 100 * qcov[i]) else ""
+          why <- if (!isTRUE(inc_seed[i]) && !is.na(reason_seed[i]))
+            span(style = "font-size: 11px; color: #d9534f;", reason_seed[i]) else NULL
           div(style = "display: flex; gap: 12px; align-items: center; margin-top: 4px;",
               checkboxInput(ns(paste0("join_inc_", s)), NULL, value = isTRUE(inc_seed[i]),
                             width = "30px"),
@@ -1643,7 +1646,8 @@ assembly_coverage_details_server <- function(id, rv) {
               numericInput(ns(paste0("join_order_", s)), NULL,
                            value = order_seed[i], min = 1, width = "80px"),
               checkboxInput(ns(paste0("join_rc_", s)), "reverse-comp",
-                            value = isTRUE(rc_seed[i])))
+                            value = isTRUE(rc_seed[i])),
+              why)
         })
       )
     })
@@ -1686,9 +1690,11 @@ assembly_coverage_details_server <- function(id, rv) {
       layout <- data.frame(
         scaffold = scaffolds[o], order = seq_along(o), rc = rc[o],
         gap_before = NA_real_, mapped = TRUE, include = inc[o], stringsAsFactors = FALSE)
-      # Reuse reference-derived gaps only when the manual order matches auto.
+      # Reuse reference-derived gaps only when the manual order AND include set
+      # both match auto; any include change invalidates the neighbor gaps.
       lay <- rv$join_layout
-      if (!is.null(lay) && identical(layout$scaffold, lay$scaffold)) {
+      if (!is.null(lay) && identical(layout$scaffold, lay$scaffold) &&
+          "include" %in% names(lay) && identical(layout$include, lay$include)) {
         layout$gap_before <- lay$gap_before
       }
       scaffolds_df <- data.frame(

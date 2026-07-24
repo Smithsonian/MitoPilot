@@ -370,6 +370,51 @@ zoom_window_base_maps <- function(ref_seq, layout_inc, oriented_seqs,
   out
 }
 
+#' Flag scaffolds whose reference extent is contained within a larger neighbor
+#'
+#' When two scaffolds map to the same reference region and one is (almost) wholly
+#' contained in the other, concatenating the contained one duplicates sequence and
+#' forces a large negative gap that would trim real bases out of the container (or
+#' silently drop the redundant scaffold). Following the contained-read convention
+#' of OLC/string-graph assemblers, the smaller scaffold is instead marked for
+#' exclusion from Path 0 and the larger (container) is kept. The user can still
+#' re-include it in the editor.
+#'
+#' @param inc mapped, included scaffold rows (need `scaffold, ref_start, ref_end`
+#'   and, ideally, `nmatch`), already restricted to well-mapped scaffolds.
+#' @param min_cover fraction of the smaller scaffold's reference extent that must
+#'   lie within the larger's extent to call it subsumed.
+#' @param min_density minimum matched-bases-per-reference-bp a scaffold must have
+#'   to act as a container; blocks a sparse origin-spanning/ballooned extent from
+#'   swallowing everything (see `collapse_scaffold_blocks`).
+#' @return character vector (length `nrow(inc)`): `NA` for kept scaffolds, else a
+#'   `"subsumed by <container>"` reason string.
+#' @noRd
+detect_subsumed <- function(inc, min_cover = 0.90, min_density = 0.50) {
+  n <- nrow(inc)
+  reason <- rep(NA_character_, n)
+  if (n < 2) return(reason)
+  rs <- inc$ref_start; re <- inc$ref_end
+  span <- pmax(re - rs, 1L)
+  nm <- if (!is.null(inc$nmatch)) inc$nmatch else rep(NA_real_, n)
+  density <- ifelse(is.na(nm), 1, nm / span)
+  for (b in seq_len(n)) {
+    if (is.na(rs[b]) || is.na(re[b])) next
+    for (a in seq_len(n)) {
+      if (a == b || is.na(rs[a]) || is.na(re[a])) next
+      # A must be the strictly larger extent (the container) and dense enough to
+      # be a trustworthy placement.
+      if (span[a] <= span[b] || density[a] < min_density) next
+      ov <- min(re[a], re[b]) - max(rs[a], rs[b])
+      if (ov > 0 && ov / span[b] >= min_cover) {
+        reason[b] <- paste0("subsumed by scaffold ", inc$scaffold[a])
+        break
+      }
+    }
+  }
+  reason
+}
+
 #' Derive scaffold layout (order + orientation + gaps) from reference mappings
 #'
 #' Only scaffolds that map reasonably well to the reference (query coverage
@@ -402,8 +447,20 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
 
   inc <- mappings[well, , drop = FALSE]
   exc <- mappings[!well, , drop = FALSE]
+  exc_reason <- if (nrow(exc) > 0)
+    ifelse(exc$mapped, "low reference coverage", "unmapped") else character(0)
   ord <- order(inc$ref_start, inc$ref_end)
   inc <- inc[ord, , drop = FALSE]
+
+  # Move contained/duplicate scaffolds out of Path 0 (see detect_subsumed): they
+  # would otherwise force a huge negative gap that trims real bases.
+  sub_reason <- detect_subsumed(inc)
+  subsumed <- !is.na(sub_reason)
+  if (any(subsumed)) {
+    exc <- rbind(exc, inc[subsumed, , drop = FALSE])
+    exc_reason <- c(exc_reason, sub_reason[subsumed])
+    inc <- inc[!subsumed, , drop = FALSE]
+  }
 
   gap_before <- rep(NA_real_, nrow(inc))
   if (nrow(inc) >= 2) {
@@ -423,6 +480,7 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
     gap_before = c(gap_before, rep(NA_real_, nrow(exc))),
     mapped = c(inc$mapped, exc$mapped),
     include = c(rep(TRUE, nrow(inc)), rep(FALSE, nrow(exc))),
+    exclude_reason = c(rep(NA_character_, nrow(inc)), exc_reason),
     qcov = c(inc$qcov, exc$qcov),
     ref_start = c(inc$ref_start, rep(NA_integer_, nrow(exc))),
     ref_end = c(inc$ref_end, rep(NA_integer_, nrow(exc))),
@@ -432,7 +490,7 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
   lay$rc[is.na(lay$rc)] <- FALSE
   lay$order <- seq_len(nrow(lay))
   lay[, c("scaffold", "order", "rc", "gap_before", "mapped", "include",
-          "qcov", "ref_start", "ref_end", "qstart")]
+          "exclude_reason", "qcov", "ref_start", "ref_end", "qstart")]
 }
 
 #' Reverse-complement a DNA string
@@ -673,9 +731,18 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
 
     if (trim > 0) seq <- substring(seq, trim + 1L)
     n <- nchar(seq)
+    if (n <= 0L) {
+      # Scaffold fully consumed by overlap trimming (redundant/contained): drop it
+      # rather than append an empty piece (which would desync src_pos), and keep
+      # the previous scaffold as the anchor for the next junction.
+      junctions <- c(junctions, sprintf(
+        "%s fully overlapped by %s; dropped as redundant",
+        s, if (!is.null(prev_scaf)) prev_scaf else "previous"))
+      next
+    }
     pieces <- c(pieces, seq)
     src_scaffold <- c(src_scaffold, rep(s, n))
-    src_pos <- c(src_pos, (trim + 1L):(trim + n))
+    src_pos <- c(src_pos, trim + seq_len(n))
     prev_oriented <- seq
     prev_scaf <- s
     prev_depth <- if (is.null(dep)) NULL else if (trim > 0) dep[-(seq_len(trim))] else dep
@@ -1126,8 +1193,13 @@ plot_scaffold_mapping <- function(layout, ref_len, scaffold_len = NULL) {
   }
   if (nrow(excluded) > 0) {
     # Place under the title (top), away from the x-axis labels.
-    graphics::mtext(paste("Excluded from Path 0 (poor/no mapping):",
-                          paste(excluded$scaffold, collapse = ", ")),
+    lab <- if (!is.null(excluded$exclude_reason)) {
+      paste(mapply(function(s, r) if (is.na(r)) s else paste0(s, " (", r, ")"),
+                   excluded$scaffold, excluded$exclude_reason), collapse = ", ")
+    } else {
+      paste(excluded$scaffold, collapse = ", ")
+    }
+    graphics::mtext(paste("Excluded from Path 0:", lab),
                     side = 3, line = 0.3, col = "#d9534f", cex = 0.85)
   }
   invisible(NULL)
@@ -1363,8 +1435,13 @@ compose_join_note <- function(layout, seq, gap_len, junctions = character(0),
   note <- sprintf("Joined %d scaffolds: %s; %d N gap bases.",
                   nrow(inc), order_str, n_gaps)
   if (nrow(exc) > 0) {
-    note <- paste0(note, sprintf(" Excluded (poor/no reference mapping): %s.",
-                                 paste(exc$scaffold, collapse = ", ")))
+    exc_lab <- if (!is.null(exc$exclude_reason)) {
+      paste(mapply(function(s, r) if (is.na(r)) s else paste0(s, " (", r, ")"),
+                   exc$scaffold, exc$exclude_reason), collapse = ", ")
+    } else {
+      paste(exc$scaffold, collapse = ", ")
+    }
+    note <- paste0(note, sprintf(" Excluded from Path 0: %s.", exc_lab))
   }
   if (length(junctions) > 0) {
     note <- paste0(note, " Junctions: ", paste(junctions, collapse = "; "), ".")

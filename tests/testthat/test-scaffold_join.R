@@ -465,3 +465,81 @@ test_that("load_scaffold_mappings round-trips into derive_scaffold_layout shape"
 
   expect_null(load_scaffold_mappings(con, "s1", "NC_missing"))
 })
+
+test_that("detect_subsumed flags a contained scaffold, keeps the container", {
+  inc <- data.frame(
+    scaffold = c("A", "B"),
+    ref_start = c(0L, 500L), ref_end = c(2000L, 800L),
+    nmatch = c(1800L, 290L), stringsAsFactors = FALSE
+  )
+  r <- detect_subsumed(inc)
+  expect_true(is.na(r[1]))
+  expect_match(r[2], "subsumed by scaffold A")
+})
+
+test_that("detect_subsumed keeps disjoint and partially-overlapping scaffolds", {
+  inc <- data.frame(
+    scaffold = c("A", "B", "C"),
+    ref_start = c(0L, 1800L, 4000L), ref_end = c(2000L, 3000L, 6000L),
+    nmatch = c(1900L, 1100L, 1900L), stringsAsFactors = FALSE
+  )
+  expect_true(all(is.na(detect_subsumed(inc))))
+})
+
+test_that("detect_subsumed density guard: a sparse ballooned extent cannot subsume", {
+  # A spans the whole reference but matches almost nothing (origin-spanning /
+  # repeat artifact); it must not swallow the well-matched B.
+  inc <- data.frame(
+    scaffold = c("A", "B"),
+    ref_start = c(0L, 500L), ref_end = c(10000L, 800L),
+    nmatch = c(200L, 290L), stringsAsFactors = FALSE
+  )
+  expect_true(all(is.na(detect_subsumed(inc))))
+})
+
+test_that("derive_scaffold_layout excludes subsumed scaffold and recomputes gap across it", {
+  mappings <- data.frame(
+    scaffold = c("A", "B", "C"),
+    ref_start = c(0L, 500L, 2100L), ref_end = c(2000L, 800L, 4000L),
+    strand = c("+", "+", "+"), nmatch = c(1800L, 290L, 1850L),
+    qcov = c(0.95, 0.95, 0.95), qstart = c(0L, 0L, 0L),
+    mapped = c(TRUE, TRUE, TRUE), stringsAsFactors = FALSE
+  )
+  lay <- derive_scaffold_layout(mappings, min_qcov = 0.5)
+  expect_false(lay$include[lay$scaffold == "B"])
+  expect_match(lay$exclude_reason[lay$scaffold == "B"], "subsumed by scaffold A")
+  # gap A -> C computed across the removed B (2100 - 2000), not a huge negative
+  expect_equal(lay$gap_before[lay$scaffold == "C"], 100)
+})
+
+test_that("join_scaffolds drops a fully-overlapped scaffold without src_pos corruption", {
+  a <- paste(rep("ACGT", 50), collapse = "")   # 200 bp
+  b <- substring(a, 101)                        # last 100 bp of a (contained)
+  seqs <- list(A = a, B = b)
+  lay <- data.frame(
+    scaffold = c("A", "B"), order = 1:2, rc = c(FALSE, FALSE),
+    gap_before = c(NA, -100), include = c(TRUE, TRUE), stringsAsFactors = FALSE
+  )
+  res <- join_scaffolds(seqs, lay)
+  expect_equal(nchar(res$seq), 200L)                    # B added no new bases
+  expect_equal(length(res$src_pos), nchar(res$seq))     # src_pos stays in lockstep
+  expect_false(any(is.na(res$src_pos)))
+  expect_false(any(res$src_pos < 1))
+  expect_true(any(grepl("dropped as redundant", res$junctions)))
+})
+
+test_that("join_scaffolds keeps src_pos aligned after a partial overlap trim", {
+  # b overlaps a's tail by 40 bp; the trim path must not desync src_pos.
+  a <- paste(rep("ACGTACGTAC", 10), collapse = "")   # 100 bp
+  overlap <- substring(a, 61)                         # a's last 40 bp
+  b <- paste0(overlap, paste(rep("TTTTGGGGCC", 6), collapse = ""))  # 40 + 60
+  seqs <- list(A = a, B = b)
+  lay <- data.frame(
+    scaffold = c("A", "B"), order = 1:2, rc = c(FALSE, FALSE),
+    gap_before = c(NA, -40), include = c(TRUE, TRUE), stringsAsFactors = FALSE
+  )
+  res <- join_scaffolds(seqs, lay)
+  expect_equal(length(res$src_pos), nchar(res$seq))
+  expect_false(any(is.na(res$src_pos)))
+  expect_true(all(res$src_pos >= 1))
+})
