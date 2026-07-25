@@ -92,3 +92,26 @@ test_that("annotate_mitofinder returns typed empty frame when db missing", {
       "length", "direction", "tRNA_ID", "anticodon") %in% names(res)
   ))
 })
+
+test_that(".parse_mitofinder_gff fills a missing tRNA anticodon with NNN", {
+  # MitoFinder GFFs frequently omit the anticodon attribute. Leaving it NA
+  # crashed export_files() at `if (cur$anticodon != "NNN")`.
+  wd <- tempfile("mf_ac_")
+  dir.create(file.path(wd, "x_Final_Results"), recursive = TRUE)
+  writeLines(c(
+    "##gff-version 3",
+    "ctg1\tMitoFinder\ttRNA\t10\t80\t.\t+\t.\tName=tRNA-Pro",
+    "ctg1\tMitoFinder\ttRNA\t100\t170\t.\t+\t.\tName=tRNA-Phe;anticodon=gaa",
+    "ctg1\tMitoFinder\trRNA\t200\t400\t.\t+\t.\tName=16S"
+  ), file.path(wd, "x_Final_Results", "x.gff"))
+  asm <- Biostrings::DNAStringSet(paste(rep("A", 500), collapse = ""))
+  names(asm) <- "ctg1"
+
+  res <- .parse_mitofinder_gff(wd, asm, "2")
+
+  expect_equal(res$anticodon[res$gene == "trnP"], "NNN")
+  expect_equal(res$anticodon[res$gene == "trnF"], "GAA")
+  expect_false(any(is.na(res$anticodon[res$type == "tRNA"])))
+  # non-tRNA features keep NA rather than a bogus sentinel
+  expect_true(is.na(res$anticodon[res$type == "rRNA"]))
+})

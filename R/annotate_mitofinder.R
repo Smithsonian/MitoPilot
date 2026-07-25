@@ -235,7 +235,11 @@ annotate_mitofinder <- function(
       pos1 = pmin(start, end),
       pos2 = pmax(start, end),
       direction = ifelse(strand == "-", "-", "+"),
-      anticodon = toupper(anticodon)
+      # MitoFinder GFFs often omit the anticodon attribute; use the "NNN"
+      # unresolved sentinel the other tools and the exporter expect.
+      anticodon = dplyr::if_else(
+        type == "tRNA", dplyr::coalesce(toupper(anticodon), "NNN"), toupper(anticodon)
+      )
     ) |>
     dplyr::filter(!is.na(gene)) |>
     dplyr::mutate(
