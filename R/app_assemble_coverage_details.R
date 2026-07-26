@@ -39,6 +39,12 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$join_layout <- NULL
       rv$join_ref_len <- NULL
       rv$join_zoom_anchor <- NULL
+      # Session-scoped, so they must be cleared per sample: if compute_join_layout
+      # early-returns for this sample, a stale accession would be stamped onto its
+      # Path 0 and a stale reference/orientation drawn under its scaffolds.
+      rv$join_ref_accession <- NULL
+      rv$join_ref_seq <- NULL
+      rv$join_oriented <- NULL
       # Auto-run reference-guided mapping on open so the layout + mapping plot show
       # without an extra click; the Auto-layout button re-runs after edits.
       if (isTRUE(rv$asmb_join_eligible)) {
@@ -1579,6 +1585,14 @@ assembly_coverage_details_server <- function(id, rv) {
         s <- lay$scaffold[i]
         rcv <- input[[paste0("join_rc_", s)]]
         incv <- input[[paste0("join_inc_", s)]]
+        # qstart is a FORWARD-query coordinate from the auto mapping. Once the user
+        # flips RC, live_oriented() hands the zoom a reverse-complemented sequence
+        # that this coordinate no longer indexes, so drop it rather than pairing
+        # the two: zoom_window_base_maps already skips rows with qstart NA, which
+        # is far better than a confidently drawn wrong base map.
+        if (!is.null(rcv) && !identical(isTRUE(rcv), isTRUE(lay$rc[i]))) {
+          lay$qstart[i] <- NA_integer_
+        }
         if (!is.null(rcv)) lay$rc[i] <- isTRUE(rcv)
         if (!is.null(incv)) lay$include[i] <- isTRUE(incv)
       }
@@ -1697,9 +1711,21 @@ assembly_coverage_details_server <- function(id, rv) {
     # reference has no cached seq/mapping the recompute fails; notify and snap the
     # dropdown back to the last good accession so it never disagrees with the layout.
     observeEvent(input$join_reference, ignoreInit = TRUE, {
+      # ignoreInit only covers the very first value. This input is re-rendered
+      # whenever scaffold_join_div redraws for a different sample, which fires the
+      # observer again and would pop the alert the modal-open path deliberately
+      # suppressed with notify = FALSE. If the dropdown already agrees with the
+      # accession the layout was built from, there is nothing to recompute.
+      if (identical(input$join_reference, rv$join_ref_accession)) return()
       ok <- compute_join_layout(input$join_reference, notify = TRUE)
+      # Only snap back to a target the new sample actually offers; reverting to a
+      # previous sample's accession would blank the control.
+      rws <- join_scaffold_rows()
+      accs <- if (is.null(rws)) character(0) else
+        unique(rws$blast_accession[!is.na(rws$blast_accession) & nzchar(rws$blast_accession)])
       if (!isTRUE(ok) && !is.null(rv$join_ref_accession) &&
-          !identical(input$join_reference, rv$join_ref_accession)) {
+          !identical(input$join_reference, rv$join_ref_accession) &&
+          rv$join_ref_accession %in% accs) {
         shiny::updateSelectInput(session, "join_reference",
                                  selected = rv$join_ref_accession)
       }
@@ -1747,12 +1773,27 @@ assembly_coverage_details_server <- function(id, rv) {
       layout <- data.frame(
         scaffold = scaffolds[o], order = seq_along(o), rc = rc[o],
         gap_before = NA_real_, mapped = TRUE, include = inc[o], stringsAsFactors = FALSE)
-      # Reuse reference-derived gaps only when the manual order AND include set
-      # both match auto; any include change invalidates the neighbor gaps.
+      # Reference-derived gaps. Reuse them verbatim when the order and include set
+      # both match auto; otherwise RECOMPUTE them from the stored reference
+      # coordinates rather than discarding the vector. Leaving gap_before all-NA
+      # would switch off join_scaffolds' overlap probe at every junction
+      # (do_probe requires !is.na(gap_before)), turning each one into a blind
+      # 100-N spacer with the shared bases duplicated - including the junctions
+      # the user never touched.
       lay <- rv$join_layout
       if (!is.null(lay) && identical(layout$scaffold, lay$scaffold) &&
           "include" %in% names(lay) && identical(layout$include, lay$include)) {
         layout$gap_before <- lay$gap_before
+      } else if (!is.null(lay) &&
+                 all(c("ref_start", "ref_end") %in% names(lay))) {
+        m <- match(layout$scaffold, lay$scaffold)
+        rs <- lay$ref_start[m]; re <- lay$ref_end[m]
+        g <- rep(NA_real_, nrow(layout))
+        ii <- which(layout$include)
+        if (length(ii) >= 2) for (k in 2:length(ii)) {
+          g[ii[k]] <- rs[ii[k]] - re[ii[k - 1]]
+        }
+        layout$gap_before <- g
       }
       idx <- match(scaffolds, as.character(rows$scaffold))
       scaffolds_df <- data.frame(

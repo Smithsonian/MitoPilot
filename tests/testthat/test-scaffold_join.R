@@ -542,6 +542,22 @@ test_that("join_scaffolds keeps src_pos aligned after a partial overlap trim", {
   expect_equal(length(res$src_pos), nchar(res$seq))
   expect_false(any(is.na(res$src_pos)))
   expect_true(all(res$src_pos >= 1))
+  # Assert the MAPPING, not its shape. A src_pos uniformly offset by the trim
+  # amount satisfies every check above, and that offset is exactly the desync
+  # class the trim + seq_len(n) fix exists to prevent.
+  expect_equal(nchar(res$seq), 160L)                       # 100 + (100 - 40)
+  expect_equal(res$src_pos[res$src_scaffold == "A"], 1:100)
+  expect_equal(res$src_pos[res$src_scaffold == "B"], 41:100)
+
+  # Round-trip through stitch_coverage with per-scaffold distinguishable depth:
+  # B's contribution must land on B's positions 41..100, not 1..60.
+  cov <- list(
+    A = list(depth = 1:100,        gc = rep(0, 100), err = rep(0, 100)),
+    B = list(depth = 101:200,      gc = rep(0, 100), err = rep(0, 100))
+  )
+  st <- stitch_coverage(cov, lay, res)
+  expect_equal(length(st$depth), nchar(res$seq))
+  expect_equal(utils::tail(st$depth, 60), 141:200)
 })
 
 
@@ -690,7 +706,9 @@ test_that("derive_scaffold_layout does not derive a negative gap from an origin-
   inc <- inc[order(inc$order), , drop = FALSE]
   expect_equal(nrow(inc), 2L)                 # neither dropped/subsumed
   gb_b <- inc$gap_before[inc$scaffold == "b"]
-  expect_true(is.na(gb_b))                    # ballooned predecessor -> unknown junction, no over-trim
+  # Ballooned predecessor: no genome-scale negative gap, but 0 rather than NA so
+  # join_scaffolds still probes the junction instead of blindly N-padding it.
+  expect_equal(gb_b, 0)
 })
 
 # --- F3 ---
@@ -748,27 +766,96 @@ test_that("assemble_from_layout circularizes on the app path only when circular 
   lin <- assemble_from_layout(df, lay, gap_len = 100L, circular = FALSE, ref_seq = NULL)
   expect_equal(lin$topology, "linear")
   expect_equal(nchar(lin$seq), n)
+  # ...but the duplication must never be SILENT: the detection still runs and the
+  # note has to say the origin region is present twice.
+  expect_match(lin$note, "redundant end overlap detected .* NOT")
   # Same input, Circular checked -> redundant overlap trimmed, marked circular.
   cir <- assemble_from_layout(df, lay, gap_len = 100L, circular = TRUE, ref_seq = NULL)
   expect_equal(cir$topology, "circular")
   expect_equal(nchar(cir$seq), n - 60L)
+  expect_match(cir$note, "circular: trimmed 60 bp")
 })
 
 # --- F17 ---
 test_that("circularize_sequence with raised min_overlap ignores a short spurious end match", {
+  skip_if_not_installed("pwalign")
   set.seed(17)
-  core <- paste(sample(c("A", "C", "G", "T"), 400L, replace = TRUE), collapse = "")
-  motif <- paste(rep("AT", 15L), collapse = "")   # 30 bp AT-rich, < 50
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  # A RANDOM 35 bp terminal repeat, not an AT motif: low_complexity_overlap would
+  # reject an AT motif on its own, which made this test pass identically at
+  # min_overlap 20 and 50 and so proved nothing about min_overlap.
+  motif <- bp(35L)
+  core <- bp(400L)
   seq <- paste0(motif, core, motif)
   n <- nchar(seq); cov <- rep(1, n)
+  expect_false(low_complexity_overlap(motif))     # the guard under test is min_overlap
+  # 35 < 50 -> not circular at the raised threshold...
   cz <- circularize_sequence(seq, cov, cov, cov, min_overlap = 50L)
   expect_false(cz$circular)
   expect_equal(nchar(cz$seq), n)                  # no real 3' bases trimmed
+  # ...but the same 35 bp repeat IS found when the threshold is below it, which is
+  # what makes this a test of min_overlap rather than of the complexity guard.
+  cz20 <- circularize_sequence(seq, cov, cov, cov, min_overlap = 20L)
+  expect_true(cz20$circular)
+  expect_equal(nchar(cz20$seq), n - 35L)
+})
+
+# --- F17 ---
+test_that("assemble_from_layout passes min_overlap through at its call site", {
+  skip_if_not_installed("pwalign")
+  set.seed(171)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  # 35 bp terminal repeat: below assemble_from_layout's hardcoded min_overlap = 50,
+  # so the call site must NOT circularize it. Testing circularize_sequence directly
+  # cannot catch a wrong (or missing) value at the call site.
+  motif <- bp(35L); seq <- paste0(motif, bp(400L), motif)
+  n <- nchar(seq)
+  df <- data.frame(scaffold = "1", sequence = seq,
+    depth = paste(rep(5, n), collapse = " "),
+    gc = paste(rep(0.4, n), collapse = " "),
+    errors = paste(rep(0, n), collapse = " "), stringsAsFactors = FALSE)
+  lay <- data.frame(scaffold = "1", order = 1L, rc = FALSE, gap_before = NA_real_,
+                    mapped = TRUE, include = TRUE, stringsAsFactors = FALSE)
+  res <- assemble_from_layout(df, lay, gap_len = 100L, circular = TRUE, ref_seq = NULL)
+  expect_equal(nchar(res$seq), n)
+  expect_false(grepl("trimmed 35 bp", res$note))
+})
+
+# --- F17/F18 ---
+test_that("assemble_from_layout circularizes and rotates on the reference path", {
+  skip_if_not_installed("pwalign")
+  set.seed(172)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  ov <- bp(60L); core <- bp(400L)
+  seq <- paste0(ov, core, ov)                     # 520 bp, 60 bp redundant end overlap
+  n <- nchar(seq)
+  df <- data.frame(scaffold = "1", sequence = seq,
+    depth = paste(rep(5, n), collapse = " "),
+    gc = paste(rep(0.4, n), collapse = " "),
+    errors = paste(rep(0, n), collapse = " "), stringsAsFactors = FALSE)
+  lay <- data.frame(scaffold = "1", order = 1L, rc = FALSE, gap_before = NA_real_,
+                    mapped = TRUE, include = TRUE, stringsAsFactors = FALSE)
+  # has_ref TRUE: circularizes without the user asserting circular, then rotates.
+  # Every other assemble_from_layout test in this file passes ref_seq = NULL, so
+  # this wiring was previously uncovered.
+  origin_block <- data.frame(scaffold = "joined", qlen = n - 60L, qstart = 100L,
+    qend = 300L, strand = "+", ref_start = 0L, ref_end = 200L, nmatch = 200L,
+    cigar = NA_character_, stringsAsFactors = FALSE)
+  testthat::local_mocked_bindings(run_minimap2_paf = function(...) origin_block)
+  res <- assemble_from_layout(df, lay, gap_len = 100L, circular = FALSE,
+                              ref_seq = paste0(core, ov))
+  expect_equal(res$topology, "circular")
+  expect_equal(nchar(res$seq), n - 60L)
+  expect_match(res$note, "rotated 100 bp to reference origin")
 })
 
 # --- F18 ---
 test_that("rotate_to_reference skips rotation when no block covers the reference origin", {
-  seq <- paste(rep("ACGT", 500L), collapse = "")   # 2000 bp
+  # APERIODIC fixture. A "ACGT" tandem repeat rotated by a multiple of 4 is
+  # indistinguishable from the original, so the sequence assertion below was
+  # vacuous against a period-4 fixture.
+  set.seed(180)
+  seq <- paste(sample(c("A", "C", "G", "T"), 2000L, replace = TRUE), collapse = "")
   n <- nchar(seq); cov <- seq_len(n)
   far_block <- data.frame(scaffold = "joined", qlen = n, qstart = 800L, qend = 1200L,
     strand = "+", ref_start = 3000L, ref_end = 3400L, nmatch = 400L,
@@ -777,10 +864,12 @@ test_that("rotate_to_reference skips rotation when no block covers the reference
   rt <- rotate_to_reference(seq, cov, cov, cov, ref_seq = seq)
   expect_equal(rt$rotated, 0L)                     # min ref_start 3000 > tol -> no rotation
   expect_identical(rt$seq, seq)
+  expect_identical(rt$depth, cov)                  # coverage untouched too
 })
 
 test_that("rotate_to_reference rotates to the block covering reference position 0", {
-  seq <- paste(rep("ACGT", 500L), collapse = "")
+  set.seed(181)
+  seq <- paste(sample(c("A", "C", "G", "T"), 2000L, replace = TRUE), collapse = "")
   n <- nchar(seq); cov <- seq_len(n)
   origin_block <- data.frame(scaffold = "joined", qlen = n, qstart = 120L, qend = 500L,
     strand = "+", ref_start = 0L, ref_end = 380L, nmatch = 380L,
@@ -788,5 +877,200 @@ test_that("rotate_to_reference rotates to the block covering reference position 
   testthat::local_mocked_bindings(run_minimap2_paf = function(...) origin_block)
   rt <- rotate_to_reference(seq, cov, cov, cov, ref_seq = seq)
   expect_equal(rt$rotated, 120L)                   # qstart of the origin-covering block
+  # Assert the actual rotation, and that the coverage vectors rotated with it.
+  expect_equal(rt$seq, paste0(substring(seq, 121L), substring(seq, 1L, 120L)))
+  expect_equal(rt$depth[1], 121L)
+  expect_equal(utils::tail(rt$depth, 1L), 120L)
+  expect_equal(length(rt$depth), n)
 })
 
+
+
+# =============================================================================
+# Post-review fixes (18-finding adversarial review of the batches above)
+# =============================================================================
+
+# --- review #5 ---
+test_that("colinear_chain keeps blocks across a large real indel", {
+  # Two colinear blocks separated by a 3 kb reference-side deletion. The old
+  # fixed diagonal band (max(1000, 0.2*qlen) = 1600 here) discarded the far side,
+  # which then shrank ref_end and fabricated a gap at the next junction.
+  rows <- data.frame(
+    scaffold = c("s", "s"), qlen = c(8000L, 8000L),
+    qstart = c(0L, 4000L), qend = c(4000L, 8000L),
+    strand = c("+", "+"),
+    ref_start = c(0L, 7000L), ref_end = c(4000L, 11000L),  # 3 kb ref-side indel
+    nmatch = c(3900L, 3800L), cigar = NA_character_, stringsAsFactors = FALSE
+  )
+  cc <- collapse_scaffold_blocks(rows)
+  expect_equal(cc$ref_start, 0L)
+  expect_equal(cc$ref_end, 11000L)      # both blocks kept; extent spans the indel
+  expect_equal(cc$nmatch, 7700L)
+})
+
+test_that("colinear_chain still prunes an origin wrap", {
+  # Same two blocks, but the query advances while the reference goes BACKWARDS:
+  # not colinear, so the monotone walk must still drop one side.
+  rows <- data.frame(
+    scaffold = c("s", "s"), qlen = c(8000L, 8000L),
+    qstart = c(0L, 4000L), qend = c(4000L, 8000L),
+    strand = c("+", "+"),
+    ref_start = c(12000L, 0L), ref_end = c(16000L, 4000L),
+    nmatch = c(3900L, 3800L), cigar = NA_character_, stringsAsFactors = FALSE
+  )
+  cc <- collapse_scaffold_blocks(rows)
+  expect_lt(cc$ref_end - cc$ref_start, 8000L)   # not ballooned to the whole reference
+})
+
+# --- review #6 ---
+test_that("qcov is measured over all blocks, not the pruned chain", {
+  # An origin-wrapping scaffold covers its whole query, just not colinearly.
+  # Scoring qcov on the pruned chain halved it and let min_qcov drop a real
+  # scaffold; the placement extent still comes from the pruned chain.
+  rows <- data.frame(
+    scaffold = c("s", "s"), qlen = c(8000L, 8000L),
+    qstart = c(0L, 4000L), qend = c(4000L, 8000L),
+    strand = c("+", "+"),
+    ref_start = c(12000L, 0L), ref_end = c(16000L, 4000L),
+    nmatch = c(3900L, 3800L), cigar = NA_character_, stringsAsFactors = FALSE
+  )
+  cc <- collapse_scaffold_blocks(rows)
+  expect_equal(cc$qcov, 1)
+})
+
+# --- review #7 ---
+test_that("an excluded scaffold keeps its orientation and reference coordinates", {
+  mappings <- data.frame(
+    scaffold = c("A", "B"),
+    ref_start = c(0L, 500L), ref_end = c(3000L, 1000L),
+    strand = c("+", "-"),                     # B is minus-strand and subsumed by A
+    nmatch = c(2900L, 480L),
+    qcov = c(0.95, 0.95), qstart = c(0L, 0L),
+    mapped = c(TRUE, TRUE), stringsAsFactors = FALSE
+  )
+  lay <- derive_scaffold_layout(mappings, min_qcov = 0.5)
+  b <- lay[lay$scaffold == "B", ]
+  expect_false(b$include)
+  expect_true(b$rc)                            # orientation survives exclusion
+  expect_equal(b$ref_start, 500L)              # ...and so do the coordinates
+  expect_equal(b$ref_end, 1000L)
+  # Order is seeded from the reference position, so re-including B in the editor
+  # puts it where it belongs rather than at the end.
+  expect_lt(lay$order[lay$scaffold == "A"], b$order)
+})
+
+# --- review #9 ---
+test_that("detect_subsumed keeps a contained scaffold that carries unaligned sequence", {
+  inc <- data.frame(
+    scaffold = c("A", "B"),
+    ref_start = c(0L, 500L), ref_end = c(3000L, 1000L),
+    nmatch = c(2900L, 480L),
+    qcov = c(0.95, 0.40),      # B's aligned part nests in A, but 60% never aligned
+    stringsAsFactors = FALSE
+  )
+  expect_true(is.na(detect_subsumed(inc)[2]))
+  # ...and it IS dropped once essentially all of it is accounted for.
+  inc$qcov[2] <- 0.98
+  expect_match(detect_subsumed(inc)[2], "subsumed by scaffold A")
+})
+
+# --- review #18 ---
+test_that("detect_subsumed names the largest container", {
+  inc <- data.frame(
+    scaffold = c("small", "mid", "big"),
+    ref_start = c(500L, 400L, 0L), ref_end = c(1000L, 2000L, 6000L),
+    nmatch = c(480L, 1500L, 5500L),
+    qcov = c(0.98, 0.98, 0.98), stringsAsFactors = FALSE
+  )
+  expect_match(detect_subsumed(inc)[1], "subsumed by scaffold big")
+})
+
+# --- review #10 ---
+test_that("collapse_scaffold_blocks flips qstart onto the reverse-complemented sequence", {
+  # The zoom view indexes the ORIENTED (rc'd) scaffold, so a '-' block's
+  # forward-query PAF coordinate has to be converted, or every '-' scaffold with
+  # asymmetric soft-clipping gets a fabricated base map.
+  rows <- data.frame(
+    scaffold = "s", qlen = 1000L, qstart = 100L, qend = 900L, strand = "-",
+    ref_start = 0L, ref_end = 800L, nmatch = 780L,
+    cigar = NA_character_, stringsAsFactors = FALSE
+  )
+  cc <- collapse_scaffold_blocks(rows)
+  expect_equal(cc$qstart, 100L)          # qlen - qend = 1000 - 900
+  # '+' is unchanged
+  rows$strand <- "+"
+  expect_equal(collapse_scaffold_blocks(rows)$qstart, 100L)
+  rows$qend <- 950L
+  rows$strand <- "-"
+  expect_equal(collapse_scaffold_blocks(rows)$qstart, 50L)
+})
+
+# --- review #13 ---
+test_that("refine_overlap rejects an alignment dragged through a divergent tail", {
+  skip_if_not_installed("pwalign")
+  set.seed(131)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  shared <- bp(120)
+  # A ends with the shared block plus 25 bp that B does not have: a genuine
+  # junction would end in exact identities, this one cannot.
+  a <- paste0(bp(400), shared, bp(25))
+  b <- paste0(shared, bp(600))
+  ov <- refine_overlap(a, b, est_overlap = 120, min_identity = 0.7, min_overlap = 10L)
+  expect_false(ov$reliable)
+  expect_equal(ov$trim_b, 0L)
+  # ...while the same pair with A actually ending at the shared block confirms.
+  a2 <- paste0(bp(400), shared)
+  ov2 <- refine_overlap(a2, b, est_overlap = 120, min_identity = 0.7, min_overlap = 10L)
+  expect_true(ov2$reliable)
+  expect_equal(ov2$trim_b, 120L)
+})
+
+# --- review #3 ---
+test_that("refine_overlap reports indels so the consensus can be skipped", {
+  skip_if_not_installed("pwalign")
+  set.seed(132)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  shared <- bp(200)
+  a <- paste0(bp(300), shared)
+  # B's copy of the overlap carries a 1 bp insertion: pairing A and B by index
+  # across this junction would shift every downstream base.
+  b_ov <- paste0(substring(shared, 1L, 100L), "G", substring(shared, 101L))
+  b <- paste0(b_ov, bp(400))
+  ov <- refine_overlap(a, b, est_overlap = 200, min_identity = 0.7, min_overlap = 10L)
+  expect_gt(ov$n_indel, 0L)
+  expect_true(ov$pat_len > 0L)
+})
+
+test_that("join_scaffolds skips the consensus when the overlap is not base-alignable", {
+  skip_if_not_installed("pwalign")
+  set.seed(133)
+  bp <- function(n) paste0(sample(c("A", "C", "G", "T"), n, replace = TRUE), collapse = "")
+  shared <- bp(200)
+  a <- paste0(bp(300), shared)
+  b <- paste0(substring(shared, 1L, 100L), "G", substring(shared, 101L), bp(400))
+  lay <- data.frame(
+    scaffold = c("A", "B"), order = 1:2, rc = c(FALSE, FALSE),
+    gap_before = c(NA, -200), include = c(TRUE, TRUE), stringsAsFactors = FALSE
+  )
+  res <- join_scaffolds(list(A = a, B = b), lay,
+                        scaffold_depth = list(A = rep(10, nchar(a)), B = rep(50, nchar(b))))
+  # No IUPAC codes manufactured across the junction.
+  expect_false(grepl("[RYSWKMBDHVN]", res$seq))
+  expect_true(any(grepl("not base-alignable", res$junctions)))
+})
+
+# --- review #12 ---
+test_that("plot_scaffold_mapping still renders an included but unplaced scaffold", {
+  lay <- data.frame(
+    scaffold = c("A", "B"), order = 1:2, rc = c(FALSE, FALSE),
+    gap_before = c(NA_real_, NA_real_), mapped = c(TRUE, FALSE),
+    include = c(TRUE, TRUE), exclude_reason = c(NA_character_, NA_character_),
+    qcov = c(0.9, 0), ref_start = c(0L, NA_integer_), ref_end = c(1000L, NA_integer_),
+    qstart = c(0L, NA_integer_), stringsAsFactors = FALSE
+  )
+  pf <- tempfile(fileext = ".png")
+  grDevices::png(pf); on.exit(unlink(pf), add = TRUE)
+  expect_silent(plot_scaffold_mapping(lay, ref_len = 1000))
+  grDevices::dev.off()
+  expect_gt(file.info(pf)$size, 0)
+})

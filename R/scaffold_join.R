@@ -297,24 +297,48 @@ parse_paf <- function(paf_lines) {
 
 #' Reduce one scaffold's same-strand blocks to a single colinear chain
 #'
-#' Blocks on one colinear alignment share a query-vs-reference diagonal
-#' (`ref_start - qstart` on the '+' strand, `ref_start + qend` on '-'). Anchoring
-#' on the largest-nmatch block and keeping only blocks within `tol` of its
-#' diagonal drops origin-wrap and distant repeat/secondary blocks that would
-#' otherwise balloon the reference extent in [collapse_scaffold_blocks()].
+#' Anchors on the largest-nmatch block and walks outwards in reference order,
+#' keeping a block only when it is monotone in BOTH the reference and the query
+#' relative to the last block kept. That drops origin-wrap and distant
+#' repeat/secondary blocks, which reverse one of the two axes and would otherwise
+#' balloon the reference extent in [collapse_scaffold_blocks()].
+#'
+#' Monotonicity rather than a fixed diagonal band: a real indel shifts the
+#' diagonal by its own length, so a banded test discards the far side of any
+#' indel bigger than the band and then recomputes the extent from the surviving
+#' half. A monotone walk admits a colinear indel of any size while still
+#' rejecting a wrap. minimap2 reports query coordinates on the forward strand
+#' regardless of `strand`, so on '-' the query runs backwards as the reference
+#' advances.
 #'
 #' @param gs single-strand PAF rows for one scaffold (columns `strand`,
-#'   `ref_start`, `qstart`, `qend`, `nmatch`, `qlen`).
-#' @param tol max diagonal deviation from the anchor; defaults to a scaffold-
-#'   relative slack that tolerates indels but not an origin wrap / distant repeat.
-#' @return the subset of `gs` on the anchor block's colinear diagonal.
+#'   `ref_start`, `ref_end`, `qstart`, `qend`, `nmatch`).
+#' @param slop bp of overlap tolerated between consecutive blocks (block ends
+#'   commonly overhang each other by a few bases).
+#' @return the subset of `gs` forming the anchor block's colinear chain.
 #' @noRd
-colinear_chain <- function(gs, tol = NULL) {
+colinear_chain <- function(gs, slop = 100L) {
   if (nrow(gs) <= 1L) return(gs)
-  dg <- ifelse(gs$strand == "-", gs$ref_start + gs$qend, gs$ref_start - gs$qstart)
-  anchor <- which.max(gs$nmatch)
-  if (is.null(tol)) tol <- max(1000L, as.integer(round(0.2 * gs$qlen[1])))
-  gs[abs(dg - dg[anchor]) <= tol, , drop = FALSE]
+  g <- gs[order(gs$ref_start, gs$ref_end), , drop = FALSE]
+  a <- which.max(g$nmatch)
+  minus <- identical(as.character(g$strand[1]), "-")
+  keep <- rep(FALSE, nrow(g))
+  keep[a] <- TRUE
+  # forward: reference advances, so the query must advance too ('+') or retreat ('-')
+  last <- a
+  if (a < nrow(g)) for (i in (a + 1L):nrow(g)) {
+    ok <- g$ref_start[i] >= g$ref_end[last] - slop &&
+      if (minus) g$qend[i] <= g$qstart[last] + slop else g$qstart[i] >= g$qend[last] - slop
+    if (isTRUE(ok)) { keep[i] <- TRUE; last <- i }
+  }
+  # backward: mirror image of the same test
+  last <- a
+  if (a > 1L) for (i in (a - 1L):1L) {
+    ok <- g$ref_end[i] <= g$ref_start[last] + slop &&
+      if (minus) g$qstart[i] >= g$qend[last] - slop else g$qend[i] <= g$qstart[last] + slop
+    if (isTRUE(ok)) { keep[i] <- TRUE; last <- i }
+  }
+  g[keep, , drop = FALSE]
 }
 
 #' Collapse a scaffold's PAF alignment blocks to one placement row
@@ -336,10 +360,10 @@ collapse_scaffold_blocks <- function(rows) {
   do.call(rbind, lapply(split(rows, rows$scaffold), function(g) {
     by_strand <- tapply(g$nmatch, g$strand, sum)
     dom <- names(by_strand)[which.max(by_strand)]
-    gs <- g[g$strand == dom, , drop = FALSE]
+    gs_all <- g[g$strand == dom, , drop = FALSE]
     # Keep only the dominant strand's colinear chain so an origin-wrap or a
     # distant repeat/secondary block cannot balloon the reference extent.
-    gs <- colinear_chain(gs)
+    gs <- colinear_chain(gs_all)
     anchor <- gs[which.min(gs$ref_start), , drop = FALSE]
     data.frame(
       scaffold  = g$scaffold[1],
@@ -347,8 +371,15 @@ collapse_scaffold_blocks <- function(rows) {
       ref_end   = max(gs$ref_end),
       strand    = dom,
       nmatch    = sum(gs$nmatch),
-      qcov      = union_len(gs$qstart, gs$qend) / gs$qlen[1],
-      qstart    = anchor$qstart,
+      # qcov over ALL the dominant strand's blocks, not the pruned chain: pruning
+      # exists to keep a wrap from inflating the reference extent, but a wrapping
+      # or rearranged scaffold still genuinely covers the query it aligns over,
+      # and scoring it on half its blocks lets min_qcov drop a real scaffold.
+      qcov      = union_len(gs_all$qstart, gs_all$qend) / gs_all$qlen[1],
+      # Colinear (ref_start, qstart) pair for the zoom view. On '-' the sequence
+      # the zoom indexes is reverse-complemented, so the forward-query PAF
+      # coordinate has to be flipped to match it.
+      qstart    = if (identical(dom, "-")) anchor$qlen - anchor$qend else anchor$qstart,
       stringsAsFactors = FALSE
     )
   }))
@@ -434,19 +465,36 @@ detect_subsumed <- function(inc, min_cover = 0.90, min_density = 0.50) {
   span <- pmax(re - rs, 1L)
   nm <- if (!is.null(inc$nmatch)) inc$nmatch else rep(NA_real_, n)
   density <- ifelse(is.na(nm), 1, nm / span)
+  qcov <- if (!is.null(inc$qcov)) inc$qcov else rep(NA_real_, n)
   for (b in seq_len(n)) {
     if (is.na(rs[b]) || is.na(re[b])) next
+    # Containment is judged on the reference extent, which says nothing about the
+    # part of B that never aligned. A scaffold still carrying substantial
+    # unaligned query sequence is not proven redundant, and dropping it would
+    # discard bases no other scaffold has.
+    if (!is.na(qcov[b]) && qcov[b] < 0.9) next
+    hits <- integer(0)
     for (a in seq_len(n)) {
       if (a == b || is.na(rs[a]) || is.na(re[a])) next
       # A must be the strictly larger extent (the container) and dense enough to
       # be a trustworthy placement.
       if (span[a] <= span[b] || density[a] < min_density) next
       ov <- min(re[a], re[b]) - max(rs[a], rs[b])
-      if (ov > 0 && ov / span[b] >= min_cover) {
-        reason[b] <- paste0("subsumed by scaffold ", inc$scaffold[a])
-        break
-      }
+      if (ov > 0 && ov / span[b] >= min_cover) hits <- c(hits, a)
     }
+    # Name the LARGEST qualifying container, not whichever came first, so the
+    # reason shown in the editor points at the scaffold actually carrying B.
+    if (length(hits)) {
+      reason[b] <- paste0("subsumed by scaffold ", inc$scaffold[hits[which.max(span[hits])]])
+    }
+  }
+  # A scaffold that is itself being excluded must not be cited as a container.
+  keep <- is.na(reason)
+  if (any(!keep)) {
+    bad <- paste0("subsumed by scaffold ", inc$scaffold[!keep])
+    orphan <- !is.na(reason) & reason %in% bad
+    reason[orphan] <- sub("^subsumed by scaffold .*$",
+                          "subsumed (container also excluded)", reason[orphan])
   }
   reason
 }
@@ -502,9 +550,14 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
   # a ballooned extent spanning nearly the whole reference; its ref_end is then not
   # a real right boundary, and deriving the next scaffold's gap from it manufactures
   # a genome-scale negative gap that over-trims (or drops) a real scaffold. Skip
-  # such a predecessor's junction (NA -> N-gap). Gate on LOW density so a genuine
-  # dense full-length contig is not misread as a wrap (a real ballooned wrap unions
+  # such a predecessor's junction. Gate on LOW density so a genuine dense
+  # full-length contig is not misread as a wrap (a real ballooned wrap unions
   # disjoint blocks and so is sparse: nmatch/span < min_density).
+  #
+  # Use 0 rather than NA for the skipped junction. NA means "unknown", which
+  # switches join_scaffolds' do_probe off and fabricates a blind N spacer over
+  # what is usually a real overlap; 0 keeps the probe on, so refine_overlap can
+  # still confirm and merge the overlap, and degrades to a butt join if it cannot.
   wrap_thresh <- if (is.finite(ref_len) && ref_len > 0) 0.9 * ref_len else Inf
   min_density <- 0.5
   gap_before <- rep(NA_real_, nrow(inc))
@@ -515,8 +568,7 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
         inc$nmatch[i - 1] / prev_span else NA_real_
       ballooned <- !is.na(prev_span) && prev_span >= wrap_thresh &&
         !is.na(prev_density) && prev_density < min_density
-      if (ballooned) next
-      gap_before[i] <- inc$ref_start[i] - inc$ref_end[i - 1]
+      gap_before[i] <- if (ballooned) 0 else inc$ref_start[i] - inc$ref_end[i - 1]
     }
   }
 
@@ -525,21 +577,28 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
   } else {
     list(inc = rep(NA_integer_, nrow(inc)), exc = rep(NA_integer_, nrow(exc)))
   }
+  # Excluded rows keep their REAL orientation and reference coordinates. A
+  # subsumed scaffold is well mapped by definition, and the editor invites the
+  # user to re-include it; blanking rc/ref_start/ref_end would hand it back
+  # forward-stranded and unplaced. Genuinely unmapped rows already hold NA, so
+  # nothing is invented (the is.na sweep below coerces their rc to FALSE).
   lay <- data.frame(
     scaffold = c(inc$scaffold, exc$scaffold),
-    rc = c(inc$strand == "-", rep(FALSE, nrow(exc))),
+    rc = c(inc$strand == "-", exc$strand == "-"),
     gap_before = c(gap_before, rep(NA_real_, nrow(exc))),
     mapped = c(inc$mapped, exc$mapped),
     include = c(rep(TRUE, nrow(inc)), rep(FALSE, nrow(exc))),
     exclude_reason = c(rep(NA_character_, nrow(inc)), exc_reason),
     qcov = c(inc$qcov, exc$qcov),
-    ref_start = c(inc$ref_start, rep(NA_integer_, nrow(exc))),
-    ref_end = c(inc$ref_end, rep(NA_integer_, nrow(exc))),
+    ref_start = c(inc$ref_start, exc$ref_start),
+    ref_end = c(inc$ref_end, exc$ref_end),
     qstart = c(qstart_col$inc, qstart_col$exc),
     stringsAsFactors = FALSE
   )
   lay$rc[is.na(lay$rc)] <- FALSE
-  lay$order <- seq_len(nrow(lay))
+  # Seed the order at each scaffold's true reference position so a re-included
+  # scaffold lands where it belongs rather than at the end. Unplaced rows sort last.
+  lay$order <- rank(ifelse(is.na(lay$ref_start), Inf, lay$ref_start), ties.method = "first")
   lay[, c("scaffold", "order", "rc", "gap_before", "mapped", "include",
           "exclude_reason", "qcov", "ref_start", "ref_end", "qstart")]
 }
@@ -580,8 +639,11 @@ low_complexity_overlap <- function(s, k = 3L, min_distinct = 4L) {
 #' @param min_identity minimum overlap identity to "confirm" the overlap.
 #' @param min_overlap minimum aligned length to "confirm" the overlap; raise it
 #'   for overlaps not predicted by the reference to suppress spurious short hits.
-#' @return list(reliable, trim_b, identity, overlap_len): `trim_b` = bases to drop
-#'   from the start of `b_seq` (the confirmed overlap length when reliable).
+#' @return list(reliable, trim_b, identity, overlap_len, pat_len, n_indel):
+#'   `trim_b` = bases to drop from the start of `b_seq` (the confirmed overlap
+#'   length when reliable). `pat_len` is the aligned length on A's side and
+#'   `n_indel` the indel bases in the alignment; the two together tell the caller
+#'   whether A's suffix and B's prefix can be paired position-for-position.
 #' @noRd
 refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7,
                            min_overlap = 10L) {
@@ -592,7 +654,8 @@ refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7,
   # wider window when the reference itself predicts a big overlap.
   maxwin <- as.integer(getOption("MitoPilot.scaffold_overlap_maxwin", 5000L))
   L <- min(nchar(a_seq), nchar(b_seq), max(est + slack, maxwin))
-  out <- list(reliable = FALSE, trim_b = 0L, identity = NA_real_, overlap_len = 0L)
+  out <- list(reliable = FALSE, trim_b = 0L, identity = NA_real_, overlap_len = 0L,
+              pat_len = 0L, n_indel = 0L)
   if (L < 10L) return(out)
   a_tail <- substring(a_seq, nchar(a_seq) - L + 1L)
   b_head <- substring(b_seq, 1L, L)
@@ -614,22 +677,39 @@ refine_overlap <- function(a_seq, b_seq, est_overlap, min_identity = 0.7,
   sub_start <- BiocGenerics::start(sub_rng)
   sub_end <- BiocGenerics::end(sub_rng)
   # The aligned pattern (a_tail) must also reach a's 3' terminus: a genuine
-  # junction overlap sits at BOTH a's suffix end and b's prefix start. Without
-  # this, a copy of b's prefix buried inside a's tail (an internal repeat, made
-  # reachable by the widened window) would falsely confirm and trim real bases.
+  # junction overlap sits at BOTH a's suffix end and b's prefix start.
   pat_rng <- pwalign::pattern(aln)@range
   pat_at_end <- (nchar(a_tail) - BiocGenerics::end(pat_rng)) <= 2L
+  # ...and the terminal columns must actually MATCH. Reaching a's end is not
+  # enough on its own: pwalign type="overlap" will happily drag the alignment
+  # through a divergent 3' tail to get there, which both confirms a junction that
+  # is not one and inflates trim_b past the real boundary. Requiring the last few
+  # columns to be ungapped identities is what separates a true junction overlap
+  # from a dragged alignment or an internal repeat.
+  # Ungapped and >= 80% identical over the last 10 columns, rather than exactly
+  # identical: a genuine overlap can carry a sequencing error at the terminus, but
+  # a dragged alignment is far worse than 8/10 there (measured on real data: 5/10
+  # with 42 indel bases, against 100% for a true junction).
+  ap <- as.character(pwalign::alignedPattern(aln))
+  sq <- as.character(pwalign::alignedSubject(aln))
+  tw <- min(10L, nchar(ap), nchar(sq))
+  pa <- substring(ap, nchar(ap) - tw + 1L)
+  sa <- substring(sq, nchar(sq) - tw + 1L)
+  tail_ok <- tw > 0L && !grepl("-", pa, fixed = TRUE) && !grepl("-", sa, fixed = TRUE) &&
+    mean(strsplit(pa, "", fixed = TRUE)[[1]] == strsplit(sa, "", fixed = TRUE)[[1]]) >= 0.8
   # Reject low-complexity confirmations (homopolymer / short tandem motif at
   # AT-rich termini) that clear identity/length by chance and would trim real
   # bases from B.
   ov_lc <- low_complexity_overlap(substring(b_head, 1L, sub_end))
-  if (ident >= min_identity && sub_start <= 2L && pat_at_end && !ov_lc) {
+  ind <- tryCatch(pwalign::nindel(aln), error = function(e) NULL)
+  out$n_indel <- if (is.null(ind)) 0L else
+    as.integer(sum(ind@insertion[, 2], ind@deletion[, 2]))
+  out$pat_len <- as.integer(BiocGenerics::end(pat_rng) - BiocGenerics::start(pat_rng) + 1L)
+  out$identity <- ident
+  if (ident >= min_identity && sub_start <= 2L && pat_at_end && tail_ok && !ov_lc) {
     out$reliable <- TRUE
     out$trim_b <- as.integer(sub_end)
-    out$identity <- ident
     out$overlap_len <- as.integer(alen)
-  } else {
-    out$identity <- ident
   }
   out
 }
@@ -750,7 +830,15 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
         jmsg <- sprintf("%s|%s overlap %d bp confirmed (%.0f%% identity), merged",
                         prev_scaf, s, ov$overlap_len, 100 * ov$identity)
         # Coverage-majority consensus across the overlap (replaces A's tail).
-        if (!is.null(prev_depth) && !is.null(dep) && trim >= 1L) {
+        # Only safe when A's suffix and B's prefix line up position-for-position:
+        # the consensus pairs them by index, so an indel inside the overlap, or an
+        # A-side aligned length that differs from the trim taken off B, would
+        # compare off-register bases and manufacture IUPAC codes across the whole
+        # junction. In that case keep A's tail unmodified (the pre-consensus
+        # behavior) and say so rather than quoting an identity that does not
+        # describe what was written.
+        alignable <- ov$n_indel == 0L && identical(as.integer(ov$pat_len), as.integer(trim))
+        if (!is.null(prev_depth) && !is.null(dep) && trim >= 1L && alignable) {
           k <- min(trim, nchar(prev_oriented))
           pl <- nchar(prev_oriented)
           a_ch <- strsplit(substring(prev_oriented, pl - k + 1L), "", fixed = TRUE)[[1]]
@@ -761,6 +849,9 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
           if (cc$n_mismatch > 0) jmsg <- sprintf(
             "%s; %d mismatches resolved by coverage (%d IUPAC, %d N)",
             jmsg, cc$n_mismatch, cc$n_iupac, cc$n_n)
+        } else if (!alignable) {
+          jmsg <- sprintf("%s; overlap not base-alignable (%d indel bp), A's bases kept",
+                          jmsg, ov$n_indel)
         }
         junctions <- c(junctions, jmsg)
       } else if (ref_overlap) {
@@ -1031,17 +1122,21 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
   # circularizes only when the user asserts circular. The `circular` arg still
   # forces rotation below.
   has_ref <- !is.null(ref_seq) && length(ref_seq) == 1 && !is.na(ref_seq) && nzchar(ref_seq)
-  cz <- if (isTRUE(circular) || has_ref) {
-    circularize_sequence(seq, depth, gc, errors, min_overlap = 50L)
-  } else {
-    list(circular = FALSE, seq = seq, depth = depth, gc = gc,
-         errors = errors, overlap_len = 0L, identity = NA_real_)
-  }
-  is_circular <- isTRUE(cz$circular) || isTRUE(circular)
-  if (isTRUE(cz$circular)) {
+  # ALWAYS run the detection, even when the gate below will not act on it. The
+  # gate decides whether to TRIM; leaving the detection off as well meant an
+  # unticked Circular box silently emitted the origin region twice.
+  cz <- circularize_sequence(seq, depth, gc, errors, min_overlap = 50L)
+  may_trim <- isTRUE(circular) || has_ref
+  is_circular <- (isTRUE(cz$circular) && may_trim) || isTRUE(circular)
+  if (isTRUE(cz$circular) && may_trim) {
     seq <- cz$seq; depth <- cz$depth; gc <- cz$gc; errors <- cz$errors
     circ_note <- c(circ_note, sprintf(
       "circular: trimmed %d bp redundant end overlap (%.0f%% identity)",
+      cz$overlap_len, 100 * cz$identity))
+  } else if (isTRUE(cz$circular)) {
+    circ_note <- c(circ_note, sprintf(
+      paste("WARNING: %d bp redundant end overlap detected (%.0f%% identity) but NOT",
+            "trimmed because Circular is unchecked; the origin region is present twice"),
       cz$overlap_len, 100 * cz$identity))
   }
   if (is_circular && !is.null(ref_seq) && !is.na(ref_seq) && nzchar(ref_seq)) {
@@ -1270,11 +1365,15 @@ plot_scaffold_mapping <- function(layout, ref_len, scaffold_len = NULL) {
   inc <- if ("include" %in% names(layout)) layout$include else !is.na(layout$ref_start)
   shown <- layout[inc & !is.na(layout$ref_start), , drop = FALSE]
   excluded <- layout[!inc, , drop = FALSE]
+  # Included but with no reference placement: it goes into Path 0 yet has no bar
+  # to draw, so without its own note it would be absent from the plot entirely.
+  unplaced <- layout[inc & is.na(layout$ref_start), , drop = FALSE]
   ref_len <- max(ref_len, 1, shown$ref_end, na.rm = TRUE)
 
-  # Extra top margin reserves a line for the excluded-scaffold note so it never
-  # collides with the x-axis title at the bottom.
-  top_mar <- if (nrow(excluded) > 0) 4 else 2.5
+  # Extra top margin reserves a line per note so they never collide with the
+  # x-axis title at the bottom.
+  n_notes <- (nrow(excluded) > 0) + (nrow(unplaced) > 0)
+  top_mar <- if (n_notes > 0) 2.5 + 1.5 * n_notes else 2.5
   op <- graphics::par(mar = c(4.5, 1, top_mar, 1))
   on.exit(graphics::par(op), add = TRUE)
   n <- max(nrow(shown), 1)
@@ -1309,6 +1408,13 @@ plot_scaffold_mapping <- function(layout, ref_len, scaffold_len = NULL) {
     }
     graphics::mtext(paste("Excluded from Path 0:", lab),
                     side = 3, line = 0.3, col = "#d9534f", cex = 0.85)
+  }
+  if (nrow(unplaced) > 0) {
+    graphics::mtext(
+      paste("Included but unplaced (appended with N gap):",
+            paste(unplaced$scaffold, collapse = ", ")),
+      side = 3, line = if (nrow(excluded) > 0) 1.5 else 0.3,
+      col = "#e08a00", cex = 0.85)
   }
   invisible(NULL)
 }
