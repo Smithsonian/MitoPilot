@@ -235,11 +235,12 @@ annotate_mitofinder <- function(
       pos1 = pmin(start, end),
       pos2 = pmax(start, end),
       direction = ifelse(strand == "-", "-", "+"),
-      # MitoFinder GFFs often omit the anticodon attribute; use the "NNN"
-      # unresolved sentinel the other tools and the exporter expect.
-      anticodon = dplyr::if_else(
-        type == "tRNA", dplyr::coalesce(toupper(anticodon), "NNN"), toupper(anticodon)
-      )
+      # Left NA when the GFF omits the attribute, NOT coerced to the "NNN"
+      # sentinel: "NNN" means a tool tried to call the anticodon and failed, and
+      # validate_mito_core() warns on it. MitoFinder transfers annotations from a
+      # reference and never reports an anticodon at all, so stamping NNN here
+      # would add a spurious low-confidence warning to every gap-filled tRNA.
+      anticodon = toupper(anticodon)
     ) |>
     dplyr::filter(!is.na(gene)) |>
     dplyr::mutate(

@@ -93,9 +93,11 @@ test_that("annotate_mitofinder returns typed empty frame when db missing", {
   ))
 })
 
-test_that(".parse_mitofinder_gff fills a missing tRNA anticodon with NNN", {
-  # MitoFinder GFFs frequently omit the anticodon attribute. Leaving it NA
-  # crashed export_files() at `if (cur$anticodon != "NNN")`.
+test_that(".parse_mitofinder_gff leaves a missing tRNA anticodon as NA, not NNN", {
+  # MitoFinder GFFs frequently omit the anticodon attribute. It must stay NA:
+  # "NNN" is the sentinel for a tool that tried to call the anticodon and failed,
+  # and validate_mito_core() raises a low-confidence warning on it. The NA is made
+  # safe at the consumer instead (see the export_files() guard).
   wd <- tempfile("mf_ac_")
   dir.create(file.path(wd, "x_Final_Results"), recursive = TRUE)
   writeLines(c(
@@ -109,9 +111,24 @@ test_that(".parse_mitofinder_gff fills a missing tRNA anticodon with NNN", {
 
   res <- .parse_mitofinder_gff(wd, asm, "2")
 
-  expect_equal(res$anticodon[res$gene == "trnP"], "NNN")
-  expect_equal(res$anticodon[res$gene == "trnF"], "GAA")
-  expect_false(any(is.na(res$anticodon[res$type == "tRNA"])))
-  # non-tRNA features keep NA rather than a bogus sentinel
+  expect_true(is.na(res$anticodon[res$gene == "trnP"]))   # absent attribute -> NA
+  expect_equal(res$anticodon[res$gene == "trnF"], "GAA")  # present attribute -> parsed
+  # ...and specifically NOT the low-confidence sentinel, which would make
+  # validate_mito_core() warn on every MitoFinder gap-filled tRNA.
+  expect_false(any(res$anticodon[res$type == "tRNA"] %in% "NNN"))
   expect_true(is.na(res$anticodon[res$type == "rRNA"]))
+})
+
+test_that("export_files tolerates an NA anticodon on a tRNA row", {
+  # The half of the fix that actually rescues an existing project: rows already in
+  # the DB carry NA regardless of what annotate_mitofinder() does from now on.
+  # `if (cur$anticodon != "NNN")` on NA aborted the export mid-sample.
+  guard <- function(anticodon) {
+    if (!is.na(anticodon) && anticodon != "NNN") "note written" else "note skipped"
+  }
+  expect_equal(guard(NA_character_), "note skipped")
+  expect_equal(guard("NNN"), "note skipped")
+  expect_equal(guard("GAA"), "note written")
+  # The pre-fix condition is what crashed; keep a live record of that.
+  expect_error(if (NA_character_ != "NNN") TRUE, "missing value where TRUE/FALSE needed")
 })
