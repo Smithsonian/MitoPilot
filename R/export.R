@@ -845,7 +845,7 @@ export_files <- function(
           cat(file = tbl_fn, sep = "\n", append = TRUE)
         paste("\t\t\tproduct\t", cur$product) |>
           cat(file = tbl_fn, sep = "\n", append = TRUE)
-        if (cur$anticodon != "NNN") {
+        if (!is.na(cur$anticodon) && cur$anticodon != "NNN") {
           paste("\t\t\tnote\t", paste0("anticodon:", tolower(cur$anticodon))) |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
         }

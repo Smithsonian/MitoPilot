@@ -235,6 +235,13 @@ annotate_mitofinder <- function(
       pos1 = pmin(start, end),
       pos2 = pmax(start, end),
       direction = ifelse(strand == "-", "-", "+"),
+      # Left NA when the GFF omits the attribute, NOT coerced to the "NNN"
+      # sentinel: "NNN" means a tool tried to call the anticodon and failed, and
+      # validate_mito_core() warns on it. MitoFinder's GFF carries no anticodon
+      # attribute, so stamping NNN here would add a spurious low-confidence
+      # warning to every gap-filled tRNA. (Its tRNA finder does determine one
+      # internally; MitoFinder just does not write it out.) NA is made safe at
+      # the consumer instead - see the guard in export_files().
       anticodon = toupper(anticodon)
     ) |>
     dplyr::filter(!is.na(gene)) |>
