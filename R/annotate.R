@@ -8,7 +8,9 @@
 #' @param genetic_code Genetic code to use for annotation (default: 2).
 #' @param ref_db Reference Mitos2 database to use for annotation (default:
 #'   "Chordata").
-#' @param ref_dir Path to the Mitos2 reference database.
+#' @param ref_dir Unused, retained for backwards compatibility. MITOS2 is always
+#'   run with `--refdir .`, so the `ref_db` directory must be staged in the
+#'   working directory.
 #' @param use_mitos logical; whether to run MITOS2 annotation (default: TRUE).
 #' @param mitos_opts Additional command line options for MITOS2.
 #' @param mitos_condaenv Conda environment to run MITOS2 (default: "mitos").
@@ -49,7 +51,7 @@ annotate <- function(
   cpus = 4,
   genetic_code = "2",
   ref_db = "Chordata",
-  ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
+  ref_dir = NULL,
   use_mitos = TRUE,
   mitos_opts = "--intron 0 --oril 0",
   mitos_condaenv = "mitos",
@@ -75,6 +77,11 @@ annotate <- function(
   ignore_scaffolds = NULL,
   out_dir = NULL
 ) {
+  # Fail before the tRNA tools run, not after MITOS2 aborts on a bad ref DB.
+  if (isTRUE(use_mitos)) {
+    check_mitos_ref_db(ref_db)
+  }
+
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
   # Drop scaffolds flagged ignore=1 in the assemblies table. Scaffold IDs in the

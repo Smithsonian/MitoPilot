@@ -41,7 +41,11 @@ A list with two elements:
       `start_offset`, `stop_offset`, `start_flag`, `stop_flag`,
       `identity_flag`, `issue`.}
     \item{alignments}{A named list (by gene) of clustering-ordered aligned
-      `AAStringSet` objects, for every gene that has a flagged sample.}
+      `AAStringSet` objects, for every gene that has a flagged sample (plus any
+      explicitly requested via `genes`, even if their last flag was cleared).}
+    \item{samples}{A named list (by gene) of tibbles listing every unit in the
+      gene's alignment (`ID`, `label`, `path`, `scaffold`), flagged or not, so
+      the review UI can edit any sample of the gene.}
   }
 }
 \description{

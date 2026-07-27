@@ -1,3 +1,41 @@
+#' Validate a MITOS2 reference database directory
+#'
+#' MITOS2 needs a real reference directory: `auxinfo.json` (per-feature length
+#' and start/stop statistics) plus the `ncRNA/` covariance models. The bundled
+#' Metazoa_RefSeq231 / Metazoa_RefSeq235 tarballs are curation BLAST databases
+#' (featureProt/featureNuc only) and have neither, so MITOS2 aborts on them.
+#'
+#' @param ref_db name of the reference database directory.
+#' @param refdir directory containing `ref_db` (MITOS2 is always run with
+#'   `--refdir .`, so this is the working directory).
+#'
+#' @noRd
+check_mitos_ref_db <- function(ref_db, refdir = ".") {
+  db_path <- file.path(refdir, ref_db)
+  if (!dir.exists(db_path)) {
+    stop(
+      "MITOS2 reference database '", ref_db, "' not found in '",
+      normalizePath(refdir, mustWork = FALSE), "'.",
+      call. = FALSE
+    )
+  }
+  missing <- c(
+    if (!file.exists(file.path(db_path, "auxinfo.json"))) "auxinfo.json",
+    if (!dir.exists(file.path(db_path, "ncRNA"))) "ncRNA/"
+  )
+  if (length(missing) > 0) {
+    stop(
+      "'", ref_db, "' is not a MITOS2 reference database (missing ",
+      paste(missing, collapse = ", "), "). Curation-only databases such as ",
+      "Metazoa_RefSeq231 and Metazoa_RefSeq235 (and custom databases built ",
+      "from them) cannot be used for annotation. Set the annotate ref_db to ",
+      "Metazoa_RefSeq89 or Chordata.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
 #' Annotate mitochondrial genomes using MITOS2
 #'
 #' @param assembly a DNAString object
@@ -23,6 +61,7 @@ annotate_mitos2 <- function(
     out = NULL,
     condaenv = "mitos",
     rescue_no_trna = TRUE) {
+  check_mitos_ref_db(ref_db)
   genetic_code <- as.character(genetic_code)
   # write MITOS2 output into the local work dir so it is retained for inspection
   out <- out %||% "MITOS2_temp"
