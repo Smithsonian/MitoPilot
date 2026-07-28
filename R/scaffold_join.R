@@ -387,10 +387,22 @@ collapse_scaffold_blocks <- function(rows) {
 
 #' Per-reference-position scaffold bases for ONE reference window (lazy)
 #'
-#' For the base-pair zoom: aligns just the small scaffold sub-region that maps to
-#' `[win_start, win_end]` (estimated from the minimap2 colinear offset, padded)
-#' against the reference window. This keeps each alignment tiny and works for
-#' divergent references (where minimap2 `-c` CIGAR is unreliable).
+#' For the base-pair zoom: aligns the scaffold sub-region that maps to
+#' `[win_start, win_end]` against the reference window. Keeping each alignment
+#' small works for divergent references (where minimap2 `-c` CIGAR is unreliable).
+#'
+#' The sub-region is estimated from the cached colinear offset, which is anchored
+#' on ONE block (the lowest `ref_start`), so its error grows with distance from
+#' that anchor and with every indel in between - the reason scaffolds that show a
+#' bar in the overview plot could render blank here. Three defences:
+#'
+#' 1. the sub-region widens in proportion to that distance;
+#' 2. a candidate alignment is scored against the reference window and rejected
+#'    below `min_identity`, so a drifted estimate yields an honest blank instead
+#'    of confidently wrong bases;
+#' 3. when the estimate covers little of the window (or there is no offset to
+#'    extrapolate from at all) the whole oriented scaffold is realigned to the
+#'    window and the better-covering result wins.
 #'
 #' @param ref_seq reference sequence.
 #' @param layout_inc included layout rows (need `scaffold, rc, ref_start, ref_end,
@@ -398,42 +410,130 @@ collapse_scaffold_blocks <- function(rows) {
 #' @param oriented_seqs named character vector of ORIENTED scaffold sequences.
 #' @param win_start,win_end 1-based reference window.
 #' @param pad bp of slack around the estimated scaffold sub-region.
+#' @param min_identity minimum identity to the reference window for a candidate
+#'   alignment to be drawn at all.
+#' @param max_retry_len longest scaffold to attempt the whole-scaffold retry on
+#'   (bounds the O(n*m) DP; mitogenome scaffolds are far below it).
 #' @return named list (by scaffold id) of reference-position -> base vectors,
-#'   restricted to the window.
+#'   restricted to the window. Scaffolds with no acceptable alignment are absent.
 #' @noRd
 zoom_window_base_maps <- function(ref_seq, layout_inc, oriented_seqs,
-                                  win_start, win_end, pad = 100L) {
+                                  win_start, win_end, pad = 100L,
+                                  min_identity = 0.6, max_retry_len = 50000L) {
   ws <- max(1L, as.integer(win_start)); we <- min(nchar(ref_seq), as.integer(win_end))
   rsub_s <- max(1L, ws - pad); rsub_e <- min(nchar(ref_seq), we + pad)
   ref_sub <- substring(ref_seq, rsub_s, rsub_e)
+  win_key <- as.character(ws:we)
+  win_ref <- strsplit(substring(ref_seq, ws, we), "", fixed = TRUE)[[1]]
   mx <- pwalign::nucleotideSubstitutionMatrix(match = 1, mismatch = -1)
-  out <- list()
-  for (i in seq_len(nrow(layout_inc))) {
-    s <- as.character(layout_inc$scaffold[i])
-    rstart <- layout_inc$ref_start[i]; rend <- layout_inc$ref_end[i]
-    qstart <- layout_inc$qstart[i]
-    if (is.na(rstart) || is.na(qstart) || rend < ws || rstart > we) next
-    oseq <- oriented_seqs[[s]]
-    if (is.null(oseq)) next
-    # colinear estimate of scaffold coords for [ws, we] (PAF coords are 0-based)
-    qs_est <- qstart + ((ws - 1L) - rstart)
-    qe_est <- qstart + ((we - 1L) - rstart)
-    sub_s <- max(1L, qs_est + 1L - pad); sub_e <- min(nchar(oseq), qe_est + 1L + pad)
-    if (sub_e <= sub_s) next
-    scaf_sub <- substring(oseq, sub_s, sub_e)
+
+  # Local (not global-local) alignment: the scaffold sub-region is deliberately
+  # padded wider than the reference window, and a global pattern would be forced
+  # to cram that overhang in, wrecking the placement it is meant to refine.
+  align_bm <- function(scaf_sub) {
+    if (!nzchar(scaf_sub)) return(NULL)
     aln <- tryCatch(
       pwalign::pairwiseAlignment(
         pattern = Biostrings::DNAString(scaf_sub),
         subject = Biostrings::DNAString(ref_sub),
         substitutionMatrix = mx, gapOpening = 5, gapExtension = 2,
-        type = "global-local"),
+        type = "local"),
       error = function(e) NULL)
-    if (is.null(aln)) next
+    if (is.null(aln)) return(NULL)
     ref_off <- rsub_s + BiocGenerics::start(pwalign::subject(aln)@range) - 1L
     bm <- build_ref_base_map(as.character(pwalign::alignedPattern(aln)),
                              as.character(pwalign::alignedSubject(aln)), ref_off)
-    out[[s]] <- bm[as.character(ws:we)]
+    bm[win_key]
   }
+  # Window positions covered, and identity to the reference over them. Any
+  # alignment returns bases; only this says whether they belong here.
+  score_bm <- function(bm) {
+    if (is.null(bm)) return(list(n = 0L, ident = NA_real_))
+    idx <- which(!is.na(bm))
+    if (length(idx) == 0L) return(list(n = 0L, ident = NA_real_))
+    keep <- idx[bm[idx] != "-"]
+    list(n = length(idx),
+         ident = if (length(keep)) mean(toupper(bm[keep]) == toupper(win_ref[keep])) else 0)
+  }
+
+  out <- list()
+  for (i in seq_len(nrow(layout_inc))) {
+    s <- as.character(layout_inc$scaffold[i])
+    rstart <- layout_inc$ref_start[i]; rend <- layout_inc$ref_end[i]
+    qstart <- layout_inc$qstart[i]
+    if (is.na(rstart) || is.na(rend) || rend < ws || rstart > we) next
+    oseq <- oriented_seqs[[s]]
+    if (is.null(oseq)) next
+
+    best <- NULL; best_sc <- list(n = 0L, ident = NA_real_)
+    take <- function(bm) {
+      sc <- score_bm(bm)
+      if (!is.na(sc$ident) && sc$ident >= min_identity && sc$n > best_sc$n) {
+        best <<- bm; best_sc <<- sc
+      }
+    }
+    # 1. colinear estimate of scaffold coords for [ws, we] (PAF coords 0-based),
+    #    padded in proportion to how far the window sits from the anchor block.
+    if (!is.na(qstart)) {
+      drift <- abs((ws - 1L) - rstart)
+      pad_i <- pad + min(2000L, as.integer(ceiling(0.15 * drift)))
+      qs_est <- qstart + ((ws - 1L) - rstart)
+      qe_est <- qstart + ((we - 1L) - rstart)
+      sub_s <- max(1L, qs_est + 1L - pad_i)
+      sub_e <- min(nchar(oseq), qe_est + 1L + pad_i)
+      if (sub_e > sub_s) take(align_bm(substring(oseq, sub_s, sub_e)))
+    }
+    # 2. fall back to the whole scaffold when the estimate covered under half the
+    #    window, ran off the scaffold end, or never existed (qstart NA).
+    if (best_sc$n < length(win_key) %/% 2L && nchar(oseq) <= max_retry_len) {
+      take(align_bm(oseq))
+    }
+    if (!is.null(best)) out[[s]] <- best
+  }
+  out
+}
+
+#' Flag reference extents that are ballooned origin-wrap artifacts
+#'
+#' A scaffold mapping near BOTH ends of a linear reference unions two distant
+#' blocks into a single extent spanning nearly the whole reference. That extent is
+#' an artifact rather than a placement, so it must neither drive a junction gap
+#' nor act as a containment container.
+#'
+#' The tell is a near-full-reference span carrying far fewer matched bases per
+#' reference bp than the sample's other scaffolds. The comparison has to be
+#' RELATIVE: minimap2 `nmatch` density falls with reference divergence, so an
+#' absolute floor (the 0.5 this replaces) is cleared by every scaffold against a
+#' conspecific reference and by none against an 83%-identity cross-species one -
+#' switching the guard off exactly where fragmented assemblies need it, and
+#' switching it on for genuine dense containers when the reference is close.
+#'
+#' @param span per-scaffold reference extent widths.
+#' @param density per-scaffold matched bases per reference bp (`nmatch / span`).
+#' @param ref_len reference length; falls back to the widest `ref_end` when unknown.
+#' @param ref_end per-scaffold extent ends, for that fallback.
+#' @param span_frac fraction of the reference a span must reach to be suspect.
+#' @param density_frac fraction of the cohort's best density below which a
+#'   near-full-reference span is judged an artifact.
+#' @return logical vector, one entry per scaffold.
+#' @noRd
+ballooned_extent <- function(span, density, ref_len = NA_integer_, ref_end = NULL,
+                             span_frac = 0.9, density_frac = 0.25) {
+  n <- length(span)
+  if (n == 0L) return(logical(0))
+  ref_len <- suppressWarnings(as.numeric(ref_len)[1])
+  if (!isTRUE(is.finite(ref_len)) || ref_len <= 0) {
+    ref_len <- if (!is.null(ref_end) && any(is.finite(ref_end))) {
+      max(ref_end[is.finite(ref_end)])
+    } else NA_real_
+  }
+  if (!isTRUE(is.finite(ref_len)) || ref_len <= 0) return(rep(FALSE, n))
+  fin <- is.finite(density)
+  best <- if (any(fin)) max(density[fin]) else NA_real_
+  if (!isTRUE(is.finite(best)) || best <= 0) return(rep(FALSE, n))
+  out <- is.finite(span) & span >= span_frac * ref_len &
+    fin & density < density_frac * best
+  out[is.na(out)] <- FALSE
   out
 }
 
@@ -451,13 +551,13 @@ zoom_window_base_maps <- function(ref_seq, layout_inc, oriented_seqs,
 #'   and, ideally, `nmatch`), already restricted to well-mapped scaffolds.
 #' @param min_cover fraction of the smaller scaffold's reference extent that must
 #'   lie within the larger's extent to call it subsumed.
-#' @param min_density minimum matched-bases-per-reference-bp a scaffold must have
-#'   to act as a container; blocks a sparse origin-spanning/ballooned extent from
-#'   swallowing everything (see `collapse_scaffold_blocks`).
+#' @param ref_len reference length, used to recognise a ballooned (origin-wrapping)
+#'   extent that must not act as a container. Defaults to the widest observed
+#'   `ref_end` when not supplied.
 #' @return character vector (length `nrow(inc)`): `NA` for kept scaffolds, else a
 #'   `"subsumed by <container>"` reason string.
 #' @noRd
-detect_subsumed <- function(inc, min_cover = 0.90, min_density = 0.50) {
+detect_subsumed <- function(inc, min_cover = 0.90, ref_len = NA_integer_) {
   n <- nrow(inc)
   reason <- rep(NA_character_, n)
   if (n < 2) return(reason)
@@ -465,6 +565,7 @@ detect_subsumed <- function(inc, min_cover = 0.90, min_density = 0.50) {
   span <- pmax(re - rs, 1L)
   nm <- if (!is.null(inc$nmatch)) inc$nmatch else rep(NA_real_, n)
   density <- ifelse(is.na(nm), 1, nm / span)
+  ballooned <- ballooned_extent(span, density, ref_len, re)
   qcov <- if (!is.null(inc$qcov)) inc$qcov else rep(NA_real_, n)
   for (b in seq_len(n)) {
     if (is.na(rs[b]) || is.na(re[b])) next
@@ -476,9 +577,9 @@ detect_subsumed <- function(inc, min_cover = 0.90, min_density = 0.50) {
     hits <- integer(0)
     for (a in seq_len(n)) {
       if (a == b || is.na(rs[a]) || is.na(re[a])) next
-      # A must be the strictly larger extent (the container) and dense enough to
-      # be a trustworthy placement.
-      if (span[a] <= span[b] || density[a] < min_density) next
+      # A must be the strictly larger extent (the container) and not a ballooned
+      # origin-wrap, whose extent is an artifact rather than a real placement.
+      if (span[a] <= span[b] || isTRUE(ballooned[a])) next
       ov <- min(re[a], re[b]) - max(rs[a], rs[b])
       if (ov > 0 && ov / span[b] >= min_cover) hits <- c(hits, a)
     }
@@ -538,7 +639,7 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
 
   # Move contained/duplicate scaffolds out of Path 0 (see detect_subsumed): they
   # would otherwise force a huge negative gap that trims real bases.
-  sub_reason <- detect_subsumed(inc)
+  sub_reason <- detect_subsumed(inc, ref_len = ref_len)
   subsumed <- !is.na(sub_reason)
   if (any(subsumed)) {
     exc <- rbind(exc, inc[subsumed, , drop = FALSE])
@@ -550,25 +651,22 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
   # a ballooned extent spanning nearly the whole reference; its ref_end is then not
   # a real right boundary, and deriving the next scaffold's gap from it manufactures
   # a genome-scale negative gap that over-trims (or drops) a real scaffold. Skip
-  # such a predecessor's junction. Gate on LOW density so a genuine dense
-  # full-length contig is not misread as a wrap (a real ballooned wrap unions
-  # disjoint blocks and so is sparse: nmatch/span < min_density).
+  # such a predecessor's junction. See ballooned_extent() for why the sparseness
+  # test is relative to the cohort rather than an absolute density floor.
   #
   # Use 0 rather than NA for the skipped junction. NA means "unknown", which
   # switches join_scaffolds' do_probe off and fabricates a blind N spacer over
   # what is usually a real overlap; 0 keeps the probe on, so refine_overlap can
   # still confirm and merge the overlap, and degrades to a butt join if it cannot.
-  wrap_thresh <- if (is.finite(ref_len) && ref_len > 0) 0.9 * ref_len else Inf
-  min_density <- 0.5
+  inc_span <- inc$ref_end - inc$ref_start
+  inc_density <- ifelse(is.na(inc$nmatch) | is.na(inc_span) | inc_span <= 0,
+                        NA_real_, inc$nmatch / inc_span)
+  inc_ballooned <- ballooned_extent(inc_span, inc_density, ref_len, inc$ref_end)
   gap_before <- rep(NA_real_, nrow(inc))
   if (nrow(inc) >= 2) {
     for (i in 2:nrow(inc)) {
-      prev_span <- inc$ref_end[i - 1] - inc$ref_start[i - 1]
-      prev_density <- if (!is.na(prev_span) && prev_span > 0)
-        inc$nmatch[i - 1] / prev_span else NA_real_
-      ballooned <- !is.na(prev_span) && prev_span >= wrap_thresh &&
-        !is.na(prev_density) && prev_density < min_density
-      gap_before[i] <- if (ballooned) 0 else inc$ref_start[i] - inc$ref_end[i - 1]
+      gap_before[i] <- if (isTRUE(inc_ballooned[i - 1])) 0 else
+        inc$ref_start[i] - inc$ref_end[i - 1]
     }
   }
 
@@ -593,6 +691,9 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
     ref_start = c(inc$ref_start, exc$ref_start),
     ref_end = c(inc$ref_end, exc$ref_end),
     qstart = c(qstart_col$inc, qstart_col$exc),
+    # Carried so the mapping plot can tell a dense placement from a union extent
+    # stitched across blocks.
+    nmatch = c(inc$nmatch, exc$nmatch),
     stringsAsFactors = FALSE
   )
   lay$rc[is.na(lay$rc)] <- FALSE
@@ -600,7 +701,7 @@ derive_scaffold_layout <- function(mappings, ref_len = NA_integer_, circular = F
   # scaffold lands where it belongs rather than at the end. Unplaced rows sort last.
   lay$order <- rank(ifelse(is.na(lay$ref_start), Inf, lay$ref_start), ties.method = "first")
   lay[, c("scaffold", "order", "rc", "gap_before", "mapped", "include",
-          "exclude_reason", "qcov", "ref_start", "ref_end", "qstart")]
+          "exclude_reason", "qcov", "ref_start", "ref_end", "qstart", "nmatch")]
 }
 
 #' Reverse-complement a DNA string
@@ -790,6 +891,11 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
   prev_oriented <- NULL
   prev_scaf <- NULL
   prev_depth <- NULL
+  # Layout index of the last scaffold actually written. Not always i-1: a scaffold
+  # fully consumed by overlap trimming is dropped below, and its precomputed
+  # gap_before must not be used to place the next one.
+  prev_idx <- NA_integer_
+  have_ref <- all(c("ref_start", "ref_end") %in% names(layout))
 
   for (i in seq_len(nrow(layout))) {
     s <- layout$scaffold[i]
@@ -799,8 +905,19 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
 
     trim <- 0L
     consensus <- NULL
-    if (i > 1) {
+    # Gate on a surviving predecessor, not on i > 1: with the first scaffold
+    # dropped there is nothing to junction against.
+    if (!is.na(prev_idx)) {
       gb <- layout$gap_before[i]
+      # gap_before was precomputed against layout row i-1. When that row was
+      # dropped at runtime, re-measure against the scaffold actually present.
+      # Only on a drop: the precomputed value carries the ballooned-predecessor
+      # override (0, not the raw reference difference), which a blanket
+      # recompute would undo.
+      if (have_ref && prev_idx != (i - 1L) &&
+          !is.na(layout$ref_start[i]) && !is.na(layout$ref_end[prev_idx])) {
+        gb <- layout$ref_start[i] - layout$ref_end[prev_idx]
+      }
       # Structured junction descriptor (type + measured overlap quality), kept
       # alongside the prose `junctions` for the join-quality summary.
       jtype <- NA_character_; j_ov_len <- 0L; j_ident <- NA_real_
@@ -916,6 +1033,7 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
     src_pos <- c(src_pos, trim + seq_len(n))
     prev_oriented <- seq
     prev_scaf <- s
+    prev_idx <- i
     prev_depth <- if (is.null(dep)) NULL else if (trim > 0) dep[-(seq_len(trim))] else dep
   }
 
@@ -1370,9 +1488,19 @@ plot_scaffold_mapping <- function(layout, ref_len, scaffold_len = NULL) {
   unplaced <- layout[inc & is.na(layout$ref_start), , drop = FALSE]
   ref_len <- max(ref_len, 1, shown$ref_end, na.rm = TRUE)
 
+  # A bar spans the UNION extent of a scaffold's alignment blocks, so a sparse
+  # placement is drawn solid over reference it does not actually cover - which is
+  # what makes the base-pair zoom look like it disagrees with this plot. Hatch
+  # those bars instead of filling them. Sparseness is judged relative to the
+  # cohort, since match density falls with reference divergence.
+  bar_span <- pmax(shown$ref_end - shown$ref_start, 1)
+  bar_density <- if (!is.null(shown$nmatch)) shown$nmatch / bar_span else rep(NA_real_, nrow(shown))
+  med_density <- suppressWarnings(stats::median(bar_density[is.finite(bar_density)]))
+  sparse <- is.finite(bar_density) & is.finite(med_density) & bar_density < 0.5 * med_density
+
   # Extra top margin reserves a line per note so they never collide with the
   # x-axis title at the bottom.
-  n_notes <- (nrow(excluded) > 0) + (nrow(unplaced) > 0)
+  n_notes <- (nrow(excluded) > 0) + (nrow(unplaced) > 0) + any(sparse)
   top_mar <- if (n_notes > 0) 2.5 + 1.5 * n_notes else 2.5
   op <- graphics::par(mar = c(4.5, 1, top_mar, 1))
   on.exit(graphics::par(op), add = TRUE)
@@ -1387,7 +1515,12 @@ plot_scaffold_mapping <- function(layout, ref_len, scaffold_len = NULL) {
     rc <- isTRUE(shown$rc[i])
     col <- if (rc) "#d9534f" else "#4a90d9"
     x0 <- shown$ref_start[i]; x1 <- shown$ref_end[i]
-    graphics::rect(x0, y - 0.25, x1, y + 0.25, col = col, border = "black")
+    if (isTRUE(sparse[i])) {
+      graphics::rect(x0, y - 0.25, x1, y + 0.25, col = col, border = "black",
+                     density = 12, angle = 45)
+    } else {
+      graphics::rect(x0, y - 0.25, x1, y + 0.25, col = col, border = "black")
+    }
     # orientation arrow along the block
     ax <- if (rc) c(x1, x0) else c(x0, x1)
     graphics::arrows(ax[1], y, ax[2], y, length = 0.08, col = "white", lwd = 2)
@@ -1398,23 +1531,28 @@ plot_scaffold_mapping <- function(layout, ref_len, scaffold_len = NULL) {
     }
     graphics::text(mean(c(x0, x1)), y + 0.38, labels = lab, cex = 0.8)
   }
+  # Notes stack upward from just under the title, away from the x-axis labels.
+  note_line <- 0.3
+  add_note <- function(txt, col) {
+    graphics::mtext(txt, side = 3, line = note_line, col = col, cex = 0.85)
+    note_line <<- note_line + 1.2
+  }
   if (nrow(excluded) > 0) {
-    # Place under the title (top), away from the x-axis labels.
     lab <- if (!is.null(excluded$exclude_reason)) {
       paste(mapply(function(s, r) if (is.na(r)) s else paste0(s, " (", r, ")"),
                    excluded$scaffold, excluded$exclude_reason), collapse = ", ")
     } else {
       paste(excluded$scaffold, collapse = ", ")
     }
-    graphics::mtext(paste("Excluded from Path 0:", lab),
-                    side = 3, line = 0.3, col = "#d9534f", cex = 0.85)
+    add_note(paste("Excluded from Path 0:", lab), "#d9534f")
   }
   if (nrow(unplaced) > 0) {
-    graphics::mtext(
-      paste("Included but unplaced (appended with N gap):",
-            paste(unplaced$scaffold, collapse = ", ")),
-      side = 3, line = if (nrow(excluded) > 0) 1.5 else 0.3,
-      col = "#e08a00", cex = 0.85)
+    add_note(paste("Included but unplaced (appended with N gap):",
+                   paste(unplaced$scaffold, collapse = ", ")), "#e08a00")
+  }
+  if (any(sparse)) {
+    add_note(paste("Hatched = sparse alignment; the bar is the union extent of",
+                   "several blocks, not continuous coverage"), "#777777")
   }
   invisible(NULL)
 }
@@ -1545,6 +1683,11 @@ plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_
       if (any(mm)) cell(which(mm), y, NA, border = "#C0392B", lwd = 1.6)
       graphics::text(idx, y, sc[idx], col = "#222222", cex = 1.15,
                      font = 2, family = "mono")
+    } else {
+      # An empty row otherwise reads as missing data. Say which it is: the
+      # scaffold has no alignment the aligner would stand behind here.
+      graphics::text(mean(x), y, "(no alignment in this window)",
+                     col = "#999999", cex = 0.8)
     }
     graphics::mtext(paste("scaffold", s), side = 2, at = y, las = 1,
                     line = 0.4, cex = 0.8)

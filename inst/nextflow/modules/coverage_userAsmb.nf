@@ -6,7 +6,8 @@ process coverage_userAsmb {
 
     errorStrategy 'ignore'
     cpus {params.coverage.cpus}
-    memory = params.coverage.memory ?: null
+    // GB from config; a bare number would be read as BYTES.
+    memory { (params.coverage.memory instanceof Number) ? params.coverage.memory.GB * task.attempt : null }
     clusterOptions {
         def opts = [
             (params.coverage.executor == 'sge') ? '-S /bin/bash' : '',
@@ -60,7 +61,8 @@ process coverage_userAsmb_noReads {
 
     errorStrategy 'ignore'
     cpus {params.coverage.cpus}
-    memory = params.coverage.memory ?: null
+    // GB from config; a bare number would be read as BYTES.
+    memory { (params.coverage.memory instanceof Number) ? params.coverage.memory.GB * task.attempt : null }
     clusterOptions {
         def opts = [
             (params.coverage.executor == 'sge') ? '-S /bin/bash' : '',

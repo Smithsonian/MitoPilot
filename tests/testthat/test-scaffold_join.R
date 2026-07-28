@@ -1074,3 +1074,110 @@ test_that("plot_scaffold_mapping still renders an included but unplaced scaffold
   grDevices::dev.off()
   expect_gt(file.info(pf)$size, 0)
 })
+
+# --- note.txt / Eu20-2-1 regression round ---
+
+test_that("Eu20-2-1: contained scaffold is excluded and the gap spans it", {
+  # Real scaffold_mappings rows for Eu20-2-1 vs JN713150.1 (14,251 bp, ~83%
+  # identity). Scaffold 4 is wholly inside scaffold 2's reference extent; the old
+  # absolute density floor (0.5) let it through because every scaffold's nmatch
+  # density against this divergent reference is 0.10-0.27, so scaffold 4 was
+  # instead consumed by a blind 6,303 bp trim and the NEXT junction measured its
+  # gap from the dropped scaffold: 3,844 Ns.
+  mappings <- data.frame(
+    scaffold  = c("3", "2", "4", "1"),
+    ref_start = c(4L, 5837L, 6167L, 12544L),
+    ref_end   = c(5851L, 12470L, 8700L, 14229L),
+    strand    = c("+", "+", "+", "-"),
+    nmatch    = c(937L, 678L, 455L, 453L),
+    qcov      = c(0.698, 0.960, 0.957, 0.797),
+    qstart    = c(2488L, 0L, 0L, 0L),
+    mapped    = c(TRUE, TRUE, TRUE, TRUE), stringsAsFactors = FALSE
+  )
+  lay <- derive_scaffold_layout(mappings, ref_len = 14251L)
+  expect_false(lay$include[lay$scaffold == "4"])
+  expect_match(lay$exclude_reason[lay$scaffold == "4"], "subsumed by scaffold 2")
+  # gap for scaffold 1 measured from scaffold 2 (12544 - 12470), not scaffold 4
+  expect_equal(lay$gap_before[lay$scaffold == "1"], 74)
+  expect_true(all(lay$include[lay$scaffold %in% c("3", "2", "1")]))
+})
+
+test_that("ballooned_extent is relative, not an absolute density floor", {
+  span    <- c(6633, 5847, 2533, 1685)
+  density <- c(0.102, 0.160, 0.180, 0.269)   # all below the old 0.5 floor
+  expect_false(any(ballooned_extent(span, density, ref_len = 14251)))
+  # a real origin-wrap: near-full-reference span, far sparser than its cohort
+  expect_true(ballooned_extent(c(14000, 2533), c(0.032, 0.180), ref_len = 14251)[1])
+  # with only two scaffolds a median-based test would call the denser one sparse
+  expect_false(any(ballooned_extent(c(2000, 300), c(0.90, 0.967), ref_len = 2000)))
+})
+
+test_that("join_scaffolds measures a junction from the surviving predecessor", {
+  set.seed(11)
+  base <- paste(sample(c("A", "C", "G", "T"), 3000, TRUE), collapse = "")
+  a <- substring(base, 1, 2400)
+  b <- substring(base, 2301, 2400)     # entirely A's tail: consumed by the trim
+  cc <- substring(base, 2501, 3000)
+  lay <- data.frame(
+    scaffold = c("A", "B", "C"), order = 1:3, rc = c(FALSE, FALSE, FALSE),
+    # gap_before for C was precomputed against B (2500 - 1200 = 1300); B is
+    # dropped at runtime, so the real gap is C against A (2500 - 2400 = 100).
+    gap_before = c(NA_real_, -1300, 1300),
+    include = c(TRUE, TRUE, TRUE),
+    ref_start = c(0L, 1100L, 2500L), ref_end = c(2400L, 1200L, 3000L),
+    stringsAsFactors = FALSE
+  )
+  res <- join_scaffolds(list(A = a, B = b, C = cc), lay)
+  expect_true(any(grepl("dropped as redundant", res$junctions)))
+  n_run <- max(nchar(unlist(regmatches(res$seq, gregexpr("N+", res$seq)))), 0)
+  expect_equal(n_run, 100L)
+})
+
+test_that("a ballooned predecessor still yields gap_before 0 with nothing dropped", {
+  # The runtime recompute must fire ONLY on a drop: the precomputed 0 encodes the
+  # ballooned-wrap override, and a blanket recompute would restore the genome-scale
+  # negative gap it exists to suppress.
+  set.seed(12)
+  a <- paste(sample(c("A", "C", "G", "T"), 600, TRUE), collapse = "")
+  b <- paste(sample(c("A", "C", "G", "T"), 600, TRUE), collapse = "")
+  lay <- data.frame(
+    scaffold = c("A", "B"), order = 1:2, rc = c(FALSE, FALSE),
+    gap_before = c(NA_real_, 0),
+    include = c(TRUE, TRUE),
+    ref_start = c(0L, 500L), ref_end = c(13000L, 14000L),
+    stringsAsFactors = FALSE
+  )
+  res <- join_scaffolds(list(A = a, B = b), lay)
+  # gb 0 -> butt join or confirmed overlap, never a 12,500 bp negative trim
+  expect_false(grepl("N", res$seq))
+  expect_gt(nchar(res$seq), 600L)
+})
+
+test_that("zoom base map survives indel drift from the anchor block", {
+  set.seed(42)
+  ref <- paste(sample(c("A", "C", "G", "T"), 6000, TRUE), collapse = "")
+  # 200 bp deletion at 1001-1200: every window past it is 200 bp off the
+  # single-anchor colinear estimate.
+  scaf <- paste0(substring(ref, 1, 1000), substring(ref, 1201))
+  lay <- data.frame(scaffold = "1", rc = FALSE, ref_start = 0L, ref_end = 5999L,
+                    qstart = 0L, stringsAsFactors = FALSE)
+  bm <- zoom_window_base_maps(ref, lay, list("1" = scaf), 4001L, 4060L)
+  expect_true(!is.null(bm[["1"]]))
+  truth <- strsplit(substring(ref, 4001, 4060), "", fixed = TRUE)[[1]]
+  expect_equal(sum(bm[["1"]] == truth, na.rm = TRUE), 60L)
+})
+
+test_that("zoom base map works with no colinear offset and refuses a false one", {
+  set.seed(43)
+  ref <- paste(sample(c("A", "C", "G", "T"), 4000, TRUE), collapse = "")
+  scaf <- substring(ref, 1, 3000)
+  # qstart NA (the editor blanks it when the user flips RC): the old code skipped
+  # the row outright and drew nothing.
+  lay <- data.frame(scaffold = "1", rc = FALSE, ref_start = 0L, ref_end = 2999L,
+                    qstart = NA_integer_, stringsAsFactors = FALSE)
+  bm <- zoom_window_base_maps(ref, lay, list("1" = scaf), 2001L, 2060L)
+  expect_equal(sum(!is.na(bm[["1"]])), 60L)
+  # an unrelated sequence must not be rendered at all
+  junk <- paste(sample(c("A", "C", "G", "T"), 3000, TRUE), collapse = "")
+  expect_length(zoom_window_base_maps(ref, lay, list("1" = junk), 2001L, 2060L), 0L)
+})
