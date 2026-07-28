@@ -129,6 +129,13 @@ details[open] summary {
   border: 1px solid #ccc; /* Optional border around the circle */
 }
 
+/* Two-row modal footer (annotate details). Bootstrap gives adjacent footer
+   buttons a left margin, which double-spaces them against the flex gap and
+   also indents the first button of each row group. */
+.annotate-footer-rows .btn + .btn {
+  margin-left: 0;
+}
+
 .modal-lg {
   width: auto !important;
   min-width: 800px !important;
