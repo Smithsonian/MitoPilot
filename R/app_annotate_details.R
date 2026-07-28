@@ -2611,6 +2611,13 @@ annotations_details_server <- function(id, rv) {
         req(F)
       }
 
+      ## Snapshot before the first edit, so "Restore assembly" can undo this ----
+      # After every guard above, so an aborted linearize records nothing.
+      snapshot_assembly_unit(
+        session$userData$con, rv$updating$ID, rv$updating$path, rv$updating$scaffold,
+        session$userData$dir_out, "linearize"
+      )
+
       ## Get Sequence ----
       assembly <- get_assembly(
         ID = rv$annotations$ID[selected()],
@@ -2710,7 +2717,217 @@ annotations_details_server <- function(id, rv) {
           rv$updating[, c("ID", "path", "scaffold", "topology", "annotate_notes")],
           by = c("ID", "path", "scaffold")
         )
+      # Reveal Restore, and re-measure the flanks the assembly now has as a
+      # linear molecule (Trim is only available once it is linear).
+      bump_asmb_edit()
     }) # END LINEARIZE
+
+    # Assembly edits: trim unannotated ends / restore ----
+    # Trimming is fixed to the outermost annotated feature, so no feature is ever
+    # dropped or cut and the counts, spans and gene order all stay valid. Export
+    # already does this cut in memory for linear units (R/export.R); doing it
+    # here makes it visible, undoable, and applied to everything the app shows.
+
+    # Bumped by each edit so the controls re-read the DB even when the edit does
+    # not otherwise change rv$updating.
+    asmb_edit_tick <- reactiveVal(0)
+    bump_asmb_edit <- function() asmb_edit_tick(isolate(asmb_edit_tick()) + 1)
+
+    # Everything the controls need, read from the DB rather than tracked in a
+    # reactiveVal: a manually refreshed value would depend on gargoyle observer
+    # ordering to be correct at first render. Topology comes from `assemblies`,
+    # which is the row a trim actually cuts.
+    asmb_state <- reactive({
+      asmb_edit_tick()
+      u <- rv$updating
+      req(!is.null(u), !is.null(u$ID), length(u$ID) == 1)
+      con <- session$userData$con
+      ends <- tryCatch(unannotated_ends(con, u$ID, u$path, u$scaffold),
+                       error = function(e) NULL)
+      list(
+        ends = ends,
+        edited = tryCatch(has_assembly_backup(con, u$ID, u$path, u$scaffold),
+                          error = function(e) FALSE)
+      )
+    })
+
+    # Rendered reactively so linearizing a circular assembly enables Trim, and
+    # applying either edit reveals Restore, without reopening the modal.
+    output$asmb_edit_controls <- renderUI({
+      st <- asmb_state()
+      e <- st$ends
+      reason <- if (is.null(e)) {
+        "This unit has no assembly on record."
+      } else if (!isTRUE(e$topology == "linear")) {
+        "Only linear assemblies can be trimmed. Linearize a circular assembly first."
+      } else if (is.na(e$from)) {
+        "This unit has no annotations to trim to."
+      } else if (e$lead + e$trail == 0L) {
+        "The annotations already span the whole assembly; nothing to trim."
+      } else {
+        NA_character_
+      }
+      lbl <- if (is.na(reason)) {
+        stringr::str_glue(
+          "Trim unannotated ends ({format(e$lead + e$trail, big.mark = ',')} bp)"
+        )
+      } else {
+        "Trim unannotated ends"
+      }
+      tagList(
+        if (is.na(reason)) {
+          actionButton(ns("trim_ends"), lbl, icon = icon("scissors"))
+        } else {
+          tags$span(
+            title = reason,
+            actionButton(ns("trim_ends"), lbl, icon = icon("scissors")) |>
+              shinyjs::disabled()
+          )
+        },
+        if (isTRUE(st$edited)) {
+          actionButton(ns("restore_asmb"), "Restore assembly", icon = icon("rotate-left"))
+        }
+      )
+    })
+
+    observeEvent(input$trim_ends, {
+      req(rv$updating$ID)
+      e <- asmb_state()$ends
+      if (is.null(e) || !isTRUE(e$topology == "linear") || is.na(e$from) ||
+          (e$lead + e$trail) == 0L) {
+        shinyWidgets::sendSweetAlert(title = "Nothing to trim.")
+        req(F)
+      }
+      shinyWidgets::confirmSweetAlert(
+        inputId = ns("trim_ends_confirm"),
+        title = "Trim unannotated ends?",
+        text = stringr::str_glue(
+          "Removes {e$lead} bp before the first annotation and {e$trail} bp after ",
+          "the last, leaving {format(e$to - e$from + 1, big.mark = ',')} bp. ",
+          "Feature coordinates and the coverage track shift to match. ",
+          "Use \"Restore assembly\" to undo."
+        ),
+        type = "warning",
+        btn_labels = c("Cancel", "Trim"),
+        btn_colors = c("#6c757d", "#d9534f")
+      )
+    })
+
+    observeEvent(input$trim_ends_confirm, ignoreNULL = TRUE, {
+      req(isTRUE(input$trim_ends_confirm))
+      u <- rv$updating
+      res <- tryCatch(
+        trim_assembly_ends(
+          session$userData$con, u$ID, u$path, u$scaffold, session$userData$dir_out
+        ),
+        error = function(e) {
+          shinyWidgets::sendSweetAlert(title = "Trim failed", text = conditionMessage(e))
+          NULL
+        }
+      )
+      req(res)
+      note <- stringr::str_glue(
+        "EDITED: trimmed {res$removed_lead} bp and {res$removed_trail} bp of ",
+        "unannotated ends ({res$length} bp remaining)"
+      )
+      cur_notes <- (input$notes %||% rv$updating$annotate_notes) %|NA|% ""
+      rv$updating$annotate_notes <- stringr::str_remove(
+        paste(note, cur_notes, sep = "; "), "; $"
+      )
+      rv$updating$length <- res$length
+      bump_asmb_edit()
+      update_annotate_unit(c("length", "annotate_notes"))
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          rv$updating[, c("ID", "path", "scaffold", "length", "annotate_notes")],
+          by = c("ID", "path", "scaffold")
+        )
+      trigger("update_annotate_table")
+      trigger("refresh_export")
+      # Full reload: annotations, coverage and every figure come off the trimmed
+      # record, and the reopened modal shows the new coordinates.
+      trigger("annotations_modal")
+      showNotification(
+        stringr::str_glue(
+          "Trimmed {res$removed_lead + res$removed_trail} bp of unannotated ends; ",
+          "assembly is now {format(res$length, big.mark = ',')} bp."
+        ),
+        type = "message"
+      )
+    })
+
+    observeEvent(input$restore_asmb, {
+      ops <- assembly_backup_ops(
+        session$userData$con, rv$updating$ID, rv$updating$path, rv$updating$scaffold
+      )
+      shinyWidgets::confirmSweetAlert(
+        inputId = ns("restore_asmb_confirm"),
+        title = "Restore assembly?",
+        text = paste0(
+          "This undoes the in-app assembly edits for this unit (",
+          paste(ops, collapse = ", "),
+          ") and puts back the sequence and feature model as the pipeline left ",
+          "them. Annotation edits made since then are lost."
+        ),
+        type = "warning",
+        btn_labels = c("Cancel", "Restore"),
+        btn_colors = c("#6c757d", "#0056b3")
+      )
+    })
+
+    observeEvent(input$restore_asmb_confirm, ignoreNULL = TRUE, {
+      req(isTRUE(input$restore_asmb_confirm))
+      u <- rv$updating
+      res <- tryCatch(
+        restore_assembly_unit(
+          session$userData$con, u$ID, u$path, u$scaffold, session$userData$dir_out
+        ),
+        error = function(e) {
+          shinyWidgets::sendSweetAlert(title = "Restore failed", text = conditionMessage(e))
+          NULL
+        }
+      )
+      req(res)
+      # Read back the restored annotate row rather than reconstruct it, so the
+      # table shows exactly what the DB now holds.
+      meta <- DBI::dbGetQuery(
+        session$userData$con,
+        "SELECT length, topology, structure FROM annotate
+         WHERE ID = ? AND path = ? AND scaffold = ?",
+        params = list(as.character(u$ID), as.integer(u$path), as.integer(u$scaffold))
+      )
+      # Restore undoes every edit, so drop every auto-generated note; keep what
+      # the user typed.
+      kept <- ((input$notes %||% rv$updating$annotate_notes) %|NA|% "") |>
+        stringr::str_split("; ") |>
+        unlist()
+      kept <- kept[!stringr::str_detect(kept, "^EDITED: ")]
+      rv$updating$annotate_notes <- paste(kept[nzchar(kept)], collapse = "; ")
+      cols <- c("length", "annotate_notes")
+      if (nrow(meta) > 0) {
+        rv$updating$length <- meta$length[1]
+        rv$updating$topology <- meta$topology[1]
+        rv$updating$structure <- meta$structure[1]
+        cols <- c("length", "topology", "structure", "annotate_notes")
+      }
+      bump_asmb_edit()
+      update_annotate_unit(cols)
+      rv$data <- rv$data |>
+        dplyr::rows_update(
+          rv$updating[, c("ID", "path", "scaffold", cols)],
+          by = c("ID", "path", "scaffold")
+        )
+      trigger("update_annotate_table")
+      trigger("refresh_export")
+      trigger("annotations_modal")
+      showNotification(
+        stringr::str_glue(
+          "Assembly restored ({format(res$length, big.mark = ',')} bp, ",
+          "{res$topology %|NA|% 'unknown'})."
+        ),
+        type = "message"
+      )
+    })
 
     # Mark ID verified ----
     observeEvent(input$ID_verified, {
@@ -4961,19 +5178,43 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         width = "100%"
       )
     ),
-    footer = tagList(
-      if (isTRUE(session$userData$in_outlier_review)) {
-        actionButton(
-          ns("back_to_review"), "Back to Review",
-          icon = icon("arrow-left"),
-          class = "btn-success",
-          style = "float: left;"
+    # Two-row footer: up to ten controls no longer fit on one line once the trim
+    # button carries its bp count. Row 1 is the assembly-level edits, row 2 the
+    # unit's status flags (left) and the ways out (right). The uiOutputs use
+    # display:contents so their buttons are flex items of the row rather than one
+    # lump, and so the row's gap applies between them.
+    footer = div(
+      class = "annotate-footer-rows",
+      style = "display:flex; flex-direction:column; gap:6px; width:100%;",
+      div(
+        style = "display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-start;",
+        actionButton(ns("linearize"), "Linearize",
+                     icon = icon("arrows-left-right-to-line")),
+        uiOutput(ns("asmb_edit_controls"), inline = TRUE, style = "display:contents;")
+      ),
+      div(
+        style = paste(
+          "display:flex; flex-wrap:wrap; gap:6px;",
+          "justify-content:space-between; align-items:center;"
+        ),
+        div(
+          style = "display:flex; flex-wrap:wrap; gap:6px;",
+          uiOutput(ns("status_toggles"), inline = TRUE, style = "display:contents;")
+        ),
+        div(
+          style = "display:flex; flex-wrap:wrap; gap:6px;",
+          if (isTRUE(session$userData$in_outlier_review)) {
+            actionButton(
+              ns("back_to_review"), "Back to Review",
+              icon = icon("arrow-left"),
+              class = "btn-success"
+            )
+          },
+          actionButton(ns("lock"), "Lock & Close", icon = icon("lock"),
+                       class = "btn-primary"),
+          actionButton(ns("close"), "Close")
         )
-      },
-      uiOutput(ns("status_toggles"), inline = TRUE),
-      actionButton(ns("linearize"), "Linearize"),
-      actionButton(ns("lock"), "Lock & Close"),
-      actionButton(ns("close"), "Close")
+      )
     )
   )
 }
