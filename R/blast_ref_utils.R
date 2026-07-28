@@ -1206,6 +1206,57 @@ normalize_trna <- function(n, product = NA_character_) {
 }
 
 
+#' Normalise a stored BLAST reference alignment to the assembly's orientation
+#'
+#' [compute_blast_ref_alignment()] aligns the assembly on whichever strand scores
+#' higher, so a sample stored on the opposite strand from its reference comes back
+#' reverse-complemented. Drawing that as-is puts the synteny view in a different
+#' frame from the coverage map and the sequence editor: the same sample, with gene
+#' order and orientation mirrored between two plots sitting next to each other.
+#'
+#' The homology is identical either way, so the correction is presentational: flip
+#' the alignment back so the SAMPLE is always shown in its stored orientation and
+#' let the REFERENCE track carry the reverse-complement instead.
+#'
+#' Deliberately independent of the `ref_based_rc` curate option. With that option
+#' ON, CURATE has already flipped the assembly to the reference strand before
+#' BLAST_REF_ALIGN runs, so the aligner returns "+" and this is a no-op. With it
+#' OFF the assembly keeps its own orientation, and so must the plot.
+#'
+#' @param aln rows from the `blast_ref_alignment` table (usually one).
+#' @return the same rows with `aligned_sample` / `aligned_ref` in sample
+#'   orientation, `strand` set to "+", and a `ref_rc` flag recording whether the
+#'   reference was flipped for display.
+#' @noRd
+normalize_blast_ref_alignment <- function(aln) {
+  if (is.null(aln) || !is.data.frame(aln) || nrow(aln) == 0) return(aln)
+  aln$ref_rc <- FALSE
+  if (!all(c("strand", "aligned_sample", "aligned_ref") %in% names(aln))) return(aln)
+  flip <- which(!is.na(aln$strand) & aln$strand == "-")
+  if (length(flip) == 0) return(aln)
+  # DNAString treats "-" as a gap character and complements it to itself, so the
+  # gapped alignment strings round-trip. Case is normalised because the alphabet
+  # is uppercase-only; downstream comparisons are case-insensitive anyway.
+  rc_gapped <- function(s) {
+    if (is.na(s) || !nzchar(s)) return(NA_character_)
+    tryCatch(
+      as.character(Biostrings::reverseComplement(Biostrings::DNAString(toupper(s)))),
+      error = function(e) NA_character_)
+  }
+  for (i in flip) {
+    rs <- rc_gapped(aln$aligned_sample[i])
+    rr <- rc_gapped(aln$aligned_ref[i])
+    # Both must flip or neither: a half-flipped pair would mis-pair every column.
+    # Leave the row as the aligner wrote it if either conversion fails.
+    if (is.na(rs) || is.na(rr)) next
+    aln$aligned_sample[i] <- rs
+    aln$aligned_ref[i]    <- rr
+    aln$strand[i] <- "+"
+    aln$ref_rc[i] <- TRUE
+  }
+  aln
+}
+
 #' Pre-compute a whole-genome pairwise alignment of a sample against its BLAST
 #' reference and write the result for ingestion into the
 #' \code{blast_ref_alignment} SQLite table.

@@ -66,7 +66,10 @@ params {
     }
     scaffold_join {
         cpus = 1
-        clusterOptions = "-l mres=16G,h_data=16G,h_vmem=16G,himem -S /bin/bash"
+        memory = 32
+        // Closure so the reservation grows with the retry attempt; a job killed
+        // for exceeding memory (exit 137-140) then succeeds on retry.
+        clusterOptions = { attempt -> "-l mres=${32 * attempt}G,h_data=${32 * attempt}G,h_vmem=${32 * attempt}G,himem -S /bin/bash" }
         container = process.container
         executor = process.executor
     }

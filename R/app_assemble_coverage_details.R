@@ -1781,6 +1781,14 @@ assembly_coverage_details_server <- function(id, rv) {
       # 100-N spacer with the shared bases duplicated - including the junctions
       # the user never touched.
       lay <- rv$join_layout
+      # Carry the reference coordinates onto the manual layout as well: they are
+      # what lets join_scaffolds re-measure a junction whose predecessor it drops
+      # at runtime. Without them that correction is inert on the editor path.
+      if (!is.null(lay) && all(c("ref_start", "ref_end") %in% names(lay))) {
+        m0 <- match(layout$scaffold, lay$scaffold)
+        layout$ref_start <- lay$ref_start[m0]
+        layout$ref_end   <- lay$ref_end[m0]
+      }
       if (!is.null(lay) && identical(layout$scaffold, lay$scaffold) &&
           "include" %in% names(lay) && identical(layout$include, lay$include)) {
         layout$gap_before <- lay$gap_before
