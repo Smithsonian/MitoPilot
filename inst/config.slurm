@@ -58,7 +58,7 @@ params {
     }
     scaffold_join {
         cpus = 1
-        memory = 4
+        memory = 8
         clusterOptions = '<<CLUSTER_OPTIONS>>'
         container = process.container
         executor = process.executor
