@@ -585,7 +585,50 @@ assemble_server <- function(id) {
       # Locking advances every non-ignored (path, scaffold) unit for the sample
       # (multi-assembly). Each unit was seeded an annotate row at assemble time.
       lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
-      rv$updating$assemble_lock <- as.numeric(!lock_current)
+      upd <- rv$updating
+      # Locking hands the sample to WF2, which rebuilds the published output path
+      # from assemble_opts. Samples that never assembled are not affected.
+      if (lock_current == 0) {
+        stale <- tryCatch(
+          stale_assemble_dirs(
+            session$userData$con,
+            session$userData$dir_out,
+            ids = upd$ID,
+            pending_only = FALSE
+          ),
+          error = function(e) NULL
+        )
+        if (!is.null(stale) && nrow(stale) > 0L) {
+          upd <- upd |> dplyr::filter(!ID %in% stale$ID)
+          shinyWidgets::sendSweetAlert(
+            title = "Assembly output not found",
+            text = shiny::tags$div(
+              shiny::tags$p(
+                "These samples were NOT locked, because Annotation and Curation ",
+                "would look for assembly output that is not on disk:"
+              ),
+              shiny::tags$ul(stale_assemble_items(stale)),
+              shiny::tags$p("Either:"),
+              shiny::tags$ul(
+                shiny::tags$li("set the assembly parameter set back to the name that exists on disk, or"),
+                shiny::tags$li("re-run Assembly so the output is published under the assigned name.")
+              ),
+              shiny::tags$p(
+                if (nrow(upd) > 0L) {
+                  "The rest of the selected samples were locked."
+                } else {
+                  "No other samples remained, so nothing was locked."
+                }
+              )
+            ),
+            html = TRUE,
+            type = "error"
+          )
+          req(nrow(upd) > 0L)
+        }
+      }
+      upd$assemble_lock <- as.numeric(!lock_current)
+      rv$updating <- upd
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           rv$updating,
@@ -928,6 +971,9 @@ assemble_server <- function(id) {
           dplyr::collect()
       }
       ## Update Assembly Table ----
+      # Captured before the write, rv$updating is cleared below.
+      prior <- dplyr::bind_rows(rv$updating, rv$updating_indirect) |>
+        dplyr::select(dplyr::any_of(c("ID", "assemble_opts")))
       update <- data.frame(
         ID = c(rv$updating$ID, rv$updating_indirect$ID),
         assemble_opts = input$assemble_opts,
@@ -946,9 +992,52 @@ assemble_server <- function(id) {
           update,
           by = "ID"
         )
+      ## Flag samples with no output under the new parameter set ----
+      dir_out <- session$userData$dir_out
+      unpublished <- prior |> dplyr::slice(0)
+      if (nrow(prior) > 0L && "assemble_opts" %in% names(prior) &&
+          length(dir_out) == 1L && !is.na(dir_out) && nzchar(dir_out)) {
+        unpublished <- prior |>
+          dplyr::filter(
+            assemble_opts != input$assemble_opts,
+            !dir.exists(assemble_out_dir(dir_out, ID, input$assemble_opts))
+          )
+      }
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
+      if (nrow(unpublished) > 0L) {
+        shown <- unpublished |> dplyr::slice(seq_len(min(nrow(unpublished), 10)))
+        items <- lapply(seq_len(nrow(shown)), function(i) {
+          shiny::tags$li(
+            shiny::tags$b(shown$ID[i]),
+            " previously used ",
+            shiny::tags$code(shown$assemble_opts[i])
+          )
+        })
+        if (nrow(unpublished) > nrow(shown)) {
+          items <- c(items, list(shiny::tags$li(
+            paste0("... and ", nrow(unpublished) - nrow(shown), " more")
+          )))
+        }
+        shinyWidgets::sendSweetAlert(
+          title = "No assembly output for this parameter set",
+          text = shiny::tags$div(
+            shiny::tags$p(
+              "These samples are now assigned to parameter set ",
+              shiny::tags$code(input$assemble_opts),
+              ", which has no assembly output on disk:"
+            ),
+            shiny::tags$ul(items),
+            shiny::tags$p(
+              "Re-run Assembly before locking these samples, or set the ",
+              "parameter set back to a name that exists on disk."
+            )
+          ),
+          html = TRUE,
+          type = "warning"
+        )
+      }
     })
 
     # Set BLAST Opts ----

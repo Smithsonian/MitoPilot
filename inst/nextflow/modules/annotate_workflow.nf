@@ -46,18 +46,30 @@ workflow ANNOTATE {
                 }
             }
 
+            // params.publishDir is relative, so resolve against launchDir (as CURATE does).
+            def assembleRel = params.publishDir + '/' + it[0] + '/assemble/' + it[3]
+            def assemblyRel = assembleRel + '/' + it[0] + '_assembly_' + it[1] + '.fasta'
+            // Only judged when the project output tree is local; the unit is still
+            // emitted either way so annotate() fails as loudly as it always has.
+            def outRoot = new File(launchDir.toString(), params.publishDir)
+            if (outRoot.isDirectory() && !new File(launchDir.toString(), assemblyRel).exists()) {
+                def assembleBase = new File(outRoot, it[0] + '/assemble')
+                def onDisk = assembleBase.isDirectory() ?
+                    assembleBase.listFiles()?.findAll { d -> d.isDirectory() && !d.name.startsWith('.') }?.collect { d -> d.name }?.sort() : null
+                log.warn "ANNOTATE: ${it[0]} (path ${it[1]}, scaffold ${it[2]}): expected assembly ${assemblyRel} not found. " +
+                    (onDisk ?
+                        "Assembly parameter set directories present for this sample: ${onDisk.join(', ')}. " +
+                        "assemble_opts may have been changed after this sample was assembled, or the published output may have been moved or deleted." :
+                        "No assembly output is present for this sample at all; it may have been moved or deleted.")
+            }
+
             tuple(
                 it[0],                                          // ID
                 it[1],                                          // path
                 it[2],                                          // scaffold
-                file(                                           // Assembly (per-path; annotate() isolates this scaffold)
-                    params.publishDir + '/' +
-                    it[0] + '/assemble/' + it[3] + '/' +
-                    it[0] + '_assembly_' + it[1] + '.fasta'
-                ),
+                file(assemblyRel),                              // Assembly (per-path; annotate() isolates this scaffold)
                 file(                                           // Coverage (per-path; subset to this scaffold)
-                    params.publishDir + '/' +
-                    it[0] + '/assemble/' + it[3] + '/' +
+                    assembleRel + '/' +
                     it[0] + '_assembly_' + it[1] + '_coverageStats.csv'
                 ),
                 [
