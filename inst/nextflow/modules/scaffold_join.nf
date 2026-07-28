@@ -5,11 +5,19 @@ process scaffold_join {
     executor params.scaffold_join.executor
     container params.scaffold_join.container
     cpus { params.scaffold_join.cpus }
-    memory = params.scaffold_join.memory ?: null
+    // Config memory is a plain number of GB. A bare number is BYTES to Nextflow,
+    // so it must be converted; scaling by task.attempt lets a scheduler memory
+    // kill (SGE exit 137-140) self-heal on retry instead of dying identically.
+    memory { (params.scaffold_join.memory instanceof Number) ? params.scaffold_join.memory.GB * task.attempt : null }
     clusterOptions {
+        // A Closure lets a site config scale its own reservation with the retry
+        // attempt (schedulers like SGE take memory from clusterOptions, not from
+        // the memory directive).
+        def co = params.scaffold_join.clusterOptions
+        def co_str = (co instanceof Closure) ? co.call(task.attempt) : ((co instanceof String) ? co : '')
         def opts = [
             (params.scaffold_join.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.scaffold_join.clusterOptions instanceof String) ? params.scaffold_join.clusterOptions : ''
+            co_str
         ].findAll { it }.join(' ')
         opts ?: null
     }

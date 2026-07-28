@@ -19,9 +19,10 @@ gene_type_alpha <- 0.5
 # A feature that crosses the origin of a circular sequence has its start beyond
 # its end, so after mapping to plot coordinates `xmin > xmax`. gggenes can't draw
 # such a feature as one arrow, so split it into `[xmin, x_hi]` and `[x_lo, xmax]`
-# (the two arcs on either side of the boundary). The gene label is kept on the
-# longer piece only to avoid a duplicated label. `df` must already carry numeric
-# `xmin`/`xmax` columns (in the same coordinate space as `x_lo`/`x_hi`).
+# (the two arcs on either side of the boundary). BOTH arcs keep the gene label:
+# the two pieces are far apart on a linearised layout, and labelling only the
+# longer one leaves an unidentified arrow at the opposite edge. `df` must already
+# carry numeric `xmin`/`xmax` columns (same coordinate space as `x_lo`/`x_hi`).
 split_wrapped_genes <- function(df, x_lo, x_hi) {
   if (nrow(df) == 0 || !all(c("xmin", "xmax") %in% names(df)) ||
       !any(df$xmin > df$xmax, na.rm = TRUE)) {
@@ -34,12 +35,6 @@ split_wrapped_genes <- function(df, x_lo, x_hi) {
       seg_hi$xmax <- x_hi # [xmin, x_hi]
       seg_lo <- row
       seg_lo$xmin <- x_lo # [x_lo, xmax]
-      # keep the label on the longer arc only
-      if ((x_hi - row$xmin) >= (row$xmax - x_lo)) {
-        seg_lo$gene <- ""
-      } else {
-        seg_hi$gene <- ""
-      }
       dplyr::bind_rows(seg_hi, seg_lo)
     } else {
       row
@@ -242,13 +237,18 @@ annotations_details_server <- function(id, rv) {
           dplyr::collect(),
         error = function(e) NULL
       )
+      # Normalised on load so every consumer below sees the sample in its STORED
+      # orientation (matching the coverage map) with any reverse-complement moved
+      # onto the reference track. See normalize_blast_ref_alignment().
       rv$blast_ref_aln <- tryCatch(
-        dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
-          dplyr::filter(ID == !!rv$updating$ID,
-                        path == !!rv$updating$path,
-                        scaffold == !!rv$updating$scaffold,
-                        accession == !!acc) |>
-          dplyr::collect(),
+        normalize_blast_ref_alignment(
+          dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
+            dplyr::filter(ID == !!rv$updating$ID,
+                          path == !!rv$updating$path,
+                          scaffold == !!rv$updating$scaffold,
+                          accession == !!acc) |>
+            dplyr::collect()
+        ),
         error = function(e) NULL
       )
     }
@@ -1100,8 +1100,9 @@ annotations_details_server <- function(id, rv) {
     })
     # Sample position (original coords) -> canvas px on the overview. The x-axis is
     # alignment-column space whenever an alignment is shown, so a plain
-    # pos/sample_len mapping lands in the wrong place (and ignores strand); mirror
-    # the projection the plot itself uses.
+    # pos/sample_len mapping lands in the wrong place; mirror the projection the
+    # plot itself uses. The alignment is normalised to sample orientation at load,
+    # so no strand handling is needed here.
     synteny_proj <- reactive({
       w   <- synteny_plot_w()
       aln <- rv$blast_ref_aln
@@ -1114,11 +1115,8 @@ annotations_details_server <- function(id, rv) {
       aln_len  <- length(s_chars)
       s_nongap <- which(s_chars != "-")
       n_s      <- length(s_nongap)
-      strand   <- aln$strand[1] %||% "+"
       function(pos) {
-        idx <- as.integer(pos)
-        if (identical(strand, "-")) idx <- n_s - idx + 1L
-        idx <- pmin(pmax(idx, 1L), n_s)
+        idx <- pmin(pmax(as.integer(pos), 1L), n_s)
         s_nongap[idx] / aln_len * w
       }
     })
@@ -1146,6 +1144,13 @@ annotations_details_server <- function(id, rv) {
         isTRUE(nzchar(rv$blast_ref_aln$aligned_sample[1])) &&
         isTRUE(nzchar(rv$blast_ref_aln$aligned_ref[1]))
       plot_h     <- if (has_aln) "280px" else "200px"
+      # The sample is always drawn in its stored orientation (matching the coverage
+      # map); when it aligned to the reference's opposite strand it is the
+      # reference that is shown reverse-complemented, so say so on its label.
+      ref_rc     <- has_aln && isTRUE(rv$blast_ref_aln$ref_rc[1])
+      ref_rc_note <- if (ref_rc) {
+        div(style = "color: #d9534f; font-size: 10px;", "shown reverse-complemented")
+      } else NULL
       lbl <- function(h, ...) div(
         style = paste0("height: ", h, "; display: flex; align-items: center; word-break: break-word;"),
         ...
@@ -1159,7 +1164,8 @@ annotations_details_server <- function(id, rv) {
             div(style = "color: #888; font-size: 10px;", "identity"),
             div(style = "position: absolute; bottom: 0; right: 0; font-size: 9px; color: #aaa; line-height: 1;", "0%")
           )),
-          lbl("120px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl)))
+          lbl("120px", div(div(ref_acc), div(style = "color: #888; font-size: 10px;", ref_lbl),
+                           ref_rc_note))
         )
       } else {
         tagList(
@@ -1370,10 +1376,11 @@ annotations_details_server <- function(id, rv) {
         aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
         aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
         aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
-        # When the scaffold aligned on the reverse strand, aligned_sample is the
-        # scaffold's reverse-complement, so a sample position P (original coords)
-        # is the (n - P + 1)-th non-gap base and gene orientation is flipped.
-        aln_strand     <- rv$blast_ref_aln$strand[1] %||% "+"
+        # The alignment arrives normalised to the sample's stored orientation, so
+        # the sample maps straight through. When that required a flip, the
+        # REFERENCE is the reverse-complemented track and its coordinates and gene
+        # arrows are the ones that mirror.
+        ref_rc <- isTRUE(rv$blast_ref_aln$ref_rc[1])
         s_chars <- strsplit(aligned_sample, "")[[1]]
         r_chars <- strsplit(aligned_ref,    "")[[1]]
         aln_len <- length(s_chars)
@@ -1385,44 +1392,47 @@ annotations_details_server <- function(id, rv) {
 
         # Project sample position (original coords) -> 0-100 in alignment space
         s_to_pct <- function(pos) {
-          idx <- as.integer(pos)
-          if (identical(aln_strand, "-")) idx <- n_s - idx + 1L
-          idx <- pmin(pmax(idx, 1L), n_s)
+          idx <- pmin(pmax(as.integer(pos), 1L), n_s)
           s_nongap[idx] / aln_len * 100
         }
-        # Project ref position (original coords) -> rotate -> 0-100 in alignment space
+        # Project ref position (original coords) -> rotate -> (flip) -> 0-100 in
+        # alignment space. On a flipped reference the k-th base of the drawn
+        # (reverse-complemented) reference is base ref_length - k + 1 of the
+        # rotated original.
         r_to_pct <- function(pos) {
           pos_r <- ((as.integer(pos) - 1L - aln_rotation) %% ref_length) + 1L
+          if (ref_rc) pos_r <- ref_length - pos_r + 1L
           idx   <- pmin(pmax(pos_r, 1L), length(r_nongap))
           r_nongap[idx] / aln_len * 100
         }
 
         # Gene data frames in alignment coordinates. Features that wrap the
         # circular origin (or straddle the rotation point in the reference) map
-        # to xmin > xmax; split them into two arcs at the 0/100 boundary. On the
-        # reverse strand, s_to_pct reverses coordinate order, so take min/max and
-        # flip arrow direction (a '+' scaffold gene points '-' vs the reference).
+        # to xmin > xmax; split them into two arcs at the 0/100 boundary.
         sample_df <- sample_genes |>
+          dplyr::mutate(
+            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
+            xmin = s_to_pct(pos1), xmax = s_to_pct(pos2)
+          ) |>
+          split_wrapped_genes(x_lo = 0, x_hi = 100)
+        # On a flipped reference r_to_pct reverses coordinate order, so take
+        # min/max for the block and flip the arrow (a '+' reference gene runs '-'
+        # against the sample).
+        ref_df <- rv$blast_ref |>
           dplyr::mutate(type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")))
-        if (identical(aln_strand, "-")) {
-          sample_df <- sample_df |>
+        if (ref_rc) {
+          ref_df <- ref_df |>
             dplyr::mutate(
-              .x1 = s_to_pct(pos1), .x2 = s_to_pct(pos2),
+              .x1 = r_to_pct(pos1), .x2 = r_to_pct(pos2),
               xmin = pmin(.x1, .x2), xmax = pmax(.x1, .x2),
               direction = ifelse(direction == "+", "-", "+")
             ) |>
             dplyr::select(-.x1, -.x2)
         } else {
-          sample_df <- sample_df |>
-            dplyr::mutate(xmin = s_to_pct(pos1), xmax = s_to_pct(pos2))
+          ref_df <- ref_df |>
+            dplyr::mutate(xmin = r_to_pct(pos1), xmax = r_to_pct(pos2))
         }
-        sample_df <- sample_df |>
-          split_wrapped_genes(x_lo = 0, x_hi = 100)
-        ref_df <- rv$blast_ref |>
-          dplyr::mutate(
-            type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
-            xmin = r_to_pct(pos1), xmax = r_to_pct(pos2)
-          ) |>
+        ref_df <- ref_df |>
           split_wrapped_genes(x_lo = 0, x_hi = 100)
 
         # Classify each alignment column
@@ -1685,21 +1695,19 @@ annotations_details_server <- function(id, rv) {
       aln_rotation   <- as.integer(rv$blast_ref_aln$rotation[1])
       aligned_sample <- rv$blast_ref_aln$aligned_sample[1]
       aligned_ref    <- rv$blast_ref_aln$aligned_ref[1]
-      # On the reverse strand aligned_sample is the scaffold's reverse-complement,
-      # so a sample position P (original coords) is the (n_s - P + 1)-th non-gap
-      # base and gene orientation is flipped (mirrors the overview plot).
-      aln_strand <- rv$blast_ref_aln$strand[1] %||% "+"
+      # Normalised at load: the sample is in its stored orientation, so it maps
+      # straight through and the reference is the track that mirrors when flipped
+      # (same convention as the overview plot).
+      ref_rc <- isTRUE(rv$blast_ref_aln$ref_rc[1])
       s_chars <- strsplit(aligned_sample, "")[[1]]
       r_chars <- strsplit(aligned_ref,    "")[[1]]
       aln_len <- length(s_chars)
       s_nongap <- which(s_chars != "-")
       r_nongap <- which(r_chars != "-")
       n_s <- length(s_nongap)
-      # Sample original position -> alignment column (RC order on reverse strand)
+      # Sample original position -> alignment column
       s_pos_to_col <- function(pos) {
-        idx <- as.integer(pos)
-        if (identical(aln_strand, "-")) idx <- n_s - idx + 1L
-        idx <- pmin(pmax(idx, 1L), n_s)
+        idx <- pmin(pmax(as.integer(pos), 1L), n_s)
         s_nongap[idx]
       }
 
@@ -1769,9 +1777,7 @@ annotations_details_server <- function(id, rv) {
       }
       to_local <- function(aln_col) aln_col - win_start + 1L
 
-      # Sample genes overlapping the window - project pos1/pos2 to alignment cols
-      # (strand-aware). On the reverse strand pos1 maps above pos2 in alignment
-      # order, so take min/max for the block and flip the arrow direction.
+      # Sample genes overlapping the window - project pos1/pos2 to alignment cols.
       sg <- rv$annotations |> dplyr::filter(pos1 > 0)
       sg_c1 <- s_pos_to_col(sg$pos1)
       sg_c2 <- s_pos_to_col(sg$pos2)
@@ -1784,18 +1790,25 @@ annotations_details_server <- function(id, rv) {
           xmax = to_local(pmin(sg_hi[sg_in], win_end)) + 0.5,
           gene = sg$gene[sg_in],
           fill = type_color(sg$type[sg_in]),
-          forward = if (identical(aln_strand, "-")) sg$direction[sg_in] != "+" else sg$direction[sg_in] == "+",
+          forward = sg$direction[sg_in] == "+",
           stringsAsFactors = FALSE
         )
       } else NULL
 
-      # Ref genes - rotate to alignment-ref coords first, then map via r_nongap
+      # Ref genes - rotate to alignment-ref coords first, then map via r_nongap.
+      # On a flipped reference the coordinate order reverses, so pos1 lands above
+      # pos2 in alignment order and the arrow direction inverts.
       rg <- rv$blast_ref
       rg_pos1_r <- ((as.integer(rg$pos1) - 1L - aln_rotation) %% ref_length) + 1L
       rg_pos2_r <- ((as.integer(rg$pos2) - 1L - aln_rotation) %% ref_length) + 1L
       rg_ok <- rg_pos2_r >= rg_pos1_r  # skip wrap-around genes
-      rg_aln1 <- r_nongap[pmin(pmax(rg_pos1_r, 1L), length(r_nongap))]
-      rg_aln2 <- r_nongap[pmin(pmax(rg_pos2_r, 1L), length(r_nongap))]
+      if (ref_rc) {
+        rg_pos1_r <- ref_length - rg_pos1_r + 1L
+        rg_pos2_r <- ref_length - rg_pos2_r + 1L
+      }
+      rg_lo <- pmin(rg_pos1_r, rg_pos2_r); rg_hi <- pmax(rg_pos1_r, rg_pos2_r)
+      rg_aln1 <- r_nongap[pmin(pmax(rg_lo, 1L), length(r_nongap))]
+      rg_aln2 <- r_nongap[pmin(pmax(rg_hi, 1L), length(r_nongap))]
       rg_in <- rg_ok & rg_aln2 >= win_start & rg_aln1 <= win_end
       ref_gene_df <- if (any(rg_in)) {
         data.frame(
@@ -1803,7 +1816,7 @@ annotations_details_server <- function(id, rv) {
           xmax = to_local(pmin(rg_aln2[rg_in], win_end)) + 0.5,
           gene = rg$gene[rg_in],
           fill = type_color(rg$type[rg_in]),
-          forward = rg$direction[rg_in] == "+",
+          forward = if (ref_rc) rg$direction[rg_in] != "+" else rg$direction[rg_in] == "+",
           stringsAsFactors = FALSE
         )
       } else NULL
