@@ -177,6 +177,7 @@ backwards_compatibility <- function(
       "partial_stop" %in% DBI::dbListFields(con, "annotations") &&
       "blast_ref_annotations" %in% DBI::dbListTables(con) &&
       "blast_ref_alignment" %in% DBI::dbListTables(con) &&
+      "assembly_backup" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
         "use_orffinder" %in% DBI::dbListFields(con, "orf_opts"),
         error = function(e) FALSE
@@ -1478,6 +1479,12 @@ backwards_compatibility <- function(
         copy = TRUE,
         by = "blast_opts"
       )
+  }
+
+  # if the pre-trim snapshot table doesn't exist, create it
+  if (!("assembly_backup" %in% DBI::dbListTables(con))) {
+    message("created assembly_backup table")
+    DBI::dbExecute(con, ASSEMBLY_BACKUP_DDL)
   }
 
   # if edit_positions column doesn't exist in assemblies, add it

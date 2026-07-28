@@ -633,6 +633,9 @@ new_db_userAsmb <- function(
     );"
   )
 
+  # Pre-edit snapshots for the annotate modal's "Restore assembly"
+  DBI::dbExecute(con, ASSEMBLY_BACKUP_DDL)
+
   DBI::dbExecute(
     con,
     "CREATE TABLE blast_ref_annotations (
