@@ -656,6 +656,26 @@ guess_orf_gene <- function(refHits_json, threshold = ORF_ASSIGN_SIM_THRESHOLD) {
   )
 }
 
+#' Next unused join-group id for a set of annotations
+#'
+#' Join groups are tagged in the `notes` field with a `JOIN: mode=... group=N`
+#' marker, so the next id is one past the largest `group=` already present.
+#'
+#' @param notes the annotation `notes` column (may be NA, empty, or an all-NA
+#'   logical vector when the database column holds only NULLs).
+#'
+#' @return integer group id, 1 when no join markers are present.
+#' @noRd
+next_join_group <- function(notes) {
+  grps <- as.integer(
+    stringr::str_match(
+      dplyr::coalesce(as.character(notes), ""),
+      "^JOIN: mode=\\w+ group=(\\d+)"
+    )[, 2]
+  )
+  if (all(is.na(grps))) 1L else max(grps, na.rm = TRUE) + 1L
+}
+
 #' Splice a joined gene's segments into one CDS
 #'
 #' Concatenates a join group's segment (exon) sequences in 5'->3' order and

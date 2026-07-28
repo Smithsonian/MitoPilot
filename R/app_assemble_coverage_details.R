@@ -7,6 +7,45 @@ assembly_coverage_details_server <- function(id, rv) {
 
     init("coverage_modal")
 
+    # Reads and writes below rebuild the published output path from
+    # assemble_opts, so it is absent when the option set was reassigned or out/
+    # was moved. Report it, never create it: a directory holding only the Path 0
+    # files would look complete while the raw path assemblies stay orphaned.
+    require_assemble_output <- function(pth) {
+      if (length(pth) == 1L && !is.na(pth) && nzchar(pth) && file.exists(pth)) {
+        return(TRUE)
+      }
+      on_disk <- tryCatch(
+        assemble_dirs_on_disk(session$userData$dir_out, rv$updating$ID),
+        error = function(e) character(0)
+      )
+      shinyWidgets::sendSweetAlert(
+        title = "Assembly output not found",
+        text = tags$div(
+          tags$p(
+            "The assembly output for ", tags$b(rv$updating$ID),
+            " is not where the project database expects it:"
+          ),
+          tags$ul(tags$li(tags$code(pth))),
+          if (length(on_disk) > 0) {
+            tags$p(
+              "Assembly parameter sets published on disk: ",
+              tags$code(paste(on_disk, collapse = ", "))
+            )
+          } else {
+            tags$p("No assembly output is published for this sample.")
+          },
+          tags$p(
+            "Re-run Assembly for this sample, or set its assembly parameter ",
+            "set back to the name that exists on disk."
+          )
+        ),
+        html = TRUE,
+        type = "error"
+      )
+      FALSE
+    }
+
     # "How do I choose?" guidance modal (reopens this modal on close).
     register_tool_help("assembly_paths", input,
                        reopen = function() trigger("coverage_modal"))
@@ -366,15 +405,23 @@ assembly_coverage_details_server <- function(id, rv) {
     # View Coverage PDF ----
     observeEvent(input$view_coverage, {
       row <- as.numeric(input$view_coverage)
-      url <- file.path(
+      pdf_path <- file.path(
         dirname(getOption("MitoPilot.db") %||% "."),
         "out", rv$updating$ID,
         "assemble", rv$updating$assemble_opts,
         paste0(rv$updating$ID, "_assembly_",
                rv$focal_assembly$path[row], "_",
                rv$focal_assembly$scaffold[row], "_coverage.pdf")
-      ) |>
-        browseURL()
+      )
+      req(require_assemble_output(pdf_path))
+      # browseURL() errors when no browser is configured (headless/server).
+      tryCatch(browseURL(pdf_path), error = function(e) {
+        shiny::showNotification(
+          paste0("Cannot open a PDF viewer from this session. Path: ", pdf_path),
+          type = "warning",
+          duration = 10
+        )
+      })
     })
 
     # Copy as fasta ----
@@ -1406,6 +1453,7 @@ assembly_coverage_details_server <- function(id, rv) {
       ID <- rv$updating$ID
       dir <- file.path(session$userData$dir_out, ID, "assemble",
                        rv$updating$assemble_opts)
+      req(require_assemble_output(dir))
       # Shared with the Nextflow auto-join: writes {ID}_assembly_0.fasta and the
       # matching _coverageStats.csv in the layout annotate() reads.
       write_joined_files(dir, ID, seq_str, depth_vec, gc_vec, err_vec, topology)
@@ -1890,6 +1938,20 @@ assembly_coverage_details_server <- function(id, rv) {
       # then write everything. Deferred so a cancelled picker writes nothing.
       finalize_trim <- function(blast_row, topology = "linear") {
         bl <- blast_cols(blast_row)
+        out_dir <- file.path(
+          session$userData$dir_out,
+          rv$updating$ID,
+          "assemble",
+          rv$updating$assemble_opts
+        )
+        cov_csv <- file.path(
+          out_dir,
+          paste0(rv$updating$ID, "_assembly_",
+                 rv$focal_assembly$path[sel[1]], "_coverageStats.csv")
+        )
+        # Checked before anything is written, so a missing output cannot leave a
+        # half-written Path 0 behind.
+        req(require_assemble_output(out_dir), require_assemble_output(cov_csv))
 
       # Make new assembly
       trimmed <- purrr::map2_chr(rv$alignment$consStart, rv$alignment$consEnd, ~ {
@@ -1904,23 +1966,11 @@ assembly_coverage_details_server <- function(id, rv) {
       ) |> paste(topology)
       Biostrings::writeXStringSet(
         trimmed,
-        file.path(
-          session$userData$dir_out,
-          rv$updating$ID,
-          "assemble",
-          rv$updating$assemble_opts,
-          paste0(rv$updating$ID, "_assembly_0.fasta")
-        )
+        file.path(out_dir, paste0(rv$updating$ID, "_assembly_0.fasta"))
       )
 
       # Updated coverage stats file
-      coverage <- file.path(
-        session$userData$dir_out,
-        rv$updating$ID,
-        "assemble",
-        rv$updating$assemble_opts,
-        paste0(rv$updating$ID, "_assembly_", rv$focal_assembly$path[sel[1]], "_coverageStats.csv")
-      ) |> read.csv()
+      coverage <- read.csv(cov_csv)
 
       start_offset <- (stringr::str_extract(as.character(rv$alignment$seqs[1]), "^-+") |> nchar()) %|NA|% 0
 
@@ -1934,13 +1984,7 @@ assembly_coverage_details_server <- function(id, rv) {
 
       readr::write_csv(
         coverage,
-        file.path(
-          session$userData$dir_out,
-          rv$updating$ID,
-          "assemble",
-          rv$updating$assemble_opts,
-          paste0(rv$updating$ID, "_assembly_0_coverageStats.csv")
-        ),
+        file.path(out_dir, paste0(rv$updating$ID, "_assembly_0_coverageStats.csv")),
         quote = "none", na = ""
       )
 

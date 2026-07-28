@@ -91,6 +91,40 @@ app_server <- function(input, output, session) {
     stringr::str_remove("^[^'|^\"]+['\"]") |>
     stringr::str_extract("^[^'|^\"]+")
   session$userData$dir_out <- file.path(dirname(db), dir_out)
+
+  # The assembly output folder is named after assemble_opts, so a sample that was
+  # reassigned after it assembled points at a folder that was never created.
+  # Warn, but keep the app open: fixing this requires the app.
+  tryCatch({
+    stale <- stale_assemble_dirs(session$userData$con, session$userData$dir_out)
+    if (nrow(stale) > 0) {
+      shinyWidgets::sendSweetAlert(
+        session = session,
+        title = "Assembly output not found",
+        text = shiny::tags$div(
+          shiny::tags$p(
+            "The assembly output these samples are assigned to is not on disk. ",
+            "Either the assembly parameter set was changed after they were ",
+            "assembled, or the output was moved or deleted:"
+          ),
+          shiny::tags$ul(stale_assemble_items(stale)),
+          shiny::tags$p("Either:"),
+          shiny::tags$ul(
+            shiny::tags$li("set the sample's assembly parameter set back to the name that exists on disk, or"),
+            shiny::tags$li("re-run Assembly so the output is published under the assigned name.")
+          ),
+          shiny::tags$p(
+            "These samples are locked and awaiting annotation, so until then ",
+            "Annotation and Curation will fail or will silently run without any ",
+            "reference hits."
+          )
+        ),
+        html = TRUE,
+        type = "warning"
+      )
+    }
+  }, error = function(e) NULL)
+
   # Genetic code ----
   # Per-sample genetic codes live in samples.genetic_code (auto-selected from
   # each sample's curation ruleset) and drive translation. This project-level

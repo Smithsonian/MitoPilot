@@ -54,6 +54,36 @@ app_server_userAsmb <- function(input, output, session) {
     stringr::str_remove("^[^'|^\"]+['\"]") |>
     stringr::str_extract("^[^'|^\"]+")
   session$userData$dir_out <- file.path(dirname(db), dir_out)
+
+  # See app_server(). User-assemble projects fix assemble_opts at 'user' and offer
+  # no way to change it, so the only way to get here is missing output.
+  tryCatch({
+    stale <- stale_assemble_dirs(session$userData$con, session$userData$dir_out)
+    if (nrow(stale) > 0) {
+      shinyWidgets::sendSweetAlert(
+        session = session,
+        title = "Assembly output not found",
+        text = shiny::tags$div(
+          shiny::tags$p(
+            "The assembly output for these samples is not on disk, so the ",
+            "output folder was moved or deleted:"
+          ),
+          shiny::tags$ul(stale_assemble_items(stale)),
+          shiny::tags$p(
+            "Restore the output folder, or re-run Assembly to publish it again."
+          ),
+          shiny::tags$p(
+            "These samples are locked and awaiting annotation, so until then ",
+            "Annotation and Curation will fail or will silently run without any ",
+            "reference hits."
+          )
+        ),
+        html = TRUE,
+        type = "warning"
+      )
+    }
+  }, error = function(e) NULL)
+
   # No-raw-data mode ----
   # rawDir = 'NA' in .config signals an assembly-only project (no reads/coverage).
   # Used to hide read-derived columns in the Assemble table.

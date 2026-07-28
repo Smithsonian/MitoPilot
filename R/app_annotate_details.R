@@ -3914,10 +3914,7 @@ annotations_details_server <- function(id, rv) {
     do_join_merge <- function(rows_to_merge, merge_anns, join_mode, slip_note = NULL) {
       # Unique group id = one past the max existing group in this sample. A
       # whole-second Sys.time() collides when two joins happen in the same second.
-      existing_grps <- as.integer(
-        stringr::str_match(rv$annotations$notes %|NA|% "", "group=(\\d+)")[, 2]
-      )
-      grp <- if (all(is.na(existing_grps))) 1L else max(existing_grps, na.rm = TRUE) + 1L
+      grp <- next_join_group(rv$annotations$notes)
       marker <- stringr::str_glue("JOIN: mode={join_mode} group={grp}")
       # frameshift note travels to export in the marker; ";" would break the
       # "; "-joined notes field, so swap it for ","
