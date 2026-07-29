@@ -167,7 +167,7 @@ of the curation rulesets are contained in the underlying Docker image
 If you have a group of organisms that you would like to try with
 MitoPilot, feel free to post an
 [issue](https://github.com/Smithsonian/MitoPilot/issues) or reach out to
-Dan MacGuigan directly at <daniel.macguigan@noaa.gov>.
+Dan MacGuigan directly at <macguigand@si.edu>.
 
 Curation reference databases can be specified independently of the
 annotation reference databases. We have provided curation databases for
