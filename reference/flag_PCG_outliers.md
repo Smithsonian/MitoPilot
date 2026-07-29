@@ -68,4 +68,11 @@ A list with two elements:
 - alignments:
 
   A named list (by gene) of clustering-ordered aligned \`AAStringSet\`
-  objects, for every gene that has a flagged sample.
+  objects, for every gene that has a flagged sample (plus any explicitly
+  requested via \`genes\`, even if their last flag was cleared).
+
+- samples:
+
+  A named list (by gene) of tibbles listing every unit in the gene's
+  alignment (\`ID\`, \`label\`, \`path\`, \`scaffold\`), flagged or not,
+  so the review UI can edit any sample of the gene.

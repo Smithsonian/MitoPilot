@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -170,7 +170,7 @@
 <li><a href="https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html">Smithsonian NMNH Hydra</a></li>
 <li><a href="https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html">NOAA SEDNA</a></li>
 </ul>
-<p>To use MitoPilot, you will need <a href="https://www.r-project.org/" class="external-link">R (&gt;=4.4.0)</a> and <a href="https://www.nextflow.io/docs/latest/install.html" class="external-link">Nextflow</a>. In addition, depending or where Nextflow will be executing the pipeline (e.g., locally or on a remote cluster), you may also need to install <a href="https://docs.docker.com/engine/install/" class="external-link">Docker</a> or <a href="https://docs.sylabs.io/guides/latest/user-guide/quick_start.html#quick-installation-steps" class="external-link">Singularity</a>.</p>
+<p>To use MitoPilot, you will need <a href="https://www.r-project.org/" class="external-link">R (&gt;=4.4.0)</a> and <a href="https://www.nextflow.io/docs/latest/install.html" class="external-link">Nextflow (&gt;= 24.10.x, &lt;= 25.10.x)</a>. In addition, depending or where Nextflow will be executing the pipeline (e.g., locally or on a remote cluster), you may also need to install <a href="https://docs.docker.com/engine/install/" class="external-link">Docker</a> or <a href="https://docs.sylabs.io/guides/latest/user-guide/quick_start.html#quick-installation-steps" class="external-link">Singularity</a>.</p>
 <p>Once you have R and Nextflow installed, install <a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a> in R from GitHub:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -180,6 +180,19 @@
 <p>Alternatively, you can clone this repository and install the package locally from the project folder:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<div class="section level2">
+<h2 id="nextflow-version-compatibility">Nextflow version compatibility<a class="anchor" aria-label="anchor" href="#nextflow-version-compatibility"></a>
+</h2>
+<p>MitoPilot checks your Nextflow version when the package is loaded and when you create or launch a project. If your version is <strong>too old</strong>, the package refuses to load and prompts you to update. If it is <strong>too new</strong>, MitoPilot automatically sets the <code>NXF_VER</code> environment variable to a compatible version.</p>
+<p>The MitoPilot pipeline is tested and supported on <strong>Nextflow 24.10.x through 25.10.x</strong>. Versions outside this range are known to break it:</p>
+<ul>
+<li>
+<strong>Nextflow 26.0 and newer</strong> removed an internal method (<code>NF.isDsl2()</code>) that the <a href="https://github.com/nextflow-io/nf-sqldb" class="external-link"><code>nf-sqldb</code></a> plugin calls at load time. No released <code>nf-sqldb</code> version currently supports Nextflow 26+.</li>
+<li>
+<strong>Versions older than 24.10</strong> silently ignore the pipeline’s <code>workflow.failOnIgnore</code>
+</li>
+</ul>
+</div>
 </div>
 <div class="section level1">
 <h1 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a>

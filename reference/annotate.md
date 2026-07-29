@@ -11,7 +11,7 @@ annotate(
   cpus = 4,
   genetic_code = "2",
   ref_db = "Chordata",
-  ref_dir = "/home/harpua/Jzonah/MitoPilot/ref_dbs/Mitos2",
+  ref_dir = NULL,
   use_mitos = TRUE,
   mitos_opts = "--intron 0 --oril 0",
   mitos_condaenv = "mitos",
@@ -63,7 +63,9 @@ annotate(
 
 - ref_dir:
 
-  Path to the Mitos2 reference database.
+  Unused, retained for backwards compatibility. MITOS2 is always run
+  with \`–refdir .\`, so the \`ref_db\` directory must be staged in the
+  working directory.
 
 - use_mitos:
 

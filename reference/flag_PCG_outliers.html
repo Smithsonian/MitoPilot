@@ -19,7 +19,7 @@ badly annotated regions)."><meta property="og:image" content="https://smithsonia
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -123,7 +123,13 @@ genes).</p></dd>
 
     <dt>alignments</dt>
 <dd><p>A named list (by gene) of clustering-ordered aligned
-      `AAStringSet` objects, for every gene that has a flagged sample.</p></dd>
+      `AAStringSet` objects, for every gene that has a flagged sample (plus any
+      explicitly requested via `genes`, even if their last flag was cleared).</p></dd>
+
+    <dt>samples</dt>
+<dd><p>A named list (by gene) of tibbles listing every unit in the
+      gene's alignment (`ID`, `label`, `path`, `scaffold`), flagged or not, so
+      the review UI can edit any sample of the gene.</p></dd>
 
 
 </dl></div>
