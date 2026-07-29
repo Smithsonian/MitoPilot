@@ -81,26 +81,10 @@ $( document ).ready(function(){
   });
 });
 
-// Mousewheel -> horizontal scroll for the annotate-details alignment views.
-// The coverage map and synteny PNGs sit in overflow-x:auto containers
-// (coverageDiv / syntenyScrollDiv). Translate vertical wheel delta into
-// horizontal scroll (down = right, up = left) and suppress page scroll over
-// these views. The MSA viewer is intentionally excluded: it needs vertical
-// wheel for scrolling alignment rows up/down.
-$( document ).ready(function(){
-  document.addEventListener('wheel', function(e) {
-    if (!e.target.closest) return;
-    var delta = e.deltaY;
-    if (!delta) return;
-
-    var box = e.target.closest('[id$="coverageDiv"], [id$="syntenyScrollDiv"]');
-    if (box) {
-      box.scrollLeft += delta;
-      e.preventDefault();
-      return;
-    }
-  }, { passive: false });
-});
+// The annotate-details views (coverage map, synteny, synteny zoom, alignment)
+// use native scrolling only: a vertical wheel scrolls the page, and horizontal
+// input scrolls the view. Vertical wheel is deliberately NOT translated into
+// horizontal scroll here.
 
 // Add an "All" choice to the sample-table page-size dropdowns. reactable
 // (0.4.5) has no native "All", so append an option with a very large page size

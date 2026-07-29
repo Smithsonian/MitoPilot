@@ -161,6 +161,10 @@ annotations_details_server <- function(id, rv) {
           copy = TRUE,
           in_place = TRUE
         )
+      # The trim control measures the unannotated flanks straight from the db, so
+      # any annotation write can change them (deleting, restoring or nudging the
+      # outermost feature). Bump after the write so the re-read sees it.
+      bump_asmb_edit()
     }
 
     # Write the given columns of rv$updating to this unit's annotate row. Keyed on
