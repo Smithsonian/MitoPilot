@@ -237,8 +237,8 @@ unannotated_ends <- function(con, id, path, scaffold) {
 #'
 #' Rewrites `assemblies` (sequence, length, per-position depth/gc/error strings),
 #' shifts every live annotation by the same offset, rewrites the unit's
-#' annotate-stage FASTA + coverage CSV, drops the now-stale cached reference
-#' alignment, and updates `annotate.length`. No feature is ever dropped or cut,
+#' annotate-stage FASTA + coverage CSV, restricts the cached reference alignments
+#' to the retained range, and updates `annotate.length`. No feature is ever cut,
 #' so counts, spans and `annotate.structure` are unchanged by construction.
 #'
 #' @return list(length, removed_lead, removed_trail)
@@ -349,7 +349,7 @@ trim_assembly_ends <- function(con, id, path, scaffold, dir_out) {
     }
   }
 
-  drop_stale_ref_alignment(con, id, path, scaffold)
+  project_ref_alignment_trim(con, id, path, scaffold, n, from, to)
   write_unit_assembly_fasta(dir_out, id, path, scaffold, new_seq, asm$topology[1])
 
   DBI::dbExecute(
@@ -364,19 +364,241 @@ trim_assembly_ends <- function(con, id, path, scaffold, dir_out) {
 #'
 #' `blast_ref_alignment` holds a gapped whole-genome alignment computed against
 #' the stored sequence; the synteny view projects sample coordinates through it.
-#' Any edit to the sequence invalidates it, and nothing in the app rebuilds it,
-#' so delete rather than let the panel silently mis-register. WF1's backfill is
-#' NOT EXISTS-guarded, so the next pipeline run regenerates it.
+#' Any edit to the sequence invalidates it, so a row that can no longer be
+#' repaired in place is deleted rather than left to mis-register the panel. The
+#' modal recomputes a missing row on demand ([ensure_ref_alignment()]), and WF1's
+#' backfill is NOT EXISTS-guarded, so the next pipeline run also regenerates it.
 #' @noRd
-drop_stale_ref_alignment <- function(con, id, path, scaffold) {
+drop_stale_ref_alignment <- function(con, id, path, scaffold, accession = NULL) {
+  tryCatch(
+    if (is.null(accession)) {
+      DBI::dbExecute(
+        con,
+        "DELETE FROM blast_ref_alignment WHERE ID = ? AND path = ? AND scaffold = ?",
+        params = list(as.character(id), as.integer(path), as.integer(scaffold))
+      )
+    } else {
+      DBI::dbExecute(
+        con,
+        "DELETE FROM blast_ref_alignment
+         WHERE ID = ? AND path = ? AND scaffold = ? AND accession = ?",
+        params = list(as.character(id), as.integer(path), as.integer(scaffold),
+                      as.character(accession))
+      )
+    },
+    error = function(e) NULL
+  )
+  invisible()
+}
+
+#' Every cached alignment row for one unit, or NULL.
+#' @noRd
+ref_alignment_rows <- function(con, id, path, scaffold) {
+  tryCatch({
+    if (!DBI::dbExistsTable(con, "blast_ref_alignment")) return(NULL)
+    rows <- DBI::dbGetQuery(
+      con,
+      "SELECT * FROM blast_ref_alignment WHERE ID = ? AND path = ? AND scaffold = ?",
+      params = list(as.character(id), as.integer(path), as.integer(scaffold))
+    )
+    if (nrow(rows) == 0) NULL else rows
+  }, error = function(e) NULL)
+}
+
+#' Write a repaired alignment back over its cached row.
+#'
+#' UPDATE rather than INSERT OR REPLACE so `accession`, `ref_length` and `strand`
+#' keep the aligner's own values.
+#' @noRd
+update_ref_alignment_row <- function(con, id, path, scaffold, accession, res) {
   tryCatch(
     DBI::dbExecute(
       con,
-      "DELETE FROM blast_ref_alignment WHERE ID = ? AND path = ? AND scaffold = ?",
-      params = list(as.character(id), as.integer(path), as.integer(scaffold))
+      "UPDATE blast_ref_alignment
+         SET aligned_sample = ?, aligned_ref = ?, rotation = ?, ref_start = ?,
+             time_stamp = ?
+       WHERE ID = ? AND path = ? AND scaffold = ? AND accession = ?",
+      params = list(
+        res$aligned_sample, res$aligned_ref,
+        as.integer(res$rotation), as.integer(res$ref_start),
+        as.integer(Sys.time()),
+        as.character(id), as.integer(path), as.integer(scaffold),
+        as.character(accession)
+      )
     ),
     error = function(e) NULL
   )
+  invisible()
+}
+
+#' Restrict a stored alignment to a sub-range of the sample (trim)
+#'
+#' The trimmed sequence is a substring of the aligned one, so the alignment does
+#' not need recomputing: drop the cut bases out of the sample track and keep every
+#' column that still carries a reference base. Exact for the retained region and
+#' O(alignment length).
+#'
+#' Two invariants the synteny plot depends on are preserved. Ungapped
+#' `aligned_ref` still equals the whole (rotated) reference, because only columns
+#' that are gaps on BOTH tracks are dropped; and ungapped `aligned_sample` equals
+#' the trimmed assembly, because a cut base becomes a sample gap.
+#'
+#' `strand` is the aligner's own value, so on a "-" row `aligned_sample` is the
+#' reverse complement of the assembly and the kept window mirrors with it.
+#'
+#' @param n length of the assembly the stored row was computed against.
+#' @param from,to 1-based retained range in assembly coordinates.
+#' @return list(aligned_sample, aligned_ref, rotation, ref_start), or NULL if the
+#'   row cannot be projected and should be dropped instead.
+#' @noRd
+project_alignment_trim <- function(aligned_sample, aligned_ref, strand, rotation,
+                                   n, from, to) {
+  if (length(aligned_sample) != 1 || length(aligned_ref) != 1) return(NULL)
+  if (is.na(aligned_sample) || is.na(aligned_ref)) return(NULL)
+  if (!nzchar(aligned_sample) || !nzchar(aligned_ref)) return(NULL)
+  s <- strsplit(aligned_sample, "")[[1]]
+  r <- strsplit(aligned_ref, "")[[1]]
+  if (length(s) != length(r)) return(NULL)
+  is_s <- s != "-"
+  # A row whose sample track is a different length from the assembly is already
+  # stale from some other cause; repairing it would cement the error.
+  if (sum(is_s) != n) return(NULL)
+  if (from < 1L || to > n || from > to) return(NULL)
+
+  win <- if (identical(strand, "-")) c(n - to + 1L, n - from + 1L) else c(from, to)
+  sidx <- cumsum(is_s)
+  keep <- is_s & sidx >= win[1] & sidx <= win[2]
+  cut <- is_s & !keep
+  s[cut] <- "-"
+  drop_col <- cut & r == "-"
+  s <- s[!drop_col]
+  r <- r[!drop_col]
+
+  first <- which(s != "-")
+  if (length(first) == 0) return(NULL)
+  list(
+    aligned_sample = paste(s, collapse = ""),
+    aligned_ref    = paste(r, collapse = ""),
+    rotation       = rotation,
+    ref_start      = sum(r[seq_len(first[1] - 1L)] != "-")
+  )
+}
+
+#' Re-cut a stored alignment for a rotated sample (linearize)
+#'
+#' Linearize rotates the assembly so a chosen gene boundary becomes position 1.
+#' The homology is unchanged, only the origin moved, so the alignment can be
+#' rotated with it: cut the column vector at the new origin's column and swap the
+#' halves. That rotates BOTH tracks by the same cut, so the pair stays collinear;
+#' the reference simply starts at a different base, which is what `rotation`
+#' records. O(alignment length), and exact.
+#'
+#' Only valid when the reference is circular, which the caller checks: permuting
+#' a linear reference would invent an origin it does not have.
+#'
+#' @param start 1-based assembly position that becomes position 1.
+#' @param n assembly length (unchanged by the rotation).
+#' @return list(aligned_sample, aligned_ref, rotation, ref_start), or NULL if the
+#'   row cannot be rotated and should be dropped instead.
+#' @noRd
+rotate_alignment_columns <- function(aligned_sample, aligned_ref, strand, rotation,
+                                     ref_length, n, start) {
+  if (length(aligned_sample) != 1 || length(aligned_ref) != 1) return(NULL)
+  if (is.na(aligned_sample) || is.na(aligned_ref)) return(NULL)
+  if (!nzchar(aligned_sample) || !nzchar(aligned_ref)) return(NULL)
+  if (is.na(ref_length) || ref_length <= 0) return(NULL)
+  if (is.na(start) || start <= 1L || start > n) return(NULL)
+  s <- strsplit(aligned_sample, "")[[1]]
+  r <- strsplit(aligned_ref, "")[[1]]
+  if (length(s) != length(r)) return(NULL)
+  is_s <- s != "-"
+  if (sum(is_s) != n) return(NULL)
+  if (sum(r != "-") != ref_length) return(NULL)
+
+  # Sample index of the base that becomes position 1, in the stored strand's
+  # coordinates. On a "-" row the stored track is the reverse complement, and
+  # rotating the assembly left by (start - 1) rotates its reverse complement left
+  # by (n - start + 1), so the new origin is base n - start + 2.
+  k <- if (identical(strand, "-")) n - start + 2L else start
+  if (k < 2L || k > n) return(NULL)
+  cut <- which(is_s)[k]
+
+  ord <- c(cut:length(s), seq_len(cut - 1L))
+  r_off <- sum(r[seq_len(cut - 1L)] != "-")
+  s <- s[ord]
+  r <- r[ord]
+
+  first <- which(s != "-")
+  if (length(first) == 0) return(NULL)
+  list(
+    aligned_sample = paste(s, collapse = ""),
+    aligned_ref    = paste(r, collapse = ""),
+    rotation       = (rotation + r_off) %% ref_length,
+    ref_start      = sum(r[seq_len(first[1] - 1L)] != "-")
+  )
+}
+
+#' Which of these accessions are circular references?
+#' @noRd
+circular_ref_accessions <- function(con, accessions) {
+  accessions <- unique(stats::na.omit(as.character(accessions)))
+  if (length(accessions) == 0) return(character(0))
+  tryCatch({
+    rows <- DBI::dbGetQuery(
+      con,
+      sprintf("SELECT accession, topology FROM blast_ref_sequences WHERE accession IN (%s)",
+              paste(rep("?", length(accessions)), collapse = ",")),
+      params = as.list(accessions)
+    )
+    rows$accession[!is.na(rows$topology) & rows$topology == "circular"]
+  }, error = function(e) character(0))
+}
+
+#' Keep a unit's cached alignments in step with a trim
+#'
+#' Repairs every candidate reference's row in place; a row that cannot be
+#' projected is dropped so the modal recomputes it instead of drawing it wrong.
+#' @noRd
+project_ref_alignment_trim <- function(con, id, path, scaffold, n, from, to) {
+  rows <- ref_alignment_rows(con, id, path, scaffold)
+  if (is.null(rows)) return(invisible())
+  for (i in seq_len(nrow(rows))) {
+    res <- tryCatch(
+      project_alignment_trim(
+        rows$aligned_sample[i], rows$aligned_ref[i], rows$strand[i],
+        rows$rotation[i], n, from, to
+      ),
+      error = function(e) NULL
+    )
+    if (is.null(res)) {
+      drop_stale_ref_alignment(con, id, path, scaffold, rows$accession[i])
+    } else {
+      update_ref_alignment_row(con, id, path, scaffold, rows$accession[i], res)
+    }
+  }
+  invisible()
+}
+
+#' Keep a unit's cached alignments in step with a linearize rotation
+#' @noRd
+rotate_ref_alignment <- function(con, id, path, scaffold, n, start) {
+  rows <- ref_alignment_rows(con, id, path, scaffold)
+  if (is.null(rows)) return(invisible())
+  circular <- circular_ref_accessions(con, rows$accession)
+  for (i in seq_len(nrow(rows))) {
+    res <- if (!(rows$accession[i] %in% circular)) NULL else tryCatch(
+      rotate_alignment_columns(
+        rows$aligned_sample[i], rows$aligned_ref[i], rows$strand[i],
+        rows$rotation[i], rows$ref_length[i], n, start
+      ),
+      error = function(e) NULL
+    )
+    if (is.null(res)) {
+      drop_stale_ref_alignment(con, id, path, scaffold, rows$accession[i])
+    } else {
+      update_ref_alignment_row(con, id, path, scaffold, rows$accession[i], res)
+    }
+  }
   invisible()
 }
 

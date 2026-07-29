@@ -216,6 +216,11 @@ annotations_details_server <- function(id, rv) {
     # Active synteny-plot reference accession (user pick, else top hit).
     active_ref_acc <- reactiveVal(NULL)
 
+    # (unit, accession) pairs whose on-demand alignment already failed once this
+    # session. Keeps a reference that cannot be aligned from re-running the
+    # aligner on every modal open.
+    aln_recompute_failed <- new.env(parent = emptyenv())
+
     # Load reference annotations / sequence / alignment for one accession into rv.
     # Used on modal open and whenever the user switches the reference in the picker.
     load_blast_ref <- function(acc) {
@@ -240,7 +245,7 @@ annotations_details_server <- function(id, rv) {
       # Normalised on load so every consumer below sees the sample in its STORED
       # orientation (matching the coverage map) with any reverse-complement moved
       # onto the reference track. See normalize_blast_ref_alignment().
-      rv$blast_ref_aln <- tryCatch(
+      read_aln <- function() tryCatch(
         normalize_blast_ref_alignment(
           dplyr::tbl(session$userData$con, "blast_ref_alignment") |>
             dplyr::filter(ID == !!rv$updating$ID,
@@ -251,6 +256,34 @@ annotations_details_server <- function(id, rv) {
         ),
         error = function(e) NULL
       )
+      aln <- read_aln()
+      # No cached alignment: build one now rather than leave the panel without a
+      # synteny view. Happens when an assembly edit invalidated the row beyond
+      # repair, when the pipeline's align step failed, or on a project old enough
+      # to predate it. ~6 s for a mitogenome pair and blocking, so it runs behind
+      # a spinner, only for the reference actually being displayed, and a failure
+      # is remembered for the session so reopening the modal cannot loop on it.
+      key <- paste(rv$updating$ID, rv$updating$path, rv$updating$scaffold, acc)
+      if ((is.null(aln) || nrow(aln) == 0) && !isTRUE(aln_recompute_failed[[key]])) {
+        waiter::waiter_show(
+          html = tagList(
+            waiter::spin_fading_circles(),
+            tags$h4(style = "color:white; margin-top:1em;",
+                    "Computing reference alignment, hold tight...")
+          ),
+          color = "rgba(40,40,40,0.85)"
+        )
+        ok <- tryCatch(
+          ensure_ref_alignment(
+            session$userData$con, rv$updating$ID, rv$updating$path,
+            rv$updating$scaffold, acc
+          ),
+          error = function(e) FALSE,
+          finally = waiter::waiter_hide()
+        )
+        if (isTRUE(ok)) aln <- read_aln() else aln_recompute_failed[[key]] <- TRUE
+      }
+      rv$blast_ref_aln <- aln
     }
 
     # Prepare modal data ----
@@ -2640,9 +2673,20 @@ annotations_details_server <- function(id, rv) {
       )
       ## Rotate to cut point ----
       if (start > 1) {
+        asmb_len <- assembly@ranges@width
         assembly <- Biostrings::xscat(
-          Biostrings::subseq(assembly, start, assembly@ranges@width),
+          Biostrings::subseq(assembly, start, asmb_len),
           Biostrings::subseq(assembly, 1, start - 1)
+        )
+
+        ## Keep the cached reference alignments in step ----
+        # Rotating the sample rotates the alignment with it (circular reference),
+        # so the synteny view stays correct without realigning. A row that cannot
+        # be rotated is dropped rather than left to mis-register; load_blast_ref
+        # recomputes it on the next open.
+        rotate_ref_alignment(
+          session$userData$con, rv$updating$ID, rv$updating$path,
+          rv$updating$scaffold, asmb_len, start
         )
 
         ## Rotate coverage ----
@@ -2733,6 +2777,9 @@ annotations_details_server <- function(id, rv) {
       # Reveal Restore, and re-measure the flanks the assembly now has as a
       # linear molecule (Trim is only available once it is linear).
       bump_asmb_edit()
+      # Re-read the alignment the rotation just rewrote, so the open modal's
+      # synteny view redraws from it instead of the pre-rotation copy.
+      load_blast_ref(active_ref_acc())
     }) # END LINEARIZE
 
     # Assembly edits: trim unannotated ends / restore ----
