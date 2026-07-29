@@ -29,6 +29,34 @@ export_help_label <- function(label, tip) {
   htmltools::tagList(label, export_help_icon(tip))
 }
 
+# Per-gene signature of one unit's PCG annotations, read straight from the db.
+# Covers exactly the fields flag_PCG_outliers aligns on (see
+# get_export_PCG_annotations), so two equal signatures mean the alignment for
+# that gene cannot have changed. Returns a named character vector (names =
+# gene); multi-exon genes collapse order-independently.
+unit_pcg_sig <- function(con, ID, path, scaffold) {
+  rows <- DBI::dbGetQuery(
+    con,
+    "SELECT gene, pos1, pos2, direction, translation FROM annotations
+      WHERE ID = ? AND path = ? AND scaffold = ? AND type = 'PCG' AND pos1 > 0",
+    params = list(as.character(ID), as.integer(path), as.integer(scaffold))
+  )
+  if (nrow(rows) == 0) return(stats::setNames(character(0), character(0)))
+  key <- paste(rows$pos1, rows$pos2, rows$direction, rows$translation, sep = "|")
+  vapply(split(key, rows$gene), function(x) paste(sort(x), collapse = ";"), character(1))
+}
+
+# Genes whose signature differs between two unit_pcg_sig snapshots (edited,
+# added or removed). NULL for either snapshot means "unknown", never "unchanged".
+sig_diff <- function(before, now) {
+  if (is.null(before) || is.null(now)) return(NULL)
+  genes <- union(names(before), names(now))
+  if (length(genes) == 0) return(character(0))
+  b <- unname(before[genes])
+  n <- unname(now[genes])
+  genes[!(!is.na(b) & !is.na(n) & b == n)]
+}
+
 #' export UI Function
 #'
 #' @description A shiny Module.
@@ -104,13 +132,18 @@ export_server <- function(id) {
       data = fetch_export_data(),
       updating = NULL,
       outliers = NULL,    # flags tibble from flag_PCG_outliers()
-      alns = NULL,        # named list of aligned AAStringSet (by gene)
       review_samples = NULL, # named list (by gene) of every unit in the alignment,
                              # so any sample can be picked for editing (not just flagged)
       review_genes = NULL, # genes still pending review (drives navigation)
       review_idx = 1L,     # cursor into review_genes
       resolved = character(0), # "ID|gene" keys the user marked resolved;
                               # persists across flag/alignment recomputes
+      # The (unit, gene) the user jumped out to edit, plus that unit's PCG
+      # signature at jump-out. Compared against the db on return to decide what
+      # to re-align. Owned here, not by the annotate module, so the decision
+      # never depends on the details modal's state surviving the round trip.
+      review_focus = NULL,
+      review_focus_sig = NULL,
       # Currently selected header-template name, so the modal reopens with it
       export_template = "default",
       # Last-used review options, so the modal reopens with them (not defaults)
@@ -952,14 +985,38 @@ export_server <- function(id) {
       open_path(rv$export_done_path)
     })
 
+    # Aligned AAStringSets for the review modal, keyed by gene, held in a plain
+    # environment rather than a reactiveValues field. These are large objects that
+    # need no dependency tracking of their own: every write is immediately followed
+    # by trigger("outlier_modal"), and aln_nonce() is what invalidates the panel.
+    # Keeping them out of reactiveValues also removes the copy-on-write hop that
+    # was leaving the panel one edit behind the recompute.
+    aln_store <- new.env(parent = emptyenv())
+    aln_put <- function(gene, aln) {
+      if (is.null(gene)) return(invisible())
+      if (is.null(aln)) {
+        if (exists(gene, aln_store, inherits = FALSE)) rm(list = gene, envir = aln_store)
+      } else {
+        assign(gene, aln, envir = aln_store)
+      }
+    }
+    aln_get <- function(gene) {
+      if (is.null(gene) || !exists(gene, aln_store, inherits = FALSE)) return(NULL)
+      get(gene, envir = aln_store)
+    }
+    aln_reset <- function(alns = list()) {
+      rm(list = ls(aln_store, all.names = TRUE), envir = aln_store)
+      for (g in names(alns)) aln_put(g, alns[[g]])
+    }
+
     # Load a review result into rv and open the modal (or report none found).
     # focus_gene: optional gene name to navigate to (e.g. the gene just reviewed
     # via "Back to Review"); falls back to the first gene when absent or no longer
     # flagged.
     present_review <- function(res, focus_gene = NULL) {
       rv$outliers <- res$flags
-      rv$alns <- res$alignments
       rv$review_samples <- res$samples
+      aln_reset(res$alignments)
       flagged_genes <- unique(res$flags$gene)
       if (length(flagged_genes) > 0) {
         rv$review_genes <- flagged_genes
@@ -976,52 +1033,81 @@ export_server <- function(id) {
       }
     }
 
-    # Merge a single-gene recompute into the cached review state. Editing one gene
-    # only changes that gene's alignment, so replace just its flags/alignment and
-    # keep review_genes (and the user's position) stable, then navigate back to
-    # the focal gene and reopen.
-    merge_review <- function(res, gene) {
+    # Merge a scoped recompute into the cached review state. Only the genes that
+    # actually changed are re-aligned, so replace just their flags/alignments and
+    # keep review_genes (and the user's position) stable, then navigate to
+    # focus_gene and reopen.
+    merge_review <- function(res, genes, focus_gene = NULL) {
       rv$outliers <- dplyr::bind_rows(
-        rv$outliers[rv$outliers$gene != gene, , drop = FALSE],
+        rv$outliers[!rv$outliers$gene %in% genes, , drop = FALSE],
         res$flags
       )
-      # res$alignments/res$samples keep the recomputed gene even when the edit
+      # res$alignments/res$samples keep a recomputed gene even when the edit
       # cleared its last flag (flag_PCG_outliers retains explicitly-requested
       # genes), so the corrected alignment replaces the stale one instead of the
       # panel freezing on the pre-edit view.
-      rv$alns[[gene]] <- res$alignments[[gene]]
-      rv$review_samples[[gene]] <- res$samples[[gene]]
+      samps <- rv$review_samples
+      for (g in genes) {
+        aln_put(g, res$alignments[[g]])
+        samps[[g]] <- res$samples[[g]]
+      }
+      rv$review_samples <- samps
       # review_genes intentionally unchanged: genes stay in the list and are
       # marked resolved rather than removed.
-      if (gene %in% rv$review_genes) {
-        rv$review_idx <- which(rv$review_genes == gene)[1]
+      if (!is.null(focus_gene) && focus_gene %in% rv$review_genes) {
+        rv$review_idx <- which(rv$review_genes == focus_gene)[1]
       }
       removeModal()
       trigger("outlier_modal")
     }
 
-    # Returning from the annotate details modal: recompute against the (now
-    # possibly edited) annotations so resolved flags drop off, then reopen. The
-    # editing lock guarantees only the focal gene changed, so recompute just that
-    # gene and merge it into the cached results instead of re-aligning every PCG.
+    # Remember which unit/gene the user is off to edit and snapshot that unit's
+    # current PCG signature, so the return trip can tell exactly what changed.
+    set_review_focus <- function(ID, path, scaffold, gene) {
+      rv$review_focus <- list(ID = ID, path = path, scaffold = scaffold, gene = gene)
+      rv$review_focus_sig <- tryCatch(
+        unit_pcg_sig(session$userData$con, ID, path, scaffold),
+        error = function(e) NULL
+      )
+    }
+
+    # Returning from the annotate details modal: re-align whatever the user
+    # actually changed so resolved flags drop off, then reopen.
+    #
+    # What changed is decided HERE, by diffing the focal unit's PCG annotations in
+    # the db against the snapshot taken when we jumped out. The db is the same
+    # source flag_PCG_outliers reads, so the verdict cannot disagree with the
+    # alignment. (An earlier version trusted a flag the annotate module set from
+    # its in-memory copy; that flag could survive a rejected close or be wiped by
+    # an unrelated modal reload, and a wrong "unchanged" silently showed the
+    # pre-edit alignment with no recompute.)
     on("reopen_outlier_review", {
       req(rv$review_group)
-      # The (sample, gene) just reviewed in the annotate details modal: mark it
-      # resolved (survives the recompute below) and remember the gene so we can
-      # navigate back to it.
-      rr <- session$userData$resolve_on_return
-      session$userData$resolve_on_return <- NULL
-      focal <- if (!is.null(rr)) rr$gene else NULL
-      # Only skip the recompute when the details modal reported NO change (explicit
-      # FALSE); an unset flag means recompute to be safe.
-      unchanged <- identical(session$userData$review_annotation_changed, FALSE)
-      session$userData$review_annotation_changed <- NULL
-      if (!is.null(rr)) {
-        rv$resolved <- union(rv$resolved, paste(rr$ID, rr$gene, sep = "|"))
+      # The (unit, gene) just reviewed: mark it resolved (survives the recompute
+      # below) and remember the gene so we can navigate back to it.
+      focus <- rv$review_focus
+      sig_before <- rv$review_focus_sig
+      rv$review_focus <- NULL
+      rv$review_focus_sig <- NULL
+      focal <- if (!is.null(focus)) focus$gene else NULL
+      if (!is.null(focus)) {
+        rv$resolved <- union(rv$resolved, paste(focus$ID, focus$gene, sep = "|"))
       }
-      # Nothing was edited: the cached flags/alignments are still valid, so just
+      have_cache <- !is.null(rv$outliers) && length(rv$review_genes) > 0
+      # NULL = we could not read one of the two states, so treat everything as
+      # suspect and reload the whole group.
+      changed <- if (is.null(focus)) {
+        NULL
+      } else {
+        sig_now <- tryCatch(
+          unit_pcg_sig(session$userData$con, focus$ID, focus$path, focus$scaffold),
+          error = function(e) NULL
+        )
+        sig_diff(sig_before, sig_now)
+      }
+      # Nothing in the db moved: the cached flags/alignments are still valid, so
       # reopen at the focal gene and skip the (expensive) alignment recompute.
-      if (unchanged && !is.null(rv$outliers) && length(rv$review_genes) > 0) {
+      if (!is.null(changed) && length(changed) == 0 && have_cache) {
         if (!is.null(focal) && focal %in% rv$review_genes) {
           rv$review_idx <- which(rv$review_genes == focal)[1]
         }
@@ -1029,6 +1115,9 @@ export_server <- function(id) {
         trigger("outlier_modal")
         return()
       }
+      # Scope the recompute to the changed genes only when we know them AND have
+      # cached state to merge into; otherwise re-align the whole group.
+      scope <- if (!is.null(changed) && length(changed) > 0 && have_cache) changed else NULL
       # Show the overlay first, then defer the (blocking) recompute one tick so
       # the "hold tight" message actually paints before alignment starts.
       waiter::waiter_show(
@@ -1046,22 +1135,12 @@ export_server <- function(id) {
             start_aa = rv$review_start %||% 10,
             stop_aa = rv$review_stop %||% 10,
             ident_pct = rv$review_ident %||% 60,
-            genes = focal
+            genes = scope
           ),
           finally = waiter::waiter_hide()
         )
-        # TEMP diagnostic: ungapped AA length per sequence straight from the fresh
-        # recompute (compare against "REVIEW RENDER" to localize any staleness).
-        if (!is.null(focal) && !is.null(res$alignments[[focal]])) {
-          message(
-            "RECOMPUTE gene=", focal,
-            " lens=", paste(nchar(gsub("-", "", as.character(res$alignments[[focal]]))), collapse = ",")
-          )
-        }
-        # Scoped merge when we know the single edited gene and have cached state;
-        # otherwise fall back to a full reload.
-        if (!is.null(focal) && !is.null(rv$outliers)) {
-          merge_review(res, focal)
+        if (!is.null(scope)) {
+          merge_review(res, scope, focus_gene = focal)
         } else {
           present_review(res, focus_gene = focal)
         }
@@ -1260,8 +1339,10 @@ export_server <- function(id) {
     # Size the alignment viewport to the number of sequences so small groups
     # don't leave a large blank gap below the rows.
     review_aln_height <- reactive({
+      # aln_nonce() so the height tracks the store, which is not reactive itself.
+      aln_nonce()
       g <- current_gene()
-      aln <- rv$alns[[g]]
+      aln <- aln_get(g)
       if (is.null(aln)) return(120L)
       min(400L, max(120L, as.integer(length(aln) * 18 + 40)))
     })
@@ -1269,7 +1350,7 @@ export_server <- function(id) {
     # Render the MSA as the uiOutput content itself (not a msaROutput placeholder
     # filled by a separate renderMsaR). Returning the widget from renderUI makes
     # Shiny REPLACE the container's innerHTML on every (re)open, so the old widget
-    # DOM is torn down and a fresh one built from the current rv$alns - the
+    # DOM is torn down and a fresh one built from the current alignment store - the
     # msaROutput+dynamic-renderMsaR pattern instead let htmlwidgets reuse a stale
     # binding (and msaR::renderValue appends rather than clearing), which showed the
     # pre-edit alignment after "Back to Review". aln_nonce() forces a rebuild even
@@ -1277,7 +1358,7 @@ export_server <- function(id) {
     output$review_aln_ui <- renderUI({
       aln_nonce()
       g <- current_gene()
-      aln <- rv$alns[[g]]
+      aln <- aln_get(g)
       if (is.null(aln)) {
         return(div(style = "color:#666; padding:1em;", "No alignment for this gene."))
       }
@@ -1287,11 +1368,6 @@ export_server <- function(id) {
         aln <- aln[c(which(names(aln) == hl), which(names(aln) != hl))]
         names(aln)[1] <- paste0(">> ", names(aln)[1])
       }
-      # TEMP diagnostic: ungapped AA length per sequence in the rendered alignment.
-      message(
-        "REVIEW RENDER gene=", g, " nonce=", isolate(aln_nonce()),
-        " lens=", paste(nchar(gsub("-", "", as.character(aln))), collapse = ",")
-      )
       msaR::msaR(
         aln,
         overviewbox = FALSE,
@@ -1459,6 +1535,7 @@ export_server <- function(id) {
         start_offset = fr$start_offset, stop_offset = fr$stop_offset,
         pct_identity = fr$pct_identity
       )
+      set_review_focus(fr$ID, fr$path, fr$scaffold, fr$gene)
       removeModal()
       trigger("goto_annotate")
     })
@@ -1478,6 +1555,7 @@ export_server <- function(id) {
         start_offset = NA_integer_, stop_offset = NA_integer_,
         pct_identity = NA_real_
       )
+      set_review_focus(row$ID, row$path, row$scaffold, current_gene())
       removeModal()
       trigger("goto_annotate")
     })
@@ -1488,11 +1566,13 @@ export_server <- function(id) {
       removeModal()
       highlight_label(NULL)
       rv$outliers <- NULL
-      rv$alns <- NULL
+      aln_reset()
       rv$review_samples <- NULL
       rv$review_genes <- NULL
       rv$review_idx <- 1L
       rv$resolved <- character(0)
+      rv$review_focus <- NULL
+      rv$review_focus_sig <- NULL
     })
   })
 }
