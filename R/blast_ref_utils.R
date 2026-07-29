@@ -1257,6 +1257,115 @@ normalize_blast_ref_alignment <- function(aln) {
   aln
 }
 
+#' Reference rotation offset for one unit's synteny alignment
+#'
+#' Mirrors the SQL in \code{blast_ref_align_workflow.nf}: a circular reference is
+#' rotated so the sample's \code{start_gene} anchors both sequences; a linear
+#' reference keeps its native coordinates.
+#'
+#' @return 0-based offset, 0 when unknown or the reference is linear.
+#' @noRd
+unit_ref_rotation <- function(con, id, path, scaffold, accession) {
+  tryCatch({
+    topo <- DBI::dbGetQuery(
+      con, "SELECT topology FROM blast_ref_sequences WHERE accession = ?",
+      params = list(as.character(accession))
+    )$topology
+    if (length(topo) == 0 || is.na(topo[1]) || topo[1] != "circular") return(0L)
+    sg <- DBI::dbGetQuery(
+      con,
+      "SELECT o.start_gene FROM annotate a
+         JOIN annotate_opts o ON o.annotate_opts = a.annotate_opts
+       WHERE a.ID = ? AND a.path = ? AND a.scaffold = ?",
+      params = list(as.character(id), as.integer(path), as.integer(scaffold))
+    )$start_gene
+    if (length(sg) == 0 || is.na(sg[1]) || !nzchar(sg[1])) return(0L)
+    pos <- DBI::dbGetQuery(
+      con,
+      "SELECT MIN(pos1) AS p FROM blast_ref_annotations
+       WHERE accession = ? AND gene = ?",
+      params = list(as.character(accession), as.character(sg[1]))
+    )$p
+    if (length(pos) == 0 || is.na(pos[1])) return(0L)
+    as.integer(pos[1]) - 1L
+  }, error = function(e) 0L)
+}
+
+#' Compute and cache one unit's reference alignment on demand
+#'
+#' The synteny view reads \code{blast_ref_alignment}, which WF2 populates. An
+#' in-app assembly edit can invalidate a row beyond repair, and an old or failed
+#' run may never have written one, leaving the panel without its alignment until
+#' the pipeline is re-run. This runs the same aligner the pipeline does
+#' ([compute_blast_ref_alignment()]) against the CURRENT stored sequence and
+#' caches the result, so the view repairs itself.
+#'
+#' Roughly 6 s and ~1.3 GB for a full mitogenome pair, single-threaded and
+#' blocking, so callers should show a spinner and only ask for the reference the
+#' user is actually looking at.
+#'
+#' @param max_cells refuse pairs whose dynamic-programming matrix exceeds this
+#'   many cells. The aligner costs ~5 bytes per cell, so the default is ~3 GB.
+#'   The pipeline runs the same alignment under a memory directive and can fail a
+#'   task; here an oversized pair would take the whole app down with it.
+#'
+#' @return TRUE if a row was written.
+#' @noRd
+ensure_ref_alignment <- function(con, id, path, scaffold, accession,
+                                 max_cells = 6e8) {
+  if (is.null(accession) || is.na(accession) || !nzchar(accession)) return(FALSE)
+  tryCatch({
+    if (!DBI::dbExistsTable(con, "blast_ref_alignment")) return(FALSE)
+    key <- list(as.character(id), as.integer(path), as.integer(scaffold))
+    asm <- DBI::dbGetQuery(
+      con, "SELECT sequence FROM assemblies WHERE ID = ? AND path = ? AND scaffold = ?",
+      params = key
+    )$sequence
+    if (length(asm) == 0 || is.na(asm[1]) || !nzchar(asm[1])) return(FALSE)
+    ref <- DBI::dbGetQuery(
+      con, "SELECT sequence FROM blast_ref_sequences WHERE accession = ?",
+      params = list(as.character(accession))
+    )$sequence
+    if (length(ref) == 0 || is.na(ref[1]) || !nzchar(ref[1])) return(FALSE)
+    if (as.numeric(nchar(asm[1])) * as.numeric(nchar(ref[1])) > max_cells) {
+      message("ensure_ref_alignment: ", id, ".", path, ".", scaffold,
+              " vs ", accession, " is too large to align in the app; ",
+              "re-run the pipeline for this sample instead")
+      return(FALSE)
+    }
+
+    out <- tempfile(fileext = ".csv")
+    on.exit(unlink(out), add = TRUE)
+    compute_blast_ref_alignment(
+      assembly_seq = asm[1],
+      ref_seq      = ref[1],
+      rotation     = unit_ref_rotation(con, id, path, scaffold, accession),
+      output_file  = out
+    )
+    if (!file.exists(out)) return(FALSE)
+    res <- utils::read.csv(out, stringsAsFactors = FALSE)
+    if (nrow(res) == 0 || is.na(res$aligned_sample[1]) || !nzchar(res$aligned_sample[1])) {
+      return(FALSE)
+    }
+    DBI::dbExecute(
+      con,
+      "INSERT OR REPLACE INTO blast_ref_alignment
+         (ID, path, scaffold, accession, aligned_sample, aligned_ref, rotation,
+          ref_length, ref_start, strand, time_stamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      params = list(
+        as.character(id), as.integer(path), as.integer(scaffold),
+        as.character(accession),
+        res$aligned_sample[1], res$aligned_ref[1],
+        as.integer(res$rotation[1]), as.integer(res$ref_length[1]),
+        as.integer(res$ref_start[1]), as.character(res$strand[1]),
+        as.integer(Sys.time())
+      )
+    )
+    TRUE
+  }, error = function(e) FALSE)
+}
+
 #' Pre-compute a whole-genome pairwise alignment of a sample against its BLAST
 #' reference and write the result for ingestion into the
 #' \code{blast_ref_alignment} SQLite table.
