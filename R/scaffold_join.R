@@ -1642,8 +1642,12 @@ dna_base_bg <- function(b) {
 #' @param base_maps named list (by scaffold id) of [build_ref_base_map()] output.
 #' @param scaffold_ids included scaffold ids, in layout order.
 #' @param win_start,win_end reference window (bp).
+#' @param draw_labels draw the row labels in the left margin. FALSE when the
+#'   labels are rendered by [plot_scaffold_zoom_labels()] in a fixed panel
+#'   beside the scrollable plot.
 #' @noRd
-plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_end) {
+plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_end,
+                               draw_labels = TRUE) {
   win_start <- max(1L, as.integer(win_start))
   win_end <- min(nchar(ref_seq), as.integer(win_end))
   pos <- win_start:win_end
@@ -1657,7 +1661,7 @@ plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_
     graphics::rect(xi - 0.5, y - hh, xi + 0.5, y + hh, col = fill,
                    border = border, lwd = lwd)
 
-  op <- graphics::par(mar = c(2.4, 6, 1.2, 1))
+  op <- graphics::par(mar = c(2.4, if (draw_labels) 6 else 0.4, 1.2, 1))
   on.exit(graphics::par(op), add = TRUE)
   graphics::plot(NA, xlim = c(0.5, W + 0.5), ylim = c(0.5, rows + 0.5),
                  xlab = "", ylab = "", axes = FALSE)
@@ -1667,7 +1671,8 @@ plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_
   cell(x, yref, dna_base_bg(ref_chars))
   graphics::text(x, yref, ref_chars, col = "#222222", cex = 1.15,
                  font = 2, family = "mono")
-  graphics::mtext("reference", side = 2, at = yref, las = 1, line = 0.4, cex = 0.8)
+  if (draw_labels)
+    graphics::mtext("reference", side = 2, at = yref, las = 1, line = 0.4, cex = 0.8)
 
   for (j in seq_len(ntr)) {
     s <- as.character(scaffold_ids[j])
@@ -1689,8 +1694,9 @@ plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_
       graphics::text(mean(x), y, "(no alignment in this window)",
                      col = "#999999", cex = 0.8)
     }
-    graphics::mtext(paste("scaffold", s), side = 2, at = y, las = 1,
-                    line = 0.4, cex = 0.8)
+    if (draw_labels)
+      graphics::mtext(paste("scaffold", s), side = 2, at = y, las = 1,
+                      line = 0.4, cex = 0.8)
   }
 
   # Clean x axis: ~8-12 evenly spaced labels at real reference coordinates, short
@@ -1699,6 +1705,29 @@ plot_scaffold_zoom <- function(ref_seq, base_maps, scaffold_ids, win_start, win_
   at <- seq(1L, W, by = step)
   graphics::axis(1, at = at, labels = pos[at], cex.axis = 0.75,
                  tcl = -0.25, mgp = c(1, 0.25, 0), lwd = 0, lwd.ticks = 1)
+  invisible(NULL)
+}
+
+#' Static row labels for the base-pair zoom view
+#'
+#' Draws only the y-axis labels of [plot_scaffold_zoom()], using the same row
+#' geometry and margins so the two plots line up when placed side by side. The
+#' zoom plot scrolls horizontally; this panel does not, keeping the scaffold
+#' names visible at any scroll position.
+#'
+#' @param scaffold_ids included scaffold ids, in layout order.
+#' @noRd
+plot_scaffold_zoom_labels <- function(scaffold_ids) {
+  ntr <- length(scaffold_ids)
+  rows <- ntr + 1L
+  op <- graphics::par(mar = c(2.4, 0.2, 1.2, 0.4))
+  on.exit(graphics::par(op), add = TRUE)
+  graphics::plot(NA, xlim = c(0, 1), ylim = c(0.5, rows + 0.5),
+                 xlab = "", ylab = "", axes = FALSE)
+  graphics::text(1, rows, "reference", adj = c(1, 0.5), cex = 0.8)
+  for (j in seq_len(ntr))
+    graphics::text(1, rows - j, paste("scaffold", scaffold_ids[j]),
+                   adj = c(1, 0.5), cex = 0.8)
   invisible(NULL)
 }
 

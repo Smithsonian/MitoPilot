@@ -1692,9 +1692,15 @@ assembly_coverage_details_server <- function(id, rv) {
         div(style = "font-size: 11px; color: #555; margin-bottom: 4px;",
             sprintf("Base-pair alignment to reference | center ~%d bp | %d bp window",
                     rv$join_zoom_anchor, win)),
-        div(style = "overflow-x: auto;",
-            plotOutput(ns("join_zoom_plot"), width = paste0(plot_w, "px"),
-                       height = "160px")),
+        # Labels live in their own fixed panel so they stay readable while the
+        # alignment itself scrolls horizontally.
+        div(style = "display: flex; align-items: flex-start;",
+            div(style = "flex: 0 0 auto;",
+                plotOutput(ns("join_zoom_labels"), width = "120px",
+                           height = "160px")),
+            div(style = "flex: 1 1 auto; min-width: 0; overflow-x: auto;",
+                plotOutput(ns("join_zoom_plot"), width = paste0(plot_w, "px"),
+                           height = "160px"))),
         numericInput(ns("join_zoom_window"), "window size (bp)",
                      value = isolate(input$join_zoom_window) %||% 60L,
                      min = 20L, max = 400L, step = 20L, width = "140px")
@@ -1712,7 +1718,15 @@ assembly_coverage_details_server <- function(id, rv) {
       we <- min(nchar(rv$join_ref_seq), ws + win - 1L)
       inc <- lay[lay$include, , drop = FALSE]
       bm <- zoom_window_base_maps(rv$join_ref_seq, inc, oriented, ws, we)
-      plot_scaffold_zoom(rv$join_ref_seq, bm, inc$scaffold, ws, we)
+      plot_scaffold_zoom(rv$join_ref_seq, bm, inc$scaffold, ws, we,
+                         draw_labels = FALSE)
+    })
+
+    output$join_zoom_labels <- renderPlot({
+      req(!is.null(rv$join_zoom_anchor))
+      lay <- live_layout()
+      req(!is.null(lay))
+      plot_scaffold_zoom_labels(lay$scaffold[lay$include])
     })
 
     # Per-scaffold order + orientation controls, seeded from the current layout.
