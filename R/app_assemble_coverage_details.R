@@ -1856,27 +1856,42 @@ assembly_coverage_details_server <- function(id, rv) {
         scaffold = scaffolds, sequence = rows$sequence[idx],
         depth = rows$depth[idx], gc = rows$gc[idx], errors = rows$errors[idx],
         stringsAsFactors = FALSE)
-      # 100 N is the standard "gap of unknown length" convention; not user-tunable.
-      # ref_seq omitted so minimap-based origin rotation is skipped in the app; the
-      # molecule circularizes (end-overlap trim) only when the user checks Circular.
-      res <- assemble_from_layout(scaffolds_df, layout, gap_len = 100L,
-                                  circular = isTRUE(input$join_circular),
-                                  ref_seq = NULL)
-      if (count_ambiguities(res$seq) > 0) {
-        res$note <- paste0(res$note,
-                           " WARNING: contains ambiguous bases (IUPAC/N) - may cause ",
-                           "problems in annotation; MITOS does not handle them well.")
-      }
-      # Inherit the BLAST hit from the reference the layout was actually built from
-      # (accession + species + lineage), but blank %ident / %cov / evalue: those
-      # described a single scaffold's hit and are meaningless for the joined
-      # assembly. Use the stored accession, not the raw dropdown, so a reference
-      # whose recompute failed cannot mislabel Path 0.
-      join_acc <- rv$join_ref_accession
-      if (is.null(join_acc)) join_acc <- input$join_reference
-      blast_row <- join_reference_blast_row(join_acc, rows)
-      persist_path0(res$seq, res$depth, res$gc, res$errors, res$note,
-                    blast_row, res$topology)
+      circular <- isTRUE(input$join_circular)
+      # Show the overlay first, then defer the (blocking) build one tick so the
+      # "hold tight" message actually paints before work starts.
+      waiter::waiter_show(
+        html = tagList(
+          waiter::spin_fading_circles(),
+          tags$h4(style = "color:white; margin-top:1em;",
+                  "Building joined assembly, hold tight...")
+        ),
+        color = "rgba(40,40,40,0.85)"
+      )
+      shinyjs::delay(100, {
+        tryCatch({
+          # 100 N is the standard "gap of unknown length" convention; not user-tunable.
+          # ref_seq omitted so minimap-based origin rotation is skipped in the app; the
+          # molecule circularizes (end-overlap trim) only when the user checks Circular.
+          res <- assemble_from_layout(scaffolds_df, layout, gap_len = 100L,
+                                      circular = circular,
+                                      ref_seq = NULL)
+          if (count_ambiguities(res$seq) > 0) {
+            res$note <- paste0(res$note,
+                               " WARNING: contains ambiguous bases (IUPAC/N) - may cause ",
+                               "problems in annotation; MITOS does not handle them well.")
+          }
+          # Inherit the BLAST hit from the reference the layout was actually built from
+          # (accession + species + lineage), but blank %ident / %cov / evalue: those
+          # described a single scaffold's hit and are meaningless for the joined
+          # assembly. Use the stored accession, not the raw dropdown, so a reference
+          # whose recompute failed cannot mislabel Path 0.
+          join_acc <- rv$join_ref_accession
+          if (is.null(join_acc)) join_acc <- input$join_reference
+          blast_row <- join_reference_blast_row(join_acc, rows)
+          persist_path0(res$seq, res$depth, res$gc, res$errors, res$note,
+                        blast_row, res$topology)
+        }, finally = waiter::waiter_hide())
+      })
     })
 
     # Delete the edited consensus (Path 0) and revert the sample ----
