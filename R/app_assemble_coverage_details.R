@@ -1,3 +1,7 @@
+#' Widest base-pair zoom window (bp) the scaffold-join view will render.
+#' @noRd
+ZOOM_WINDOW_MAX_BP <- 1000L
+
 #' coverage_details Server Functions
 #'
 #' @noRd
@@ -1678,7 +1682,10 @@ assembly_coverage_details_server <- function(id, rv) {
     observeEvent(input$join_zoom_window, ignoreInit = TRUE, {
       v <- input$join_zoom_window
       if (is.null(v) || is.na(v)) return()
-      clamped <- max(20L, min(400L, as.integer(v)))
+      # Ceiling: the plot is 15 px/bp and Shiny scales the device by the client's
+      # pixelratio (2 on HiDPI), while cairo refuses a surface wider than 32767 px.
+      # 1000 bp -> 30000 px, the widest window that renders on every display.
+      clamped <- max(20L, min(ZOOM_WINDOW_MAX_BP, as.integer(v)))
       if (clamped != v) updateNumericInput(session, "join_zoom_window", value = clamped)
       if (clamped != zoom_win_rv()) zoom_win_rv(clamped)
     })
@@ -1703,7 +1710,7 @@ assembly_coverage_details_server <- function(id, rv) {
                            height = "160px"))),
         numericInput(ns("join_zoom_window"), "window size (bp)",
                      value = isolate(input$join_zoom_window) %||% 60L,
-                     min = 20L, max = 400L, step = 20L, width = "140px")
+                     min = 20L, max = ZOOM_WINDOW_MAX_BP, step = 20L, width = "140px")
       )
     })
 
