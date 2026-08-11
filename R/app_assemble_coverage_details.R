@@ -87,7 +87,6 @@ assembly_coverage_details_server <- function(id, rv) {
       # Path 0 and a stale reference/orientation drawn under its scaffolds.
       rv$join_ref_accession <- NULL
       rv$join_ref_seq <- NULL
-      rv$join_oriented <- NULL
       # Auto-run reference-guided mapping on open so the layout + mapping plot show
       # without an extra click; the Auto-layout button re-runs after edits.
       if (isTRUE(rv$asmb_join_eligible)) {
@@ -1541,18 +1540,11 @@ assembly_coverage_details_server <- function(id, rv) {
           type = "warning")
         return(invisible(FALSE))
       }
-      seqs <- stats::setNames(rows$sequence, as.character(rows$scaffold))
       rv$join_ref_len <- nchar(ref_seq)
       lay <- derive_scaffold_layout(mappings, nchar(ref_seq), isTRUE(input$join_circular))
       rv$join_layout <- lay
-      # Store reference + oriented included scaffolds for the base-pair zoom view.
+      # Store the reference for the base-pair zoom view.
       rv$join_ref_seq <- ref_seq
-      inc <- lay[lay$include, , drop = FALSE]
-      rv$join_oriented <- stats::setNames(
-        lapply(seq_len(nrow(inc)), function(i) {
-          sq <- seqs[[as.character(inc$scaffold[i])]]
-          if (isTRUE(inc$rc[i])) rc_seq(sq) else sq
-        }), as.character(inc$scaffold))
       rv$join_zoom_anchor <- NULL
       # Record which accession the stored layout was actually built from so the
       # build step inherits that reference's BLAST hit, not a stale dropdown value.

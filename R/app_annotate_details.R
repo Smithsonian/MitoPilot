@@ -294,7 +294,6 @@ annotations_details_server <- function(id, rv) {
     init("annotations_modal")
     on("annotations_modal", {
       req(rv$updating$topology != "fragmented") # TODO! modify to handle fragmented assemblies
-      rv$align_refSeq <- TRUE
 
       ## Per-sample genetic code ----
       # Genetic code auto-selects from this sample's curation ruleset and is
@@ -636,8 +635,6 @@ annotations_details_server <- function(id, rv) {
     })
 
     ## Table selection ----
-    sel <- reactiveVal("init")
-
     # Holds a pending join (rows + mode) awaiting confirmation when warnings apply.
     pending_join <- reactiveVal(NULL)
 
@@ -850,9 +847,7 @@ annotations_details_server <- function(id, rv) {
         dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "PCGCount", "tRNACount", "rRNACount")], by = c("ID", "path", "scaffold"))
       rv$annotations <- NULL
       rv$coverage <- NULL
-      rv$table_filter <- NULL
       rv$alignment <- NULL
-      rv$coverage_width <- NULL
       rv$editing <- NULL
       ref_msa_cache$msa <- NULL
       ref_msa_cache$key <- NULL

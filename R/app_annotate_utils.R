@@ -543,7 +543,6 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
 #'
 #' @param rv the local reactive vals object
 #' @param session current shiny session
-#' @import reactR
 #' @noRd
 curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   ns <- session$ns

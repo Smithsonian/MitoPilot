@@ -66,8 +66,6 @@ export_server <- function(id) {
 
     # Prepare data ----
     rv <- reactiveValues(
-      # curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
-      #  dplyr::collect(),
       data = fetch_export_data(),
       updating = NULL,
       outliers = NULL,    # flags tibble from flag_PCG_outliers()
