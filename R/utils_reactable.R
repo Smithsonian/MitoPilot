@@ -172,28 +172,6 @@ rt_ts_date <- function() {
   )
 }
 
-#' Add reactable icon button
-#'
-#' @param inputId shiny input id to use
-#' @param icon font awesome icon name
-#'
-#' @noRd
-rt_icon_bttn <- function(inputId, icon) {
-  sprintf(
-    "
-    function(cellInfo) {
-      var { index } = cellInfo;
-      return `<i class='%s grow' ` +
-        `id='${index+1}' ` +
-        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})' ` +
-        `style='padding-left: 0.2em;'></i>`
-    }
-    ",
-    icon, inputId
-  ) |>
-    htmlwidgets::JS()
-}
-
 #' Add reactable icon button with text
 #'
 #' @param inputId shiny input id to use

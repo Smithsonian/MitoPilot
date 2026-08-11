@@ -104,17 +104,6 @@ scaffold_hits_disagree <- function(scaffolds_df) {
   length(unique(acc)) > 1
 }
 
-#' Locate the minimap2 binary
-#'
-#' Honors `options(MitoPilot.minimap2=)`, else `minimap2` on PATH. Returns "" if
-#' not found (callers disable reference-guided layout in that case).
-#' @noRd
-find_minimap2 <- function() {
-  p <- getOption("MitoPilot.minimap2", "")
-  if (nzchar(p)) return(p)
-  unname(Sys.which("minimap2"))
-}
-
 #' Map scaffolds to a reference mitogenome with minimap2
 #'
 #' @param scaffold_seqs named character vector of scaffold sequences (names are
@@ -1557,40 +1546,6 @@ plot_scaffold_mapping <- function(layout, ref_len, scaffold_len = NULL) {
   invisible(NULL)
 }
 
-#' Base-level alignment of one scaffold to its reference region
-#'
-#' Aligns the oriented scaffold to the reference subregion it maps to (padded),
-#' for the base-pair zoom view. Returns the gapped aligned strings plus the
-#' reference coordinate of the first aligned reference base.
-#'
-#' @param scaf_oriented scaffold sequence (already RC-applied if needed).
-#' @param ref_seq full reference sequence.
-#' @param ref_start,ref_end reference span (from minimap2) the scaffold maps to.
-#' @param pad bp of reference context to include each side.
-#' @return list(aln_scaf, aln_ref, ref_offset) or NULL on failure.
-#' @noRd
-align_scaffold_to_ref <- function(scaf_oriented, ref_seq, ref_start, ref_end, pad = 50L) {
-  if (is.na(ref_start) || is.na(ref_end)) return(NULL)
-  rs <- max(1L, as.integer(ref_start) - pad)
-  re <- min(nchar(ref_seq), as.integer(ref_end) + pad)
-  if (re <= rs) return(NULL)
-  ref_sub <- substring(ref_seq, rs, re)
-  mx <- pwalign::nucleotideSubstitutionMatrix(match = 1, mismatch = -1)
-  aln <- tryCatch(
-    pwalign::pairwiseAlignment(
-      pattern = Biostrings::DNAString(scaf_oriented),
-      subject = Biostrings::DNAString(ref_sub),
-      substitutionMatrix = mx, gapOpening = 5, gapExtension = 2,
-      type = "global-local"),
-    error = function(e) NULL)
-  if (is.null(aln)) return(NULL)
-  list(
-    aln_scaf = as.character(pwalign::alignedPattern(aln)),
-    aln_ref  = as.character(pwalign::alignedSubject(aln)),
-    ref_offset = rs + BiocGenerics::start(pwalign::subject(aln)@range) - 1L
-  )
-}
-
 #' Map a pairwise alignment to per-reference-position scaffold bases
 #'
 #' @param aln_scaf,aln_ref gapped aligned strings (same length).
@@ -1605,17 +1560,6 @@ build_ref_base_map <- function(aln_scaf, aln_ref, ref_offset) {
   consumes <- rf != "-"
   base_at_ref <- sc[consumes]
   stats::setNames(base_at_ref, ref_offset + seq_len(sum(consumes)) - 1L)
-}
-
-#' Per-base colour for a DNA character vector
-#' @noRd
-dna_base_color <- function(b) {
-  u <- toupper(b)
-  out <- rep("#666666", length(b))
-  out[u == "A"] <- "#D9342B"; out[u == "C"] <- "#3878C5"
-  out[u == "G"] <- "#E6A500"; out[u == "T"] <- "#2D9E3F"
-  out[b == "-"] <- "#BBBBBB"
-  out
 }
 
 #' Light per-base background tint (cell fill behind a base letter)

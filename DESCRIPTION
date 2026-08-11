@@ -18,7 +18,6 @@ Imports:
     base64enc,
     BiocGenerics,
     Biostrings,
-    config,
     cowplot,
     crayon,
     DBI,

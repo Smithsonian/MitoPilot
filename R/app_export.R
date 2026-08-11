@@ -57,67 +57,6 @@ sig_diff <- function(before, now) {
   genes[!(!is.na(b) & !is.na(n) & b == n)]
 }
 
-#' export UI Function
-#'
-#' @description A shiny Module.
-#'
-#' @param id,input,output,session Internal parameters for {shiny}.
-#'
-#' @noRd
-#'
-#' @importFrom shiny NS tagList
-export_ui <- function(id) {
-  ns <- NS(id)
-  tagList(
-    uiOutput(ns("col_css")),
-    div(
-      style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
-      shinyWidgets::pickerInput(
-        inputId  = ns("col_groups"),
-        width    = "150px",
-        label    = "Show columns:",
-        choices  = names(EXPORT_COL_GROUPS),
-        selected = names(EXPORT_COL_GROUPS),
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "150px"
-        )
-      ),
-      shinyWidgets::pickerInput(
-        inputId  = ns("export_filter"),
-        width    = "140px",
-        label    = "Exported:",
-        choices  = ANNOTATE_EXPORT_CHOICES,
-        selected = ANNOTATE_EXPORT_CHOICES,
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "140px"
-        )
-      )
-    ),
-    div(class = "mp-table-resize", reactableOutput(ns("table"))),
-    div(
-      style = "font-size: 0.85em; color: #555; margin-top: 4px;",
-      textOutput(ns("n_selected"), inline = TRUE)
-    ),
-    div(
-      style = "margin-top: 12px; display: flex; gap: 8px;",
-      downloadButton(ns("export_selected"), "Export Selected to CSV",
-                     class = "btn-sm btn-default"),
-      downloadButton(ns("export_all"), "Export All to CSV",
-                     class = "btn-sm btn-default")
-    )
-  )
-}
-
 #' export Server Functions
 #'
 #' @noRd

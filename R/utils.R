@@ -26,13 +26,11 @@
   }
 }
 
-#' Inverted versions of in, is.null and is.na
+#' Inverted version of in
 #'
 #' @noRd
 #'
 `%nin%` <- Negate(`%in%`)
-not_null <- Negate(is.null)
-not_na <- Negate(is.na)
 
 #' Collapse strings with a semicolon
 #'
