@@ -1,8 +1,5 @@
 FROM condaforge/mambaforge:24.9.2-0
 
-# Passed from Github Actions
-ARG GIT_VERSION_TAG=unspecified
-
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
@@ -34,8 +31,6 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
     mamba install -c bioconda trnascan-se=2.0.12 -m -n trnascan-se && \
     mamba install -c bioconda mitos=2.1.10 -m -n mitos && \
     mamba install -c bioconda aragorn=1.2.41 -m -n aragorn
-#    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
-#    mamba install r-remotes
 
 RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock
@@ -70,8 +65,3 @@ RUN mamba create -y -n orffinder -c conda-forge curl libuv elfutils patchelf && 
 COPY docker/MitoPilot_*.tar.gz /pkg.tar.gz
 RUN R -e 'remotes::install_local("/pkg.tar.gz",upgrade="never")'
 RUN rm /pkg.tar.gz
-
-# Default Reference DBs
-# not needed for >= v1.3.0, since dbs are downloaded directly from GitHub
-#COPY ref_dbs/getOrganelle /ref_dbs/getOrganelle
-#COPY ref_dbs/Mitos2 /ref_dbs/Mitos2

@@ -164,10 +164,7 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
 #' @return `TRUE` if running on Hydra, otherwise `FALSE`.
 #' @noRd
 is_hydra_cluster <- function() {
-  motd_output <- try(
-    system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE),
-    silent = TRUE
-  )
+  motd_output <- try(readLines("/etc/hosts", warn = FALSE), silent = TRUE)
   !inherits(motd_output, "try-error") &&
     any(grepl("hydra", motd_output, ignore.case = TRUE))
 }

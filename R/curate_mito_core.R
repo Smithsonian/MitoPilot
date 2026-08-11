@@ -88,7 +88,7 @@ curate_mito_core <- function(
   ## Load params to env ----
   if (!is.null(params) && !is.list(params)) {
     params <- tryCatch(
-      jsonlite::fromJSON(rawToChar(base64enc::base64decode(params))),
+      jsonlite::fromJSON(rawToChar(jsonlite::base64_dec(params))),
       error = function(e) {
         stop("Invalid JSON string.")
       }

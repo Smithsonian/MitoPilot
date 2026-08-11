@@ -215,11 +215,7 @@ pipeline_server <- function(id) {
       is_sedna_cluster <- FALSE
 
       # Use a try block to gracefully handle errors if the command fails
-      motd_output <- try(system2("cat",
-                                 "/etc/hosts",
-                                 stdout = TRUE,
-                                 stderr = FALSE),
-                         silent = TRUE)
+      motd_output <- try(readLines("/etc/hosts", warn = FALSE), silent = TRUE)
 
       if (!inherits(motd_output, "try-error") &&
           any(grepl("hydra", motd_output, ignore.case = TRUE))) {
@@ -396,11 +392,7 @@ pipeline_server <- function(id) {
       is_sedna_cluster <- FALSE
 
       # Use a try block to gracefully handle errors if the command fails
-      motd_output <- try(system2("cat",
-                                 "/etc/hosts",
-                                 stdout = TRUE,
-                                 stderr = FALSE),
-                         silent = TRUE)
+      motd_output <- try(readLines("/etc/hosts", warn = FALSE), silent = TRUE)
 
       if (!inherits(motd_output, "try-error") &&
           any(grepl("hydra", motd_output, ignore.case = TRUE))) {

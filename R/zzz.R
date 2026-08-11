@@ -21,33 +21,33 @@
       packageStartupMessage("A Nextflow installation is needed to run the MitoPilot pipeline.")
       glue::glue(
         "Please install Nextflow {nf_supported_label()} from ",
-        "{crayon::underline('https://www.nextflow.io/')}"
+        "{cli::style_underline('https://www.nextflow.io/')}"
       ) |> packageStartupMessage()
     }
     return(invisible())
   }
 
-  packageStartupMessage(glue::glue("Welcome to {crayon::bold(crayon::white('{MitoPilot}'))}!"))
+  packageStartupMessage(glue::glue("Welcome to {cli::style_bold(cli::col_white('{MitoPilot}'))}!"))
   status <- nf_version_status(version)
 
   switch(status,
     supported = {
       glue::glue(
-        "Using Nextflow {version} {crayon::green('[supported]')} ",
+        "Using Nextflow {version} {cli::col_green('[supported]')} ",
         "(range {nf_supported_label()})"
       ) |> packageStartupMessage()
     },
     too_new = {
-      glue::glue("Using Nextflow {version} {crayon::yellow('[too new]')}") |>
+      glue::glue("Using Nextflow {version} {cli::col_yellow('[too new]')}") |>
         packageStartupMessage()
-      crayon::yellow(glue::glue(
+      cli::col_yellow(glue::glue(
         "Nextflow 26+ breaks the nf-sqldb plugin. MitoPilot will pin runs to ",
         "Nextflow {NF_MAX_SUPPORTED} via NXF_VER. For best results, install a ",
         "version in {nf_supported_label()}."
       )) |> packageStartupMessage()
     },
     too_old = {
-      glue::glue("Using Nextflow {version} {crayon::red('[unsupported: too old]')}") |>
+      glue::glue("Using Nextflow {version} {cli::col_red('[unsupported: too old]')}") |>
         packageStartupMessage()
       msg <- glue::glue(
         "Nextflow {version} is below the minimum supported version ",
@@ -56,7 +56,7 @@
       # Refuse to attach for a real library() call, but never during R's own
       # install / check load-test (that would break installation and CI).
       if (in_r_build_context()) {
-        packageStartupMessage(crayon::red(msg))
+        packageStartupMessage(cli::col_red(msg))
       } else {
         stop(msg, call. = FALSE)
       }
