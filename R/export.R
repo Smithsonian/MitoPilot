@@ -36,6 +36,84 @@ check_single_path <- function(units) {
   x
 }
 
+#' Write the per-gene FASTA and feature table for one PCG
+#'
+#' Shared by the intron/join-merged and single-exon PCG export branches. `gene`
+#' is the already 5'->3'-oriented sequence and `gene_name` the per-record name
+#' (the make.unique name for single-exon genes, the plain gene name for merged
+#' ones); the group-level directory and concatenated files always use `cur$gene`.
+#'
+#' @noRd
+write_gene_outputs <- function(gene, gene_name, cur, dat, note, start_codons,
+                               export_path, seqid, fasta_header_gene, group,
+                               group_pth, group_allgene_tbl_fn,
+                               group_allgene_fasta) {
+  # make directory for gene if it doesn't exist
+  group_geneName_pth <- file.path(group_pth, "genes", cur$gene)
+  dir.create(group_geneName_pth, recursive = T, showWarnings = F)
+
+  # update FASTA header with gene name
+  head_split <- strsplit(fasta_header_gene, "\\s+")
+  head_split[[1]][1] <- paste0(head_split[[1]][1], "_", gene_name)
+  head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
+  head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
+  names(gene) <- stringr::str_glue_data(dat, head)
+
+  # write FASTA
+  gene_fn <- file.path(export_path, paste0(seqid, "_", gene_name, ".fasta"))
+  Biostrings::writeXStringSet(gene, filepath = gene_fn)
+
+  # fix the start and stop position
+  pos1_new = 1
+  pos2_new = length(gene[[1]])
+  # extracted gene is 5'->3': mark partial ends on the start/stop coords
+  gene_p1 <- as.character(pos1_new)
+  gene_p2 <- as.character(pos2_new)
+  if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
+    gene_p1 <- paste0("<", gene_p1)
+  }
+  if (nchar(cur$stop_codon) >= 3 && isTRUE(as.integer(cur$partial_stop) == 1L)) {
+    gene_p2 <- paste0(">", gene_p2)
+  }
+
+  # write gene feature table
+  gene_tbl_fn <- file.path(export_path, paste0(seqid, "_", gene_name, ".tbl"))
+  wgene <- function(x) cat(x, file = gene_tbl_fn, sep = "\n", append = TRUE)
+  if (file.exists(gene_tbl_fn)) {
+    file.remove(gene_tbl_fn)
+  }
+  cat(paste0(">Feature ", seqid, "_", gene_name), file = gene_tbl_fn, sep = "\n")
+  wgene(paste(c(gene_p1, gene_p2, "gene"), collapse = "\t"))
+  wgene(paste0("\t\t\tgene\t", gene_name))
+  wgene(paste(c(gene_p1, gene_p2, "CDS"), collapse = "\t"))
+  wgene(paste("\t\t\tproduct\t", cur$product))
+  wgene(paste("\t\t\ttransl_table\t", dat$genetic_code))
+  if (nchar(cur$stop_codon) < 3) {
+    # extracted gene is oriented 5'->3', partial stop is the last base(s)
+    n_stop <- nchar(cur$stop_codon)
+    if (n_stop == 1) {
+      gene_transl_except <- paste0("(pos:", pos2_new, ",aa:TERM)")
+    } else {
+      gene_transl_except <- paste0("(pos:", pos2_new - n_stop + 1, "..", pos2_new, ",aa:TERM)")
+    }
+    wgene(paste0("\t\t\ttransl_except\t", gene_transl_except))
+  }
+  if (!cur$start_codon %in% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
+    wgene(paste("\t\t\tcodon_start\t", 1))
+  }
+  if (length(note) > 0) {
+    wgene(paste0("\t\t\tnote\t", note))
+  }
+
+  # concatenate sequences and tables by gene, and into the all-gene files
+  if (length(group) == 1) {
+    file.append(file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl")), gene_tbl_fn)
+    file.append(file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta")), gene_fn)
+    file.append(group_allgene_tbl_fn, gene_tbl_fn)
+    file.append(group_allgene_fasta, gene_fn)
+  }
+}
+
 #' Generate export NCBI files
 #'
 #' @param group (optional) export group names
@@ -290,6 +368,7 @@ export_files <- function(
 
     # MAKE 4 column tab file
     tbl_fn <- file.path(export_path, paste0(.seqid, ".tbl"))
+    wtbl <- function(x) cat(x, file = tbl_fn, sep = "\n", append = TRUE)
     if (file.exists(tbl_fn)) {
       file.remove(tbl_fn)
     }
@@ -301,19 +380,18 @@ export_files <- function(
 
     # MAKE GFF
     gff_fn <- file.path(export_path, paste0(.seqid, ".gff"))
+    wgff <- function(x) cat(x, file = gff_fn, sep = "\n", append = TRUE)
     if (file.exists(gff_fn)) {
       file.remove(gff_fn)
     }
     # add GFF header
-    "##gff-version 3" |>
-      cat(file = gff_fn, sep = "\n", append = TRUE)
+    wgff("##gff-version 3")
     # add GFF region
     # circ = tolower((dat$topology == "circular"))
     #f9 = paste0("ID=",seq_name,":1..",seq@ranges@width,";Is_circular=",circ,";Name=MT;mol_type=genomic DNA") # Is_circular currently bugged in Geneious
     asmb_len = seq@ranges@width
     f9 = paste0("ID=",seq_name,":1..",asmb_len,";Name=MT;mol_type=genomic DNA")
-    paste(c(seq_name, "MitoPilot", "region", 1, asmb_len, ".", "+", ".", f9), collapse = "\t") |>
-      cat(file = gff_fn, sep = "\n", append = TRUE)
+    wgff(paste(c(seq_name, "MitoPilot", "region", 1, asmb_len, ".", "+", ".", f9), collapse = "\t"))
 
     purrr::pwalk(annotations, function(...) {
       cur <- list(...)
@@ -450,51 +528,40 @@ export_files <- function(
           }
 
           # write to .tbl
-          paste(c(pos, "gene"), collapse = "\t") |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          paste0("\t\t\tgene\t", cur$gene) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          wtbl(paste(c(pos, "gene"), collapse = "\t"))
+          wtbl(paste0("\t\t\tgene\t", cur$gene))
           # write CDS lines for each exon
           if (all(exons$direction == "+")) {
             for (i in 1:nrow(exons)){
               if (i == 1){
-                paste(c(exons[i,]$pos1, exons[i,]$pos2, "CDS"), collapse = "\t") |>
-                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+                wtbl(paste(c(exons[i,]$pos1, exons[i,]$pos2, "CDS"), collapse = "\t"))
               } else {
-                paste(c(exons[i,]$pos1, exons[i,]$pos2), collapse = "\t") |>
-                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+                wtbl(paste(c(exons[i,]$pos1, exons[i,]$pos2), collapse = "\t"))
               }
             }
           } else if (all(exons$direction == "-")) {
             for (i in nrow(exons):1){
               if (i == 1){
-                paste(c(exons[i,]$pos2, exons[i,]$pos1, "CDS"), collapse = "\t") |>
-                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+                wtbl(paste(c(exons[i,]$pos2, exons[i,]$pos1, "CDS"), collapse = "\t"))
               } else {
-                paste(c(exons[i,]$pos2, exons[i,]$pos1), collapse = "\t") |>
-                  cat(file = tbl_fn, sep = "\n", append = TRUE)
+                wtbl(paste(c(exons[i,]$pos2, exons[i,]$pos1), collapse = "\t"))
               }
             }
           }
-          paste("\t\t\tproduct\t", cur$product) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          wtbl(paste("\t\t\tproduct\t", cur$product))
+          wtbl(paste("\t\t\ttransl_table\t", dat$genetic_code))
           if (length(transl_except) > 0) {
-            paste0("\t\t\ttransl_except\t", transl_except) |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            wtbl(paste0("\t\t\ttransl_except\t", transl_except))
           }
           if (!cur$start_codon %in% start_codons) {
-            paste("\t\t\tcodon_start\t", 1) |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            wtbl(paste("\t\t\tcodon_start\t", 1))
           }
           # frameshift/RNA-editing join: INSDC requires the ribosomal_slippage
           # qualifier + exception; note carries no nucleotide locations per
           # GenBank guidance
           if (identical(exon_mode, "frameshift")) {
-            cat("\t\t\tribosomal_slippage", file = tbl_fn, sep = "\n", append = TRUE)
-            paste0("\t\t\texception\tribosomal slippage") |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            wtbl("\t\t\tribosomal_slippage")
+            wtbl(paste0("\t\t\texception\tribosomal slippage"))
             fs_note <- if (!is.na(join_note) && nzchar(trimws(join_note))) {
               trimws(join_note)
             } else {
@@ -503,8 +570,7 @@ export_files <- function(
             note <- paste(c(note, fs_note), collapse = "; ")
           }
           if (length(note) > 0) {
-            paste0("\t\t\tnote\t", note) |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            wtbl(paste0("\t\t\tnote\t", note))
           }
 
           # write to GFF
@@ -513,11 +579,9 @@ export_files <- function(
           # logic to deal with annotations that wrap around the end of a circular assembly
           if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
             pos2_fix <- asmb_len + cur$pos2
-            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-              cat(file = gff_fn, sep = "\n", append = TRUE)
+            wgff(paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
           } else {
-            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-              cat(file = gff_fn, sep = "\n", append = TRUE)
+            wgff(paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
           }
 
           # write CDS feature for each exon
@@ -530,11 +594,9 @@ export_files <- function(
               # logic to deal with annotations that wrap around the end of a circular assembly
               if(dat$topology == "circular" && exons[i,]$pos1 > exons[i,]$pos2 && exons[i,]$length != (exons[i,]$pos1 - exons[i,]$pos2 + 1)){ # annotation wraps
                 pos2_fix <- asmb_len + exons[i,]$pos2
-                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
-                  cat(file = gff_fn, sep = "\n", append = TRUE)
+                wgff(paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t"))
               } else {
-                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos1, exons[i,]$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
-                  cat(file = gff_fn, sep = "\n", append = TRUE)
+                wgff(paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos1, exons[i,]$pos2, ".", cur$direction, "0", f9), collapse = "\t"))
               }
             }
           } else if (all(exons$direction == "-")) {
@@ -546,97 +608,20 @@ export_files <- function(
               # logic to deal with annotations that wrap around the end of a circular assembly
               if(dat$topology == "circular" && exons[i,]$pos2 > exons[i,]$pos1 && exons[i,]$length != (exons[i,]$pos2 - exons[i,]$pos1 + 1)){ # annotation wraps
                 pos1_fix <- asmb_len + exons[i,]$pos2
-                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos2, pos1_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
-                  cat(file = gff_fn, sep = "\n", append = TRUE)
+                wgff(paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos2, pos1_fix, ".", cur$direction, "0", f9), collapse = "\t"))
               } else {
-                paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos2, exons[i,]$pos1, ".", cur$direction, "0", f9), collapse = "\t") |>
-                  cat(file = gff_fn, sep = "\n", append = TRUE)
+                wgff(paste(c(seq_name, "MitoPilot", "CDS", exons[i,]$pos2, exons[i,]$pos1, ".", cur$direction, "0", f9), collapse = "\t"))
               }
             }
           }
 
           if(gene_export){
-            # EXTRACT GENE FROM ASSEMBLY
-            # make directory for gene if it doesn't exist
-            group_geneName_pth <- file.path(group_pth, "genes", cur$gene)
-            dir.create(group_geneName_pth, recursive = T, showWarnings = F)
-
-            # get gene region from assembly
-            gene = merged_sequence
-
-            # update FASTA header with gene name
-            head_split <- strsplit(fasta_header_gene, "\\s+")
-            head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene)
-            head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
-            head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
-            names(gene) <- stringr::str_glue_data(dat, head)
-
-            # write FASTA
-            gene_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene, ".fasta"))
-            Biostrings::writeXStringSet(gene, filepath = gene_fn)
-
-            # fix the start and stop position
-            pos1_new = 1
-            pos2_new = length(gene[[1]])
-            # extracted gene is 5'->3': mark partial ends on the start/stop coords
-            gene_p1 <- as.character(pos1_new)
-            gene_p2 <- as.character(pos2_new)
-            if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
-              gene_p1 <- paste0("<", gene_p1)
-            }
-            if (nchar(cur$stop_codon) >= 3 && isTRUE(as.integer(cur$partial_stop) == 1L)) {
-              gene_p2 <- paste0(">", gene_p2)
-            }
-
-            # write gene feature table
-            gene_tbl_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene, ".tbl"))
-            if (file.exists(gene_tbl_fn)) {
-              file.remove(gene_tbl_fn)
-            }
-            cat(paste0(">Feature ", .seqid, "_", cur$gene), file = gene_tbl_fn, sep = "\n")
-            paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste0("\t\t\tgene\t", cur$gene) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste(c(gene_p1, gene_p2, "CDS"), collapse = "\t") |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste("\t\t\tproduct\t", cur$product) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            if (nchar(cur$stop_codon) < 3) {
-              # extracted gene is oriented 5'->3', partial stop is the last base(s)
-              n_stop <- nchar(cur$stop_codon)
-              if (n_stop == 1) {
-                gene_transl_except <- paste0("(pos:", pos2_new, ",aa:TERM)")
-              } else {
-                gene_transl_except <- paste0("(pos:", pos2_new - n_stop + 1, "..", pos2_new, ",aa:TERM)")
-              }
-              paste0("\t\t\ttransl_except\t", gene_transl_except) |>
-                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            }
-            if (!cur$start_codon %in% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
-              paste("\t\t\tcodon_start\t", 1) |>
-                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            }
-            if (length(note) > 0) {
-              paste0("\t\t\tnote\t", note) |>
-                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            }
-
-            # concatenate sequences and tables by gene
-            if (length(group) == 1) {
-              group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              file.append(group_gene_tbl, gene_tbl_fn)
-              group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              file.append(group_gene_fasta, gene_fn)
-            }
-
-            # concatenate all sequences and tables
-            if (length(group) == 1) {
-              file.append(group_allgene_tbl_fn, gene_tbl_fn)
-              file.append(group_allgene_fasta, gene_fn)
-            }
+            # spliced CDS is already 5'->3'; merged genes use the plain gene name
+            write_gene_outputs(
+              merged_sequence, cur$gene, cur, dat, note, start_codons,
+              export_path, .seqid, fasta_header_gene, group, group_pth,
+              group_allgene_tbl_fn, group_allgene_fasta
+            )
           }
 
         } else { # normal processing, no introns
@@ -676,27 +661,19 @@ export_files <- function(
           }
 
           # write to .tbl
-          paste(c(pos, "gene"), collapse = "\t") |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          paste0("\t\t\tgene\t", cur$gene) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          paste(c(pos, "CDS"), collapse = "\t") |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          paste("\t\t\tproduct\t", cur$product) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          wtbl(paste(c(pos, "gene"), collapse = "\t"))
+          wtbl(paste0("\t\t\tgene\t", cur$gene))
+          wtbl(paste(c(pos, "CDS"), collapse = "\t"))
+          wtbl(paste("\t\t\tproduct\t", cur$product))
+          wtbl(paste("\t\t\ttransl_table\t", dat$genetic_code))
           if (length(transl_except) > 0) {
-            paste0("\t\t\ttransl_except\t", transl_except) |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            wtbl(paste0("\t\t\ttransl_except\t", transl_except))
           }
           if (!cur$start_codon %in% start_codons) {
-            paste("\t\t\tcodon_start\t", 1) |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            wtbl(paste("\t\t\tcodon_start\t", 1))
           }
           if (length(note) > 0) {
-            paste0("\t\t\tnote\t", note) |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            wtbl(paste0("\t\t\tnote\t", note))
           }
 
           # write to GFF
@@ -705,11 +682,9 @@ export_files <- function(
           # logic to deal with annotations that wrap around the end of a circular assembly
           if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
             pos2_fix <- asmb_len + cur$pos2
-            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-              cat(file = gff_fn, sep = "\n", append = TRUE)
+            wgff(paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
           } else {
-            paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-              cat(file = gff_fn, sep = "\n", append = TRUE)
+            wgff(paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
           }
 
           # CDS feature
@@ -720,100 +695,22 @@ export_files <- function(
           # logic to deal with annotations that wrap around the end of a circular assembly
           if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
             pos2_fix <- asmb_len + cur$pos2
-            paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
-              cat(file = gff_fn, sep = "\n", append = TRUE)
+            wgff(paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t"))
           } else {
-            paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
-              cat(file = gff_fn, sep = "\n", append = TRUE)
+            wgff(paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t"))
           }
 
           if(gene_export){
-            # EXTRACT GENE FROM ASSEMBLY
-            # make directory for gene if it doesn't exist
-            group_geneName_pth <- file.path(group_pth, "genes", cur$gene)
-            dir.create(group_geneName_pth, recursive = T, showWarnings = F)
-
-            # get gene region from assembly
+            # get gene region from assembly, oriented 5'->3'
             gene = extract_circ_region(seq, cur$pos1, cur$pos2)
-
-            # update FASTA header with gene name
-            head_split <- strsplit(fasta_header_gene, "\\s+")
-            head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene_uniq)
-            head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
-            head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
-            names(gene) <- stringr::str_glue_data(dat, head)
-
-            # reverse complement if needed
             if (cur$direction == "-") {
               gene = Biostrings::reverseComplement(gene)
             }
-
-            # write FASTA
-            gene_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene_uniq, ".fasta"))
-            Biostrings::writeXStringSet(gene, filepath = gene_fn)
-
-            # fix the start and stop position
-            pos1_new = 1
-            pos2_new = length(gene[[1]])
-            # extracted gene is 5'->3': mark partial ends on the start/stop coords
-            gene_p1 <- as.character(pos1_new)
-            gene_p2 <- as.character(pos2_new)
-            if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
-              gene_p1 <- paste0("<", gene_p1)
-            }
-            if (nchar(cur$stop_codon) >= 3 && isTRUE(as.integer(cur$partial_stop) == 1L)) {
-              gene_p2 <- paste0(">", gene_p2)
-            }
-
-            # write gene feature table
-            gene_tbl_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene_uniq, ".tbl"))
-            if (file.exists(gene_tbl_fn)) {
-              file.remove(gene_tbl_fn)
-            }
-            cat(paste0(">Feature ", .seqid, "_", cur$gene_uniq), file = gene_tbl_fn, sep = "\n")
-            paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste0("\t\t\tgene\t", cur$gene_uniq) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste(c(gene_p1, gene_p2, "CDS"), collapse = "\t") |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste("\t\t\tproduct\t", cur$product) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            if (nchar(cur$stop_codon) < 3) {
-              # extracted gene is oriented 5'->3', partial stop is the last base(s)
-              n_stop <- nchar(cur$stop_codon)
-              if (n_stop == 1) {
-                gene_transl_except <- paste0("(pos:", pos2_new, ",aa:TERM)")
-              } else {
-                gene_transl_except <- paste0("(pos:", pos2_new - n_stop + 1, "..", pos2_new, ",aa:TERM)")
-              }
-              paste0("\t\t\ttransl_except\t", gene_transl_except) |>
-                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            }
-            if (!cur$start_codon %in% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
-              paste("\t\t\tcodon_start\t", 1) |>
-                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            }
-            if (length(note) > 0) {
-              paste0("\t\t\tnote\t", note) |>
-                cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-            }
-
-            # concatenate sequences and tables by gene
-            if (length(group) == 1) {
-              group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              file.append(group_gene_tbl, gene_tbl_fn)
-              group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              file.append(group_gene_fasta, gene_fn)
-            }
-
-            # concatenate all sequences and tables
-            if (length(group) == 1) {
-              file.append(group_allgene_tbl_fn, gene_tbl_fn)
-              file.append(group_allgene_fasta, gene_fn)
-            }
+            write_gene_outputs(
+              gene, cur$gene_uniq, cur, dat, note, start_codons,
+              export_path, .seqid, fasta_header_gene, group, group_pth,
+              group_allgene_tbl_fn, group_allgene_fasta
+            )
           }
         }
         return()
@@ -821,17 +718,12 @@ export_files <- function(
 
       if (cur$type == "tRNA") {
         # write to .tbl
-        paste(c(pos, "gene"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste0("\t\t\tgene\t", cur$gene) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste(c(pos, "tRNA"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\tproduct\t", cur$product) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        wtbl(paste(c(pos, "gene"), collapse = "\t"))
+        wtbl(paste0("\t\t\tgene\t", cur$gene))
+        wtbl(paste(c(pos, "tRNA"), collapse = "\t"))
+        wtbl(paste("\t\t\tproduct\t", cur$product))
         if (!is.na(cur$anticodon) && cur$anticodon != "NNN") {
-          paste("\t\t\tnote\t", paste0("anticodon:", tolower(cur$anticodon))) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          wtbl(paste("\t\t\tnote\t", paste0("anticodon:", tolower(cur$anticodon))))
         }
 
         # write to GFF
@@ -840,11 +732,9 @@ export_files <- function(
         # logic to deal with annotations that wrap around the end of a circular assembly
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
         } else {
-          paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "tRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
         }
 
         # exon feature
@@ -852,11 +742,9 @@ export_files <- function(
         # logic to deal with annotations that wrap around the end of a circular assembly
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "exon", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
         } else {
-          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
         }
 
         return()
@@ -878,17 +766,12 @@ export_files <- function(
           rrna_note <- paste(c(rrna_note, "3' end not determined"), collapse = "; ")
         }
         # write to .tbl
-        paste(c(pos, "gene"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste0("\t\t\tgene\t", rrna_gene) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste(c(pos, "rRNA"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\tproduct\t", cur$product) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        wtbl(paste(c(pos, "gene"), collapse = "\t"))
+        wtbl(paste0("\t\t\tgene\t", rrna_gene))
+        wtbl(paste(c(pos, "rRNA"), collapse = "\t"))
+        wtbl(paste("\t\t\tproduct\t", cur$product))
         if (length(rrna_note) > 0) {
-          paste0("\t\t\tnote\t", rrna_note) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
+          wtbl(paste0("\t\t\tnote\t", rrna_note))
         }
 
         # write to GFF
@@ -897,22 +780,18 @@ export_files <- function(
         # logic to deal with annotations that wrap around the end of a circular assembly
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
         } else {
-          paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "rRNA", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
         }
         # exon feature
         f9 = paste0("ID=exon-",seq_name,":",cur$pos1,"..",cur$pos2,";Parent=rna-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=rRNA;product=",cur$product)
         # logic to deal with annotations that wrap around the end of a circular assembly
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "exon", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
         } else {
-          paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "exon", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
         }
 
         # export rRNAs individually
@@ -952,21 +831,17 @@ export_files <- function(
 
           # write gene feature table
           gene_tbl_fn <- file.path(export_path, paste0(.seqid, "_", rrna_gene_uniq, ".tbl"))
+          wgene <- function(x) cat(x, file = gene_tbl_fn, sep = "\n", append = TRUE)
           if (file.exists(gene_tbl_fn)) {
             file.remove(gene_tbl_fn)
           }
           cat(paste0(">Feature ", .seqid, "_", rrna_gene_uniq), file = gene_tbl_fn, sep = "\n")
-          paste(c(gene_p1, gene_p2, "gene"), collapse = "\t") |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste0("\t\t\tgene\t", rrna_gene_uniq) |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste(c(gene_p1, gene_p2, "rRNA"), collapse = "\t") |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
-          paste("\t\t\tproduct\t", cur$product) |>
-            cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+          wgene(paste(c(gene_p1, gene_p2, "gene"), collapse = "\t"))
+          wgene(paste0("\t\t\tgene\t", rrna_gene_uniq))
+          wgene(paste(c(gene_p1, gene_p2, "rRNA"), collapse = "\t"))
+          wgene(paste("\t\t\tproduct\t", cur$product))
           if (length(rrna_note) > 0) {
-            paste0("\t\t\tnote\t", rrna_note) |>
-              cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
+            wgene(paste0("\t\t\tnote\t", rrna_note))
           }
 
           # concatenate sequences and tables by gene
@@ -989,10 +864,8 @@ export_files <- function(
 
       if (cur$type == "ctrl") {
         # write to .tbl
-        paste(c(pos, "D-loop"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste0("\t\t\tnote\tcontrol region") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        wtbl(paste(c(pos, "D-loop"), collapse = "\t"))
+        wtbl(paste0("\t\t\tnote\tcontrol region"))
 
         # write to GFF
         f9 = paste0("ID=ctrl-",seq_name,":",cur$pos1,"..",cur$pos2,";gbkey=D-loop;Note=control region")
@@ -1000,14 +873,11 @@ export_files <- function(
         # with special check for D_loop problem of pos1 and pos2 mixup
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
         } else if(dat$topology == "circular" && cur$pos1 > cur$pos2){ # annotation does not wrap but pos1 and pos2 need to be flipped
-          paste(c(seq_name, "MitoPilot", "D_loop", cur$pos2, cur$pos1, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "D_loop", cur$pos2, cur$pos1, ".", cur$direction, ".", f9), collapse = "\t"))
         } else {
-          paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "D_loop", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
         }
 
         return()
@@ -1021,20 +891,13 @@ export_files <- function(
         note <- "open reading frame predicted by ORFfinder"
 
         # write to .tbl
-        paste(c(pos, "gene"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste0("\t\t\tgene\t", cur$gene) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste(c(pos, "CDS"), collapse = "\t") |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\tproduct\t", product) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste("\t\t\tcodon_start\t", 1) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
-        paste0("\t\t\tnote\t", note) |>
-          cat(file = tbl_fn, sep = "\n", append = TRUE)
+        wtbl(paste(c(pos, "gene"), collapse = "\t"))
+        wtbl(paste0("\t\t\tgene\t", cur$gene))
+        wtbl(paste(c(pos, "CDS"), collapse = "\t"))
+        wtbl(paste("\t\t\tproduct\t", product))
+        wtbl(paste("\t\t\ttransl_table\t", dat$genetic_code))
+        wtbl(paste("\t\t\tcodon_start\t", 1))
+        wtbl(paste0("\t\t\tnote\t", note))
 
         # write to GFF
         # gene feature
@@ -1042,11 +905,9 @@ export_files <- function(
         # logic to deal with annotations that wrap around the end of a circular assembly
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "gene", cur$pos1, pos2_fix, ".", cur$direction, ".", f9), collapse = "\t"))
         } else {
-          paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "gene", cur$pos1, cur$pos2, ".", cur$direction, ".", f9), collapse = "\t"))
         }
 
         # CDS feature
@@ -1054,11 +915,9 @@ export_files <- function(
         # logic to deal with annotations that wrap around the end of a circular assembly
         if(dat$topology == "circular" && cur$pos1 > cur$pos2 && cur$length != (cur$pos1 - cur$pos2 + 1)){ # annotation wraps
           pos2_fix <- asmb_len + cur$pos2
-          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, pos2_fix, ".", cur$direction, "0", f9), collapse = "\t"))
         } else {
-          paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t") |>
-            cat(file = gff_fn, sep = "\n", append = TRUE)
+          wgff(paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, cur$pos2, ".", cur$direction, "0", f9), collapse = "\t"))
         }
 
         # Per-gene FASTA/tbl export is intentionally skipped for ORFs: ORF.N
