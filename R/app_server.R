@@ -165,43 +165,14 @@ app_server <- function(input, output, session) {
   observeEvent(input$refresh, {
     trigger(paste0("refresh_", tolower(session$userData$mode)))
   })
-  # State
-  #init("state")
-  observeEvent(input$state, {
-    trigger("state")
-  })
-  # Lock
-  #init("lock")
-  observeEvent(input$lock, {
-    trigger("lock")
-  })
-  # Run
   init("run_modal")
-  observeEvent(input$run_modal, {
-    trigger("run_modal")
-  })
-  # ID_verified
-  observeEvent(input$id_verified_top, {
-    trigger("id_verified_top")
-  })
-  # mark problematic
-  observeEvent(input$problematic_top, {
-    trigger("problematic_top")
-  })
-  # mark partial
-  observeEvent(input$partial_top, {
-    trigger("partial_top")
-  })
-  # Export
-  observeEvent(input$group, {
-    trigger("group")
-  })
-  observeEvent(input$clear_group, {
-    trigger("clear_group")
-  })
-  observeEvent(input$export, {
-    trigger("export")
-  })
+  for (.e in c("state", "lock", "run_modal", "id_verified_top", "problematic_top",
+               "partial_top", "group", "clear_group", "export")) {
+    local({
+      e <- .e
+      observeEvent(input[[e]], trigger(e))
+    })
+  }
 
   # Cross-tab navigation: outlier review -> Annotate details modal.
   # Initialized here (before sub-modules) so listeners in annotate_server /

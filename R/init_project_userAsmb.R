@@ -108,14 +108,6 @@ new_project_userAsmb <- function(
     stop("Invalid executor.")
   }
 
-  # Create directory if it doesn't exist ----
-  if (!dir.exists(path)) {
-    message("Creating project directory: ", path)
-    dir.create(path, recursive = TRUE)
-  }
-
-  path <- normalizePath(path)
-
   # Initialize RStudio Project ----
   # (optional & only if running form RStudio)
   if (Rproj && !isFALSE(Sys.getenv("RSTUDIO", FALSE))) {
