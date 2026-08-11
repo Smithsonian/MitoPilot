@@ -78,10 +78,6 @@ params {
         container = process.container
         executor = process.executor
     }
-    validate {
-        container = process.container
-        executor = process.executor
-    }
     blast_ref_align {
         cpus = 1
         memory = 8

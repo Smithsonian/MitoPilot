@@ -92,9 +92,7 @@ workflow ASSEMBLE {
                     it[1][7]                                                    // max_scaffolds
                 )
             }
-            .set { assemble_in_full }
-
-        assemble_in_full.set { assemble_in }
+            .set { assemble_in }
 
         // Assemble
         assemble(assemble_in).set { assemble_out }

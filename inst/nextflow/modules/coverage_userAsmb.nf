@@ -30,7 +30,6 @@ process coverage_userAsmb {
 
     shell:
     outDir = "${id}/assemble/${assembler}"
-    output_name = assembly.baseName
     '''
     mkdir -p !{outDir}
 
@@ -85,7 +84,6 @@ process coverage_userAsmb_noReads {
 
     shell:
     outDir = "${id}/assemble/${assembler}"
-    output_name = assembly.baseName
     '''
     mkdir -p !{outDir}
 

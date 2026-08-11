@@ -55,13 +55,10 @@ workflow ORF {
         channel.fromQuery(params.sqlRead, db: 'sqlite')
             .join(validated_by_unit, by: [0, 1, 2])    // append validated tsv (index 16)
             .join(curate_assembly, by: [0, 1, 2])      // append assembly (index 17)
-            .branch { it ->
-                on:  (it[3] as Integer) == 1
-                off: true
-            }
+            .filter { (it[3] as Integer) == 1 }
             .set { routed }
 
-        routed.on
+        routed
             .map { it ->
 
                 // Check if refDir is a GitHub link

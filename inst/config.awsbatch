@@ -39,7 +39,6 @@ sql {
 // Pipeline parameters
 params {
     rawDir = '<<RAW_DIR>>'                  // Directory (or s3 bucket) containing raw data
-    bucket-dir = '<<bucket-dir>>'           // Path to s3 bucket for stroing intermediate data
     publishDir = 'out'                      // Directory (or s3 bucket) to publish pipeline outputs
     minDepth = <<MIN_DEPTH>>                // Skip samples with less than this read depth
     ncbi_api_key = '<<NCBI_API_KEY>>'       // Optional NCBI API key for BLAST + GenBank fetch (https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
@@ -77,10 +76,6 @@ params {
         executor = process.executor
     }
     orf {
-        container = process.container
-        executor = process.executor
-    }
-    validate {
         container = process.container
         executor = process.executor
     }

@@ -28,7 +28,6 @@ process coverage {
 
     shell:
     outDir = "${id}/assemble/${opt_id}"
-    output_name = assembly.baseName
     '''
     # Unzip reads
     if [ "!{assembler}" = "GetOrganelle" ]; then

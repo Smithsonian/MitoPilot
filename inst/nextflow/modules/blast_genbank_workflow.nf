@@ -373,26 +373,6 @@ workflow BLAST_GENBANK {
                 } else {
                     out << tuple('path', id, opts_id, path_idx, null, 'NO HIT', null, null, null, null)
                 }
-                // Per-path candidate rows: every distinct accession in this path
-                // (across ALL hits, not just the best per scaffold), keeping its best
-                // pident*qcovs. Aggregated per-sample downstream into the top-N
-                // candidate reference list. scaffold='cand' marker uses arity 10.
-                def byacc = [:]
-                per_scaffold.values().each { hits ->
-                    hits.each { v ->
-                        def acc = v[0]
-                        if (acc != null && acc != 'NO HIT') {
-                            def score = (v[2] ?: 0) * (v[3] ?: 0)
-                            if (!byacc.containsKey(acc) || score > byacc[acc].score) {
-                                byacc[acc] = [rec: v, score: score]
-                            }
-                        }
-                    }
-                }
-                byacc.each { acc, info ->
-                    def v = info.rec
-                    out << tuple('cand', id, opts_id, path_idx, null, acc, v[1], v[2], v[3], v[4])
-                }
                 return out
             }
             .set { blast_records }

@@ -1,6 +1,5 @@
 import java.util.Base64
-include {validate} from './validate.nf'
-include {write_curated_result} from './validate.nf'
+include {validate; write_curated_result} from './validate.nf'
 
 // VALIDATE runs per (ID, path, scaffold): each unit is validated, warned, and
 // summarized on its own. CURATE now emits per (ID, path, scaffold) too, so its

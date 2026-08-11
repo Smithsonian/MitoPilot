@@ -82,10 +82,6 @@ params {
         container = process.container
         executor = process.executor
     }
-    validate {
-        container = process.container
-        executor = process.executor
-    }
     blast_ref_align {
         cpus = 1
         clusterOptions = "-l mres=32G,h_data=32G,h_vmem=32G,himem -S /bin/bash"
