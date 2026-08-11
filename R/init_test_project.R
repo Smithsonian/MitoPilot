@@ -74,37 +74,22 @@ new_test_project <- function(
       acc <- cur$ID
       pre <- stringr::str_sub(acc, 1, 6)
       suf <- stringr::str_extract(acc, "..$") |> stringr::str_pad(3, "left", "0")
-      # R1
-      fn_R1 <- file.path(path, "data", glue::glue("{acc}_R1.fastq.gz"))
-      status <- glue::glue(
-        "-t {fn_R1} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
-      ) |> system2("gzip", args = _, stdout = T)
-      while (status == "incomplete") {
-        glue::glue(
-          "curl",
-          "http://ftp.sra.ebi.ac.uk/vol1/fastq/{pre}/{suf}/{acc}/{acc}_1.fastq.gz",
-          "--silent -o {fn_R1}",
-          .sep = " "
-        ) |> system()
+      for (r in 1:2) {
+        fn <- file.path(path, "data", glue::glue("{acc}_R{r}.fastq.gz"))
         status <- glue::glue(
-          "-t {fn_R1} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
+          "-t {fn} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
         ) |> system2("gzip", args = _, stdout = T)
-      }
-      # R2
-      fn_R2 <- file.path(path, "data", glue::glue("{acc}_R2.fastq.gz"))
-      status <- glue::glue(
-        "-t {fn_R2} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
-      ) |> system2("gzip", args = _, stdout = T)
-      while (status == "incomplete") {
-        glue::glue(
-          "curl",
-          "http://ftp.sra.ebi.ac.uk/vol1/fastq/{pre}/{suf}/{acc}/{acc}_2.fastq.gz",
-          "--silent -o {fn_R2}",
-          .sep = " "
-        ) |> system()
-        status <- glue::glue(
-          "-t {fn_R2} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
-        ) |> system2("gzip", args = _, stdout = T)
+        while (status == "incomplete") {
+          glue::glue(
+            "curl",
+            "http://ftp.sra.ebi.ac.uk/vol1/fastq/{pre}/{suf}/{acc}/{acc}_{r}.fastq.gz",
+            "--silent -o {fn}",
+            .sep = " "
+          ) |> system()
+          status <- glue::glue(
+            "-t {fn} >/dev/null 2>&1 && echo 'complete' || echo 'incomplete' "
+          ) |> system2("gzip", args = _, stdout = T)
+        }
       }
     })
   }

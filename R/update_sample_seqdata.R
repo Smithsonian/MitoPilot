@@ -93,17 +93,7 @@ update_sample_seqdata <- function(
   }
 
   # make backup of SQL database
-  backup_dir = file.path(path, ".old_sqlite_dbs")
-  if (!dir.exists(backup_dir)) {   # Create backup directory if it doesn't exist
-    dir.create(backup_dir, recursive = TRUE)
-    num = 1
-  } else { # if backup dir exists, find any existing backups and increment backup number by 1
-    backups <- list.files(backup_dir, pattern = ".sqlite.*", full.names=FALSE, all.files = TRUE)
-    num <- max(as.numeric(sapply(strsplit(backups, "[.]"), "[", 3))) + 1
-  }
-  backup = file.path(backup_dir, paste0(".sqlite.", num))
-  file.copy(file.path(path, ".sqlite"), backup)
-  message("Backed up old SQLite database to: ", backup)
+  backup_project_db(path)
 
   # update SQL database
   dplyr::tbl(con, "samples") |>

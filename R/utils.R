@@ -85,18 +85,18 @@ compute_missing_extra <- function(annotations, rules, default_rules) {
 
 #' toJSON wrapper
 #'
+#' Parses by columns, and simplifies the json by removing columns with only
+#' `NA` and dereplicating values when all values are the same.
+#'
 #' @param x a data.frame or tibble
-#' @param dataframe whether to parse by columns (default) or rows
-#' @param simplify_df simplify the json by removing columns with only `NA` and
-#'   dereplicating values when all values are the same
 #'
 #' @noRd
 #'
-json_string <- function(x, dataframe = "columns", simplify_df = TRUE) {
+json_string <- function(x) {
   if (length(x) == 0 || all(is.na(x))) {
     return(NULL)
   }
-  if ("data.frame" %in% class(x) && simplify_df) {
+  if ("data.frame" %in% class(x)) {
     x <- x |>
       dplyr::select(dplyr::where(~ !all(is.na(.)))) |>
       purrr::map(~ {
@@ -112,7 +112,7 @@ json_string <- function(x, dataframe = "columns", simplify_df = TRUE) {
   if (class(x) == "character") {
     x <- as.list(x)
   }
-  jsonlite::toJSON(x, dataframe = dataframe, auto_unbox = T, null = "null") |>
+  jsonlite::toJSON(x, dataframe = "columns", auto_unbox = T, null = "null") |>
     as.character()
 }
 
@@ -147,15 +147,63 @@ json_parse <- function(.x, tibble = F) {
 #' @param cols a named list of column types where names will be the columns
 #'
 #' @noRd
-add_cols <- function(dat, cols, .after = dplyr::everything()) {
+add_cols <- function(dat, cols) {
   if (length(cols) == 0L) {
     return(dat)
   }
   dat |>
     dplyr::bind_rows(dplyr::tibble(!!!cols[!names(cols) %in% names(dat)], .rows = 0)) |>
-    dplyr::relocate(names(cols), .after = .after)
+    dplyr::relocate(names(cols), .after = dplyr::everything())
 }
 
+
+#' Back up the project SQLite database
+#'
+#' Copies `.sqlite` into `.old_sqlite_dbs/.sqlite.N`, incrementing `N` past any
+#' existing backup.
+#'
+#' @param path project directory
+#'
+#' @noRd
+backup_project_db <- function(path) {
+  backup_dir <- file.path(path, ".old_sqlite_dbs")
+  if (!dir.exists(backup_dir)) {
+    dir.create(backup_dir, recursive = TRUE)
+    num <- 1
+  } else {
+    backups <- list.files(backup_dir, pattern = ".sqlite.*", full.names = FALSE, all.files = TRUE)
+    num <- max(as.numeric(sapply(strsplit(backups, "[.]"), "[", 3))) + 1
+  }
+  backup <- file.path(backup_dir, paste0(".sqlite.", num))
+  file.copy(file.path(path, ".sqlite"), backup)
+  message("Backed up old SQLite database to: ", backup)
+  invisible(backup)
+}
+
+#' Add any missing mapping columns to the samples table
+#'
+#' Returns `sample_table` with the new columns added as `NA`.
+#'
+#' @param con project database connection
+#' @param mapping updated mapping data frame
+#' @param sample_table existing samples table
+#'
+#' @noRd
+add_missing_sample_cols <- function(con, mapping, sample_table) {
+  new_cols <- subset(colnames(mapping), !(colnames(mapping) %in% colnames(sample_table)))
+  if (length(new_cols) > 0) {
+    for (col in new_cols) { # need to loop because SQLite doesn't allow multiple columns to be added in same statement
+      glue::glue_sql(
+        "ALTER TABLE samples
+        ADD COLUMN {col}",
+        col = col,
+        .con = con
+      ) |> DBI::dbExecute(con, statement = _)
+      sample_table[, col] <- as.character(rep(NA, nrow(sample_table))) # add new column with NA values to dataframe object
+    }
+  }
+  sample_table
+}
 
 #' Recursively modify nested list
 #'

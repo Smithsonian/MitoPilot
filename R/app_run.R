@@ -84,31 +84,20 @@ run_app <- function(
   }, error = function(e) {
     stop("Errpr, .config file missing \"asmbDir\": ", e$message)
   })
-  if(asmbDir == "NA"){
-    with_golem_options(
-      app = shinyApp(
-        ui = app_ui,
-        server = app_server,
-        onStart = onStart,
-        options = options,
-        enableBookmarking = enableBookmarking,
-        uiPattern = uiPattern
-      ),
-      golem_opts = list(...)
-    )
-  } else {
-    with_golem_options(
-      app = shinyApp(
-        ui = app_ui_userAsmb,
-        server = app_server_userAsmb,
-        onStart = onStart,
-        options = options,
-        enableBookmarking = enableBookmarking,
-        uiPattern = uiPattern
-      ),
-      golem_opts = list(...)
-    )
-  }
+  ui <- if (asmbDir == "NA") app_ui else app_ui_userAsmb
+  server <- if (asmbDir == "NA") app_server else app_server_userAsmb
+
+  with_golem_options(
+    app = shinyApp(
+      ui = ui,
+      server = server,
+      onStart = onStart,
+      options = options,
+      enableBookmarking = enableBookmarking,
+      uiPattern = uiPattern
+    ),
+    golem_opts = list(...)
+  )
 
 
 

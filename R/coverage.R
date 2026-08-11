@@ -58,23 +58,15 @@ coverage <- function(
   # Map Reads
   mapped_fn <- file.path(outDir, paste0(basename_prefix, ".bam"))
 
-  if(unpaired_reads == "NA"){
-    stringr::str_glue(
-      "bowtie2-build {assembly_working} index"
-    ) |> system()
-    stringr::str_glue(
-      "bowtie2 --very-sensitive-local --no-unal -x index -1 {paired_reads_1} -2 {paired_reads_2} --threads {cpus} ",
-      "| samtools view -bS - | samtools sort - > {mapped_fn}"
-    ) |> system()
-  } else {
-    stringr::str_glue(
-      "bowtie2-build {assembly_working} index"
-    ) |> system()
-    stringr::str_glue(
-      "bowtie2 --very-sensitive-local --no-unal -x index -1 {paired_reads_1} -2 {paired_reads_2} -U {unpaired_reads} --threads {cpus} ",
-      "| samtools view -bS - | samtools sort - > {mapped_fn}"
-    ) |> system()
-  }
+  unpaired_arg <- if (unpaired_reads == "NA") "" else paste0("-U ", unpaired_reads, " ")
+
+  stringr::str_glue(
+    "bowtie2-build {assembly_working} index"
+  ) |> system()
+  stringr::str_glue(
+    "bowtie2 --very-sensitive-local --no-unal -x index -1 {paired_reads_1} -2 {paired_reads_2} {unpaired_arg}--threads {cpus} ",
+    "| samtools view -bS - | samtools sort - > {mapped_fn}"
+  ) |> system()
 
   # Get coverage stats
   stringr::str_glue(
