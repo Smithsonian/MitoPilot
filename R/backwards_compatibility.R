@@ -71,9 +71,42 @@ backwards_compatibility <- function(
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite")) # open connection
   on.exit(DBI::dbDisconnect(con))
 
+  # Back up the database before the first migration write, and only then: several
+  # steps below rebuild tables (DROP + RENAME) and drop columns, none of which
+  # SQLite can undo, and a migrated database cannot be reopened by an older
+  # MitoPilot. Mirrors the backup add_samples()/update_sample_metadata() already
+  # make. `changed` doubles as the "was there anything to do" flag.
+  changed <- FALSE
+  ensure_backup <- function() {
+    if (changed) {
+      return(invisible(NULL))
+    }
+    changed <<- TRUE
+    backup_dir <- file.path(path, ".old_sqlite_dbs")
+    if (!dir.exists(backup_dir)) {
+      dir.create(backup_dir, recursive = TRUE)
+      num <- 1
+    } else {
+      backups <- list.files(backup_dir, pattern = "^\\.sqlite\\.[0-9]+$", all.files = TRUE)
+      num <- if (length(backups) == 0) {
+        1
+      } else {
+        max(as.numeric(sapply(strsplit(backups, "[.]"), "[", 3)), na.rm = TRUE) + 1
+      }
+    }
+    backup <- file.path(backup_dir, paste0(".sqlite.", num))
+    if (!file.copy(file.path(path, ".sqlite"), backup)) {
+      stop("Could not back up the project database to ", backup,
+           ". Refusing to migrate without a backup.", call. = FALSE)
+    }
+    message("Backed up project database to: ", backup)
+  }
+
+  add_col <- function(table, column, type, default = NULL) {
+    add_opt_col(con, table, column, type, default, before = ensure_backup)
+  }
+
   samples_table <- DBI::dbReadTable(con, "samples") # read in annotations table
-  annotate_table <- DBI::dbReadTable(con, "annotate") # read in annotations table
-  assemble_opts_table <- DBI::dbReadTable(con, "assemble_opts") # read in assemble opts table
   annotate_opts_table <- DBI::dbReadTable(con, "annotate_opts") # read in annotations opts table
   curate_opts_table <- DBI::dbReadTable(con, "curate_opts") # read in curate opts table
 
@@ -108,16 +141,6 @@ backwards_compatibility <- function(
   # on already-migrated projects.)
   old_ref_str <- any(grepl("/ref_dbs/Mitos2", curate_opts_table$params))
 
-  # A Smithsonian/MitoPilot MITOS2 ref_dir pointing at any branch other than main
-  # is stale: feature/deleted branches 404 at prepare_ref_db (WF2). Only our own
-  # repo URLs are considered; custom hosts or local paths are left untouched.
-  stale_ref_branch <- {
-    vals <- c(annotate_opts_table$ref_dir, curate_opts_table$ref_dir)
-    vals <- vals[!is.na(vals)]
-    any(grepl("raw\\.githubusercontent\\.com/[Ss]mithsonian/MitoPilot/.+/ref_dbs/Mitos2$", vals) &
-        !grepl("/refs/heads/main/ref_dbs/Mitos2$", vals))
-  }
-
   # Superseded default export headers, for detecting unmodified templates. Derived
   # from the frozen {ID}-era template, NOT from DEFAULT_FASTA_HEADER: the default has
   # since changed to {seqid}, so deriving from the current value would no longer match
@@ -135,129 +158,13 @@ backwards_compatibility <- function(
     error = function(e) TRUE
   )
 
-  if ((!update_config || containerVer) &&
-      genetic_code_numeric &&
-      !old_ref_str &&
-      "arwen_opts" %in% names(annotate_opts_table) &&
-      "use_arwen" %in% names(annotate_opts_table) &&
-      "start_gene" %in% names(annotate_opts_table) &&
-      "ref_based_rc" %in% names(annotate_opts_table) &&
-      "max_blast_hits" %in% names(curate_opts_table) &&
-      "ref_db" %in% names(curate_opts_table) &&
-      "ref_dir" %in% names(curate_opts_table) &&
-      "linear_complete" %in% names(curate_opts_table) &&
-      "genetic_code" %in% names(curate_opts_table) &&
-      "assembler" %in% names(assemble_opts_table) &&
-      "mitofinder_db" %in% names(assemble_opts_table) &&
-      "mitofinder" %in% names(assemble_opts_table) &&
-      "problematic" %in% names(annotate_table) &&
-      "partial" %in% names(annotate_table) &&
-      "genetic_code" %in% names(samples_table) &&
-      "export" %in% DBI::dbListTables(con) &&
-      "blast_ref_override" %in% DBI::dbListTables(con) &&
-      !any(c("export_group", "export_time_stamp") %in% names(samples_table)) &&
-      "poor_blast_ref" %in% names(assemble_table) &&
-      "ID_verified" %in% names(annotate_table) &&
-      "reviewed" %in% names(annotate_table) &&
-      "blast_accession" %in% names(assemble_table) &&
-      "blast_opts" %in% names(assemble_table) &&
-      "blast_opts" %in% DBI::dbListTables(con) &&
-      isTRUE(tryCatch(
-        "max_target_seqs" %in% DBI::dbListFields(con, "blast_opts"),
-        error = function(e) FALSE
-      )) &&
-      "use_mitos_best" %in% names(annotate_opts_table) &&
-      "rescue_no_trna" %in% names(annotate_opts_table) &&
-      "use_aragorn" %in% names(annotate_opts_table) &&
-      "aragorn_opts" %in% names(annotate_opts_table) &&
-      "max_paths" %in% names(assemble_opts_table) &&
-      "max_scaffolds" %in% names(assemble_opts_table) &&
-      "tool" %in% DBI::dbListFields(con, "annotations") &&
-      "partial_start" %in% DBI::dbListFields(con, "annotations") &&
-      "partial_stop" %in% DBI::dbListFields(con, "annotations") &&
-      "blast_ref_annotations" %in% DBI::dbListTables(con) &&
-      "blast_ref_alignment" %in% DBI::dbListTables(con) &&
-      "assembly_backup" %in% DBI::dbListTables(con) &&
-      isTRUE(tryCatch(
-        "use_orffinder" %in% DBI::dbListFields(con, "orf_opts"),
-        error = function(e) FALSE
-      )) &&
-      isTRUE(tryCatch(
-        !any(c("max_blast_hits", "ref_db", "ref_dir") %in% DBI::dbListFields(con, "orf_opts")),
-        error = function(e) FALSE
-      )) &&
-      "orf_opts" %in% names(annotate_table) &&
-      "orf_opts" %in% DBI::dbListTables(con) &&
-      "assembly_blast" %in% DBI::dbListTables(con) &&
-      "edit_positions" %in% DBI::dbListFields(con, "assemblies") &&
-      isTRUE(tryCatch(
-        all(c("genetic_code", "lineage", "topology") %in% names(DBI::dbReadTable(con, "blast_ref_sequences"))),
-        error = function(e) FALSE
-      )) &&
-      isTRUE(tryCatch(
-        "assemblies" %in% DBI::dbListTables(con) && "length_raw" %in% DBI::dbListFields(con, "assemblies"),
-        error = function(e) FALSE
-      )) &&
-      isTRUE(tryCatch(
-        "blast_accession" %in% DBI::dbListFields(con, "assemblies"),
-        error = function(e) FALSE
-      )) &&
-      isTRUE(tryCatch(
-        "orf_nested" %in% DBI::dbListFields(con, "orf_opts"),
-        error = function(e) FALSE
-      )) &&
-      !stale_ref_branch &&
-      "export_opts" %in% DBI::dbListTables(con) &&
-      "synteny_accession" %in% names(assemble_table) &&
-      "blast_accession_auto" %in% names(assemble_table) &&
-      "blast_ref_candidates" %in% DBI::dbListTables(con) &&
-      isTRUE(tryCatch(
-        all(c("path", "scaffold") %in% DBI::dbListFields(con, "blast_ref_candidates")),
-        error = function(e) FALSE
-      )) &&
-      isTRUE(tryCatch(
-        "accession" %in% DBI::dbListFields(con, "blast_ref_annotations"),
-        error = function(e) FALSE
-      )) &&
-      isTRUE(tryCatch(
-        "accession" %in% DBI::dbListFields(con, "blast_ref_alignment"),
-        error = function(e) FALSE
-      )) &&
-      isTRUE(tryCatch(
-        "scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"),
-        error = function(e) FALSE
-      )) &&
-      export_default_current)
-  {
-    message("nothing to update")
-    return(invisible(NULL))
-  }
-
-  # Back up the database before any migration writes. Several steps below rebuild
-  # tables (DROP + RENAME) and drop columns, none of which SQLite can undo, and a
-  # migrated database cannot be reopened by an older MitoPilot. Mirrors the backup
-  # add_samples()/update_sample_metadata() already make.
-  backup_dir <- file.path(path, ".old_sqlite_dbs")
-  if (!dir.exists(backup_dir)) {
-    dir.create(backup_dir, recursive = TRUE)
-    num <- 1
-  } else {
-    backups <- list.files(backup_dir, pattern = "^\\.sqlite\\.[0-9]+$", all.files = TRUE)
-    num <- if (length(backups) == 0) {
-      1
-    } else {
-      max(as.numeric(sapply(strsplit(backups, "[.]"), "[", 3)), na.rm = TRUE) + 1
-    }
-  }
-  backup <- file.path(backup_dir, paste0(".sqlite.", num))
-  if (!file.copy(file.path(path, ".sqlite"), backup)) {
-    stop("Could not back up the project database to ", backup,
-         ". Refusing to migrate without a backup.", call. = FALSE)
-  }
-  message("Backed up project database to: ", backup)
+  # The .config is stale and the caller opted into regenerating it, so this run
+  # changes something even if the database itself is current.
+  if (update_config && !containerVer) ensure_backup()
 
   # update annotation and curation reference databases
   if(old_ref_str){
+    ensure_backup()
     message("updated the annotate_opts table with new ref_dir and ref_db values")
     # update annotate ref_dir path
     annotate_opts_table$ref_dir <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
@@ -321,22 +228,9 @@ backwards_compatibility <- function(
   # the orffinder_condaenv param, the orf { } process block, blast_gb, and bumps
   # the container version in one pass.
 
-  # if genetic_code column doesn't exist, add it
-  if(!("genetic_code" %in% names(samples_table))){
-    message("added 'genetic_code' column to samples table")
-    # store as INTEGER so assemble.nf's genetic_code.intValue() works (fresh
-    # projects store a number here; a TEXT value crashes assembly).
-    samples_table$genetic_code <- rep(2L, nrow(samples_table)) # add genetic_code column
-    DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN genetic_code INTEGER")
-
-    dplyr::tbl(con, "samples") |> # update SQL database
-      dplyr::rows_upsert(
-        samples_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
+  # store genetic_code as INTEGER so assemble.nf's genetic_code.intValue() works
+  # (fresh projects store a number here; a TEXT value crashes assembly).
+  add_col("samples", "genetic_code", "INTEGER", 2L)
 
   # normalize any legacy TEXT/REAL genetic_code to INTEGER (idempotent). Older
   # projects stored it as TEXT ('2', crashes assemble.nf's genetic_code.intValue())
@@ -344,6 +238,7 @@ backwards_compatibility <- function(
   # UPDATE/CAST is not enough: the column's affinity coerces the result straight
   # back, so the column itself must be rebuilt with INTEGER affinity.
   if (!genetic_code_numeric) {
+    ensure_backup()
     message("rebuilt 'genetic_code' column in samples table as integer")
     # Wrap the multi-step rebuild so a mid-sequence failure rolls back cleanly
     # instead of leaving a half-migrated table.
@@ -362,6 +257,7 @@ backwards_compatibility <- function(
 
   # if poor_blast_ref column doesn't exist on assemble, add it (TEXT: good/poor/failed/NULL)
   if (!("poor_blast_ref" %in% names(assemble_table))) {
+    ensure_backup()
     message("added 'poor_blast_ref' column to assemble table")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN poor_blast_ref TEXT")
     # migrate from samples if the column lived there in older projects
@@ -381,24 +277,27 @@ backwards_compatibility <- function(
     }
   }
   # convert any legacy integer values left in poor_blast_ref to TEXT (idempotent)
-  DBI::dbExecute(
-    con,
-    "UPDATE assemble SET poor_blast_ref = CASE
-       WHEN typeof(poor_blast_ref) = 'integer' AND poor_blast_ref = 1 THEN 'poor'
-       WHEN typeof(poor_blast_ref) = 'integer' AND poor_blast_ref = 0 THEN 'good'
-       ELSE poor_blast_ref
-     END"
-  )
-
-  # if join_scaffolds toggle column doesn't exist on assemble_opts, add it (default off)
-  if (!("join_scaffolds" %in% names(assemble_opts_table))) {
-    message("added 'join_scaffolds' column to assemble_opts table")
-    DBI::dbExecute(con, "ALTER TABLE assemble_opts ADD COLUMN join_scaffolds INTEGER")
-    DBI::dbExecute(con, "UPDATE assemble_opts SET join_scaffolds = 0 WHERE join_scaffolds IS NULL")
+  if (DBI::dbGetQuery(
+        con,
+        "SELECT COUNT(*) AS n FROM assemble WHERE typeof(poor_blast_ref) = 'integer'"
+      )$n > 0) {
+    ensure_backup()
+    DBI::dbExecute(
+      con,
+      "UPDATE assemble SET poor_blast_ref = CASE
+         WHEN poor_blast_ref = 1 THEN 'poor'
+         WHEN poor_blast_ref = 0 THEN 'good'
+         ELSE poor_blast_ref
+       END
+       WHERE typeof(poor_blast_ref) = 'integer'"
+    )
   }
+
+  add_col("assemble_opts", "join_scaffolds", "INTEGER", 0L)
 
   # precomputed scaffold->reference mappings table (for the in-app join editor)
   if (!DBI::dbExistsTable(con, "scaffold_mappings")) {
+    ensure_backup()
     message("added 'scaffold_mappings' table")
     DBI::dbExecute(
       con,
@@ -418,103 +317,20 @@ backwards_compatibility <- function(
     )
   }
 
-  # if reviewed column doesn't exist, add it
-  if(!("reviewed" %in% names(annotate_table))){
-    message("added 'reviewed' column to annotate table")
-    annotate_table$reviewed <- rep("no", nrow(annotate_table)) # add reviewed column
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE annotate
-       ADD COLUMN reviewed TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate") |> # update SQL database
-      dplyr::rows_upsert(
-        annotate_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
-  # if ID_verified column doesn't exist, add it
-  if(!("ID_verified" %in% names(annotate_table))){
-    message("added 'ID_verified' column to annotate table")
-    annotate_table$ID_verified <- rep("no", nrow(annotate_table)) # add ID_verified column
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE annotate
-       ADD COLUMN ID_verified TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate") |> # update SQL database
-      dplyr::rows_upsert(
-        annotate_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
-  # if problematic column doesn't exist, add it
-  if(!("problematic" %in% names(annotate_table))){
-    message("added 'problematic' column to annotate table")
-    annotate_table$problematic <- rep(NA_character_, nrow(annotate_table)) # add ID_verified column
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE annotate
-       ADD COLUMN problematic TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate") |> # update SQL database
-      dplyr::rows_upsert(
-        annotate_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
-  # if partial column doesn't exist, add it
-  if(!("partial" %in% names(annotate_table))){
-    message("added 'partial' column to annotate table")
-    annotate_table$partial <- rep(NA_character_, nrow(annotate_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate
-       ADD COLUMN partial TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate") |> # update SQL database
-      dplyr::rows_upsert(
-        annotate_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
-  # if partial_start / partial_stop columns don't exist on annotations, add them
-  annotations_fields <- DBI::dbListFields(con, "annotations")
-  if(!("partial_start" %in% annotations_fields)){
-    message("added 'partial_start' column to annotations table")
-    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN partial_start INTEGER")
-  }
-  if(!("partial_stop" %in% annotations_fields)){
-    message("added 'partial_stop' column to annotations table")
-    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN partial_stop INTEGER")
-  }
-  # if linear_complete column doesn't exist on curate_opts, add it (default 0)
-  if(!("linear_complete" %in% DBI::dbListFields(con, "curate_opts"))){
-    message("added 'linear_complete' column to curate_opts table")
-    DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN linear_complete INTEGER")
-    DBI::dbExecute(con, "UPDATE curate_opts SET linear_complete = 0")
-  }
+  add_col("annotate", "reviewed", "TEXT", "no")
+  add_col("annotate", "ID_verified", "TEXT", "no")
+  add_col("annotate", "problematic", "TEXT")
+  add_col("annotate", "partial", "TEXT")
+  add_col("annotations", "partial_start", "INTEGER")
+  add_col("annotations", "partial_stop", "INTEGER")
+  add_col("curate_opts", "linear_complete", "INTEGER", 0L)
   # genetic_code override column on curate_opts. Genetic code now auto-selects
   # from the curation ruleset, but PRESERVE existing projects: freeze the
   # project's current code (uniform in the old single-code model) as an explicit
   # override on every curate_opts set so re-running curate/annotate does not
   # change translations. Read it from .config, falling back to the samples table.
   if(!("genetic_code" %in% DBI::dbListFields(con, "curate_opts"))){
+    ensure_backup()
     message("added 'genetic_code' override column to curate_opts table")
     DBI::dbExecute(con, "ALTER TABLE curate_opts ADD COLUMN genetic_code INTEGER")
     config_gc <- suppressWarnings(as.integer(stringr::str_trim(
@@ -537,361 +353,42 @@ backwards_compatibility <- function(
       glue::glue_sql("UPDATE curate_opts SET genetic_code = {config_gc}", .con = con)
     )
   }
-  # if use_arwen column doesn't exist, add it (default off)
-  if(!("use_arwen" %in% names(annotate_opts_table))){
-    message("added 'use_arwen' column to annotate_opts table")
-    annotate_opts_table$use_arwen <- rep(0L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN use_arwen INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if arwen_opts column doesn't exist, add it
-  if(!("arwen_opts" %in% names(annotate_opts_table))){
-    message("added 'arwen_opts' column to annotate_opts table")
-    annotate_opts_table$arwen_opts <- rep("-mtx", nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN arwen_opts TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if use_mitos_best column doesn't exist, add it (default on, matching prior behaviour)
-  if(!("use_mitos_best" %in% names(annotate_opts_table))){
-    message("added 'use_mitos_best' column to annotate_opts table")
-    annotate_opts_table$use_mitos_best <- rep(1L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN use_mitos_best INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if rescue_no_trna column doesn't exist, add it (default off)
-  if(!("rescue_no_trna" %in% names(annotate_opts_table))){
-    message("added 'rescue_no_trna' column to annotate_opts table")
-    annotate_opts_table$rescue_no_trna <- rep(1L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN rescue_no_trna INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if use_mitos column doesn't exist, add it (default on, matching prior behaviour)
-  if(!("use_mitos" %in% names(annotate_opts_table))){
-    message("added 'use_mitos' column to annotate_opts table")
-    annotate_opts_table$use_mitos <- rep(1L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN use_mitos INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if use_trnaScan column doesn't exist, add it (default on, matching prior behaviour)
-  if(!("use_trnaScan" %in% names(annotate_opts_table))){
-    message("added 'use_trnaScan' column to annotate_opts table")
-    annotate_opts_table$use_trnaScan <- rep(1L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN use_trnaScan INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if use_aragorn column doesn't exist, add it (default off)
-  if(!("use_aragorn" %in% names(annotate_opts_table))){
-    message("added 'use_aragorn' column to annotate_opts table")
-    annotate_opts_table$use_aragorn <- rep(0L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN use_aragorn INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if aragorn_opts column doesn't exist, add it
-  if(!("aragorn_opts" %in% names(annotate_opts_table))){
-    message("added 'aragorn_opts' column to annotate_opts table")
-    annotate_opts_table$aragorn_opts <- rep("-m -gcstd", nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN aragorn_opts TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if use_mitofinder column doesn't exist, add it (default off)
-  if(!("use_mitofinder" %in% names(annotate_opts_table))){
-    message("added 'use_mitofinder' column to annotate_opts table")
-    annotate_opts_table$use_mitofinder <- rep(0L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN use_mitofinder INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if mitofinder_db column doesn't exist, add it
-  if(!("mitofinder_db" %in% names(annotate_opts_table))){
-    message("added 'mitofinder_db' column to annotate_opts table")
-    annotate_opts_table$mitofinder_db <- rep(NA_character_, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN mitofinder_db TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if mitofinder_new_genes column doesn't exist, add it (default off)
-  if(!("mitofinder_new_genes" %in% names(annotate_opts_table))){
-    message("added 'mitofinder_new_genes' column to annotate_opts table")
-    annotate_opts_table$mitofinder_new_genes <- rep(0L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN mitofinder_new_genes INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if mitofinder_allow_introns column doesn't exist, add it (default off)
-  if(!("mitofinder_allow_introns" %in% names(annotate_opts_table))){
-    message("added 'mitofinder_allow_introns' column to annotate_opts table")
-    annotate_opts_table$mitofinder_allow_introns <- rep(0L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN mitofinder_allow_introns INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if mitofinder_opts column doesn't exist, add it
-  if(!("mitofinder_opts" %in% names(annotate_opts_table))){
-    message("added 'mitofinder_opts' column to annotate_opts table")
-    annotate_opts_table$mitofinder_opts <- rep("", nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN mitofinder_opts TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if coverage_trim column doesn't exist, add it (default on)
-  if (!("coverage_trim" %in% names(annotate_opts_table))) {
-    message("added 'coverage_trim' column to annotate_opts table")
-    annotate_opts_table$coverage_trim <- rep(1L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN coverage_trim INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if feature_trim column doesn't exist, add it (default on)
-  if (!("feature_trim" %in% names(annotate_opts_table))) {
-    message("added 'feature_trim' column to annotate_opts table")
-    annotate_opts_table$feature_trim <- rep(1L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN feature_trim INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if ref_based_rc column doesn't exist, add it (default off)
-  if (!("ref_based_rc" %in% names(annotate_opts_table))) {
-    message("added 'ref_based_rc' column to annotate_opts table")
-    annotate_opts_table$ref_based_rc <- rep(0L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN ref_based_rc INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if retain_low_conf_trna column doesn't exist, add it (default off = drop NNN)
-  if (!("retain_low_conf_trna" %in% names(annotate_opts_table))) {
-    message("added 'retain_low_conf_trna' column to annotate_opts table")
-    annotate_opts_table$retain_low_conf_trna <- rep(0L, nrow(annotate_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN retain_low_conf_trna INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-    dplyr::tbl(con, "annotate_opts") |>
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
+  # optional annotate_opts columns, in the order they were introduced:
+  # column, SQLite type, back-filled default (NULL leaves existing rows NULL)
+  annotate_opt_cols <- list(
+    list("use_arwen", "INTEGER", 0L),
+    list("arwen_opts", "TEXT", "-mtx"),
+    list("use_mitos_best", "INTEGER", 1L),
+    list("rescue_no_trna", "INTEGER", 1L),
+    list("use_mitos", "INTEGER", 1L),
+    list("use_trnaScan", "INTEGER", 1L),
+    list("use_aragorn", "INTEGER", 0L),
+    list("aragorn_opts", "TEXT", "-m -gcstd"),
+    list("use_mitofinder", "INTEGER", 0L),
+    list("mitofinder_db", "TEXT", NULL),
+    list("mitofinder_new_genes", "INTEGER", 0L),
+    list("mitofinder_allow_introns", "INTEGER", 0L),
+    list("mitofinder_opts", "TEXT", ""),
+    list("coverage_trim", "INTEGER", 1L),
+    list("feature_trim", "INTEGER", 1L),
+    list("ref_based_rc", "INTEGER", 0L),
+    list("retain_low_conf_trna", "INTEGER", 0L)
+  )
+  for (s in annotate_opt_cols) add_col("annotate_opts", s[[1]], s[[2]], s[[3]])
 
   # use_orffinder now lives in orf_opts (was annotate_opts). Add it to an existing
   # orf_opts table if missing (default off). A stale annotate_opts.use_orffinder
   # column on older databases is harmless and left in place. The orf_opts table is
   # created with use_orffinder below for databases that lack the table entirely.
-  if ("orf_opts" %in% DBI::dbListTables(con) &&
-      !("use_orffinder" %in% DBI::dbListFields(con, "orf_opts"))) {
-    message("added 'use_orffinder' column to orf_opts table")
-    DBI::dbExecute(con, "ALTER TABLE orf_opts ADD COLUMN use_orffinder INTEGER")
-    DBI::dbExecute(con, "UPDATE orf_opts SET use_orffinder = 0 WHERE use_orffinder IS NULL")
-  }
-
-  if ("orf_opts" %in% DBI::dbListTables(con) &&
-      !("orf_nested" %in% DBI::dbListFields(con, "orf_opts"))) {
-    message("added 'orf_nested' column to orf_opts table")
-    DBI::dbExecute(con, "ALTER TABLE orf_opts ADD COLUMN orf_nested INTEGER")
-    DBI::dbExecute(con, "UPDATE orf_opts SET orf_nested = 0 WHERE orf_nested IS NULL")
-  }
-
-  # if orf_opts column doesn't exist in the annotate table, add it (default set)
-  if (!("orf_opts" %in% names(annotate_table))) {
-    message("added 'orf_opts' column to annotate table")
-    annotate_table$orf_opts <- rep("default", nrow(annotate_table))
-    DBI::dbExecute(con, "ALTER TABLE annotate ADD COLUMN orf_opts TEXT")
-    dplyr::tbl(con, "annotate") |>
-      dplyr::rows_upsert(
-        annotate_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
+  add_col("orf_opts", "use_orffinder", "INTEGER", 0L)
+  add_col("orf_opts", "orf_nested", "INTEGER", 0L)
+  add_col("annotate", "orf_opts", "TEXT", "default")
 
   # if orf_opts table doesn't exist, create it and seed a default row.
   # max_blast_hits, ref_db and ref_dir are shared with curation (curate_opts),
   # not stored here.
   if (!("orf_opts" %in% DBI::dbListTables(con))) {
+    ensure_backup()
     message("created 'orf_opts' table")
     DBI::dbExecute(
       con,
@@ -928,212 +425,33 @@ backwards_compatibility <- function(
     # from curate_opts
     orf_cols <- DBI::dbListFields(con, "orf_opts")
     for (col_drop in intersect(c("max_blast_hits", "ref_db", "ref_dir"), orf_cols)) {
+      ensure_backup()
       message(paste0("removed '", col_drop, "' column from orf_opts table (now shared with curation)"))
       DBI::dbExecute(con, paste0("ALTER TABLE orf_opts DROP COLUMN ", col_drop))
     }
   }
 
-  # if start_gene column doesn't exist, add it
-  if(!("start_gene" %in% names(annotate_opts_table))){
-    message("added 'start_gene' column to annotate_opts table")
-    annotate_opts_table$start_gene <- rep("trnF", nrow(annotate_opts_table)) # add ID_verified column
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE annotate_opts
-       ADD COLUMN start_gene TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "annotate_opts") |> # update SQL database
-      dplyr::rows_upsert(
-        annotate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "annotate_opts"
-      )
-  }
-
-  # if max_blast_hits column doesn't exist, add it
-  if(!("max_blast_hits" %in% names(curate_opts_table))){
-    message("added 'max_blast_hits' column to curate_opts table")
-    curate_opts_table$max_blast_hits <- rep(10, nrow(curate_opts_table))
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE curate_opts
-       ADD COLUMN max_blast_hits INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "curate_opts") |> # update SQL database
-      dplyr::rows_upsert(
-        curate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "curate_opts"
-      )
-  }
-
-  # if ref_dir column doesn't exist, add it
-  if(!("ref_dir" %in% names(curate_opts_table))){
-    message("added 'ref_dir' column to curate_opts table")
-    curate_opts_table$ref_dir <- rep("/ref_dbs/Mitos2", nrow(curate_opts_table))
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE curate_opts
-       ADD COLUMN ref_dir TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "curate_opts") |> # update SQL database
-      dplyr::rows_upsert(
-        curate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "curate_opts"
-      )
-  }
-
-  # if ref_db column doesn't exist, add it
-  if(!("ref_db" %in% names(curate_opts_table))){
-    message("added 'ref_db' column to curate_opts table")
-    curate_opts_table$ref_db <- rep("Chordata", nrow(curate_opts_table))
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE curate_opts
-       ADD COLUMN ref_db TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "curate_opts") |> # update SQL database
-      dplyr::rows_upsert(
-        curate_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "curate_opts"
-      )
-  }
-
-  # if assembler column doesn't exist, add it
-  if(!("assembler" %in% names(assemble_opts_table))){
-    message("added 'assembler' column to assemble_opts table")
-    assemble_opts_table$assembler <- rep("GetOrganelle", nrow(assemble_opts_table))
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE assemble_opts
-       ADD COLUMN assembler TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "assemble_opts") |> # update SQL database
-      dplyr::rows_upsert(
-        assemble_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-
-  # if mitofinder_db column doesn't exist, add it
-  if(!("mitofinder_db" %in% names(assemble_opts_table))){
-    message("added 'mitofinder_db' column to assemble_opts table")
-    assemble_opts_table$mitofinder_db <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/devel-DJM/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
-                                             nrow(assemble_opts_table))
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE assemble_opts
-       ADD COLUMN mitofinder_db TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "assemble_opts") |> # update SQL database
-      dplyr::rows_upsert(
-        assemble_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-
-
-  # if mitofinder column doesn't exist, add it
-  if(!("mitofinder" %in% names(assemble_opts_table))){
-    message("added 'mitofinder' column to assemble_opts table")
-    assemble_opts_table$mitofinder <- rep("--megahit", nrow(assemble_opts_table))
-    # add new columns to database
-    glue::glue_sql(
-      "ALTER TABLE assemble_opts
-       ADD COLUMN mitofinder TEXT",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "assemble_opts") |> # update SQL database
-      dplyr::rows_upsert(
-        assemble_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-
-  # if max_paths column doesn't exist, add it
-  if(!("max_paths" %in% names(assemble_opts_table))){
-    message("added 'max_paths' column to assemble_opts table")
-    assemble_opts_table$max_paths <- rep(10L, nrow(assemble_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE assemble_opts
-       ADD COLUMN max_paths INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "assemble_opts") |>
-      dplyr::rows_upsert(
-        assemble_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-
-  # if max_scaffolds column doesn't exist, add it
-  if(!("max_scaffolds" %in% names(assemble_opts_table))){
-    message("added 'max_scaffolds' column to assemble_opts table")
-    assemble_opts_table$max_scaffolds <- rep(10L, nrow(assemble_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE assemble_opts
-       ADD COLUMN max_scaffolds INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "assemble_opts") |>
-      dplyr::rows_upsert(
-        assemble_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-
-  # if min_assembly_length column doesn't exist, add it
-  if(!("min_assembly_length" %in% names(assemble_opts_table))){
-    message("added 'min_assembly_length' column to assemble_opts table")
-    assemble_opts_table$min_assembly_length <- rep(500L, nrow(assemble_opts_table))
-    glue::glue_sql(
-      "ALTER TABLE assemble_opts
-       ADD COLUMN min_assembly_length INTEGER",
-      .con = con
-    ) |> DBI::dbExecute(con, statement = _)
-
-    dplyr::tbl(con, "assemble_opts") |>
-      dplyr::rows_upsert(
-        assemble_opts_table,
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
+  # optional opts columns, in the order they were introduced:
+  # table, column, SQLite type, back-filled default
+  opts_cols <- list(
+    list("annotate_opts", "start_gene", "TEXT", "trnF"),
+    list("curate_opts", "max_blast_hits", "INTEGER", 10L),
+    list("curate_opts", "ref_dir", "TEXT", "/ref_dbs/Mitos2"),
+    list("curate_opts", "ref_db", "TEXT", "Chordata"),
+    list("assemble_opts", "assembler", "TEXT", "GetOrganelle"),
+    list("assemble_opts", "mitofinder_db", "TEXT",
+         paste0("https://raw.githubusercontent.com/Smithsonian/MitoPilot/",
+                "refs/heads/devel-DJM/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb")),
+    list("assemble_opts", "mitofinder", "TEXT", "--megahit"),
+    list("assemble_opts", "max_paths", "INTEGER", 10L),
+    list("assemble_opts", "max_scaffolds", "INTEGER", 10L),
+    list("assemble_opts", "min_assembly_length", "INTEGER", 500L)
+  )
+  for (s in opts_cols) add_col(s[[1]], s[[2]], s[[3]], s[[4]])
 
   # if blast_accession column doesn't exist, add BLAST result columns
   if (!("blast_accession" %in% names(assemble_table))) {
+    ensure_backup()
     message("added BLAST result columns to assemble table")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_accession TEXT")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_species TEXT")
@@ -1148,6 +466,7 @@ backwards_compatibility <- function(
   # Initialize to the current blast_accession (the auto value at migration time).
   # Placed after the blast_accession add above so the UPDATE column exists.
   if (!("blast_accession_auto" %in% DBI::dbListFields(con, "assemble"))) {
+    ensure_backup()
     message("added 'blast_accession_auto' column to assemble table")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_accession_auto TEXT")
     DBI::dbExecute(
@@ -1158,21 +477,13 @@ backwards_compatibility <- function(
   }
 
   # user-selected synteny-plot reference accession (NULL falls back to top hit)
-  if (!("synteny_accession" %in% DBI::dbListFields(con, "assemble"))) {
-    message("added 'synteny_accession' column to assemble table")
-    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN synteny_accession TEXT")
-  }
-
-  # if tool column doesn't exist in annotations table, add it
-  annotations_cols <- DBI::dbListFields(con, "annotations")
-  if (!("tool" %in% annotations_cols)) {
-    message("added 'tool' column to annotations table")
-    DBI::dbExecute(con, "ALTER TABLE annotations ADD COLUMN tool TEXT")
-  }
+  add_col("assemble", "synteny_accession", "TEXT")
+  add_col("annotations", "tool", "TEXT")
 
   existing_tables <- DBI::dbListTables(con)
 
   if (!("blast_ref_annotations" %in% existing_tables)) {
+    ensure_backup()
     message("created blast_ref_annotations table")
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_annotations (
@@ -1188,6 +499,7 @@ backwards_compatibility <- function(
       );"
     )
   } else if (!("accession" %in% DBI::dbListFields(con, "blast_ref_annotations"))) {
+    ensure_backup()
     # Migrate ID-keyed table to accession-keyed: map each sample's rows to its
     # blast_accession (annotations are a property of the reference genome).
     message("re-keyed blast_ref_annotations table by accession")
@@ -1221,6 +533,7 @@ backwards_compatibility <- function(
   # the previous default (5) for existing projects.
   if ("blast_opts" %in% DBI::dbListTables(con) &&
       !("max_target_seqs" %in% DBI::dbListFields(con, "blast_opts"))) {
+    ensure_backup()
     message("added max_target_seqs column to blast_opts table")
     DBI::dbExecute(con, "ALTER TABLE blast_opts ADD COLUMN max_target_seqs INTEGER")
     DBI::dbExecute(con, "UPDATE blast_opts SET max_target_seqs = 5 WHERE max_target_seqs IS NULL")
@@ -1264,15 +577,18 @@ backwards_compatibility <- function(
     }
   }
   if (!("blast_ref_candidates" %in% DBI::dbListTables(con))) {
+    ensure_backup()
     message("created blast_ref_candidates table (per-scaffold)")
     .create_scaffold_candidates()
   } else if (!all(c("path", "scaffold") %in% DBI::dbListFields(con, "blast_ref_candidates"))) {
+    ensure_backup()
     message("migrated blast_ref_candidates to per-scaffold schema")
     DBI::dbExecute(con, "DROP TABLE blast_ref_candidates")
     .create_scaffold_candidates()
   }
 
   if (!("blast_ref_sequences" %in% existing_tables)) {
+    ensure_backup()
     message("created blast_ref_sequences table")
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_sequences (
@@ -1287,22 +603,13 @@ backwards_compatibility <- function(
       );"
     )
   } else {
-    ref_seq_cols <- names(DBI::dbReadTable(con, "blast_ref_sequences"))
-    if (!("genetic_code" %in% ref_seq_cols)) {
-      message("added 'genetic_code' column to blast_ref_sequences table")
-      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN genetic_code INTEGER")
-    }
-    if (!("lineage" %in% ref_seq_cols)) {
-      message("added 'lineage' column to blast_ref_sequences table")
-      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN lineage TEXT")
-    }
-    if (!("topology" %in% ref_seq_cols)) {
-      message("added 'topology' column to blast_ref_sequences table")
-      DBI::dbExecute(con, "ALTER TABLE blast_ref_sequences ADD COLUMN topology TEXT")
-    }
+    add_col("blast_ref_sequences", "genetic_code", "INTEGER")
+    add_col("blast_ref_sequences", "lineage", "TEXT")
+    add_col("blast_ref_sequences", "topology", "TEXT")
   }
 
   if (!("blast_ref_alignment" %in% existing_tables)) {
+    ensure_backup()
     message("created blast_ref_alignment table")
     DBI::dbExecute(con,
       "CREATE TABLE blast_ref_alignment (
@@ -1323,6 +630,7 @@ backwards_compatibility <- function(
   } else {
     bra_fields <- DBI::dbListFields(con, "blast_ref_alignment")
     if (!("accession" %in% bra_fields)) {
+      ensure_backup()
       # Migrate single-ref (ID-keyed) alignment to (ID, path, accession): the
       # existing alignment is against the sample's current top hit, path 1.
       message("re-keyed blast_ref_alignment table by (ID, path, accession)")
@@ -1350,6 +658,7 @@ backwards_compatibility <- function(
       DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
       DBI::dbExecute(con, "ALTER TABLE blast_ref_alignment_new RENAME TO blast_ref_alignment")
     } else if (!("path" %in% bra_fields)) {
+      ensure_backup()
       # Add path to the key: (ID, accession) -> (ID, path, accession). Legacy
       # single-path alignments map to path 1.
       message("re-keyed blast_ref_alignment table by (ID, path, accession)")
@@ -1384,6 +693,7 @@ backwards_compatibility <- function(
     # Re-read fields: the branches above may have rebuilt the table in this pass.
     bra_fields <- DBI::dbListFields(con, "blast_ref_alignment")
     if (!("scaffold" %in% bra_fields)) {
+      ensure_backup()
       message("re-keyed blast_ref_alignment table by (ID, path, scaffold, accession); cleared legacy alignments for per-scaffold recompute")
       DBI::dbExecute(con, "DROP TABLE blast_ref_alignment")
       DBI::dbExecute(con,
@@ -1405,23 +715,11 @@ backwards_compatibility <- function(
     }
   }
 
-  # if blast_opts column doesn't exist in assemble table, add it
-  if (!("blast_opts" %in% names(assemble_table))) {
-    message("added 'blast_opts' column to assemble table")
-    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN blast_opts TEXT")
-    assemble_table$blast_opts <- rep("default", nrow(assemble_table))
-    dplyr::tbl(con, "assemble") |>
-      dplyr::rows_update(
-        assemble_table[, c("ID", "blast_opts")],
-        unmatched = "ignore",
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
+  add_col("assemble", "blast_opts", "TEXT", "default")
 
   # if assemblies table doesn't exist, create it; otherwise add length_raw if missing
   if (!("assemblies" %in% existing_tables)) {
+    ensure_backup()
     message("created assemblies table")
     DBI::dbExecute(con,
       "CREATE TABLE assemblies (
@@ -1448,6 +746,7 @@ backwards_compatibility <- function(
       );"
     )
   } else if (!("length_raw" %in% DBI::dbListFields(con, "assemblies"))) {
+    ensure_backup()
     message("added 'length_raw' column to assemblies table")
     DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN length_raw INTEGER")
     DBI::dbExecute(con, "UPDATE assemblies SET length_raw = length WHERE length_raw IS NULL")
@@ -1455,6 +754,7 @@ backwards_compatibility <- function(
 
   # if blast_opts table doesn't exist, create it with a default entry
   if (!("blast_opts" %in% DBI::dbListTables(con))) {
+    ensure_backup()
     message("created blast_opts table")
     DBI::dbExecute(con,
       "CREATE TABLE blast_opts (
@@ -1483,17 +783,13 @@ backwards_compatibility <- function(
 
   # if the pre-trim snapshot table doesn't exist, create it
   if (!("assembly_backup" %in% DBI::dbListTables(con))) {
+    ensure_backup()
     message("created assembly_backup table")
     DBI::dbExecute(con, ASSEMBLY_BACKUP_DDL)
   }
 
-  # if edit_positions column doesn't exist in assemblies, add it
-  if (!("edit_positions" %in% DBI::dbListFields(con, "assemblies"))) {
-    message("added 'edit_positions' column to assemblies table")
-    DBI::dbExecute(con, "ALTER TABLE assemblies ADD COLUMN edit_positions TEXT")
-  }
+  add_col("assemblies", "edit_positions", "TEXT")
 
-  # if the per-scaffold BLAST result columns don't exist in assemblies, add them.
   # A pre-existing assemblies table (created before these columns) never gets them
   # from the create branch above, yet the app (unit_ref_facts, the annotate/export
   # tables) and WF2 (CURATE/ORF select a.blast_accession) require them. NULLs are
@@ -1501,16 +797,11 @@ backwards_compatibility <- function(
   asmb_blast_cols <- c(blast_accession = "TEXT", blast_species = "TEXT",
                        blast_pident = "REAL", blast_qcovs = "REAL",
                        blast_evalue = "REAL", blast_lineage = "TEXT")
-  asmb_fields <- DBI::dbListFields(con, "assemblies")
-  for (col in names(asmb_blast_cols)) {
-    if (!(col %in% asmb_fields)) {
-      message(paste0("added '", col, "' column to assemblies table"))
-      DBI::dbExecute(con, paste0("ALTER TABLE assemblies ADD COLUMN ", col, " ", asmb_blast_cols[[col]]))
-    }
-  }
+  for (col in names(asmb_blast_cols)) add_col("assemblies", col, asmb_blast_cols[[col]])
 
   # if assembly_blast table doesn't exist, create it (per-path BLAST hits)
   if (!("assembly_blast" %in% DBI::dbListTables(con))) {
+    ensure_backup()
     message("created assembly_blast table")
     DBI::dbExecute(con,
       "CREATE TABLE assembly_blast (
@@ -1531,6 +822,7 @@ backwards_compatibility <- function(
 
   # if export_opts table doesn't exist, create it and seed the default templates
   if (!("export_opts" %in% DBI::dbListTables(con))) {
+    ensure_backup()
     message("created 'export_opts' table")
     DBI::dbExecute(
       con,
@@ -1553,6 +845,7 @@ backwards_compatibility <- function(
         by = "export_opts"
       )
   } else if (!export_default_current) {
+    ensure_backup()
     # Migrate unmodified default export templates to the current default. Only exact
     # matches to a superseded default are touched; a customised template is left as
     # the user wrote it, even though it may need {seqid} for fragmented samples.
@@ -1577,6 +870,7 @@ backwards_compatibility <- function(
   # stored path (fallback path/scaffold = 1). Placed after assemblies is ensured.
   annotate_fields <- DBI::dbListFields(con, "annotate")
   if (!("scaffold" %in% annotate_fields)) {
+    ensure_backup()
     message("re-keyed annotate table by (ID, path, scaffold)")
     path_expr <- if ("path" %in% annotate_fields) "COALESCE(CAST(an.path AS INTEGER), 1)" else "1"
     # Carry over whatever the old table actually has. Legacy annotate tables vary in
@@ -1648,6 +942,13 @@ backwards_compatibility <- function(
   # and an upgrading user has no reason to re-assemble. INSERT OR IGNORE keeps the
   # re-keyed legacy row untouched and seeds the rest ready to annotate, mirroring
   # assemble_workflow.nf's seed.
+  if (DBI::dbGetQuery(con,
+        "SELECT COUNT(*) AS n FROM assemblies asm
+         LEFT JOIN annotate an
+           ON an.ID = asm.ID AND an.path = asm.path AND an.scaffold = asm.scaffold
+         WHERE asm.ignore = 0 AND an.ID IS NULL")$n > 0) {
+    ensure_backup()
+  }
   n_seeded <- DBI::dbExecute(con,
     "INSERT OR IGNORE INTO annotate
        (ID, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts,
@@ -1675,6 +976,7 @@ backwards_compatibility <- function(
   # accession. Carry any existing override onto that sample's units - the old model
   # applied it sample-wide, so that is what it meant at the time.
   if (!DBI::dbExistsTable(con, "blast_ref_override")) {
+    ensure_backup()
     message("created 'blast_ref_override' table (per-unit reference selection)")
     DBI::dbExecute(
       con,
@@ -1710,6 +1012,7 @@ backwards_compatibility <- function(
   # Must run after the annotate re-key above, which is what gives annotate path and
   # scaffold to join on.
   if (!DBI::dbExistsTable(con, "export")) {
+    ensure_backup()
     message("created 'export' table (per-unit export state)")
     DBI::dbExecute(
       con,
@@ -1748,6 +1051,7 @@ backwards_compatibility <- function(
   # exactly what moving to the export table removes. Needs SQLite >= 3.35.
   for (col in c("export_group", "export_time_stamp")) {
     if (col %in% DBI::dbListFields(con, "samples")) {
+      ensure_backup()
       message("dropped '", col, "' from samples table (now per-unit in 'export')")
       DBI::dbExecute(con, paste0("ALTER TABLE samples DROP COLUMN ", col))
     }
@@ -1759,18 +1063,33 @@ backwards_compatibility <- function(
   # custom hosts and local paths are left untouched. Done last, as a direct UPDATE
   # on the final table state, so earlier in-memory opts upserts cannot clobber it.
   canonical_mitos_ref <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2"
+  stale_ref_where <- paste0(
+    "WHERE ref_dir LIKE 'https://raw.githubusercontent.com/%mithsonian/MitoPilot/%/ref_dbs/Mitos2' ",
+    "AND ref_dir <> ?"
+  )
   for (ref_tbl in c("annotate_opts", "curate_opts")) {
     fields <- tryCatch(DBI::dbListFields(con, ref_tbl), error = function(e) character(0))
     if ("ref_dir" %in% fields) {
-      n <- DBI::dbExecute(
+      n <- DBI::dbGetQuery(
         con,
-        paste0("UPDATE ", ref_tbl, " SET ref_dir = ? ",
-               "WHERE ref_dir LIKE 'https://raw.githubusercontent.com/%mithsonian/MitoPilot/%/ref_dbs/Mitos2' ",
-               "AND ref_dir <> ?"),
-        params = list(canonical_mitos_ref, canonical_mitos_ref)
-      )
-      if (n > 0) message(paste0("repointed ", n, " stale ", ref_tbl, ".ref_dir value(s) to main"))
+        paste0("SELECT COUNT(*) AS n FROM ", ref_tbl, " ", stale_ref_where),
+        params = list(canonical_mitos_ref)
+      )$n
+      if (n > 0) {
+        ensure_backup()
+        DBI::dbExecute(
+          con,
+          paste0("UPDATE ", ref_tbl, " SET ref_dir = ? ", stale_ref_where),
+          params = list(canonical_mitos_ref, canonical_mitos_ref)
+        )
+        message(paste0("repointed ", n, " stale ", ref_tbl, ".ref_dir value(s) to main"))
+      }
     }
+  }
+
+  if (!changed) {
+    message("nothing to update")
+    return(invisible(NULL))
   }
 
   # Regenerate the .config from the chosen executor's template (port project
@@ -1781,6 +1100,36 @@ backwards_compatibility <- function(
     migrate_config(path, executor)
   }
 
+}
+
+#' Add an optional column to an existing table, back-filling a constant default
+#'
+#' No-op when the table is absent or already carries the column. The column is
+#' added without a SQL DEFAULT clause, so a migrated database keeps the schema a
+#' fresh project gets from [init_db()]; `default` is written to the existing rows
+#' with a plain UPDATE instead. `default = NULL` leaves them NULL.
+#'
+#' @param con project database connection
+#' @param table table to alter
+#' @param column new column name
+#' @param type SQLite column type
+#' @param default constant back-fill value, or NULL for none
+#' @param before function called once before the first write (e.g. to back up)
+#'
+#' @noRd
+add_opt_col <- function(con, table, column, type, default = NULL, before = NULL) {
+  fields <- tryCatch(DBI::dbListFields(con, table), error = function(e) character(0))
+  if (length(fields) == 0L || column %in% fields) {
+    return(invisible(FALSE))
+  }
+  if (is.function(before)) before()
+  message("added '", column, "' column to ", table, " table")
+  DBI::dbExecute(con, paste0("ALTER TABLE ", table, " ADD COLUMN ", column, " ", type))
+  if (!is.null(default)) {
+    DBI::dbExecute(con, paste0("UPDATE ", table, " SET ", column, " = ?"),
+                   params = list(default))
+  }
+  invisible(TRUE)
 }
 
 #' Landmarks of the current project schema that an older database will lack.
