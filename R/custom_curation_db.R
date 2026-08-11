@@ -186,38 +186,35 @@ custom_curation_db <- function(path = ".",
     all_seqs <- Biostrings::readAAStringSet(file.path(orig_db_dir, "featureProt", paste0(gene, ".fas")))
     data_sub <- data[data$Gene == gene, ]
     for (i in 1:nrow(data_sub)) {
-      if (data_sub$Gene[i] == gene) {
-        fasta_file_path <- file.path(gene_fasta_dir, data_sub$FASTA[i])
-        # Check if the file exists before trying to read it
-        if (!file.exists(fasta_file_path)) {
-          stop(paste(
-            "Error: Required file does not exist at path:",
-            fasta_file_path
-          ))
-        }
-        new_seq <- Biostrings::readAAStringSet(fasta_file_path)
-        tryCatch({
-          new_seq <- Biostrings::readAAStringSet(fasta_file_path)
-        }, error = function(e) {
-          message(paste0("Failed to read the FASTA file: ", fasta_file_path))
-          stop(
-            "Make sure this file is properly formatted and contains amino acid (protein) sequence data"
-          )
-        })
-        # make sure FASTA file contains only one sequence
-        if (length(new_seq) > 1) {
-          message(paste0("Problem with ", fasta_file_path))
-          stop("Each FASTA file must contain only one sequence")
-        } else if (length(new_seq) < 1) {
-          message(paste0("Problem with ", fasta_file_path))
-          stop("FASTA file contains no sequences")
-        }
-
-        # rename sequence with SeqID
-        names(new_seq)[1] <- data_sub$SeqID[i]
-        # combine with database
-        all_seqs <- c(all_seqs, new_seq)
+      fasta_file_path <- file.path(gene_fasta_dir, data_sub$FASTA[i])
+      # Check if the file exists before trying to read it
+      if (!file.exists(fasta_file_path)) {
+        stop(paste(
+          "Error: Required file does not exist at path:",
+          fasta_file_path
+        ))
       }
+      tryCatch({
+        new_seq <- Biostrings::readAAStringSet(fasta_file_path)
+      }, error = function(e) {
+        message(paste0("Failed to read the FASTA file: ", fasta_file_path))
+        stop(
+          "Make sure this file is properly formatted and contains amino acid (protein) sequence data"
+        )
+      })
+      # make sure FASTA file contains only one sequence
+      if (length(new_seq) > 1) {
+        message(paste0("Problem with ", fasta_file_path))
+        stop("Each FASTA file must contain only one sequence")
+      } else if (length(new_seq) < 1) {
+        message(paste0("Problem with ", fasta_file_path))
+        stop("FASTA file contains no sequences")
+      }
+
+      # rename sequence with SeqID
+      names(new_seq)[1] <- data_sub$SeqID[i]
+      # combine with database
+      all_seqs <- c(all_seqs, new_seq)
     }
     # write the new fasta file
     Biostrings::writeXStringSet(all_seqs, file.path(orig_db_dir, "featureProt", paste0(gene, ".fas")))
@@ -233,9 +230,6 @@ custom_curation_db <- function(path = ".",
   # rename directory
   setwd(file.path(path, "custom_curation_dbs", cur_dir))
   file.rename(file.path(orig_db_dir), file.path(paste0(orig_db_dir, "_custom")))
-
-  #tar(paste0(orig_db_dir_base, "_custom.tar.gz"), paste0(orig_db_dir_base, "_custom"), compression = 'gzip', tar="tar")
-  #unlink(file.path(paste0(orig_db_dir, "_custom")), recursive = TRUE)
 
   message("FINISHED creating custom curation database")
   message("In the curation options, specify the following directory as the \'ref_dif\':")

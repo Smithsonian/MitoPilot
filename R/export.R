@@ -384,7 +384,7 @@ export_files <- function(
           # skip if not the first exon
           if (cur$pos1 != exons[1,]$pos1) return()
           if (length(unique(exons$direction)) > 1) {
-            message(crayon::red(
+            message(cli::col_red(
               paste0("Warning: exons on opposite strands for gene ", cur$gene)
             ))
           } else {
@@ -415,13 +415,13 @@ export_files <- function(
           }
 
           if (stringr::str_detect(cur$translation, "\\*")) {
-            message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
+            message(cli::col_red(paste("##### Internal stop codon", cur$gene, cli::bg_blue(cur$stop_codon), "#####")))
           }
           if (cur$stop_codon %nin% stop_codons) {
-            message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
+            message(cli::col_red(paste("Non-standard stop codon:", cur$gene, cli::bg_blue(cur$stop_codon))))
           }
           if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
-            message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
+            message(cli::col_red(paste("Non-standard start codon:", cur$gene, cli::bg_blue(cur$start_codon))))
             # 5' partial: '<' prepends the start coordinate (first column, both strands)
             pos[1] <- paste0("<", pos[1])
             note <- "start codon not determined"
@@ -627,35 +627,27 @@ export_files <- function(
             # concatenate sequences and tables by gene
             if (length(group) == 1) {
               group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_gene_tbl}"
-              ) |> system()
+              file.append(group_gene_tbl, gene_tbl_fn)
               group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_gene_fasta}"
-              ) |> system()
+              file.append(group_gene_fasta, gene_fn)
             }
 
             # concatenate all sequences and tables
             if (length(group) == 1) {
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-              ) |> system()
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_allgene_fasta}"
-              ) |> system()
+              file.append(group_allgene_tbl_fn, gene_tbl_fn)
+              file.append(group_allgene_fasta, gene_fn)
             }
           }
 
         } else { # normal processing, no introns
           if (stringr::str_detect(cur$translation, "\\*")) {
-            message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
+            message(cli::col_red(paste("##### Internal stop codon", cur$gene, cli::bg_blue(cur$stop_codon), "#####")))
           }
           if (cur$stop_codon %nin% stop_codons) {
-            message(crayon::red(paste("Non-standard stop codon:", cur$gene, crayon::bgBlue(cur$stop_codon))))
+            message(cli::col_red(paste("Non-standard stop codon:", cur$gene, cli::bg_blue(cur$stop_codon))))
           }
           if (cur$start_codon %nin% start_codons || isTRUE(as.integer(cur$partial_start) == 1L)) {
-            message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
+            message(cli::col_red(paste("Non-standard start codon:", cur$gene, cli::bg_blue(cur$start_codon))))
             # 5' partial: '<' prepends the start coordinate (first column, both strands)
             pos[1] <- paste0("<", pos[1])
             note <- "start codon not determined"
@@ -812,23 +804,15 @@ export_files <- function(
             # concatenate sequences and tables by gene
             if (length(group) == 1) {
               group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_gene_tbl}"
-              ) |> system()
+              file.append(group_gene_tbl, gene_tbl_fn)
               group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_gene_fasta}"
-              ) |> system()
+              file.append(group_gene_fasta, gene_fn)
             }
 
             # concatenate all sequences and tables
             if (length(group) == 1) {
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-              ) |> system()
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_allgene_fasta}"
-              ) |> system()
+              file.append(group_allgene_tbl_fn, gene_tbl_fn)
+              file.append(group_allgene_fasta, gene_fn)
             }
           }
         }
@@ -988,23 +972,15 @@ export_files <- function(
           # concatenate sequences and tables by gene
           if (length(group) == 1) {
             group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".tbl"))
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_gene_tbl}"
-            ) |> system()
+            file.append(group_gene_tbl, gene_tbl_fn)
             group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".fasta"))
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_gene_fasta}"
-            ) |> system()
+            file.append(group_gene_fasta, gene_fn)
           }
 
           # concatenate all sequences and tables
           if (length(group) == 1) {
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-            ) |> system()
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_allgene_fasta}"
-            ) |> system()
+            file.append(group_allgene_tbl_fn, gene_tbl_fn)
+            file.append(group_allgene_fasta, gene_fn)
           }
         }
 
@@ -1094,15 +1070,11 @@ export_files <- function(
     })
 
     if (length(group) == 1) {
-      stringr::str_glue(
-        "cat {tbl_fn} >> {group_tbl}"
-      ) |> system()
+      file.append(group_tbl, tbl_fn)
       stringr::str_glue(
         "cp {gff_fn} {group_gff_pth}"
       ) |> system()
-      stringr::str_glue(
-        "cat {fasta_fn} >> {group_fasta}"
-      ) |> system()
+      file.append(group_fasta, fasta_fn)
     }
   })
 
@@ -1330,7 +1302,7 @@ get_export_PCG_annotations <- function(con, group) {
           merged_sequence <- Biostrings::DNAString(paste(exon_seqs, collapse = "")) |>
             Biostrings::reverseComplement()
         } else {
-          message(crayon::red(paste("Warning: exons on opposite strands for gene", cur$gene)))
+          message(cli::col_red(paste("Warning: exons on opposite strands for gene", cur$gene)))
           next
         }
 

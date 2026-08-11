@@ -55,8 +55,7 @@ ASSEMBLY_PATH_THRESHOLDS <- list(
 #' @noRd
 count_ambiguities <- function(seq) {
   if (is.null(seq) || is.na(seq) || !nzchar(seq)) return(0L)
-  chars <- strsplit(toupper(seq), "")[[1]]
-  sum(!chars %in% c("A", "C", "G", "T", "-"))
+  nchar(gsub("[ACGT-]", "", toupper(seq)))
 }
 
 #' Score and rank alternative assembly paths.
@@ -356,11 +355,7 @@ iupac_code <- function(bases) {
   b <- sort(unique(toupper(bases[bases %in% c("a", "c", "g", "t", "A", "C", "G", "T")])))
   key <- paste(b, collapse = "")
   if (!nzchar(key)) return("N")
-  codes <- c(
-    A = "A", C = "C", G = "G", T = "T",
-    AC = "M", AG = "R", AT = "W", CG = "S", CT = "Y", GT = "K",
-    ACG = "V", ACT = "H", AGT = "D", CGT = "B", ACGT = "N"
-  )
+  codes <- stats::setNames(names(Biostrings::IUPAC_CODE_MAP), Biostrings::IUPAC_CODE_MAP)
   out <- codes[[key]]
   if (is.null(out)) "N" else out
 }

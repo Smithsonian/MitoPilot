@@ -291,7 +291,7 @@ custom_assembly_db <- function(clade,
          "Check spelling at https://www.ncbi.nlm.nih.gov/taxonomy")
   }
   id <- regmatches(x, regexpr("<Id>\\d+</Id>", x))
-  sub("</?Id>", "", gsub("</?Id>", "", id))
+  gsub("</?Id>", "", id)
 }
 
 #' Build the GenBank nucleotide query string
