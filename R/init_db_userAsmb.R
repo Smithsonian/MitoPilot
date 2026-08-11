@@ -74,41 +74,10 @@ new_db_userAsmb <- function(
     min_assembly_length = 500,
     # Skip read-mapping coverage (no raw data). Disables annotate coverage trim.
     no_raw_data = FALSE) {
-  # Read mapping file
-  if (is.null(mapping_fn)) {
-    mapping_fn <- "./mapping.csv"
-    if (!file.exists(mapping_fn)) {
-      stop("Mapping file not found")
-    }
-  }
-  mapping <- utils::read.csv(mapping_fn)
+  mapping <- read_and_validate_mapping(mapping_fn, mapping_id)
 
   # convert ID column to characters
   mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
-
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("Duplicate IDs found in mapping file")
-  }
-
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must be no more than 18 characters")
-  }
-
-  # Validate IDs contain only alphanumeric characters
-  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
-    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
-  }
 
   # check for assembly and topology columns
   if ("Assembly" %nin% colnames(mapping)) {

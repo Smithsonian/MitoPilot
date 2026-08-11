@@ -144,39 +144,24 @@ custom_curation_db <- function(path = ".",
   dir.create(file.path(path, "custom_curation_dbs", cur_dir),
              showWarnings = FALSE)
   # download the base curation database
-  if (base_db == "Metazoa") {
-    # Metazoa_RefSeq235 is the current base (includes the rRNA featureNuc BLAST
-    # DBs, which carry through to the custom database).
-    URL <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2/Metazoa_RefSeq235.tar.gz"
-    download.file(
-      url = URL,
-      destfile = file.path('./custom_curation_dbs/Metazoa_RefSeq235.tar.gz'),
-      method = 'curl'
-    )
-    untar(
-      file.path('./custom_curation_dbs/Metazoa_RefSeq235.tar.gz'),
-      exdir = file.path(path, "custom_curation_dbs", cur_dir)
-    )
-    file.remove(file.path('./custom_curation_dbs/Metazoa_RefSeq235.tar.gz'))
-    orig_db_dir_base <- "Metazoa_RefSeq235"
-    orig_db_dir <- file.path(path, "custom_curation_dbs", cur_dir, "Metazoa_RefSeq235")
-  } else if (base_db == "Chordata") {
-    URL <- "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2/Chordata.tar.gz"
-    download.file(
-      url = URL,
-      destfile = file.path('./custom_curation_dbs/Chordata.tar.gz'),
-      method = 'curl'
-    )
-    untar(
-      file.path('./custom_curation_dbs/Chordata.tar.gz'),
-      exdir = file.path(path, "custom_curation_dbs", cur_dir)
-    )
-    file.remove(file.path('./custom_curation_dbs/Chordata.tar.gz'))
-    orig_db_dir_base <- "Chordata"
-    orig_db_dir <- file.path(path, "custom_curation_dbs", cur_dir, "Chordata")
-  } else {
+  # Metazoa_RefSeq235 is the current Metazoa base (includes the rRNA featureNuc
+  # BLAST DBs, which carry through to the custom database).
+  orig_db_dir_base <- switch(
+    base_db,
+    Metazoa = "Metazoa_RefSeq235",
+    Chordata = "Chordata",
     stop("base_db must be either Metazoa or Chordata")
-  }
+  )
+  tarball <- file.path("./custom_curation_dbs", paste0(orig_db_dir_base, ".tar.gz"))
+  URL <- paste0(
+    "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2/",
+    orig_db_dir_base,
+    ".tar.gz"
+  )
+  download.file(url = URL, destfile = tarball, method = 'curl')
+  untar(tarball, exdir = file.path(path, "custom_curation_dbs", cur_dir))
+  file.remove(tarball)
+  orig_db_dir <- file.path(path, "custom_curation_dbs", cur_dir, orig_db_dir_base)
 
   # append sequences to existing FASTAs in the curation directory
   setwd(file.path(orig_db_dir, "featureProt"))

@@ -30,31 +30,7 @@ add_samples <- function(
   }else if(!file.exists(update_mapping_fn)){
     stop("Update mapping file does not exist")
   }
-  mapping <- utils::read.csv(update_mapping_fn)
-
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
-    stop("Duplicate IDs found in mapping file")
-  }
-
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
-    stop("IDs must be no more than 18 characters")
-  }
-
-  # Validate IDs contain only alphanumeric characters
-  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
-    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
-    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
-  }
+  mapping <- read_and_validate_mapping(update_mapping_fn, mapping_id)
 
   if ("Topology" %in% colnames(mapping)) {
     # Confirm topology field contains only lowercase "linear" or "circular"

@@ -107,55 +107,22 @@ new_db <- function(
     orffinder_opts = "-s 1",
     orf_min_len = 300,
     orf_max_overlap = 0.1) {
-  # Read mapping file
-  if (is.null(mapping_fn)) {
-    mapping_fn <- "./mapping.csv"
-    if (!file.exists(mapping_fn)) {
-      stop("Mapping file not found")
-    }
-  }
-  mapping <- utils::read.csv(mapping_fn)
-
-  # convert ID column to characters
-  mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
-
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("Duplicate IDs found in mapping file")
-  }
+  mapping <- read_and_validate_mapping(mapping_fn, mapping_id)
 
   # Validate assembler choice
   if (assembler %nin% c("GetOrganelle", "MitoFinder")) {
     stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder]")
   }
 
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must be no more than 18 characters")
-  }
-
-  # Validate IDs contain only alphanumeric characters
-  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
-    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
-  }
+  # convert ID column to characters
+  mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
 
   # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
   # using default fish databases
-  if (is.null(seeds_db) & is.null(labels_db)) {
+  if (is.null(seeds_db)) {
     seeds_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
-    labels_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
-  } else if (is.null(seeds_db)) {
-    seeds_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
-  } else if (is.null(labels_db)) {
+  }
+  if (is.null(labels_db)) {
     labels_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
   }
 
@@ -778,4 +745,49 @@ new_db <- function(
   )
 
   invisible(return())
+}
+
+#' Read a project mapping CSV and validate its ID column
+#'
+#' @param mapping_fn Path to the mapping CSV file. `NULL` falls back to
+#'   "./mapping.csv".
+#' @param mapping_id Column name of the mapping file to use as the primary key
+#'
+#' @noRd
+read_and_validate_mapping <- function(mapping_fn = NULL, mapping_id = "ID") {
+  # Read mapping file
+  if (is.null(mapping_fn)) {
+    mapping_fn <- "./mapping.csv"
+    if (!file.exists(mapping_fn)) {
+      stop("Mapping file not found")
+    }
+  }
+  mapping <- utils::read.csv(mapping_fn)
+  ids <- mapping[[mapping_id]]
+
+  # Validate ID col
+  if (any(duplicated(ids))) {
+    bad_IDs <- unique(ids[duplicated(ids)])
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse = ", "))
+    stop("Duplicate IDs found in mapping file")
+  }
+
+  # Validate ID length
+  if (any(nchar(ids) > 18)) {
+    bad_IDs <- ids[nchar(ids) > 18]
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse = ", "))
+    stop("IDs must be no more than 18 characters")
+  }
+
+  # Validate IDs contain only alphanumeric characters
+  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", ids)))) {
+    bad_IDs <- ids[!(grepl("^[a-zA-Z0-9_:-]+$", ids))]
+    message("problematic IDs:")
+    message(paste(bad_IDs, collapse = ", "))
+    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
+  }
+
+  mapping
 }
