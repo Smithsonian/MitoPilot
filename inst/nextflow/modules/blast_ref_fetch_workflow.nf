@@ -1,24 +1,7 @@
 import groovy.json.JsonSlurper
 
 include {blast_ref_fetch; blast_ref_stamp} from './blast_ref_fetch.nf'
-
-// SQL fragment: assemble_notes with any segment starting at `tag` stripped
-// (and a preceding '; ' if present). Mirrors the helper in
-// blast_genbank_workflow.nf; duplicated here so this module is self-contained.
-def stripTagSql(String tag) {
-    def lit = tag.replace("'", "''")
-    return "RTRIM(" +
-        "CASE WHEN INSTR(COALESCE(assemble_notes,''), '${lit}') > 0 " +
-            "THEN SUBSTR(COALESCE(assemble_notes,''), 1, INSTR(COALESCE(assemble_notes,''), '${lit}') - 1) " +
-            "ELSE COALESCE(assemble_notes,'') END" +
-    ", '; ')"
-}
-
-def appendTaggedNoteSql(String tag, String msg) {
-    def stripped = stripTagSql(tag)
-    def tagged = (tag + ' ' + msg).replace("'", "''")
-    return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
-}
+include {appendTaggedNoteSql} from './sql_notes.nf'
 
 // Strip BOTH [blast] and [ref] tagged segments from assemble_notes. Used on
 // the success path so stale failure messages from prior -resume attempts are
@@ -212,16 +195,19 @@ workflow BLAST_REF_FETCH {
             .map { key, lineage, path, scaffold -> tuple(lineage, key[0], path, scaffold) }
             .sqlInsert(statement: params.sqlWriteBlastLineageScaffold, db: 'sqlite')
 
-        // Detect top-hit fetch failures: IDs that entered but produced no output after all retries
+        // Top-hit fetch results only (shared by the three consumers below).
         ref_out
             .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
-            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id, true) }
+            .set { top_out }
+
+        // Detect top-hit fetch failures: IDs that entered but produced no output after all retries
+        top_out
+            .map { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id, true) }
             .set { succeeded_top_ids }
 
         // Mark poor_blast_ref = 'good' for IDs whose top-hit ref fetch succeeded
-        ref_out
-            .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
-            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id) }
+        top_out
+            .map { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastRefGood, db: 'sqlite')
 
         // Failure message is embedded in params.sqlWriteBlastRefFetchFailed (with [ref] tag)
@@ -234,8 +220,7 @@ workflow BLAST_REF_FETCH {
 
     emit:
         // Per-ID top-hit reference sequence file, for reference-guided scaffold join.
-        ref_seq = ref_out
-            .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
-            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file ->
-                        tuple(id, seq_file) }
+        ref_seq = top_out
+            .map { id, accession, is_top, csv_file, seq_file, gc_file, json_file ->
+                     tuple(id, seq_file) }
 }

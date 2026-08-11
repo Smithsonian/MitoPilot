@@ -25,7 +25,7 @@ include {ANNOTATE} from './modules/annotate_workflow.nf'
 include {CURATE} from './modules/curate_workflow.nf'
 include {VALIDATE} from './modules/validate_workflow.nf'
 include {ORF} from './modules/orf_workflow.nf'
-include {COVERAGE_userAsmb; COVERAGE_userAsmb_noReads} from './modules/coverage_userAsmb_workflow.nf'
+include {COVERAGE_userAsmb} from './modules/coverage_userAsmb_workflow.nf'
 include {BLAST_GENBANK} from './modules/blast_genbank_workflow.nf'
 include {BLAST_REF_FETCH} from './modules/blast_ref_fetch_workflow.nf'
 include {BLAST_REF_ALIGN} from './modules/blast_ref_align_workflow.nf'
@@ -59,17 +59,14 @@ workflow WF1 {
 workflow WF1_userAsmb {
 
     // No-reads projects skip PREPROCESS entirely and pull samples straight from
-    // the DB; read-based projects preprocess then map reads for coverage. Either
-    // path emits the same blast_in, so BLAST is invoked once.
+    // the DB; read-based projects preprocess then map reads for coverage.
     if (params.noRawData) {
-        COVERAGE_userAsmb_noReads()
-        blast_in = COVERAGE_userAsmb_noReads.out.blast_in
+        COVERAGE_userAsmb(channel.empty())
     } else {
         PREPROCESS()
         COVERAGE_userAsmb(PREPROCESS.out[0])
-        blast_in = COVERAGE_userAsmb.out.blast_in
     }
-    BLAST_GENBANK(blast_in)
+    BLAST_GENBANK(COVERAGE_userAsmb.out.blast_in)
     BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map, BLAST_GENBANK.out.ref_batches)
 
 }

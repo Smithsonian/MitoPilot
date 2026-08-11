@@ -1,3 +1,5 @@
+include { clusterOpts } from './cluster_opts.nf'
+
 process blast_ref_align {
 
     executor params.blast_ref_align.executor
@@ -5,13 +7,7 @@ process blast_ref_align {
 
     cpus { (params.blast_ref_align.cpus instanceof Integer) ? params.blast_ref_align.cpus : 1 }
     memory = (params.blast_ref_align.memory instanceof Number) ? "${params.blast_ref_align.memory}.GB" : null
-    clusterOptions {
-        def opts = [
-            (params.blast_ref_align.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.blast_ref_align.clusterOptions instanceof String) ? params.blast_ref_align.clusterOptions : ''
-        ].findAll { it }.join(' ')
-        opts ?: null
-    }
+    clusterOptions { clusterOpts(params.blast_ref_align) }
 
     errorStrategy 'ignore'
 

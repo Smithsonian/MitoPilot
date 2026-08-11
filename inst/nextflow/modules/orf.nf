@@ -1,3 +1,5 @@
+include { clusterOpts } from './cluster_opts.nf'
+
 process orf {
 
     // symlink, not copy: the ref DB is a shared pre-extracted, read-only directory
@@ -6,13 +8,7 @@ process orf {
 
     executor params.orf.executor
     container params.orf.container
-    clusterOptions {
-        def opts = [
-            (params.orf.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.orf.clusterOptions instanceof String) ? params.orf.clusterOptions : ''
-        ].findAll { it }.join(' ')
-        opts ?: null
-    }
+    clusterOptions { clusterOpts(params.orf) }
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/*", mode: 'copy'
 
@@ -31,19 +27,6 @@ process orf {
     '''
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
-
-    # Reference DB: a pre-extracted, shared directory named for the clade is
-    # normally staged (symlinked). Fall back to extracting a tarball if only that
-    # is present.
-    if [ ! -d "!{ref_db_clean}" ]; then
-        for tb in "!{ref_db_clean}.tar.gz" "!{ref_clade}"; do
-            if [ -f "$tb" ]; then
-                echo "Decompressing $tb..."
-                tar -xzf "$tb"
-                break
-            fi
-        done
-    fi
 
     # Merge the per-scaffold validated annotation TSVs into one per-path file so
     # ORFfinder avoids overlaps against every existing annotation on the path.

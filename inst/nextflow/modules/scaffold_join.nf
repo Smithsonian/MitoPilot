@@ -1,3 +1,5 @@
+include { clusterOpts } from './cluster_opts.nf'
+
 process scaffold_join {
 
     stageInMode 'copy'
@@ -9,18 +11,7 @@ process scaffold_join {
     // so it must be converted; scaling by task.attempt lets a scheduler memory
     // kill (SGE exit 137-140) self-heal on retry instead of dying identically.
     memory { (params.scaffold_join.memory instanceof Number) ? params.scaffold_join.memory.GB * task.attempt : null }
-    clusterOptions {
-        // A Closure lets a site config scale its own reservation with the retry
-        // attempt (schedulers like SGE take memory from clusterOptions, not from
-        // the memory directive).
-        def co = params.scaffold_join.clusterOptions
-        def co_str = (co instanceof Closure) ? co.call(task.attempt) : ((co instanceof String) ? co : '')
-        def opts = [
-            (params.scaffold_join.executor == 'sge') ? '-S /bin/bash' : '',
-            co_str
-        ].findAll { it }.join(' ')
-        opts ?: null
-    }
+    clusterOptions { clusterOpts(params.scaffold_join) }
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, mode: 'copy'
 
@@ -29,8 +20,8 @@ process scaffold_join {
     // leaves this process's mandatory 'mappings' output channel unclosed, which
     // hangs every downstream operator and stalls the whole workflow. Retrying
     // absorbs the transient qsub errors that trigger it.
-    errorStrategy { task.attempt <= (params.scaffold_join.maxRetries instanceof Integer ? params.scaffold_join.maxRetries : 3) ? 'retry' : 'ignore' }
-    maxRetries { params.scaffold_join.maxRetries instanceof Integer ? params.scaffold_join.maxRetries : 3 }
+    errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
+    maxRetries 3
 
     tag "${id}"
 

@@ -1,22 +1,5 @@
 include {blast_ref_align} from './blast_ref_align.nf'
-
-// SQL fragment: assemble_notes with any segment starting at `tag` stripped (and a
-// preceding '; '). Mirrors the helpers in the blast_* workflows; duplicated here so
-// this module is self-contained.
-def stripTagSql(String tag) {
-    def lit = tag.replace("'", "''")
-    return "RTRIM(" +
-        "CASE WHEN INSTR(COALESCE(assemble_notes,''), '${lit}') > 0 " +
-            "THEN SUBSTR(COALESCE(assemble_notes,''), 1, INSTR(COALESCE(assemble_notes,''), '${lit}') - 1) " +
-            "ELSE COALESCE(assemble_notes,'') END" +
-    ", '; ')"
-}
-
-def appendTaggedNoteSql(String tag, String msg) {
-    def stripped = stripTagSql(tag)
-    def tagged = (tag + ' ' + msg).replace("'", "''")
-    return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
-}
+include {appendTaggedNoteSql} from './sql_notes.nf'
 
 // Reference sequence and rotation per candidate reference for newly-curated
 // samples (gated on curate_out). One row per (ID, candidate accession). rank=1 is

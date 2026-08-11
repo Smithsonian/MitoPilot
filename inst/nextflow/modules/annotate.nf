@@ -1,3 +1,5 @@
+include { clusterOpts } from './cluster_opts.nf'
+
 process annotate {
 
     // symlink, not copy: MITOS never writes into its ref DB (it uses MITOS2_temp*),
@@ -6,13 +8,7 @@ process annotate {
 
     executor params.annotate.executor
     container params.annotate.container
-    clusterOptions {
-        def opts = [
-            (params.annotate.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.annotate.clusterOptions instanceof String) ? params.annotate.clusterOptions : ''
-        ].findAll { it }.join(' ')
-        opts ?: null
-    }
+    clusterOptions { clusterOpts(params.annotate) }
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/NF_work_dir_annotate.txt", mode: 'copy'
 
@@ -37,19 +33,6 @@ process annotate {
 
     # Name the assembly per unit; annotate() isolates this scaffold via ignore_scaffolds.
     cp !{assembly} !{unit_assembly}
-
-    # Reference DB: a pre-extracted, shared directory named for the clade is
-    # normally staged (symlinked). Fall back to extracting a tarball if only that
-    # is present.
-    if [ ! -d "!{ref_db_clean}" ]; then
-        for tb in "!{ref_db_clean}.tar.gz" "!{opts.ref_db}"; do
-            if [ -f "$tb" ]; then
-                echo "Decompressing $tb..."
-                tar -xzf "$tb"
-                break
-            fi
-        done
-    fi
 
     # Resolve MitoFinder reference db (decompress if gzip/tar.gz)
     MF_DB="!{mitofinder_db}"

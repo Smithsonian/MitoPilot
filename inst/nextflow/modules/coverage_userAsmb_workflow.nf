@@ -1,4 +1,4 @@
-include {coverage_userAsmb; coverage_userAsmb_noReads} from './coverage_userAsmb.nf'
+include {coverage_userAsmb} from './coverage_userAsmb.nf'
 
 params.sqlRead =  'SELECT s.ID, s.assembly, s.topology, ' +
                   'a.assemble_opts, opts.min_assembly_length ' +
@@ -27,8 +27,7 @@ params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?,
 workflow COVERAGE_userAsmb_WRITE {
     take:
         coverage_out
-        min_len_lookup
-        min_len_summary
+        min_len_ch
 
     main:
         // Coverage output -> depth/gc/errors
@@ -80,7 +79,7 @@ workflow COVERAGE_userAsmb_WRITE {
                     record.seqString                    // sequence
                 ).flatten()
             }
-            .combine(min_len_lookup, by: 0)             // append per-sample min_assembly_length
+            .combine(min_len_ch, by: 0)                    // append per-sample min_assembly_length
             .map { it ->                                // mark short assemblies
                 def min_len = it[8] as Integer
                 it[8] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
@@ -101,7 +100,7 @@ workflow COVERAGE_userAsmb_WRITE {
                 )
             }
             .groupTuple()
-            .combine(min_len_summary, by: 0)        // append per-sample min_assembly_length
+            .combine(min_len_ch, by: 0)                // append per-sample min_assembly_length
             .map { id, paths_list, scaffolds_list, lengths_list, topos_list, min_assembly_length ->
                 def max_paths      = paths_list.max()
                 def max_scaffolds  = scaffolds_list.max()
@@ -136,6 +135,9 @@ workflow COVERAGE_userAsmb_WRITE {
 }
 
 
+// No-raw-data projects (params.noRawData) skip PREPROCESS: samples come straight
+// from the DB, a placeholder is staged in place of reads, and coverage() runs in
+// its no-reads mode (GC from the sequence, depth/error stats empty).
 workflow COVERAGE_userAsmb {
     take:
         input
@@ -150,70 +152,39 @@ workflow COVERAGE_userAsmb {
                     it[2],                                          // topology
                     it[3]                                          // assemble opts dummy var
                 )
-                min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
-                min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
+                min_len: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length
             }
             .set { query_ch }
 
         query_ch.info.set { sample_info }
-        query_ch.min_len_scaffolds.set { min_len_lookup }
-        query_ch.min_len_summary.set { min_len_summary }
+        query_ch.min_len.set { min_len_ch }
 
         // Coverage Input Channel
-        input
-            // cross with sample info
-            .cross(sample_info)
-            .map{ it ->
-                tuple(
-                    it[0][0],                                                   // ID
-                    it[0][1],                                                   // trimmed reads in
-                    it[1][1],                                                   // assembly
-                    it[1][2],                                                   // topology
-                    it[1][3],                                                   // assemble opts dummy var
-                )
-            }
-            .set { coverage_in }
+        if (params.noRawData) {
+            // No reads to cross in; stage the placeholder alongside the assembly
+            sample_info
+                .map{ it -> tuple(it[0], file("${projectDir}/assets/NO_FILE"), it[1], it[2], it[3]) }
+                .set { coverage_in }
+        } else {
+            input
+                // cross with sample info
+                .cross(sample_info)
+                .map{ it ->
+                    tuple(
+                        it[0][0],                                                   // ID
+                        it[0][1],                                                   // trimmed reads in
+                        it[1][1],                                                   // assembly
+                        it[1][2],                                                   // topology
+                        it[1][3],                                                   // assemble opts dummy var
+                    )
+                }
+                .set { coverage_in }
+        }
 
         // Coverage
         coverage_userAsmb(coverage_in).set { coverage_out }
 
-        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary)
-
-    emit:
-        blast_in = COVERAGE_userAsmb_WRITE.out.blast_in
-}
-
-
-// No-reads variant: user-provided assembly, no raw data. Samples come straight
-// from the DB (no PREPROCESS) and coverage() runs in its no-reads mode, deriving
-// GC from the sequence and leaving depth/error stats empty.
-workflow COVERAGE_userAsmb_noReads {
-    main:
-        channel.fromQuery(params.sqlRead, db: 'sqlite')
-            .multiMap { it ->
-                info: tuple(
-                    it[0],                                          // ID
-                    file(params.asmbDir + "/" + it[1]),             // assembly
-                    it[2],                                          // topology
-                    it[3]                                          // assemble opts dummy var
-                )
-                min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
-                min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
-            }
-            .set { query_ch }
-
-        query_ch.info.set { sample_info }
-        query_ch.min_len_scaffolds.set { min_len_lookup }
-        query_ch.min_len_summary.set { min_len_summary }
-
-        // No reads to cross in; feed the assembly straight to the no-reads process
-        sample_info
-            .map{ it -> tuple(it[0], it[1], it[2], it[3]) }
-            .set { coverage_in }
-
-        coverage_userAsmb_noReads(coverage_in).set { coverage_out }
-
-        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary)
+        COVERAGE_userAsmb_WRITE(coverage_out, min_len_ch)
 
     emit:
         blast_in = COVERAGE_userAsmb_WRITE.out.blast_in

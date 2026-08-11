@@ -1,3 +1,5 @@
+include { clusterOpts } from './cluster_opts.nf'
+
 // Fetch the NCBI reference for one accession exactly once. Cross-sample dedup is
 // done at the channel level (see blast_ref_fetch_workflow.nf): the workflow feeds
 // this process the set of UNIQUE accessions, and the per-sample fan-out / metadata
@@ -13,13 +15,7 @@ process blast_ref_fetch {
 
     cpus { (params.blast_gb.cpus instanceof Integer) ? params.blast_gb.cpus : 1 }
     memory = (params.blast_gb.memory instanceof Number) ? "${params.blast_gb.memory}.GB" : null
-    clusterOptions {
-        def opts = [
-            (params.blast_gb.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : ''
-        ].findAll { it }.join(' ')
-        opts ?: null
-    }
+    clusterOptions { clusterOpts(params.blast_gb) }
 
     // 'ignore' keeps other batches running when this one times out. Failed tasks are
     // NOT cached as successful, so -resume re-executes this step. Within a batch,
@@ -71,13 +67,7 @@ process blast_ref_stamp {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
-    clusterOptions {
-        def opts = [
-            (params.blast_gb.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : ''
-        ].findAll { it }.join(' ')
-        opts ?: null
-    }
+    clusterOptions { clusterOpts(params.blast_gb) }
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/assemble/${opts_id}/blast_ref_${blast_accession}/remote_blast_ref.json", mode: 'copy'
 

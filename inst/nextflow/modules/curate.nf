@@ -1,3 +1,5 @@
+include { clusterOpts } from './cluster_opts.nf'
+
 process curate {
 
     // symlink, not copy: the ref DB is a shared pre-extracted directory that is
@@ -7,13 +9,7 @@ process curate {
 
     executor params.curate.executor
     container params.curate.container
-    clusterOptions {
-        def opts = [
-            (params.curate.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.curate.clusterOptions instanceof String) ? params.curate.clusterOptions : ''
-        ].findAll { it }.join(' ')
-        opts ?: null
-    }
+    clusterOptions { clusterOpts(params.curate) }
 
     publishDir "${launchDir}/${params.publishDir}", overwrite: true, pattern: "${id}/annotate/*", mode: 'copy'
 
@@ -32,19 +28,6 @@ process curate {
     '''
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
-
-    # Reference DB: a pre-extracted, shared directory named for the clade is
-    # normally staged (symlinked). Fall back to extracting a tarball if only that
-    # is present, so the process still works if handed a raw tarball.
-    if [ ! -d "!{ref_db_clean}" ]; then
-        for tb in "!{ref_db_clean}.tar.gz" "!{ref_clade}"; do
-            if [ -f "$tb" ]; then
-                echo "Decompressing $tb..."
-                tar -xzf "$tb"
-                break
-            fi
-        done
-    fi
 
     Rscript -e "MitoPilot::curate_!{opts.target}( \
         annotations_fn = '!{annotations}', \

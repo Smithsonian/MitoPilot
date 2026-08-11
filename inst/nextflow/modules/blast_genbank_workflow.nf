@@ -1,24 +1,26 @@
 include {blast_genbank} from './blast_genbank.nf'
+include {appendTaggedNoteSql} from './sql_notes.nf'
 
-// SQL fragment that returns assemble_notes with any segment starting with the
-// given tag (and a preceding '; ' if present) stripped. Used so each stage's
-// failure message can be idempotently replaced across re-runs instead of
-// accumulating duplicates on -resume.
-def stripTagSql(String tag) {
-    def lit = tag.replace("'", "''")
-    return "RTRIM(" +
-        "CASE WHEN INSTR(COALESCE(assemble_notes,''), '${lit}') > 0 " +
-            "THEN SUBSTR(COALESCE(assemble_notes,''), 1, INSTR(COALESCE(assemble_notes,''), '${lit}') - 1) " +
-            "ELSE COALESCE(assemble_notes,'') END" +
-    ", '; ')"
-}
-
-// SQL fragment that appends a tagged message to assemble_notes, after first
-// stripping any prior segment with the same tag.
-def appendTaggedNoteSql(String tag, String msg) {
-    def stripped = stripTagSql(tag)
-    def tagged = (tag + ' ' + msg).replace("'", "''")
-    return "CASE WHEN ${stripped} = '' THEN '${tagged}' ELSE ${stripped} || '; ${tagged}' END"
+// Parse a blast outfmt-6 result file into a map of
+// qseqid -> ordered list of [accession, species, pident, qcovs, evalue]
+// (blastn returns hits best-first per query, and that order is preserved).
+def parseBlastHits(result_file) {
+    def per_scaffold = [:]
+    result_file.readLines().findAll { it.trim() }.each { line ->
+        def parts = line.split('\t')
+        if (parts.size() >= 6) {
+            def rec = [
+                parts[1],
+                parts[2],
+                Math.round(parts[3].toFloat() * 100) / 100.0,
+                Math.round(parts[4].toFloat() * 100) / 100.0,
+                parts[5].toDouble()
+            ]
+            if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
+            per_scaffold[parts[0]] << rec
+        }
+    }
+    return per_scaffold
 }
 
 // Two distinct failure modes, distinguished by blast_genbank.nf:
@@ -82,9 +84,8 @@ workflow BLAST_GENBANK {
             .set { blast_opts_ch }  // (id, entrez_query, extra_opts, max_target_seqs)
 
         // Per-sample max_target_seqs, used to bound the retained candidate list.
-        channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
-            .filter { row -> row[1] as Integer == 1 }
-            .map { row -> tuple(row[0], (row[4] == null ? 5 : (row[4] as Integer))) }
+        blast_opts_ch
+            .map { id, entrez_query, extra_opts, mts -> tuple(id, mts) }
             .set { mts_ch }  // (id, max_target_seqs)
 
         input
@@ -200,22 +201,7 @@ workflow BLAST_GENBANK {
         // reference list. blastn already caps hits per query at max_target_seqs.
         blast_out.candidates
             .flatMap { id, path_idx, result_file ->
-                def lines = result_file.readLines().findAll { it.trim() }
-                def per_scaffold = [:]
-                lines.each { line ->
-                    def parts = line.split('\t')
-                    if (parts.size() >= 6) {
-                        def rec = [
-                            parts[1],
-                            parts[2],
-                            Math.round(parts[3].toFloat() * 100) / 100.0,
-                            Math.round(parts[4].toFloat() * 100) / 100.0,
-                            parts[5].toDouble()
-                        ]
-                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
-                        per_scaffold[parts[0]] << rec
-                    }
-                }
+                def per_scaffold = parseBlastHits(result_file)
                 def out = []
                 per_scaffold.each { qseqid, hits ->
                     def toks = qseqid.split(/\./)
@@ -250,22 +236,7 @@ workflow BLAST_GENBANK {
         blast_out.perpath
             .map { id, path_idx, result_file ->
                 def opts_id = result_file.parent.name
-                def lines = result_file.readLines().findAll { it.trim() }
-                def per_scaffold = [:]
-                lines.each { line ->
-                    def parts = line.split('\t')
-                    if (parts.size() >= 6) {
-                        def rec = [
-                            parts[1],
-                            parts[2],
-                            Math.round(parts[3].toFloat() * 100) / 100.0,
-                            Math.round(parts[4].toFloat() * 100) / 100.0,
-                            parts[5].toDouble()
-                        ]
-                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
-                        per_scaffold[parts[0]] << rec
-                    }
-                }
+                def per_scaffold = parseBlastHits(result_file)
                 // Candidate list: every distinct accession across all hits, keeping
                 // its best pident*qcovs (matches the old per-path 'cand' rows).
                 def byacc = [:]
@@ -316,7 +287,6 @@ workflow BLAST_GENBANK {
         blast_out.parse
             .flatMap{ id, path_idx, result_file ->
                 def opts_id = result_file.parent.name
-                def lines = result_file.readLines().findAll{ it.trim() }
                 // Collect ALL queried scaffolds from this path's target FASTA so
                 // no-hit scaffolds still get a row written to the assemblies table.
                 def targetFasta = new File("${workflow.workDir}/blast_select_targets/${id}.${path_idx}.blast_target.fasta")
@@ -328,25 +298,9 @@ workflow BLAST_GENBANK {
                         }
                     }
                 }
-                // qseqid -> ordered list of hits [accession, species, pident, qcovs, evalue]
-                // (blastn outfmt 6 returns hits best-first per query). With
-                // -max_target_seqs > 1 each scaffold can return multiple hits; the
-                // extra hits widen the per-sample candidate-reference pool.
-                def per_scaffold = [:]
-                lines.each { line ->
-                    def parts = line.split('\t')
-                    if (parts.size() >= 6) {
-                        def rec = [
-                            parts[1],
-                            parts[2],
-                            Math.round(parts[3].toFloat() * 100) / 100.0,
-                            Math.round(parts[4].toFloat() * 100) / 100.0,
-                            parts[5].toDouble()
-                        ]
-                        if (!per_scaffold.containsKey(parts[0])) per_scaffold[parts[0]] = []
-                        per_scaffold[parts[0]] << rec
-                    }
-                }
+                // With -max_target_seqs > 1 each scaffold can return multiple hits;
+                // the extra hits widen the per-sample candidate-reference pool.
+                def per_scaffold = parseBlastHits(result_file)
                 def out = []
                 // Per-scaffold rows (assemblies table): each scaffold's BEST hit only
                 queried.each { qseqid ->

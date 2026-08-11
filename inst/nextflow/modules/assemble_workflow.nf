@@ -54,16 +54,14 @@ workflow ASSEMBLE {
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
                     (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer))  // max_scaffolds
                 )
-                min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
-                min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
+                min_len: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer))           // ID, min_assembly_length
                 run_blast_lookup:  tuple(it[0], it[14] == null ? 1 : (it[14] as Integer))   // ID, run_blast (NULL -> 1, i.e. BLAST by default)
                 join_lookup:       tuple(it[0], it[15] == null ? 0 : (it[15] as Integer))   // ID, join_scaffolds toggle (NULL -> 0, off)
             }
             .set { query_ch }
 
         query_ch.opts.set { assemble_opts }
-        query_ch.min_len_scaffolds.set { min_len_lookup }
-        query_ch.min_len_summary.set { min_len_summary }
+        query_ch.min_len.set { min_len_ch }
         query_ch.run_blast_lookup.set { run_blast_lookup }
         query_ch.join_lookup.set { join_lookup }
 
@@ -149,10 +147,10 @@ workflow ASSEMBLE {
             .set { summarized }
 
         // Apply user-configured thresholds: split into pass / fail branches.
-        // Combine with min_len_summary (per-sample all-short check) and
+        // Combine with min_len_ch (per-sample all-short check) and
         // run_blast_lookup (state=2 finalization for run_blast=0 samples).
         summarized
-            .combine(min_len_summary, by: 0)
+            .combine(min_len_ch, by: 0)
             .combine(run_blast_lookup, by: 0)
             .branch { id, n_paths, n_scaffolds, length_str, topo_str, lengths_all, raw, max_paths, max_scaffolds, min_assembly_length, run_blast ->
                 fail: (n_paths > max_paths) || (n_scaffolds > max_scaffolds)
@@ -219,7 +217,7 @@ workflow ASSEMBLE {
                     record.seqString                    // sequence
                 ).flatten()
             }
-            .combine(min_len_lookup, by: 0)             // append per-sample min_assembly_length
+            .combine(min_len_ch, by: 0)                    // append per-sample min_assembly_length
             .map { it ->                                // mark short assemblies
                 def min_len = it[8] as Integer
                 it[8] = (it[3] < min_len) ? 1 : 0     // replace min_len slot with ignore flag
