@@ -20,33 +20,26 @@ nextflow_cmd <- function(
     stop("Invalid workflow.")
   }
 
-  if(userAsmbs){
-    cmd <- c(
-      "-log", "{file.path(path, '.logs', 'nextflow.log')}",
-      "run", "{source}",
-      #"-ansi-log", "false",
-      "-c", "{file.path(path, '.config')}",
-      "-entry", "{ifelse(workflow == 'assemble', 'WF1_userAsmb', 'WF2')}",
-      # userAsmb assemblies are a single user-provided genome: WF2 validates all
-      # their contigs together as one unit (no per-scaffold split).
-      "--userAsmb", "true",
-      "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
-    ) |> purrr::map_chr(~ stringr::str_glue(.x))
-
-    return(invisible(cmd))
+  # main.nf has no WF2_userAsmb entry; userAsmb only forks the assemble workflow.
+  entry <- if (workflow == "assemble") {
+    if (userAsmbs) "WF1_userAsmb" else "WF1"
   } else {
-    cmd <- c(
-      "-log", "{file.path(path, '.logs', 'nextflow.log')}",
-      "run", "{source}",
-      #"-ansi-log", "false",
-      "-c", "{file.path(path, '.config')}",
-      "-entry", "{ifelse(workflow == 'assemble', 'WF1', 'WF2')}",
-      "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
-    ) |> purrr::map_chr(~ stringr::str_glue(.x))
-
-    return(invisible(cmd))
+    "WF2"
   }
 
+  cmd <- c(
+    "-log", "{file.path(path, '.logs', 'nextflow.log')}",
+    "run", "{source}",
+    #"-ansi-log", "false",
+    "-c", "{file.path(path, '.config')}",
+    "-entry", entry,
+    # userAsmb assemblies are a single user-provided genome: WF2 validates all
+    # their contigs together as one unit (no per-scaffold split).
+    if (userAsmbs) c("--userAsmb", "true"),
+    "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
+  ) |> purrr::map_chr(~ stringr::str_glue(.x))
+
+  invisible(cmd)
 }
 
 #' Read the scheduler executor (and queue) from a project .config
@@ -169,6 +162,18 @@ is_hydra_cluster <- function() {
     any(grepl("hydra", motd_output, ignore.case = TRUE))
 }
 
+#' Detect whether we are running on the NOAA SEDNA cluster
+#'
+#' Greps `/etc/hosts` for "sedna".
+#'
+#' @return `TRUE` if running on SEDNA, otherwise `FALSE`.
+#' @noRd
+is_sedna_cluster <- function() {
+  motd_output <- try(readLines("/etc/hosts", warn = FALSE), silent = TRUE)
+  !inherits(motd_output, "try-error") &&
+    any(grepl("sedna", motd_output, ignore.case = TRUE))
+}
+
 #' Configure the R session environment for the NMNH Hydra cluster
 #'
 #' RStudio Server sessions on Hydra start with a stripped `PATH` that omits the
@@ -246,6 +251,44 @@ hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
     "",
     'echo "---"',
     'echo "= `date` job $JOB_NAME done"',
+    'echo "---"'
+  )
+}
+
+#' SEDNA-specific submission script
+#'
+#' Reproduces the script format used by the non-headless "Submit as Job" handler
+#' on NOAA SEDNA (SLURM directives, mamba env activation).
+#'
+#' @param full_nf_cmd The full `nextflow ...` command string to run.
+#' @param job_name Job name for the scheduler.
+#' @param log_file Path to the combined stdout/stderr log file.
+#' @return Character vector of script lines.
+#' @noRd
+sedna_submission_script <- function(full_nf_cmd, job_name, log_file,
+                                    nxf_ver = nf_pin_version()) {
+  c(
+    "#!/bin/sh",
+    paste0("#SBATCH -J ", job_name),
+    paste0("#SBATCH -o ", log_file),
+    "#SBATCH -p standard",
+    "#SBATCH -c 1",
+    "#SBATCH --mem=8G",
+    "#SBATCH -t 24:00:00",
+    "",
+    'echo "---"',
+    'echo + `date` job $SLURM_JOB_NAME started in $SLURM_JOB_PARTITION with jobID=$SLURM_JOBID on $SLURM_JOB_NODELIST',
+    'echo "---"',
+    "",
+    "source ~/.bashrc",
+    "mamba activate MitoPilot_deps",
+    "",
+    # Pin the Nextflow engine to a MitoPilot-compatible version.
+    if (!is.na(nxf_ver)) paste0("export NXF_VER=", nxf_ver),
+    full_nf_cmd,
+    "",
+    'echo "---"',
+    'echo = `date` job $SLURM_JOB_NAME done',
     'echo "---"'
   )
 }

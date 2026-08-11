@@ -179,16 +179,7 @@ pipeline_server_userAsmb <- function(id) {
         ))
       }
 
-      is_hydra_cluster <- FALSE
-
-      # Use a try block to gracefully handle errors if the command fails
-      motd_output <- try(readLines("/etc/hosts", warn = FALSE), silent = TRUE)
-
-      if (!inherits(motd_output, "try-error") && any(grepl("hydra", motd_output, ignore.case = TRUE))) {
-        is_hydra_cluster <- TRUE
-      }
-
-      if (is_hydra_cluster) {
+      if (is_hydra_cluster()) {
         # If hydra is found, render a list containing both buttons
         tagList(
           actionButton(ns("start"), "Run from App", class = "btn-success"),
