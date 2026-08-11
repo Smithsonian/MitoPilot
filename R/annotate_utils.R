@@ -593,15 +593,13 @@ augment_rules_for_unknown_genes <- function(rules, annotations, default_rules) {
 #' @param query The focal sequence
 #' @param target The target sequence
 #' @param end The end to count gaps. Options are 'leading' and 'trailing'
-#' @param subMx The substitution matrix to use for the comparison. Default is BLOSUM80
 #'
 #' @noRd
 #'
-count_end_gaps <- function(query, target, end = c("leading", "trailing"), subMx = "BLOSUM80") {
+count_end_gaps <- function(query, target, end = c("leading", "trailing")) {
   end <- end[1]
   s1 <- Biostrings::AAString(query)
   s2 <- Biostrings::AAString(target)
-  #aln <- pwalign::pairwiseAlignment(subject = s1, pattern = s2, substitutionMatrix = subMx)
   # MSA algorithm seems to do better than pwalign
   seqs <- Biostrings::AAStringSet(list(s1, s2))
   aln <- DECIPHER::AlignSeqs(seqs, verbose = FALSE)

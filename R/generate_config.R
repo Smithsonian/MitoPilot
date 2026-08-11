@@ -124,14 +124,12 @@ extract_container_engine <- function(lines) {
 #'
 #' @param path Project directory containing `.config`.
 #' @param executor Executor / profile name (see [list_configs()]).
-#' @param con Optional open DB connection (currently unused; retained for
-#'   call-site compatibility).
 #' @param profile_dir Directory searched for saved profiles (see
 #'   [mitopilot_config_dir()]).
 #'
 #' @return (invisibly) `TRUE` if the config was regenerated, `FALSE` otherwise.
 #' @noRd
-migrate_config <- function(path, executor, con = NULL,
+migrate_config <- function(path, executor,
                            profile_dir = mitopilot_config_dir()) {
   conf_path <- file.path(path, ".config")
   old <- readLines(conf_path)

@@ -1778,7 +1778,7 @@ backwards_compatibility <- function(
   # being stale so an already-current config is left alone, and on the caller
   # opting in (default on).
   if (update_config && !containerVer) {
-    migrate_config(path, executor, con = con)
+    migrate_config(path, executor)
   }
 
 }

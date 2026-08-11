@@ -970,7 +970,7 @@ assembly_coverage_details_server <- function(id, rv) {
 
       # --- per-path single-value bar plot builder (depth / error) ---
       bar_panel <- function(aligned, ylab, fill, show_x) {
-        df <- melt_per_path(aligned, "val", aln_len)
+        df <- melt_per_path(aligned, aln_len)
         df <- df[df$col >= win_start & df$col <= win_end, , drop = FALSE]
         df$path <- factor(df$path, levels = path_levels)
         if (all(is.na(df$val))) {
@@ -1078,7 +1078,7 @@ assembly_coverage_details_server <- function(id, rv) {
       shiny::bindCache(rv$alignment$sig, rv$cur_block)
 
     # Helper: build long-format df for a named list of per-path vectors.
-    melt_per_path <- function(lst, value_col, aln_len) {
+    melt_per_path <- function(lst, aln_len) {
       path_levels <- names(lst)
       df <- purrr::imap_dfr(lst, function(v, nm) {
         d <- data.frame(col = seq_len(aln_len), val = v, path = nm,
@@ -1086,7 +1086,6 @@ assembly_coverage_details_server <- function(id, rv) {
         d
       })
       df$path <- factor(df$path, levels = path_levels)
-      names(df)[names(df) == "val"] <- value_col
       df
     }
 
