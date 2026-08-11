@@ -15,11 +15,9 @@ BugReports: https://github.com/Smithsonian/MitoPilot/issues
 Depends:
     R (>= 4.4.0)
 Imports:
-    base64enc,
     BiocGenerics,
     Biostrings,
     cowplot,
-    crayon,
     DBI,
     dbplyr,
     DECIPHER,
@@ -42,7 +40,6 @@ Imports:
     ragg,
     rclipboard,
     reactable,
-    reactR,
     readr,
     reticulate,
     rmarkdown,
