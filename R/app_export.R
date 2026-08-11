@@ -6,13 +6,6 @@ EXPORT_COL_GROUPS <- list(
   BLAST   = c("blast_accession", "blast_ref_status", "blast_species",
               "blast_lineage")
 )
-EXPORT_COL_GROUP_LOOKUP <- {
-  out <- character()
-  for (.g in names(EXPORT_COL_GROUPS)) {
-    for (.c in EXPORT_COL_GROUPS[[.g]]) out[.c] <- .g
-  }
-  out
-}
 
 # Inline grey "?" help icon matching the tool-help icons (tool_help_icon),
 # but as a plain hover tooltip (native title) rather than a help modal.
@@ -110,10 +103,7 @@ export_server <- function(id) {
       export_filter_rv(input$export_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
-    .grp <- function(col) {
-      g <- EXPORT_COL_GROUP_LOOKUP[col]
-      if (is.na(g)) NULL else paste0("mp-grp-", g)
-    }
+    .grp <- function(col) grp_class(col, EXPORT_COL_GROUPS)
 
     # CSS hide for unselected groups / exported states; keeps DOM intact so
     # filter/sort/page state survives toggling.
@@ -287,30 +277,9 @@ export_server <- function(id) {
     })
 
     # CSV Export ----
-    .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto")
-
-    observe({
-      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
-    })
-
-    output$export_selected <- downloadHandler(
-      filename = function() paste0("export_selected_", Sys.Date(), ".csv"),
-      content = function(file) {
-        req(length(selected()) > 0)
-        rv$data |>
-          dplyr::slice(selected()) |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
-          write.csv(file, row.names = FALSE)
-      }
-    )
-
-    output$export_all <- downloadHandler(
-      filename = function() paste0("export_all_", Sys.Date(), ".csv"),
-      content = function(file) {
-        rv$data |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
-          write.csv(file, row.names = FALSE)
-      }
+    csv_download_outputs(
+      output, rv, selected, "export",
+      c("poor_blast_ref", "blast_accession_auto")
     )
 
     # Group ----

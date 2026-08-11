@@ -10,13 +10,6 @@ ANNOTATE_COL_GROUPS <- list(
   Export   = c("export_group", "export_time_stamp"),
   Metadata = c("time_stamp", "annotate_notes")
 )
-ANNOTATE_COL_GROUP_LOOKUP <- {
-  out <- character()
-  for (.g in names(ANNOTATE_COL_GROUPS)) {
-    for (.c in ANNOTATE_COL_GROUPS[[.g]]) out[.c] <- .g
-  }
-  out
-}
 
 # Status-filter pickers. Values match the annotate_lock / annotate_switch
 # codes; each row is tagged with mp-lock-<v> / mp-state-<v> classes so
@@ -231,34 +224,22 @@ annotate_server <- function(id) {
       updateReactable("table", data = filtered_data())
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
-    # Mirror the column-group picker so NULL (= user cleared all) is
-    # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(names(ANNOTATE_COL_GROUPS))
-    observeEvent(input$col_groups, {
-      col_groups_rv(input$col_groups %||% character(0))
-    }, ignoreNULL = FALSE, ignoreInit = TRUE)
-
-    # Mirror the lock / state status pickers the same way, so clearing all
-    # is distinguishable from the pre-init state. Default: all codes shown.
-    lock_filter_rv <- reactiveVal(unname(ANNOTATE_LOCK_CHOICES))
-    observeEvent(input$lock_filter, {
-      lock_filter_rv(input$lock_filter %||% character(0))
-    }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    state_filter_rv <- reactiveVal(unname(ANNOTATE_STATE_CHOICES))
-    observeEvent(input$state_filter, {
-      state_filter_rv(input$state_filter %||% character(0))
-    }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    export_filter_rv <- reactiveVal(unname(ANNOTATE_EXPORT_CHOICES))
-    observeEvent(input$export_filter, {
-      export_filter_rv(input$export_filter %||% character(0))
-    }, ignoreNULL = FALSE, ignoreInit = TRUE)
-
-    # CSS class for a togglable column. Added to both body cells and the
-    # header cell so the whole column collapses when the group is hidden.
-    .grp <- function(col) {
-      g <- ANNOTATE_COL_GROUP_LOOKUP[col]
-      if (is.na(g)) NULL else paste0("mp-grp-", g)
+    # Mirror a picker into a reactiveVal so NULL (= user cleared all) is
+    # distinguishable from the pre-init state.
+    mirror <- function(id, default) {
+      force(id)
+      out <- reactiveVal(default)
+      observeEvent(input[[id]], {
+        out(input[[id]] %||% character(0))
+      }, ignoreNULL = FALSE, ignoreInit = TRUE)
+      out
     }
+    col_groups_rv   <- mirror("col_groups", names(ANNOTATE_COL_GROUPS))
+    lock_filter_rv  <- mirror("lock_filter", unname(ANNOTATE_LOCK_CHOICES))
+    state_filter_rv <- mirror("state_filter", unname(ANNOTATE_STATE_CHOICES))
+    export_filter_rv <- mirror("export_filter", unname(ANNOTATE_EXPORT_CHOICES))
+
+    .grp <- function(col) grp_class(col, ANNOTATE_COL_GROUPS)
 
     # Inject a <style> tag that display:nones unselected column groups.
     # Hiding via CSS keeps columns mounted, so filters, sort, page, and
@@ -1023,71 +1004,28 @@ annotate_server <- function(id) {
       }
     })
     observeEvent(input$edit_annotate_opts, ignoreInit = T, {
-      shinyjs::toggleState("annotate_opts_cpus", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("annotate_opts_memory", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("use_mitos", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitos_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("use_mitos_best", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("rescue_no_trna", condition = input$edit_annotate_opts)
-      # shinyjs::toggleState("mitos_ref_dir", condition = input$edit_annotate_opts) # TODO: custom / alt ref db for mitos
-      shinyjs::toggleState("mitos_ref_db", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("use_trnaScan", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("trnaScan_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("use_arwen", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("arwen_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("use_aragorn", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("aragorn_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("use_mitofinder", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitofinder_db", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitofinder_new_genes", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitofinder_allow_introns", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("mitofinder_opts", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("coverage_trim", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("feature_trim", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("ref_based_rc", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("retain_low_conf_trna", condition = input$edit_annotate_opts)
-      shinyjs::toggleState("start_gene", condition = input$edit_annotate_opts)
-      # Check if editing opts that apply beyond selection
-      if (input$edit_annotate_opts && input$annotate_opts %in% filtered_data()$annotate_opts) {
-        rv$updating_indirect <- filtered_data() |>
-          dplyr::filter(annotate_opts == input$annotate_opts) |>
-          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
-        # Prevent editing opts that apply to locked samples
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(
-            inputId = "edit_annotate_opts",
-            value = FALSE
-          )
-          req(F)
-        }
-        # Confirm editing opts that apply beyond selection
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_annotate_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      # "mitos_ref_dir" is deliberately absent. TODO: custom / alt ref db for mitos
+      for (id in c(
+        "annotate_opts_cpus", "annotate_opts_memory",
+        "use_mitos", "mitos_opts", "use_mitos_best", "rescue_no_trna", "mitos_ref_db",
+        "use_trnaScan", "trnaScan_opts",
+        "use_arwen", "arwen_opts",
+        "use_aragorn", "aragorn_opts",
+        "use_mitofinder", "mitofinder_db", "mitofinder_new_genes",
+        "mitofinder_allow_introns", "mitofinder_opts",
+        "coverage_trim", "feature_trim", "ref_based_rc", "retain_low_conf_trna",
+        "start_gene"
+      )) {
+        shinyjs::toggleState(id, condition = input$edit_annotate_opts)
       }
+      opts_indirect_guard(
+        input, rv, filtered_data(),
+        opts_col = "annotate_opts", edit_id = "edit_annotate_opts",
+        confirm_id = "editing_annotate_opts_indirect", noun = "assembly options",
+        lock_col = "annotate_lock", by = c("ID", "path", "scaffold")
+      )
     })
-    # Confirm editing opts that apply beyond selection
-    observeEvent(input$editing_annotate_opts_indirect, ignoreInit = T, {
-      if (!input$editing_annotate_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(
-          inputId = "edit_annotate_opts",
-          value = FALSE
-        )
-      }
-    })
+    opts_indirect_confirm(input, rv, "editing_annotate_opts_indirect", "edit_annotate_opts")
     # Show each tool's option inputs only when that tool is enabled; the
     # "use <tool>" toggle itself always stays visible.
     observeEvent(input$use_mitos, {
@@ -1257,45 +1195,19 @@ annotate_server <- function(id) {
       )
     })
     observeEvent(input$edit_curate_opts, ignoreInit = T, {
-      shinyjs::toggleState("curate_opts_cpus", condition = input$edit_curate_opts)
-      shinyjs::toggleState("curate_opts_memory", condition = input$edit_curate_opts)
-      shinyjs::toggleState("max_blast_hits", condition = input$edit_curate_opts)
-      shinyjs::toggleState("curate_ref_dir", condition = input$edit_curate_opts)
-      shinyjs::toggleState("curate_ref_db", condition = input$edit_curate_opts)
-      shinyjs::toggleState("target", condition = input$edit_curate_opts)
-      shinyjs::toggleState("genetic_code", condition = input$edit_curate_opts)
-      shinyjs::toggleState("start_gene", condition = input$edit_curate_opts)
-      shinyjs::toggleState("linear_complete", condition = input$edit_curate_opts)
-      # Check if editing opts that apply beyond selection
-      if (input$edit_curate_opts && input$curate_opts %in% filtered_data()$curate_opts) {
-        rv$updating_indirect <- filtered_data() |>
-          dplyr::filter(curate_opts == input$curate_opts) |>
-          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
-        # Prevent editing opts that apply to locked samples
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(
-            inputId = "edit_curate_opts",
-            value = FALSE
-          )
-          req(F)
-        }
-        # Confirm editing opts that apply beyond selection
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_curate_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      for (id in c(
+        "curate_opts_cpus", "curate_opts_memory", "max_blast_hits",
+        "curate_ref_dir", "curate_ref_db", "target", "genetic_code",
+        "start_gene", "linear_complete"
+      )) {
+        shinyjs::toggleState(id, condition = input$edit_curate_opts)
       }
+      opts_indirect_guard(
+        input, rv, filtered_data(),
+        opts_col = "curate_opts", edit_id = "edit_curate_opts",
+        confirm_id = "editing_curate_opts_indirect", noun = "assembly options",
+        lock_col = "annotate_lock", by = c("ID", "path", "scaffold")
+      )
     })
     observeEvent(input$target, {
       # Guard against partial/invalid entries (e.g. while typing): only known
@@ -1328,16 +1240,7 @@ annotate_server <- function(id) {
         )
       })
     })
-    # Confirm editing opts that apply beyond selection
-    observeEvent(input$editing_curate_opts_indirect, ignoreInit = T, {
-      if (!input$editing_curate_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(
-          inputId = "edit_curate_opts",
-          value = FALSE
-        )
-      }
-    })
+    opts_indirect_confirm(input, rv, "editing_curate_opts_indirect", "edit_curate_opts")
     ## Save Changes ----
     observeEvent(input$update_curate_opts, {
       ## Add to params table if new or editing ----
@@ -1452,45 +1355,20 @@ annotate_server <- function(id) {
       shinyjs::toggle("orf_param_opts", condition = isTRUE(input$use_orffinder))
     })
     observeEvent(input$edit_orf_opts, ignoreInit = T, {
-      shinyjs::toggleState("use_orffinder", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_opts_cpus", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_opts_memory", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_min_len", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_max_overlap", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orf_nested", condition = input$edit_orf_opts)
-      shinyjs::toggleState("orffinder_opts", condition = input$edit_orf_opts)
-      # Check if editing opts that apply beyond selection
-      if (input$edit_orf_opts && input$orf_opts %in% filtered_data()$orf_opts) {
-        rv$updating_indirect <- filtered_data() |>
-          dplyr::filter(orf_opts == input$orf_opts) |>
-          dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
-          req(F)
-        }
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_orf_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      for (id in c(
+        "use_orffinder", "orf_opts_cpus", "orf_opts_memory", "orf_min_len",
+        "orf_max_overlap", "orf_nested", "orffinder_opts"
+      )) {
+        shinyjs::toggleState(id, condition = input$edit_orf_opts)
       }
+      opts_indirect_guard(
+        input, rv, filtered_data(),
+        opts_col = "orf_opts", edit_id = "edit_orf_opts",
+        confirm_id = "editing_orf_opts_indirect", noun = "options",
+        lock_col = "annotate_lock", by = c("ID", "path", "scaffold")
+      )
     })
-    observeEvent(input$editing_orf_opts_indirect, ignoreInit = T, {
-      if (!input$editing_orf_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
-      }
-    })
+    opts_indirect_confirm(input, rv, "editing_orf_opts_indirect", "edit_orf_opts")
     ## Save Changes ----
     observeEvent(input$update_orf_opts, {
       if (input$edit_orf_opts) {
@@ -1570,30 +1448,9 @@ annotate_server <- function(id) {
     annotations_details_server(ns("annotations"), rv)
 
     # CSV Export ----
-    .export_cols_drop <- c("output", "view", "poor_blast_ref", "warnings_details", "blast_accession_auto")
-
-    observe({
-      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
-    })
-
-    output$export_selected <- downloadHandler(
-      filename = function() paste0("annotate_selected_", Sys.Date(), ".csv"),
-      content = function(file) {
-        req(length(selected()) > 0)
-        rv$data |>
-          dplyr::slice(selected()) |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
-          write.csv(file, row.names = FALSE)
-      }
-    )
-
-    output$export_all <- downloadHandler(
-      filename = function() paste0("annotate_all_", Sys.Date(), ".csv"),
-      content = function(file) {
-        rv$data |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
-          write.csv(file, row.names = FALSE)
-      }
+    csv_download_outputs(
+      output, rv, selected, "annotate",
+      c("output", "view", "poor_blast_ref", "warnings_details", "blast_accession_auto")
     )
   })
 }

@@ -8,16 +8,9 @@ ASSEMBLE_COL_GROUPS <- list(
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Metadata = c("time_stamp", "assemble_notes")
 )
-# Reverse lookup col -> group, used to tag colDefs with a CSS class so the
-# column-group picker can show/hide columns via CSS without re-rendering
+# The reverse lookup col -> group (see grp_class) tags colDefs with a CSS class
+# so the column-group picker can show/hide columns via CSS without re-rendering
 # the table (preserves filters, sort, page, selection).
-ASSEMBLE_COL_GROUP_LOOKUP <- {
-  out <- character()
-  for (.g in names(ASSEMBLE_COL_GROUPS)) {
-    for (.c in ASSEMBLE_COL_GROUPS[[.g]]) out[.c] <- .g
-  }
-  out
-}
 
 # Status-filter pickers. Values match the assemble_lock / assemble_switch
 # codes; each row is tagged with mp-lock-<v> / mp-state-<v> classes so
@@ -189,13 +182,7 @@ assemble_server <- function(id) {
       state_filter_rv(input$state_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
-    # CSS class for a togglable column. Returned class is added to both the
-    # body cell (class) and the header cell (headerClass) so the
-    # whole column collapses when the matching group is unselected.
-    .grp <- function(col) {
-      g <- ASSEMBLE_COL_GROUP_LOOKUP[col]
-      if (is.na(g)) NULL else paste0("mp-grp-", g)
-    }
+    .grp <- function(col) grp_class(col, ASSEMBLE_COL_GROUPS)
 
     # Inject a <style> tag that display:nones unselected column groups.
     # Hiding via CSS keeps the columns mounted in the DOM, so filters,
@@ -645,18 +632,7 @@ assemble_server <- function(id) {
     })
 
     # Set Pre-process Opts ----
-    observeEvent(input$set_pre_opts, {
-      row <- as.numeric(input$set_pre_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
-      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      pre_opts_modal(rv)
-    })
+    open_opts_modal(input, "set_pre_opts", rv, selected, pre_opts_modal)
     observeEvent(input$pre_opts, ignoreInit = T, {
       exists <- input$pre_opts %in% rv$pre_opts$pre_opts
       shinyWidgets::updatePrettyCheckbox(
@@ -683,48 +659,14 @@ assemble_server <- function(id) {
       shinyjs::toggleState("pre_opts_cpus", condition = input$edit_pre_opts)
       shinyjs::toggleState("pre_opts_memory", condition = input$edit_pre_opts)
       shinyjs::toggleState("fastp", condition = input$edit_pre_opts)
-      # Check if editing opts that apply beyond selection
-      if (input$edit_pre_opts && input$pre_opts %in% rv$data$pre_opts) {
-        rv$updating_indirect <- rv$data |>
-          dplyr::filter(pre_opts == input$pre_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
-
-        # Prevent editing opts that apply to locked
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(
-            inputId = "edit_pre_opts",
-            value = FALSE
-          )
-          req(F)
-        }
-
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit pre-processing options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      }
+      opts_indirect_guard(
+        input, rv, rv$data,
+        opts_col = "pre_opts", edit_id = "edit_pre_opts",
+        confirm_id = "editing_opts_indirect", noun = "pre-processing options",
+        lock_col = "assemble_lock", by = "ID"
+      )
     })
-    # Confirm editing opts that apply beyond selection
-    observeEvent(input$editing_opts_indirect, ignoreInit = T, {
-      if (!input$editing_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(
-          inputId = "edit_pre_opts",
-          value = FALSE
-        )
-      }
-    })
+    opts_indirect_confirm(input, rv, "editing_opts_indirect", "edit_pre_opts")
     observeEvent(input$update_pre_opts, ignoreInit = T, {
       if (input$edit_pre_opts) {
         dplyr::tbl(session$userData$con, "pre_opts") |>
@@ -785,18 +727,7 @@ assemble_server <- function(id) {
     })
 
     # Set Assemble Opts ----
-    observeEvent(input$set_assemble_opts, {
-      row <- as.numeric(input$set_assemble_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
-      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      assemble_opts_modal(rv)
-    })
+    open_opts_modal(input, "set_assemble_opts", rv, selected, assemble_opts_modal)
     observeEvent(input$assemble_opts, ignoreInit = T, {
       exists <- input$assemble_opts %in% rv$assemble_opts$assemble_opts
       shinyWidgets::updatePrettyCheckbox(
@@ -884,47 +815,14 @@ assemble_server <- function(id) {
       shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
       shinyjs::toggleState("min_assembly_length", condition = input$edit_assemble_opts)
       shinyjs::toggleState("join_scaffolds", condition = input$edit_assemble_opts)
-      # Check if editing opts that apply beyond selection
-      if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
-        rv$updating_indirect <- rv$data |>
-          dplyr::filter(assemble_opts == input$assemble_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
-        # Prevent editing opts that apply to locked samples
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(
-            inputId = "edit_assemble_opts",
-            value = FALSE
-          )
-          req(F)
-        }
-        # Confirm editing opts that apply beyond selection
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_assemble_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      }
+      opts_indirect_guard(
+        input, rv, rv$data,
+        opts_col = "assemble_opts", edit_id = "edit_assemble_opts",
+        confirm_id = "editing_assemble_opts_indirect", noun = "assembly options",
+        lock_col = "assemble_lock", by = "ID"
+      )
     })
-    # Confirm editing opts that apply beyond selection
-    observeEvent(input$editing_assemble_opts_indirect, ignoreInit = T, {
-      if (!input$editing_assemble_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(
-          inputId = "edit_assemble_opts",
-          value = FALSE
-        )
-      }
-    })
+    opts_indirect_confirm(input, rv, "editing_assemble_opts_indirect", "edit_assemble_opts")
     # toggle parameters depending on selected assembler. Each help line lives
     # inside its input's container, so toggling the input carries its help too.
     observeEvent(input$assembler, {
@@ -1041,18 +939,7 @@ assemble_server <- function(id) {
     })
 
     # Set BLAST Opts ----
-    observeEvent(input$set_blast_opts, {
-      row <- as.numeric(input$set_blast_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
-      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      blast_opts_modal(rv)
-    })
+    open_opts_modal(input, "set_blast_opts", rv, selected, blast_opts_modal)
     observeEvent(input$blast_opts, ignoreInit = T, {
       exists <- input$blast_opts %in% rv$blast_opts$blast_opts
       shinyWidgets::updatePrettyCheckbox(
@@ -1084,38 +971,14 @@ assemble_server <- function(id) {
       shinyjs::toggleState("entrez_query",    condition = input$edit_blast_opts)
       shinyjs::toggleState("max_target_seqs", condition = input$edit_blast_opts)
       shinyjs::toggleState("extra_opts",      condition = input$edit_blast_opts)
-      # Check if editing opts that apply beyond selection
-      if (input$edit_blast_opts && input$blast_opts %in% rv$data$blast_opts) {
-        rv$updating_indirect <- rv$data |>
-          dplyr::filter(blast_opts == input$blast_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
-          req(F)
-        }
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_blast_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit BLAST options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      }
+      opts_indirect_guard(
+        input, rv, rv$data,
+        opts_col = "blast_opts", edit_id = "edit_blast_opts",
+        confirm_id = "editing_blast_opts_indirect", noun = "BLAST options",
+        lock_col = "assemble_lock", by = "ID"
+      )
     })
-    observeEvent(input$editing_blast_opts_indirect, ignoreInit = T, {
-      if (!input$editing_blast_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
-      }
-    })
+    opts_indirect_confirm(input, rv, "editing_blast_opts_indirect", "edit_blast_opts")
     # Show/hide entrez + extra opts when run_blast toggle changes
     observeEvent(input$run_blast, ignoreInit = T, {
       if (isTRUE(input$run_blast)) {
@@ -1191,30 +1054,9 @@ assemble_server <- function(id) {
     })
 
     # CSV Export ----
-    .export_cols_drop <- c("ignore_flags", "min_assembly_length", "output", "view", "blast_hits", "poor_blast_ref")
-
-    observe({
-      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
-    })
-
-    output$export_selected <- downloadHandler(
-      filename = function() paste0("assemble_selected_", Sys.Date(), ".csv"),
-      content = function(file) {
-        req(length(selected()) > 0)
-        rv$data |>
-          dplyr::slice(selected()) |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
-          write.csv(file, row.names = FALSE)
-      }
-    )
-
-    output$export_all <- downloadHandler(
-      filename = function() paste0("assemble_all_", Sys.Date(), ".csv"),
-      content = function(file) {
-        rv$data |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
-          write.csv(file, row.names = FALSE)
-      }
+    csv_download_outputs(
+      output, rv, selected, "assemble",
+      c("ignore_flags", "min_assembly_length", "output", "view", "blast_hits", "poor_blast_ref")
     )
   })
 }

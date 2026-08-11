@@ -2,6 +2,17 @@
 #' @noRd
 ZOOM_WINDOW_MAX_BP <- 1000L
 
+#' Summaries over per-base stat vectors that may hold NA / Inf, returning
+#' NA_real_ when nothing finite is left.
+#' @noRd
+finite_only <- function(x) x[is.finite(x)]
+#' @noRd
+safe_min <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else min(x) }
+#' @noRd
+safe_mean <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else mean(x) }
+#' @noRd
+safe_max <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else max(x) }
+
 #' coverage_details Server Functions
 #'
 #' @noRd
@@ -640,7 +651,6 @@ assembly_coverage_details_server <- function(id, rv) {
       if (nrow(cf) > 0) {
         dl <- rv$alignment$depth_aligned
         el <- rv$alignment$error_aligned
-        fin <- function(x) x[is.finite(x)]
         # Do the selected paths disagree taxonomically? (possible NUMT signal)
         sel_species <- rv$focal_assembly$blast_species[sel_rows]
         sel_lineage <- if ("blast_lineage" %in% names(rv$focal_assembly)) {
@@ -653,12 +663,10 @@ assembly_coverage_details_server <- function(id, rv) {
         cls <- lapply(seq_len(nrow(cf)), function(i) {
           b <- cf[i, ]
           cols <- seq.int(b$aln_start, b$aln_end)
-          min_d <- suppressWarnings(min(unlist(lapply(dl, function(v) fin(v[cols]))), na.rm = TRUE))
+          min_d <- safe_min(unlist(lapply(dl, function(v) v[cols])))
           max_e <- if (!is.null(el)) {
-            suppressWarnings(max(unlist(lapply(el, function(v) fin(v[cols]))), na.rm = TRUE))
+            safe_max(unlist(lapply(el, function(v) v[cols])))
           } else NA_real_
-          if (!is.finite(min_d)) min_d <- NA_real_
-          if (!is.finite(max_e)) max_e <- NA_real_
           at_junc <- is_circ && (b$aln_start <= 1L || b$aln_end >= rv$alignment$aln_len)
           classify_conflict_block(
             list(len = b$len, n_snps = b$n_snps, n_indels = b$n_indels,
@@ -1159,10 +1167,6 @@ assembly_coverage_details_server <- function(id, rv) {
       dl <- rv$alignment$depth_aligned
       el <- rv$alignment$error_aligned
       # Per-block summary stats: min depth, mean depth, max error across paths.
-      finite_only <- function(x) x[is.finite(x)]
-      safe_min  <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else min(x) }
-      safe_mean <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else mean(x) }
-      safe_max  <- function(x) { x <- finite_only(x); if (!length(x)) NA_real_ else max(x) }
       summarize_block <- function(b) {
         cols <- seq.int(b$aln_start, b$aln_end)
         min_d  <- vapply(dl, function(v) safe_min(v[cols]),  numeric(1))
