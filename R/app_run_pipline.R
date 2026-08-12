@@ -41,7 +41,7 @@ render_progress_board <- function(board) {
   vapply(board[order(ord)], function(x) x$line, character(1))
 }
 
-pipeline_server <- function(id) {
+pipeline_server <- function(id, userAsmb = FALSE) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -84,7 +84,7 @@ pipeline_server <- function(id) {
     on("run_modal", {
       job_submitting(FALSE)
       # Generate Nextflow params ----
-      nf_cmd(nextflow_cmd(session$userData$mode))
+      nf_cmd(nextflow_cmd(session$userData$mode, userAsmbs = userAsmb))
       message(nf_cmd())
 
       # Count samples to update ----
@@ -231,9 +231,12 @@ pipeline_server <- function(id) {
     # Toggle "-resume" Nextflow option
     observeEvent(input$resume, {
       if (isTRUE(input$resume)) {
-        nf_cmd(nextflow_cmd(session$userData$mode))
+        nf_cmd(nextflow_cmd(session$userData$mode, userAsmbs = userAsmb))
       } else {
-        nf_cmd(stringr::str_remove(nextflow_cmd(session$userData$mode), pattern = "-resume"))
+        nf_cmd(stringr::str_remove(
+          nextflow_cmd(session$userData$mode, userAsmbs = userAsmb),
+          pattern = "-resume"
+        ))
       }
       output$nf_code_block <- shiny::renderText({
         paste(c("nextflow", nf_cmd()), collapse = " ")

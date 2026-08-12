@@ -220,11 +220,10 @@ app_server <- function(input, output, session, userAsmb = FALSE) {
   })
 
   # Sub-modules ----
+  pipeline_server("run", userAsmb = userAsmb)
   if (userAsmb) {
-    pipeline_server_userAsmb("run")
     assemble_server_userAsmb("assemble")
   } else {
-    pipeline_server("run")
     assemble_server("assemble")
   }
   annotate_server("annotate")
