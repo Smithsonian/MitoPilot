@@ -101,7 +101,7 @@ assemble_server_userAsmb <- function(id) {
         dplyr::collect(),
       blast_opts = dplyr::tbl(session$userData$con, "blast_opts") |>
         dplyr::collect(),
-      data = fetch_assemble_data_userAsmb(),
+      data = fetch_assemble_data(userAsmb = TRUE),
       updating = NULL
     )
 
@@ -129,7 +129,7 @@ assemble_server_userAsmb <- function(id) {
     # Refresh ----
     init("refresh_assemble")
     on("refresh_assemble", {
-      rv$data <- fetch_assemble_data_userAsmb()
+      rv$data <- fetch_assemble_data(userAsmb = TRUE)
       updateReactable(
         "table",
         data = filtered_data()
