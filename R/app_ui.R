@@ -121,7 +121,7 @@ app_ui <- function(request, userAsmb = FALSE) {
           style = "padding: 1em;",
           conditionalPanel(
             condition = "input.mode == 'Assemble'",
-            if (userAsmb) assemble_ui_userAsmb("assemble") else assemble_ui("assemble")
+            assemble_ui("assemble", userAsmb = userAsmb)
           ),
           conditionalPanel(
             condition = "input.mode == 'Annotate'",

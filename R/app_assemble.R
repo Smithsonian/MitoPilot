@@ -25,12 +25,321 @@ ASSEMBLE_STATE_CHOICES <- c(
   "Failed"       = "3"
 )
 
+#' Assemble table column definitions.
+#'
+#' Every colDef the two flavours disagree on lives in the `flavour` list at the
+#' bottom; `shared` is identical for both. Column order here does not matter,
+#' reactable orders the table by the data frame's own column order.
+#'
+#' @noRd
+assemble_cols <- function(ns, userAsmb = FALSE, no_raw = FALSE) {
+  .grp <- function(col) grp_class(col, ASSEMBLE_COL_GROUPS)
+
+  shared <- list(
+    `.selection` = colDef(show = T, sticky = "left", width = 28),
+    assemble_lock = colDef(
+      show = TRUE,
+      sticky = "left",
+      name = "",
+      html = TRUE,
+      width = 32,
+      align = "center",
+      filterable = FALSE,
+      cell = rt_dynamicIcon(
+        c(
+          `0` = "fa fa-lock-open",
+          `1` = "fa fa-lock"
+        )
+      )
+    ),
+    assemble_switch = colDef(
+      show = TRUE,
+      sticky = "left",
+      name = "",
+      html = TRUE,
+      width = 30,
+      align = "center",
+      filterable = FALSE,
+      cell = rt_dynamicIcon(
+        c(
+          `0` = "fa fa-hourglass",
+          `1` = "fa fa-person-running",
+          `2` = "fa fa-circle-check",
+          `3` = "fa fa-triangle-exclamation",
+          `4` = "fa fa-circle-half-stroke"
+        )
+      )
+    ),
+    ID = colDef(
+      show = T,
+      minWidth = 120,
+      sticky = "left",
+      html = T,
+      cell = rt_longtext()
+    ),
+    Taxon = colDef(
+      show = T,
+      minWidth = 140,
+      sticky = "left",
+      html = T,
+      cell = rt_longtext()
+    ),
+    # No-raw-data projects have no reads/coverage, so hide the read-derived
+    # columns (preprocess opts, read count, read length) entirely.
+    pre_opts = colDef(
+      show = !no_raw, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
+      name = "Preprocess Opts.",
+      html = T,
+      width = 130,
+      cell = rt_link(ns("set_pre_opts"))
+    ),
+    trimmed_reads = colDef(
+      show = !no_raw, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
+      name = "Reads",
+      filterable = FALSE,
+      minWidth = 100
+    ),
+    mean_length = colDef(
+      show = !no_raw, class = .grp("mean_length"), headerClass = .grp("mean_length"),
+      name = "Read Length",
+      filterable = FALSE,
+      minWidth = 100
+    ),
+    blast_opts = colDef(
+      show = TRUE, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
+      name = "BLAST Opts.",
+      html = T,
+      width = 120,
+      cell = rt_link(ns("set_blast_opts"))
+    ),
+    topology = colDef(
+      show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
+      width = 100,
+      name = "Topology"
+    ),
+    scaffolds = colDef(
+      show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"), width = 100, name = "# Scaffolds", align = "center"
+    ),
+    poor_blast_ref = colDef(show = FALSE),
+    blast_hits = colDef(
+      show = TRUE,
+      name = "",
+      filterable = FALSE,
+      sortable = FALSE,
+      html = TRUE,
+      width = 140,
+      align = "center",
+      cell = rt_icon_bttn_text(ns("all_blast_hits"), "fas fa-list", "All BLAST Hits")
+    ),
+    time_stamp = colDef(
+      show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
+      name = "Last Updated",
+      filterable = FALSE,
+      html = T,
+      width = 150,
+      cell = rt_ts_date()
+    ),
+    assemble_notes = colDef(
+      show = TRUE, class = .grp("assemble_notes"), headerClass = .grp("assemble_notes"),
+      name = "Notes",
+      html = TRUE,
+      align = "left",
+      minWidth = 150,
+      cell = rt_longtext()
+    ),
+    view = colDef(
+      show = TRUE,
+      sticky = "right",
+      filterable = FALSE,
+      name = "",
+      html = TRUE,
+      width = 80,
+      align = "center",
+      cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
+    ),
+    output = colDef(
+      show = TRUE,
+      sticky = "right",
+      filterable = FALSE,
+      name = "",
+      html = TRUE,
+      width = 80,
+      align = "center",
+      cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
+    )
+  )
+
+  # Flavour-specific columns. `assembly` exists only in the user-assembly data
+  # and `min_assembly_length` / `ignore_flags` only in the standard data, so a
+  # colDef on the wrong side is a hard reactable error. `assemble_opts` is in
+  # both, and is deliberately left undefined for userAsmb so the table shows no
+  # "Assembly Opts." link. The JS cell body below keeps its original
+  # indentation because that whitespace is part of the rendered payload.
+  flavour <- if (userAsmb) {
+    list(
+      assembly = colDef(
+        show = TRUE,
+        minWidth = 140,
+        name = "Input Assembly File",
+        html = T,
+        cell = rt_longtext()
+      ),
+      length = colDef(
+        show = TRUE, class = .grp("length"), headerClass = .grp("length"),
+        minWidth = 140,
+        name = "Asmb. Length (raw)",
+        filterable = FALSE,
+        html = TRUE,
+        cell = rt_longtext()
+      ),
+      paths = colDef(
+        show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
+        width = 100, name = "# Paths", align = "center",
+        cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
+        style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
+      ),
+      blast_accession = colDef(
+        show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
+        name = "Top Hit",
+        html = TRUE,
+        width = 120,
+        cell = rt_ncbi_link()
+      ),
+      blast_ref_status = colDef(
+        show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
+        name = "Ref Align",
+        html = TRUE,
+        width = 100,
+        align = "center",
+        filterable = TRUE,
+        cell = rt_blast_ref_status()
+      ),
+      blast_species = colDef(
+        show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
+        name = "Species",
+        html = TRUE,
+        minWidth = 160,
+        cell = rt_longtext()
+      ),
+      blast_lineage = colDef(
+        show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
+        name = "Lineage",
+        html = TRUE,
+        minWidth = 200,
+        cell = rt_longtext()
+      ),
+      blast_pident = colDef(
+        show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
+        name = "% Ident",
+        filterable = FALSE,
+        width = 90,
+        align = "center"
+      ),
+      blast_qcovs = colDef(
+        show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
+        name = "% Cov",
+        filterable = FALSE,
+        width = 90,
+        align = "center"
+      )
+    )
+  } else {
+    list(
+      assemble_opts = colDef(
+        show = TRUE, class = .grp("assemble_opts"), headerClass = .grp("assemble_opts"),
+        name = "Assembly Opts.",
+        html = T,
+        width = 130,
+        cell = rt_link(ns("set_assemble_opts"))
+      ),
+      length = colDef(
+        show = TRUE, class = .grp("length"), headerClass = .grp("length"),
+        minWidth = 140,
+        name = "Asmb. Length (ignored)",
+        header = htmltools::HTML('Asmb. Length (<span style="color:#e74c3c;font-weight:bold">ignored</span>)'),
+        filterable = FALSE,
+        html = TRUE,
+        cell = JS("function(cellInfo) {
+                var val = cellInfo.value;
+                if (!val) return val;
+                var flagsStr = cellInfo.row['ignore_flags'];
+                var flags = flagsStr ? String(flagsStr).split(';') : [];
+                var parts = String(val).split(';');
+                var colored = parts.map(function(p, i) {
+                  var ign = flags[i];
+                  if (ign === '1') {
+                    return '<span style=\"color:#e74c3c;font-weight:bold\">' + p.trim() + '</span>';
+                  }
+                  return p.trim();
+                });
+                return colored.join('; ');
+              }")
+      ),
+      min_assembly_length = colDef(show = FALSE),
+      ignore_flags = colDef(show = FALSE),
+      paths = colDef(
+        show = TRUE, width = 100, name = "# Paths", align = "center",
+        cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
+        style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
+      ),
+      blast_accession = colDef(
+        show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
+        name = "BLAST Top Hit",
+        html = TRUE,
+        width = 120,
+        cell = rt_ncbi_link()
+      ),
+      blast_ref_status = colDef(
+        show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
+        name = "BLAST Ref Align",
+        html = TRUE,
+        minWidth = 130,
+        resizable = TRUE,
+        align = "center",
+        filterable = TRUE,
+        cell = rt_blast_ref_status()
+      ),
+      blast_species = colDef(
+        show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
+        name = "BLAST Species",
+        html = TRUE,
+        minWidth = 160,
+        cell = rt_longtext()
+      ),
+      blast_lineage = colDef(
+        show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
+        name = "BLAST Lineage",
+        html = TRUE,
+        minWidth = 200,
+        cell = rt_longtext()
+      ),
+      blast_pident = colDef(
+        show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
+        name = "BLAST % Ident",
+        filterable = FALSE,
+        minWidth = 90,
+        align = "center"
+      ),
+      blast_qcovs = colDef(
+        show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
+        name = "BLAST % Cov",
+        filterable = FALSE,
+        minWidth = 90,
+        align = "center"
+      )
+    )
+  }
+
+  c(shared, flavour)
+}
+
 #' assemble UI
 #'
 #' @param id,input,output,session Internal parameters for {shiny}.
+#' @param userAsmb logical. TRUE for a user-assembly project.
 #'
 #' @noRd
-assemble_ui <- function(id) {
+assemble_ui <- function(id, userAsmb = FALSE) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("col_css")),
@@ -96,20 +405,25 @@ assemble_ui <- function(id) {
       style = "font-size: 0.85em; color: #555; margin-top: 4px;",
       textOutput(ns("n_selected"), inline = TRUE)
     ),
-    div(
-      style = "margin-top: 12px; display: flex; gap: 8px;",
-      downloadButton(ns("export_selected"), "Export Selected to CSV",
-                     class = "btn-sm btn-default"),
-      downloadButton(ns("export_all"), "Export All to CSV",
-                     class = "btn-sm btn-default")
-    )
+    # CSV export is standard-only.
+    if (!userAsmb) {
+      div(
+        style = "margin-top: 12px; display: flex; gap: 8px;",
+        downloadButton(ns("export_selected"), "Export Selected to CSV",
+                       class = "btn-sm btn-default"),
+        downloadButton(ns("export_all"), "Export All to CSV",
+                       class = "btn-sm btn-default")
+      )
+    }
   )
 }
 
 #' assemble Server
 #'
+#' @param userAsmb logical. TRUE for a user-assembly project.
+#'
 #' @noRd
-assemble_server <- function(id) {
+assemble_server <- function(id, userAsmb = FALSE) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -127,7 +441,7 @@ assemble_server <- function(id) {
         dplyr::collect(),
       blast_opts = dplyr::tbl(session$userData$con, "blast_opts") |>
         dplyr::collect(),
-      data = fetch_assemble_data(),
+      data = fetch_assemble_data(userAsmb = userAsmb),
       updating = NULL
     )
 
@@ -157,7 +471,7 @@ assemble_server <- function(id) {
     # Refresh ----
     init("refresh_assemble")
     on("refresh_assemble", {
-      rv$data <- fetch_assemble_data()
+      rv$data <- fetch_assemble_data(userAsmb = userAsmb)
       updateReactable(
         "table",
         data = filtered_data()
@@ -182,7 +496,7 @@ assemble_server <- function(id) {
       state_filter_rv(input$state_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
-    .grp <- function(col) grp_class(col, ASSEMBLE_COL_GROUPS)
+    no_raw <- isTRUE(session$userData$no_raw_data)
 
     # Inject a <style> tag that display:nones unselected column groups.
     # Hiding via CSS keeps the columns mounted in the DOM, so filters,
@@ -196,7 +510,7 @@ assemble_server <- function(id) {
       hidden_lock  <- setdiff(unname(ASSEMBLE_LOCK_CHOICES), lock_filter_rv())
       hidden_state <- setdiff(unname(ASSEMBLE_STATE_CHOICES), state_filter_rv())
       # Scope to THIS module's table so rules don't hit the shared mp-lock /
-      # mp-state / mp-grp classes on the annotate, export, and userAsmb tables.
+      # mp-state / mp-grp classes on the annotate and export tables.
       sel <- paste0("#", ns("table"), " ")
       rules <- c(
         if (length(hidden_grp))   paste0(sel, ".mp-grp-",   hidden_grp,   " { display: none !important; }"),
@@ -230,220 +544,16 @@ assemble_server <- function(id) {
             return 'mp-lock-' + rowInfo.values['assemble_lock'] +
                    ' mp-state-' + rowInfo.values['assemble_switch'];
           }"),
-          defaultColDef = colDef(align = "left", show = F),
-          columns = list(
-            `.selection` = colDef(show = T, sticky = "left", width = 28),
-            assemble_lock = colDef(
-              show = TRUE,
-              sticky = "left",
-              name = "",
-              html = TRUE,
-              width = 32,
-              align = "center",
-              filterable = FALSE,
-              cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-lock-open",
-                  `1` = "fa fa-lock"
-                )
-              )
-            ),
-            assemble_switch = colDef(
-              show = TRUE,
-              sticky = "left",
-              name = "",
-              html = TRUE,
-              width = 30,
-              align = "center",
-              filterable = FALSE,
-              cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-hourglass",
-                  `1` = "fa fa-person-running",
-                  `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation",
-                  `4` = "fa fa-circle-half-stroke"
-                )
-              )
-            ),
-            ID = colDef(
-              show = T,
-              minWidth = 120,
-              sticky = "left",
-              html = T,
-              cell = rt_longtext()
-            ),
-            Taxon = colDef(
-              show = T,
-              minWidth = 140,
-              sticky = "left",
-              html = T,
-              cell = rt_longtext()
-            ),
-            pre_opts = colDef(
-              show = TRUE, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
-              name = "Preprocess Opts.",
-              html = T,
-              width = 130,
-              cell = rt_link(ns("set_pre_opts"))
-            ),
-            trimmed_reads = colDef(
-              show = TRUE, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
-              name = "Reads",
-              filterable = FALSE,
-              minWidth = 100
-            ),
-            mean_length = colDef(
-              show = TRUE, class = .grp("mean_length"), headerClass = .grp("mean_length"),
-              name = "Read Length",
-              filterable = FALSE,
-              minWidth = 100
-            ),
-            assemble_opts = colDef(
-              show = TRUE, class = .grp("assemble_opts"), headerClass = .grp("assemble_opts"),
-              name = "Assembly Opts.",
-              html = T,
-              width = 130,
-              cell = rt_link(ns("set_assemble_opts"))
-            ),
-            blast_opts = colDef(
-              show = TRUE, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
-              name = "BLAST Opts.",
-              html = T,
-              width = 120,
-              cell = rt_link(ns("set_blast_opts"))
-            ),
-            topology = colDef(
-              show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
-              width = 100,
-              name = "Topology"
-            ),
-            length = colDef(
-              show = TRUE, class = .grp("length"), headerClass = .grp("length"),
-              minWidth = 140,
-              name = "Asmb. Length (ignored)",
-              header = htmltools::HTML('Asmb. Length (<span style="color:#e74c3c;font-weight:bold">ignored</span>)'),
-              filterable = FALSE,
-              html = TRUE,
-              cell = JS("function(cellInfo) {
-                var val = cellInfo.value;
-                if (!val) return val;
-                var flagsStr = cellInfo.row['ignore_flags'];
-                var flags = flagsStr ? String(flagsStr).split(';') : [];
-                var parts = String(val).split(';');
-                var colored = parts.map(function(p, i) {
-                  var ign = flags[i];
-                  if (ign === '1') {
-                    return '<span style=\"color:#e74c3c;font-weight:bold\">' + p.trim() + '</span>';
-                  }
-                  return p.trim();
-                });
-                return colored.join('; ');
-              }")
-            ),
-            min_assembly_length = colDef(show = FALSE),
-            ignore_flags = colDef(show = FALSE),
-            paths = colDef(
-              show = TRUE, width = 100, name = "# Paths", align = "center",
-              cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
-              style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
-            ),
-            scaffolds = colDef(
-              show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"), width = 100, name = "# Scaffolds", align = "center"
-            ),
-            blast_accession = colDef(
-              show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-              name = "BLAST Top Hit",
-              html = TRUE,
-              width = 120,
-              cell = rt_ncbi_link()
-            ),
-            poor_blast_ref = colDef(show = FALSE),
-            blast_ref_status = colDef(
-              show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
-              name = "BLAST Ref Align",
-              html = TRUE,
-              minWidth = 130,
-              resizable = TRUE,
-              align = "center",
-              filterable = TRUE,
-              cell = rt_blast_ref_status()
-            ),
-            blast_species = colDef(
-              show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
-              name = "BLAST Species",
-              html = TRUE,
-              minWidth = 160,
-              cell = rt_longtext()
-            ),
-            blast_lineage = colDef(
-              show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
-              name = "BLAST Lineage",
-              html = TRUE,
-              minWidth = 200,
-              cell = rt_longtext()
-            ),
-            blast_hits = colDef(
-              show = TRUE,
-              name = "",
-              filterable = FALSE,
-              sortable = FALSE,
-              html = TRUE,
-              width = 140,
-              align = "center",
-              cell = rt_icon_bttn_text(ns("all_blast_hits"), "fas fa-list", "All BLAST Hits")
-            ),
-            blast_pident = colDef(
-              show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
-              name = "BLAST % Ident",
-              filterable = FALSE,
-              minWidth = 90,
-              align = "center"
-            ),
-            blast_qcovs = colDef(
-              show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
-              name = "BLAST % Cov",
-              filterable = FALSE,
-              minWidth = 90,
-              align = "center"
-            ),
-            time_stamp = colDef(
-              show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
-              name = "Last Updated",
-              filterable = FALSE,
-              html = T,
-              width = 150,
-              cell = rt_ts_date()
-            ),
-            assemble_notes = colDef(
-              show = TRUE, class = .grp("assemble_notes"), headerClass = .grp("assemble_notes"),
-              name = "Notes",
-              html = TRUE,
-              align = "left",
-              minWidth = 150,
-              cell = rt_longtext()
-            ),
-            view = colDef(
-              show = TRUE,
-              sticky = "right",
-              filterable = FALSE,
-              name = "",
-              html = TRUE,
-              width = 80,
-              align = "center",
-              cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
-            ),
-            output = colDef(
-              show = TRUE,
-              sticky = "right",
-              filterable = FALSE,
-              name = "",
-              html = TRUE,
-              width = 80,
-              align = "center",
-              cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
+          # Header wrapping, user-assembly table only.
+          theme = if (userAsmb) {
+            reactable::reactableTheme(
+              headerStyle = list(whiteSpace = "normal", lineHeight = "1.2", textAlign = "left")
             )
-          )
+          } else {
+            getOption("reactable.theme")
+          },
+          defaultColDef = colDef(align = "left", show = F),
+          columns = assemble_cols(ns, userAsmb, no_raw)
         )
     })
 
@@ -511,6 +621,17 @@ assemble_server <- function(id) {
     }, ignoreInit = TRUE)
 
     # Set State ----
+    # Same codes and order in both flavours; only the labels differ. The
+    # user-assembly step computes coverage, it does not assemble.
+    state_choices <- if (userAsmb) {
+      c("Pre-Coverage (wait)" = 0,
+        "Ready to Calculate Coverage" = 1,
+        "In Progress" = 4,
+        "Successful Coverage Calculation" = 2,
+        "Failed Coverage Calculation" = 3)
+    } else {
+      c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "In Progress" = 4, "Successful Assembly" = 2, "Failed / Problematic" = 3)
+    }
     init("state")
     on("state", {
       req(session$userData$mode == "Assemble")
@@ -529,7 +650,7 @@ assemble_server <- function(id) {
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
             label = NULL,
-            choices = c("Pre-Assembly (wait)" = 0, "Ready to Assemble" = 1, "In Progress" = 4, "Successful Assembly" = 2, "Failed / Problematic" = 3),
+            choices = state_choices,
             selected = current,
             shape = "square",
             status = "primary"
@@ -562,6 +683,9 @@ assemble_server <- function(id) {
     })
 
     # Toggle lock ----
+    # Two different policies. Standard drops samples whose published output is
+    # missing and locks the rest; user-assembly refuses the whole operation if
+    # any sample still has more than one non-ignored assembly.
     init("lock")
     on("lock", {
       req(session$userData$mode == "Assemble")
@@ -569,53 +693,71 @@ assemble_server <- function(id) {
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_lock) |>
         dplyr::slice(selected())
-      # Locking advances every non-ignored (path, scaffold) unit for the sample
-      # (multi-assembly). Each unit was seeded an annotate row at assemble time.
-      lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
-      upd <- rv$updating
-      # Locking hands the sample to WF2, which rebuilds the published output path
-      # from assemble_opts. Samples that never assembled are not affected.
-      if (lock_current == 0) {
-        stale <- tryCatch(
-          stale_assemble_dirs(
-            session$userData$con,
-            session$userData$dir_out,
-            ids = upd$ID,
-            pending_only = FALSE
-          ),
-          error = function(e) NULL
-        )
-        if (!is.null(stale) && nrow(stale) > 0L) {
-          upd <- upd |> dplyr::filter(!ID %in% stale$ID)
+      if (userAsmb) {
+        ## Ensure single assemble ---
+        # TODO - could relax this constraint
+        assemblies <- dplyr::tbl(session$userData$con, "assemblies") |>
+          dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
+          dplyr::pull(ID)
+        if (any(duplicated(assemblies))) {
           shinyWidgets::sendSweetAlert(
-            title = "Assembly output not found",
-            text = shiny::tags$div(
-              shiny::tags$p(
-                "These samples were NOT locked, because Annotation and Curation ",
-                "would look for assembly output that is not on disk:"
-              ),
-              shiny::tags$ul(stale_assemble_items(stale)),
-              shiny::tags$p("Either:"),
-              shiny::tags$ul(
-                shiny::tags$li("set the assembly parameter set back to the name that exists on disk, or"),
-                shiny::tags$li("re-run Assembly so the output is published under the assigned name.")
-              ),
-              shiny::tags$p(
-                if (nrow(upd) > 0L) {
-                  "The rest of the selected samples were locked."
-                } else {
-                  "No other samples remained, so nothing was locked."
-                }
-              )
-            ),
-            html = TRUE,
-            type = "error"
+            title = "Multiple assemblies detected.",
+            text = "Only one assembly 'path' for each sample can be locked for annotation. Please open the assembly details and 'ignore' all but one assembly or use the consensus trimming feature.",
+            type = "warning"
           )
-          req(nrow(upd) > 0L)
+          req(F)
         }
+        lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
+        rv$updating$assemble_lock <- as.numeric(!lock_current)
+      } else {
+        # Locking advances every non-ignored (path, scaffold) unit for the sample
+        # (multi-assembly). Each unit was seeded an annotate row at assemble time.
+        lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
+        upd <- rv$updating
+        # Locking hands the sample to WF2, which rebuilds the published output path
+        # from assemble_opts. Samples that never assembled are not affected.
+        if (lock_current == 0) {
+          stale <- tryCatch(
+            stale_assemble_dirs(
+              session$userData$con,
+              session$userData$dir_out,
+              ids = upd$ID,
+              pending_only = FALSE
+            ),
+            error = function(e) NULL
+          )
+          if (!is.null(stale) && nrow(stale) > 0L) {
+            upd <- upd |> dplyr::filter(!ID %in% stale$ID)
+            shinyWidgets::sendSweetAlert(
+              title = "Assembly output not found",
+              text = shiny::tags$div(
+                shiny::tags$p(
+                  "These samples were NOT locked, because Annotation and Curation ",
+                  "would look for assembly output that is not on disk:"
+                ),
+                shiny::tags$ul(stale_assemble_items(stale)),
+                shiny::tags$p("Either:"),
+                shiny::tags$ul(
+                  shiny::tags$li("set the assembly parameter set back to the name that exists on disk, or"),
+                  shiny::tags$li("re-run Assembly so the output is published under the assigned name.")
+                ),
+                shiny::tags$p(
+                  if (nrow(upd) > 0L) {
+                    "The rest of the selected samples were locked."
+                  } else {
+                    "No other samples remained, so nothing was locked."
+                  }
+                )
+              ),
+              html = TRUE,
+              type = "error"
+            )
+            req(nrow(upd) > 0L)
+          }
+        }
+        upd$assemble_lock <- as.numeric(!lock_current)
+        rv$updating <- upd
       }
-      upd$assemble_lock <- as.numeric(!lock_current)
-      rv$updating <- upd
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           rv$updating,
@@ -1054,9 +1196,12 @@ assemble_server <- function(id) {
     })
 
     # CSV Export ----
-    csv_download_outputs(
-      output, rv, selected, "assemble",
-      c("ignore_flags", "min_assembly_length", "output", "view", "blast_hits", "poor_blast_ref")
-    )
+    # Standard-only, matching the download buttons in assemble_ui().
+    if (!userAsmb) {
+      csv_download_outputs(
+        output, rv, selected, "assemble",
+        c("ignore_flags", "min_assembly_length", "output", "view", "blast_hits", "poor_blast_ref")
+      )
+    }
   })
 }

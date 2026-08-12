@@ -221,11 +221,7 @@ app_server <- function(input, output, session, userAsmb = FALSE) {
 
   # Sub-modules ----
   pipeline_server("run", userAsmb = userAsmb)
-  if (userAsmb) {
-    assemble_server_userAsmb("assemble")
-  } else {
-    assemble_server("assemble")
-  }
+  assemble_server("assemble", userAsmb = userAsmb)
   annotate_server("annotate")
   export_server("export")
   workdir_browser_server("workdir_browser")

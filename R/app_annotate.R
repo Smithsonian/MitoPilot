@@ -1181,7 +1181,7 @@ annotate_server <- function(id) {
     output$params <- listviewer::renderReactjson({
       listviewer::reactjson(
         req(rv$params),
-        "Validataion Parameters",
+        "Validation Parameters",
         theme = "monokai",
         iconStyle = "triangle",
         collapsed = 2,
@@ -1226,7 +1226,7 @@ annotate_server <- function(id) {
       output$params <- listviewer::renderReactjson({
         listviewer::reactjson(
           req(rv$params),
-          "Validataion Parameters",
+          "Validation Parameters",
           theme = "monokai",
           iconStyle = "triangle",
           collapsed = 2,
