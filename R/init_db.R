@@ -107,23 +107,244 @@ new_db <- function(
     orffinder_opts = "-s 1",
     orf_min_len = 300,
     orf_max_overlap = 0.1) {
+  new_db_core(
+    userAsmb = FALSE,
+    db_path = db_path,
+    mapping_fn = mapping_fn,
+    mapping_id = mapping_id,
+    mapping_taxon = mapping_taxon,
+    genetic_code = genetic_code,
+    assemble_cpus = assemble_cpus,
+    assemble_memory = assemble_memory,
+    assembler = assembler,
+    seeds_db = seeds_db,
+    labels_db = labels_db,
+    getOrganelle = getOrganelle,
+    mitofinder_db = mitofinder_db,
+    mitofinder = mitofinder,
+    max_paths = max_paths,
+    max_scaffolds = max_scaffolds,
+    min_assembly_length = min_assembly_length,
+    annotate_cpus = annotate_cpus,
+    annotate_memory = annotate_memory,
+    annotate_ref_db = annotate_ref_db,
+    annotate_ref_dir = annotate_ref_dir,
+    mitos_opts = mitos_opts,
+    trnaScan_opts = trnaScan_opts,
+    arwen_opts = arwen_opts,
+    aragorn_opts = aragorn_opts,
+    curate_cpus = curate_cpus,
+    curate_memory = curate_memory,
+    curate_target = curate_target,
+    curate_ref_db = curate_ref_db,
+    max_blast_hits = max_blast_hits,
+    linear_complete = linear_complete,
+    curate_params = curate_params,
+    orf_cpus = orf_cpus,
+    orf_memory = orf_memory,
+    orffinder_opts = orffinder_opts,
+    orf_min_len = orf_min_len,
+    orf_max_overlap = orf_max_overlap
+  )
+}
+
+#' Initialize a new project database
+#'
+#' @param db_path Path to the new database file
+#' @param mapping_fn Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", "R2", "Assembly", and "Topology"
+#' @param mapping_id Column name of the mapping file to use as the primary key
+#' @param mapping_taxon Column name of the mapping file containing a Taxonomic
+#'   identifier (eg, species name)
+#' @param genetic_code Optional NCBI translation table override. Default `NULL`
+#'   auto-selects from the curation ruleset; a number sets an override on the
+#'   default curate_opts set. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+#' @param annotate_cpus Default # cpus for annotation
+#' @param annotate_memory Default memory (GB) for annotation
+#' @param annotate_ref_db Default Mitos2 reference database
+#' @param annotate_ref_dir Default Mitos2 reference database directory
+#' @param mitos_opts Default MITOS2 command line options
+#' @param trnaScan_opts Default tRNAscan-SE command line options
+#' @param arwen_opts Default ARWEN command line options
+#' @param aragorn_opts Default ARAGORN command line options
+#' @param curate_cpus Default # cpus for curation
+#' @param curate_memory Default memory (GB) for curation
+#' @param curate_target Default target database for curation
+#' @param curate_ref_db Default curation reference database (default =
+#'   "Metazoa_RefSeq235", the only bundled DB with rRNA BLAST references)
+#' @param max_blast_hits Maximum number of top BLAST hits to retain (default = 10)
+#' @param linear_complete Treat linear assemblies as complete genomes for the
+#'   export "completeness" field? By default only circular assemblies are
+#'   labeled "complete genome" and linear assemblies "partial genome". Set TRUE
+#'   for taxa whose complete mitogenome is genuinely linear (default = FALSE).
+#'   Editable later in the curation-options modal.
+#' @param curate_params Default curation parameters
+#' @param orf_cpus CPUs for the optional ORF-finder step (default = 4)
+#' @param orf_memory Memory (GB) for the optional ORF-finder step (default = 8)
+#' @param orffinder_opts Default NCBI ORFfinder options (default = "-s 1")
+#' @param orf_min_len Minimal ORF length in nucleotides (default = 300)
+#' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
+#'   of the ORF length, before an ORF is discarded (default = 0.1)
+#' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
+#' @param no_raw_data (logical) Initialize a project with no raw reads (default =
+#'   FALSE). When TRUE, annotation coverage trimming (`coverage_trim`) is disabled
+#'   since no read-depth information is available.
+#' @export
+#'
+new_db_userAsmb <- function(
+    db_path = "./.sqlite",
+    mapping_fn = NULL,
+    mapping_id = "ID",
+    mapping_taxon = "Taxon",
+    genetic_code = NULL,
+    # Default annotation options
+    annotate_cpus = 6,
+    annotate_memory = 36,
+    annotate_ref_db = "Chordata",
+    annotate_ref_dir = "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/Mitos2",
+    mitos_opts = "--intron 0 --oril 0",
+    trnaScan_opts = "-M vert -X 20",
+    arwen_opts = "-mtx",
+    aragorn_opts = "-m -gcstd",
+    # Default curation options
+    curate_cpus = 4,
+    curate_memory = 8,
+    curate_target = "fish_mito",
+    curate_ref_db = "Metazoa_RefSeq235",
+    max_blast_hits = 10,
+    linear_complete = FALSE,
+    curate_params = NULL,
+    # Default ORF-finder options
+    orf_cpus = 4,
+    orf_memory = 8,
+    orffinder_opts = "-s 1",
+    orf_min_len = 300,
+    orf_max_overlap = 0.1,
+    # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
+    # set per-scaffold ignore flags; matches the regular pipeline default)
+    min_assembly_length = 500,
+    # Skip read-mapping coverage (no raw data). Disables annotate coverage trim.
+    no_raw_data = FALSE) {
+  new_db_core(
+    userAsmb = TRUE,
+    db_path = db_path,
+    mapping_fn = mapping_fn,
+    mapping_id = mapping_id,
+    mapping_taxon = mapping_taxon,
+    genetic_code = genetic_code,
+    annotate_cpus = annotate_cpus,
+    annotate_memory = annotate_memory,
+    annotate_ref_db = annotate_ref_db,
+    annotate_ref_dir = annotate_ref_dir,
+    mitos_opts = mitos_opts,
+    trnaScan_opts = trnaScan_opts,
+    arwen_opts = arwen_opts,
+    aragorn_opts = aragorn_opts,
+    curate_cpus = curate_cpus,
+    curate_memory = curate_memory,
+    curate_target = curate_target,
+    curate_ref_db = curate_ref_db,
+    max_blast_hits = max_blast_hits,
+    linear_complete = linear_complete,
+    curate_params = curate_params,
+    orf_cpus = orf_cpus,
+    orf_memory = orf_memory,
+    orffinder_opts = orffinder_opts,
+    orf_min_len = orf_min_len,
+    orf_max_overlap = orf_max_overlap,
+    min_assembly_length = min_assembly_length,
+    no_raw_data = no_raw_data
+  )
+}
+
+#' Shared database builder behind new_db() and new_db_userAsmb()
+#'
+#' The assembly-specific arguments have no defaults on purpose: they are only
+#' reachable from the `userAsmb = FALSE` branches, so a mis-branch fails loudly
+#' instead of silently seeding a read-based default into a userAsmb project.
+#'
+#' @noRd
+new_db_core <- function(
+    userAsmb = FALSE,
+    db_path,
+    mapping_fn,
+    mapping_id,
+    mapping_taxon,
+    genetic_code,
+    assemble_cpus,
+    assemble_memory,
+    assembler,
+    seeds_db,
+    labels_db,
+    getOrganelle,
+    mitofinder_db,
+    mitofinder,
+    max_paths,
+    max_scaffolds,
+    min_assembly_length,
+    annotate_cpus,
+    annotate_memory,
+    annotate_ref_db,
+    annotate_ref_dir,
+    mitos_opts,
+    trnaScan_opts,
+    arwen_opts,
+    aragorn_opts,
+    curate_cpus,
+    curate_memory,
+    curate_target,
+    curate_ref_db,
+    max_blast_hits,
+    linear_complete,
+    curate_params,
+    orf_cpus,
+    orf_memory,
+    orffinder_opts,
+    orf_min_len,
+    orf_max_overlap,
+    no_raw_data = FALSE) {
   mapping <- read_and_validate_mapping(mapping_fn, mapping_id)
 
   # Validate assembler choice
-  if (assembler %nin% c("GetOrganelle", "MitoFinder")) {
+  if (!userAsmb && assembler %nin% c("GetOrganelle", "MitoFinder")) {
     stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder]")
   }
 
   # convert ID column to characters
   mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
 
-  # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
-  # using default fish databases
-  if (is.null(seeds_db)) {
-    seeds_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
-  }
-  if (is.null(labels_db)) {
-    labels_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
+  if (userAsmb) {
+    # check for assembly and topology columns
+    if ("Assembly" %nin% colnames(mapping)) {
+      stop("Mapping file missing Assembly column")
+    }
+    if ("Topology" %nin% colnames(mapping)) {
+      stop("Mapping file missing Topology column")
+    }
+
+    # Confirm topology field contains only lowercase "linear" or "circular"
+    if (any(mapping$Topology %nin% c("circular", "linear"))) {
+      bad_IDs <- mapping[[mapping_id]][mapping$Topology %nin% c("circular", "linear")]
+      message("problematic samples:")
+      message(paste(bad_IDs, collapse = ", "))
+      stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
+    }
+
+    # No raw reads: R1/R2 are not needed, so tolerate their absence in the mapping.
+    # Added here (before samples/preprocess are built) so both tables carry the
+    # columns as NA, matching the read-based schema the app/export code expects.
+    if (no_raw_data) {
+      if (!"R1" %in% colnames(mapping)) mapping$R1 <- NA_character_
+      if (!"R2" %in% colnames(mapping)) mapping$R2 <- NA_character_
+    }
+  } else {
+    # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
+    # using default fish databases
+    if (is.null(seeds_db)) {
+      seeds_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta"
+    }
+    if (is.null(labels_db)) {
+      labels_db <- "https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/labels/fish_mito_labels.fasta"
+    }
   }
 
   # Load default curation parameters
@@ -142,12 +363,22 @@ new_db <- function(
   on.exit(DBI::dbDisconnect(con))
 
   # Metadata table ----
+  # The samples DDL is generated from colnames(mapping), so the userAsmb mutate
+  # below is what puts `topology`/`assembly` in the table at all.
   mapping <- mapping |>
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code
     )
+  if (userAsmb) {
+    mapping <- mapping |>
+      dplyr::mutate(
+        topology = .data[["Topology"]],
+        assembly = .data[["Assembly"]]
+      ) |>
+      dplyr::select(-Topology, -Assembly)
+  }
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},
@@ -260,7 +491,8 @@ new_db <- function(
           assemble_switch = 1,
           assemble_lock = 0,
           hide_switch = 0,
-          assemble_opts = "default",
+          # Also the on-disk directory segment out/<ID>/assemble/<assemble_opts>/
+          assemble_opts = if (userAsmb) "user" else "default",
           blast_opts = "default",
           poor_blast_ref = NA_character_,
           time_stamp = NA_integer_
@@ -271,9 +503,33 @@ new_db <- function(
     )
 
   ## Assemble options ----
-  DBI::dbExecute(
-    con,
-    "CREATE TABLE assemble_opts (
+  if (userAsmb) {
+    # Minimal table for userAsmb: only the columns the Nextflow workflows and the
+    # app actually query (assemble_opts FK + min_assembly_length). The regular
+    # pipeline schema carries assembler/getOrganelle/etc. fields that don't apply
+    # when assemblies are user-provided.
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE assemble_opts (
+      assemble_opts TEXT NOT NULL,
+      min_assembly_length INTEGER,
+      PRIMARY KEY (assemble_opts)
+    );"
+    )
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          assemble_opts = "user",
+          min_assembly_length = min_assembly_length
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  } else {
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE assemble_opts (
       assemble_opts TEXT NOT NULL,
       cpus INTEGER,
       memory INTEGER,
@@ -289,28 +545,29 @@ new_db <- function(
       join_scaffolds INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
-  )
-  dplyr::tbl(con, "assemble_opts") |>
-    dplyr::rows_upsert(
-      data.frame(
-        assemble_opts = "default",
-        cpus = assemble_cpus,
-        memory = assemble_memory,
-        seeds_db = seeds_db,
-        labels_db = labels_db,
-        assembler = assembler,
-        getOrganelle = getOrganelle,
-        mitofinder_db = mitofinder_db,
-        mitofinder = mitofinder,
-        max_paths = max_paths,
-        max_scaffolds = max_scaffolds,
-        min_assembly_length = min_assembly_length,
-        join_scaffolds = 0L
-      ),
-      in_place = TRUE,
-      copy = TRUE,
-      by = "assemble_opts"
     )
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        data.frame(
+          assemble_opts = "default",
+          cpus = assemble_cpus,
+          memory = assemble_memory,
+          seeds_db = seeds_db,
+          labels_db = labels_db,
+          assembler = assembler,
+          getOrganelle = getOrganelle,
+          mitofinder_db = mitofinder_db,
+          mitofinder = mitofinder,
+          max_paths = max_paths,
+          max_scaffolds = max_scaffolds,
+          min_assembly_length = min_assembly_length,
+          join_scaffolds = 0L
+        ),
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
 
   ## BLAST options ----
   DBI::dbExecute(
@@ -339,8 +596,33 @@ new_db <- function(
     )
 
   ## Add assemblies output ----
-  DBI::dbExecute(
-    con,
+  ## The two flavours ship different on-disk column orders (edit_positions sits
+  ## at a different position); both are preserved verbatim.
+  DBI::dbExecute(con, if (userAsmb) {
+    "CREATE TABLE assemblies (
+      ID TEXT NOT NULL,
+      path INTEGER NOT NULL,
+      scaffold INTEGER NOT NULL,
+      topology TEXT,
+      length INTEGER,
+      length_raw INTEGER,
+      sequence TEXT,
+      depth TEXT,
+      gc TEXT,
+      errors TEXT,
+      ignore INTEGER,
+      edited INTEGER,
+      edit_positions TEXT,
+      blast_accession TEXT,
+      blast_species TEXT,
+      blast_pident REAL,
+      blast_qcovs REAL,
+      blast_evalue REAL,
+      blast_lineage TEXT,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, path, scaffold)
+    );"
+  } else {
     "CREATE TABLE assemblies (
       ID TEXT NOT NULL,
       path INTEGER NOT NULL,
@@ -364,7 +646,7 @@ new_db <- function(
       time_stamp INTEGER,
       PRIMARY KEY (ID, path, scaffold)
     );"
-  )
+  })
 
   ## Per-path BLAST hits ----
   DBI::dbExecute(
@@ -512,7 +794,8 @@ new_db <- function(
         mitofinder_allow_introns = 0L,
         mitofinder_opts = "",
         start_gene = "trnF",
-        coverage_trim = 1L,
+        # No read depth to trim against when the project has no raw data
+        coverage_trim = if (userAsmb && no_raw_data) 0L else 1L,
         feature_trim = 1L,
         ref_based_rc = 0L,
         retain_low_conf_trna = 0L
