@@ -1,0 +1,150 @@
+---
+title: "Test Project: Export"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Test Project: Export}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+strong { font-weight: bold; }
+img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+</style>
+
+The Export module turns finished annotations into the files GenBank wants:
+a FASTA of the sequences and a five-column feature table of the annotations, plus
+GFF3 and alignment summaries for your own checking.
+
+Switch the module dropdown to **Export**.
+
+![Export module sample table](figures/get-started/export-table.png)
+
+## Make a group
+
+Export works on **groups**, which correspond to submission batches. Select the
+samples you want and click **ASSIGN GROUP**.
+
+![Submission group window](figures/get-started/export-group-modal.png)
+
+The window summarises what you selected: how many records, which topologies, and
+the gene order of each. Type a name (letters, numbers, dashes, and underscores
+only) and click **Create**.
+
+For the test project, select everything. MitoPilot then stops you:
+
+![Warning about mixing complete and partial mitogenomes in one group](figures/get-started/export-mixed-warning.png)
+
+A GenBank submission may contain complete genomes or partial genomes, but not
+both, and this selection has some of each. **Split into two groups** does the
+obvious thing, producing `fish_batch-complete` and `fish_batch-partial`.
+Completeness comes from each assembly's topology, circular meaning complete and
+linear meaning partial, unless you overrode it with the per-sample Partial flag
+or the `linear_complete` project setting.
+
+![Export table with samples assigned to groups](figures/get-started/export-table-grouped.png)
+
+A unit belongs to one group at a time. **CLEAR GROUP** removes the selected
+samples from their group, and re-assigning a grouped sample asks for confirmation
+first, because files already written for the old group are not cleaned up.
+
+## Export
+
+Click **EXPORT DATA**.
+
+![Export Data window with header template and output options](figures/get-started/export-modal.png)
+
+**Header Template** is the FASTA definition line, built from any column in your
+sample data with `{curly braces}`. Anything you put in the mapping file at
+project setup is available here, which is how voucher numbers and BioSample
+accessions reach the submission. `{completeness}` expands to "complete genome" or
+"partial genome" and belongs at the end of the header for GenBank to parse it
+correctly. Templates are validated as you type and can be saved by name for
+reuse.
+
+The options below it:
+
+- **Generate Group-level PCG alignment summary** aligns every protein-coding gene
+  across the group and writes an HTML report. Worth the wait as a final check.
+- **Export individual protein-coding and rRNA genes** writes per-gene FASTA files
+  and feature tables, with their own header template. Useful for phylogenetics or
+  single-gene submissions.
+- **Review PCG annotations for outliers** is the pre-flight check described
+  below.
+
+Then click **Export**.
+
+<div class="alert alert-note">
+<strong>Note.</strong> If any sample in the group contributes more than one
+record, for example a sample whose scaffolds were deliberately kept apart,
+MitoPilot asks you to confirm before exporting. Each scaffold becomes its own
+GenBank record with a <code>ID_p&lt;path&gt;_s&lt;scaffold&gt;</code> SeqID.
+That is right when the scaffolds really are different molecules and wrong when
+they are one fragmented genome, so it is worth a second look. Samples that still
+have more than one assembly path cannot be exported at all.
+</div>
+
+## The outlier review
+
+With the review enabled, MitoPilot aligns each protein-coding gene across the
+group and stops on any gene where a sample looks out of line, before writing
+anything.
+
+![PCG annotation outlier review with a flagged sample](figures/get-started/export-outlier-review.png)
+
+A sample is flagged when its start or stop sits more than a threshold number of
+amino acids away from the alignment's well-aligned core, or when its mean
+identity to the rest of the group falls below the identity threshold. Here
+SRR21844202's ATP6 is at 59.2% identity against the others.
+
+You can page through the flagged genes with **Prev** and **Next**, jump straight
+into the annotation editor for any sample with **edit**, mark a gene resolved
+once you have looked at it, or cancel the export entirely. Files are written only
+when you click **Done**, so edits made during review are in the exported files
+rather than one version behind.
+
+<div class="alert alert-tip">
+<strong>Tip.</strong> Low identity is not automatically an error. ATP8 and NAD6
+are genuinely fast-evolving and routinely flag in a diverse group. Read the
+alignment rather than the number.
+</div>
+
+## What you get
+
+Files land in `<project>/out/export/<group name>/`:
+
+| File | What it is |
+|---|---|
+| `<group>.fasta` | The mitogenome sequences with your header template applied |
+| `<group>.tbl` | The [five-column feature table](https://www.ncbi.nlm.nih.gov/genbank/feature_table/) of annotations |
+| `<group>_sample_info.csv` | The sample metadata behind the submission |
+| `AA_alignments_<group>.html` | The group-level protein alignment report |
+| `GFFs/` | One [GFF3](https://gmod.org/wiki/GFF3) per sample, for Geneious and friends |
+| `genes/` | Per-gene FASTA and feature tables, if you asked for them |
+
+The FASTA and the feature table are the two files you need for a
+[GenBank organelle submission](https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/).
+
+The HTML report is the one to read first.
+
+![Exported HTML report listing flagged outliers and gene alignments](figures/get-started/export-aa-report.png)
+
+It opens with every flagged outlier in one table, then shows the alignment for
+each protein-coding gene across the group. A sample whose annotation is wrong
+tends to be obvious here in a way it never is in a single-sample view, which is
+exactly the point of checking a whole batch at once.
+
+## That's the tour
+
+You have taken raw reads to GenBank-ready files. When you are ready to do it with
+your own data, see [your own project](Your-Own-Project.html).

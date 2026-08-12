@@ -14,6 +14,11 @@ on a HPC cluster. We have specific instructions for the [Smithsonian
 Hydra cluster](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
 and the [NOAA SEDNA cluster](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html).
 
+This page covers the cluster-specific parts only: getting an R session, writing a
+config, and submitting work. Everything about using MitoPilot itself is the same
+as in the [Get Started](MitoPilot.html) walkthrough, so run through that first if
+you have not already.
+
 ## Launch an R session on the cluster
 
 Everything that follows (creating a cluster config, initializing projects, launching

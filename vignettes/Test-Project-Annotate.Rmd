@@ -1,0 +1,168 @@
+---
+title: "Test Project: Annotate"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Test Project: Annotate}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+strong { font-weight: bold; }
+img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+</style>
+
+With the assemblies locked, switch the module dropdown to **Annotate**. This
+module finds the genes, curates the gene models against reference proteins, and
+validates the result against rules for your taxonomic group, flagging anything
+GenBank would reject.
+
+One row here is one **assembly unit**, not one sample. A sample that kept several
+scaffolds appears once per scaffold, and each is annotated and validated on its
+own.
+
+## Set the options
+
+**Annotate Opts.** controls the annotation tools.
+
+![Annotation options window](figures/get-started/annotate-opts.png)
+
+Genes come from [MITOS2](https://gitlab.com/Bernt/MITOS) (protein-coding genes
+and rRNAs) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE)
+(tRNAs), with MitoFinder, ARWEN, ARAGORN, and ORFfinder available as extras. The
+MITOS2 reference database defaults to Chordata; `Metazoa_RefSeq89` is the
+general-purpose choice for other groups.
+
+**Curate Opts.** controls what MitoPilot does with those raw annotations.
+
+![Curation options window showing the taxonomic ruleset](figures/get-started/curate-opts.png)
+
+The one that matters most is **Target**, the taxonomic ruleset. It sets the
+expected gene content, the allowed start and stop codons, the naming
+conventions, and the genetic code. It defaults to Actinopterygii, which is right
+for the test fishes. For your own data, pick the closest clade from the
+[ruleset browser](Ruleset-Browser.html). The validation parameters below are the
+ruleset itself, laid out so you can see exactly which rules a sample is being
+judged against; see [fish mitogenome curation](Fish-Mitogenome-Curation.html) for
+how to customise them.
+
+Then click **UPDATE** and run the workflow the same way you ran Assemble.
+
+![Progress window during a Nextflow run](figures/get-started/progress-window.png)
+
+This module is slower than Assemble. MITOS2 takes a couple of minutes per unit,
+and curation aligns every protein-coding gene against reference sequences.
+
+## Read the results
+
+![Annotate table showing missing genes, extra genes, and warning counts](figures/get-started/annotate-table-warnings.png)
+
+Scroll right in the table for the columns that matter:
+
+- **PCGCount, tRNACount, rRNACount**: how many of each gene type were annotated.
+  For a vertebrate mitogenome you expect 13, 22, and 2.
+- **Missing**: expected genes that were not found.
+- **Extra**: genes annotated more times than the ruleset expects.
+- **Warnings**: how many validation flags were raised. This is your work queue.
+
+Two units stand out in the test project. SRR21844202 has an extra `trnW` and two
+warnings. SCAFFJOIN is missing `atp8` and `trnK` and carries eight warnings,
+which is the honest consequence of joining scaffolds across coverage gaps: the
+sequence in those gaps is N, so the genes that lived there are gone.
+
+<div class="alert alert-note">
+<strong>Note.</strong> The <strong>Warnings column includes</strong> dropdown at
+the top filters which warning types are counted. Narrow it to one warning type to
+pull out every sample with that problem and work through them as a batch.
+</div>
+
+## Inspect a sample
+
+Click `details` on any row.
+
+![Annotation details window with the gene table](figures/get-started/annotate-details.png)
+
+The annotation table lists every gene with its position, strand, and the tool
+that called it. The **Notes** column records what automatic curation changed, for
+example a start position moved upstream or a stop codon trimmed, and
+**Warnings** shows what validation flagged. The `nt` and `aa` buttons copy the
+nucleotide or amino acid sequence to your clipboard.
+
+The badges along the top track the sample: topology, ID verified, reviewed,
+problematic, and partial. The buttons at the bottom toggle them, which is how you
+keep track of what you have already looked at across a large project.
+
+Below the table are three collapsible views.
+
+**Coverage Map** plots read depth along the assembly with the gene models drawn
+on top, zoomed to whichever gene you have selected. The gene bars are
+semi-transparent so overlapping models are easy to spot.
+
+![Coverage map with gene models drawn over read depth](figures/get-started/annotate-coverage-map.png)
+
+**BLAST Reference Synteny** lines your annotation up against the closest GenBank
+genome, with a percent-identity bar between them. Gene order that disagrees with
+the reference is usually either a real rearrangement or a curation mistake, and
+this is the fastest way to tell them apart. If the best reference is a poor match,
+flag it here or pick a different one from the dropdown, and the curation
+alignments will use your choice instead.
+
+![Gene order compared against the closest GenBank reference](figures/get-started/annotate-synteny.png)
+
+**Alignment** shows a selected protein-coding gene against its reference hits.
+
+![Protein alignment of a gene against its reference hits](figures/get-started/annotate-alignment.png)
+
+The nucleotide boundary box shows the exact sequence at each end of the gene with
+the codon frame marked, along with the start and stop codons that were called.
+Below it, the protein alignment puts your gene ("focal") against the reference
+proteins.
+
+## Fix what needs fixing
+
+Click **EDIT** in the alignment section to nudge the start or stop position by a
+codon at a time and watch the alignment respond. If your gene starts several
+residues short of every reference, that is visible immediately.
+
+Useful editing tools:
+
+- **Merge PCGs/rRNAs** joins gene models that were split into separate pieces,
+  which is how you handle spliced or fragmented genes.
+- **Auto-assign ORFs** attaches open reading frames found by ORFfinder to
+  unannotated regions.
+- **Delete** removes an annotation entirely. There is no undo short of
+  re-running the module; see the [FAQ](FAQ.html).
+- **Trim unannotated ends** cuts assembly overhang that carries no genes, and can
+  be undone.
+- **Linearize** converts a circular assembly to linear, useful when the control
+  region assembled badly.
+- **Align fewer refs** speeds up editing by restricting the alignment to the top
+  five hits, which matters because the alignment is recomputed on every nudge.
+
+Write down what you did in the **Notes** box; it saves automatically and travels
+with the sample.
+
+<div class="alert alert-warning">
+<strong>Warning.</strong> Validation warnings do not disappear when you fix the
+underlying problem. They record the state at the time the module ran. Use the
+<strong>Reviewed</strong> toggle to track what you have actually dealt with.
+</div>
+
+## Lock and move on
+
+When you are satisfied, select the samples and click **LOCK** to release them to
+the Export module.
+
+![Annotate table with samples locked](figures/get-started/annotate-locked.png)
+
+Then continue with [export](Test-Project-Export.html).

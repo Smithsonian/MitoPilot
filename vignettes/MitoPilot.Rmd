@@ -1,8 +1,8 @@
 ---
-title: "Tutorial Page"
+title: "Get Started"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Test Project Tutorial}
+  %\VignetteIndexEntry{Get Started}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -19,7 +19,147 @@ vignette: >
 .alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
 .alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
 strong { font-weight: bold; }
+img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 </style>
 
-Please see the [2025 workshop website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/) for a detailed walkthrough. While this material is written for the Smithsonian Hydra cluster, it can be easily adjusted for different computing environments.
+MitoPilot takes you from raw genome skimming reads to mitogenome records ready
+for submission to NCBI GenBank. The heavy lifting is a
+[Nextflow](https://www.nextflow.io/) pipeline; you drive it from an R Shiny app
+that shows you every sample, every assembly, and every annotation, and lets you
+fix the ones that need a human.
 
+This page gets MitoPilot installed and running on the built-in test project. The
+walkthrough articles that follow it cover each stage of the pipeline in detail.
+
+## What you need
+
+| Requirement | Notes |
+|---|---|
+| [R](https://www.r-project.org/) >= 4.4.0 | RStudio is recommended but not required |
+| [Nextflow](https://www.nextflow.io/docs/latest/install.html) 24.10.x - 25.10.x | Needs Java 17 or newer |
+| [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html) | Only if the pipeline runs where you are sitting. On a cluster, the container runs on the compute nodes |
+| Disk space | About 15 GB for the container image, plus room for your data |
+| Internet access | The pipeline BLASTs each assembly against GenBank |
+
+<div class="alert alert-note">
+<strong>Note.</strong> MitoPilot checks your Nextflow version when the package
+loads and when you create or open a project. Too old and it refuses to load; too
+new and it quietly pins <code>NXF_VER</code> to a version that works.
+</div>
+
+## Install
+
+```r
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+BiocManager::install("Smithsonian/MitoPilot", ask = FALSE)
+```
+
+The first install pulls a long list of dependencies and takes a while. Warnings
+about system library paths that are not writeable are harmless.
+
+To update later:
+
+```r
+remove.packages("MitoPilot")
+BiocManager::install("Smithsonian/MitoPilot")
+.rs.restartR()   # or restart R yourself
+```
+
+<div class="alert alert-tip">
+<strong>Tip.</strong> Each MitoPilot release pairs with a matching container
+image. After updating the R package, clear your container cache
+(<code>docker image prune</code>, or <code>singularity cache clean</code>) so the
+new image is pulled.
+</div>
+
+Load it:
+
+```r
+library(MitoPilot)
+```
+
+You should see a welcome message naming the Nextflow version MitoPilot will use.
+If Nextflow cannot be found, make sure it is on your `PATH` in the same R session
+(`Sys.which("nextflow")`), and see the
+[HPC cluster article](Custom-HPC.html) if you are working on a cluster.
+
+## Run the test project
+
+MitoPilot ships with a small test dataset: 15 samples of pre-filtered Illumina
+reads, mostly marine fishes. It is deliberately messy. Some samples assemble
+cleanly, one has far too little data, one produces two competing assemblies, and
+two produce fragmented assemblies, so you get to see the situations that need
+your judgement before you meet them in your own data.
+
+```r
+library(MitoPilot)
+
+# Anywhere you have space. MitoPilot creates the directory if needed.
+wd <- "~/MitoPilot_test/run_01"
+
+new_test_project(
+  path = wd,
+  executor = "local",
+  full_size = FALSE,
+  Rproj = FALSE
+)
+```
+
+`executor = "local"` runs everything on the machine you are sitting at, using
+Docker. To run on a cluster instead, see
+[HPC cluster support](Custom-HPC.html) and pass the matching executor name.
+`full_size = FALSE` uses the small pre-filtered reads that ship with the package;
+`TRUE` downloads about 10 GB of raw data from ENA.
+
+MitoPilot lists the samples as it sets them up, then writes a hidden `.config`
+file holding the Nextflow settings for the project. The defaults are fine for the
+test project.
+
+## Open the app
+
+```r
+setwd(wd)     # the app must be launched from the project directory
+MitoPilot()
+```
+
+![MitoPilot sample table in the Assemble module](figures/get-started/assemble-table.png)
+
+Each row is a sample. The dropdown at the top left switches between the three
+pipeline modules, **Assemble**, **Annotate**, and **Export**, which you work
+through in that order. The circular arrow refreshes the table.
+
+Two icons sit to the left of each sample ID:
+
+- **The lock.** Unlocked samples are the ones the next pipeline run will process.
+  Locking a sample freezes it in the current module and releases it to the next
+  one. Select samples and use the `LOCK` button to toggle.
+- **The state.** Where the sample stands in the current module. The pipeline sets
+  these automatically, but you can override them with the `STATE` button, which
+  is how you park samples you do not want to process yet.
+
+Clicking a column header sorts by it, the search box at the top right filters
+everything, and most columns have their own filter box.
+
+## Where to go next
+
+The walkthrough follows the test project all the way to GenBank-ready files:
+
+1. [Assemble](Test-Project-Assemble.html) - set assembly options, run the
+   workflow, read coverage and error plots, and resolve samples with multiple
+   assembly paths or scaffolds.
+2. [Annotate](Test-Project-Annotate.html) - annotate and curate, read validation
+   warnings, inspect gene alignments, and make manual corrections.
+3. [Export](Test-Project-Export.html) - group samples and write FASTA, feature
+   tables, and GFF3 for submission.
+4. [Your own project](Your-Own-Project.html) - mapping files, the arguments that
+   matter, and starting from assemblies you already have.
+
+Useful references along the way:
+
+- [Multiple paths and scaffolds](Multiple-Assemblies.html)
+- [Curation ruleset browser](Ruleset-Browser.html) and
+  [fish mitogenome curation](Fish-Mitogenome-Curation.html)
+- [Building custom databases](custom_dbs.html)
+- [FAQ](FAQ.html) and [troubleshooting](Troubleshooting.html)

@@ -59,8 +59,8 @@ new_test_project <- function(
     # TODO - make parallel
     message("Fetching test data. Go grab a coffee, this may take a while...")
     # Samples whose ID is not an SRA run accession have no ENA URL to fetch from
-    # (MULTISCAFF is built from two species' reads to exercise multi-scaffold
-    # assembly). Copy the packaged reads for those instead.
+    # (MULTISCAFF mixes two species' reads; SCAFFJOIN is one species with
+    # coverage gaps). Copy the packaged reads for those instead.
     is_sra <- grepl("^[SED]RR[0-9]+$", mapping$ID)
     purrr::pwalk(mapping[!is_sra, , drop = FALSE], function(...) {
       cur <- list(...)
