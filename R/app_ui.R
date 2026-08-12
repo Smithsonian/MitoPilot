@@ -2,9 +2,10 @@
 #'
 #' @param request Internal parameter for `{shiny}`.
 #'     DO NOT REMOVE.
+#' @param userAsmb logical. TRUE for a user-assembly project.
 #' @import shiny reactable
 #' @noRd
-app_ui <- function(request) {
+app_ui <- function(request, userAsmb = FALSE) {
   tagList(
     add_external_resources(),
     fluidPage(
@@ -99,12 +100,14 @@ app_ui <- function(request) {
               style = "material-flat",
               size = "sm"
             ),
-            shinyWidgets::actionBttn(
-              "clear_group",
-              label = "Clear Group",
-              style = "material-flat",
-              size = "sm"
-            ),
+            if (isFALSE(userAsmb)) {
+              shinyWidgets::actionBttn(
+                "clear_group",
+                label = "Clear Group",
+                style = "material-flat",
+                size = "sm"
+              )
+            },
             shinyWidgets::actionBttn(
               "export",
               label = "Export Data",
@@ -118,7 +121,7 @@ app_ui <- function(request) {
           style = "padding: 1em;",
           conditionalPanel(
             condition = "input.mode == 'Assemble'",
-            assemble_ui("assemble")
+            if (userAsmb) assemble_ui_userAsmb("assemble") else assemble_ui("assemble")
           ),
           conditionalPanel(
             condition = "input.mode == 'Annotate'",

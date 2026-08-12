@@ -84,8 +84,11 @@ run_app <- function(
   }, error = function(e) {
     stop("Errpr, .config file missing \"asmbDir\": ", e$message)
   })
-  ui <- if (asmbDir == "NA") app_ui else app_ui_userAsmb
-  server <- if (asmbDir == "NA") app_server else app_server_userAsmb
+  # asmbDir == "NA" means no user-supplied assembly directory, i.e. a standard project.
+  ui <- function(request) app_ui(request, userAsmb = (asmbDir != "NA"))
+  server <- function(input, output, session) {
+    app_server(input, output, session, userAsmb = (asmbDir != "NA"))
+  }
 
   with_golem_options(
     app = shinyApp(

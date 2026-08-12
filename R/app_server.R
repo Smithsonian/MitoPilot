@@ -2,9 +2,10 @@
 #'
 #' @param input,output,session Internal parameters for {shiny}.
 #'     DO NOT REMOVE.
+#' @param userAsmb logical. TRUE for a user-assembly project.
 #' @import shiny gargoyle dbplyr
 #' @noRd
-app_server <- function(input, output, session) {
+app_server <- function(input, output, session, userAsmb = FALSE) {
   # db connection ----
   db <- getOption("MitoPilot.db") %||% normalizePath(".sqlite")
   session$userData$dir <- dirname(db)
@@ -94,14 +95,30 @@ app_server <- function(input, output, session) {
 
   # The assembly output folder is named after assemble_opts, so a sample that was
   # reassigned after it assembled points at a folder that was never created.
-  # Warn, but keep the app open: fixing this requires the app.
+  # Warn, but keep the app open: fixing this requires the app. User-assembly
+  # projects pin assemble_opts to 'user' and offer no way to change it, so there
+  # the only possible cause is missing output.
   tryCatch({
     stale <- stale_assemble_dirs(session$userData$con, session$userData$dir_out)
     if (nrow(stale) > 0) {
-      shinyWidgets::sendSweetAlert(
-        session = session,
-        title = "Assembly output not found",
-        text = shiny::tags$div(
+      stale_text <- if (userAsmb) {
+        shiny::tags$div(
+          shiny::tags$p(
+            "The assembly output for these samples is not on disk, so the ",
+            "output folder was moved or deleted:"
+          ),
+          shiny::tags$ul(stale_assemble_items(stale)),
+          shiny::tags$p(
+            "Restore the output folder, or re-run Assembly to publish it again."
+          ),
+          shiny::tags$p(
+            "These samples are locked and awaiting annotation, so until then ",
+            "Annotation and Curation will fail or will silently run without any ",
+            "reference hits."
+          )
+        )
+      } else {
+        shiny::tags$div(
           shiny::tags$p(
             "The assembly output these samples are assigned to is not on disk. ",
             "Either the assembly parameter set was changed after they were ",
@@ -118,12 +135,24 @@ app_server <- function(input, output, session) {
             "Annotation and Curation will fail or will silently run without any ",
             "reference hits."
           )
-        ),
+        )
+      }
+      shinyWidgets::sendSweetAlert(
+        session = session,
+        title = "Assembly output not found",
+        text = stale_text,
         html = TRUE,
         type = "warning"
       )
     }
   }, error = function(e) NULL)
+
+  # No-raw-data mode ----
+  # rawDir = 'NA' in .config signals an assembly-only project (no reads/coverage).
+  # Used to hide read-derived columns in the Assemble table.
+  session$userData$no_raw_data <- readLines(file.path(dirname(db), ".config")) |>
+    stringr::str_detect("rawDir\\s*=\\s*['\"]NA['\"]") |>
+    any()
 
   # Genetic code ----
   # Per-sample genetic codes live in samples.genetic_code (auto-selected from
@@ -145,7 +174,11 @@ app_server <- function(input, output, session) {
     session$userData$mode <- input$mode
     # Reload the destination tab's data so changes made in another tab (e.g. a
     # newly locked consensus in Assemble) appear without a manual refresh.
-    trigger(paste0("refresh_", tolower(input$mode)))
+    # Not done for user-assembly projects, which have never refreshed on tab
+    # switch.
+    if (isFALSE(userAsmb)) {
+      trigger(paste0("refresh_", tolower(input$mode)))
+    }
     if(input$mode == "Export"){
       shinyjs::toggle("export_ctrls", condition = TRUE)
       shinyjs::toggle("asmb_ctrls", condition = FALSE)
@@ -187,8 +220,13 @@ app_server <- function(input, output, session) {
   })
 
   # Sub-modules ----
-  pipeline_server("run")
-  assemble_server("assemble")
+  if (userAsmb) {
+    pipeline_server_userAsmb("run")
+    assemble_server_userAsmb("assemble")
+  } else {
+    pipeline_server("run")
+    assemble_server("assemble")
+  }
   annotate_server("annotate")
   export_server("export")
   workdir_browser_server("workdir_browser")
