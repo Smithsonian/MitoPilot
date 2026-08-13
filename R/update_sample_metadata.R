@@ -30,17 +30,7 @@ update_sample_metadata <- function(
   }else if(!file.exists(update_mapping_fn)){
     stop("Update mapping file does not exist")
   }
-  mapping <- utils::read.csv(update_mapping_fn)
-
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    stop("Duplicate IDs found in mapping file")
-  }
-
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    stop("IDs must be no more than 18 characters")
-  }
+  mapping <- read_and_validate_mapping(update_mapping_fn, mapping_id)
 
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))

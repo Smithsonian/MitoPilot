@@ -31,14 +31,6 @@ navbar:
     - github
 
 articles:
-- title: "Tutorial"
-  navbar: ~
-  contents:
-  - 'Test-Project-Assemble'
-  - 'Test-Project-Annotate'
-  - 'Test-Project-Export'
-  - 'Your-Own-Project'
-
 - title: "Help"
   navbar: ~
   contents:

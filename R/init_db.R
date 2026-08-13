@@ -1045,7 +1045,35 @@ read_and_validate_mapping <- function(mapping_fn = NULL, mapping_id = "ID") {
       stop("Mapping file not found")
     }
   }
-  mapping <- utils::read.csv(mapping_fn)
+  utf8_msg <- paste0(
+    "Mapping file contains non-UTF-8 characters. Re-save it as UTF-8 ",
+    "(common cause: text pasted from Word or Excel)."
+  )
+
+  # A bad byte in the header aborts read.csv itself
+  mapping <- tryCatch(
+    utils::read.csv(mapping_fn),
+    error = function(e) {
+      if (grepl("invalid multibyte string", conditionMessage(e))) {
+        stop(utf8_msg, call. = FALSE)
+      }
+      stop(e)
+    }
+  )
+
+  # Validate encoding. Invalid bytes are stored verbatim and later kill the
+  # Shiny session when the samples table is serialized to the client.
+  bad_cols <- names(mapping)[vapply(
+    mapping,
+    function(x) is.character(x) && any(!validUTF8(x)),
+    logical(1)
+  )]
+  if (length(bad_cols) > 0) {
+    message("columns with invalid characters:")
+    message(paste(bad_cols, collapse = ", "))
+    stop(utf8_msg, call. = FALSE)
+  }
+
   ids <- mapping[[mapping_id]]
 
   # Validate ID col

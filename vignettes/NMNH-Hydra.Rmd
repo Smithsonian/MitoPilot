@@ -74,18 +74,22 @@ source ~/.bashrc
 You must load the Java module (`module load tools/java/21.0.2`) whenever you use
 Nextflow from a shell or a job script.
 
-## Make Nextflow visible to RStudio
+## Set up the R session
 
-An RStudio Server session does not inherit your shell `PATH`, so tell it where
-`nextflow` and Java live before loading MitoPilot:
+An RStudio Server session on Hydra starts with a stripped `PATH` that leaves out
+the Univa Grid Engine, Java, and your `~/bin`, so Nextflow cannot find `qsub` and
+job submission fails. `hydra_setup()` fixes that. Call it once per session, right
+after loading the package and before creating a project or opening the app:
 
 ```r
-default_path <- Sys.getenv("PATH")
-new_path <- paste0(Sys.getenv("HOME"), "/bin:/share/apps/tools/java/21.0.2/bin")
-Sys.setenv(PATH = paste(new_path, default_path, sep = ":"))
-
 library(MitoPilot)
+hydra_setup()
 ```
+
+It puts the Hydra Java and grid-engine directories at the front of your `PATH`,
+checks your Nextflow version, and pins a compatible one for the session. It warns
+and changes nothing if you are not on Hydra, so it is safe to leave in a script
+you also run elsewhere.
 
 ## Create projects with the Hydra executor
 
@@ -97,8 +101,11 @@ new_test_project(
 ```
 
 Use the same `executor = "NMNH_Hydra"` with `new_project()` for your own data.
-Work under `/pool`, `/scratch`, or `/store`, not in your home directory, which is
-too small for pipeline work directories.
+Work under `/pool` or `/scratch`. Home directories are too small for pipeline
+work directories, and projects cannot be run from `/store`.
+
+The full walkthrough, with Hydra-specific notes at each step, is on the
+[Get Started](MitoPilot.html) page.
 
 ## Running jobs
 
