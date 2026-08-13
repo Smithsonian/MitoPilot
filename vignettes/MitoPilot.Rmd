@@ -54,17 +54,20 @@ img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 MitoPilot takes you from raw genome skimming reads to mitogenome records ready
 for submission to NCBI GenBank. The heavy lifting is a
 [Nextflow](https://www.nextflow.io/) pipeline; you drive it from an R Shiny app
-that shows you every sample, every assembly, and every annotation, and lets you
-fix the ones that need a human.
+that shows you every sample, assembly, and annotation. MitoPilot automatically
+curates annotations based on clade-specific rulesets and also allows you
+to manually adjust annotations by eye.
 
 This page walks the whole pipeline on the built-in test project, then shows you
 how to start a project with your own data.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
-<strong>Smithsonian NMNH Hydra users.</strong> Boxes like this one flag the
-places where Hydra differs from a generic setup. First time on Hydra? Work
-through <a href="NMNH-Hydra.html">NMNH Hydra setup</a> before starting here.
+Boxes like this one flag the
+places where Smithsonian Hydra computing cluster differs from a generic setup. 
+First time on Hydra? Work
+through the "Get an R session" and "Install Nextflow" sections 
+before starting this tutorial.
 </div>
 
 # What you need
@@ -73,17 +76,20 @@ through <a href="NMNH-Hydra.html">NMNH Hydra setup</a> before starting here.
 |---|---|
 | [R](https://www.r-project.org/) >= 4.4.0 | RStudio is recommended but not required |
 | [Nextflow](https://www.nextflow.io/docs/latest/install.html) 24.10.x - 25.10.x | Needs Java 17 or newer |
-| [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html) | Only if the pipeline runs where you are sitting. On a cluster, the container runs on the compute nodes |
+| [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html) | Containerized execution is handled by Nextflow |
 | Disk space | About 15 GB for the container image, plus room for your data |
 | Internet access | The pipeline BLASTs each assembly against GenBank |
 
 <div class="alert alert-note">
 <strong>Note.</strong> MitoPilot checks your Nextflow version when the package
-loads and when you create or open a project. Too old and it refuses to load; too
+loads and when you create or open a project. If the Nextflow version is too old 
+and it refuses to load; too
 new and it quietly pins <code>NXF_VER</code> to a version that works.
 </div>
 
 # Install
+
+Open R (perferably using R Studio) and run the following.
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -93,7 +99,7 @@ BiocManager::install("Smithsonian/MitoPilot", ask = FALSE)
 ```
 
 The first install pulls a long list of dependencies and takes a while. Warnings
-about system library paths that are not writeable are harmless.
+about system library paths that are not writeable are usually harmless.
 
 To update later:
 
@@ -104,13 +110,13 @@ BiocManager::install("Smithsonian/MitoPilot")
 ```
 
 <div class="alert alert-tip">
-<strong>Tip.</strong> Each MitoPilot release pairs with a matching container
-image. After updating the R package, clear your container cache
-(<code>docker image prune</code>, or <code>singularity cache clean</code>) so the
-new image is pulled.
+<strong>Tip.</strong> Each MitoPilot version pairs with a matching container
+image. If needed, you can clear your container cache
+(<code>docker image prune</code>, or <code>singularity cache clean</code>) to ensure a
+new image is pulled. Careful, this will clear other cached images aside from MitoPilot.
 </div>
 
-Load it:
+Load the package:
 
 ```r
 library(MitoPilot)
@@ -118,22 +124,22 @@ library(MitoPilot)
 
 You should see a welcome message naming the Nextflow version MitoPilot will use.
 If Nextflow cannot be found, make sure it is on your `PATH` in the same R session
-(`Sys.which("nextflow")`), and see [HPC cluster support](Custom-HPC.html) if you
+(`Sys.which("nextflow")`). See [HPC cluster support](Custom-HPC.html) if you
 are working on a cluster.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
 <strong>Run <code>hydra_setup()</code> once per session.</strong> RStudio Server
 sessions on Hydra start with a stripped <code>PATH</code> that leaves out the
-grid engine, Java, and your <code>~/bin</code>, so Nextflow cannot find
-<code>qsub</code> and job submission fails. Call it right after loading the
-package, before creating a project or opening the app:
+job scheduler engine, Java, and your <code>~/bin</code>, so Nextflow cannot find
+<code>qsub</code> and job submission fails. So before creating a project or opening the app,
+call the following function:
 
 <pre><code class="r">library(MitoPilot)
 hydra_setup()
 </code></pre>
 
-It puts the Hydra Java and grid-engine directories at the front of your
+It puts the Hydra Java and job scheduler directories at the front of your
 <code>PATH</code> and pins a compatible Nextflow version for the session. It has
 no effect anywhere else, and warns if you are not on Hydra.
 </div>
@@ -143,8 +149,8 @@ no effect anywhere else, and warns if you are not on Hydra.
 MitoPilot ships with a small test dataset: 15 samples of pre-filtered Illumina
 reads, mostly marine fishes. It is deliberately messy. Some samples assemble
 cleanly, one has far too little data, one produces two competing assemblies, and
-two produce fragmented assemblies, so you get to see the situations that need
-your judgement before you meet them in your own data.
+two produce fragmented assemblies. This allows you to see more complex situations that need
+user judgement.
 
 ```r
 library(MitoPilot)
@@ -160,14 +166,14 @@ new_test_project(
 )
 ```
 
-`executor = "local"` runs everything on the machine you are sitting at, using
+`executor = "local"` runs everything on the machine you are sitting at and uses
 Docker. To run on a cluster instead, see
 [HPC cluster support](Custom-HPC.html) and pass the matching executor name.
 `full_size = FALSE` uses the small pre-filtered reads that ship with the package;
-`TRUE` downloads about 10 GB of raw data from ENA.
+`TRUE` downloads about 10 GB of raw data from ENA, takes much longer to process.
 
 MitoPilot lists the samples as it sets them up, then writes a hidden `.config`
-file holding the Nextflow settings for the project. The defaults are fine for the
+file holding the Nextflow settings for the project directory. The defaults are fine for the
 test project.
 
 <div class="alert alert-hydra">
@@ -178,12 +184,6 @@ instead of running on the login or RStudio node. Put projects under
 <code>/pool</code> or <code>/scratch</code>. Home directories are far too small
 for Nextflow work directories, and projects cannot be run from
 <code>/store</code>.
-
-<pre><code class="r">new_test_project(
-  path = "/pool/public/genomics/&lt;&lt;USER&gt;&gt;/MitoPilot/test_project",
-  executor = "NMNH_Hydra"
-)
-</code></pre>
 </div>
 
 # Open the app
@@ -201,29 +201,21 @@ through in that order. The circular arrow refreshes the table.
 
 Two icons sit to the left of each sample ID:
 
-- **The lock.** Unlocked samples are the ones the next pipeline run will process.
-  Locking a sample freezes it in the current module and releases it to the next
-  one. Select samples and use the `LOCK` button to toggle.
-- **The state.** Where the sample stands in the current module. The pipeline sets
-  these automatically, but you can override them with the `STATE` button, which
-  is how you park samples you do not want to process yet.
+- **The lock.** Unlocked samples are available for the next pipeline run to process.
+  Locking a sample freezes it in the current module and makes it available for the next
+  module. Select samples and use the `LOCK` button to toggle.
+- **The state.** Status of the sample in the current module. The pipeline sets
+  these automatically, but you can override them with the `STATE` button. This
+  is how you can park samples you do not want to process yet or reset samples that 
+  have already completed the pipeline.
 
-Clicking a column header sorts by it, the search box at the top right filters
+Clicking a column header sorts alphanumerically. The search box at the top right filters
 everything, and most columns have their own filter box.
-
-<div class="alert alert-hydra">
-<span class="hydra-tag">HYDRA</span>
-<strong>Reaching the app.</strong> On the dedicated RStudio Server
-(<a href="https://galaxy.si.edu/R4">galaxy.si.edu/R4</a>) the app opens in a
-browser tab like any other Shiny app. If instead you tunnelled to your own
-RStudio Server session, the app is served through that same tunnel. Use Chrome or
-Firefox; there are known problems with Safari.
-</div>
 
 # Assemble
 
 The Assemble module cleans the reads, builds mitogenome assemblies, maps the
-reads back to measure coverage, and BLASTs each assembly against GenBank to find
+reads to the assembly to calculate coverage, and BLASTs each assembly against GenBank to find
 its closest published relative.
 
 ## Set the options
@@ -240,15 +232,15 @@ Nothing is editable until you tick **Edit**. The important controls:
   errors.
 - **Assembler.** [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) by
   default, or [MitoFinder](https://github.com/RemiAllio/MitoFinder). GetOrganelle
-  only assembles reads it recognises as mitochondrial, which makes it fast but
+  only assembles reads it recognizes as mitochondrial, which makes it fast but
   dependent on good reference databases. MitoFinder assembles everything, which
   is much slower but can work better for groups with few reference mitogenomes.
 - **Seeds and Labels databases.** The reference sequences GetOrganelle uses to
   recruit and extend mitochondrial reads. The defaults are fish; for other
   groups, build your own with `custom_assembly_db()` (see
   [custom databases](custom_dbs.html)).
-- **Max assembly paths / Max scaffolds.** Samples that come apart into more
-  pieces than this are marked failed instead of continuing.
+- **Max assembly paths / Max scaffolds.** Samples are marked failed instead 
+  of continuing in the pipeline if they exceed these thresholds.
 - **Automatically join multi-scaffold assemblies.** Off by default, and worth
   leaving off until you understand your data. See
   [multiple paths and scaffolds](Multiple-Assemblies.html).
@@ -256,18 +248,18 @@ Nothing is editable until you tick **Edit**. The important controls:
 Options are saved as named, reusable sets. To make one, tick **Edit**, change
 what you want, type a new name in the **Parameter set name** box, and click
 **Update**. That name then appears in the dropdown for any sample. Different
-samples can use different sets, which is how you give the difficult ones more
-memory without paying for it everywhere.
+samples can use different sets, which can allow you to selectively increase 
+memory usage for difficult samples.
 
 For the test project the defaults are fine.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
 <strong>CPUs and memory are per-job requests.</strong> On Hydra these values
-become the grid engine's resource request, so asking for more memory than a
+become the job scheduler's resource request, so asking for more memory than a
 queue allows will leave jobs pending rather than make them faster. The Hydra
 config also flags high-memory steps automatically when a request crosses the
-per-CPU threshold, so raise CPUs and memory together rather than memory alone.
+per-CPU threshold.
 </div>
 
 ## Run the workflow
@@ -284,22 +276,11 @@ a project this size.
 
 <div class="alert alert-warning">
 <strong>Watch out.</strong> Running from the app ties the pipeline to the app
-session. For large projects, or anything on a cluster, save or submit a job
+session. Closing the MitoPilot app will kill the pipeline.
+For large projects, or anything on a cluster, save or submit a job
 script instead so the run survives a dropped connection. See
 <a href="Custom-HPC.html">HPC cluster support</a>.
 </div>
-
-Assemble runs three steps per sample: read pre-processing with
-[fastp](https://github.com/OpenGene/fastp), assembly with GetOrganelle, and
-read mapping with [bowtie2](https://github.com/BenLangmead/bowtie2) to compute
-depth and error rates. It then BLASTs each assembly against GenBank and fetches
-the best-matching reference, which is the slowest part because it waits on NCBI.
-Nextflow runs samples in parallel, so the whole test project takes a while but
-not fifteen times one sample.
-
-Failures are normal and mostly mean a sample ran out of memory; MitoPilot retries
-those with more. Common errors are covered in the
-[FAQ](FAQ.html) and [troubleshooting](Troubleshooting.html) articles.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
@@ -312,9 +293,21 @@ it finishes. For anything beyond a few dozen samples, use this rather than
 running from the app.
 </div>
 
+Assemble runs three steps per sample: read pre-processing with
+[fastp](https://github.com/OpenGene/fastp), assembly with GetOrganelle or MitoFinder, and
+read mapping with [bowtie2](https://github.com/BenLangmead/bowtie2) to compute
+depth and error rates. It then BLASTs each assembly against GenBank and fetches
+the best-matching reference. BLAST  is the slowest part of the pipeline because it waits on NCBI's severs.
+Nextflow runs all samples in parallel through these steps.
+
+Failures are normal and often mean a sample ran out of memory.
+Common error messages are covered in the
+[FAQ](FAQ.html) and [troubleshooting](Troubleshooting.html) articles.
+
 ## Read the results
 
-When the run finishes, the table fills in.
+When the run finishes, the sample table should automatically fill in. If not
+try clicking the circular arrow refresh button.
 
 ![MitoPilot sample table in the Assemble module](figures/get-started/assemble-table.png)
 
@@ -385,15 +378,14 @@ From here you can:
 ![Assembly details with the second path marked ignored](figures/get-started/multipath-ignored.png)
 
 <div class="alert alert-note">
-<strong>Note.</strong> Recording both alleles with IUPAC ambiguity codes is
-available, but MITOS2 handles ambiguous bases poorly at the annotation step, so
-prefer picking an allele unless the heteroplasmy is the point of your study.
+<strong>Note.</strong> Resolving discrepancies with IUPAC ambiguity codes is
+a provided option. But be aware that annotation may handle ambiguous bases poorly if 
+they occur in a protein-coding region.
 </div>
 
 ### Fragmented assemblies
 
-Two samples come back in pieces, and they need opposite treatment. This is the
-distinction that matters most, so it is worth doing both.
+Two samples come back in pieces, but they need different treatment.
 
 **SCAFFJOIN** (*Conger oceanicus*) is one mitogenome broken into three
 scaffolds. Open its details and MitoPilot shows the scaffold join editor.
@@ -401,8 +393,8 @@ scaffolds. Open its details and MitoPilot shows the scaffold join editor.
 ![Scaffold join editor showing three scaffolds mapped to one reference](figures/get-started/scaffjoin-join-editor.png)
 
 All three scaffolds map to the same reference (NC_083079.1) at 100% coverage,
-and the plot lays them out along it: scaffold 1 reversed, then scaffolds 2 and 3,
-with gaps between them. That is exactly the signature of one genome that the
+and the plot lays them out along the ref: scaffold 1 reversed, then scaffolds 2 and 3,
+with gaps between them. That is the signature of a single mitogenome that the
 assembler could not connect. You can override the order or orientation, tick
 **Circular** if appropriate, and then click **Build joined assembly (Path 0)**.
 
