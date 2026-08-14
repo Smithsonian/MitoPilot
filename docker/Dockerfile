@@ -37,13 +37,24 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
 #    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
 #    mamba install r-remotes
 
-# blastn/blastdbcmd arrive transitively today (the bioconda getorganelle/mitos/
-# trnascan installs pull them in). The WF1 reference search depends on blastn and
-# on BLAST DB v5 read support, so pin it rather than rely on a transitive solve.
-# Kept with the other base-env conda installs and BEFORE renv::restore: a solve
-# here can move libcurl/openssl/zlib, and doing that under R packages already
-# compiled against them is how the libidn breakage below happened.
-RUN mamba install -y -c bioconda blast=2.16.0
+# blastn/blastdbcmd/makeblastdb arrive transitively (the bioconda getorganelle/
+# mitos/trnascan installs above pull them in), already at 2.16.0+ in
+# /opt/conda/bin. The WF1 reference search hard-depends on blastn and on BLAST
+# DB v5 read support, so assert rather than reinstall: an explicit
+# `mamba install blast=2.16.0` here cost a 1.08 GB layer for binaries the image
+# already had. This check is free and still fails the build loudly if a future
+# dependency solve drops or downgrades BLAST, which is exactly when to find out.
+# Accepts any version >= 2.16, including a future 3.x.
+RUN for t in blastn blastdbcmd makeblastdb; do \
+        command -v "$t" >/dev/null || \
+            { echo "BLAST+ tool '$t' is missing: a dependency bump dropped it"; exit 1; }; \
+    done && \
+    set -- $(blastn -version | head -1 | sed -E 's/^blastn: ([0-9]+)\.([0-9]+)\..*/\1 \2/') && \
+    { case "$1$2" in ''|*[!0-9]*) \
+        echo "could not parse blastn version: $(blastn -version | head -1)"; exit 1;; esac; } && \
+    { [ "$1" -gt 2 ] || { [ "$1" -eq 2 ] && [ "$2" -ge 16 ]; } || \
+        { echo "BLAST+ $1.$2 is older than the required 2.16"; exit 1; }; } && \
+    echo "BLAST+ $1.$2 present"
 
 # Local metazoan mitogenome BLAST database for the WF1 reference search.
 # 134,560 sequences / 2,201,289,510 bases; 289 MB tarball, 835 MiB unpacked.
