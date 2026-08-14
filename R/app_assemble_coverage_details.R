@@ -303,7 +303,12 @@ assembly_coverage_details_server <- function(id, rv) {
             "SELECT asm.ID, asm.path, asm.scaffold, asm.topology, ",
             "CASE WHEN asm.topology = 'circular' OR co.linear_complete = 1 ",
             "THEN 'no' ELSE 'yes' END, ",
-            "an.annotate_opts, an.curate_opts, an.orf_opts, 1, 0, 'no' ",
+            # COALESCE to 'default': ignoring a scaffold deletes its annotate row,
+            # so ignoring every scaffold leaves nothing to inherit from and the
+            # LEFT JOIN yields NULL opts, which crashes the opts modals.
+            "COALESCE(an.annotate_opts, 'default'), ",
+            "COALESCE(an.curate_opts, 'default'), ",
+            "COALESCE(an.orf_opts, 'default'), 1, 0, 'no' ",
             "FROM assemblies asm ",
             "LEFT JOIN (SELECT ID, annotate_opts, curate_opts, orf_opts, MIN(path) ",
             "FROM annotate GROUP BY ID) an ON an.ID = asm.ID ",

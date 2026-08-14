@@ -229,9 +229,16 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
   ns <- session$ns
 
   current <- list()
-  if (length(unique(rv$updating$annotate_opts)) == 1) {
-    current <- rv$annotate_opts[rv$annotate_opts$annotate_opts == rv$updating$annotate_opts[1], ]
-    cur_params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]] |>
+  # An annotate row can carry NA option sets (a unit rebuilt with nothing to
+  # inherit from). Comparing against NA subsets to a row of NAs, and fromJSON()
+  # then errors and takes the whole app down, so treat NA as the default set.
+  sel_annotate <- rv$updating$annotate_opts
+  sel_annotate[is.na(sel_annotate)] <- "default"
+  sel_curate <- rv$updating$curate_opts
+  sel_curate[is.na(sel_curate)] <- "default"
+  if (length(unique(sel_annotate)) == 1) {
+    current <- rv$annotate_opts[rv$annotate_opts$annotate_opts == sel_annotate[1], ]
+    cur_params <- rv$curate_opts$params[rv$curate_opts$curate_opts == sel_curate[1]] |>
       jsonlite::fromJSON()
 
     showModal(
@@ -549,11 +556,14 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   ns <- session$ns
   req(rv$updating)
   current <- list()
-  rv$params <- rv$curate_opts$params[rv$curate_opts$curate_opts == rv$updating$curate_opts[1]] |>
+  # NA option sets subset to a row of NAs and crash fromJSON(); see annotate_opts_modal
+  sel_curate <- rv$updating$curate_opts
+  sel_curate[is.na(sel_curate)] <- "default"
+  rv$params <- rv$curate_opts$params[rv$curate_opts$curate_opts == sel_curate[1]] |>
     jsonlite::fromJSON()
 
-  if (length(unique(rv$updating$curate_opts)) == 1) {
-    current <- rv$curate_opts[rv$curate_opts$curate_opts == rv$updating$curate_opts[1], ]
+  if (length(unique(sel_curate)) == 1) {
+    current <- rv$curate_opts[rv$curate_opts$curate_opts == sel_curate[1], ]
 
     showModal(
       modalDialog(
@@ -745,8 +755,12 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   req(rv$updating)
   current <- list()
 
-  if (length(unique(rv$updating$orf_opts)) == 1) {
-    current <- rv$orf_opts[rv$orf_opts$orf_opts == rv$updating$orf_opts[1], ]
+  # NA option sets subset to a row of NAs, not zero rows, so the nrow() fallback
+  # below never fires for them; see annotate_opts_modal
+  sel_orf <- rv$updating$orf_opts
+  sel_orf[is.na(sel_orf)] <- "default"
+  if (length(unique(sel_orf)) == 1) {
+    current <- rv$orf_opts[rv$orf_opts$orf_opts == sel_orf[1], ]
     # Fall back to the default parameter set if the sample's orf_opts is unset
     # or doesn't match a saved set, so the fields are never blank.
     if (nrow(current) == 0) {
