@@ -105,6 +105,10 @@ params {
         // The reference fetch/stamp steps share this params block but run at 1 CPU
         // (HTTP and file copying), so they take a much smaller reservation instead
         // of the search's.
+        // The fetch/stamp steps are one single-threaded Rscript doing HTTP; peak
+        // RSS is ~70 MB. 2G is ample now that the module sets OMP_NUM_THREADS=1
+        // (without it R reserved GBs of address space and h_vmem killed the task
+        // regardless of the cap).
         ref_fetch_clusterOptions = "-l mres=2G,h_data=2G,h_vmem=2G -S /bin/bash"
         db_dir = '/ref_dbs/mito_metazoa'    // local BLAST database, baked into the container
         db_name = 'mito_metazoa'

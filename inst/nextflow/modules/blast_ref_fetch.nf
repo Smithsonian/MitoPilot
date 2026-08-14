@@ -42,7 +42,11 @@ process blast_ref_fetch {
     // simply omits the rest, so a dropped accession produces no fan-out and every
     // sample whose top hit was that accession is flagged as a fetch failure downstream
     // (see the all_top_ids join in the workflow).
-    errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
+    // Exit 140 (128+12, SIGUSR2) is an SGE resource kill, and 137 (128+9) an OOM
+    // kill. Both are deterministic: the same task on the same node fails the same
+    // way, so retrying only burns queue time (0+30+60+90 s of backoff here).
+    errorStrategy { (task.exitStatus in [137, 140]) ? 'ignore'
+                    : (task.attempt <= 3 ? 'retry' : 'ignore') }
     maxRetries 3
 
     // No task tag: with a tag, Nextflow's ANSI progress truncates this process's
@@ -64,6 +68,13 @@ process blast_ref_fetch {
     // falls back to a per-accession request inside fetch_blast_refs.
     acc_csv = accessions.join(',')
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
+    # Not just the blas_thread_init error: the pthread OpenBLAS in the image sizes
+    # its per-thread buffers by core count, so R reserves GBs of VIRTUAL address
+    # space before running a line of code (measured: 268 MB with this set, 2.2 G on
+    # 16 cores, 6.2 G on 48). Schedulers that cap address space (SGE h_vmem) then
+    # kill the task with SIGUSR2 (exit 140) before the first HTTP request, and
+    # raising the cap does not help because the reservation scales with the node.
     # Back off on retries to give NCBI EFetch time to recover from rate limits
     if [ "!{task.attempt}" -gt 1 ]; then
         sleep $(( (!{task.attempt} - 1) * 30 ))
@@ -121,6 +132,7 @@ process blast_ref_stamp {
     // Per-accession subdir keeps multi-accession-per-id runs from clobbering each other
     outDir = "${id}/assemble/${opts_id}/blast_ref_${blast_accession}"
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{outDir}
 
     ann="!{outDir}/blast_ref_annotations.csv"
