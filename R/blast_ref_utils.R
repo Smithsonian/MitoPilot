@@ -1504,8 +1504,10 @@ local_blast_db_info <- function(dir_out) {
   if (is.null(dir_out) || is.na(dir_out) || !dir.exists(dir_out)) {
     return(NULL)
   }
-  files <- list.files(dir_out, pattern = "^blast_db_VERSION\\.txt$",
-                      recursive = TRUE, full.names = TRUE)
+  # Targeted glob, not a recursive walk: this runs synchronously when the BLAST
+  # options modal opens, and a real project's output tree holds assemblies,
+  # annotations and BAMs, so recursing it would block the Shiny session.
+  files <- Sys.glob(file.path(dir_out, "*", "assemble", "*", "blast_db_VERSION.txt"))
   if (length(files) == 0) {
     return(NULL)
   }

@@ -23,12 +23,21 @@ process blast_genbank {
     // cached as successful, so -resume will re-execute this step for the
     // affected sample.
     errorStrategy {
+        def maxTries = (params.blast_gb.maxRetries instanceof Number) ? params.blast_gb.maxRetries : 3
         if (task.exitStatus == 75) {
-            return task.attempt <= 3 ? 'retry' : 'ignore'
+            return task.attempt <= maxTries ? 'retry' : 'ignore'
+        }
+        // Nextflow reports Integer.MAX_VALUE when it cannot read .exitcode at all
+        // (node crash, shared-filesystem lag, preemption). That is transient and
+        // must stay retryable: without this it falls through to 'ignore' on the
+        // first glitch, and every config sets failOnIgnore, so one hiccup aborts
+        // the whole run.
+        if (task.exitStatus == null || task.exitStatus == Integer.MAX_VALUE) {
+            return task.attempt <= maxTries ? 'retry' : 'ignore'
         }
         return (task.exitStatus in [104, 134, 137, 139, 140, 143, 247] && task.attempt <= 2) ? 'retry' : 'ignore'
     }
-    maxRetries 3
+    maxRetries { (params.blast_gb.maxRetries instanceof Number) ? params.blast_gb.maxRetries : 3 }
 
     // The local executor refuses to submit a task asking for more CPUs than the
     // machine has, and that refusal aborts the whole run rather than the task, so
@@ -102,7 +111,11 @@ process blast_genbank {
     // rank 1 and become the reference. Fall back to the historical default.
     eq_eff = eq_raw ?: 'mitochondrion[Location]'
     eq_remote = tax_entrez ? "${tax_entrez} AND ${eq_eff}" : eq_eff
-    entrez = "-entrez_query \"${eq_remote}\""
+    // Single-quote for the shell, escaping any embedded single quote. Entrez
+    // queries routinely contain double quotes for multi-word organisms
+    // ("Danio rerio"[Organism]), which would terminate a double-quoted argument
+    // early and hand blastn split words; $ and backticks would also expand.
+    entrez = "-entrez_query '" + eq_remote.replace("'", "'\\''") + "'"
     '''
     mkdir -p !{outDir}
 
@@ -200,9 +213,14 @@ process blast_genbank {
         fi
         exit 1
     fi
-    if [ ! -s "${BLASTDB}/taxonomy4blast.sqlite3" ]; then
-        echo "${BLASTDB}/taxonomy4blast.sqlite3 is missing; taxon restrictions would be" >&2
-        echo "silently discarded. Refusing to run." >&2
+    # Only when a taxon restriction was actually requested. A site pointing
+    # blast_gb.db_dir/db_name at its own database without the taxonomy files is
+    # otherwise perfectly able to run unrestricted searches, and this guard would
+    # hard-fail every sample. A -negative_taxids smuggled in through extra_opts
+    # is still caught by the unconditional stderr check after blastn runs.
+    if [ -n "!{tax_flag}" ] && [ ! -s "${BLASTDB}/taxonomy4blast.sqlite3" ]; then
+        echo "${BLASTDB}/taxonomy4blast.sqlite3 is missing; the requested taxon" >&2
+        echo "restriction would be silently discarded. Refusing to run." >&2
         exit 1
     fi
 

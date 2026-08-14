@@ -45,15 +45,23 @@ params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_access
 // upsert then fills in length/sequence/topology without disturbing it.
 // Placeholder order is unchanged (accession, species, pident, qcovs, evalue,
 // id, path, scaffold), so the feeding channel needs no edit.
+// time_stamp is set to this run's ts, and that is load-bearing, not decoration.
+// sqlDeleteAssemblies ('DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?')
+// is a THIRD independently-batched channel. On a re-run, if this upsert commits
+// before that delete, it would update the previous run's row, the delete would
+// then remove that row for having a stale ts, and the assemblies upsert would
+// re-insert it without the hit: the same silent loss, one step removed. Stamping
+// the row with the current ts takes it out of the delete's reach.
 params.sqlWriteBlastHitScaffold = '''INSERT INTO assemblies
-    (blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, ID, path, scaffold)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, ID, path, scaffold, time_stamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ID, path, scaffold) DO UPDATE SET
       blast_accession = excluded.blast_accession,
       blast_species   = excluded.blast_species,
       blast_pident    = excluded.blast_pident,
       blast_qcovs     = excluded.blast_qcovs,
-      blast_evalue    = excluded.blast_evalue'''
+      blast_evalue    = excluded.blast_evalue,
+      time_stamp      = excluded.time_stamp'''
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
 // Connection / tool failure: blast produced no output file after all retries.
 params.sqlWriteBlastNoOutput = "UPDATE assemble SET " +
@@ -442,7 +450,7 @@ workflow BLAST_GENBANK {
         blast_records
             .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'scaffold' }
             .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                tuple(accession, species, pident, qcovs, evalue, id, path as Integer, scaffold as Integer)
+                tuple(accession, species, pident, qcovs, evalue, id, path as Integer, scaffold as Integer, params.ts)
             }
             .sqlInsert(statement: params.sqlWriteBlastHitScaffold, db: 'sqlite')
 

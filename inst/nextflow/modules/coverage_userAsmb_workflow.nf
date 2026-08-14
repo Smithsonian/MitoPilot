@@ -27,7 +27,22 @@ params.sqlWriteAssemblies = '''INSERT INTO assemblies
       time_stamp = excluded.time_stamp,
       sequence   = excluded.sequence,
       ignore     = excluded.ignore,
-      edited     = 0'''
+      edited     = 0,
+      depth          = NULL,
+      gc             = NULL,
+      errors         = NULL,
+      edit_positions = NULL,
+      blast_lineage  = NULL,
+      blast_accession = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_accession ELSE NULL END,
+      blast_species   = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_species ELSE NULL END,
+      blast_pident    = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_pident ELSE NULL END,
+      blast_qcovs     = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_qcovs ELSE NULL END,
+      blast_evalue    = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_evalue ELSE NULL END'''
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
                             'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'

@@ -1,13 +1,22 @@
+# Base R rather than withr: withr is not in DESCRIPTION Suggests and no other
+# test in this package uses it. Directories live under tempdir() and go away
+# with the R session.
+tmp_project <- function() {
+  d <- tempfile("mp-project-")
+  dir.create(d, recursive = TRUE)
+  d
+}
+
 test_that("local_blast_db_info returns NULL when there is nothing to read", {
   expect_null(local_blast_db_info(NULL))
   expect_null(local_blast_db_info(file.path(tempdir(), "does-not-exist")))
 
-  empty <- withr::local_tempdir()
+  empty <- tmp_project()
   expect_null(local_blast_db_info(empty))
 })
 
 test_that("local_blast_db_info parses a published VERSION file", {
-  out <- withr::local_tempdir()
+  out <- tmp_project()
   d <- file.path(out, "SAMPLE1", "assemble", "default")
   dir.create(d, recursive = TRUE)
   writeLines(
@@ -29,7 +38,7 @@ test_that("local_blast_db_info parses a published VERSION file", {
 })
 
 test_that("local_blast_db_info picks the most recently written file", {
-  out <- withr::local_tempdir()
+  out <- tmp_project()
   older <- file.path(out, "OLD", "assemble", "default")
   newer <- file.path(out, "NEW", "assemble", "default")
   dir.create(older, recursive = TRUE)
@@ -47,7 +56,7 @@ test_that("local_blast_db_info picks the most recently written file", {
 })
 
 test_that("local_blast_db_info survives a malformed file", {
-  out <- withr::local_tempdir()
+  out <- tmp_project()
   d <- file.path(out, "S", "assemble", "default")
   dir.create(d, recursive = TRUE)
   writeLines(c("this is not tab separated", ""), file.path(d, "blast_db_VERSION.txt"))
