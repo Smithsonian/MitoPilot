@@ -58,7 +58,9 @@ the MitoPilot app in Safari.
 
 ## Install Nextflow
 
-Hydra has no Nextflow module yet, so install your own copy once:
+Hydra has no Nextflow module yet, so install your own copy once. Run these in a
+**terminal** on Hydra: either an SSH session to a login node, or the Terminal tab
+in your RStudio Server session (bottom left, next to Console).
 
 ```bash
 cd ~
@@ -76,8 +78,11 @@ Nextflow from a shell or a job script.
 
 ## Set up the R session
 
+Everything from here on runs in **R**, in the Console of your RStudio Server
+session.
+
 An RStudio Server session on Hydra starts with a stripped `PATH` that leaves out
-the Univa Grid Engine, Java, and your `~/bin`, so Nextflow cannot find `qsub` and
+the job scheduler, Java, and your `~/bin`, so Nextflow cannot find `qsub` and
 job submission fails. `hydra_setup()` fixes that. Call it once per session, right
 after loading the package and before creating a project or opening the app:
 
@@ -86,7 +91,7 @@ library(MitoPilot)
 hydra_setup()
 ```
 
-It puts the Hydra Java and grid-engine directories at the front of your `PATH`,
+It puts the Hydra Java and job scheduler directories at the front of your `PATH`,
 checks your Nextflow version, and pins a compatible one for the session. It warns
 and changes nothing if you are not on Hydra, so it is safe to leave in a script
 you also run elsewhere.
@@ -110,8 +115,8 @@ The full walkthrough, with Hydra-specific notes at each step, is on the
 ## Running jobs
 
 On Hydra the app offers **Submit as Job** alongside **Run from App**, which
-submits the workflow to the cluster for you. Monitor it with `qstat` and the log
-files, then reopen the app when it finishes. For large sample sets this is the
+submits the workflow to the cluster for you. Monitor it by running `qstat` in a
+terminal and reading the log files, then reopen the app when it finishes. For large sample sets this is the
 right choice; running from the app ties the pipeline to your session.
 
 The generic mechanics of job scripts, resources, and the SSH tunnel are covered

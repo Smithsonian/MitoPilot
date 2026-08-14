@@ -66,7 +66,9 @@ how to start a project with your own data.
 Boxes like this one flag the
 places where Smithsonian Hydra computing cluster differs from a generic setup. 
 First time on Hydra? Work
-through the "Get an R session" and "Install Nextflow" sections 
+through the
+<a href="NMNH-Hydra.html#get-an-r-session-on-hydra">Get an R session</a> and
+<a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a> sections
 before starting this tutorial.
 </div>
 
@@ -78,18 +80,22 @@ before starting this tutorial.
 | [Nextflow](https://www.nextflow.io/docs/latest/install.html) 24.10.x - 25.10.x | Needs Java 17 or newer |
 | [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html) | Containerized execution is handled by Nextflow |
 | Disk space | About 15 GB for the container image, plus room for your data |
-| Internet access | The pipeline BLASTs each assembly against GenBank |
+| Internet access | Reference annotations and taxonomy are fetched from NCBI |
 
 <div class="alert alert-note">
 <strong>Note.</strong> MitoPilot checks your Nextflow version when the package
-loads and when you create or open a project. If the Nextflow version is too old 
-and it refuses to load; too
-new and it quietly pins <code>NXF_VER</code> to a version that works.
+loads and when you create or open a project. If the version is too old the
+package refuses to load; if it is too new, MitoPilot quietly pins
+<code>NXF_VER</code> to a version that works.
 </div>
 
 # Install
 
-Open R (perferably using R Studio) and run the following.
+Everything in this tutorial happens in **R**, preferably from RStudio. The only
+steps that need a **terminal** are installing Nextflow and, on a cluster,
+checking on submitted jobs; those are called out where they come up.
+
+Open R and run the following.
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -150,7 +156,7 @@ MitoPilot ships with a small test dataset: 15 samples of pre-filtered Illumina
 reads, mostly marine fishes. It is deliberately messy. Some samples assemble
 cleanly, one has far too little data, one produces two competing assemblies, and
 two produce fragmented assemblies. This allows you to see more complex situations that need
-user judgement.
+user judgment.
 
 ```r
 library(MitoPilot)
@@ -215,8 +221,8 @@ everything, and most columns have their own filter box.
 # Assemble
 
 The Assemble module cleans the reads, builds mitogenome assemblies, maps the
-reads to the assembly to calculate coverage, and BLASTs each assembly against GenBank to find
-its closest published relative.
+reads to the assembly to calculate coverage, and BLASTs each assembly against a
+database of metazoan mitogenomes to find its closest published relative.
 
 ## Set the options
 
@@ -239,6 +245,11 @@ Nothing is editable until you tick **Edit**. The important controls:
   recruit and extend mitochondrial reads. The defaults are fish; for other
   groups, build your own with `custom_assembly_db()` (see
   [custom databases](custom_dbs.html)).
+- **MitoFinder reference database.** Only used when the assembler is MitoFinder.
+  A GenBank-format (`.gb`) file of one or more reference mitogenomes that
+  MitoFinder uses to identify mitochondrial contigs. The default is the zebrafish
+  mitogenome (NC_002333.2), so for anything other than a fish, supply a reference
+  from your own group. `custom_assembly_db()` can build this file too.
 - **Max assembly paths / Max scaffolds.** Samples are marked failed instead 
   of continuing in the pipeline if they exceed these thresholds.
 - **Automatically join multi-scaffold assemblies.** Off by default, and worth
@@ -252,6 +263,22 @@ samples can use different sets, which can allow you to selectively increase
 memory usage for difficult samples.
 
 For the test project the defaults are fine.
+
+<div class="alert alert-hydra">
+<span class="hydra-tag">HYDRA</span>
+<strong>Raise the memory defaults before running.</strong> The package defaults
+are tuned for a laptop and are too low for Hydra's queues. For the test project,
+edit the options sets and use:
+
+<ul>
+<li><strong>Preprocess Opts.</strong> memory <strong>40 GB</strong></li>
+<li><strong>Assembly Opts.</strong> memory <strong>120 GB</strong></li>
+</ul>
+
+Tick <strong>Edit</strong>, change the memory, give the set a name such as
+<code>hydra</code>, and click <strong>Update</strong> so it applies to every
+selected sample.
+</div>
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
@@ -287,7 +314,8 @@ script instead so the run survives a dropped connection. See
 <strong>Submit as Job.</strong> MitoPilot detects Hydra and adds a
 <strong>Submit as Job</strong> button next to <strong>Run from App</strong>. It
 submits the workflow to the cluster for you, so the run keeps going after you
-close the app or lose your connection. Monitor it with <code>qstat</code> and the
+close the app or lose your connection. Monitor it by running
+<code>qstat</code> in a terminal (the Terminal tab in RStudio works) and reading the
 log files in the project's <code>.logs</code> directory, then reopen the app when
 it finishes. For anything beyond a few dozen samples, use this rather than
 running from the app.
@@ -296,13 +324,41 @@ running from the app.
 Assemble runs three steps per sample: read pre-processing with
 [fastp](https://github.com/OpenGene/fastp), assembly with GetOrganelle or MitoFinder, and
 read mapping with [bowtie2](https://github.com/BenLangmead/bowtie2) to compute
-depth and error rates. It then BLASTs each assembly against GenBank and fetches
-the best-matching reference. BLAST  is the slowest part of the pipeline because it waits on NCBI's severs.
+depth and error rates. It then BLASTs each assembly to find its closest published
+relative, and fetches that reference's annotations from NCBI.
 Nextflow runs all samples in parallel through these steps.
 
 Failures are normal and often mean a sample ran out of memory.
 Common error messages are covered in the
 [FAQ](FAQ.html) and [troubleshooting](Troubleshooting.html) articles.
+
+### Finding the reference: local vs remote BLAST
+
+The reference search runs against a **local database of metazoan mitogenomes
+bundled into the MitoPilot container**, so it needs no network and finishes in
+seconds rather than the minutes-to-hours a queued NCBI search can take. This is
+the default, and for most projects it is all you need. The **BLAST Opts.** window
+shows the build date of the bundled database.
+
+Two settings in that window change the behavior:
+
+- **Remote BLAST** searches NCBI over the network instead of the local database.
+  It is much slower and rate limited, and it is worth using only to reach
+  sequences the bundled database does not contain.
+- **Fall back to remote BLAST when no local hit** is on by default. If the local
+  search comes up empty, MitoPilot retries that sample once against NCBI.
+
+You can restrict either search to particular **NCBI taxon IDs** (numeric IDs, not
+names). The **Entrez query** box applies to remote searches only.
+
+<div class="alert alert-note">
+<strong>Note.</strong> Local BLAST does not remove the need for an NCBI API key.
+Only the <em>search</em> is local. Once a reference is chosen, MitoPilot still
+goes to NCBI for that record's sequence, its annotations, and its taxonomic
+lineage, all of which feed curation and export. On projects beyond a handful of
+samples, set <code>ncbi_api_key</code> at project setup so those requests are not
+throttled.
+</div>
 
 ## Read the results
 
@@ -332,17 +388,18 @@ different GetOrganelle settings, or accepting a partial genome.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
-<strong>Buttons that open files.</strong> The <code>output</code> button and the
-coverage <code>view</code> plot open a folder or a PDF on the machine running the
-app. On the RStudio Server that works; through an SSH tunnel from a container it
-may not, because the app tries to open them on the cluster rather than on your
-laptop. The <strong>Work Dirs</strong> browser is the reliable way to reach files
-either way.
+<strong>Buttons that open files.</strong> On RStudio Server, the
+<code>output</code> button opens that sample's results folder in the
+<strong>Files</strong> pane at the bottom right of your RStudio session, and the
+coverage <code>view</code> plot opens the PDF the same way. If you reached the
+app through an SSH tunnel from a container instead, these may do nothing, because
+the app tries to open them on the cluster rather than on your laptop. The
+<strong>Work Dirs</strong> browser is the reliable way to reach files either way.
 </div>
 
-## The awkward samples
+## Problematic samples
 
-Three test samples are deliberately awkward, and between them they cover most of
+Three test samples are deliberately problematic, and between them they cover most of
 what goes wrong with real data.
 
 ### Not enough data
@@ -597,7 +654,7 @@ samples you want and click **ASSIGN GROUP**.
 
 ![Submission group window](figures/get-started/export-group-modal.png)
 
-The window summarises what you selected: how many records, which topologies, and
+The window summarizes what you selected: how many records, which topologies, and
 the gene order of each. Type a name (letters, numbers, dashes, and underscores
 only) and click **Create**.
 
@@ -798,8 +855,9 @@ been filtered or baited.
 **`linear_complete`** should be `TRUE` for taxa whose complete mitogenome is
 genuinely linear, so export labels them "complete genome" rather than "partial".
 
-**`ncbi_api_key`** raises your NCBI request limits. Worth setting for anything
-beyond a handful of samples; get one from
+**`ncbi_api_key`** raises your NCBI request limits. Still worth setting even
+though the BLAST search itself is local, because MitoPilot fetches each chosen
+reference's annotations and taxonomic lineage from NCBI. Get one from
 [NCBI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/).
 
 **`executor`** decides where the work runs: `"local"`, one of the generic cluster
