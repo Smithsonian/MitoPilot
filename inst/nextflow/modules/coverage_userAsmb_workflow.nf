@@ -13,9 +13,21 @@ params.sqlWrite =   'UPDATE assemblies SET depth = ?, gc = ?, errors = ?, time_s
 
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
-params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
-                            '(ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited) ' +
-                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
+// Upsert for the same reason as assemble_workflow.nf: `INSERT OR REPLACE` is
+// delete-then-insert and nulls every unlisted column (all six blast_*, plus
+// depth/gc/errors/edit_positions), which races the per-scaffold BLAST UPDATE
+// because nf-sqldb batches and commits each channel independently.
+params.sqlWriteAssemblies = '''INSERT INTO assemblies
+    (ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    ON CONFLICT(ID, path, scaffold) DO UPDATE SET
+      length     = excluded.length,
+      length_raw = excluded.length_raw,
+      topology   = excluded.topology,
+      time_stamp = excluded.time_stamp,
+      sequence   = excluded.sequence,
+      ignore     = excluded.ignore,
+      edited     = 0'''
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
                             'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'

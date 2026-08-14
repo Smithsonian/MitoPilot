@@ -19,9 +19,27 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
 
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
-params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
-                            '(ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited) ' +
-                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
+// Upsert, NOT `INSERT OR REPLACE`: REPLACE is delete-then-insert, so every column
+// missing from the list below is reset to NULL, including all six blast_* plus
+// depth/gc/errors/edit_positions. That is a live data-loss race, not a
+// theoretical one: nf-sqldb's InsertHandler batches (default 10 rows) and commits
+// per batch with autocommit off, so this channel and the per-scaffold BLAST
+// UPDATE in blast_genbank_workflow.nf commit in an order nothing guarantees. When
+// a sample's assemblies row lands in a later batch than its BLAST update, the
+// REPLACE silently wipes the committed hit. Observed on one sample of 14.
+// DO UPDATE touches only the columns this channel owns, so commit order stops
+// mattering. Same placeholder arity as before, so callers are unchanged.
+params.sqlWriteAssemblies = '''INSERT INTO assemblies
+    (ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    ON CONFLICT(ID, path, scaffold) DO UPDATE SET
+      length     = excluded.length,
+      length_raw = excluded.length_raw,
+      topology   = excluded.topology,
+      time_stamp = excluded.time_stamp,
+      sequence   = excluded.sequence,
+      ignore     = excluded.ignore,
+      edited     = 0'''
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
                             'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'

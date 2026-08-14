@@ -33,9 +33,27 @@ params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_access
 // blast_lineage is NOT set here: ref fetch hasn't run yet so the subquery would
 // resolve to NULL, and this deferred commit could clobber the lineage written
 // later by BLAST_REF_FETCH. Lineage is handled solely in blast_ref_fetch_workflow.nf.
-params.sqlWriteBlastHitScaffold = '''UPDATE assemblies
-    SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ?
-    WHERE assemblies.ID = ? AND path = ? AND scaffold = ?'''
+// Upsert, NOT a plain UPDATE. This channel and the assemblies write in
+// assemble_workflow.nf are separate nf-sqldb handlers with autocommit off,
+// batching 10 rows each, so nothing orders their commits. A plain UPDATE run
+// before the assemblies row is committed matches ZERO rows and the hit is lost
+// silently: observed on 1 sample of 14, whose BLAST update fell in the first
+// (early-committed) batch while its assemblies row fell in the second.
+// Making BOTH statements upserts on the same primary key makes them
+// commutative, so either commit order produces the same final row. If this
+// lands first it creates the row carrying only the hit, and the assemblies
+// upsert then fills in length/sequence/topology without disturbing it.
+// Placeholder order is unchanged (accession, species, pident, qcovs, evalue,
+// id, path, scaffold), so the feeding channel needs no edit.
+params.sqlWriteBlastHitScaffold = '''INSERT INTO assemblies
+    (blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, ID, path, scaffold)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ID, path, scaffold) DO UPDATE SET
+      blast_accession = excluded.blast_accession,
+      blast_species   = excluded.blast_species,
+      blast_pident    = excluded.blast_pident,
+      blast_qcovs     = excluded.blast_qcovs,
+      blast_evalue    = excluded.blast_evalue'''
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
 // Connection / tool failure: blast produced no output file after all retries.
 params.sqlWriteBlastNoOutput = "UPDATE assemble SET " +
