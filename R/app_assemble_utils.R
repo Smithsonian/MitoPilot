@@ -506,6 +506,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                   "metazoan mitogenomes to find the closest reference (used for ",
                   "orientation and curation). Annotations for the winning ",
                   "reference are still fetched from NCBI."),
+        local_blast_db_note(session$userData$dir_out),
         div(
           id = ns("blast_taxids_group"),
           tags$label(
