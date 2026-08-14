@@ -31,8 +31,10 @@ raw input and performs the following steps.
       mitogenome assembly
     - [bowtie2](https://github.com/BenLangmead/bowtie2) for read mapping
       to calculate coverage and error rates.
-    - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) remotely
-      fetch closest match from GenBank for automatic and manual curation
+    - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) against a
+      local database of all annotated metazoan mitogenomes in GenBank,
+      packaged in the MitoPilot container, to find the closest reference
+      for automatic and manual curation
 2.  Mitogenome annotation
     - [MITOS2](https://gitlab.com/Bernt/MITOS) for rRNA, PCG, and tRNA
       annotation
@@ -315,8 +317,9 @@ MitoPilot::new_project(
   - We highly recommended [generating a NCBI API
     key](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/)
     and providing it here during project initialization. This will
-    increase the efficiency of the remote BLAST search and corresponding
-    GenBank downloads during the Assemble module.
+    increase the efficiency of the GenBank downloads during the Assemble
+    module. The BLAST search itself runs against the local database
+    packaged in the container and does not need it.
 
 **NOTE**: If running MitoPilot via RStudio Server on a computing
 cluster, you likely need to specify `Rproj = FALSE` when calling the
