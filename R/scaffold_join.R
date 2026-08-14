@@ -100,7 +100,12 @@ parse_scaffold_hits <- function(s, scaf_len = NULL) {
 scaffold_hits_disagree <- function(scaffolds_df) {
   if (is.null(scaffolds_df) || is.null(scaffolds_df$blast_accession)) return(FALSE)
   acc <- scaffolds_df$blast_accession
-  acc <- acc[!is.na(acc) & nzchar(acc)]
+  # 'NO HIT' is the sentinel the pipeline writes for a scaffold that was BLASTed
+  # and matched nothing; it is not an accession and must not count as a second
+  # opinion. parse_scaffold_hits() already drops it, but rows read straight from
+  # the assemblies table do not go through that path. Counting it disagrees with
+  # the real accession and silently cancels the automatic join.
+  acc <- acc[!is.na(acc) & nzchar(acc) & acc != "NO HIT"]
   length(unique(acc)) > 1
 }
 
@@ -1414,7 +1419,9 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
 
   # Gather a candidate reference sequence per distinct accession from the cache.
   ref_seqs <- character(0)        # named accession -> sequence (candidate refs)
-  accs <- if (!is.null(sc)) unique(sc$blast_accession[!is.na(sc$blast_accession) & nzchar(sc$blast_accession)]) else character(0)
+  accs <- if (!is.null(sc)) unique(sc$blast_accession[!is.na(sc$blast_accession) &
+                                                      nzchar(sc$blast_accession) &
+                                                      sc$blast_accession != "NO HIT"]) else character(0)
   if (length(accs) && !is.null(db) && nzchar(db) && file.exists(db)) {
     tryCatch({
       con <- DBI::dbConnect(RSQLite::SQLite(), db, flags = RSQLite::SQLITE_RO)

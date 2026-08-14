@@ -39,7 +39,7 @@ login node):
 
 ```{bash eval=FALSE}
 # NOTE: match the tag to the latest MitoPilot version
-singularity pull mitopilot.sif docker://macguigand/mitopilot:1.4.7
+singularity pull mitopilot.sif docker://macguigand/mitopilot:1.5.2
 ```
 
 **2. Start an R session.** By default a Singularity container can only see your
@@ -132,7 +132,9 @@ list_configs()
 The generated config sets defaults for CPUs and memory that work for most
 datasets. Per-step resource requests (`coverage`, `blast_ref_align`,
 `blast_gb`) live in the `params { }` block of the `.config` file and can be
-edited by hand. Memory and CPU for all other steps in the workflow are pulled dynamically
+edited by hand. Note that `blast_gb` now runs a real local BLAST search
+against the mitogenome database packaged in the container, so it asks for
+CPUs rather than just waiting on the network. Memory and CPU for all other steps in the workflow are pulled dynamically
 from the project database and can be set directly in the MitoPilot app.
 
 ## Validate before running

@@ -37,6 +37,52 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
 #    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
 #    mamba install r-remotes
 
+# blastn/blastdbcmd/makeblastdb arrive transitively (the bioconda getorganelle/
+# mitos/trnascan installs above pull them in), already at 2.16.0+ in
+# /opt/conda/bin. The WF1 reference search hard-depends on blastn and on BLAST
+# DB v5 read support, so assert rather than reinstall: an explicit
+# `mamba install blast=2.16.0` here cost a 1.08 GB layer for binaries the image
+# already had. This check is free and still fails the build loudly if a future
+# dependency solve drops or downgrades BLAST, which is exactly when to find out.
+# Accepts any version >= 2.16, including a future 3.x.
+RUN for t in blastn blastdbcmd makeblastdb; do \
+        command -v "$t" >/dev/null || \
+            { echo "BLAST+ tool '$t' is missing: a dependency bump dropped it"; exit 1; }; \
+    done && \
+    set -- $(blastn -version | head -1 | sed -E 's/^blastn: ([0-9]+)\.([0-9]+)\..*/\1 \2/') && \
+    { case "$1$2" in ''|*[!0-9]*) \
+        echo "could not parse blastn version: $(blastn -version | head -1)"; exit 1;; esac; } && \
+    { [ "$1" -gt 2 ] || { [ "$1" -eq 2 ] && [ "$2" -ge 16 ]; } || \
+        { echo "BLAST+ $1.$2 is older than the required 2.16"; exit 1; }; } && \
+    echo "BLAST+ $1.$2 present"
+
+# Local metazoan mitogenome BLAST database for the WF1 reference search.
+# 134,560 sequences / 2,201,289,510 bases; 289 MB tarball, 835 MiB unpacked.
+#
+# Staged into the build context by the maintainer, exactly like
+# docker/MitoPilot_*.tar.gz. Build it with tools/build_local_blast_db.py +
+# tools/dedup_local_blast_db.py, then copy the tarball to
+# docker/mito_metazoa_blastdb.tar.gz. It is gitignored: at 275 MiB it exceeds
+# GitHub's 100 MB per-file push limit, and it ships to users inside this image
+# rather than through the repo. The deploy scripts check for it up front.
+#
+# ADD (not COPY + tar) extracts a local tarball into a SINGLE layer and leaves no
+# tarball behind; COPY followed by a separate RUN would keep the 275 MiB archive
+# in its own layer forever. --chown is required because ADD otherwise preserves
+# the build machine's uid/gid from the archive. Do not add a `chmod -R` in a
+# later RUN: touching every file's metadata copies the whole 835 MiB layer again.
+# The archive is already 0644/0755, so it is readable by the invoking user under
+# Singularity.
+#
+# blastdbcmd -info is the smoke test (volume-agnostic, unlike a .nsq stat).
+# taxonomy4blast.sqlite3 must be present: without it blastn SILENTLY discards
+# -taxids and exits 0 with unrestricted hits.
+# Placed above COPY renv.lock so a dependency bump does not rebuild this layer,
+# and well above the package COPY so R code edits never invalidate it.
+ADD --chown=root:root docker/mito_metazoa_blastdb.tar.gz /ref_dbs/
+RUN BLASTDB=/ref_dbs/mito_metazoa blastdbcmd -db /ref_dbs/mito_metazoa/mito_metazoa -info && \
+    test -s /ref_dbs/mito_metazoa/taxonomy4blast.sqlite3
+
 RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock
 RUN R -e 'renv::restore()'

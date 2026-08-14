@@ -1485,3 +1485,85 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
   })
   invisible(NULL)
 }
+
+#' Read the local BLAST database provenance published by the pipeline
+#'
+#' The database lives inside the container, so the app cannot read it directly:
+#' on HPC the container only exists on the compute nodes. Instead, blast_genbank
+#' copies the database's VERSION file next to each sample's hits, and this reads
+#' the most recently written copy.
+#'
+#' @param dir_out Project output directory (\code{session$userData$dir_out}).
+#'
+#' @return A named list with the parsed VERSION fields plus \code{built_date}
+#'   (ISO date only), or NULL when no local search has run in this project or the
+#'   file carries no usable build date.
+#'
+#' @keywords internal
+local_blast_db_info <- function(dir_out) {
+  # length() guard first: dir_out comes from a str_extract over .config, which
+  # yields character(0) when nothing matches and length 2 when two lines mention
+  # publishDir. Either would error inside `||` and take the modal down with it.
+  if (is.null(dir_out) || length(dir_out) != 1L || is.na(dir_out) ||
+      !dir.exists(dir_out)) {
+    return(NULL)
+  }
+  # Targeted glob, not a recursive walk: this runs synchronously when the BLAST
+  # options modal opens, and a real project's output tree holds assemblies,
+  # annotations and BAMs, so recursing it would block the Shiny session.
+  files <- Sys.glob(file.path(dir_out, "*", "assemble", "*", "blast_db_VERSION.txt"))
+  if (length(files) == 0) {
+    return(NULL)
+  }
+  # Newest wins: a project can hold copies from different container images if
+  # some samples were re-run after an update.
+  newest <- files[which.max(file.mtime(files))]
+
+  lines <- tryCatch(readLines(newest, warn = FALSE), error = function(e) character(0))
+  parts <- strsplit(lines[nzchar(lines)], "\t", fixed = TRUE)
+  parts <- parts[lengths(parts) >= 2]
+  if (length(parts) == 0) {
+    return(NULL)
+  }
+  info <- stats::setNames(
+    lapply(parts, function(x) paste(x[-1], collapse = "\t")),
+    vapply(parts, `[`, character(1), 1)
+  )
+  if (is.null(info$built)) {
+    return(NULL)
+  }
+  info$built_date <- substr(info$built, 1, 10)
+  info$path <- newest
+  info
+}
+
+#' Modal note stating when the bundled BLAST database was built
+#'
+#' Plain fact, deliberately not a staleness warning: users pinned to an older
+#' container for reproducibility should not be nagged.
+#'
+#' @param dir_out Project output directory (\code{session$userData$dir_out}).
+#'
+#' @return A shiny tag.
+#'
+#' @keywords internal
+local_blast_db_note <- function(dir_out) {
+  info <- local_blast_db_info(dir_out)
+  txt <- if (is.null(info)) {
+    paste0("Bundled BLAST database: build date is recorded the first time a ",
+           "local search runs in this project.")
+  } else {
+    n <- info$sequences
+    n_txt <- if (!is.null(n) && grepl("^[0-9]+$", n)) {
+      paste0(", ", formatC(as.numeric(n), format = "d", big.mark = ","), " sequences")
+    } else {
+      ""
+    }
+    paste0("Bundled BLAST database built ", info$built_date, n_txt, ".")
+  }
+  shiny::tags$p(
+    class = "text-muted",
+    style = "margin-top: -6px; margin-bottom: 14px; font-size: 0.85em;",
+    txt
+  )
+}

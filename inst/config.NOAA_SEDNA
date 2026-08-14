@@ -84,10 +84,12 @@ params {
         executor = process.executor
     }
     blast_gb {
-        cpus = 1
+        cpus = 4                            // -num_threads for the local BLAST search
         maxForks = 10 // only allow 10 concurrent BLAST runs to avoid server timeout issues
         maxRetries = 3
-        memory = 8
+        memory = 4                          // measured peak RSS 672 MiB (mmapped .nsq)
+        db_dir = '/ref_dbs/mito_metazoa'    // local BLAST database, baked into the container
+        db_name = 'mito_metazoa'
         container = process.container
         executor = process.executor
     }

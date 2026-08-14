@@ -11,12 +11,27 @@ process blast_ref_fetch {
 
     maxForks params.blast_gb.maxForks
 
-    cpus { (params.blast_gb.cpus instanceof Integer) ? params.blast_gb.cpus : 1 }
-    memory = (params.blast_gb.memory instanceof Number) ? "${params.blast_gb.memory}.GB" : null
+    // One Rscript doing HTTP: network-bound, never CPU-bound. Deliberately NOT
+    // tied to params.blast_gb.cpus, which now sizes the local blastn search;
+    // inheriting that would give every fetch task the search's cores (times
+    // maxForks) and throttle the local executor for no gain.
+    cpus 1
+    // Method-call form, NOT `memory = ...`: the assignment form is not a process
+    // directive, so the value is dropped and the generic process block in .config
+    // wins instead (1 byte on config.local, a hard task failure on the scheduler
+    // templates, whose closure dereferences an `opts` input this process lacks).
+    memory { (params.blast_gb.memory instanceof Number) ? params.blast_gb.memory.GB : null }
     clusterOptions {
+        // This process runs at 1 CPU, so it does not inherit a clusterOptions
+        // string sized for the multi-CPU local blastn search. Sites that encode
+        // memory there (Hydra) set blast_gb.ref_fetch_clusterOptions instead;
+        // where that key is absent the shared string is used, as before.
+        def co = (params.blast_gb.ref_fetch_clusterOptions instanceof String)
+            ? params.blast_gb.ref_fetch_clusterOptions
+            : ((params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : '')
         def opts = [
             (params.blast_gb.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : ''
+            co
         ].findAll { it }.join(' ')
         opts ?: null
     }
@@ -27,7 +42,11 @@ process blast_ref_fetch {
     // simply omits the rest, so a dropped accession produces no fan-out and every
     // sample whose top hit was that accession is flagged as a fetch failure downstream
     // (see the all_top_ids join in the workflow).
-    errorStrategy { task.attempt <= 3 ? 'retry' : 'ignore' }
+    // Exit 140 (128+12, SIGUSR2) is an SGE resource kill, and 137 (128+9) an OOM
+    // kill. Both are deterministic: the same task on the same node fails the same
+    // way, so retrying only burns queue time (0+30+60+90 s of backoff here).
+    errorStrategy { (task.exitStatus in [137, 140]) ? 'ignore'
+                    : (task.attempt <= 3 ? 'retry' : 'ignore') }
     maxRetries 3
 
     // No task tag: with a tag, Nextflow's ANSI progress truncates this process's
@@ -49,6 +68,13 @@ process blast_ref_fetch {
     // falls back to a per-accession request inside fetch_blast_refs.
     acc_csv = accessions.join(',')
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
+    # Not just the blas_thread_init error: the pthread OpenBLAS in the image sizes
+    # its per-thread buffers by core count, so R reserves GBs of VIRTUAL address
+    # space before running a line of code (measured: 268 MB with this set, 2.2 G on
+    # 16 cores, 6.2 G on 48). Schedulers that cap address space (SGE h_vmem) then
+    # kill the task with SIGUSR2 (exit 140) before the first HTTP request, and
+    # raising the cap does not help because the reservation scales with the node.
     # Back off on retries to give NCBI EFetch time to recover from rate limits
     if [ "!{task.attempt}" -gt 1 ]; then
         sleep $(( (!{task.attempt} - 1) * 30 ))
@@ -71,10 +97,23 @@ process blast_ref_stamp {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
+    cpus 1
+    // Declared even though this process is trivial: without a memory directive the
+    // generic process block in .config supplies one, and on the scheduler templates
+    // that closure dereferences an `opts` process input this process does not have,
+    // which fails the task at submission.
+    memory { (params.blast_gb.memory instanceof Number) ? params.blast_gb.memory.GB : null }
     clusterOptions {
+        // This process runs at 1 CPU, so it does not inherit a clusterOptions
+        // string sized for the multi-CPU local blastn search. Sites that encode
+        // memory there (Hydra) set blast_gb.ref_fetch_clusterOptions instead;
+        // where that key is absent the shared string is used, as before.
+        def co = (params.blast_gb.ref_fetch_clusterOptions instanceof String)
+            ? params.blast_gb.ref_fetch_clusterOptions
+            : ((params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : '')
         def opts = [
             (params.blast_gb.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : ''
+            co
         ].findAll { it }.join(' ')
         opts ?: null
     }
@@ -93,6 +132,7 @@ process blast_ref_stamp {
     // Per-accession subdir keeps multi-accession-per-id runs from clobbering each other
     outDir = "${id}/assemble/${opts_id}/blast_ref_${blast_accession}"
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{outDir}
 
     ann="!{outDir}/blast_ref_annotations.csv"

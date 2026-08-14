@@ -24,8 +24,8 @@ def appendTaggedNoteSql(String tag, String msg) {
 // Two distinct failure modes, distinguished by blast_genbank.nf:
 //   - blastNoOutputMsg: blast produced no output after all retries (connection / tool error).
 //   - blastNoHitMsg:    blast ran cleanly but found no significant hits (sentinel output).
-params.blastNoOutputMsg = "BLAST produced no output after all retries (possible NCBI connection or rate-limit issue). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
-params.blastNoHitMsg = "No significant BLAST hits found in GenBank for this assembly. The assembly may be non-target, too fragmented, or from a taxon not represented in the database."
+params.blastNoOutputMsg = "BLAST produced no output. Most often this is a legacy Entrez query that the local BLAST database cannot apply (open BLAST Options, check Edit, and tick Remote BLAST, which both applies the query and reveals the Entrez query field so it can be cleared, then click Update), bad additional blastn options, an unreadable local BLAST database, or, for a remote search, an NCBI connection or rate-limit failure. The blast_genbank task's error output is in its work directory (Work Directory browser). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
+params.blastNoHitMsg = "No significant BLAST hits found for this assembly. The assembly may be non-target, too fragmented, or from a taxon with no mitogenome in the reference database. If BLAST Options carries a taxon ID restriction, check that it names a clade the database actually contains."
 
 // blast_accession_auto mirrors the automatic rank-1 hit so a later user override
 // of blast_accession can be flagged in the tables; set both from the same values.
@@ -33,9 +33,35 @@ params.sqlWriteBlastHit = 'UPDATE assemble SET blast_accession = ?, blast_access
 // blast_lineage is NOT set here: ref fetch hasn't run yet so the subquery would
 // resolve to NULL, and this deferred commit could clobber the lineage written
 // later by BLAST_REF_FETCH. Lineage is handled solely in blast_ref_fetch_workflow.nf.
-params.sqlWriteBlastHitScaffold = '''UPDATE assemblies
-    SET blast_accession = ?, blast_species = ?, blast_pident = ?, blast_qcovs = ?, blast_evalue = ?
-    WHERE assemblies.ID = ? AND path = ? AND scaffold = ?'''
+// Upsert, NOT a plain UPDATE. This channel and the assemblies write in
+// assemble_workflow.nf are separate nf-sqldb handlers with autocommit off,
+// batching 10 rows each, so nothing orders their commits. A plain UPDATE run
+// before the assemblies row is committed matches ZERO rows and the hit is lost
+// silently: observed on 1 sample of 14, whose BLAST update fell in the first
+// (early-committed) batch while its assemblies row fell in the second.
+// Making BOTH statements upserts on the same primary key makes them
+// commutative, so either commit order produces the same final row. If this
+// lands first it creates the row carrying only the hit, and the assemblies
+// upsert then fills in length/sequence/topology without disturbing it.
+// Placeholder order is unchanged (accession, species, pident, qcovs, evalue,
+// id, path, scaffold), so the feeding channel needs no edit.
+// time_stamp is set to this run's ts, and that is load-bearing, not decoration.
+// sqlDeleteAssemblies ('DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?')
+// is a THIRD independently-batched channel. On a re-run, if this upsert commits
+// before that delete, it would update the previous run's row, the delete would
+// then remove that row for having a stale ts, and the assemblies upsert would
+// re-insert it without the hit: the same silent loss, one step removed. Stamping
+// the row with the current ts takes it out of the delete's reach.
+params.sqlWriteBlastHitScaffold = '''INSERT INTO assemblies
+    (blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, ID, path, scaffold, time_stamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ID, path, scaffold) DO UPDATE SET
+      blast_accession = excluded.blast_accession,
+      blast_species   = excluded.blast_species,
+      blast_pident    = excluded.blast_pident,
+      blast_qcovs     = excluded.blast_qcovs,
+      blast_evalue    = excluded.blast_evalue,
+      time_stamp      = excluded.time_stamp'''
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
 // Connection / tool failure: blast produced no output file after all retries.
 params.sqlWriteBlastNoOutput = "UPDATE assemble SET " +
@@ -54,8 +80,10 @@ params.sqlDeleteAssemblyBlast = 'DELETE FROM assembly_blast WHERE ID = ? AND tim
 params.sqlWriteCandidate = 'INSERT OR REPLACE INTO blast_ref_candidates (ID, path, scaffold, rank, accession, species, pident, qcovs, evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 params.sqlDeleteCandidates = 'DELETE FROM blast_ref_candidates WHERE ID = ? AND time_stamp != ?'
 
+// New columns are appended at the END: the row[N] indices below are positional.
 params.sqlReadBlastOpts =
-    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts, b.max_target_seqs ' +
+    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts, b.max_target_seqs, ' +
+    'b.taxids, b.remote_blast, b.remote_fallback ' +
     'FROM assemble a ' +
     'JOIN blast_opts b ON a.blast_opts = b.blast_opts'
 
@@ -76,10 +104,16 @@ workflow BLAST_GENBANK {
         // max_target_seqs is now a per-parameter-set DB value (was a .config
         // param); it sets both the blastn -max_target_seqs flag and the number
         // of candidate references retained (N_CAND below). Default 5.
+        // taxids / remote_blast / remote_fallback are defaulted here as well as in
+        // blast_genbank.nf, so a NULL from an older project database is harmless.
         channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
             .filter { row -> row[1] as Integer == 1 }
-            .map { row -> tuple(row[0], row[2], row[3] ?: '', (row[4] == null ? 5 : (row[4] as Integer))) }
-            .set { blast_opts_ch }  // (id, entrez_query, extra_opts, max_target_seqs)
+            .map { row -> tuple(row[0], row[2],
+                                (row[5] ?: '').toString().trim(),
+                                (row[6] == null ? 0 : (row[6] as Integer)),
+                                (row[7] == null ? 1 : (row[7] as Integer)),
+                                row[3] ?: '', (row[4] == null ? 5 : (row[4] as Integer))) }
+            .set { blast_opts_ch }  // (id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, max_target_seqs)
 
         // Per-sample max_target_seqs, used to bound the retained candidate list.
         channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
@@ -153,11 +187,11 @@ workflow BLAST_GENBANK {
                 targets.collect { t -> tuple(id, t[0], t[1], opts_id) }
             }
             .combine(blast_opts_ch, by: 0)
-            .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
-                tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
+            .map{ id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts ->
+                tuple(id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts)
             }
-            .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
-                process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
+            .multiMap { id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts ->
+                process: tuple(id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts)
                 ids:     tuple(id, true)
                 pathkey: id
             }
@@ -184,7 +218,9 @@ workflow BLAST_GENBANK {
             .map { id, asmb_list, opts_id -> tuple(id, params.ts) }
             .sqlInsert(statement: params.sqlDeleteAssemblyBlast, db: 'sqlite')
 
-        blast_genbank(blast_in_split.process)
+        // .hits is the (id, path_idx, result_file) tuple; the process also emits
+        // db_version (the local database's VERSION file), published but unused here.
+        blast_genbank(blast_in_split.process).hits
             .multiMap { id, path_idx, result_file ->
                 state:      tuple(id, result_file)
                 parse:      tuple(id, path_idx, result_file)
@@ -288,9 +324,13 @@ workflow BLAST_GENBANK {
                     .collect { it[0][0] }
                     .findAll { it != null && it != 'NO HIT' }
                     .unique()
-                tuple(id, opts_id, candList, scaffAccs)
+                // 0 = hits came from the local database, 1 = from the remote
+                // fallback. blast_genbank.nf stamps this; absent (older result
+                // files) is treated as local, which is the pre-fallback default.
+                def src = lines.any { it.contains('blast_source=remote') } ? 1 : 0
+                tuple(id, opts_id, candList, scaffAccs, src)
             }
-            .set { perpath_ch }  // (id, opts_id, [candRec...], [scaffAcc...])
+            .set { perpath_ch }  // (id, opts_id, [candRec...], [scaffAcc...], src)
 
         // Write state=4 (BLAST done, ref fetch pending); BLAST_REF_FETCH writes
         // state=2 once the ref fetch completes. Redundant per-id updates are safe.
@@ -414,7 +454,7 @@ workflow BLAST_GENBANK {
         blast_records
             .filter { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue -> kind == 'scaffold' }
             .map { kind, id, opts_id, path, scaffold, accession, species, pident, qcovs, evalue ->
-                tuple(accession, species, pident, qcovs, evalue, id, path as Integer, scaffold as Integer)
+                tuple(accession, species, pident, qcovs, evalue, id, path as Integer, scaffold as Integer, params.ts)
             }
             .sqlInsert(statement: params.sqlWriteBlastHitScaffold, db: 'sqlite')
 
@@ -446,13 +486,22 @@ workflow BLAST_GENBANK {
         // per-sample blast_opts.max_target_seqs (default 5, joined from mts_ch).
         perpath_ch
             .combine(path_count_ch, by: 0)
-            .map { id, opts_id, candList, scaffAccs, n_paths ->
-                tuple(groupKey(id, n_paths), [id, opts_id, candList, scaffAccs]) }
+            .map { id, opts_id, candList, scaffAccs, src, n_paths ->
+                tuple(groupKey(id, n_paths), [id, opts_id, candList, scaffAccs, src]) }
             .groupTuple()
             .map { gk, items ->
                 def id = items[0][0]
                 def opts_id = items[0][1]
-                def allCands = items.collectMany { it[2] ?: [] }
+                // The fallback is decided per PATH, so one sample can hold local
+                // and remote results at once. Their e-values come from search
+                // spaces three orders of magnitude apart and cannot be ranked
+                // against each other, so when any path searched locally, only
+                // those candidates represent the sample. A remote-only path
+                // keeps its own per-scaffold hit, and its accession still
+                // reaches the reference fetch through allScaffs below.
+                def localItems = items.findAll { (it[4] ?: 0) == 0 }
+                def candItems = localItems ?: items
+                def allCands = candItems.collectMany { it[2] ?: [] }
                 def allScaffs = items.collectMany { it[3] ?: [] }.unique()
                 tuple(id, opts_id, allCands, allScaffs)
             }

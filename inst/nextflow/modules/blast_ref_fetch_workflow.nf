@@ -36,7 +36,7 @@ def stripBlastAndRefTagsSql() {
     ", '; ')"
 }
 
-params.refFetchFailedMsg = "BLAST reference fetch failed after all retries (possible NCBI connection or rate-limit issue). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
+params.refFetchFailedMsg = "BLAST reference fetch failed. Common causes: an NCBI connection or rate-limit problem, or, on a cluster, the scheduler killing the task for exceeding a resource limit (exit 140 = SIGUSR2 from SGE, exit 137 = OOM kill; check .command.log in the task's work directory, which is empty except for a signal message in that case). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
 
 params.sqlWriteBlastLineage = 'UPDATE assemble SET blast_lineage = ? WHERE ID = ?'
 // Per-scaffold lineage: keyed on (ID, path, scaffold). The scaffold->accession

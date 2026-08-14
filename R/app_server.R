@@ -50,6 +50,43 @@ app_server <- function(input, output, session) {
     return(invisible(NULL))
   }
 
+  # Container version check. Warn only: the project is perfectly usable, it just
+  # runs the pipeline code baked into the older image (e.g. a pre-1.5.2 image has
+  # no local BLAST database, so every sample goes to the remote search instead).
+  cgap <- container_version_gap(dirname(db))
+  if (!is.null(cgap)) {
+    shinyWidgets::sendSweetAlert(
+      session = session,
+      title = "Container version does not match MitoPilot",
+      text = shiny::tags$div(
+        shiny::tags$p("This project runs the pipeline from:"),
+        shiny::tags$pre(cgap$configured),
+        shiny::tags$p("but the installed MitoPilot package is ",
+                      shiny::tags$b(as.character(utils::packageVersion("MitoPilot"))),
+                      ", which expects:"),
+        shiny::tags$pre(cgap$expected),
+        shiny::tags$p(
+          "The app works either way, but pipeline runs will use the older ",
+          "image's tools and workflow code."
+        ),
+        shiny::tags$p(
+          shiny::tags$b("To switch, edit the container line in the project's .config."),
+          " That is a one-line change and leaves the rest of your settings alone."
+        ),
+        shiny::tags$p(
+          "You can instead regenerate the whole config, but note it is rebuilt ",
+          "from the template for the executor you name, so any tuned cpus, ",
+          "memory or clusterOptions must be re-applied afterwards (the old file ",
+          "is backed up alongside it). Name your own profile, not \"local\", if ",
+          "this project runs on a cluster:"
+        ),
+        shiny::tags$pre('MitoPilot::backwards_compatibility(executor = "local")')
+      ),
+      html = TRUE,
+      type = "info"
+    )
+  }
+
   # Migrate: add BLAST result columns to assemble table for pre-existing databases
   existing_fields <- DBI::dbListFields(session$userData$con, "assemble")
   if (!"blast_accession" %in% existing_fields)

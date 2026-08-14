@@ -1,0 +1,14 @@
+# Build context allowlist. The image is built from the repo root
+# (docker/deploy-*.sh runs `docker build -f docker/Dockerfile .`) and the Dockerfile
+# pulls in exactly four things: renv.lock, docker/arwen/arwen1.2.3.c,
+# docker/MitoPilot_*.tar.gz and docker/mito_metazoa_blastdb.tar.gz.
+#
+# Deliberately an allowlist rather than a copy of .gitignore: .gitignore excludes
+# /docker/MitoPilot*, and reusing it here would drop the package tarball the
+# build installs.
+*
+!renv.lock
+!docker/
+# Stray 27 MB tracked blob in docker/ that nothing COPYs; re-excluded here so the
+# allowlist above does not drag it into the context.
+docker/docker

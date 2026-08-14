@@ -54,6 +54,7 @@ process scaffold_join {
     cov_list = (cov_csvs instanceof List ? cov_csvs : [cov_csvs]).collect { "'" + it + "'" }.join(', ')
     auto = ((auto_join as Integer) == 1) ? 'TRUE' : 'FALSE'
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
 
     # The reference fetch stores a bare sequence; wrap it as FASTA if needed.

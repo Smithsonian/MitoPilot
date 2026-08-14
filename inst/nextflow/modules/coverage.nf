@@ -30,6 +30,7 @@ process coverage {
     outDir = "${id}/assemble/${opt_id}"
     output_name = assembly.baseName
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     # Unzip reads
     if [ "!{assembler}" = "GetOrganelle" ]; then
         tar -xzf !{reads} --strip-components=2  

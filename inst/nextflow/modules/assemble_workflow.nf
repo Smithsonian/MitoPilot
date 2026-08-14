@@ -19,9 +19,55 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
 
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
-params.sqlWriteAssemblies = 'INSERT OR REPLACE INTO assemblies ' +
-                            '(ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited) ' +
-                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)'
+// Upsert, NOT `INSERT OR REPLACE`: REPLACE is delete-then-insert, so every column
+// missing from the list below is reset to NULL, including all six blast_* plus
+// depth/gc/errors/edit_positions. That is a live data-loss race, not a
+// theoretical one: nf-sqldb's InsertHandler batches (default 10 rows) and commits
+// per batch with autocommit off, so this channel and the per-scaffold BLAST
+// UPDATE in blast_genbank_workflow.nf commit in an order nothing guarantees. When
+// a sample's assemblies row lands in a later batch than its BLAST update, the
+// REPLACE silently wipes the committed hit. Observed on one sample of 14.
+// DO UPDATE touches only the columns this channel owns, so commit order stops
+// mattering. Same placeholder arity as before, so callers are unchanged.
+// Column notes for the DO UPDATE below:
+//   depth/gc/errors/edit_positions/blast_lineage describe the OLD sequence this
+//   row is replacing, so they are cleared. INSERT OR REPLACE cleared them as a
+//   side effect; an upsert has to say so. Stale edit_positions is the worst of
+//   them, since the app would highlight edits at coordinates in a sequence that
+//   no longer exists. depth/gc/errors are recomputed by coverage, and
+//   blast_lineage is rewritten by BLAST_REF_FETCH later in the run.
+//   The blast_* hit is kept ONLY when the existing row carries this run's
+//   time_stamp, which is the point of the upsert: the BLAST channel may commit
+//   first. A row still holding a previous run's time_stamp describes a
+//   superseded assembly, so its hit is cleared exactly as REPLACE used to.
+// No SQL `--` comments inside the statement: if the string is ever flattened,
+// everything after one would be silently commented out.
+params.sqlWriteAssemblies = '''INSERT INTO assemblies
+    (ID, path, scaffold, length, length_raw, topology, time_stamp, sequence, ignore, edited)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    ON CONFLICT(ID, path, scaffold) DO UPDATE SET
+      length     = excluded.length,
+      length_raw = excluded.length_raw,
+      topology   = excluded.topology,
+      time_stamp = excluded.time_stamp,
+      sequence   = excluded.sequence,
+      ignore     = excluded.ignore,
+      edited     = 0,
+      depth          = NULL,
+      gc             = NULL,
+      errors         = NULL,
+      edit_positions = NULL,
+      blast_lineage  = NULL,
+      blast_accession = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_accession ELSE NULL END,
+      blast_species   = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_species ELSE NULL END,
+      blast_pident    = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_pident ELSE NULL END,
+      blast_qcovs     = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_qcovs ELSE NULL END,
+      blast_evalue    = CASE WHEN assemblies.time_stamp = excluded.time_stamp
+                             THEN assemblies.blast_evalue ELSE NULL END'''
 
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
                             'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'
