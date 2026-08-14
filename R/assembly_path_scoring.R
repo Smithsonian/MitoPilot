@@ -105,6 +105,10 @@ score_assembly_paths <- function(paths_df, cov_by_path = NULL, expected_len = NU
       mean_error  = if (all(is.na(err))) NA_real_ else mean(err, na.rm = TRUE),
       blast_species = .first_chr(rows[["blast_species"]]),
       blast_lineage = .first_chr(rows[["blast_lineage"]]),
+      # Needed to tell "BLASTed, matched nothing" ('NO HIT') from "never
+      # BLASTed" (NA). Absent when the caller does not supply the column, in
+      # which case every path scores exactly as before.
+      blast_accession = .first_chr(rows[["blast_accession"]]),
       blast_pident  = .max_num(rows[["blast_pident"]]),
       blast_qcovs   = .max_num(rows[["blast_qcovs"]]),
       n_ambig       = sum(vapply(rows$sequence, count_ambiguities, integer(1))),
@@ -123,6 +127,16 @@ score_assembly_paths <- function(paths_df, cov_by_path = NULL, expected_len = NU
   per_path$s_error      <- .score_inverse(per_path$mean_error, lo = 0, hi = th$high_error)
   per_path$s_blast      <- .score_blast(per_path$blast_pident, per_path$blast_qcovs)
   per_path$s_blast_conc <- .score_concordance(per_path$blast_species, per_path$blast_lineage)
+  # A path that was searched and matched nothing is evidence, not absence of it.
+  # Left as NA, both sub-scores drop out of the weighted mean, whose denominator
+  # renormalizes over whatever is present, so a no-hit path is not penalized at
+  # all and can outrank a path with a genuine but distant hit. Since the search
+  # space became mitogenome-only, "no hit" also became the signature of a
+  # non-target contaminant, so it must score worst, not opt out.
+  searched_no_hit <- !is.na(per_path$blast_accession) &
+    toupper(trimws(per_path$blast_accession)) == "NO HIT"
+  per_path$s_blast[searched_no_hit]      <- 0
+  per_path$s_blast_conc[searched_no_hit] <- 0
   per_path$s_ambiguity  <- .score_inverse(per_path$n_ambig, lo = 0, hi = 20)
 
   w <- ASSEMBLY_PATH_SCORE_WEIGHTS
@@ -222,7 +236,13 @@ score_assembly_paths <- function(paths_df, cov_by_path = NULL, expected_len = NU
   n <- length(species)
   if (n <= 1L) return(rep(NA_real_, n))
   # Compare lineage first (broader, more robust), fall back to species string.
-  key <- ifelse(!is.na(lineage) & nzchar(lineage), lineage, species)
+  # All-or-nothing, NOT per element: .top_taxon reduces a lineage to its last
+  # token (family) but a species string to its first word (genus), so a mixed
+  # key set compares family against genus and never matches. One path whose
+  # taxonomy fetch failed would then look like the odd one out and get flagged
+  # as a possible contaminant.
+  has_lineage <- !is.na(lineage) & nzchar(lineage)
+  key <- if (all(has_lineage)) lineage else species
   if (all(is.na(key))) return(rep(NA_real_, n))
   tops <- .top_taxon(key)
   vapply(seq_len(n), function(i) {

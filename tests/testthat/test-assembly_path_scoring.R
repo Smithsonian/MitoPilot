@@ -171,3 +171,67 @@ test_that("gap columns are dropped from the resolved sequence", {
                                  base_row = 1L)
   expect_equal(res$seq, "AG")
 })
+
+# --- searched-but-no-hit must be penalised, not excused -----------------------
+
+test_that("a path BLASTed with no hit scores below a path with a distant hit", {
+  rows <- function(path, acc, pid, qcov, sp) data.frame(
+    path = path, scaffold = 1, topology = "circular", length = 16500,
+    sequence = strrep("A", 100), depth = "50", errors = "0",
+    blast_accession = acc, blast_species = sp, blast_lineage = NA_character_,
+    blast_pident = pid, blast_qcovs = qcov, stringsAsFactors = FALSE
+  )
+  df <- rbind(
+    rows(1, "NO HIT", NA_real_, NA_real_, NA_character_),
+    rows(2, "OR582709.1", 82, 85, "Fundulus majalis")
+  )
+  res <- score_assembly_paths(df)
+  no_hit <- res$score[res$path == 1]
+  distant <- res$score[res$path == 2]
+  expect_true(no_hit < distant)
+})
+
+test_that("a no-hit path is flagged rather than passing silently", {
+  rows <- function(path, acc, sp) data.frame(
+    path = path, scaffold = 1, topology = "circular", length = 16500,
+    sequence = strrep("A", 100), depth = "50", errors = "0",
+    blast_accession = acc, blast_species = sp, blast_lineage = NA_character_,
+    blast_pident = if (is.na(sp)) NA_real_ else 99, 
+    blast_qcovs = if (is.na(sp)) NA_real_ else 98, stringsAsFactors = FALSE
+  )
+  df <- rbind(
+    rows(1, "OR582709.1", "Fundulus majalis"),
+    rows(2, "OR582709.1", "Fundulus majalis"),
+    rows(3, "NO HIT", NA_character_)
+  )
+  res <- score_assembly_paths(df)
+  expect_match(res$flags[res$path == 3], "NUMT|contaminant")
+})
+
+test_that("missing blast_accession column leaves scoring unchanged", {
+  base <- data.frame(
+    path = c(1, 2), scaffold = 1, topology = "circular", length = 16500,
+    sequence = strrep("A", 100), depth = "50", errors = "0",
+    blast_species = "Fundulus majalis", blast_lineage = NA_character_,
+    blast_pident = c(99, 82), blast_qcovs = c(98, 85), stringsAsFactors = FALSE
+  )
+  res <- score_assembly_paths(base)
+  expect_equal(nrow(res), 2L)
+  expect_true(all(is.finite(res$score)))
+})
+
+test_that("one path with a failed taxonomy fetch is not flagged as the odd one out", {
+  # lineage present for two paths, absent for the third: comparing family
+  # against genus would make the third look divergent
+  df <- data.frame(
+    path = c(1, 2, 3), scaffold = 1, topology = "circular", length = 16500,
+    sequence = strrep("A", 100), depth = "50", errors = "0",
+    blast_accession = "OR582709.1",
+    blast_species = c("Thunnus albacares", "Thunnus albacares", "Thunnus albacares"),
+    blast_lineage = c("Chordata; Perciformes; Scombridae",
+                      "Chordata; Perciformes; Scombridae", NA_character_),
+    blast_pident = 99, blast_qcovs = 98, stringsAsFactors = FALSE
+  )
+  res <- score_assembly_paths(df)
+  expect_false(any(grepl("NUMT|contaminant", res$flags)))
+})

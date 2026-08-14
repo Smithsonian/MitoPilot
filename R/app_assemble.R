@@ -1194,7 +1194,12 @@ assemble_server <- function(id) {
               # the documented way out of a blocked legacy query) and it keeps a
               # remote search mitochondrion-restricted instead of hitting all of
               # core_nt, where a nuclear or NUMT record could win rank 1.
-              entrez_query    = if (nzchar(trimws(input$entrez_query %||% ""))) {
+              # Forced to the default whenever Remote BLAST is off. The field is
+              # hidden in that state, so a value left over from a previous remote
+              # setup would otherwise be saved unseen and then fail every sample
+              # at the local search, with the field needed to fix it invisible.
+              entrez_query    = if (isTRUE(input$remote_blast) &&
+                                    nzchar(trimws(input$entrez_query %||% ""))) {
                 input$entrez_query
               } else {
                 "mitochondrion[Location]"

@@ -109,7 +109,14 @@ process blast_genbank {
     // A blank Entrez query must NEVER reach the remote search: -remote with no
     // -entrez_query searches all of core_nt, so a nuclear or NUMT record can win
     // rank 1 and become the reference. Fall back to the historical default.
-    eq_eff = eq_raw ?: 'mitochondrion[Location]'
+    // Only a query the user chose for a REMOTE search may restrict a remote
+    // search. When remote_on is 0 this task is a local search (or its fallback),
+    // and eq_raw has already been judged a no-op against the local database:
+    // 'biomol_genomic[PROP]' restricts biomolecule type, not location, so
+    // carrying it to core_nt would put nuclear scaffolds and NUMTs back in scope
+    // and one could win rank 1. Nothing is lost by forcing the default, since a
+    // local no-op restricts nothing.
+    eq_eff = (remote_on == '1') ? (eq_raw ?: 'mitochondrion[Location]') : 'mitochondrion[Location]'
     eq_remote = tax_entrez ? "${tax_entrez} AND ${eq_eff}" : eq_eff
     // Single-quote for the shell, escaping any embedded single quote. Entrez
     // queries routinely contain double quotes for multi-word organisms

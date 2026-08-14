@@ -1501,7 +1501,11 @@ compute_blast_ref_alignment <- function(assembly_seq, ref_seq, rotation = 0L,
 #'
 #' @keywords internal
 local_blast_db_info <- function(dir_out) {
-  if (is.null(dir_out) || is.na(dir_out) || !dir.exists(dir_out)) {
+  # length() guard first: dir_out comes from a str_extract over .config, which
+  # yields character(0) when nothing matches and length 2 when two lines mention
+  # publishDir. Either would error inside `||` and take the modal down with it.
+  if (is.null(dir_out) || length(dir_out) != 1L || is.na(dir_out) ||
+      !dir.exists(dir_out)) {
     return(NULL)
   }
   # Targeted glob, not a recursive walk: this runs synchronously when the BLAST

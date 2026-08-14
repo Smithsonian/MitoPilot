@@ -1261,7 +1261,15 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "UPDATE blast_opts SET remote_fallback = 1 WHERE remote_fallback IS NULL")
     blast_opts_localized <- TRUE
   }
-  if (blast_opts_localized) {
+  # Deliberately NOT gated on blast_opts_localized. Each ADD COLUMN above
+  # auto-commits on its own, so a migration that adds the columns and then dies
+  # further down leaves a database where the columns exist but this rescue never
+  # ran. On the rerun the flag is FALSE, the rescue is skipped forever, and any
+  # parameter set carrying a legacy Entrez query fails BLAST on every run. Both
+  # statements below are idempotent, so running them every time is free.
+  if ("blast_opts" %in% DBI::dbListTables(con) &&
+      all(c("taxids", "remote_blast", "remote_fallback") %in%
+          DBI::dbListFields(con, "blast_opts"))) {
     # entrez_query has no local equivalent. Values that are no-ops against a
     # metazoan-mitogenome-only database are normalized to the historical default
     # (not to '', so that an older MitoPilot reading this database still sends a
