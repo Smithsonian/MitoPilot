@@ -10,6 +10,15 @@ then
  exit 1
 fi
 
+# Local BLAST database, staged into the build context and not tracked in git.
+# Checked before the credential prompt so a missing artifact fails immediately.
+if [ ! -s docker/mito_metazoa_blastdb.tar.gz ]; then
+  echo "Missing docker/mito_metazoa_blastdb.tar.gz (about 275 MiB)."
+  echo "Build it with tools/build_local_blast_db.py then tools/dedup_local_blast_db.py,"
+  echo "and copy the resulting mito_metazoa_blastdb.tar.gz into docker/."
+  exit 1
+fi
+
 # Prompt for Docker Hub username and password
 read -p "Enter your Docker Hub username: " username
 read -s -p "Enter your Docker Hub password: " password

@@ -47,28 +47,29 @@ RUN mamba install -y -c bioconda blast=2.16.0
 
 # Local metazoan mitogenome BLAST database for the WF1 reference search.
 # 134,560 sequences / 2,201,289,510 bases; 289 MB tarball, 835 MiB unpacked.
-# Tagged separately from the package so a database refresh does not need a
-# package release, and a package release does not need the asset re-uploaded.
-# curl -f is load-bearing: without it a GitHub 404/403 exits 0 and writes an HTML
-# body that tar then rejects as "not in gzip format" instead of the real cause.
-# Downloaded to a file rather than piped into tar so that curl's exit status is
-# actually checked (a pipeline's status is its LAST command's); the file is
-# removed in the same RUN, so it does not add to the layer.
-# --no-same-owner + chmod a+rX: tar as root would otherwise restore the build
-# machine's uid/mode, and Singularity runs as the invoking user, so an unreadable
-# database would pass the root-run smoke test here and fail only on HPC.
+#
+# Staged into the build context by the maintainer, exactly like
+# docker/MitoPilot_*.tar.gz. Build it with tools/build_local_blast_db.py +
+# tools/dedup_local_blast_db.py, then copy the tarball to
+# docker/mito_metazoa_blastdb.tar.gz. It is gitignored: at 275 MiB it exceeds
+# GitHub's 100 MB per-file push limit, and it ships to users inside this image
+# rather than through the repo. The deploy scripts check for it up front.
+#
+# ADD (not COPY + tar) extracts a local tarball into a SINGLE layer and leaves no
+# tarball behind; COPY followed by a separate RUN would keep the 275 MiB archive
+# in its own layer forever. --chown is required because ADD otherwise preserves
+# the build machine's uid/gid from the archive. Do not add a `chmod -R` in a
+# later RUN: touching every file's metadata copies the whole 835 MiB layer again.
+# The archive is already 0644/0755, so it is readable by the invoking user under
+# Singularity.
+#
 # blastdbcmd -info is the smoke test (volume-agnostic, unlike a .nsq stat).
 # taxonomy4blast.sqlite3 must be present: without it blastn SILENTLY discards
 # -taxids and exits 0 with unrestricted hits.
-# Placed above COPY renv.lock so a dependency bump does not re-download 289 MB,
-# and well above the package COPY so R code edits never invalidate this layer.
-ARG MITO_BLASTDB_URL=https://github.com/Smithsonian/MitoPilot/releases/download/blastdb-2026.08/mito_metazoa_blastdb.tar.gz
-RUN mkdir -p /ref_dbs && \
-    curl -fsSL "$MITO_BLASTDB_URL" -o /tmp/mito_metazoa_blastdb.tar.gz && \
-    tar --no-same-owner -xzf /tmp/mito_metazoa_blastdb.tar.gz -C /ref_dbs && \
-    rm -f /tmp/mito_metazoa_blastdb.tar.gz && \
-    chmod -R a+rX /ref_dbs/mito_metazoa && \
-    BLASTDB=/ref_dbs/mito_metazoa blastdbcmd -db /ref_dbs/mito_metazoa/mito_metazoa -info && \
+# Placed above COPY renv.lock so a dependency bump does not rebuild this layer,
+# and well above the package COPY so R code edits never invalidate it.
+ADD --chown=root:root docker/mito_metazoa_blastdb.tar.gz /ref_dbs/
+RUN BLASTDB=/ref_dbs/mito_metazoa blastdbcmd -db /ref_dbs/mito_metazoa/mito_metazoa -info && \
     test -s /ref_dbs/mito_metazoa/taxonomy4blast.sqlite3
 
 RUN R -e "remotes::install_github('rstudio/renv')"

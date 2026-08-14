@@ -17,6 +17,9 @@ inst/doc
 /doc/
 /Meta/
 /docker/MitoPilot*
+# Local BLAST database staged for the image build; 275 MiB, over GitHub's 100 MB
+# per-file push limit. Ships to users inside the container, not through the repo.
+/docker/mito_metazoa_blastdb.tar.gz
 .vscode
 CLAUDE.md
 .claude

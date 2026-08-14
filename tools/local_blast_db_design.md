@@ -326,10 +326,39 @@ which is the same `stitle` shape the remote search returns, so the downstream
 
 ## Delivery and refresh
 
-Ship the same way as the existing curation reference database: a hosted tarball,
-unpacked into the container image at build time. Refresh quarterly. Record the
-database `VERSION` string into the project database at run time so a project can
-report which reference set produced its assignments.
+The database ships **inside the container image**, and reaches users through
+Docker Hub alongside everything else. There is no hosted copy and no download at
+build time.
+
+The tarball is staged into the build context as
+`docker/mito_metazoa_blastdb.tar.gz`, exactly like the existing
+`docker/MitoPilot_*.tar.gz` package artifact, and is gitignored for the same
+reason: at 275 MiB it is over GitHub's 100 MB per-file push limit, and git
+history is permanent, so every clone would carry a copy of every refresh
+forever. The three `docker/deploy-*.sh` scripts check for it before doing any
+work and fail with instructions if it is missing.
+
+`ADD` is used rather than `COPY` plus a `RUN tar`, because `ADD` extracts a local
+archive into a single layer and leaves no tarball behind; the two-step form would
+keep the 275 MiB archive in its own layer permanently. `--chown=root:root` is
+required, since `ADD` otherwise preserves the build machine's uid and gid from
+the archive. Do not add a `chmod -R` in a later `RUN`: touching every file's
+metadata copies the whole 835 MiB layer again. The archive is already 0644/0755,
+so it is readable by the invoking user under Singularity. Verified in a real
+build: the layer adds 900 MB uncompressed (13.5 GB image to 14.4 GB), roughly
+275 MiB compressed on the wire, and a search run as uid 65534 on a read-only
+mount returns the expected top hit with taxon filtering honoured.
+
+A hosted copy was considered and rejected for now. Image builds are manual
+(`docker/deploy-*.sh`; the only GitHub workflows are `pkgdown` and
+`R-CMD-check`), so a URL buys nothing while adding a build-time network
+dependency and a 404 failure mode. Revisit if image builds ever move to CI,
+where the build machine would not have the artifact. A separate data-only image
+consumed via `COPY --from` is the natural next step if database refreshes start
+outpacing package releases.
+
+Refresh quarterly. Record the database `VERSION` string into the project database
+at run time so a project can report which reference set produced its assignments.
 
 ## Integration with MitoPilot
 
