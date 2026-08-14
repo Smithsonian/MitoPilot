@@ -218,17 +218,61 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                   "check Edit to change values or type a new name to create a set."),
         shinyWidgets::prettyCheckbox(
           ns("run_blast"),
-          label = "Run remote BLAST search using using assembly as query",
+          label = "Run BLAST reference search using assembly as query",
           value = as.logical(current$run_blast %||% 1L),
           status = "primary"
         ) |> shinyjs::disabled(),
-        opts_help("BLAST each assembly against NCBI GenBank to find the closest ",
-                  "reference mitogenome (used for orientation and curation).",
-                  href = "https://blast.ncbi.nlm.nih.gov/Blast.cgi"),
+        opts_help("BLAST each assembly against the bundled local database of ",
+                  "metazoan mitogenomes to find the closest reference (used for ",
+                  "orientation and curation). Annotations for the winning ",
+                  "reference are still fetched from NCBI."),
+        div(
+          id = ns("blast_taxids_group"),
+          tags$label(
+            "Restrict search to taxon IDs (optional) -",
+            tags$a("NCBI Taxonomy Browser",
+              href = "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi",
+              target = "_blank"
+            )
+          ),
+          textInput(
+            ns("taxids"),
+            label = NULL,
+            value = current$taxids %||% "",
+            placeholder = "e.g. 7711 for Chordata, or 7711,6656",
+            width = "100%"
+          ) |> shinyjs::disabled(),
+          opts_help("Comma-separated NUMERIC NCBI taxon IDs; taxon names are not ",
+                    "accepted. Leave blank to search the whole database. Applies to ",
+                    "both the local and the remote search.")
+        ),
+        div(
+          id = ns("blast_remote_group"),
+          shinyWidgets::prettyCheckbox(
+            ns("remote_blast"),
+            label = "Remote BLAST",
+            value = as.logical(current$remote_blast %||% 0L),
+            status = "primary"
+          ) |> shinyjs::disabled(),
+          opts_help("Search NCBI over the network instead of the bundled local ",
+                    "database. Much slower, rate limited, and requires internet ",
+                    "access; use it only to reach sequences the local database ",
+                    "does not contain."),
+          shinyWidgets::prettyCheckbox(
+            ns("remote_fallback"),
+            label = "Fall back to remote BLAST when no local hit",
+            value = as.logical(current$remote_fallback %||% 1L),
+            status = "primary"
+          ) |> shinyjs::disabled(),
+          opts_help("If the local search finds no significant hit, retry the search ",
+                    "once against NCBI.")
+        ),
         div(
           id = ns("blast_entrez_group"),
+          # Remote-only setting: hidden unless the remote toggle is on
+          style = if (isTRUE(as.logical(current$remote_blast %||% 0L))) NULL else "display: none;",
           tags$label(
-            "Entrez query -",
+            "Entrez query (remote BLAST only) -",
             tags$a("Entrez help documentation",
               href = "https://www.ncbi.nlm.nih.gov/books/NBK3837/",
               target = "_blank"
@@ -240,8 +284,11 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             value = current$entrez_query %||% "mitochondrion[Location]",
             width = "100%"
           ) |> shinyjs::disabled(),
-          opts_help("Restricts the BLAST search to GenBank records matching this ",
-                    "Entrez filter (default limits hits to mitochondrial sequences).")
+          opts_help("Restricts a REMOTE BLAST search to GenBank records matching ",
+                    "this Entrez filter (default limits hits to mitochondrial ",
+                    "sequences). The local database search cannot apply it; use ",
+                    "taxon IDs above instead. Leave anything other than the default ",
+                    "here and the local search will refuse to run.")
         ),
         div(
           id = ns("blast_mts_group"),
@@ -280,6 +327,8 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
     )
 
     if (!as.logical(current$run_blast %||% 1L)) {
+      shinyjs::hide(id = "blast_taxids_group")
+      shinyjs::hide(id = "blast_remote_group")
       shinyjs::hide(id = "blast_entrez_group")
       shinyjs::hide(id = "blast_mts_group")
       shinyjs::hide(id = "blast_extra_group")

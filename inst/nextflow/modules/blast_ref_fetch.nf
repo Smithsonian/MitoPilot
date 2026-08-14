@@ -11,12 +11,27 @@ process blast_ref_fetch {
 
     maxForks params.blast_gb.maxForks
 
-    cpus { (params.blast_gb.cpus instanceof Integer) ? params.blast_gb.cpus : 1 }
-    memory = (params.blast_gb.memory instanceof Number) ? "${params.blast_gb.memory}.GB" : null
+    // One Rscript doing HTTP: network-bound, never CPU-bound. Deliberately NOT
+    // tied to params.blast_gb.cpus, which now sizes the local blastn search;
+    // inheriting that would give every fetch task the search's cores (times
+    // maxForks) and throttle the local executor for no gain.
+    cpus 1
+    // Method-call form, NOT `memory = ...`: the assignment form is not a process
+    // directive, so the value is dropped and the generic process block in .config
+    // wins instead (1 byte on config.local, a hard task failure on the scheduler
+    // templates, whose closure dereferences an `opts` input this process lacks).
+    memory { (params.blast_gb.memory instanceof Number) ? params.blast_gb.memory.GB : null }
     clusterOptions {
+        // This process runs at 1 CPU, so it does not inherit a clusterOptions
+        // string sized for the multi-CPU local blastn search. Sites that encode
+        // memory there (Hydra) set blast_gb.ref_fetch_clusterOptions instead;
+        // where that key is absent the shared string is used, as before.
+        def co = (params.blast_gb.ref_fetch_clusterOptions instanceof String)
+            ? params.blast_gb.ref_fetch_clusterOptions
+            : ((params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : '')
         def opts = [
             (params.blast_gb.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : ''
+            co
         ].findAll { it }.join(' ')
         opts ?: null
     }
@@ -71,10 +86,23 @@ process blast_ref_stamp {
     executor params.blast_gb.executor
     container params.blast_gb.container
 
+    cpus 1
+    // Declared even though this process is trivial: without a memory directive the
+    // generic process block in .config supplies one, and on the scheduler templates
+    // that closure dereferences an `opts` process input this process does not have,
+    // which fails the task at submission.
+    memory { (params.blast_gb.memory instanceof Number) ? params.blast_gb.memory.GB : null }
     clusterOptions {
+        // This process runs at 1 CPU, so it does not inherit a clusterOptions
+        // string sized for the multi-CPU local blastn search. Sites that encode
+        // memory there (Hydra) set blast_gb.ref_fetch_clusterOptions instead;
+        // where that key is absent the shared string is used, as before.
+        def co = (params.blast_gb.ref_fetch_clusterOptions instanceof String)
+            ? params.blast_gb.ref_fetch_clusterOptions
+            : ((params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : '')
         def opts = [
             (params.blast_gb.executor == 'sge') ? '-S /bin/bash' : '',
-            (params.blast_gb.clusterOptions instanceof String) ? params.blast_gb.clusterOptions : ''
+            co
         ].findAll { it }.join(' ')
         opts ?: null
     }

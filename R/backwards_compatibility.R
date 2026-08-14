@@ -18,6 +18,10 @@
 #'     to the GitHub-hosted reference db).
 #'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
 #'     normalized to TEXT), BLAST result columns, "blast_opts".
+#'   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
+#'     "remote_fallback" (any parameter set carrying a non-default Entrez query is
+#'     switched to the remote search, with a warning, since the local database
+#'     cannot apply one).
 #'   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
 #'     column as INTEGER so assembly does not crash).
 #'   \item New tables: "orf_opts", "blast_opts", "export_opts",
@@ -164,6 +168,11 @@ backwards_compatibility <- function(
       "blast_opts" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
         "max_target_seqs" %in% DBI::dbListFields(con, "blast_opts"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        all(c("taxids", "remote_blast", "remote_fallback") %in%
+              DBI::dbListFields(con, "blast_opts")),
         error = function(e) FALSE
       )) &&
       "use_mitos_best" %in% names(annotate_opts_table) &&
@@ -1226,6 +1235,74 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "UPDATE blast_opts SET max_target_seqs = 5 WHERE max_target_seqs IS NULL")
   }
 
+  # The reference search now runs against the local mitogenome BLAST database
+  # bundled in the container. taxids restricts that search (numeric NCBI taxon
+  # IDs); entrez_query is kept but applies only when the remote search is used.
+  # Existing projects default to the local search with the remote fallback on.
+  blast_opts_localized <- FALSE
+  if ("blast_opts" %in% DBI::dbListTables(con) &&
+      !("taxids" %in% DBI::dbListFields(con, "blast_opts"))) {
+    message("added taxids column to blast_opts table")
+    DBI::dbExecute(con, "ALTER TABLE blast_opts ADD COLUMN taxids TEXT")
+    DBI::dbExecute(con, "UPDATE blast_opts SET taxids = '' WHERE taxids IS NULL")
+    blast_opts_localized <- TRUE
+  }
+  if ("blast_opts" %in% DBI::dbListTables(con) &&
+      !("remote_blast" %in% DBI::dbListFields(con, "blast_opts"))) {
+    message("added remote_blast column to blast_opts table")
+    DBI::dbExecute(con, "ALTER TABLE blast_opts ADD COLUMN remote_blast INTEGER")
+    DBI::dbExecute(con, "UPDATE blast_opts SET remote_blast = 0 WHERE remote_blast IS NULL")
+    blast_opts_localized <- TRUE
+  }
+  if ("blast_opts" %in% DBI::dbListTables(con) &&
+      !("remote_fallback" %in% DBI::dbListFields(con, "blast_opts"))) {
+    message("added remote_fallback column to blast_opts table")
+    DBI::dbExecute(con, "ALTER TABLE blast_opts ADD COLUMN remote_fallback INTEGER")
+    DBI::dbExecute(con, "UPDATE blast_opts SET remote_fallback = 1 WHERE remote_fallback IS NULL")
+    blast_opts_localized <- TRUE
+  }
+  if (blast_opts_localized) {
+    # entrez_query has no local equivalent. Values that are no-ops against a
+    # metazoan-mitogenome-only database are normalized to the historical default
+    # (not to '', so that an older MitoPilot reading this database still sends a
+    # mitochondrion-restricted remote query rather than searching all of core_nt).
+    DBI::dbExecute(con, paste(
+      "UPDATE blast_opts SET entrez_query = 'mitochondrion[Location]'",
+      "WHERE entrez_query IS NULL OR TRIM(entrez_query) = ''",
+      "OR LOWER(TRIM(entrez_query)) IN",
+      "('mitochondrion[location]','mitochondrion[filter]','biomol_genomic[prop]')"
+    ))
+    # A real Entrez restriction is deliberately NOT translated or discarded: it is
+    # kept, and its parameter set is switched to the remote search, which is what
+    # that set was already doing before the upgrade. Otherwise every sample using
+    # it would fail the BLAST step on the next run.
+    legacy_entrez <- DBI::dbGetQuery(con, paste(
+      "SELECT blast_opts, entrez_query FROM blast_opts",
+      "WHERE entrez_query IS NOT NULL AND TRIM(entrez_query) <> ''",
+      "AND entrez_query <> 'mitochondrion[Location]'"
+    ))
+    if (nrow(legacy_entrez) > 0) {
+      DBI::dbExecute(con, paste(
+        "UPDATE blast_opts SET remote_blast = 1",
+        "WHERE entrez_query IS NOT NULL AND TRIM(entrez_query) <> ''",
+        "AND entrez_query <> 'mitochondrion[Location]'"
+      ))
+      warning(
+        "The BLAST reference search now runs against a local mitogenome database ",
+        "bundled in the container, which cannot apply an Entrez query. These BLAST ",
+        "parameter sets carry one, so they have been left on the remote NCBI search ",
+        "to preserve their current behaviour: ",
+        paste0(legacy_entrez$blast_opts, " ('", legacy_entrez$entrez_query, "')",
+               collapse = "; "),
+        ". To move them to the (much faster) local search, open BLAST Options, ",
+        "check Edit, clear the Entrez query field, untick Remote BLAST, and enter ",
+        "any taxon restriction as numeric NCBI taxon IDs instead ",
+        "(https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi).",
+        call. = FALSE
+      )
+    }
+  }
+
   # Per-SCAFFOLD candidate references (rank 1 = that scaffold's top hit). Kept
   # separate per (ID, path, scaffold) so divergent scaffolds/paths never merge
   # into one ranked list. Legacy tables (per-sample, PK (ID, accession)) are
@@ -1461,6 +1538,9 @@ backwards_compatibility <- function(
         blast_opts TEXT NOT NULL,
         run_blast INTEGER,
         entrez_query TEXT,
+        taxids TEXT,
+        remote_blast INTEGER,
+        remote_fallback INTEGER,
         extra_opts TEXT,
         max_target_seqs INTEGER,
         PRIMARY KEY (blast_opts)
@@ -1472,6 +1552,9 @@ backwards_compatibility <- function(
           blast_opts      = "default",
           run_blast       = 1L,
           entrez_query    = "mitochondrion[Location]",
+          taxids          = "",
+          remote_blast    = 0L,
+          remote_fallback = 1L,
           extra_opts      = "",
           max_target_seqs = 5L
         ),
@@ -1812,6 +1895,10 @@ schema_gaps <- function(con) {
   }
   if (!has("orf_nested" %in% DBI::dbListFields(con, "orf_opts"))) {
     gaps <- c(gaps, "the orf_opts table lacks the 'orf_nested' column")
+  }
+  if (!has(all(c("taxids", "remote_blast", "remote_fallback") %in%
+               DBI::dbListFields(con, "blast_opts")))) {
+    gaps <- c(gaps, "the blast_opts table lacks the local BLAST columns ('taxids', 'remote_blast', 'remote_fallback')")
   }
   if (has(any(c("text", "real") %in%
               DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t))) {

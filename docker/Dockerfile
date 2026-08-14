@@ -37,6 +37,40 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
 #    mamba install -c conda-forge r-base=4.5.2 r-reticulate && \
 #    mamba install r-remotes
 
+# blastn/blastdbcmd arrive transitively today (the bioconda getorganelle/mitos/
+# trnascan installs pull them in). The WF1 reference search depends on blastn and
+# on BLAST DB v5 read support, so pin it rather than rely on a transitive solve.
+# Kept with the other base-env conda installs and BEFORE renv::restore: a solve
+# here can move libcurl/openssl/zlib, and doing that under R packages already
+# compiled against them is how the libidn breakage below happened.
+RUN mamba install -y -c bioconda blast=2.16.0
+
+# Local metazoan mitogenome BLAST database for the WF1 reference search.
+# 134,560 sequences / 2,201,289,510 bases; 289 MB tarball, 835 MiB unpacked.
+# Tagged separately from the package so a database refresh does not need a
+# package release, and a package release does not need the asset re-uploaded.
+# curl -f is load-bearing: without it a GitHub 404/403 exits 0 and writes an HTML
+# body that tar then rejects as "not in gzip format" instead of the real cause.
+# Downloaded to a file rather than piped into tar so that curl's exit status is
+# actually checked (a pipeline's status is its LAST command's); the file is
+# removed in the same RUN, so it does not add to the layer.
+# --no-same-owner + chmod a+rX: tar as root would otherwise restore the build
+# machine's uid/mode, and Singularity runs as the invoking user, so an unreadable
+# database would pass the root-run smoke test here and fail only on HPC.
+# blastdbcmd -info is the smoke test (volume-agnostic, unlike a .nsq stat).
+# taxonomy4blast.sqlite3 must be present: without it blastn SILENTLY discards
+# -taxids and exits 0 with unrestricted hits.
+# Placed above COPY renv.lock so a dependency bump does not re-download 289 MB,
+# and well above the package COPY so R code edits never invalidate this layer.
+ARG MITO_BLASTDB_URL=https://github.com/Smithsonian/MitoPilot/releases/download/blastdb-2026.08/mito_metazoa_blastdb.tar.gz
+RUN mkdir -p /ref_dbs && \
+    curl -fsSL "$MITO_BLASTDB_URL" -o /tmp/mito_metazoa_blastdb.tar.gz && \
+    tar --no-same-owner -xzf /tmp/mito_metazoa_blastdb.tar.gz -C /ref_dbs && \
+    rm -f /tmp/mito_metazoa_blastdb.tar.gz && \
+    chmod -R a+rX /ref_dbs/mito_metazoa && \
+    BLASTDB=/ref_dbs/mito_metazoa blastdbcmd -db /ref_dbs/mito_metazoa/mito_metazoa -info && \
+    test -s /ref_dbs/mito_metazoa/taxonomy4blast.sqlite3
+
 RUN R -e "remotes::install_github('rstudio/renv')"
 COPY renv.lock renv.lock
 RUN R -e 'renv::restore()'

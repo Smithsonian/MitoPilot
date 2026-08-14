@@ -352,6 +352,9 @@ new_db <- function(
       blast_opts TEXT NOT NULL,
       run_blast INTEGER,
       entrez_query TEXT,
+      taxids TEXT,
+      remote_blast INTEGER,
+      remote_fallback INTEGER,
       extra_opts TEXT,
       max_target_seqs INTEGER,
       PRIMARY KEY (blast_opts)
@@ -363,6 +366,9 @@ new_db <- function(
         blast_opts      = "default",
         run_blast       = 1L,
         entrez_query    = "mitochondrion[Location]",
+        taxids          = "",
+        remote_blast    = 0L,
+        remote_fallback = 1L,
         extra_opts      = "",
         max_target_seqs = 5L
       ),

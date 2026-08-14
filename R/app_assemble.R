@@ -1065,14 +1065,36 @@ assemble_server <- function(id) {
           inputId = "run_blast",
           value = as.logical(cur$run_blast)
         )
+        # isTRUE()/is.na() rather than a bare as.logical(): a row inserted by an
+        # older MitoPilot has NA in these columns, which %||% does not catch.
+        updateTextInput(
+          inputId = "taxids",
+          value = if (is.na(cur$taxids %||% NA)) "" else cur$taxids
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "remote_blast",
+          value = isTRUE(as.logical(cur$remote_blast %||% 0L))
+        )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "remote_fallback",
+          value = !isFALSE(as.logical(cur$remote_fallback %||% 1L))
+        )
         updateTextInput(inputId = "entrez_query", value = cur$entrez_query %||% "")
         updateNumericInput(inputId = "max_target_seqs", value = as.integer(cur$max_target_seqs %||% 5L))
         updateTextAreaInput(inputId = "extra_opts", value = cur$extra_opts %||% "")
         if (as.logical(cur$run_blast)) {
-          shinyjs::show(id = "blast_entrez_group")
+          shinyjs::show(id = "blast_taxids_group")
+          shinyjs::show(id = "blast_remote_group")
+          # Entrez query only applies to the remote search
+          shinyjs::toggle(
+            id = "blast_entrez_group",
+            condition = isTRUE(as.logical(cur$remote_blast %||% 0L))
+          )
           shinyjs::show(id = "blast_mts_group")
           shinyjs::show(id = "blast_extra_group")
         } else {
+          shinyjs::hide(id = "blast_taxids_group")
+          shinyjs::hide(id = "blast_remote_group")
           shinyjs::hide(id = "blast_entrez_group")
           shinyjs::hide(id = "blast_mts_group")
           shinyjs::hide(id = "blast_extra_group")
@@ -1081,6 +1103,9 @@ assemble_server <- function(id) {
     })
     observeEvent(input$edit_blast_opts, ignoreInit = T, {
       shinyjs::toggleState("run_blast",       condition = input$edit_blast_opts)
+      shinyjs::toggleState("taxids",          condition = input$edit_blast_opts)
+      shinyjs::toggleState("remote_blast",    condition = input$edit_blast_opts)
+      shinyjs::toggleState("remote_fallback", condition = input$edit_blast_opts)
       shinyjs::toggleState("entrez_query",    condition = input$edit_blast_opts)
       shinyjs::toggleState("max_target_seqs", condition = input$edit_blast_opts)
       shinyjs::toggleState("extra_opts",      condition = input$edit_blast_opts)
@@ -1116,26 +1141,67 @@ assemble_server <- function(id) {
         shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
       }
     })
-    # Show/hide entrez + extra opts when run_blast toggle changes
+    # Show/hide search restriction + extra opts when run_blast toggle changes
     observeEvent(input$run_blast, ignoreInit = T, {
       if (isTRUE(input$run_blast)) {
-        shinyjs::show(id = "blast_entrez_group")
+        shinyjs::show(id = "blast_taxids_group")
+        shinyjs::show(id = "blast_remote_group")
+        shinyjs::toggle(id = "blast_entrez_group", condition = isTRUE(input$remote_blast))
         shinyjs::show(id = "blast_mts_group")
         shinyjs::show(id = "blast_extra_group")
       } else {
+        shinyjs::hide(id = "blast_taxids_group")
+        shinyjs::hide(id = "blast_remote_group")
         shinyjs::hide(id = "blast_entrez_group")
         shinyjs::hide(id = "blast_mts_group")
         shinyjs::hide(id = "blast_extra_group")
       }
     })
+    # Entrez query is remote-only, so reveal it live with the remote toggle
+    observeEvent(input$remote_blast, ignoreInit = T, {
+      shinyjs::toggle(
+        id = "blast_entrez_group",
+        condition = isTRUE(input$run_blast) && isTRUE(input$remote_blast)
+      )
+    })
     observeEvent(input$update_blast_opts, ignoreInit = T, {
       if (input$edit_blast_opts) {
+        # Numeric NCBI taxon IDs only; validated here, with no network lookup, so
+        # the save path keeps working offline.
+        taxids <- paste(
+          trimws(strsplit(trimws(input$taxids %||% ""), ",")[[1]]),
+          collapse = ","
+        )
+        if (nzchar(taxids) && !grepl("^[0-9]+(,[0-9]+)*$", taxids)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Invalid taxon restriction",
+            text = paste0(
+              "Enter comma-separated numeric NCBI taxon IDs (e.g. 7711 or ",
+              "7711,6656), or leave the field blank. Look up IDs at ",
+              "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi"
+            ),
+            type = "error"
+          )
+          req(F)
+        }
         dplyr::tbl(session$userData$con, "blast_opts") |>
           dplyr::rows_upsert(
             data.frame(
               blast_opts      = req(input$blast_opts),
               run_blast       = as.integer(isTRUE(input$run_blast)),
-              entrez_query    = input$entrez_query %||% "mitochondrion[Location]",
+              # An emptied field is stored as the historical default rather than
+              # "": that is a no-op for the local search (so emptying the field is
+              # the documented way out of a blocked legacy query) and it keeps a
+              # remote search mitochondrion-restricted instead of hitting all of
+              # core_nt, where a nuclear or NUMT record could win rank 1.
+              entrez_query    = if (nzchar(trimws(input$entrez_query %||% ""))) {
+                input$entrez_query
+              } else {
+                "mitochondrion[Location]"
+              },
+              taxids          = taxids,
+              remote_blast    = as.integer(isTRUE(input$remote_blast)),
+              remote_fallback = as.integer(input$remote_fallback %||% TRUE),
               max_target_seqs = as.integer(input$max_target_seqs %||% 5L),
               extra_opts      = input$extra_opts %||% ""
             ),

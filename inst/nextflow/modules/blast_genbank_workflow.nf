@@ -24,8 +24,8 @@ def appendTaggedNoteSql(String tag, String msg) {
 // Two distinct failure modes, distinguished by blast_genbank.nf:
 //   - blastNoOutputMsg: blast produced no output after all retries (connection / tool error).
 //   - blastNoHitMsg:    blast ran cleanly but found no significant hits (sentinel output).
-params.blastNoOutputMsg = "BLAST produced no output after all retries (possible NCBI connection or rate-limit issue). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
-params.blastNoHitMsg = "No significant BLAST hits found in GenBank for this assembly. The assembly may be non-target, too fragmented, or from a taxon not represented in the database."
+params.blastNoOutputMsg = "BLAST produced no output. Most often this is a legacy Entrez query that the local BLAST database cannot apply (open BLAST Options, check Edit, and tick Remote BLAST, which both applies the query and reveals the Entrez query field so it can be cleared, then click Update), bad additional blastn options, an unreadable local BLAST database, or, for a remote search, an NCBI connection or rate-limit failure. The blast_genbank task's error output is in its work directory (Work Directory browser). To retry, set this sample back to 'Ready to Assemble' (State button) and re-run the pipeline."
+params.blastNoHitMsg = "No significant BLAST hits found for this assembly. The assembly may be non-target, too fragmented, or from a taxon with no mitogenome in the reference database. If BLAST Options carries a taxon ID restriction, check that it names a clade the database actually contains."
 
 // blast_accession_auto mirrors the automatic rank-1 hit so a later user override
 // of blast_accession can be flagged in the tables; set both from the same values.
@@ -54,8 +54,10 @@ params.sqlDeleteAssemblyBlast = 'DELETE FROM assembly_blast WHERE ID = ? AND tim
 params.sqlWriteCandidate = 'INSERT OR REPLACE INTO blast_ref_candidates (ID, path, scaffold, rank, accession, species, pident, qcovs, evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 params.sqlDeleteCandidates = 'DELETE FROM blast_ref_candidates WHERE ID = ? AND time_stamp != ?'
 
+// New columns are appended at the END: the row[N] indices below are positional.
 params.sqlReadBlastOpts =
-    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts, b.max_target_seqs ' +
+    'SELECT a.ID, b.run_blast, b.entrez_query, b.extra_opts, b.max_target_seqs, ' +
+    'b.taxids, b.remote_blast, b.remote_fallback ' +
     'FROM assemble a ' +
     'JOIN blast_opts b ON a.blast_opts = b.blast_opts'
 
@@ -76,10 +78,16 @@ workflow BLAST_GENBANK {
         // max_target_seqs is now a per-parameter-set DB value (was a .config
         // param); it sets both the blastn -max_target_seqs flag and the number
         // of candidate references retained (N_CAND below). Default 5.
+        // taxids / remote_blast / remote_fallback are defaulted here as well as in
+        // blast_genbank.nf, so a NULL from an older project database is harmless.
         channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
             .filter { row -> row[1] as Integer == 1 }
-            .map { row -> tuple(row[0], row[2], row[3] ?: '', (row[4] == null ? 5 : (row[4] as Integer))) }
-            .set { blast_opts_ch }  // (id, entrez_query, extra_opts, max_target_seqs)
+            .map { row -> tuple(row[0], row[2],
+                                (row[5] ?: '').toString().trim(),
+                                (row[6] == null ? 0 : (row[6] as Integer)),
+                                (row[7] == null ? 1 : (row[7] as Integer)),
+                                row[3] ?: '', (row[4] == null ? 5 : (row[4] as Integer))) }
+            .set { blast_opts_ch }  // (id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, max_target_seqs)
 
         // Per-sample max_target_seqs, used to bound the retained candidate list.
         channel.fromQuery(params.sqlReadBlastOpts, db: 'sqlite')
@@ -153,11 +161,11 @@ workflow BLAST_GENBANK {
                 targets.collect { t -> tuple(id, t[0], t[1], opts_id) }
             }
             .combine(blast_opts_ch, by: 0)
-            .map{ id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
-                tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
+            .map{ id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts ->
+                tuple(id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts)
             }
-            .multiMap { id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts ->
-                process: tuple(id, path_idx, asmb, opts_id, entrez_query, extra_opts, mts)
+            .multiMap { id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts ->
+                process: tuple(id, path_idx, asmb, opts_id, entrez_query, taxids, remote_blast, remote_fallback, extra_opts, mts)
                 ids:     tuple(id, true)
                 pathkey: id
             }
@@ -184,7 +192,9 @@ workflow BLAST_GENBANK {
             .map { id, asmb_list, opts_id -> tuple(id, params.ts) }
             .sqlInsert(statement: params.sqlDeleteAssemblyBlast, db: 'sqlite')
 
-        blast_genbank(blast_in_split.process)
+        // .hits is the (id, path_idx, result_file) tuple; the process also emits
+        // db_version (the local database's VERSION file), published but unused here.
+        blast_genbank(blast_in_split.process).hits
             .multiMap { id, path_idx, result_file ->
                 state:      tuple(id, result_file)
                 parse:      tuple(id, path_idx, result_file)
