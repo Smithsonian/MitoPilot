@@ -79,6 +79,14 @@ SHA-256 catches only byte-identical pairs. A RefSeq copy that differs by one bas
 
 ## 2. Delivery: bake the database into the container image
 
+> **Superseded in part.** The decision to bake into the image stands, but the
+> database is now staged locally as `docker/mito_metazoa_blastdb.tar.gz` and
+> pulled in with `ADD`, rather than downloaded from a GitHub release asset at
+> build time. No release asset is created and no `curl` runs during the build.
+> See "Delivery and refresh" in `tools/local_blast_db_design.md` for the
+> implemented approach. Steps 2.1 and 2.2 below are kept for the reasoning that
+> led here; the `ARG MITO_BLASTDB_URL` block they describe is not what shipped.
+
 Option B (staging the tarball through `prepare_ref_db`) is dropped, not deferred. `prepare_ref_db.nf:9-13` records in-repo that cross-run `storeDir` caching was tried and abandoned under Docker, and `prepare_ref_db.nf:20` hard-codes `executor 'local'`. That means a 336 MB download plus a 989 MB extraction on the driver on **every** run, including every `-resume`, landing on the submit node under SLURM/SGE. It would also break the `-resume` caching requirement in Step 10.6, since a session-UUID-keyed `path(db_dir)` input is a new path every session.
 
 2.1. Upload the post-Step-1 `mito_metazoa_blastdb.tar.gz` as a **GitHub release asset**, under a database-specific tag (`blastdb-2026.08`) decoupled from the package version. It cannot live under `ref_dbs/` the way `ref_dbs/Mitos2/Metazoa_RefSeq235.tar.gz` (47 MB) does: GitHub rejects pushes over 100 MB, and this is 336 MB. Release assets allow up to 2 GB.
