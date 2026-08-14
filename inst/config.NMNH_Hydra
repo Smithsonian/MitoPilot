@@ -96,20 +96,8 @@ params {
         cpus = 4                            // -num_threads for the local BLAST search
         maxForks = 10 // only allow 10 concurrent BLAST runs to avoid server timeout issues
         maxRetries = 3
-        // Memory is requested through clusterOptions on Hydra, not the memory
-        // directive (mres = total, h_data/h_vmem = per CPU). Measured peak RSS is
-        // 672 MiB, but h_vmem caps ADDRESS SPACE and blastn memory-maps the whole
-        // database volume, so this is sized well above the RSS: 4G per CPU x 4
-        // CPUs. Still under the 8G-per-CPU himem threshold above.
         clusterOptions = "-l mres=16G,h_data=4G,h_vmem=4G -S /bin/bash"
-        // The reference fetch/stamp steps share this params block but run at 1 CPU
-        // (HTTP and file copying), so they take a much smaller reservation instead
-        // of the search's.
-        // The fetch/stamp steps are one single-threaded Rscript doing HTTP; peak
-        // RSS is ~70 MB. 2G is ample now that the module sets OMP_NUM_THREADS=1
-        // (without it R reserved GBs of address space and h_vmem killed the task
-        // regardless of the cap).
-        ref_fetch_clusterOptions = "-l mres=2G,h_data=2G,h_vmem=2G -S /bin/bash"
+        ref_fetch_clusterOptions = "-l mres=6G,h_data=6G,h_vmem=6G -S /bin/bash"
         db_dir = '/ref_dbs/mito_metazoa'    // local BLAST database, baked into the container
         db_name = 'mito_metazoa'
         container = process.container
