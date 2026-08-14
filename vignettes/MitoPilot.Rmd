@@ -275,7 +275,7 @@ mean work is still happening. This is the simplest option, and the right one for
 a project this size.
 
 <div class="alert alert-warning">
-<strong>Watch out.</strong> Running from the app ties the pipeline to the app
+<strong>Warning.</strong> Running from the app ties the pipeline to the app
 session. Closing the MitoPilot app will kill the pipeline.
 For large projects, or anything on a cluster, save or submit a job
 script instead so the run survives a dropped connection. See
@@ -411,16 +411,16 @@ the opposite case.
 
 ![Warning that scaffolds map to different references](figures/get-started/multiscaff-details.png)
 
-MitoPilot refuses to go quietly here: the scaffolds carry *different* BLAST hits,
-and the mapping plot shows the second one only sparsely aligned (hatched) to the
-reference. These are two different animals, from contamination or a mixed sample.
-Joining them would fabricate a chimeric genome. Leave them separate, and each is
+These scaffolds carry *different* BLAST hits,
+and the mapping plot shows the second one only sparsely aligned (hatched shading) to the
+reference. This likely represents contamination or a mixed sample.
+Joining them would fabricate a chimeric mitogenome. Leave them separate, and each is
 annotated, validated, and exported as its own record.
 
 <div class="alert alert-tip">
 <strong>Tip.</strong> Fragmented does not automatically mean joinable. Check that
-the pieces map to the same reference, in a sensible order, without overlapping
-each other, before you join anything. Contamination, NUMTs, and naturally
+the pieces map to the same reference in a sensible order before 
+you join anything. Contamination, NUMTs, and naturally
 multipartite mitogenomes all look like "extra scaffolds" at first glance.
 </div>
 
