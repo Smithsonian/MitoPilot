@@ -64,8 +64,18 @@ app_server_userAsmb <- function(input, output, session) {
         shiny::tags$pre(cgap$expected),
         shiny::tags$p(
           "The app works either way, but pipeline runs will use the older ",
-          "image's tools and workflow code. To switch, edit the container line ",
-          "in the project's .config, or regenerate it with:"
+          "image's tools and workflow code."
+        ),
+        shiny::tags$p(
+          shiny::tags$b("To switch, edit the container line in the project's .config."),
+          " That is a one-line change and leaves the rest of your settings alone."
+        ),
+        shiny::tags$p(
+          "You can instead regenerate the whole config, but note it is rebuilt ",
+          "from the template for the executor you name, so any tuned cpus, ",
+          "memory or clusterOptions must be re-applied afterwards (the old file ",
+          "is backed up alongside it). Name your own profile, not \"local\", if ",
+          "this project runs on a cluster:"
         ),
         shiny::tags$pre('MitoPilot::backwards_compatibility(executor = "local")')
       ),
