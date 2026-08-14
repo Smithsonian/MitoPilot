@@ -12,13 +12,19 @@ justified it:
 
 | Property | Estimated | **Actual** |
 | --- | --- | --- |
-| Records | ~167,600 | **171,915** |
-| Total bases | ~2.75 Gbp | **2,813,598,799** |
-| BLAST DB v5 on disk | ~736 MB | **712 MiB** |
+| Records | ~167,600 | **134,560** |
+| Total bases | ~2.75 Gbp | **2,201,289,510** |
+| BLAST DB v5 on disk | ~736 MB | **557 MiB** |
 | `taxdb` (required, see below) | ~350 MB | **278 MiB** |
-| Total on disk | - | **989 MiB** |
-| Shipped tarball | ~230 MB | **336 MiB** |
-| Build wall clock | - | **~35 min** |
+| Total on disk | - | **835 MiB** |
+| Shipped tarball | ~230 MB | **289 MB** |
+| Build wall clock | - | **~35 min + 2 min dedup** |
+
+The record count came in below the estimate because the raw build was
+deduplicated afterwards, which removed 37,355 byte-identical sequences (see
+"Redundancy" below). The pre-dedup build was 171,915 records and 2.81 Gbp, so
+the bytes-per-base projection that produced the ~736 MB estimate was accurate to
+within 1%.
 
 Sizes above are `du` values (MiB). The bytes-per-base estimate that produced the
 ~736 MB projection was accurate to within 1%; the tarball estimate was not, since
@@ -214,11 +220,11 @@ Verified after the build:
 - With `BLASTDB` set, `-taxids 6656` on a pangolin query returns only arthropod
   hits and `-taxids 7711` returns only chordates.
 
-### 6. Known defect: RefSeq/GenBank redundancy changes the top hit
+### 6. Redundancy: fixed by deduplication
 
 Found by comparing the local database against the remote baselines in the
-existing fish test project, using the real staged query FASTAs. **This must be
-fixed before the database ships.**
+existing fish test project, using the real staged query FASTAs. Fixed by
+`tools/dedup_local_blast_db.py`, results at the end of this section.
 
 The database holds 16,018 `NC_` (RefSeq) records out of 171,915, and for many of
 them the byte-identical GenBank source record is also present. Remote `core_nt`
@@ -241,13 +247,39 @@ lose two of five candidate slots to duplicates. That changes
 versus raw submitter annotation), the published `blast_ref_<accession>/`
 directory name, and the diversity of the reference picker.
 
-Fix is a local dedupe: `blastdbcmd` can dump accessions and sequences from the
-existing database, so identical sequences can be collapsed (preferring the `NC_`
-accession) and the database rebuilt without refetching anything from NCBI. Note
-this is exact-duplicate collapsing, which is a different and much safer
-operation than the species-level deduplication considered and deferred below.
-SHA-256 matching only catches byte-identical pairs; a RefSeq copy that differs by
-one base or is rotated relative to its GenBank source will survive.
+Fix is a local dedupe: `blastdbcmd` dumps accessions and sequences from the
+existing database, identical sequences are collapsed by SHA-256 (preferring the
+`NC_` accession), and the database is rebuilt without refetching anything from
+NCBI. This is exact-duplicate collapsing, a different and much safer operation
+than the species-level deduplication considered and deferred below. Every drop
+is recorded in `dropped_duplicates.tsv` so the decision is auditable.
+
+**Result.** 37,355 records collapsed, more than twice the 16,018 that the RefSeq
+overlap alone predicted:
+
+| Reason a record was dropped | Count |
+| --- | --- |
+| A RefSeq (`NC_`) copy of the identical sequence was kept | 16,444 |
+| An identical GenBank record was kept instead | 20,911 |
+
+The second row was the surprise. Population studies deposit large numbers of
+byte-identical mitogenomes: one accession absorbed 228 identical records, and
+24,749 kept accessions absorbed at least one duplicate. These were consuming
+candidate slots with the same genome under different accessions.
+
+Rank 1 after dedup matches the remote baseline on **7 of 7** test queries,
+including the three that previously flipped. Candidate diversity went from
+4/5, 3/5, and 3/5 on the three worst queries to 5/5, 4/5, and 5/5.
+
+The one remaining repeat is correct behaviour, not a miss: `MULTISCAFF.1.2`
+returns both `NC_002761.2` and `MW788427.1` for *Conger myriaster*, at 90.421%
+and 90.414% identity. Those are two different individuals, so they are real
+biological variation and both belong in the database.
+
+SHA-256 only catches byte-identical pairs. A RefSeq copy differing by one base,
+or rotated relative to its GenBank source, survives on purpose. Merging those
+would require alignment, and a wrong guess would silently delete a real
+reference.
 
 ## Build pipeline
 
