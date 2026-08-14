@@ -452,37 +452,33 @@ own.
 
 Genes come from [MITOS2](https://gitlab.com/Bernt/MITOS) (protein-coding genes
 and rRNAs) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE)
-(tRNAs), with MitoFinder, ARWEN, ARAGORN, and ORFfinder available as extras. The
-MITOS2 reference database defaults to Chordata; `Metazoa_RefSeq89` is the
+(tRNAs), with MitoFinder, ARWEN, ARAGORN, and ORFfinder available as optional annotators. 
+The MITOS2 reference database defaults to Chordata, but `Metazoa_RefSeq89` is the
 general-purpose choice for other groups.
 
 **Curate Opts.** controls what MitoPilot does with those raw annotations.
 
 ![Curation options window showing the taxonomic ruleset](figures/get-started/curate-opts.png)
 
-The one that matters most is **Target**, the taxonomic ruleset. It sets the
+The setting that matters most is **Target**, the taxonomic ruleset. It sets the
 expected gene content, the allowed start and stop codons, the naming
 conventions, and the genetic code. It defaults to Actinopterygii, which is right
-for the test fishes. For your own data, pick the closest clade from the
+for the test fishes. 
+
+For your own data, pick the closest clade from the
 [ruleset browser](Ruleset-Browser.html). The validation parameters below are the
 ruleset itself, laid out so you can see exactly which rules a sample is being
 judged against; see [fish mitogenome curation](Fish-Mitogenome-Curation.html) for
-how to customise them.
+how to customize them.
 
 Then click **UPDATE** and run the workflow the same way you ran Assemble.
 
 ![Progress window during a Nextflow run](figures/get-started/progress-window.png)
 
 This module is slower than Assemble. MITOS2 takes a couple of minutes per unit,
-and curation aligns every protein-coding gene against reference sequences.
-
-<div class="alert alert-hydra">
-<span class="hydra-tag">HYDRA</span>
-<strong>Annotation is the step worth submitting as a job.</strong> It is the
-longest stage of the pipeline, so this is where <strong>Submit as Job</strong>
-earns its keep. Submit it, close the app, and come back when
-<code>qstat</code> shows the job finished.
-</div>
+and curation aligns every protein-coding gene against reference sequences. 
+When working on a computing cluster with your own project, consider 
+running this step as a job rather than directly from the MitoPilot app.
 
 ## Read the results
 
@@ -514,9 +510,9 @@ Click `details` on any row.
 ![Annotation details window with the gene table](figures/get-started/annotate-details.png)
 
 The annotation table lists every gene with its position, strand, and the tool
-that called it. The **Notes** column records what automatic curation changed, for
-example a start position moved upstream or a stop codon trimmed, and
-**Warnings** shows what validation flagged. The `nt` and `aa` buttons copy the
+that called it. The **Notes** column records changes made during automatic curation, such as
+a start position moved upstream or a stop codon trimmed.
+**Warnings** shows what validation the flagged. The `nt` and `aa` buttons copy the
 nucleotide or amino acid sequence to your clipboard.
 
 The badges along the top track the sample: topology, ID verified, reviewed,
