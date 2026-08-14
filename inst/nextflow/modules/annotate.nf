@@ -33,6 +33,7 @@ process annotate {
     // other scaffold of the path, so only this unit's scaffold is annotated.
     unit_assembly = "${id}_assembly_${path}_${scaffold}.fasta"
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
 
     # Name the assembly per unit; annotate() isolates this scaffold via ignore_scaffolds.

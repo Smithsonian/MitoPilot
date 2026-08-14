@@ -33,6 +33,7 @@ process blast_ref_align {
     outDir = "${id}/annotate"
     outFile = "blast_ref_alignment_${path}_${scaffold}_${accession}.csv"
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{outDir}
     # blast_ref_align output contract v2: CSV has 6 columns
     # (aligned_sample, aligned_ref, rotation, ref_length, ref_start, strand).

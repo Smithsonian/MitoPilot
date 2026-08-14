@@ -32,6 +32,7 @@ process coverage_userAsmb {
     outDir = "${id}/assemble/${assembler}"
     output_name = assembly.baseName
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{outDir}
 
     # rename assembly file and contig(s)
@@ -87,6 +88,7 @@ process coverage_userAsmb_noReads {
     outDir = "${id}/assemble/${assembler}"
     output_name = assembly.baseName
     '''
+    export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{outDir}
 
     # rename assembly file and contig(s)
