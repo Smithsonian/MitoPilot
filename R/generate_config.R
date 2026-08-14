@@ -410,3 +410,31 @@ generate_config <- function(
   message("Use it with: new_project(..., executor = '", name, "')")
   invisible(out_path)
 }
+
+#' Compare a project's configured container against the installed package version
+#'
+#' The pipeline's behaviour lives in the image, not in the R package, so a
+#' project pinned to an older image silently runs older code: the local BLAST
+#' database, for instance, only exists from 1.5.2 onward, and a project pointing
+#' at an earlier tag sends every sample to the remote search instead with no
+#' visible sign. A custom container is left alone deliberately, mirroring
+#' `migrate_config()`: it has no version to compare against.
+#'
+#' @param path Project directory containing `.config`.
+#'
+#' @return NULL when the container matches, is custom, or cannot be read.
+#'   Otherwise a list with `configured` and `expected` image references.
+#'
+#' @keywords internal
+container_version_gap <- function(path) {
+  cfg <- file.path(path, ".config")
+  if (!file.exists(cfg)) return(NULL)
+  lines <- tryCatch(readLines(cfg, warn = FALSE), error = function(e) NULL)
+  if (is.null(lines)) return(NULL)
+  configured <- config_get_param(lines, "container")
+  if (is.null(configured) || identical(configured, "process.container")) return(NULL)
+  if (!grepl("^macguigand/mitopilot:", configured)) return(NULL)
+  expected <- paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
+  if (identical(configured, expected)) return(NULL)
+  list(configured = configured, expected = expected)
+}

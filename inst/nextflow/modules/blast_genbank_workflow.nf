@@ -324,9 +324,13 @@ workflow BLAST_GENBANK {
                     .collect { it[0][0] }
                     .findAll { it != null && it != 'NO HIT' }
                     .unique()
-                tuple(id, opts_id, candList, scaffAccs)
+                // 0 = hits came from the local database, 1 = from the remote
+                // fallback. blast_genbank.nf stamps this; absent (older result
+                // files) is treated as local, which is the pre-fallback default.
+                def src = lines.any { it.contains('blast_source=remote') } ? 1 : 0
+                tuple(id, opts_id, candList, scaffAccs, src)
             }
-            .set { perpath_ch }  // (id, opts_id, [candRec...], [scaffAcc...])
+            .set { perpath_ch }  // (id, opts_id, [candRec...], [scaffAcc...], src)
 
         // Write state=4 (BLAST done, ref fetch pending); BLAST_REF_FETCH writes
         // state=2 once the ref fetch completes. Redundant per-id updates are safe.
@@ -482,13 +486,22 @@ workflow BLAST_GENBANK {
         // per-sample blast_opts.max_target_seqs (default 5, joined from mts_ch).
         perpath_ch
             .combine(path_count_ch, by: 0)
-            .map { id, opts_id, candList, scaffAccs, n_paths ->
-                tuple(groupKey(id, n_paths), [id, opts_id, candList, scaffAccs]) }
+            .map { id, opts_id, candList, scaffAccs, src, n_paths ->
+                tuple(groupKey(id, n_paths), [id, opts_id, candList, scaffAccs, src]) }
             .groupTuple()
             .map { gk, items ->
                 def id = items[0][0]
                 def opts_id = items[0][1]
-                def allCands = items.collectMany { it[2] ?: [] }
+                // The fallback is decided per PATH, so one sample can hold local
+                // and remote results at once. Their e-values come from search
+                // spaces three orders of magnitude apart and cannot be ranked
+                // against each other, so when any path searched locally, only
+                // those candidates represent the sample. A remote-only path
+                // keeps its own per-scaffold hit, and its accession still
+                // reaches the reference fetch through allScaffs below.
+                def localItems = items.findAll { (it[4] ?: 0) == 0 }
+                def candItems = localItems ?: items
+                def allCands = candItems.collectMany { it[2] ?: [] }
                 def allScaffs = items.collectMany { it[3] ?: [] }.unique()
                 tuple(id, opts_id, allCands, allScaffs)
             }

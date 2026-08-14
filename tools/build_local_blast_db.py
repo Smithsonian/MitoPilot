@@ -23,6 +23,7 @@ import gzip
 import html
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -476,6 +477,10 @@ def main():
     p.add_argument("--workdir", default=os.path.expanduser("~/mitopilot_blastdb_build"))
     p.add_argument("--stage", choices=["uids", "summary", "filter", "fasta", "build", "all"],
                    default="all", help="run from this stage onward")
+    p.add_argument("--resume", action="store_true",
+                   help="continue an interrupted build in an existing workdir "
+                        "instead of clearing it. Only safe when the query and "
+                        "filter parameters are unchanged.")
     p.add_argument("--min-len-any", type=int, default=DEFAULTS["min_len_any"])
     p.add_argument("--min-len-complete", type=int, default=DEFAULTS["min_len_complete"])
     p.add_argument("--max-len", type=int, default=DEFAULTS["max_len"])
@@ -484,6 +489,21 @@ def main():
                    action="store_false", default=DEFAULTS["drop_unverified"])
     opts = p.parse_args()
 
+    # A rerun starts from an empty workdir unless --resume is given. Every stage's
+    # "already done" test is bare file existence, with no record of the query or
+    # the filter parameters that produced it, so reusing a workdir silently
+    # rebuilds the OLD data while stamping the NEW parameters into VERSION, which
+    # is then copied into every user's project as provenance. Nothing of value is
+    # lost by clearing: the shipped database lives in the container image, and the
+    # tarball is staged separately for the image build.
+    if os.path.isdir(opts.workdir) and os.listdir(opts.workdir) and not opts.resume:
+        log(f"clearing {opts.workdir} (pass --resume to continue an interrupted build)")
+        for name in os.listdir(opts.workdir):
+            target = os.path.join(opts.workdir, name)
+            if os.path.isdir(target):
+                shutil.rmtree(target)
+            else:
+                os.remove(target)
     os.makedirs(opts.workdir, exist_ok=True)
     log(f"workdir {opts.workdir}")
     log(f"api key {'set' if api_key() else 'NOT set (3 req/s)'}")

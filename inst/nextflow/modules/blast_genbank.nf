@@ -171,6 +171,12 @@ process blast_genbank {
                 fi
                 echo "NO_SIGNIFICANT_HITS" > !{outDir}/!{outFile}
             fi
+            # Provenance marker. e-values are not comparable between search
+            # spaces (E scales with database size, and core_nt is ~3 orders
+            # larger than the local database), so the workflow must never rank a
+            # remote hit against a local one on e-value. No tabs, so every
+            # existing parser skips it: they require 6 tab-separated fields.
+            echo "# blast_source=remote" >> !{outDir}/!{outFile}
         else
             cat blast_remote.err >&2
             exit 75
@@ -271,6 +277,7 @@ process blast_genbank {
         # Provenance, written only when the published hits really came from the
         # local database (not when the remote fallback below supplies them).
         cp "${BLASTDB}/VERSION" !{outDir}/blast_db_VERSION.txt 2>/dev/null || true
+        echo "# blast_source=local" >> !{outDir}/!{outFile}
     else
         if [ "!{fallback_on}" = "1" ]; then
             # No significant hit locally: retry once against NCBI, which covers a
