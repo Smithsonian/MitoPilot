@@ -199,7 +199,11 @@ setwd(wd)     # the app must be launched from the project directory
 MitoPilot()
 ```
 
-![MitoPilot sample table in the Assemble module](figures/get-started/assemble-table.png)
+![Sample table in the Assemble module before the pipeline has run](figures/get-started/assemble-table-prerun.png)
+
+This is a fresh project, so the result columns are still empty: the sample
+metadata comes from your mapping file, and everything else fills in as the
+pipeline runs.
 
 Each row is a sample. The dropdown at the top left switches between the three
 pipeline modules, **Assemble**, **Annotate**, and **Export**, which you work
@@ -227,8 +231,12 @@ database of metazoan mitogenomes to find its closest published relative.
 ## Set the options
 
 Every processing step has an options set, shown as a link in the sample table.
-Click the `default` link in the **Assembly Opts.** column to see what the
-assembler will do.
+Click the `default` link in the **Preprocess Opts.** column to see how the reads
+will be cleaned.
+
+![Preprocess options window](figures/get-started/preprocess-opts.png)
+
+The **Assembly Opts.** column works the same way, and controls the assembler.
 
 ![Assembly options window](figures/get-started/assemble-opts.png)
 
@@ -301,6 +309,12 @@ updates as samples move through the steps, and the spinning gears in the corner
 mean work is still happening. This is the simplest option, and the right one for
 a project this size.
 
+![Progress window part way through an Assemble run](figures/get-started/progress-window.png)
+
+Each line is a pipeline step, with a count of how many samples have finished it.
+**Stop / Interrupt** halts the run; you can resume it later without redoing
+completed work.
+
 <div class="alert alert-warning">
 <strong>Warning.</strong> Running from the app ties the pipeline to the app
 session. Closing the MitoPilot app will kill the pipeline.
@@ -337,10 +351,13 @@ Common error messages are covered in the
 The reference search runs against a **local database of metazoan mitogenomes
 bundled into the MitoPilot container**, so it needs no network and finishes in
 seconds rather than the minutes-to-hours a queued NCBI search can take. This is
-the default, and for most projects it is all you need. The **BLAST Opts.** window
-shows the build date of the bundled database.
+the default, and for most projects it is all you need.
 
-Two settings in that window change the behavior:
+![BLAST options window](figures/get-started/blast-opts.png)
+
+The **BLAST Opts.** window reports the build date and size of the bundled
+database, recorded the first time a local search runs in a project. Two settings
+change the behavior:
 
 - **Remote BLAST** searches NCBI over the network instead of the local database.
   It is much slower and rate limited, and it is worth using only to reach
@@ -373,6 +390,19 @@ whether the sample came back as one clean sequence or something messier. The
 BLAST columns name the closest GenBank record.
 
 `output` opens the sample's results folder. `details` opens the assembly itself.
+
+![Assembly details for a sample with one clean assembly](figures/get-started/assemble-details.png)
+
+For a sample that assembled cleanly there is one row here: the assembly, its
+topology and length, and the GenBank record it matched. Select it and `Fasta`
+copies the sequence to your clipboard. Samples that produced more than one
+assembly get more rows and more tools, covered below.
+
+**Work Dirs** at the top right opens a browser of the working directory that each
+pipeline step used for a sample, including failed attempts. It is the most
+reliable way to reach logs and intermediate files when something goes wrong.
+
+![Work directory browser](figures/get-started/workdir-browser.png)
 
 ### Coverage and error
 
@@ -529,8 +559,6 @@ judged against; see [fish mitogenome curation](Fish-Mitogenome-Curation.html) fo
 how to customize them.
 
 Then click **UPDATE** and run the workflow the same way you ran Assemble.
-
-![Progress window during a Nextflow run](figures/get-started/progress-window.png)
 
 This module is slower than Assemble. MITOS2 takes a couple of minutes per unit,
 and curation aligns every protein-coding gene against reference sequences. 
