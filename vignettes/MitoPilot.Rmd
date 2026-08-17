@@ -69,7 +69,7 @@ how to start a project with your own data.
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
 Boxes like this one flag the
-places where Smithsonian Hydra computing cluster differs from a generic setup. 
+places where usage on the Smithsonian Hydra computing cluster differs from a generic setup. 
 First time on Hydra? Work
 through the
 <a href="NMNH-Hydra.html#get-an-r-session-on-hydra">Get an R session</a> and
