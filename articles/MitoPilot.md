@@ -11,13 +11,14 @@ annotations when needed.
 This page walks the whole pipeline using the built-in test project, then
 shows you how to start a project with your own data.
 
-HYDRA Boxes like this one flag the places where usage on the Smithsonian
-Hydra computing cluster differs from a generic setup. First time on
-Hydra? Work through the [Get an R
+HYDRA **Are you a Smithsonian user?** Boxes like this one flag the
+places where usage on the Smithsonian Hydra computing cluster differs
+from a generic setup. Before starting this tutorial, work through the
+[Get an R
 session](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html#get-an-r-session-on-hydra)
 and [Install
 Nextflow](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html#install-nextflow)
-sections before starting this tutorial.
+sections.
 
 ------------------------------------------------------------------------
 
