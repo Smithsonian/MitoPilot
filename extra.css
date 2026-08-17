@@ -1,0 +1,11 @@
+/* Bootstrap styles the <figcaption> element, but pandoc emits a div/p with a
+   class instead. Markup differs by pandoc version, so cover both. */
+.float > .figcaption,
+.figure > .caption {
+  font-size: 0.875em;
+  font-style: italic;
+  color: var(--bs-secondary-color, #6c757d);
+  text-align: center;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
