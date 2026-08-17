@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,9 +85,110 @@
 .alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
 strong { font-weight: bold; }
 </style>
-<p>Please see the <a href="https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/qmd/setup/01_RstudioServer.html" class="external-link">MitoPilot
-workshop website</a> for detailed setup instructions.</p>
-  </main>
+<p>This page covers what is specific to the Smithsonian NMNH Hydra
+cluster. Once you are set up here, the rest of MitoPilot works exactly
+as in the <a href="MitoPilot.html">Get Started</a> walkthrough, with
+<code>executor = "NMNH_Hydra"</code>.</p>
+<p>You need a Hydra account; see the <a href="https://confluence.si.edu/display/HPC/Hydra+Policies" class="external-link">Hydra
+policies page</a>.</p>
+<div class="section level2">
+<h2 id="get-an-r-session-on-hydra">Get an R session on Hydra<a class="anchor" aria-label="anchor" href="#get-an-r-session-on-hydra"></a>
+</h2>
+<p>The simplest route is the dedicated RStudio Server at <a href="https://galaxy.si.edu/R4" class="external-link">https://galaxy.si.edu/R4</a>, which you
+reach in a browser with your Hydra credentials and which can see
+<code>/pool</code>, <code>/scratch</code>, and <code>/store</code>. It
+is a shared resource, so use it for interactive work and submit long
+runs as jobs. Details on the <a href="https://confluence.si.edu/display/HPC/Dedicated+RStudio+Server" class="external-link">Hydra
+RStudio page</a>.</p>
+<p>If you would rather run your own RStudio Server session, start one on
+a login node and tunnel to it:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">conda</span> deactivate                       <span class="co"># avoid package conflicts</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">module</span> load tools/R/RStudio/server</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="ex">start-rstudio-server</span></span></code></pre></div>
+<p>The command prints the <code>ssh -N -L ...</code> line to run in a
+terminal on your own computer. Leave both terminals open and point a
+browser at <code>http://localhost:8787</code>. If port 8787 is taken,
+pass a different one with
+<code>start-rstudio-server -port 8890</code>.</p>
+<div class="alert alert-note">
+<p><strong>Note.</strong> Use Chrome or Firefox. There are known
+problems running the MitoPilot app in Safari.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="install-nextflow">Install Nextflow<a class="anchor" aria-label="anchor" href="#install-nextflow"></a>
+</h2>
+<p>Hydra has no Nextflow module yet, so install your own copy once. Run
+these in a <strong>terminal</strong> on Hydra: either an SSH session to
+a login node, or the Terminal tab in your RStudio Server session (bottom
+left, next to Console).</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="bu">cd</span> ~</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="ex">module</span> load tools/java/21.0.2</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> https://get.nextflow.io <span class="kw">|</span> <span class="fu">bash</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="fu">chmod</span> +x nextflow</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> ~/bin</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="fu">mv</span> nextflow ~/bin/nextflow</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="bu">echo</span> <span class="st">'export PATH="${HOME}/bin:${PATH}"'</span> <span class="op">&gt;&gt;</span> ~/.bashrc</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span></code></pre></div>
+<p>You must load the Java module
+(<code>module load tools/java/21.0.2</code>) whenever you use Nextflow
+from a shell or a job script.</p>
+</div>
+<div class="section level2">
+<h2 id="set-up-the-r-session">Set up the R session<a class="anchor" aria-label="anchor" href="#set-up-the-r-session"></a>
+</h2>
+<p>Everything from here on runs in <strong>R</strong>, in the Console of
+your RStudio Server session.</p>
+<p>An RStudio Server session on Hydra starts with a stripped
+<code>PATH</code> that leaves out the job scheduler, Java, and your
+<code>~/bin</code>, so Nextflow cannot find <code>qsub</code> and job
+submission fails. <code><a href="../reference/hydra_setup.html">hydra_setup()</a></code> fixes that. Call it once
+per session, right after loading the package and before creating a
+project or opening the app:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/hydra_setup.html">hydra_setup</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p>It puts the Hydra Java and job scheduler directories at the front of
+your <code>PATH</code>, checks your Nextflow version, and pins a
+compatible one for the session. It warns and changes nothing if you are
+not on Hydra, so it is safe to leave in a script you also run
+elsewhere.</p>
+</div>
+<div class="section level2">
+<h2 id="create-projects-with-the-hydra-executor">Create projects with the Hydra executor<a class="anchor" aria-label="anchor" href="#create-projects-with-the-hydra-executor"></a>
+</h2>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/new_test_project.html">new_test_project</a></span><span class="op">(</span></span>
+<span>  path <span class="op">=</span> <span class="st">"/pool/public/genomics/&lt;&lt;USER&gt;&gt;/MitoPilot/test_project"</span>,</span>
+<span>  executor <span class="op">=</span> <span class="st">"NMNH_Hydra"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Use the same <code>executor = "NMNH_Hydra"</code> with
+<code><a href="../reference/new_project.html">new_project()</a></code> for your own data. Work under
+<code>/pool</code> or <code>/scratch</code>. Home directories are too
+small for pipeline work directories, and projects cannot be run from
+<code>/store</code>.</p>
+<p>The full walkthrough, with Hydra-specific notes at each step, is on
+the <a href="MitoPilot.html">Get Started</a> page.</p>
+</div>
+<div class="section level2">
+<h2 id="running-jobs">Running jobs<a class="anchor" aria-label="anchor" href="#running-jobs"></a>
+</h2>
+<p>On Hydra the app offers <strong>Submit as Job</strong> alongside
+<strong>Run from App</strong>, which submits the workflow to the cluster
+for you. Monitor it by running <code>qstat</code> in a terminal and
+reading the log files, then reopen the app when it finishes. For large
+sample sets this is the right choice; running from the app ties the
+pipeline to your session.</p>
+<p>The generic mechanics of job scripts, resources, and the SSH tunnel
+are covered in <a href="Custom-HPC.html">HPC cluster support</a>.</p>
+<div class="alert alert-tip">
+<p><strong>Tip.</strong> Clear your Singularity cache with
+<code>singularity cache clean</code> after updating MitoPilot, so the
+matching container image is pulled.</p>
+</div>
+</div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside>
 </div>
 
 

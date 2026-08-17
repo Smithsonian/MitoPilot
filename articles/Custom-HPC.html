@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -79,6 +79,11 @@
 HPC cluster. We have specific instructions for the <a href="https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html">Smithsonian
 Hydra cluster</a> and the <a href="https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html">NOAA
 SEDNA cluster</a>.</p>
+<p>This page covers the cluster-specific parts only: getting an R
+session, writing a config, and submitting work. Everything about using
+MitoPilot itself is the same as in the <a href="MitoPilot.html">Get
+Started</a> walkthrough, so run through that first if you have not
+already.</p>
 <div class="section level3">
 <h3 id="launch-an-r-session-on-the-cluster">Launch an R session on the cluster<a class="anchor" aria-label="anchor" href="#launch-an-r-session-on-the-cluster"></a>
 </h3>
@@ -110,7 +115,7 @@ copy of the image. You build it once, then reuse it.</li>
 <p><strong>1. Pull the image once.</strong> From an interactive session
 or compute node (not the login node):</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># </span><span class="al">NOTE</span><span class="co">: match the tag to the latest MitoPilot version</span></span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">singularity</span> pull mitopilot.sif docker://macguigand/mitopilot:1.4.7</span></code></pre></div>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">singularity</span> pull mitopilot.sif docker://macguigand/mitopilot:1.5.2</span></code></pre></div>
 <p><strong>2. Start an R session.</strong> By default a Singularity
 container can only see your <strong>home directory</strong>. Bind any
 other locations your projects or data live in (for example
@@ -236,9 +241,11 @@ profiles):</p>
 most datasets. Per-step resource requests (<code>coverage</code>,
 <code>blast_ref_align</code>, <code>blast_gb</code>) live in the
 <code>params { }</code> block of the <code>.config</code> file and can
-be edited by hand. Memory and CPU for all other steps in the workflow
-are pulled dynamically from the project database and can be set directly
-in the MitoPilot app.</p>
+be edited by hand. Note that <code>blast_gb</code> now runs a real local
+BLAST search against the mitogenome database packaged in the container,
+so it asks for CPUs rather than just waiting on the network. Memory and
+CPU for all other steps in the workflow are pulled dynamically from the
+project database and can be set directly in the MitoPilot app.</p>
 </div>
 <div class="section level3">
 <h3 id="validate-before-running">Validate before running<a class="anchor" aria-label="anchor" href="#validate-before-running"></a>

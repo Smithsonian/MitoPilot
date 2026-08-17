@@ -8,6 +8,12 @@ cluster](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
 and the [NOAA SEDNA
 cluster](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html).
 
+This page covers the cluster-specific parts only: getting an R session,
+writing a config, and submitting work. Everything about using MitoPilot
+itself is the same as in the [Get
+Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.md)
+walkthrough, so run through that first if you have not already.
+
 ### Launch an R session on the cluster
 
 Everything that follows (creating a cluster config, initializing
@@ -37,7 +43,7 @@ A quick vocabulary primer if containers are new to you:
 
 ``` bash
 # NOTE: match the tag to the latest MitoPilot version
-singularity pull mitopilot.sif docker://macguigand/mitopilot:1.4.7
+singularity pull mitopilot.sif docker://macguigand/mitopilot:1.5.2
 ```
 
 **2. Start an R session.** By default a Singularity container can only
@@ -145,9 +151,12 @@ list_configs()
 The generated config sets defaults for CPUs and memory that work for
 most datasets. Per-step resource requests (`coverage`,
 `blast_ref_align`, `blast_gb`) live in the `params { }` block of the
-`.config` file and can be edited by hand. Memory and CPU for all other
-steps in the workflow are pulled dynamically from the project database
-and can be set directly in the MitoPilot app.
+`.config` file and can be edited by hand. Note that `blast_gb` now runs
+a real local BLAST search against the mitogenome database packaged in
+the container, so it asks for CPUs rather than just waiting on the
+network. Memory and CPU for all other steps in the workflow are pulled
+dynamically from the project database and can be set directly in the
+MitoPilot app.
 
 ### Validate before running
 

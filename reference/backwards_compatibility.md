@@ -23,6 +23,11 @@ changes. Migrations include, among others:
 - `assemble`: "poor_blast_ref" (migrated from `samples` and normalized
   to TEXT), BLAST result columns, "blast_opts".
 
+- `blast_opts`: "max_target_seqs", "taxids", "remote_blast",
+  "remote_fallback" (any parameter set carrying a non-default Entrez
+  query is switched to the remote search, with a warning, since the
+  local database cannot apply one).
+
 - `samples`: numeric "genetic_code" (rebuilding any legacy TEXT column
   as INTEGER so assembly does not crash).
 

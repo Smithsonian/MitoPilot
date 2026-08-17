@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,7 +85,7 @@
 <li>
 <a href="https://github.com/BenLangmead/bowtie2" class="external-link">bowtie2</a> for read mapping to calculate coverage and error rates.</li>
 <li>
-<a href="https://blast.ncbi.nlm.nih.gov/Blast.cgi" class="external-link">NCBI BLAST</a> remotely fetch closest match from GenBank for automatic and manual curation</li>
+<a href="https://blast.ncbi.nlm.nih.gov/Blast.cgi" class="external-link">NCBI BLAST</a> against a local database of all annotated metazoan mitogenomes in GenBank, packaged in the MitoPilot container, to find the closest reference for automatic and manual curation</li>
 </ul>
 </li>
 <li>Mitogenome annotation
@@ -263,7 +263,7 @@
 </li>
 <li>NCBI Api Key
 <ul>
-<li>We highly recommended <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">generating a NCBI API key</a> and providing it here during project initialization. This will increase the efficiency of the remote BLAST search and corresponding GenBank downloads during the Assemble module.</li>
+<li>We highly recommended <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">generating a NCBI API key</a> and providing it here during project initialization. This will increase the efficiency of the GenBank downloads during the Assemble module. The BLAST search itself runs against the local database packaged in the container and does not need it.</li>
 </ul>
 </li>
 </ul>

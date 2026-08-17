@@ -16,6 +16,10 @@ curate_opts: &quot;max_blast_hits&quot;, &quot;ref_dir&quot;, &quot;ref_db&quot;
     to the GitHub-hosted reference db).
 assemble: &quot;poor_blast_ref&quot; (migrated from samples and
     normalized to TEXT), BLAST result columns, &quot;blast_opts&quot;.
+blast_opts: &quot;max_target_seqs&quot;, &quot;taxids&quot;, &quot;remote_blast&quot;,
+    &quot;remote_fallback&quot; (any parameter set carrying a non-default Entrez query is
+    switched to the remote search, with a warning, since the local database
+    cannot apply one).
 samples: numeric &quot;genetic_code&quot; (rebuilding any legacy TEXT
     column as INTEGER so assembly does not crash).
 New tables: &quot;orf_opts&quot;, &quot;blast_opts&quot;, &quot;export_opts&quot;,
@@ -39,6 +43,10 @@ curate_opts: &quot;max_blast_hits&quot;, &quot;ref_dir&quot;, &quot;ref_db&quot;
     to the GitHub-hosted reference db).
 assemble: &quot;poor_blast_ref&quot; (migrated from samples and
     normalized to TEXT), BLAST result columns, &quot;blast_opts&quot;.
+blast_opts: &quot;max_target_seqs&quot;, &quot;taxids&quot;, &quot;remote_blast&quot;,
+    &quot;remote_fallback&quot; (any parameter set carrying a non-default Entrez query is
+    switched to the remote search, with a warning, since the local database
+    cannot apply one).
 samples: numeric &quot;genetic_code&quot; (rebuilding any legacy TEXT
     column as INTEGER so assembly does not crash).
 New tables: &quot;orf_opts&quot;, &quot;blast_opts&quot;, &quot;export_opts&quot;,
@@ -53,7 +61,7 @@ New tables: &quot;orf_opts&quot;, &quot;blast_opts&quot;, &quot;export_opts&quot
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,6 +115,10 @@ others:</p><ul><li><p><code>annotate</code>: "reviewed", "ID_verified", "problem
     to the GitHub-hosted reference db).</p></li>
 <li><p><code>assemble</code>: "poor_blast_ref" (migrated from <code>samples</code> and
     normalized to TEXT), BLAST result columns, "blast_opts".</p></li>
+<li><p><code>blast_opts</code>: "max_target_seqs", "taxids", "remote_blast",
+    "remote_fallback" (any parameter set carrying a non-default Entrez query is
+    switched to the remote search, with a warning, since the local database
+    cannot apply one).</p></li>
 <li><p><code>samples</code>: numeric "genetic_code" (rebuilding any legacy TEXT
     column as INTEGER so assembly does not crash).</p></li>
 <li><p>New tables: "orf_opts", "blast_opts", "export_opts",
