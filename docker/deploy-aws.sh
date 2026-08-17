@@ -18,6 +18,9 @@ if [ ! -s docker/mito_metazoa_blastdb.tar.gz ]; then
 fi
 
 # Build R pkg for install
+# Stale tarballs must go first: the Dockerfile COPY glob picks the last match
+# alphabetically, so a leftover 1.4.9 would beat a new 1.4.10.
+rm -f docker/MitoPilot_*.tar.gz
 Rscript -e 'devtools::document()'
 Rscript -e 'devtools::build(path="docker", vignettes = FALSE)'
 
