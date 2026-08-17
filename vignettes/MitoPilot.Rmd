@@ -74,7 +74,8 @@ places where usage on the Smithsonian Hydra computing cluster differs from a gen
 Before starting this tutorial, work
 through the
 <a href="NMNH-Hydra.html#get-an-r-session-on-hydra">Get an R session</a> and
-<a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a> sections.
+<a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a> sections. Smithsonian users
+can also check out the [2025 workshop website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/)
 </div>
 
 <hr class="part-break" />
