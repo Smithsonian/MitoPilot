@@ -127,8 +127,8 @@ BiocManager::install("Smithsonian/MitoPilot")
 <div class="alert alert-tip">
 <strong>Tip.</strong> Each MitoPilot version pairs with a matching container
 image. If needed, you can clear your container cache
-(<code>docker image prune</code>, or <code>singularity cache clean</code>) to ensure a
-new image is pulled. Careful, this will clear other cached images aside from MitoPilot.
+(<code>docker image prune</code> or <code>singularity cache clean</code>) to ensure a
+new image is pulled. Careful, this will clear all cached images, not just MitoPilot.
 </div>
 
 Load the package:
@@ -147,8 +147,8 @@ are working on a cluster.
 <strong>Run <code>hydra_setup()</code> once per session.</strong> RStudio Server
 sessions on Hydra start with a stripped <code>PATH</code> that leaves out the
 job scheduler engine, Java, and your <code>~/bin</code>, so Nextflow cannot find
-<code>qsub</code> and job submission fails. So before creating a project or opening the app,
-call the following function:
+<code>qsub</code> and job submission fails. Before creating a project or opening the app,
+you must call the following function:
 
 <pre><code class="r">library(MitoPilot)
 hydra_setup()
@@ -187,7 +187,7 @@ new_test_project(
 Docker. To run on a cluster instead, see
 [HPC cluster support](Custom-HPC.html) and pass the matching executor name.
 `full_size = FALSE` uses the small pre-filtered reads that ship with the package;
-`TRUE` downloads about 10 GB of raw data from ENA, takes much longer to process.
+`TRUE` downloads about 10 GB of raw data, which takes much longer to process.
 
 MitoPilot lists the samples as it sets them up, then writes a hidden `.config`
 file holding the Nextflow settings for the project directory. The defaults are fine for the
@@ -207,7 +207,10 @@ for Nextflow work directories, and projects cannot be run from
 
 # Open the app
 
+Once your project is initialized, run the following in your R session:
+
 ```r
+wd <- "~/MitoPilot_test/run_01"
 setwd(wd)     # the app must be launched from the project directory
 MitoPilot()
 ```
@@ -281,9 +284,9 @@ Nothing is editable until you tick **Edit**. The important controls:
 
 Options are saved as named, reusable sets. To make one, tick **Edit**, change
 what you want, type a new name in the **Parameter set name** box, and click
-**Update**. That name then appears in the dropdown for any sample. Different
-samples can use different sets, which can allow you to selectively increase 
-memory usage for difficult samples.
+**Update**. That name now appears in the dropdown for any sample. Different
+samples can use different parameter sets, which can allow you to selectively tweak 
+memory usage, assembly method, etc. for difficult samples.
 
 For the test project the defaults are fine.
 
@@ -295,7 +298,7 @@ edit the options sets and use:
 
 <ul>
 <li><strong>Preprocess Opts.</strong> memory <strong>40 GB</strong></li>
-<li><strong>Assembly Opts.</strong> memory <strong>120 GB</strong></li>
+<li><strong>Assembly Opts.</strong> memory <strong>80 GB</strong></li>
 </ul>
 
 Tick <strong>Edit</strong>, change the memory, give the set a name such as
@@ -305,11 +308,11 @@ selected sample.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
-<strong>CPUs and memory are per-job requests.</strong> On Hydra these values
-become the job scheduler's resource request, so asking for more memory than a
-queue allows will leave jobs pending rather than make them faster. The Hydra
-config also flags high-memory steps automatically when a request crosses the
-per-CPU threshold.
+<strong>CPUs and memory are per-job request.</strong> On Hydra these values
+become the job scheduler's resource request. The Hydra
+config flags high-memory steps automatically when a request crosses the
+per-CPU threshold. See the [Hydra wiki](https://confluence.si.edu/spaces/HPC/pages/163152285/Compute+Nodes)
+for details about the available compute nodes.
 </div>
 
 ## Run the workflow
@@ -319,8 +322,8 @@ it is about to run and how many samples it applies to.
 
 ![Update window showing the Nextflow command and Run from App button](figures/get-started/update-window.png)
 
-**Run from App** runs the pipeline in your R session. The Progress window
-updates as samples move through the steps, and the spinning gears in the corner
+**Run from App** runs the pipeline in your R session (distributing individual tasks to compute nodes if you are working on a HPC cluster). 
+The Progress window updates as samples move through the steps, and the spinning gears in the corner
 mean work is still happening. This is the simplest option, and the right one for
 a project this size.
 
@@ -344,9 +347,9 @@ script instead so the run survives a dropped connection. See
 <strong>Submit as Job</strong> button next to <strong>Run from App</strong>. It
 submits the workflow to the cluster for you, so the run keeps going after you
 close the app or lose your connection. Monitor it by running
-<code>qstat</code> in a terminal (the Terminal tab in RStudio works) and reading the
-log files in the project's <code>.logs</code> directory, then reopen the app when
-it finishes. For anything beyond a few dozen samples, use this rather than
+<code>qstat</code> in a terminal (the Terminal tab in RStudio Server works) and reading the
+log files in the project's <code>.logs</code> directory. Reopen the app when
+the job finishes. For anything beyond a dozen samples, use <strong>Submit as Job</strong> rather than
 running from the app.
 </div>
 
@@ -358,14 +361,12 @@ relative, and fetches that reference's annotations from NCBI.
 Nextflow runs all samples in parallel through these steps.
 
 Failures are normal and often mean a sample ran out of memory.
-Common error messages are covered in the
-[FAQ](FAQ.html) and [troubleshooting](Troubleshooting.html) articles.
+Common error messages are covered in the [troubleshooting](Troubleshooting.html) articles.
 
 ### Finding the reference: local vs remote BLAST
 
 The reference search runs against a **local database of metazoan mitogenomes
-bundled into the MitoPilot container**, so it needs no network and finishes in
-seconds rather than the minutes-to-hours a queued NCBI search can take. This is
+bundled with the MitoPilot Docker/Singularity container**. This is
 the default, and for most projects it is all you need.
 
 ![BLAST options window](figures/get-started/blast-opts.png)
@@ -375,8 +376,8 @@ database, recorded the first time a local search runs in a project. Two settings
 change the behavior:
 
 - **Remote BLAST** searches NCBI over the network instead of the local database.
-  It is much slower and rate limited, and it is worth using only to reach
-  sequences not contained in the BLAST database included in the MitoPilot container.
+  It is much slower (sometimes hours per search) and rate limited. Only worth using to reach
+  sequences not contained in the BLAST database included with the MitoPilot container.
 - **Fall back to remote BLAST when no local hit** is on by default. If the local
   search comes up empty, MitoPilot retries that sample once against NCBI.
 
@@ -386,7 +387,7 @@ names). The **Entrez query** box applies to remote searches only.
 <div class="alert alert-note">
 <strong>Note.</strong> Local BLAST does not remove the need for an NCBI API key.
 Only the <em>search</em> is local. Once a reference is chosen, MitoPilot still
-goes to NCBI for that record's sequence, its annotations, and its taxonomic
+goes to NCBI for that record's sequence, annotations, and taxonomic
 lineage, all of which feed into curation and export. For projects with more than a handful of
 samples, set <code>ncbi_api_key</code> at project setup so those requests are not
 throttled.
@@ -402,34 +403,33 @@ try clicking the circular arrow refresh button.
 Useful columns: **Reads** surviving pre-processing, **Topology** (circular or
 linear), **Asmb. Length**, and **# Paths** / **# Scaffolds**, which tell you
 whether the sample came back as one clean sequence or something messier. The
-BLAST columns name the closest GenBank record.
+BLAST columns name the closest GenBank record. The `output` button opens the sample's 
+results folder. 
 
-`output` opens the sample's results folder. `details` opens the assembly itself.
+The `details` button opens a new window for the assembly.
 
 ![Assembly details for a sample with one clean assembly](figures/get-started/assemble-details.png)
 
-For a sample that assembled cleanly there is one row here: the assembly, its
-topology and length, and the GenBank record it matched. Select it and `Fasta`
-copies the sequence to your clipboard. Samples that produced more than one
+For a sample that assembled cleanly there is one row here. Samples that produced more than one
 assembly get more rows and more tools, covered below.
 
-**Work Dirs** at the top right opens a browser of the working directory that each
-pipeline step used for a sample, including failed attempts. It is the most
-reliable way to reach logs and intermediate files when something goes wrong.
-
-![Work directory browser](figures/get-started/workdir-browser.png)
+Select the row and use the `Fasta`
+button to copy the sequence to your clipboard. 
 
 ### Coverage and error
 
-In the details window, `view` opens a plot of read depth, error rate, and GC
+In this assembly details window, `view` opens a plot of read depth, error rate, and GC
 content along the assembly.
 
 ![Read depth, error rate, and GC content along an assembly](figures/get-started/coverage-plot.png)
 
 This is SRR21843972 (*Stomias affinis*). Depth collapses at both ends, which is
 why the assembly came back linear rather than circular: there were not enough
-reads spanning that region to close the circle. Options are more sequencing,
-different GetOrganelle settings, or accepting a partial mitogenome.
+reads spanning that region to close the circle. To assemble a circular mitogenome,
+we could try different GetOrganelle settings or using MitoFinder for assembly.
+
+Note that GenBank will still accept and verify partial (linear) mitogenomes.
+A linear mitogenome is not a failure and can still be annotated.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
@@ -437,10 +437,17 @@ different GetOrganelle settings, or accepting a partial mitogenome.
 <code>output</code> button opens that sample's results folder in the
 <strong>Files</strong> pane at the bottom right of your RStudio session, and the
 coverage <code>view</code> plot opens the PDF the same way. If you reached the
-app through an SSH tunnel from a container instead, these may do nothing, because
-the app tries to open them on the cluster rather than on your laptop. The
-<strong>Work Dirs</strong> browser is the reliable way to reach files either way.
+app through an SSH tunnel from a container instead, these buttons may do nothing, because
+the app tries to open them on the cluster rather than on your laptop.
 </div>
+
+### Detailed troubleshooting
+
+**Work Dirs** at the top right opens a browser of the working directories for
+every step of the pipeline, including failed attempts. It is the most
+reliable way to reach logs and intermediate files when something goes wrong.
+
+![Work directory browser](figures/get-started/workdir-browser.png)
 
 ## Problematic samples
 
@@ -450,8 +457,8 @@ what goes wrong with real data.
 ### Not enough data
 
 SRR22396758 (*Upeneus parvus*) carries a warning icon and the note
-"Insufficient sequencing depth". Its read file was truncated to 200 reads on
-purpose. The threshold is the `min_depth` argument at project setup. There is
+"Insufficient sequencing depth". Its read files were intentionally truncated to 200 reads. 
+This sample fails to meet the default `min_depth` argument at project setup. There is
 nothing to fix here, so leave this sample behind when you lock the rest.
 
 ### Two competing assemblies
@@ -471,7 +478,7 @@ support.
 
 From here you can:
 
-- **Ignore the extras.** Click the ignore control on the paths you do not want.
+- **Ignore the extras.** Click the ignore button on the paths you do not want.
   Only what remains goes to annotation. This is what we do for the test project.
 - **Build a resolved assembly.** Choose how to handle each conflict block and
   MitoPilot writes a single reconciled sequence as **Path 0**, superseding the
@@ -480,8 +487,8 @@ From here you can:
 ![Assembly details with the second path marked ignored](figures/get-started/multipath-ignored.png)
 
 <div class="alert alert-note">
-<strong>Note.</strong> Resolving discrepancies with IUPAC ambiguity codes is
-a provided option. But be aware that annotation may handle ambiguous bases poorly if 
+<strong>Note.</strong> Resolving discrepancies with IUPAC ambiguity codes provided as an
+option. But be aware that annotation may handle ambiguous bases poorly if 
 they occur in a protein-coding region.
 </div>
 
@@ -495,9 +502,9 @@ scaffolds. Open its details and MitoPilot shows the scaffold join editor.
 ![Scaffold join editor showing three scaffolds mapped to one reference](figures/get-started/scaffjoin-join-editor.png)
 
 All three scaffolds map to the same reference (NC_083079.1) at 100% coverage,
-and the plot lays them out along the ref: scaffold 1 reversed, then scaffolds 2 and 3,
-with gaps between them. That is the signature of a single mitogenome that the
-assembler could not connect. You can override the order or orientation, tick
+and the plot shows their mapping positions against the reference. That is the 
+signature of a mitogenome that the assembler could not connect into a single contig. 
+You can override the order or orientation, tick
 **Circular** if appropriate, and then click **Build joined assembly (Path 0)**.
 
 ![Assembly details after building the joined Path 0](figures/get-started/scaffjoin-joined.png)
@@ -557,7 +564,7 @@ own.
 Genes come from [MITOS2](https://gitlab.com/Bernt/MITOS) (protein-coding genes, tRNAs,
 and rRNAs) and [tRNAscan-SE](https://github.com/UCSC-LoweLab/tRNAscan-SE)
 (tRNAs), with MitoFinder, ARWEN, ARAGORN, and ORFfinder available as optional annotators. 
-The MITOS2 reference database defaults to Chordata, but `Metazoa_RefSeq89` is the
+The MITOS2 reference database defaults to `Chordata`, but `Metazoa_RefSeq89` is the
 general-purpose choice for other groups.
 
 **Curate Opts.** controls what MitoPilot does with those raw annotations.
@@ -576,7 +583,9 @@ judged against.
 
 <div class="alert alert-note">
 <strong>No ruleset for your samples?</strong> If you do not see an appropriate clade for your samples,
-please contact the developers. We are always looking to expand the taxonomic scope
+please post an
+[issue](https://github.com/Smithsonian/MitoPilot/issues) or reach out to
+Dan MacGuigan directly at <macguigand@si.edu>. We are always looking to expand the taxonomic scope
 of MitoPilot.
 </div>
 
@@ -607,7 +616,7 @@ This is an real consequence of joining scaffolds across coverage gaps. The
 sequence in those gaps is set to "N", so the genes in those gaps cannot be annotated.
 
 <div class="alert alert-note">
-<strong>Note.</strong> The <strong>Warnings column includes</strong> dropdown at
+<strong>Note.</strong> The <strong><code>Warnings column includes</code></strong> dropdown menu at
 the top filters which warning types are counted. Narrow it to one warning type to
 pull out every sample with that problem and work through them as a batch.
 </div>
@@ -637,17 +646,19 @@ semi-transparent so overlapping gene models are easy to spot.
 ![Coverage map with gene models drawn over read depth](figures/get-started/annotate-coverage-map.png)
 
 **BLAST Reference Synteny** lines your annotation up against the closest GenBank
-mitogenome, with a percent-identity bar between them. Gene order that disagrees with
-the reference is usually either a real rearrangement or a curation mistake. This view
-provides a quick way to differentiate these options. 
+mitogenome, with a percent-identity bar between them. Click anywhere in this plot to show a
+zoomed-in base-pair level alignment of your sample
+versus the reference.
 
-The reference mitogenome shown here will be exported to your GenBank submission files as a note.
-If the best reference is a poor match, you can flag it (which inclusion as a note in the submission files)
-or use the dropdown menu to pick a better reference.
+The reference mitogenome shown in this plot will be exported in your GenBank submission files as a note: 
+"annotation compared to GenBank accession XXX".
+If the reference mitogenome is a poor match, you can flag it (remove the submission note)
+or use the dropdown menu to pick a better reference from among the top BLAST hits.
 
 ![Gene order compared against the closest GenBank reference](figures/get-started/annotate-synteny.png)
 
-**Alignment** shows a selected protein-coding gene aligned to its reference hits.
+**Alignment** shows a selected protein-coding gene aligned to its reference hits
+and the curation database.
 
 ![Protein alignment of a gene against its reference hits](figures/get-started/annotate-alignment.png)
 
@@ -656,7 +667,7 @@ the codon frame marked, along with the start and stop codons that were called.
 Below it, the protein alignment shows your gene ("focal") alongside the reference
 proteins.
 
-## Fix what needs fixing
+## Manually fix annotations
 
 Click **EDIT** in the alignment section to nudge the start or stop position 
 and watch the alignment respond. 
@@ -664,16 +675,17 @@ and watch the alignment respond.
 ![Alignment-based annotation editing](figures/get-started/annotation-codon-edits.png)
 
 By default, the `+` and `-` buttons search
-for the next valid start or stop codon. You can select the `single codon` button to
+for the next valid start or stop codon (according to the curation ruleset you selected). 
+You can toggle the `single codon` button to
 instead nudge the position one codon at a time. This can lead to a **partial**
 gene model with undetermined start or stop codons.
 
-Pressing the `poly-A stop` button will truncate a stop codon to **TA** or **T**. 
+Clicking the `poly-A stop` button will truncate a stop codon to **TA** or **T**. 
 Sometimes this is required by GenBank to avoid overlapping gene models. When transcribed,
 these genes will have their stop codon completed by the addition of the 3' poly-A tail.
 
-You can manually set a gene to have a undetermined start or stop codon by clicking the
-Partial `5'` or `3'` buttons. MitoPilot will add the appropriate format and notes to that gene
+You can manually set a gene to have an undetermined start or stop codon by clicking the
+Partial `5'` or `3'` buttons. MitoPilot will add the appropriate format and notes for that gene
 in the GenBank submission files. Best to use this sparingly, as GenBank may not accept a submission
 with many "partial" gene models.
 
@@ -685,14 +697,14 @@ Other useful editing tools:
   on sequence similarity with the curation database of protein-coding genes.
 - **Delete** removes an annotation entirely. Bring back a deleted annotation
   using the **Restore** button.
-- **Trim unannotated ends** cuts assembly overhang that carries no genes, and can
+- **Trim unannotated ends** cuts assembly overhang that carries no genes, can
   be undone.
 - **Linearize** converts a circular assembly to linear, useful when the control
-  region assembled badly. 
+  region assembled poorly. 
 - **Align fewer refs** in the Alignment panel speeds up editing by restricting the alignment to the top
-  five hits, which matters because the alignment is recomputed on every nudge.
+  five hits, which matters because the alignment is recomputed on every start/stop codon nudge.
 
-Write down what you did in the **Notes** box; it saves automatically and is retained
+You can record what you did in the **Notes** box; it saves automatically and is retained
 with the sample.
 
 <div class="alert alert-warning">
@@ -706,15 +718,11 @@ underlying problem. They record the state at the time the Annotate module ran. U
 When you are satisfied, select the samples and click **LOCK** to release them to
 the Export module.
 
-![Annotate table with samples locked](figures/get-started/annotate-locked.png)
-
-<hr class="part-break" />
-
 # Export
 
 The Export module turns finished annotations into the files GenBank needs for submission: 
 a FASTA of the sequences and a five-column feature table of the annotations. MitoPilot
-allows you to export the entire mitogenomes, individual genes, or both. Export also generates
+allows you to export entire mitogenomes, individual genes, or both. Export also generates
 GFF3 annotation files and alignment summaries.
 
 ![Export module sample table](figures/get-started/export-table.png)
@@ -744,7 +752,7 @@ or the `linear_complete` project setting.
 ![Export table with samples assigned to groups](figures/get-started/export-table-grouped.png)
 
 A unit can only belong to one export group at a time. **CLEAR GROUP** removes the selected
-samples from their group, and re-assigning a grouped sample asks for confirmation
+samples from their group. Re-assigning a grouped sample asks for confirmation
 first, because files already written for the old group are not cleaned up.
 
 ## Export
@@ -753,10 +761,10 @@ Click **EXPORT DATA**.
 
 ![Export Data window with header template and output options](figures/get-started/export-modal.png)
 
-**Header Template** is the FASTA definition line, built from any column in your
-sample data with `{column_name}`. Anything you put in the mapping file at
-project setup is available here, which is how voucher numbers and BioSample
-accessions reach the submission files. 
+**Header Template** is the FASTA definition line. Any extra columns you put in the mapping file at
+project setup are available here and can be referenced using `{column_name}`.
+This is how you can include things like voucher numbers and BioSample
+accessions in the GenBank submission files.
 
 There are two special parameters. First, `{completeness}` expands to "complete genome" or
 "partial genome" and belongs at the end of the header for GenBank to parse it
@@ -779,36 +787,38 @@ Then click **Export**.
 
 <div class="alert alert-note">
 <strong>Note.</strong> If any sample in the group contributes more than one
-record, for example a sample whose scaffolds were deliberately kept apart,
-MitoPilot asks you to confirm before exporting. Each scaffold becomes its own
+record, MitoPilot asks you to confirm before exporting. Each scaffold becomes its own
 GenBank record with a <code>ID_p&lt;path&gt;_s&lt;scaffold&gt;</code> SeqID.
 This allows you to submit samples that have truly fragmented mitogenomes.
-Samples that still have more than one assembly path cannot be exported at all.
+Samples that still have more than one assembly path cannot be exported at all,
+since different assembly paths usually represent multiple versions of the same molecule.
 </div>
 
 ## The outlier review
 
 With the review enabled, MitoPilot aligns each protein-coding gene across the
-group and stops on any gene where a sample looks out of line, before writing
-anything.
+group and stops on any gene where a sample looks out of line.
 
 ![PCG annotation outlier review with a flagged sample](figures/get-started/export-outlier-review.png)
 
-A gene is flagged when it appears truncated or extended compared to the rest of the submission
+A sample's gene is flagged when it appears truncated or extended compared to the rest of the submission
 group, as determined by the `offset` parameter settings. 
 
-Genes are also flagged when their identity compared the rest of the group 
+Sequences are also flagged when their identity compared the rest of the group 
 falls below the specified threshold. In the screenshot above,
 SRR21844202's ATP6 is at 59.2% identity against the others.
 
 You can page through the flagged genes with **Prev** and **Next**, jump straight
 into the annotation editor for any sample with **edit**, mark a gene resolved
-once you have looked at it, or cancel the export entirely. Files are written only
+once you have looked at it, or cancel the export entirely. You can also edit
+genes for samples that were not automatically flagged. 
+
+Files are written only
 when you click **Done**, so edits made during review will appear in the exported files.
 
 <div class="alert alert-tip">
 <strong>Tip.</strong> Low identity is not automatically an error. ATP8 and NAD6
-are genuinely fast-evolving and routinely flag in a diverse group.
+are genuinely fast-evolving and routinely flag in a diverse export group.
 </div>
 
 ## Exported files
@@ -845,8 +855,8 @@ to submit to GenBank.
 
 # Starting your own project
 
-Once you are comfortable with how MitoPilot works, running your own data is mostly a matter of
-pointing MitoPilot at your reads and telling it what kind of organism you are
+Once you are comfortable with how MitoPilot works, starting your own project is mostly a matter of
+pointing MitoPilot at your sequence data and telling it what kind of organism you are
 working on.
 
 ## What you need
@@ -864,7 +874,7 @@ Four columns are required:
 | `ID` | Unique identifier for the sample. Used as the SeqID at export, so keep it short and free of spaces. |
 | `Taxon` | Taxonomic information. Only included for your own benefit, so no required format. |
 | `R1` | File name of the forward reads (name only, not a path). |
-| `R2` | File name of the reverse reads. |
+| `R2` | File name of the reverse reads (name only, not a path). |
 
 Any other columns you add are carried along and can be pulled into GenBank FASTA
 headers at export, so this is the place to put voucher numbers, BioSample
@@ -878,9 +888,7 @@ OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,USNM:1234568,
 
 You do not have to get the mapping file columns right the first time. `update_sample_metadata()`
 adds new columns or revises the values in existing projects. Close the app before
-either one, since they need sole access to the project database. Both are
-described on the
-[reference pages](https://smithsonian.github.io/MitoPilot/reference/index.html).
+updating the metadata, since this function needs sole access to the project database.
 
 <div class="alert alert-note">
 <strong>Note.</strong> If your identifier column is not called <code>ID</code>,
@@ -915,19 +923,19 @@ genetic code. The default is `"fish_mito"`. Browse the available rulesets in the
 [curation ruleset browser](Ruleset-Browser.html) and pass the one matching your
 clade, for example `curate_target = "octocoral_mito"`.
 
-**`genetic_code`** is normally left alone: MitoPilot takes it from the ruleset.
+**`genetic_code`** is normally left alone: MitoPilot takes it from the curation ruleset.
 Set it only when you need to override that, using an
 [NCBI translation table number](https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi).
 
 **`custom_seeds_db` and `custom_labels_db`** point GetOrganelle at reference
 sequences for your group. The defaults are for fishes, but you can build
-databases for any clade with `custom_assembly_db()` without leaving R; see
+databases for any clade with the R function `custom_assembly_db()`, see
 [building custom databases](custom_dbs.html). Give absolute paths, not paths
 starting with `~`.
 
 **`assembler` and `mitofinder_db`** switch the assembler to `"MitoFinder"` and
-point it at its reference. The reference must be GenBank format (`.gb`) and can
-be a local path or a URL; the default is the zebrafish mitogenome, so supply
+point it at a reference database. The reference database must be GenBank format (`.gb`) and can
+be a local path or a URL. The default is the zebrafish mitogenome, so supply
 your own for anything that is not a fish. Leave both alone to stay on
 GetOrganelle.
 
@@ -935,7 +943,7 @@ GetOrganelle.
 `"Chordata"`; `"Metazoa_RefSeq89"` is the general-purpose alternative and is the
 right choice for most invertebrates.
 
-**`min_depth`** is the minimum number of read pairs surviving pre-processing for
+**`min_depth`** is the minimum number of read pairs after pre-processing for
 a sample to continue (default 2,000,000). Lower it if your reads have already
 been filtered or baited.
 
@@ -952,7 +960,7 @@ templates (`"slurm"`, `"sge"`, `"pbs"`, `"lsf"`, `"awsbatch"`), a site profile
 (`"NMNH_Hydra"`, `"NOAA_SEDNA"`), or a profile you saved yourself with
 `generate_config()`. See [HPC cluster support](Custom-HPC.html).
 
-Below is a more complete `new_project` example, for an octocoral dataset on a SLURM cluster:
+Below is a more complete `new_project` example for an octocoral dataset on a SLURM cluster:
 
 ```r
 new_project(
@@ -980,7 +988,7 @@ MitoPilot()
 <div class="alert alert-tip">
 <strong>Tip.</strong> Run a handful of samples through the whole pipeline before
 analyzing hundreds. Curation settings that are wrong for your clade are much
-cheaper to discover on a test batch of samples.
+cheaper to discover on a small test run.
 </div>
 
 <div class="alert alert-hydra">
@@ -1002,8 +1010,8 @@ new_project(
 )
 </code></pre>
 
-Reference databases you pass to <code>custom_seeds_db</code> and friends must be
-readable from the compute nodes, so put them on shared storage rather than in
+Reference databases you pass to the `new_project` function must be
+readable from the compute nodes. Best to put them on shared storage rather than in
 your home directory.
 </div>
 
@@ -1016,14 +1024,14 @@ re-created from scratch.
 ## Using pre-existing mitogenome assemblies
 
 If your mitogenomes were assembled elsewhere, for example by mapping to a reference
-in Geneious, use `new_project_userAsmb()` instead. MitoPilot then skips assembly
-and gives you annotation, curation, and export.
+in Geneious, use `new_project_userAsmb()` instead. MitoPilot will skis assembly
+and let you perform annotation, curation, and export.
 
 It needs two extra columns in the mapping file:
 
 | Column | Contents |
 |---|---|
-| `Assembly` | File name of the assembly FASTA for the sample |
+| `Assembly` | File name of the assembly FASTA for the sample (one file per sample) |
 | `Topology` | `circular` or `linear` |
 
 ```r
