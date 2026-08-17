@@ -18,7 +18,8 @@ from a generic setup. Before starting this tutorial, work through the
 session](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html#get-an-r-session-on-hydra)
 and [Install
 Nextflow](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html#install-nextflow)
-sections.
+sections. Smithsonian users can also check out the [2025 workshop
+website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/)
 
 ------------------------------------------------------------------------
 

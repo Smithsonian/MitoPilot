@@ -6,6 +6,9 @@ Once you are set up here, the rest of MitoPilot works exactly as in the
 Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.md)
 walkthrough, with `executor = "NMNH_Hydra"`.
 
+Smithsonian users can also check out the [2025 workshop
+website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/).
+
 You need a Hydra account; see the [Hydra policies
 page](https://confluence.si.edu/display/HPC/Hydra+Policies).
 
