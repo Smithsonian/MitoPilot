@@ -708,7 +708,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             options = list(maxItems = 1)
           ) |> shinyjs::disabled()
         ),
-        opts_help("NCBI translation table used for protien-coding genes. 'Auto' to sets the genetic code based on selected ",
+        opts_help("NCBI translation table used for protein-coding genes. 'Auto' sets the genetic code based on selected ",
                   "ruleset. Or pick a specific table to override it for these samples.",
                   href = "https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi"),
         div(
