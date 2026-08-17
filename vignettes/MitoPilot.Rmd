@@ -68,13 +68,13 @@ how to start a project with your own data.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
+<strong>Are you a Smithsonian user?</strong>
 Boxes like this one flag the
 places where usage on the Smithsonian Hydra computing cluster differs from a generic setup. 
-First time on Hydra? Work
+Before starting this tutorial, work
 through the
 <a href="NMNH-Hydra.html#get-an-r-session-on-hydra">Get an R session</a> and
-<a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a> sections
-before starting this tutorial.
+<a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a> sections.
 </div>
 
 <hr class="part-break" />
