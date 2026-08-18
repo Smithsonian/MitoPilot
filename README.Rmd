@@ -50,37 +50,6 @@ Optionally, MitoPilot can proceed straight to annotation and curation if the use
 
 ![](man/figures/workflow_overview.png)
 
-# Taxonomic Scope
-
-MitoPilot was initially built for fish mitogenomes, and the bundled assembly
-reference databases are fish. It has since been extended with curation and
-validation rulesets for **33 groups of animals**, from sponges and cnidarians to
-birds and mammals. See the
-[curation ruleset browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
-for the full list, each ruleset's testing status, and what it enforces.
-
-For groups other than fishes you will usually want to supply your own reference
-databases. There are three independent kinds:
-
-- **Assembly** references for GetOrganelle or MitoFinder.
-  `MitoPilot::custom_assembly_db()` builds these for a clade automatically, with
-  no external tools required. See
-  [building custom databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html).
-- **Annotation** references for MITOS2. We ship
-  [Chordata](https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Chordata)
-  and [Metazoa](https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Metazoa)
-  databases, selectable in the `Annotate Opts.` window.
-- **Curation** references, chosen independently of the annotation database.
-  Bundled options are `Metazoa_RefSeq235` (the default), `Metazoa_RefSeq231`,
-  `Metazoa_RefSeq89`, and `Chordata`. MitoPilot also folds each sample's assembly
-  BLAST results into the curation references automatically.
-
-All curation rulesets ship inside the Docker image
-([macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)).
-If you have a group you would like to try, please open an
-[issue](https://github.com/Smithsonian/MitoPilot/issues) or contact Dan MacGuigan
-at <macguigand@si.edu>.
-
 # Installation
 
 MitoPilot needs R (>= 4.4.0), Java 17+, Nextflow (24.10.x - 25.10.x), and a
@@ -104,20 +73,79 @@ for any other cluster see
 # Quick start
 
 MitoPilot ships a small pre-filtered test dataset. Running it end to end is the
-recommended way to confirm your installation and learn the interface before
+recommended way to verify your installation and learn the interface before
 using your own data.
 
-```{r, eval = FALSE}
-library(MitoPilot)
+The [Get Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html)
+tutorial walks the whole pipeline using this test project.
 
-new_test_project("~/mitopilot_test")
-setwd("~/mitopilot_test")
-MitoPilot()
+Want to skip straight to using MitoPilot with your own data? Head on over to
+[Starting Your Own Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.html).
+
+# Taxonomic Scope
+
+MitoPilot was initially built for fish mitogenomes, but It has since been extended 
+with curation and validation rulesets for the groups below.
+
+```{r clade-table, echo = FALSE, results = "asis"}
+# Generated from RULESET_MAP so this table cannot drift from the shipped rulesets.
+map <- MitoPilot:::RULESET_MAP
+status <- c(
+  fish_mito = "Tested", starfish_mito = "Tested", diptera_mito = "Tested",
+  hexacoral_mito = "Tested", octocoral_mito = "Tested", turtle_mito = "Tested",
+  annelid_mito = "Testing in progress", copepod_mito = "Testing in progress",
+  ctenophore_mito = "Testing in progress", scyphozoa_mito = "Testing in progress",
+  gastropoda_mito = "Testing in progress", hydrozoa_mito = "Testing in progress",
+  malacostraca_mito = "Testing in progress", nemertea_mito = "Testing in progress",
+  polychaeta_mito = "Testing in progress", thaliacea_mito = "Testing in progress"
+)
+tbl <- data.frame(
+  clade  = vapply(map, `[[`, character(1), "ncbi"),
+  label  = vapply(map, `[[`, character(1), "label"),
+  taxid  = vapply(map, `[[`, character(1), "taxid"),
+  target = names(map),
+  stringsAsFactors = FALSE
+)
+tbl$status <- ifelse(is.na(status[tbl$target]), "Untested", status[tbl$target])
+tbl <- tbl[order(tbl$clade), ]
+
+# Emitted as HTML so the pkgdown site can style it compactly (see
+# pkgdown/extra.css); GitHub renders the table fine and ignores the class.
+cat('```{=html}\n<table class="clade-table">\n<thead>\n')
+cat("<tr><th>Clade</th><th>Common name</th><th>curate_target</th><th>Status</th></tr>\n")
+cat("</thead>\n<tbody>\n")
+cat(sprintf(
+  paste0('<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/%s/">%s</a></td>',
+         "<td>%s</td><td><code>%s</code></td><td>%s</td></tr>"),
+  tbl$taxid, tbl$clade, tbl$label, tbl$target, tbl$status
+), sep = "\n")
+cat("\n</tbody>\n</table>\n```\n")
 ```
 
-The [Get Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html)
-tutorial walks the whole pipeline using this project, then shows you how to set up
-a project with your own data.
+See the
+[curation ruleset browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
+for details about each curation ruleset. The curation ruleset can be set individually for each sample in the
+`Curate Opts.` window in the MitoPilot app. 
+
+All curation rulesets ship inside the Docker image
+([macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)).
+If MitoPilot doesn't have a curation ruleset for your taxonomic group, please open an
+[issue](https://github.com/Smithsonian/MitoPilot/issues) or contact Dan MacGuigan
+at <macguigand@si.edu>.
+
+For groups other than fishes, make sure you build or pick the appropriate reference
+databases. There are three independent kinds of databases:
+
+- **Assembly** references for GetOrganelle or MitoFinder.
+  `MitoPilot::custom_assembly_db()` builds these for a clade automatically, with
+  no external tools required. See
+  [building custom databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html).
+- **Annotation** references for MITOS2. MitoPilot includes
+  Chordata and Metazoa databases, selectable in the `Annotate Opts.` window.
+- **Curation** references, chosen independently of the annotation database.
+  Bundled options are `Metazoa_RefSeq235` (the default), `Metazoa_RefSeq231`,
+  `Metazoa_RefSeq89`, and `Chordata`. MitoPilot also folds each sample's assembly
+  BLAST results into the curation references automatically.
 
 # Documentation
 
@@ -126,15 +154,9 @@ a project with your own data.
 | [Get Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html) | Full walkthrough, then starting your own project |
 | [Installation and Requirements](https://smithsonian.github.io/MitoPilot/articles/Installation.html) | Prerequisites, installing, updating, container cache |
 | [HPC cluster support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html) | Executors, cluster profiles, SSH tunnel, submitting runs |
-| [Multiple paths and scaffolds](https://smithsonian.github.io/MitoPilot/articles/Multiple-Assemblies.html) | Resolving competing assemblies and fragmented scaffolds |
 | [Curation ruleset browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html) | What each clade ruleset enforces |
 | [Building custom databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html) | Assembly and curation reference databases |
+| [Handling difficult assemblies](https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.html) | Resolving competing assemblies and fragmented scaffolds |
 | [FAQ](https://smithsonian.github.io/MitoPilot/articles/FAQ.html) and [Troubleshooting](https://smithsonian.github.io/MitoPilot/articles/Troubleshooting.html) | Common questions and pipeline failures |
 | [Reference](https://smithsonian.github.io/MitoPilot/reference/index.html) | All functions |
 | [Changelog](https://smithsonian.github.io/MitoPilot/news/index.html) | Release notes and container tags |
-
-# Development Notes
-
-  - This package uses [{renv}](https://rstudio.github.io/renv/) for package management. After cloning the repository, run `renv::restore()` to install the necessary packages.
-  - To work from the package repository, but reference a MitoPilot project in a different directory, set the `MitoPilot.db` option to the location of the `.sqlite` database for the project (e.g. `options("MitoPilot.db" = "~/Jonah/MitoPilot-testing/.sqlite")`).
-  - When modifying the underlying R-package functions references in the Nextflow pipeline, or modifying / adding reference databases specified in `docker/Dockerfile`, the docker image should be rebuilt. The `docker/deploy-local.sh` script can be used to build a local image, or the `docker/deploy-aws.sh` and `docker/deploy-dockerhub.sh` scripts can be modified to deploy a remote image to your account. In any case, the Nextflow `.config` file should be modified such that one or more of the processing steps reference the new image.

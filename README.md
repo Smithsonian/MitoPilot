@@ -64,39 +64,6 @@ the user supplies mitogenome assemblies with the
 
 ![](man/figures/workflow_overview.png)
 
-# Taxonomic Scope
-
-MitoPilot was initially built for fish mitogenomes, and the bundled
-assembly reference databases are fish. It has since been extended with
-curation and validation rulesets for **33 groups of animals**, from
-sponges and cnidarians to birds and mammals. See the [curation ruleset
-browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
-for the full list, each ruleset’s testing status, and what it enforces.
-
-For groups other than fishes you will usually want to supply your own
-reference databases. There are three independent kinds:
-
-  - **Assembly** references for GetOrganelle or MitoFinder.
-    `MitoPilot::custom_assembly_db()` builds these for a clade
-    automatically, with no external tools required. See [building custom
-    databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html).
-  - **Annotation** references for MITOS2. We ship
-    [Chordata](https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Chordata)
-    and
-    [Metazoa](https://github.com/Smithsonian/MitoPilot/tree/main/ref_dbs/Mitos2/Metazoa)
-    databases, selectable in the `Annotate Opts.` window.
-  - **Curation** references, chosen independently of the annotation
-    database. Bundled options are `Metazoa_RefSeq235` (the default),
-    `Metazoa_RefSeq231`, `Metazoa_RefSeq89`, and `Chordata`. MitoPilot
-    also folds each sample’s assembly BLAST results into the curation
-    references automatically.
-
-All curation rulesets ship inside the Docker image
-([macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)).
-If you have a group you would like to try, please open an
-[issue](https://github.com/Smithsonian/MitoPilot/issues) or contact Dan
-MacGuigan at <macguigand@si.edu>.
-
 # Installation
 
 MitoPilot needs R (\>= 4.4.0), Java 17+, Nextflow (24.10.x - 25.10.x),
@@ -124,21 +91,91 @@ support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html).
 # Quick start
 
 MitoPilot ships a small pre-filtered test dataset. Running it end to end
-is the recommended way to confirm your installation and learn the
+is the recommended way to verify your installation and learn the
 interface before using your own data.
-
-``` r
-library(MitoPilot)
-
-new_test_project("~/mitopilot_test")
-setwd("~/mitopilot_test")
-MitoPilot()
-```
 
 The [Get
 Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html)
-tutorial walks the whole pipeline using this project, then shows you how
-to set up a project with your own data.
+tutorial walks the whole pipeline using this test project.
+
+Want to skip straight to using MitoPilot with your own data? Head on
+over to [Starting Your Own
+Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.html).
+
+# Taxonomic Scope
+
+MitoPilot was initially built for fish mitogenomes, but It has since
+been extended with curation and validation rulesets for the groups
+below.
+
+<table class="clade-table">
+<thead>
+<tr><th>Clade</th><th>Common name</th><th>curate_target</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7898/">Actinopterygii</a></td><td>Ray-finned fishes</td><td><code>fish_mito</code></td><td>Tested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6340/">Annelida</a></td><td>Annelids</td><td><code>annelid_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7713/">Ascidiacea</a></td><td>Sea squirts</td><td><code>ascidiacea_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7588/">Asteroidea</a></td><td>Sea stars</td><td><code>starfish_mito</code></td><td>Tested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8782/">Aves</a></td><td>Birds</td><td><code>bird_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6544/">Bivalvia</a></td><td>Bivalves</td><td><code>bivalvia_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10205/">Bryozoa</a></td><td>Bryozoans</td><td><code>bryozoa_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6830/">Copepoda</a></td><td>Copepods</td><td><code>copepod_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/35069/">Crinoidea</a></td><td>Crinoids</td><td><code>crinoidea_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/10197/">Ctenophora</a></td><td>Ctenophores</td><td><code>ctenophore_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6042/">Demospongiae</a></td><td>Demosponges</td><td><code>demospongiae_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7147/">Diptera</a></td><td>True flies</td><td><code>diptera_mito</code></td><td>Tested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7625/">Echinoidea</a></td><td>Sea urchins</td><td><code>echinoidea_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6448/">Gastropoda</a></td><td>Gastropods</td><td><code>gastropoda_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6102/">Hexacorallia</a></td><td>Hexacorals</td><td><code>hexacoral_mito</code></td><td>Tested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7705/">Holothuroidea</a></td><td>Sea cucumbers</td><td><code>holothuroidea_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/80999/">Homoscleromorpha</a></td><td>Homoscleromorph sponges</td><td><code>homoscleromorpha_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6074/">Hydrozoa</a></td><td>Hydrozoans</td><td><code>hydrozoa_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8504/">Lepidosauria</a></td><td>Lepidosaurs</td><td><code>lepidosaur_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6681/">Malacostraca</a></td><td>Malacostracans</td><td><code>malacostraca_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/40674/">Mammalia</a></td><td>Mammals</td><td><code>mammal_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6217/">Nemertea</a></td><td>Ribbon worms</td><td><code>nemertea_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6132/">Octocorallia</a></td><td>Octocorals</td><td><code>octocoral_mito</code></td><td>Tested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/7618/">Ophiuroidea</a></td><td>Brittle stars</td><td><code>ophiuroidea_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6157/">Platyhelminthes</a></td><td>Flatworms</td><td><code>platyhelminthes_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6341/">Polychaeta</a></td><td>Polychaetes</td><td><code>polychaeta_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/57294/">Pycnogonida</a></td><td>Sea spiders</td><td><code>pycnogonida_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6142/">Scyphozoa</a></td><td>True jellyfishes</td><td><code>scyphozoa_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/6433/">Sipuncula</a></td><td>Peanut worms</td><td><code>sipuncula_mito</code></td><td>Untested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/8459/">Testudines</a></td><td>Turtles</td><td><code>turtle_mito</code></td><td>Tested</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/30304/">Thaliacea</a></td><td>Salps</td><td><code>thaliacea_mito</code></td><td>Testing in progress</td></tr>
+<tr><td><a href="https://www.ncbi.nlm.nih.gov/datasets/taxonomy/116172/">Thecostraca</a></td><td>Barnacles</td><td><code>thecostraca_mito</code></td><td>Untested</td></tr>
+
+</tbody>
+</table>
+
+See the [curation ruleset
+browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)
+for details about each curation ruleset. The curation ruleset can be set
+individually for each sample in the `Curate Opts.` window in the
+MitoPilot app.
+
+All curation rulesets ship inside the Docker image
+([macguigand/MitoPilot](https://hub.docker.com/repository/docker/macguigand/mitopilot)).
+If MitoPilot doesn’t have a curation ruleset for your taxonomic group,
+please open an [issue](https://github.com/Smithsonian/MitoPilot/issues)
+or contact Dan MacGuigan at <macguigand@si.edu>.
+
+For groups other than fishes, make sure you build or pick the
+appropriate reference databases. There are three independent kinds of
+databases:
+
+  - **Assembly** references for GetOrganelle or MitoFinder.
+    `MitoPilot::custom_assembly_db()` builds these for a clade
+    automatically, with no external tools required. See [building custom
+    databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html).
+  - **Annotation** references for MITOS2. MitoPilot includes Chordata
+    and Metazoa databases, selectable in the `Annotate Opts.` window.
+  - **Curation** references, chosen independently of the annotation
+    database. Bundled options are `Metazoa_RefSeq235` (the default),
+    `Metazoa_RefSeq231`, `Metazoa_RefSeq89`, and `Chordata`. MitoPilot
+    also folds each sample’s assembly BLAST results into the curation
+    references automatically.
 
 # Documentation
 
@@ -147,29 +184,9 @@ to set up a project with your own data.
 | [Get Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html)                                                                                | Full walkthrough, then starting your own project         |
 | [Installation and Requirements](https://smithsonian.github.io/MitoPilot/articles/Installation.html)                                                           | Prerequisites, installing, updating, container cache     |
 | [HPC cluster support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html)                                                                       | Executors, cluster profiles, SSH tunnel, submitting runs |
-| [Multiple paths and scaffolds](https://smithsonian.github.io/MitoPilot/articles/Multiple-Assemblies.html)                                                     | Resolving competing assemblies and fragmented scaffolds  |
 | [Curation ruleset browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html)                                                             | What each clade ruleset enforces                         |
 | [Building custom databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html)                                                                 | Assembly and curation reference databases                |
+| [Handling difficult assemblies](https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.html)                                                   | Resolving competing assemblies and fragmented scaffolds  |
 | [FAQ](https://smithsonian.github.io/MitoPilot/articles/FAQ.html) and [Troubleshooting](https://smithsonian.github.io/MitoPilot/articles/Troubleshooting.html) | Common questions and pipeline failures                   |
 | [Reference](https://smithsonian.github.io/MitoPilot/reference/index.html)                                                                                     | All functions                                            |
 | [Changelog](https://smithsonian.github.io/MitoPilot/news/index.html)                                                                                          | Release notes and container tags                         |
-
-# Development Notes
-
-  - This package uses [{renv}](https://rstudio.github.io/renv/) for
-    package management. After cloning the repository, run
-    `renv::restore()` to install the necessary packages.
-  - To work from the package repository, but reference a MitoPilot
-    project in a different directory, set the `MitoPilot.db` option to
-    the location of the `.sqlite` database for the project
-    (e.g. `options("MitoPilot.db" =
-    "~/Jonah/MitoPilot-testing/.sqlite")`).
-  - When modifying the underlying R-package functions references in the
-    Nextflow pipeline, or modifying / adding reference databases
-    specified in `docker/Dockerfile`, the docker image should be
-    rebuilt. The `docker/deploy-local.sh` script can be used to build a
-    local image, or the `docker/deploy-aws.sh` and
-    `docker/deploy-dockerhub.sh` scripts can be modified to deploy a
-    remote image to your account. In any case, the Nextflow `.config`
-    file should be modified such that one or more of the processing
-    steps reference the new image.
