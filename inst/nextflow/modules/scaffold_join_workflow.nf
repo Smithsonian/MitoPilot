@@ -31,11 +31,73 @@ params.sqlSyncAnnotateJoin = '''INSERT OR REPLACE INTO annotate
      1, 0, "no", ?)'''
 
 // Precomputed scaffold->reference mappings (one row per ID/scaffold/ref) so the
-// in-app manual join editor needs no minimap2. Replace any stale rows first.
-params.sqlClearMappings  = 'DELETE FROM scaffold_mappings WHERE ID = ?'
-params.sqlInsertMappings = '''INSERT OR REPLACE INTO scaffold_mappings
-    (ID, ref_accession, scaffold, ref_start, ref_end, strand, nmatch, qcov, qstart, mapped)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+// in-app manual join editor needs no minimap2. The clear + insert must run in
+// one driver-side transaction: two independent sqlInsert operators batch and
+// commit on separate connections with no ordering guarantee, so the DELETE
+// batch can commit after the INSERT batch and empty the table.
+process write_scaffold_mappings {
+
+    executor 'local'
+    maxForks 1
+    errorStrategy 'ignore'
+    tag "${id}"
+
+    input:
+    tuple val(id), val(csv_fn)
+
+    output:
+    val(id)
+
+    exec:
+    def dbPath = "${workflow.launchDir}/.sqlite"
+    // Resolve org.sqlite.JDBC from the nf-sqldb plugin classloader, falling back
+    // to the app classpath (same approach as write_curated_result).
+    def driverClass = null
+    try {
+        def pcl = nextflow.plugin.Plugins.manager?.getPluginClassLoader('nf-sqldb')
+        if (pcl) driverClass = pcl.loadClass("org.sqlite.JDBC")
+    } catch (Throwable ignored) {}
+    if (driverClass == null) {
+        try { driverClass = Class.forName("org.sqlite.JDBC") } catch (Throwable ignored) {}
+    }
+    if (driverClass == null)
+        throw new RuntimeException("Could not load org.sqlite.JDBC from the nf-sqldb plugin or the classpath")
+    def drv = driverClass.getDeclaredConstructor().newInstance()
+    def conn = drv.connect("jdbc:sqlite:${dbPath}", new java.util.Properties())
+
+    try {
+        conn.autoCommit = false
+        def pragma = conn.prepareStatement("PRAGMA busy_timeout=30000"); pragma.execute(); pragma.close()
+
+        def del = conn.prepareStatement("DELETE FROM scaffold_mappings WHERE ID = ?")
+        del.setString(1, id.toString()); del.executeUpdate(); del.close()
+
+        def lines = new File(csv_fn.toString()).readLines()
+        def hi = [:]; lines[0].split(',', -1).eachWithIndex { h, i -> hi[h.trim()] = i }
+        def cols = ['ID', 'ref_accession', 'scaffold', 'ref_start', 'ref_end',
+                    'strand', 'nmatch', 'qcov', 'qstart', 'mapped']
+        def ins = conn.prepareStatement(
+            "INSERT OR REPLACE INTO scaffold_mappings (${cols.join(', ')}) " +
+            "VALUES (${cols.collect { '?' }.join(', ')})")
+        lines.drop(1).each { line ->
+            if (line == null || line.length() == 0) return
+            def f = line.split(',', -1)
+            cols.eachWithIndex { c, k ->
+                def v = f[hi[c]]
+                if (v == null || v.length() == 0) ins.setNull(k + 1, java.sql.Types.VARCHAR)
+                else ins.setString(k + 1, v)
+            }
+            ins.addBatch()
+        }
+        ins.executeBatch(); ins.close()
+        conn.commit()
+    } catch (Exception e) {
+        try { conn.rollback() } catch (Exception ignored) {}
+        throw new RuntimeException("write_scaffold_mappings failed for ${id} (rolled back): ${e.message}", e)
+    } finally {
+        conn.close()
+    }
+}
 
 workflow SCAFFOLD_JOIN {
     take:
@@ -45,17 +107,11 @@ workflow SCAFFOLD_JOIN {
     main:
         scaffold_join(input)
 
-        // Always-present mappings: clear stale rows, then insert the fresh set.
-        scaffold_join.out.mappings
-            .map { id, csv -> tuple(id) }
-            .sqlInsert(statement: params.sqlClearMappings, db: 'sqlite')
-
-        scaffold_join.out.mappings
-            .map { id, csv -> csv }
-            .splitCsv(header: true)
-            .map { r -> tuple(r.ID, r.ref_accession, r.scaffold, r.ref_start, r.ref_end,
-                              r.strand, r.nmatch, r.qcov, r.qstart, r.mapped) }
-            .sqlInsert(statement: params.sqlInsertMappings, db: 'sqlite')
+        // Always-present mappings: clear stale rows and insert the fresh set
+        // in one driver-side transaction (see write_scaffold_mappings).
+        write_scaffold_mappings(
+            scaffold_join.out.mappings.map { id, csv -> tuple(id, csv.toString()) }
+        )
 
         // Joined Path 0 row is emitted only when auto-join built it; the channel
         // is simply empty otherwise, so these branches are no-ops in that case.
