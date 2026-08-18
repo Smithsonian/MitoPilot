@@ -29,7 +29,8 @@ MitoPilot <- function(host = NULL, port = NULL, launch.browser = NULL, ...) {
 #' See `?golem::get_golem_options` for more details.
 #' @inheritParams shiny::shinyApp
 #'
-#' @export
+#' @keywords internal
+#' @noRd
 #' @importFrom shiny shinyApp
 #' @importFrom golem with_golem_options
 run_app <- function(

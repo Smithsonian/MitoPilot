@@ -58,7 +58,6 @@ reference:
     Create a project and launch the app.
   contents:
   - MitoPilot
-  - run_app
   - new_project
   - new_project_userAsmb
   - new_test_project
