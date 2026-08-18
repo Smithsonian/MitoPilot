@@ -21,3 +21,5 @@ $run_dev.*
 ^LICENSE\.md$
 ^\.positai$
 ^\.claude$
+^vignettes_OLD$
+^CITATION\.cff$

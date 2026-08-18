@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use MitoPilot, please cite it as below."
+title: "MitoPilot: mitogenome assembly, annotation, and curation"
+type: software
+authors:
+  - family-names: Leopold
+    given-names: Devin
+  - family-names: MacGuigan
+    given-names: Dan
+    email: macguigand@si.edu
+repository-code: "https://github.com/Smithsonian/MitoPilot"
+url: "https://smithsonian.github.io/MitoPilot/"
+license: CC0-1.0
+version: 1.5.2
