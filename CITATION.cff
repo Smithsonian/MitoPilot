@@ -10,5 +10,5 @@ authors:
     email: macguigand@si.edu
 repository-code: "https://github.com/Smithsonian/MitoPilot"
 url: "https://smithsonian.github.io/MitoPilot/"
-license: CC0-1.0
+license: GPL-3.0-or-later
 version: 1.5.2
