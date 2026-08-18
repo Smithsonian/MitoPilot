@@ -9,16 +9,16 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/Smithsonian/MitoPilot/blob/main/DESCRIPTION)
+[`inst/CITATION`](https://github.com/Smithsonian/MitoPilot/blob/main/inst/CITATION)
 
-Leopold D, MacGuigan D (2026). *MitoPilot: Mitogenome assembly,
-annotation, and curation*. R package version 1.5.2,
-<https://github.com/Smithsonian/MitoPilot>.
+Leopold D, MacGuigan D (2026). *MitoPilot: Mitogenome Assembly,
+Annotation, and Curation*. R package version 1.5.2,
+<https://smithsonian.github.io/MitoPilot/>.
 
     @Manual{,
-      title = {MitoPilot: Mitogenome assembly, annotation, and curation},
+      title = {MitoPilot: Mitogenome Assembly, Annotation, and Curation},
       author = {Devin Leopold and Dan MacGuigan},
       year = {2026},
       note = {R package version 1.5.2},
-      url = {https://github.com/Smithsonian/MitoPilot},
+      url = {https://smithsonian.github.io/MitoPilot/},
     }

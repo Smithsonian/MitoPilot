@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Building Custom Databases • MitoPilot</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="icon" sizes="any" href="../favicon.ico">
+<link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -35,15 +40,30 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
-    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
-    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
-    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/Multiple-Assemblies.html">Multiple Paths and Scaffolds</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Setup</h6></li>
+    <li><a class="dropdown-item" href="../articles/Installation.html">Installation and Requirements</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Test project</h6></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Assemble.html">Test Project: Assemble</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Annotate.html">Test Project: Annotate</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Export.html">Test Project: Export</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
-    <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
+    <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">Smithsonian Hydra Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Help</h6></li>
+    <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
   </ul>
 </li>
       </ul>
@@ -197,140 +217,29 @@ and <code>nogene_min_frac</code>.</p>
 </div>
 </div>
 <div class="section level3">
-<h3 id="legacy-approach-genbankdownloadutil-sh">Legacy approach: <code>GenBankDownloadUtil.sh</code><a class="anchor" aria-label="anchor" href="#legacy-approach-genbankdownloadutil-sh"></a>
-</h3>
-<p>The original shell/python workflow remains available for advanced
-users who want full manual control. It performs a GenBank query for all
-mitochondrial records matching your search criteria, downloads those
-sequences, and sorts them into GetOrganelle “seed” and “label”
-databases.</p>
-<p>Before proceeding, you will need the following dependencies:</p>
-<ul>
-<li>
-<a href="https://www.ncbi.nlm.nih.gov/books/NBK179288/" class="external-link">Entrez
-Direct tools</a> (tested with v22.8)</li>
-<li>
-<a href="https://www.python.org/downloads/" class="external-link">python</a> (tested with
-v3.12.2)</li>
-<li>
-<a href="https://biopython.org/" class="external-link">biopython</a> (tested with
-v1.84)</li>
-</ul>
-<p>If you are working on the NMNH Hydra cluster, python and biopython
-are available as a module. Simply run
-<code>module load bio/biopython/1.83</code>.</p>
-<p>Download the <a href="https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//GenBankDownloadUtil.sh" class="external-link">GenBankDownloadUtil.sh</a>
-script to the directory where you want to create the custom databases.
-You will also need to download <a href="https://github.com/smithsonian/MitoPilot/blob/main/ref_dbs/getOrganelle/GenBankDownload//parseGB.py" class="external-link">parseGB.py</a>
-to the same directory.</p>
-<p>To run the script, you will need to construct an <a href="https://www.ncbi.nlm.nih.gov/nuccore/advanced" class="external-link">advanced GenBank
-query</a>.</p>
-<p>For example, if you want to download all starfish mitochondrial
-sequences, you could use <code>'"Asteroidea"[Organism]'</code>.</p>
-<p>The script can take multiple search terms. For example, use
-<code>'"Percidae"[Organism] AND "PRJNA720393"[BioProject]'</code> to
-download all percid mitochondrial sequences from a specific
-BioProject.</p>
-<p>Run the script as follows, providing your custom search terms. Make
-sure your full query is in single quotes, each search term is in double
-quotes, and the query type in in square brackets.</p>
-<p><code>bash GenBankDownloadUtil.sh '"my query"[QueryType]'</code></p>
-<p>This may take a while depending on how many GenBank records match
-your search terms. If working on a computing cluster, we recommend
-running this script as a batch job. Below is an example submission
-script for the NMNH Hydra cluster.</p>
-<div class="alert alert-note">
-<p><strong>Note:</strong> The submission script below assumes that you
-have the Entrez Direct tools in your PATH (i.e. these tools can be run
-from any directory).</p>
-</div>
-<pre><code># /bin/sh
-# ----------------Parameters---------------------- #
-#$ -S /bin/sh
-#$ -pe mthread 8
-#$ -q sThM.q
-#$ -l mres=640G,h_data=80G,h_vmem=80G,himem
-#$ -cwd
-#$ -j y
-#$ -N customGetOrgDBs
-#$ -o customGetOrgDBs.log
-
-# script to generate custom seed and label DBs for starfish
-
-# load python and biopython module
-module load bio/biopython/1.83 # need python and biopython too
-
-# run the script
-bash GenBankDownloadUtil.sh '"Asteroidea"[Organism]'</code></pre>
-<p>The script will produce several files:</p>
-<ul>
-<li>
-<code>genbank.gb</code> - GenBank file containing all of the
-matching records</li>
-<li>
-<code>multigene.fasta</code> - FASTA file of sequences that
-contained multiple gene records, indicating they are either a partial or
-complete mitogenome</li>
-<li>
-<code>multigene.dedup.fasta</code> - same as
-<code>multigene.fasta</code>, but with duplicate sequences removed</li>
-<li>
-<code>nogene.fasta</code> - FASTA file of mitochondrial sequences
-with no annotated genes</li>
-<li>
-<code>nogene.dedup.fasta</code> - same as <code>nogene.fasta</code>,
-but with duplicate sequences removed</li>
-<li>
-<code>singlegene.fasta</code> - FASTA file of mitochondrial gene
-sequences</li>
-<li>
-<code>singlegene.dedup.fasta</code> - same as
-<code>singlelocus.fasta</code>, but with duplicate sequences
-removed</li>
-</ul>
-<p>For GetOrganelle:</p>
-<ul>
-<li>seed database = <code>multigene.dedup.fasta</code> (plus maybe some
-sequences from <code>nogene.dedup.fasta</code>)</li>
-<li>label database = <code>singlegene.dedup.fasta</code>
-</li>
-</ul>
-<p>The <code>nogene.fasta</code> file contains un-annotated
-mitochondrial sequences or mitochondrial sequences from a non-gene
-region, such as the D-loop. Consider manually inspecting these
-sequences. You may wish to include some of them in your custom
-GetOrganelle seed database.</p>
-</div>
-<div class="section level3">
 <h3 id="inspecting-custom-databases">Inspecting custom databases<a class="anchor" aria-label="anchor" href="#inspecting-custom-databases"></a>
 </h3>
 <p>Here are a few helpful one-liners to inspect and manipulate FASTA
 files.</p>
 <p><strong><em>Count the number of sequences in a FASTA
 file:</em></strong></p>
-<pre><code>grep -c "&gt;" singlelocus.dedup.fasta</code></pre>
+<pre><code>grep -c "&gt;" getorganelle_label.fasta</code></pre>
 <p><strong><em>Generate list of FASTA headers:</em></strong></p>
-<pre><code>grep "&gt;" singlelocus.dedup.fasta</code></pre>
+<pre><code>grep "&gt;" getorganelle_label.fasta</code></pre>
 <p><strong><em>Generate list of unique gene names:</em></strong></p>
-<pre><code>grep "&gt;" singlelocus.dedup.fasta | cut -f1 -d" " | sort | uniq</code></pre>
+<pre><code>grep "&gt;" getorganelle_label.fasta | cut -f1 -d" " | sort | uniq</code></pre>
 <p><strong><em>Calculate sequence lengths:</em></strong></p>
 <pre><code>cat my_file.fasta | awk '$0 ~ "&gt;" {if (NR &gt; 1) {print c;} c=0;printf substr($0,2,100) "\t"; } $0 !~ "&gt;" {c+=length($0);} END { print c; }'</code></pre>
 <p><strong><em>Extract specific sequences from a FASTA file with <a href="https://bioinf.shenwei.me/seqkit/" class="external-link">seqkit</a>:</em></strong></p>
 <pre><code># Extract sequences based on names.txt
 # names.txt should contain full sequences headers, one per line, but no "&gt;" at start
-module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
+module load bio/seqkit/2.8.1 # ONLY FOR SMITHSONIAN HYDRA CLUSTER
 seqkit grep -f -n names.txt file.fasta &gt; file_subset.fasta</code></pre>
 <p><strong><em>Remove sequences from a FASTA file with <a href="https://bioinf.shenwei.me/seqkit/" class="external-link">seqkit</a>:</em></strong></p>
 <pre><code># Remove sequences based on name patterns listed in names.txt
 # one pattern per line
-module load bio/seqkit/2.8.1 # ONLY FOR NMNH HYDRA CLUSTER
+module load bio/seqkit/2.8.1 # ONLY FOR SMITHSONIAN HYDRA CLUSTER
 seqkit grep -v -f names.txt file.fasta &gt; file_subset.fasta</code></pre>
-<div class="alert alert-note">
-<p><strong>Note:</strong> <code>GenBankDownloadUtil.sh</code> will
-rename any sequence with no GenBank “product” (protein, tRNA, or rRNA)
-as “no_product ACCESSION”. You may wish to remove these sequences, as
-they often represent poorly annotated genes.</p>
-</div>
 </div>
 <div class="section level3">
 <h3 id="adding-your-own-sequences-to-a-custom-database">Adding your own sequences to a custom database<a class="anchor" aria-label="anchor" href="#adding-your-own-sequences-to-a-custom-database"></a>
@@ -341,7 +250,7 @@ does not require any specific format for the sequence names in the seed
 database.</p>
 <p>You can easily combine FASTA files with the Linux <code>cat</code>
 command:</p>
-<pre><code>cat multigene.dedup.fasta my_mitogenomes.fasta more_mitogenomes.fasta &gt; final_seed_db.fasta</code></pre>
+<pre><code>cat getorganelle_seed.fasta my_mitogenomes.fasta more_mitogenomes.fasta &gt; final_seed_db.fasta</code></pre>
 <p>You could also add unpublished individual gene sequences to a custom
 GetOrganelle label database in a similar manner.</p>
 </div>

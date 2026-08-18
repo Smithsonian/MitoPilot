@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>NOAA SEDNA Setup • MitoPilot</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="icon" sizes="any" href="../favicon.ico">
+<link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -35,15 +40,30 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
-    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
-    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
-    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/Multiple-Assemblies.html">Multiple Paths and Scaffolds</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Setup</h6></li>
+    <li><a class="dropdown-item" href="../articles/Installation.html">Installation and Requirements</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Test project</h6></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Assemble.html">Test Project: Assemble</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Annotate.html">Test Project: Annotate</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Export.html">Test Project: Export</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
-    <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
+    <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">Smithsonian Hydra Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Help</h6></li>
+    <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
   </ul>
 </li>
       </ul>
@@ -74,7 +94,7 @@
     
     
 <div class="section level2">
-<h2 id="how-to-use-mitopilot-on-the-noaa-nmfs-senda-computing-cluster">How to use MitoPilot on the NOAA NMFS SENDA computing cluster<a class="anchor" aria-label="anchor" href="#how-to-use-mitopilot-on-the-noaa-nmfs-senda-computing-cluster"></a>
+<h2 id="how-to-use-mitopilot-on-the-noaa-nmfs-sedna-computing-cluster">How to use MitoPilot on the NOAA NMFS SEDNA computing cluster<a class="anchor" aria-label="anchor" href="#how-to-use-mitopilot-on-the-noaa-nmfs-sedna-computing-cluster"></a>
 </h2>
 <p>You will need an account to access the SEDNA computing cluster.
 Detailed instructions can be found <a href="https://docs.google.com/document/d/1nn0T0OWEsQCBoCdaH6DSY69lQSbK3XnPlseyyQuU2Lc/edit?usp=sharing" class="external-link">here</a>.
@@ -91,7 +111,7 @@ used mamba on SEDNA before, run the following.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">/opt/bioinformatics/mambaforge/bin/mamba</span> init</span></code></pre></div>
 <p>Let’s create the <code>MitoPilot_deps</code> mamba environment. This
 may take a while.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">mamba</span> create <span class="at">--name</span> MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib conda-forge::r-base <span class="at">-y</span></span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">mamba</span> create <span class="at">--name</span> MitoPilot_deps <span class="st">'bioconda::nextflow&lt;26'</span> conda-forge::singularity conda-forge::zlib <span class="st">'conda-forge::r-base&gt;=4.4'</span> <span class="at">-y</span></span></code></pre></div>
 <div class="alert alert-note">
 <p><strong>Note:</strong> Please ensure your mamba environment is named
 <code>MitoPilot_deps</code>, case sensitive. Otherwise, RStudio server
@@ -116,7 +136,6 @@ take a while to install all of the necessary dependencies.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"Smithsonian/MitoPilot"</span><span class="op">)</span></span></code></pre></div>
 <p>If install was successful, you can exit the R session using
@@ -125,16 +144,14 @@ take a while to install all of the necessary dependencies.</p>
 <div class="section level3">
 <h3 id="updating-mitopilot">Updating MitoPilot<a class="anchor" aria-label="anchor" href="#updating-mitopilot"></a>
 </h3>
-<p>If you need to update MitoPilot, simply run the BiocManager
-installation command again. If you would like to ensure that you’re
-using the latest MitoPilot version, run
-<code>remove.packages("MitoPilot")</code> prior to installation.</p>
-<p>After updating MitoPilot, we recommend restarting R (in RStudio,
-Session &gt; Restart R or run <code>.rs.restartR()</code>) and then
-reloading the package with <code><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">library(MitoPilot)</a></code>.</p>
-<p>We also recommend clearing your Singularity cache with
-<code>singularity cache clean</code> to ensure you are using the latest
-MitoPilot Singularity image.</p>
+<p>See <a href="Installation.html#updating-pinning-and-rolling-back">updating,
+pinning, and rolling back</a>. Note that some releases change the
+project database schema and require
+<code><a href="../reference/backwards_compatibility.html">backwards_compatibility()</a></code> before existing projects will
+open.</p>
+<p>On SEDNA, activate the <code>MitoPilot_deps</code> environment first,
+and remember that a stale Singularity image will keep an updated package
+running old pipeline code.</p>
 </div>
 <div class="section level3">
 <h3 id="setting-up-rstudio-server">Setting up RStudio server<a class="anchor" aria-label="anchor" href="#setting-up-rstudio-server"></a>
@@ -142,8 +159,8 @@ MitoPilot Singularity image.</p>
 <blockquote>
 <p><strong>Note:</strong> If you only need the MitoPilot GUI (not a full
 RStudio session), you can skip RStudio Server entirely and run the GUI
-headless over an SSH tunnel. See <a href="Custom-HPC.html#headless-gui-over-an-ssh-tunnel">Headless GUI over
-an SSH tunnel</a> in the Custom HPC vignette.</p>
+headless over an SSH tunnel. See <a href="Custom-HPC.html#accessing-the-mitopilot-app-over-an-ssh-tunnel">Headless
+GUI over an SSH tunnel</a> in the Custom HPC vignette.</p>
 </blockquote>
 <p>Next we need to set up RStudio server. The version of RStudio server
 must match the R version in your <code>MitoPilot_deps</code> mamba
@@ -225,7 +242,7 @@ sure you’re setting <code>Rstudio_version</code> correctly.</p>
 <h3 id="launching-rstudio-server">Launching RStudio server<a class="anchor" aria-label="anchor" href="#launching-rstudio-server"></a>
 </h3>
 <p>To launch RStudio server, first start an interactive session in
-SENDA. You won’t need much computing resources, since MitoPilot uses
+SEDNA. You won’t need much computing resources, since MitoPilot uses
 Nextflow to distribute the analyses.</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="ex">srun</span> <span class="at">-c</span> 2 <span class="at">--mem</span><span class="op">=</span>16GB <span class="at">-p</span> standard <span class="at">--pty</span> /bin/bash</span></code></pre></div>
 <p>Then run the following.</p>
@@ -256,50 +273,27 @@ workshop website</a>.</p>
 <div class="section level3">
 <h3 id="running-mitopilot-jobs">Running MitoPilot Jobs<a class="anchor" aria-label="anchor" href="#running-mitopilot-jobs"></a>
 </h3>
-<p>SEDNA does not currently support running Nextflow within the R Shiny
-GUI.</p>
-<p>For a small number of samples, you could run Nextflow in an
-interactive session. However, this requires you to maintain an open
-connection to the cluster. For large datasets, there may be issues if
-the connection breaks while Nextflow is running.</p>
-<p>Therefore, if you have a large number of samples to process (more
-than a few dozen), we recommend running the assemble and annotate
-MitoPilot modules as batch jobs.</p>
-<p>First, initialize your new project and modify any desired parameters
-using the GUI. Once ready, click <code>UPDATE</code>. A new window
-should appear.</p>
-<p><img src="figures/test-project/13.png"></p>
-<p>Rather than clicking the <code>Run from App</code> button, copy the
-Nextflow command and create a submission script. We have provided a
-template below. You may wish to modify the job name
-(<code>--job-name</code>) and the output file names
-(<code>--output</code> and <code>--error</code>).</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="co">#!/bin/bash</span></span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="co">#SBATCH --job-name=MitoPilot_assembly # MODIFY THIS IF DESIRED</span></span>
-<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#SBATCH --output=MitoPilot_assembly.out # MODIFY THIS IF DESIRED</span></span>
-<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="co">#SBATCH --error=MitoPilot_assembly.err # MODIFY THIS IF DESIRED</span></span>
-<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co">#SBATCH -p standard</span></span>
-<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#SBATCH -c 1</span></span>
-<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#SBATCH --mem=8G</span></span>
-<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#SBATCH -t 24:00:00</span></span>
-<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a></span>
-<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="bu">echo</span> + <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$SLURM_JOB_NAME</span> started in <span class="va">$SLURM_JOB_PARTITION</span> with jobID=<span class="va">$SLURM_JOBID</span> on <span class="va">$SLURM_JOB_NODELIST</span></span>
-<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a></span>
-<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
-<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a><span class="ex">mamba</span> activate MitoPilot_deps</span>
-<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a></span>
-<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="co"># MITOPILOT NEXTFLOW COMMAND, example below</span></span>
-<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="ex">nextflow</span> <span class="at">-log</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps/lib/R/library/MitoPilot/nextflow <span class="at">-c</span> /home/dmacguigan/MitoPilot/test/2025_1_2/.config <span class="at">-entry</span> WF1</span>
-<span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a></span>
-<span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a><span class="bu">echo</span> = <span class="kw">`</span><span class="fu">date</span><span class="kw">`</span> job <span class="va">$SLURM_JOB_NAME</span> done</span></code></pre></div>
-<p>Move the submission script into your MitoPilot project directory (in
-the above example,
-<code>/home/dmacguigan/MitoPilot/test/2025_1_2/</code>). Then submit the
-job using <code>sbatch MY_SCRIPT_NAME.sh</code>.</p>
-<p>You can monitor the progress of this job using the
-<code>squeue</code> command and by checking on the log files. Once the
-job is done, you can relaunch the GUI to inspect the results. The same
-approach can be used for the annotate module.</p>
+<p>On SEDNA, run the pipeline as a batch job rather than in an
+interactive session. An interactive run needs you to hold the connection
+open for the whole workflow, which is fine for a handful of samples and
+risky for a few dozen or more.</p>
+<p>MitoPilot builds the submission script for you. Click
+<code>UPDATE</code>, and the update window shows a ready-to-edit SLURM
+script pre-filled with <code>#SBATCH</code> directives. Add the SEDNA
+environment setup where the script indicates:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="ex">mamba</span> activate MitoPilot_deps</span></code></pre></div>
+<p>Then use <strong>“Save Script Only”</strong> and submit the written
+<code>.sh</code> from a normal shell with <code>sbatch</code>. Do not
+use <strong>“Submit to Cluster”</strong> if you launched the app from a
+container, because <code>sbatch</code> is not available inside it. Your
+edits to the resource block are remembered per project, so the next run
+pre-fills them.</p>
+<p>Monitor the job with <code>squeue</code> and the log files. When it
+finishes, relaunch the GUI to inspect the results. The same approach
+works for the annotate module. See <a href="Custom-HPC.html#running-the-pipeline">Running the pipeline</a> in
+the Custom HPC vignette for the full description of the submission
+window.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

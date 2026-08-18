@@ -41,9 +41,12 @@ A quick vocabulary primer if containers are new to you:
 **1. Pull the image once.** From an interactive session or compute node
 (not the login node):
 
+The image tag must match your installed MitoPilot version. Get it with
+`packageVersion("MitoPilot")`, which for this build of the documentation
+is 1.5.2.
+
 ``` bash
-# NOTE: match the tag to the latest MitoPilot version
-singularity pull mitopilot.sif docker://macguigand/mitopilot:1.5.2
+singularity pull mitopilot.sif docker://macguigand/mitopilot:<version>
 ```
 
 **2. Start an R session.** By default a Singularity container can only
@@ -77,12 +80,15 @@ templates** for the four most common schedulers, plus a helper function
 to build a Nextflow config for your cluster once and reuse it for every
 project. See below for details.
 
-| Scheduler | `scheduler =` | Nextflow executor |
-|----|----|----|
-| SLURM | `"slurm"` | `slurm` |
-| SGE / UGE | `"sge"` | `sge` |
-| PBS Pro / OpenPBS / Torque | `"pbs"` | `pbspro` (edit to `pbs` for Torque/OpenPBS) |
-| IBM Spectrum LSF | `"lsf"` | `lsf` |
+Pass the value in the middle column to
+`generate_config(scheduler = ...)`:
+
+| Scheduler                | Value     | Nextflow executor |
+|--------------------------|-----------|-------------------|
+| SLURM                    | `"slurm"` | `slurm`           |
+| SGE / UGE                | `"sge"`   | `sge`             |
+| PBS Pro, OpenPBS, Torque | `"pbs"`   | `pbspro` [^1]     |
+| IBM Spectrum LSF         | `"lsf"`   | `lsf`             |
 
 [`generate_config()`](https://smithsonian.github.io/MitoPilot/reference/generate_config.md)
 builds a Nextflow config from a generic template, fills in your
@@ -114,7 +120,7 @@ Docker/Singularity. The
 [`generate_config()`](https://smithsonian.github.io/MitoPilot/reference/generate_config.md)
 writes its profiles to `~/.config/R/MitoPilot` inside your home
 directory, and Singularity mounts your home automatically. A profile you
-save once therefor persists and is found by
+save once therefore persists and is found by
 [`new_project()`](https://smithsonian.github.io/MitoPilot/reference/new_project.md)
 on every later run, with no `--bind` needed. (This only breaks if you
 deliberately launch with `--contain` or `--no-home`, which detach the
@@ -144,6 +150,26 @@ List everything available (built-in templates plus your saved profiles):
 ``` r
 
 list_configs()
+```
+
+### The project `.config` file
+
+[`new_project()`](https://smithsonian.github.io/MitoPilot/reference/new_project.md)
+writes a `.config` file into the project directory, built from your
+executor’s template. It may contain placeholders in the form
+`<<PARAMETER_NAME>>` that you need to fill in. Every generated config
+includes `rawDir = '<<RAW_DIR>>'`, which must point at the directory
+holding the raw reads named in your mapping file. Review the `.config`
+after creating a project and make sure nothing is left unfilled. The
+same file is where you point individual processing steps at a different
+container image.
+
+If you would rather supply a Nextflow config of your own instead of
+using a template or a saved profile, pass it directly:
+
+``` r
+
+new_project(..., config = "path/to/.config")
 ```
 
 ### Per-process resources
@@ -251,3 +277,6 @@ container. If you launched the MitoPilot app from a container, use
 cluster shell. The submitted job runs on a compute node and calls
 Nextflow, so make sure `java` and `nextflow` are available via the
 script’s environment-setup lines.
+
+[^1]: The generated config uses the `pbspro` executor. On Torque or
+    OpenPBS, edit that line in the `.config` to `pbs`.

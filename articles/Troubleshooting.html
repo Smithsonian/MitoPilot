@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Troubleshooting • MitoPilot</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="icon" sizes="any" href="../favicon.ico">
+<link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -35,15 +40,30 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
-    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
-    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
-    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/Multiple-Assemblies.html">Multiple Paths and Scaffolds</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Setup</h6></li>
+    <li><a class="dropdown-item" href="../articles/Installation.html">Installation and Requirements</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Test project</h6></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Assemble.html">Test Project: Assemble</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Annotate.html">Test Project: Annotate</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Export.html">Test Project: Export</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
-    <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
+    <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">Smithsonian Hydra Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Help</h6></li>
+    <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
   </ul>
 </li>
       </ul>
@@ -82,11 +102,51 @@ general usage questions, see the <a href="FAQ.html">FAQ</a>.</p>
 for example:</p>
 <pre><code>Caused by:
   Process `WF2:ANNOTATE:annotate (SAMPLE_ID)` terminated with an error exit status (140)</code></pre>
-<p>The number identifies the cause. Nextflow retries a failed process
-automatically (up to a few times), and each retry requests more memory
-(the requested memory is multiplied by the attempt number), so a step
-that fails once often succeeds on retry. A process that fails on every
-retry needs your attention.</p>
+<p>The number identifies the cause. Whether the step is retried depends
+on which step it is:</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th>Step</th>
+<th>On failure</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>ASSEMBLE</code></td>
+<td>Retried on exit 137-140 only, up to
+<code>assemble.maxRetries</code>. Each attempt requests more
+memory.</td>
+</tr>
+<tr class="even">
+<td>
+<code>SCAFFOLD_JOIN</code>, <code>BLAST_GENBANK</code>,
+<code>BLAST_REF_FETCH</code>
+</td>
+<td>Retried up to 3 times (these fail mostly on transient network or
+resource problems).</td>
+</tr>
+<tr class="odd">
+<td>
+<code>PREPROCESS</code>, <code>COVERAGE</code>,
+<code>ANNOTATE</code>, <code>CURATE</code>, <code>ORF</code>,
+<code>VALIDATE</code>, <code>BLAST_REF_ALIGN</code>
+</td>
+<td>
+<strong>Not retried.</strong> The sample is skipped and the run
+continues without it.</td>
+</tr>
+</tbody>
+</table>
+<p>For the steps that are not retried there is no free second attempt:
+the sample keeps whatever state it had before, and the only way forward
+is to change the options (usually memory) and rerun. Because the run
+continues past a skipped sample and then exits with a non-zero status at
+the end, a red exit code alongside a handful of per-sample warnings is
+the normal shape of a partly failed run, not a sign that the whole batch
+died.</p>
 <div class="section level3">
 <h3 id="exit-status-137">“exit status (137)”<a class="anchor" aria-label="anchor" href="#exit-status-137"></a>
 </h3>
@@ -96,11 +156,14 @@ the cluster scheduler enforces a memory limit, and a process that
 exceeds it is killed outright rather than allowed to finish. It can also
 appear when a job hits a scheduler time limit, or when a container is
 stopped manually.</p>
-<p>Because each retry requests more memory, a one-off 137 that then
-succeeds needs no action. If a step fails with 137 on every retry,
-increase its requested memory in the R Shiny GUI for the process that
-failed, then rerun the workflow (the same fix as
-<code>exit status (140)</code> below).</p>
+<p>For <code>ASSEMBLE</code>, each retry requests more memory (the
+request is multiplied by the attempt number), so a one-off 137 that then
+succeeds needs no action.</p>
+<p>For every other step a 137 is final. Increase the requested memory in
+the R Shiny GUI for the process that failed, then rerun the workflow
+(the same fix as <code>exit status (140)</code> below). If raising
+memory does not help, check your cluster’s walltime limit: a job killed
+at the time limit also reports 137.</p>
 </div>
 <div class="section level3">
 <h3 id="exit-status-140">“exit status (140)”<a class="anchor" aria-label="anchor" href="#exit-status-140"></a>
@@ -136,6 +199,18 @@ sequence read files.</p>
 <div class="section level2">
 <h2 id="other-errors">Other errors<a class="anchor" aria-label="anchor" href="#other-errors"></a>
 </h2>
+<div class="section level3">
+<h3 id="inspecting-the-project-database-directly">Inspecting the project database directly<a class="anchor" aria-label="anchor" href="#inspecting-the-project-database-directly"></a>
+</h3>
+<p>MitoPilot stores sample metadata, processing parameters, and results
+in a <code>.sqlite</code> database in the project directory, created
+automatically when the project is initialized. The app is the normal way
+to read it, but when troubleshooting it is often quicker to query it
+yourself.</p>
+<p>From R, use <a href="https://dbi.r-dbi.org/" class="external-link">{DBI}</a> and <a href="https://dbplyr.tidyverse.org/" class="external-link">{dbplyr}</a>, which the package
+itself relies on heavily. Outside R, a graphical client such as <a href="https://sqlitebrowser.org/" class="external-link">DB Browser for SQLite</a> works well.
+Close the app first if you intend to write anything.</p>
+</div>
 <div class="section level3">
 <h3 id="database-disk-image-is-malformed">“database disk image is malformed”<a class="anchor" aria-label="anchor" href="#database-disk-image-is-malformed"></a>
 </h3>

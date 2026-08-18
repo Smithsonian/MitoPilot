@@ -1,19 +1,25 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://smithsonian.github.io/MitoPilot/404.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/LICENSE.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/FAQ.html</loc></url>
-<url><loc>https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Installation.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html</loc></url>
-<url><loc>https://smithsonian.github.io/MitoPilot/articles/Multiple-Assemblies.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Annotate.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Assemble.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Export.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Troubleshooting.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/index.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/authors.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/index.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/news/index.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/MitoPilot.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/add_samples.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/annotate.html</loc></url>
@@ -120,7 +126,6 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/patch_blast_ref_meta.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/ruleset_browser.html</loc></url>
-<url><loc>https://smithsonian.github.io/MitoPilot/reference/run_app.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/scaffold_join.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/splice_join_cds.html</loc></url>

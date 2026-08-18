@@ -1,4 +1,4 @@
-# Configure the R session environment for the NMNH Hydra cluster
+# Configure the R session environment for the Smithsonian Hydra cluster
 
 RStudio Server sessions on Hydra start with a stripped \`PATH\` that
 omits the Univa Grid Engine, Java, and user \`~/bin\` directories, so

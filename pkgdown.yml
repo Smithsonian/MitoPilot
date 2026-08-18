@@ -2,17 +2,22 @@ pandoc: 3.8.3
 pkgdown: 2.2.1
 pkgdown_sha: ~
 articles:
+  Curation-and-Validation: Curation-and-Validation.html
   custom_dbs: custom_dbs.html
   Custom-HPC: Custom-HPC.html
+  Difficult-Assemblies: Difficult-Assemblies.html
   FAQ: FAQ.html
-  Fish-Mitogenome-Curation: Fish-Mitogenome-Curation.html
+  Installation: Installation.html
   MitoPilot: MitoPilot.html
-  Multiple-Assemblies: Multiple-Assemblies.html
   NMNH-Hydra: NMNH-Hydra.html
   NOAA-SEDNA: NOAA-SEDNA.html
   Ruleset-Browser: Ruleset-Browser.html
+  Test-Project-Annotate: Test-Project-Annotate.html
+  Test-Project-Assemble: Test-Project-Assemble.html
+  Test-Project-Export: Test-Project-Export.html
   Troubleshooting: Troubleshooting.html
-last_built: 2026-08-17T20:15Z
+  Your-Own-Project: Your-Own-Project.html
+last_built: 2026-08-18T20:20Z
 urls:
   reference: https://smithsonian.github.io/MitoPilot/reference
   article: https://smithsonian.github.io/MitoPilot/articles

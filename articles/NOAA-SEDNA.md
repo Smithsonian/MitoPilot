@@ -1,6 +1,6 @@
 # NOAA SEDNA Setup
 
-## How to use MitoPilot on the NOAA NMFS SENDA computing cluster
+## How to use MitoPilot on the NOAA NMFS SEDNA computing cluster
 
 You will need an account to access the SEDNA computing cluster. Detailed
 instructions can be found
@@ -26,7 +26,7 @@ Let’s create the `MitoPilot_deps` mamba environment. This may take a
 while.
 
 ``` bash
-mamba create --name MitoPilot_deps bioconda::nextflow conda-forge::singularity conda-forge::zlib conda-forge::r-base -y
+mamba create --name MitoPilot_deps 'bioconda::nextflow<26' conda-forge::singularity conda-forge::zlib 'conda-forge::r-base>=4.4' -y
 ```
 
 **Note:** Please ensure your mamba environment is named
@@ -56,7 +56,6 @@ take a while to install all of the necessary dependencies.
 
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
-  install.packages("remotes")
 }
 BiocManager::install("Smithsonian/MitoPilot")
 ```
@@ -66,25 +65,22 @@ If install was successful, you can exit the R session using
 
 ### Updating MitoPilot
 
-If you need to update MitoPilot, simply run the BiocManager installation
-command again. If you would like to ensure that you’re using the latest
-MitoPilot version, run `remove.packages("MitoPilot")` prior to
-installation.
+See [updating, pinning, and rolling
+back](https://smithsonian.github.io/MitoPilot/articles/Installation.html#updating-pinning-and-rolling-back).
+Note that some releases change the project database schema and require
+[`backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.md)
+before existing projects will open.
 
-After updating MitoPilot, we recommend restarting R (in RStudio, Session
-\> Restart R or run `.rs.restartR()`) and then reloading the package
-with [`library(MitoPilot)`](https://github.com/Smithsonian/MitoPilot).
-
-We also recommend clearing your Singularity cache with
-`singularity cache clean` to ensure you are using the latest MitoPilot
-Singularity image.
+On SEDNA, activate the `MitoPilot_deps` environment first, and remember
+that a stale Singularity image will keep an updated package running old
+pipeline code.
 
 ### Setting up RStudio server
 
 > **Note:** If you only need the MitoPilot GUI (not a full RStudio
 > session), you can skip RStudio Server entirely and run the GUI
 > headless over an SSH tunnel. See [Headless GUI over an SSH
-> tunnel](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html#headless-gui-over-an-ssh-tunnel)
+> tunnel](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html#accessing-the-mitopilot-app-over-an-ssh-tunnel)
 > in the Custom HPC vignette.
 
 Next we need to set up RStudio server. The version of RStudio server
@@ -173,7 +169,7 @@ chmod 755 ~/bin/start-rstudio-server-MitoPilot
 
 ### Launching RStudio server
 
-To launch RStudio server, first start an interactive session in SENDA.
+To launch RStudio server, first start an interactive session in SEDNA.
 You won’t need much computing resources, since MitoPilot uses Nextflow
 to distribute the analyses.
 
@@ -213,54 +209,30 @@ website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/qmd/exam
 
 ### Running MitoPilot Jobs
 
-SEDNA does not currently support running Nextflow within the R Shiny
-GUI.
+On SEDNA, run the pipeline as a batch job rather than in an interactive
+session. An interactive run needs you to hold the connection open for
+the whole workflow, which is fine for a handful of samples and risky for
+a few dozen or more.
 
-For a small number of samples, you could run Nextflow in an interactive
-session. However, this requires you to maintain an open connection to
-the cluster. For large datasets, there may be issues if the connection
-breaks while Nextflow is running.
-
-Therefore, if you have a large number of samples to process (more than a
-few dozen), we recommend running the assemble and annotate MitoPilot
-modules as batch jobs.
-
-First, initialize your new project and modify any desired parameters
-using the GUI. Once ready, click `UPDATE`. A new window should appear.
-
-![](figures/test-project/13.png)
-
-Rather than clicking the `Run from App` button, copy the Nextflow
-command and create a submission script. We have provided a template
-below. You may wish to modify the job name (`--job-name`) and the output
-file names (`--output` and `--error`).
+MitoPilot builds the submission script for you. Click `UPDATE`, and the
+update window shows a ready-to-edit SLURM script pre-filled with
+`#SBATCH` directives. Add the SEDNA environment setup where the script
+indicates:
 
 ``` bash
-#!/bin/bash
-#SBATCH --job-name=MitoPilot_assembly # MODIFY THIS IF DESIRED
-#SBATCH --output=MitoPilot_assembly.out # MODIFY THIS IF DESIRED
-#SBATCH --error=MitoPilot_assembly.err # MODIFY THIS IF DESIRED
-#SBATCH -p standard
-#SBATCH -c 1
-#SBATCH --mem=8G
-#SBATCH -t 24:00:00
-
-echo + `date` job $SLURM_JOB_NAME started in $SLURM_JOB_PARTITION with jobID=$SLURM_JOBID on $SLURM_JOB_NODELIST
-
 source ~/.bashrc
 mamba activate MitoPilot_deps
-
-# MITOPILOT NEXTFLOW COMMAND, example below
-nextflow -log /home/dmacguigan/MitoPilot/test/2025_1_2/.logs/nextflow.log run /home/dmacguigan/.conda/envs/MitoPilot_deps/lib/R/library/MitoPilot/nextflow -c /home/dmacguigan/MitoPilot/test/2025_1_2/.config -entry WF1
-
-echo = `date` job $SLURM_JOB_NAME done
 ```
 
-Move the submission script into your MitoPilot project directory (in the
-above example, `/home/dmacguigan/MitoPilot/test/2025_1_2/`). Then submit
-the job using `sbatch MY_SCRIPT_NAME.sh`.
+Then use **“Save Script Only”** and submit the written `.sh` from a
+normal shell with `sbatch`. Do not use **“Submit to Cluster”** if you
+launched the app from a container, because `sbatch` is not available
+inside it. Your edits to the resource block are remembered per project,
+so the next run pre-fills them.
 
-You can monitor the progress of this job using the `squeue` command and
-by checking on the log files. Once the job is done, you can relaunch the
-GUI to inspect the results. The same approach can be used for the
-annotate module.
+Monitor the job with `squeue` and the log files. When it finishes,
+relaunch the GUI to inspect the results. The same approach works for the
+annotate module. See [Running the
+pipeline](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html#running-the-pipeline)
+in the Custom HPC vignette for the full description of the submission
+window.

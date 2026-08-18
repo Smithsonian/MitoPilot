@@ -1,8 +1,7 @@
-# NMNH Hydra Setup
+# Smithsonian Hydra Setup
 
-This page covers what is specific to the Smithsonian NMNH Hydra cluster.
-Once you are set up here, the rest of MitoPilot works exactly as in the
-[Get
+This page covers what is specific to the Smithsonian Hydra cluster. Once
+you are set up here, the rest of MitoPilot works exactly as in the [Get
 Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.md)
 walkthrough, with `executor = "NMNH_Hydra"`.
 

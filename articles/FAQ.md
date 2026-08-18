@@ -63,7 +63,7 @@ Alternatively, if you are familiar with SQL, you can directly pull the
 necessary information from the `.sqlite` database located in your
 project directory.
 
-## How do I restore annotatations after manual editing?
+## How do I restore annotations after manual editing?
 
 If you simply wish to bring back a deleted annotation, select the
 deleted annotation in the table and click the `Restore` button.

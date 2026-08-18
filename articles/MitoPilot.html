@@ -6,6 +6,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Get Started • MitoPilot</title>
+<!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
+<link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+<link rel="icon" sizes="any" href="../favicon.ico">
+<link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -35,15 +40,30 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
-    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
-    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
-    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">NMNH Hydra Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
-    <li><a class="dropdown-item" href="../articles/Multiple-Assemblies.html">Multiple Paths and Scaffolds</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Setup</h6></li>
+    <li><a class="dropdown-item" href="../articles/Installation.html">Installation and Requirements</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Test project</h6></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Assemble.html">Test Project: Assemble</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Annotate.html">Test Project: Annotate</a></li>
+    <li><a class="dropdown-item" href="../articles/Test-Project-Export.html">Test Project: Export</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
-    <li><a class="dropdown-item" href="../articles/Fish-Mitogenome-Curation.html">Fish Mitogenome Curation</a></li>
+    <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
+    <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">Smithsonian Hydra Setup</a></li>
+    <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Help</h6></li>
+    <li><a class="dropdown-item" href="../articles/FAQ.html">Frequently Asked Questions</a></li>
+    <li><a class="dropdown-item" href="../articles/Troubleshooting.html">Troubleshooting</a></li>
   </ul>
 </li>
       </ul>
@@ -114,8 +134,84 @@ img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 }
 .part-break {
   border: none;
-  border-top: 4px solid #101820;
-  margin: 5.5em 0 3.4em;
+  border-top: 3px solid #c9d1d6;
+  margin: 2.2em 0 1.6em;
+}
+.step-nav {
+  margin: 0 0 2.5em;
+  padding-bottom: 1.2em;
+  border-bottom: 1px solid #dde3e6;
+}
+.step-nav.no-rule {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* pandoc wraps the row contents in a <p>, so that is the flex container. */
+.step-nav p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.step-nav .step-label {
+  font-weight: 600;
+  color: #6b7b85;
+  margin-right: 4px;
+}
+.step-nav a,
+.step-nav .current {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none !important;
+  border: 1px solid #c8dde5;
+}
+.step-nav a {
+  background-color: #e4f0f4;
+  color: #1f6f8b !important;
+}
+.step-nav a:hover,
+.step-nav a:focus {
+  background-color: #d3e7ee;
+  color: #17566b !important;
+  text-decoration: none !important;
+}
+.step-nav .current {
+  background-color: #1f6f8b;
+  color: #ffffff;
+  border-color: #1f6f8b;
+}
+.state-icon {
+  color: #1f6f8b;
+  width: 1.3em;
+  text-align: center;
+  margin-right: 2px;
+}
+table.state-table {
+  width: auto;
+  max-width: 100%;
+  font-size: 0.92rem;
+  line-height: 1.3;
+  margin: 0.75rem 0 1.25rem;
+}
+/* mirrors Bootstrap's own selector so the padding override wins */
+table.state-table > :not(caption) > * > * {
+  padding: 2px 18px 2px 0;
+  border-bottom-width: 0;
+  box-shadow: none;
+  vertical-align: baseline;
+  background: none;
+}
+table.state-table > thead > tr > th {
+  font-weight: 600;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+table.state-table p {
+  margin: 0;
 }
 </style>
 <p>MitoPilot takes you from raw Illumina paired-end reads to polished
@@ -125,103 +221,38 @@ you drive it from an R Shiny app that shows you every sample, assembly,
 and annotation. MitoPilot automatically curates annotations based on
 clade-specific rulesets and also allows you to manually adjust
 annotations when needed.</p>
-<p>This page walks the whole pipeline using the built-in test project,
-then shows you how to start a project with your own data.</p>
+<p>Start here. This page gets MitoPilot installed and the built-in test
+project running, then hands off to a page per pipeline module. Work
+through them in order; the whole test project takes an afternoon at
+most.</p>
 <div class="alert alert-hydra">
 <p><span class="hydra-tag">HYDRA</span> <strong>Are you a Smithsonian
 user?</strong> Boxes like this one flag the places where usage on the
 Smithsonian Hydra computing cluster differs from a generic setup. Before
-starting this tutorial, work through the
+starting this tutorial, work through the Hydra
 <a href="NMNH-Hydra.html#get-an-r-session-on-hydra">Get an R session</a>
 and <a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a>
-sections. Smithsonian users can also check out the <a href="https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/" class="external-link">2025
-workshop website</a></p>
+sections. Users can also check out the <a href="https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/" class="external-link">2025
+Smithsonian workshop webpage</a>, although it is slightly outdated.</p>
 </div>
 <hr class="part-break">
 <div class="section level2">
-<h2 id="what-you-need">What you need<a class="anchor" aria-label="anchor" href="#what-you-need"></a>
+<h2 id="before-you-begin">Before you begin<a class="anchor" aria-label="anchor" href="#before-you-begin"></a>
 </h2>
-<table class="table">
-<colgroup>
-<col width="50%">
-<col width="50%">
-</colgroup>
-<thead><tr class="header">
-<th>Requirement</th>
-<th>Notes</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td>
-<a href="https://www.r-project.org/" class="external-link">R</a> &gt;= 4.4.0</td>
-<td>RStudio is recommended but not required</td>
-</tr>
-<tr class="even">
-<td>
-<a href="https://www.nextflow.io/docs/latest/install.html" class="external-link">Nextflow</a>
-24.10.x - 25.10.x</td>
-<td>Needs Java 17 or newer</td>
-</tr>
-<tr class="odd">
-<td>
-<a href="https://docs.docker.com/engine/install/" class="external-link">Docker</a> or <a href="https://docs.sylabs.io/guides/latest/user-guide/quick_start.html" class="external-link">Singularity</a>
-</td>
-<td>Containerized execution is handled by Nextflow</td>
-</tr>
-<tr class="even">
-<td>Disk space</td>
-<td>About 15 GB for the container image, plus room for your data</td>
-</tr>
-<tr class="odd">
-<td>Internet access</td>
-<td>Reference annotations and taxonomy are fetched from NCBI</td>
-</tr>
-</tbody>
-</table>
-<div class="alert alert-note">
-<p><strong>Note.</strong> MitoPilot checks your Nextflow version when
-the package loads and when you create or open a project. If the version
-is too old the package refuses to load; if it is too new, MitoPilot
-quietly pins <code>NXF_VER</code> to a version that works.</p>
-</div>
-<hr class="part-break">
-</div>
-<div class="section level2">
-<h2 id="install">Install<a class="anchor" aria-label="anchor" href="#install"></a>
-</h2>
+<p>MitoPilot needs R, Java, Nextflow, and a container runtime (Docker
+locally, or Singularity/Apptainer on a cluster), plus about 15 GB of
+disk for the container image. <a href="Installation.html">Installation
+and Requirements</a> has the full list and the install commands. Work
+through that page first, then come back here.</p>
 <p>Everything in this tutorial happens in <strong>R</strong>, preferably
 from RStudio. The only steps that need a <strong>terminal</strong> are
 installing Nextflow and, on a cluster, checking on submitted jobs; those
 are called out where they come up.</p>
-<p>Open R and run the following.</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"Smithsonian/MitoPilot"</span>, ask <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
-<p>The first install pulls a long list of dependencies and takes a
-while. Warnings about system library paths that are not writeable are
-usually harmless.</p>
-<p>To update later:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/remove.packages.html" class="external-link">remove.packages</a></span><span class="op">(</span><span class="st">"MitoPilot"</span><span class="op">)</span></span>
-<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="st">"Smithsonian/MitoPilot"</span><span class="op">)</span></span>
-<span><span class="fu">.rs.restartR</span><span class="op">(</span><span class="op">)</span>   <span class="co"># or restart R yourself</span></span></code></pre></div>
-<div class="alert alert-tip">
-<p><strong>Tip.</strong> Each MitoPilot version pairs with a matching
-container image. If needed, you can clear your container cache
-(<code>docker image prune</code> or <code>singularity cache
-clean</code>) to ensure a new image is pulled. Careful, this will clear
-all cached images, not just MitoPilot.</p>
-</div>
 <p>Load the package:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span></code></pre></div>
 <p>You should see a welcome message naming the Nextflow version
-MitoPilot will use. If Nextflow cannot be found, make sure it is on your
-<code>PATH</code> in the same R session
-(<code>Sys.which("nextflow")</code>). See <a href="Custom-HPC.html">HPC
-cluster support</a> if you are working on a cluster.</p>
+MitoPilot will use.</p>
 <div class="alert alert-hydra">
 <p><span class="hydra-tag">HYDRA</span> <strong>Run
 <code><a href="../reference/hydra_setup.html">hydra_setup()</a></code> once per session.</strong> RStudio Server
@@ -240,14 +271,14 @@ Hydra.</p>
 <hr class="part-break">
 </div>
 <div class="section level2">
-<h2 id="run-the-test-project">Run the test project<a class="anchor" aria-label="anchor" href="#run-the-test-project"></a>
+<h2 id="set-up-the-test-project">Set up the test project<a class="anchor" aria-label="anchor" href="#set-up-the-test-project"></a>
 </h2>
 <p>MitoPilot ships with a small test dataset: 15 samples of pre-filtered
 Illumina reads, mostly marine fishes. It is deliberately messy. Some
 samples assemble cleanly, one has far too little data, one produces two
 competing assemblies, and two produce fragmented assemblies. This allows
 you to see more complex situations that need user judgment.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Anywhere you have space. MitoPilot creates the directory if needed.</span></span>
@@ -269,12 +300,11 @@ process.</p>
 <code>.config</code> file holding the Nextflow settings for the project
 directory. The defaults are fine for the test project.</p>
 <div class="alert alert-hydra">
-<p><span class="hydra-tag">HYDRA</span> <strong>Use the Hydra executor,
-and pick the right disk.</strong> Pass <code>executor =
-“NMNH_Hydra”</code> so work is dispatched to compute nodes instead of
-running on the login or RStudio node. Put projects under
-<code>/pool</code> or <code>/scratch</code>. Home directories are far
-too small for Nextflow work directories, and projects cannot be run from
+<p><span class="hydra-tag">HYDRA</span> <strong>Project setup.</strong>
+Pass <code>executor = “NMNH_Hydra”</code> so work is dispatched to
+compute nodes instead of running on the login or RStudio node. Put
+projects under <code>/pool</code> or <code>/scratch</code>. Home
+directories are far too small and projects cannot be run from
 <code>/store</code>.</p>
 </div>
 <hr class="part-break">
@@ -282,9 +312,9 @@ too small for Nextflow work directories, and projects cannot be run from
 <div class="section level2">
 <h2 id="open-the-app">Open the app<a class="anchor" aria-label="anchor" href="#open-the-app"></a>
 </h2>
-<p>Once your project is initialized, run the following in your R
+<p>Once your test project is initialized, run the following in your R
 session:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">wd</span> <span class="op">&lt;-</span> <span class="st">"~/MitoPilot_test/run_01"</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="va">wd</span><span class="op">)</span>     <span class="co"># the app must be launched from the project directory</span></span>
 <span><span class="fu"><a href="../reference/MitoPilot.html">MitoPilot</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
@@ -299,1018 +329,109 @@ in as the pipeline runs.</p>
 the three pipeline modules, <strong>Assemble</strong>,
 <strong>Annotate</strong>, and <strong>Export</strong>, which you work
 through in that order. The circular arrow refreshes the table.</p>
+<p>Clicking a column header sorts alphanumerically. The search box at
+the top right filters everything, and most columns have their own filter
+box.</p>
 <p>Two icons sit to the left of each sample ID:</p>
 <ul>
 <li>
-<strong>The lock.</strong> Unlocked samples are available for the
-next pipeline run to process. Locking a sample freezes it in the current
-module and makes it available for the next module. Select samples and
-use the <code>LOCK</code> button to toggle.</li>
+<strong>The lock</strong>
+(<i class="fa fa-lock-open state-icon"></i> unlocked,
+<i class="fa fa-lock state-icon"></i> locked). Unlocked samples are
+available for the next pipeline run to process. Locking a sample freezes
+it in the current module and makes it available for the next module.
+Select samples and use the <code>LOCK</code> button to toggle.</li>
 <li>
 <strong>The state.</strong> Status of the sample in the current
 module. The pipeline sets these automatically, but you can override them
 with the <code>STATE</code> button. This is how you can park samples you
 do not want to process yet or reset samples that have already completed
-the pipeline.</li>
+the pipeline. There are five states:</li>
 </ul>
-<p>Clicking a column header sorts alphanumerically. The search box at
-the top right filters everything, and most columns have their own filter
-box.</p>
-<hr class="part-break">
-</div>
-<div class="section level2">
-<h2 id="assemble">Assemble<a class="anchor" aria-label="anchor" href="#assemble"></a>
-</h2>
-<p>The Assemble module cleans the reads, builds mitogenome assemblies,
-maps the reads to the assembly to calculate coverage, and BLASTs each
-assembly against a database of metazoan mitogenomes to find its closest
-published relative.</p>
-<div class="section level3">
-<h3 id="set-the-options">Set the options<a class="anchor" aria-label="anchor" href="#set-the-options"></a>
-</h3>
-<p>Every processing step has an options set, shown as a link in the
-sample table. Click the <code>default</code> link in the
-<strong>Preprocess Opts.</strong> column to see how the reads will be
-cleaned.</p>
-<div class="float">
-<img src="figures/get-started/preprocess-opts.png" alt="Preprocess options window"><div class="figcaption">Preprocess options window</div>
-</div>
-<p>The <strong>Assembly Opts.</strong> column works the same way, and
-controls the assembler.</p>
-<div class="float">
-<img src="figures/get-started/assemble-opts.png" alt="Assembly options window"><div class="figcaption">Assembly options window</div>
-</div>
-<p>Nothing is editable until you tick <strong>Edit</strong>. The
-important controls:</p>
-<ul>
-<li>
-<strong>CPUs and Memory</strong> per sample. Raise memory if samples
-fail with out-of-memory errors.</li>
-<li>
-<strong>Assembler.</strong> <a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a> by
-default, or <a href="https://github.com/RemiAllio/MitoFinder" class="external-link">MitoFinder</a>.
-GetOrganelle only assembles reads it recognizes as mitochondrial, which
-makes it fast but dependent on good reference databases. MitoFinder
-assembles everything, which is much slower but can work better for
-groups with few reference mitogenomes.</li>
-<li>
-<strong>Seeds and Labels databases.</strong> The reference sequences
-GetOrganelle uses to recruit and extend mitochondrial reads. The
-defaults are fish; for other groups, build your own with
-<code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code> (see <a href="custom_dbs.html">custom
-databases</a>).</li>
-<li>
-<strong>MitoFinder reference database.</strong> Only used when the
-assembler is MitoFinder. A GenBank-format (<code>.gb</code>) file of one
-or more reference mitogenomes that MitoFinder uses to identify
-mitochondrial contigs. The default is the zebrafish mitogenome
-(NC_002333.2), so for anything other than a fish, supply a reference
-from your own group. <code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code> can build this
-file too.</li>
-<li>
-<strong>Max assembly paths / Max scaffolds.</strong> Samples are
-marked failed instead of continuing in the pipeline if they exceed these
-thresholds.</li>
-<li>
-<strong>Automatically join multi-scaffold assemblies.</strong> Off
-by default, and worth leaving off until you understand your data. See <a href="Multiple-Assemblies.html">multiple paths and scaffolds</a>.</li>
-</ul>
-<p>Options are saved as named, reusable sets. To make one, tick
-<strong>Edit</strong>, change what you want, type a new name in the
-<strong>Parameter set name</strong> box, and click
-<strong>Update</strong>. That name now appears in the dropdown for any
-sample. Different samples can use different parameter sets, which can
-allow you to selectively tweak memory usage, assembly method, etc. for
-difficult samples.</p>
-<p>For the test project the defaults are fine.</p>
-<div class="alert alert-hydra">
-<p><span class="hydra-tag">HYDRA</span> <strong>Raise the memory
-defaults before running.</strong> The package defaults are tuned for a
-laptop and are too low for Hydra’s queues. For the test project, edit
-the options sets and use:</p>
-<ul>
-<li>
-<strong>Preprocess Opts.</strong> memory <strong>40 GB</strong>
-</li>
-<li>
-<strong>Assembly Opts.</strong> memory <strong>80 GB</strong>
-</li>
-</ul>
-<p>Tick <strong>Edit</strong>, change the memory, give the set a name
-such as <code>hydra</code>, and click <strong>Update</strong> so it
-applies to every selected sample.</p>
-</div>
-<div class="alert alert-hydra">
-<p><span class="hydra-tag">HYDRA</span> <strong>CPUs and memory are
-per-job request.</strong> On Hydra these values become the job
-scheduler’s resource request. The Hydra config flags high-memory steps
-automatically when a request crosses the per-CPU threshold. See the <a href="https://confluence.si.edu/spaces/HPC/pages/163152285/Compute+Nodes" class="external-link">Hydra
-wiki</a> for details about the available compute nodes.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="run-the-workflow">Run the workflow<a class="anchor" aria-label="anchor" href="#run-the-workflow"></a>
-</h3>
-<p>Click <strong>UPDATE</strong> at the top of the window. MitoPilot
-shows the Nextflow command it is about to run and how many samples it
-applies to.</p>
-<div class="float">
-<img src="figures/get-started/update-window.png" alt="Update window showing the Nextflow command and Run from App button"><div class="figcaption">Update window showing the Nextflow command and
-Run from App button</div>
-</div>
-<p><strong>Run from App</strong> runs the pipeline in your R session
-(distributing individual tasks to compute nodes if you are working on a
-HPC cluster). The Progress window updates as samples move through the
-steps, and the spinning gears in the corner mean work is still
-happening. This is the simplest option, and the right one for a project
-this size.</p>
-<div class="float">
-<img src="figures/get-started/progress-window.png" alt="Progress window part way through an Assemble run"><div class="figcaption">Progress window part way through an Assemble
-run</div>
-</div>
-<p>Each line is a pipeline step, with a count of how many samples have
-finished it. <strong>Stop / Interrupt</strong> halts the run; you can
-resume it later without redoing completed work.</p>
-<div class="alert alert-warning">
-<p><strong>Warning.</strong> Running from the app ties the pipeline to
-the app session. Closing the MitoPilot app will kill the pipeline. For
-large projects, or anything on a cluster, save or submit a job script
-instead so the run survives a dropped connection. See
-<a href="Custom-HPC.html">HPC cluster support</a>.</p>
-</div>
-<div class="alert alert-hydra">
-<p><span class="hydra-tag">HYDRA</span> <strong>Submit as Job.</strong>
-MitoPilot detects Hydra and adds a <strong>Submit as Job</strong> button
-next to <strong>Run from App</strong>. It submits the workflow to the
-cluster for you, so the run keeps going after you close the app or lose
-your connection. Monitor it by running <code>qstat</code> in a terminal
-(the Terminal tab in RStudio Server works) and reading the log files in
-the project’s <code>.logs</code> directory. Reopen the app when the job
-finishes. For anything beyond a dozen samples, use <strong>Submit as
-Job</strong> rather than running from the app.</p>
-</div>
-<p>Assemble runs three steps per sample: read pre-processing with <a href="https://github.com/OpenGene/fastp" class="external-link">fastp</a>, assembly with
-GetOrganelle or MitoFinder, and read mapping with <a href="https://github.com/BenLangmead/bowtie2" class="external-link">bowtie2</a> to compute
-depth and error rates. It then BLASTs each assembly to find its closest
-published relative, and fetches that reference’s annotations from NCBI.
-Nextflow runs all samples in parallel through these steps.</p>
-<p>Failures are normal and often mean a sample ran out of memory. Common
-error messages are covered in the <a href="Troubleshooting.html">troubleshooting</a> articles.</p>
-<div class="section level4">
-<h4 id="finding-the-reference-local-vs-remote-blast">Finding the reference: local vs remote BLAST<a class="anchor" aria-label="anchor" href="#finding-the-reference-local-vs-remote-blast"></a>
-</h4>
-<p>The reference search runs against a <strong>local database of
-metazoan mitogenomes bundled with the MitoPilot Docker/Singularity
-container</strong>. This is the default, and for most projects it is all
-you need.</p>
-<div class="float">
-<img src="figures/get-started/blast-opts.png" alt="BLAST options window"><div class="figcaption">BLAST options window</div>
-</div>
-<p>The <strong>BLAST Opts.</strong> window reports the build date and
-size of the bundled database, recorded the first time a local search
-runs in a project. Two settings change the behavior:</p>
-<ul>
-<li>
-<strong>Remote BLAST</strong> searches NCBI over the network instead
-of the local database. It is much slower (sometimes hours per search)
-and rate limited. Only worth using to reach sequences not contained in
-the BLAST database included with the MitoPilot container.</li>
-<li>
-<strong>Fall back to remote BLAST when no local hit</strong> is on
-by default. If the local search comes up empty, MitoPilot retries that
-sample once against NCBI.</li>
-</ul>
-<p>You can restrict either search to particular <strong>NCBI taxon
-IDs</strong> (numeric IDs, not names). The <strong>Entrez query</strong>
-box applies to remote searches only.</p>
-<div class="alert alert-note">
-<p><strong>Note.</strong> Local BLAST does not remove the need for an
-NCBI API key. Only the <em>search</em> is local. Once a reference is
-chosen, MitoPilot still goes to NCBI for that record’s sequence,
-annotations, and taxonomic lineage, all of which feed into curation and
-export. For projects with more than a handful of samples, set
-<code>ncbi_api_key</code> at project setup so those requests are not
-throttled.</p>
-</div>
-</div>
-</div>
-<div class="section level3">
-<h3 id="read-the-results">Read the results<a class="anchor" aria-label="anchor" href="#read-the-results"></a>
-</h3>
-<p>When the run finishes, the sample table should automatically fill in.
-If not try clicking the circular arrow refresh button.</p>
-<div class="float">
-<img src="figures/get-started/assemble-table.png" alt="MitoPilot sample table in the Assemble module"><div class="figcaption">MitoPilot sample table in the Assemble
-module</div>
-</div>
-<p>Useful columns: <strong>Reads</strong> surviving pre-processing,
-<strong>Topology</strong> (circular or linear), <strong>Asmb.
-Length</strong>, and <strong># Paths</strong> / <strong>#
-Scaffolds</strong>, which tell you whether the sample came back as one
-clean sequence or something messier. The BLAST columns name the closest
-GenBank record. The <code>output</code> button opens the sample’s
-results folder.</p>
-<p>The <code>details</code> button opens a new window for the
-assembly.</p>
-<div class="float">
-<img src="figures/get-started/assemble-details.png" alt="Assembly details for a sample with one clean assembly"><div class="figcaption">Assembly details for a sample with one clean
-assembly</div>
-</div>
-<p>For a sample that assembled cleanly there is one row here. Samples
-that produced more than one assembly get more rows and more tools,
-covered below.</p>
-<p>Select the row and use the <code>Fasta</code> button to copy the
-sequence to your clipboard.</p>
-<div class="section level4">
-<h4 id="coverage-and-error">Coverage and error<a class="anchor" aria-label="anchor" href="#coverage-and-error"></a>
-</h4>
-<p>In this assembly details window, <code>view</code> opens a plot of
-read depth, error rate, and GC content along the assembly.</p>
-<div class="float">
-<img src="figures/get-started/coverage-plot.png" alt="Read depth, error rate, and GC content along an assembly"><div class="figcaption">Read depth, error rate, and GC content along an
-assembly</div>
-</div>
-<p>This is SRR21843972 (<em>Stomias affinis</em>). Depth collapses at
-both ends, which is why the assembly came back linear rather than
-circular: there were not enough reads spanning that region to close the
-circle. To assemble a circular mitogenome, we could try different
-GetOrganelle settings or using MitoFinder for assembly.</p>
-<p>Note that GenBank will still accept and verify partial (linear)
-mitogenomes. A linear mitogenome is not a failure and can still be
-annotated.</p>
-<div class="alert alert-hydra">
-<p><span class="hydra-tag">HYDRA</span> <strong>Buttons that open
-files.</strong> On RStudio Server, the <code>output</code> button opens
-that sample’s results folder in the <strong>Files</strong> pane at the
-bottom right of your RStudio session, and the coverage <code>view</code>
-plot opens the PDF the same way. If you reached the app through an SSH
-tunnel from a container instead, these buttons may do nothing, because
-the app tries to open them on the cluster rather than on your
-laptop.</p>
-</div>
-</div>
-<div class="section level4">
-<h4 id="detailed-troubleshooting">Detailed troubleshooting<a class="anchor" aria-label="anchor" href="#detailed-troubleshooting"></a>
-</h4>
-<p><strong>Work Dirs</strong> at the top right opens a browser of the
-working directories for every step of the pipeline, including failed
-attempts. It is the most reliable way to reach logs and intermediate
-files when something goes wrong.</p>
-<div class="float">
-<img src="figures/get-started/workdir-browser.png" alt="Work directory browser"><div class="figcaption">Work directory browser</div>
-</div>
-</div>
-</div>
-<div class="section level3">
-<h3 id="problematic-samples">Problematic samples<a class="anchor" aria-label="anchor" href="#problematic-samples"></a>
-</h3>
-<p>Three test samples are deliberately problematic, and between them
-they cover most of what goes wrong with real data.</p>
-<div class="section level4">
-<h4 id="not-enough-data">Not enough data<a class="anchor" aria-label="anchor" href="#not-enough-data"></a>
-</h4>
-<p>SRR22396758 (<em>Upeneus parvus</em>) carries a warning icon and the
-note “Insufficient sequencing depth”. Its read files were intentionally
-truncated to 200 reads. This sample fails to meet the default
-<code>min_depth</code> argument at project setup. There is nothing to
-fix here, so leave this sample behind when you lock the rest.</p>
-</div>
-<div class="section level4">
-<h4 id="two-competing-assemblies">Two competing assemblies<a class="anchor" aria-label="anchor" href="#two-competing-assemblies"></a>
-</h4>
-<p>SRR21844202 (<em>Fundulus majalis</em>) is flagged “Unable to resolve
-single assembly from reads”: GetOrganelle found two valid paths through
-a tangled assembly graph. Open <code>details</code> and you see both,
-each 19,332 bp.</p>
-<p>Select both and click <strong>Align</strong>.</p>
-<div class="float">
-<img src="figures/get-started/multipath-align.png" alt="Alignment of two competing assembly paths with a conflict block highlighted"><div class="figcaption">Alignment of two competing assembly paths with a
-conflict block highlighted</div>
-</div>
-<p>The paths are 99.99% identical, disagreeing at two single-base
-positions. MitoPilot classifies each conflict, here “Likely heteroplasmy
-/ SNP”, and shows read depth and error rate around it so you can see
-whether both alleles have real support.</p>
-<p>From here you can:</p>
-<ul>
-<li>
-<strong>Ignore the extras.</strong> Click the ignore button on the
-paths you do not want. Only what remains goes to annotation. This is
-what we do for the test project.</li>
-<li>
-<strong>Build a resolved assembly.</strong> Choose how to handle
-each conflict block and MitoPilot writes a single reconciled sequence as
-<strong>Path 0</strong>, superseding the alternatives.</li>
-</ul>
-<div class="float">
-<img src="figures/get-started/multipath-ignored.png" alt="Assembly details with the second path marked ignored"><div class="figcaption">Assembly details with the second path marked
-ignored</div>
-</div>
-<div class="alert alert-note">
-<p><strong>Note.</strong> Resolving discrepancies with IUPAC ambiguity
-codes provided as an option. But be aware that annotation may handle
-ambiguous bases poorly if they occur in a protein-coding region.</p>
-</div>
-</div>
-<div class="section level4">
-<h4 id="fragmented-assemblies">Fragmented assemblies<a class="anchor" aria-label="anchor" href="#fragmented-assemblies"></a>
-</h4>
-<p>Two samples come back in pieces, but they need different
-treatment.</p>
-<p><strong>SCAFFJOIN</strong> (<em>Conger oceanicus</em>) is one
-mitogenome broken into three scaffolds. Open its details and MitoPilot
-shows the scaffold join editor.</p>
-<div class="float">
-<img src="figures/get-started/scaffjoin-join-editor.png" alt="Scaffold join editor showing three scaffolds mapped to one reference"><div class="figcaption">Scaffold join editor showing three scaffolds
-mapped to one reference</div>
-</div>
-<p>All three scaffolds map to the same reference (NC_083079.1) at 100%
-coverage, and the plot shows their mapping positions against the
-reference. That is the signature of a mitogenome that the assembler
-could not connect into a single contig. You can override the order or
-orientation, tick <strong>Circular</strong> if appropriate, and then
-click <strong>Build joined assembly (Path 0)</strong>.</p>
-<div class="float">
-<img src="figures/get-started/scaffjoin-joined.png" alt="Assembly details after building the joined Path 0"><div class="figcaption">Assembly details after building the joined Path
-0</div>
-</div>
-<p>The joined Path 0 is 17,652 bp, the three original scaffolds are
-marked ignored, and the sample is locked automatically. The note records
-how it was built, including how many N bases fill the gaps. Those Ns are
-real missing sequence, and MitoPilot warns you about them because MITOS2
-does not handle ambiguous bases well.</p>
-<p><strong>MULTISCAFF</strong> looks superficially similar, two
-scaffolds in one path, but it is the opposite case.</p>
-<div class="float">
-<img src="figures/get-started/multiscaff-details.png" alt="Warning that scaffolds map to different references"><div class="figcaption">Warning that scaffolds map to different
-references</div>
-</div>
-<p>These scaffolds carry <em>different</em> BLAST hits, and the mapping
-plot shows the second one only sparsely aligned (hatched shading) to the
-reference. This likely represents contamination or a mixed sample.
-Joining them would fabricate a chimeric mitogenome. Leave them separate,
-and each is annotated, validated, and exported as its own record.</p>
-<div class="alert alert-tip">
-<p><strong>Tip.</strong> Fragmented does not automatically mean
-joinable. Check that the pieces map to the same reference in a sensible
-order before you join anything. Contamination, NUMTs, and naturally
-multipartite mitogenomes all look like “extra scaffolds” at first
-glance.</p>
-</div>
-</div>
-</div>
-<div class="section level3">
-<h3 id="lock-and-move-on">Lock and move on<a class="anchor" aria-label="anchor" href="#lock-and-move-on"></a>
-</h3>
-<p>Select every sample that assembled successfully, which is all of them
-except SRR22396758, and click <strong>LOCK</strong>.</p>
-<div class="float">
-<img src="figures/get-started/assemble-selected.png" alt="Sample table with successful samples selected for locking"><div class="figcaption">Sample table with successful samples selected
-for locking</div>
-</div>
-<p>Locking freezes those samples in Assemble and releases them to the
-Annotate module. Switch modules with the dropdown at the top left.</p>
-<hr class="part-break">
-</div>
-</div>
-<div class="section level2">
-<h2 id="annotate">Annotate<a class="anchor" aria-label="anchor" href="#annotate"></a>
-</h2>
-<p>This module finds the genes, curates the gene models against
-reference sequences from GenBank, and validates the result against rules
-for your taxonomic group. It attempts to flag any issues that would
-cause a rejection during GenBank submission.</p>
-<p>Each row here is one <strong>assembly unit</strong>, not one sample.
-A sample that kept several scaffolds or paths will be represented by
-several rows, and each is annotated and validated on its own.</p>
-<div class="section level3">
-<h3 id="set-the-options-1">Set the options<a class="anchor" aria-label="anchor" href="#set-the-options-1"></a>
-</h3>
-<p><strong>Annotate Opts.</strong> controls the annotation tools.</p>
-<div class="float">
-<img src="figures/get-started/annotate-opts.png" alt="Annotation options window"><div class="figcaption">Annotation options window</div>
-</div>
-<p>Genes come from <a href="https://gitlab.com/Bernt/MITOS" class="external-link">MITOS2</a>
-(protein-coding genes, tRNAs, and rRNAs) and <a href="https://github.com/UCSC-LoweLab/tRNAscan-SE" class="external-link">tRNAscan-SE</a>
-(tRNAs), with MitoFinder, ARWEN, ARAGORN, and ORFfinder available as
-optional annotators. The MITOS2 reference database defaults to
-<code>Chordata</code>, but <code>Metazoa_RefSeq89</code> is the
-general-purpose choice for other groups.</p>
-<p><strong>Curate Opts.</strong> controls what MitoPilot does with those
-raw annotations.</p>
-<div class="float">
-<img src="figures/get-started/curate-opts.png" alt="Curation options window showing the taxonomic ruleset"><div class="figcaption">Curation options window showing the taxonomic
-ruleset</div>
-</div>
-<p>The setting that matters most is <strong>Target</strong>, the
-taxonomic ruleset. It sets the expected gene content, the allowed start
-and stop codons, the naming conventions, and the genetic code. It
-defaults to Actinopterygii, which is correct for the test fishes.</p>
-<p>For your own data, pick the closest clade from the <a href="Ruleset-Browser.html">ruleset browser</a>. The validation
-parameters below are the ruleset itself, laid out so you can see exactly
-which rules a sample is being judged against.</p>
-<div class="alert alert-note">
-<p><strong>No ruleset for your samples?</strong> If you do not see an
-appropriate clade for your samples, please post an <a href="https://github.com/Smithsonian/MitoPilot/issues" class="external-link">issue</a> or
-reach out to Dan MacGuigan directly at <a href="mailto:macguigand@si.edu" class="email">macguigand@si.edu</a>. We
-are always looking to expand the taxonomic scope of MitoPilot.</p>
-</div>
-<p>When ready, click <strong>UPDATE</strong> and run the workflow the
-same way you ran Assemble.</p>
-<p>This module is slower than Assemble. MITOS2 takes a few minutes per
-unit, and curation aligns every protein-coding gene against reference
-sequences. When working on a computing cluster with your own project,
-consider running this step as a job rather than directly from the
-MitoPilot app.</p>
-</div>
-<div class="section level3">
-<h3 id="read-the-results-1">Read the results<a class="anchor" aria-label="anchor" href="#read-the-results-1"></a>
-</h3>
-<div class="float">
-<img src="figures/get-started/annotate-table-warnings.png" alt="Annotate table showing missing genes, extra genes, and warning counts"><div class="figcaption">Annotate table showing missing genes, extra
-genes, and warning counts</div>
-</div>
-<p>Scroll right in the table for the columns that matter:</p>
-<ul>
-<li>
-<strong>PCGCount, tRNACount, rRNACount</strong>: how many of each
-gene type were annotated. For a vertebrate mitogenome you expect 13, 22,
-and 2.</li>
-<li>
-<strong>Missing</strong>: expected genes that were not found.</li>
-<li>
-<strong>Extra</strong>: genes annotated more times than the ruleset
-expects.</li>
-<li>
-<strong>Warnings</strong>: how many validation flags were raised.
-This is your work queue.</li>
-</ul>
-<p>A few units stand out in the test project. For example, SRR21844202
-has an extra <code>trnW</code> and two warnings.</p>
-<p>SCAFFJOIN is missing <code>atp8</code> and <code>trnK</code> and
-carries eight warnings. This is an real consequence of joining scaffolds
-across coverage gaps. The sequence in those gaps is set to “N”, so the
-genes in those gaps cannot be annotated.</p>
-<div class="alert alert-note">
-<p><strong>Note.</strong> The <strong><code>Warnings column
-includes</code></strong> dropdown menu at the top filters which warning
-types are counted. Narrow it to one warning type to pull out every
-sample with that problem and work through them as a batch.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="inspect-a-sample">Inspect a sample<a class="anchor" aria-label="anchor" href="#inspect-a-sample"></a>
-</h3>
-<p>Click <code>details</code> on any row. Here we’ll look at sample
-SRR19434536.</p>
-<div class="float">
-<img src="figures/get-started/annotate-details.png" alt="Annotation details window with the gene table"><div class="figcaption">Annotation details window with the gene
-table</div>
-</div>
-<p>The annotation table lists every gene with its position, strand, and
-the tool that called it. The <strong>Notes</strong> column records
-changes made during automatic curation, such as a start position moved
-upstream or a stop codon trimmed. <strong>Warnings</strong> shows what
-validation the flagged. The <code>nt</code> and <code>aa</code> buttons
-copy the nucleotide or amino acid sequence to your clipboard.</p>
-<p>The badges along the top track the sample: topology, ID verified,
-reviewed, problematic, and partial. The buttons at the bottom toggle
-them, which is how you keep track of what you have already looked at
-across a large project.</p>
-<p>Below the table are three collapsible views.</p>
-<p><strong>Coverage Map</strong> plots read depth along the assembly
-with the gene models drawn below, zoomed to whichever gene you have
-selected. The gene bars are semi-transparent so overlapping gene models
-are easy to spot.</p>
-<div class="float">
-<img src="figures/get-started/annotate-coverage-map.png" alt="Coverage map with gene models drawn over read depth"><div class="figcaption">Coverage map with gene models drawn over read
-depth</div>
-</div>
-<p><strong>BLAST Reference Synteny</strong> lines your annotation up
-against the closest GenBank mitogenome, with a percent-identity bar
-between them. Click anywhere in this plot to show a zoomed-in base-pair
-level alignment of your sample versus the reference.</p>
-<p>The reference mitogenome shown in this plot will be exported in your
-GenBank submission files as a note: “annotation compared to GenBank
-accession XXX”. If the reference mitogenome is a poor match, you can
-flag it (remove the submission note) or use the dropdown menu to pick a
-better reference from among the top BLAST hits.</p>
-<div class="float">
-<img src="figures/get-started/annotate-synteny.png" alt="Gene order compared against the closest GenBank reference"><div class="figcaption">Gene order compared against the closest GenBank
-reference</div>
-</div>
-<p><strong>Alignment</strong> shows a selected protein-coding gene
-aligned to its reference hits and the curation database.</p>
-<div class="float">
-<img src="figures/get-started/annotate-alignment.png" alt="Protein alignment of a gene against its reference hits"><div class="figcaption">Protein alignment of a gene against its
-reference hits</div>
-</div>
-<p>The nucleotide boundary box shows the exact sequence at each end of
-the gene with the codon frame marked, along with the start and stop
-codons that were called. Below it, the protein alignment shows your gene
-(“focal”) alongside the reference proteins.</p>
-</div>
-<div class="section level3">
-<h3 id="manually-fix-annotations">Manually fix annotations<a class="anchor" aria-label="anchor" href="#manually-fix-annotations"></a>
-</h3>
-<p>Click <strong>EDIT</strong> in the alignment section to nudge the
-start or stop position and watch the alignment respond.</p>
-<div class="float">
-<img src="figures/get-started/annotation-codon-edits.png" alt="Alignment-based annotation editing"><div class="figcaption">Alignment-based annotation editing</div>
-</div>
-<p>By default, the <code>+</code> and <code>-</code> buttons search for
-the next valid start or stop codon (according to the curation ruleset
-you selected). You can toggle the <code>single codon</code> button to
-instead nudge the position one codon at a time. This can lead to a
-<strong>partial</strong> gene model with undetermined start or stop
-codons.</p>
-<p>Clicking the <code>poly-A stop</code> button will truncate a stop
-codon to <strong>TA</strong> or <strong>T</strong>. Sometimes this is
-required by GenBank to avoid overlapping gene models. When transcribed,
-these genes will have their stop codon completed by the addition of the
-3’ poly-A tail.</p>
-<p>You can manually set a gene to have an undetermined start or stop
-codon by clicking the Partial <code>5'</code> or <code>3'</code>
-buttons. MitoPilot will add the appropriate format and notes for that
-gene in the GenBank submission files. Best to use this sparingly, as
-GenBank may not accept a submission with many “partial” gene models.</p>
-<p>Other useful editing tools:</p>
-<ul>
-<li>
-<strong>Merge PCGs/rRNAs</strong> joins gene models that were split
-into separate pieces, which is how you handle spliced or fragmented
-genes.</li>
-<li>
-<strong>Auto-assign ORFs</strong> renames open reading frames found
-by ORFfinder based on sequence similarity with the curation database of
-protein-coding genes.</li>
-<li>
-<strong>Delete</strong> removes an annotation entirely. Bring back a
-deleted annotation using the <strong>Restore</strong> button.</li>
-<li>
-<strong>Trim unannotated ends</strong> cuts assembly overhang that
-carries no genes, can be undone.</li>
-<li>
-<strong>Linearize</strong> converts a circular assembly to linear,
-useful when the control region assembled poorly.</li>
-<li>
-<strong>Align fewer refs</strong> in the Alignment panel speeds up
-editing by restricting the alignment to the top five hits, which matters
-because the alignment is recomputed on every start/stop codon
-nudge.</li>
-</ul>
-<p>You can record what you did in the <strong>Notes</strong> box; it
-saves automatically and is retained with the sample.</p>
-<div class="alert alert-warning">
-<p><strong>Warning.</strong> Validation warnings do not disappear when
-you fix the underlying problem. They record the state at the time the
-Annotate module ran. Use the <strong>Reviewed</strong> toggle to track
-what you have actually dealt with.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="lock-and-move-on-1">Lock and move on<a class="anchor" aria-label="anchor" href="#lock-and-move-on-1"></a>
-</h3>
-<p>When you are satisfied, select the samples and click
-<strong>LOCK</strong> to release them to the Export module.</p>
-</div>
-</div>
-<div class="section level2">
-<h2 id="export">Export<a class="anchor" aria-label="anchor" href="#export"></a>
-</h2>
-<p>The Export module turns finished annotations into the files GenBank
-needs for submission: a FASTA of the sequences and a five-column feature
-table of the annotations. MitoPilot allows you to export entire
-mitogenomes, individual genes, or both. Export also generates GFF3
-annotation files and alignment summaries.</p>
-<div class="float">
-<img src="figures/get-started/export-table.png" alt="Export module sample table"><div class="figcaption">Export module sample table</div>
-</div>
-<div class="section level3">
-<h3 id="make-a-group">Make a group<a class="anchor" aria-label="anchor" href="#make-a-group"></a>
-</h3>
-<p>Export works on <strong>groups</strong>, which correspond to
-submission batches. Select the samples you want and click <strong>ASSIGN
-GROUP</strong>.</p>
-<div class="float">
-<img src="figures/get-started/export-group-modal.png" alt="Submission group window"><div class="figcaption">Submission group window</div>
-</div>
-<p>The window summarizes what you selected: how many records, which
-topologies, and the gene order of each. Type a name (letters, numbers,
-dashes, and underscores only) and click <strong>Create</strong>.</p>
-<p>For the test project, select everything. MitoPilot then stops
-you:</p>
-<div class="float">
-<img src="figures/get-started/export-mixed-warning.png" alt="Warning about mixing complete and partial mitogenomes in one group"><div class="figcaption">Warning about mixing complete and partial
-mitogenomes in one group</div>
-</div>
-<p>A GenBank submission may contain complete mitogenomes or partial
-mitogenomes, but not both. This selection has some of each.
-<strong>Split into two groups</strong> produces
-<code>fish_batch-complete</code> and <code>fish_batch-partial</code>.
-Note that completeness is derived from each assembly’s topology, with
-circular meaning complete and linear meaning partial, unless you
-overrode it using the per-sample Partial flag or the
-<code>linear_complete</code> project setting.</p>
-<div class="float">
-<img src="figures/get-started/export-table-grouped.png" alt="Export table with samples assigned to groups"><div class="figcaption">Export table with samples assigned to
-groups</div>
-</div>
-<p>A unit can only belong to one export group at a time. <strong>CLEAR
-GROUP</strong> removes the selected samples from their group.
-Re-assigning a grouped sample asks for confirmation first, because files
-already written for the old group are not cleaned up.</p>
-</div>
-<div class="section level3">
-<h3 id="export-1">Export<a class="anchor" aria-label="anchor" href="#export-1"></a>
-</h3>
-<p>Click <strong>EXPORT DATA</strong>.</p>
-<div class="float">
-<img src="figures/get-started/export-modal.png" alt="Export Data window with header template and output options"><div class="figcaption">Export Data window with header template and
-output options</div>
-</div>
-<p><strong>Header Template</strong> is the FASTA definition line. Any
-extra columns you put in the mapping file at project setup are available
-here and can be referenced using <code>{column_name}</code>. This is how
-you can include things like voucher numbers and BioSample accessions in
-the GenBank submission files.</p>
-<p>There are two special parameters. First, <code>{completeness}</code>
-expands to “complete genome” or “partial genome” and belongs at the end
-of the header for GenBank to parse it correctly. Second,
-<code>{seqid}</code> takes the value in the ID column of the mapping
-file and appends the scaffold/path number if that sample is exporting
-multiple sequences.</p>
-<p>Templates are validated as you type and can be saved by name for
-reuse.</p>
-<p>Other options in the Export Data window:</p>
-<ul>
-<li>
-<strong>Generate Group-level PCG alignment summary</strong> aligns
-every protein-coding gene across the group and writes an HTML report.
-Worth the wait as a final check.</li>
-<li>
-<strong>Export individual protein-coding and rRNA genes</strong>
-writes per-gene FASTA files and feature tables, with their own header
-template. Useful for phylogenetics or single-gene submissions.</li>
-<li>
-<strong>Review PCG annotations for outliers</strong> runs a final
-pre-submission check described below.</li>
-</ul>
-<p>Then click <strong>Export</strong>.</p>
-<div class="alert alert-note">
-<p><strong>Note.</strong> If any sample in the group contributes more
-than one record, MitoPilot asks you to confirm before exporting. Each
-scaffold becomes its own GenBank record with a
-<code>ID_p&lt;path&gt;_s&lt;scaffold&gt;</code> SeqID. This allows you
-to submit samples that have truly fragmented mitogenomes. Samples that
-still have more than one assembly path cannot be exported at all, since
-different assembly paths usually represent multiple versions of the same
-molecule.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="the-outlier-review">The outlier review<a class="anchor" aria-label="anchor" href="#the-outlier-review"></a>
-</h3>
-<p>With the review enabled, MitoPilot aligns each protein-coding gene
-across the group and stops on any gene where a sample looks out of
-line.</p>
-<div class="float">
-<img src="figures/get-started/export-outlier-review.png" alt="PCG annotation outlier review with a flagged sample"><div class="figcaption">PCG annotation outlier review with a flagged
-sample</div>
-</div>
-<p>A sample’s gene is flagged when it appears truncated or extended
-compared to the rest of the submission group, as determined by the
-<code>offset</code> parameter settings.</p>
-<p>Sequences are also flagged when their identity compared the rest of
-the group falls below the specified threshold. In the screenshot above,
-SRR21844202’s ATP6 is at 59.2% identity against the others.</p>
-<p>You can page through the flagged genes with <strong>Prev</strong> and
-<strong>Next</strong>, jump straight into the annotation editor for any
-sample with <strong>edit</strong>, mark a gene resolved once you have
-looked at it, or cancel the export entirely. You can also edit genes for
-samples that were not automatically flagged.</p>
-<p>Files are written only when you click <strong>Done</strong>, so edits
-made during review will appear in the exported files.</p>
-<div class="alert alert-tip">
-<p><strong>Tip.</strong> Low identity is not automatically an error.
-ATP8 and NAD6 are genuinely fast-evolving and routinely flag in a
-diverse export group.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="exported-files">Exported files<a class="anchor" aria-label="anchor" href="#exported-files"></a>
-</h3>
-<p>During export, files are saved to
-<code>&lt;project&gt;/out/export/&lt;group name&gt;/</code>:</p>
-<table class="table">
-<colgroup>
-<col width="50%">
-<col width="50%">
-</colgroup>
-<thead><tr class="header">
-<th>File</th>
-<th>What it is</th>
+<table class="table state-table">
+<thead><tr>
+<th>
+State
+</th>
+<th>
+Meaning
+</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
-<td><code>&lt;group&gt;.fasta</code></td>
-<td>The mitogenome sequences with your header template applied</td>
-</tr>
-<tr class="even">
-<td><code>&lt;group&gt;.tbl</code></td>
-<td>The <a href="https://www.ncbi.nlm.nih.gov/genbank/feature_table/" class="external-link">five-column
-feature table</a> of annotations</td>
-</tr>
-<tr class="odd">
-<td><code>&lt;group&gt;_sample_info.csv</code></td>
-<td>The sample metadata behind the submission</td>
-</tr>
-<tr class="even">
-<td><code>AA_alignments_&lt;group&gt;.html</code></td>
-<td>The group-level protein alignment report</td>
-</tr>
-<tr class="odd">
-<td><code>GFFs/</code></td>
-<td>One <a href="https://gmod.org/wiki/GFF3" class="external-link">GFF3</a> per sample, can be
-reviewed using Geneious or other tools</td>
-</tr>
-<tr class="even">
-<td><code>genes/</code></td>
-<td>Per-gene FASTA and feature tables, if you asked for them</td>
-</tr>
-</tbody>
-</table>
-<p>The FASTA and the feature table are the two files you need for a <a href="https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/" class="external-link">GenBank
-organelle submission</a>.</p>
-<p>The HTML report is the file to read first.</p>
-<div class="float">
-<img src="figures/get-started/export-aa-report.png" alt="Exported HTML report listing flagged outliers and gene alignments"><div class="figcaption">Exported HTML report listing flagged outliers
-and gene alignments</div>
-</div>
-<p>It opens with every flagged outlier in one table, then shows the
-alignment for each protein-coding gene across the group. Poor
-annotations tend to be obvious here.</p>
-<div class="alert alert-hydra">
-<p><span class="hydra-tag">HYDRA</span> <strong>Getting files off the
-cluster.</strong> Export runs inside the app rather than as a cluster
-job. You will need to <a href="https://confluence.si.edu/spaces/HPC/pages/163152227/Transferring+Files+to+from+Hydra" class="external-link">download
-the data</a> to submit to GenBank.</p>
-</div>
-<hr class="part-break">
-</div>
-</div>
-<div class="section level2">
-<h2 id="starting-your-own-project">Starting your own project<a class="anchor" aria-label="anchor" href="#starting-your-own-project"></a>
-</h2>
-<p>Once you are comfortable with how MitoPilot works, starting your own
-project is mostly a matter of pointing MitoPilot at your sequence data
-and telling it what kind of organism you are working on.</p>
-<div class="section level3">
-<h3 id="what-you-need-1">What you need<a class="anchor" aria-label="anchor" href="#what-you-need-1"></a>
-</h3>
-<ul>
-<li>
-<strong>A directory of paired-end Illumina reads.</strong> Two
-gzipped FASTQ files per sample. The data directory does not have to be
-inside the project directory.</li>
-<li>
-<strong>A mapping file.</strong> A CSV describing your samples.</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="the-mapping-file">The mapping file<a class="anchor" aria-label="anchor" href="#the-mapping-file"></a>
-</h3>
-<p>Four columns are required:</p>
-<table class="table">
-<colgroup>
-<col width="50%">
-<col width="50%">
-</colgroup>
-<thead><tr class="header">
-<th>Column</th>
-<th>Contents</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td><code>ID</code></td>
-<td>Unique identifier for the sample. Used as the SeqID at export, so
-keep it short and free of spaces.</td>
-</tr>
-<tr class="even">
-<td><code>Taxon</code></td>
-<td>Taxonomic information. Only included for your own benefit, so no
-required format.</td>
-</tr>
-<tr class="odd">
-<td><code>R1</code></td>
-<td>File name of the forward reads (name only, not a path).</td>
-</tr>
-<tr class="even">
-<td><code>R2</code></td>
-<td>File name of the reverse reads (name only, not a path).</td>
-</tr>
-</tbody>
-</table>
-<p>Any other columns you add are carried along and can be pulled into
-GenBank FASTA headers at export, so this is the place to put voucher
-numbers, BioSample accessions, collection data, and anything else your
-submission needs.</p>
-<pre><code>ID,Taxon,R1,R2,Voucher,BioSample
-OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN00000001
-OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,USNM:1234568,SAMN00000002</code></pre>
-<p>You do not have to get the mapping file columns right the first time.
-<code><a href="../reference/update_sample_metadata.html">update_sample_metadata()</a></code> adds new columns or revises the
-values in existing projects. Close the app before updating the metadata,
-since this function needs sole access to the project database.</p>
-<div class="alert alert-note">
-<p><strong>Note.</strong> If your identifier column is not called
-<code>ID</code>, you can pass its name with <code>mapping_id</code>
-instead of renaming the column.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="initialize-the-project">Initialize the project<a class="anchor" aria-label="anchor" href="#initialize-the-project"></a>
-</h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"~/my_mitogenomes/run_01"</span>,</span>
-<span>  mapping_fn <span class="op">=</span> <span class="st">"~/my_mitogenomes/mapping.csv"</span>,</span>
-<span>  data_path <span class="op">=</span> <span class="st">"~/my_mitogenomes/raw_data"</span>,</span>
-<span>  executor <span class="op">=</span> <span class="st">"local"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>That is the minimum. Everything below is optional, but for anything
-other than a ray-finned fish you will want at least
-<code>curate_target</code> and custom assembly databases.</p>
-<div class="section level4">
-<h4 id="arguments-worth-setting">Arguments worth setting<a class="anchor" aria-label="anchor" href="#arguments-worth-setting"></a>
-</h4>
-<p>Many of these options can also be set in the MitoPilot app. Setting
-them at project initilization may save you time.</p>
-<p><strong><code>curate_target</code></strong> picks the curation and
-validation ruleset, which controls expected gene content, allowed start
-and stop codons, gene naming, and the genetic code. The default is
-<code>"fish_mito"</code>. Browse the available rulesets in the <a href="Ruleset-Browser.html">curation ruleset browser</a> and pass the
-one matching your clade, for example
-<code>curate_target = "octocoral_mito"</code>.</p>
-<p><strong><code>genetic_code</code></strong> is normally left alone:
-MitoPilot takes it from the curation ruleset. Set it only when you need
-to override that, using an <a href="https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi" class="external-link">NCBI
-translation table number</a>.</p>
-<p><strong><code>custom_seeds_db</code> and
-<code>custom_labels_db</code></strong> point GetOrganelle at reference
-sequences for your group. The defaults are for fishes, but you can build
-databases for any clade with the R function
-<code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code>, see <a href="custom_dbs.html">building custom databases</a>. Give absolute
-paths, not paths starting with <code>~</code>.</p>
-<p><strong><code>assembler</code> and
-<code>mitofinder_db</code></strong> switch the assembler to
-<code>"MitoFinder"</code> and point it at a reference database. The
-reference database must be GenBank format (<code>.gb</code>) and can be
-a local path or a URL. The default is the zebrafish mitogenome, so
-supply your own for anything that is not a fish. Leave both alone to
-stay on GetOrganelle.</p>
-<p><strong><code>annotate_ref_db</code></strong> selects the MITOS2
-reference database. The default is <code>"Chordata"</code>;
-<code>"Metazoa_RefSeq89"</code> is the general-purpose alternative and
-is the right choice for most invertebrates.</p>
-<p><strong><code>min_depth</code></strong> is the minimum number of read
-pairs after pre-processing for a sample to continue (default 2,000,000).
-Lower it if your reads have already been filtered or baited.</p>
-<p><strong><code>linear_complete</code></strong> should be
-<code>TRUE</code> for taxa whose complete mitogenome is genuinely
-linear, will cause export to label them “complete genome” rather than
-“partial”.</p>
-<p><strong><code>ncbi_api_key</code></strong> raises your NCBI request
-limits. Worth setting even though the BLAST search itself is local,
-because MitoPilot fetches annotations and taxonomic lineage for each
-BLAST hit directly from NCBI. Get an API key from <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">NCBI</a>.</p>
-<p><strong><code>executor</code></strong> decides where the work runs:
-<code>"local"</code>, one of the generic cluster templates
-(<code>"slurm"</code>, <code>"sge"</code>, <code>"pbs"</code>,
-<code>"lsf"</code>, <code>"awsbatch"</code>), a site profile
-(<code>"NMNH_Hydra"</code>, <code>"NOAA_SEDNA"</code>), or a profile you
-saved yourself with <code><a href="../reference/generate_config.html">generate_config()</a></code>. See <a href="Custom-HPC.html">HPC cluster support</a>.</p>
-<p>Below is a more complete <code>new_project</code> example for an
-octocoral dataset on a SLURM cluster:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"~/octocorals/run_01"</span>,</span>
-<span>  mapping_fn <span class="op">=</span> <span class="st">"~/octocorals/mapping.csv"</span>,</span>
-<span>  data_path <span class="op">=</span> <span class="st">"~/octocorals/raw_data"</span>,</span>
-<span>  executor <span class="op">=</span> <span class="st">"slurm"</span>,</span>
-<span>  curate_target <span class="op">=</span> <span class="st">"octocoral_mito"</span>,</span>
-<span>  annotate_ref_db <span class="op">=</span> <span class="st">"Metazoa_RefSeq89"</span>,</span>
-<span>  custom_seeds_db <span class="op">=</span> <span class="st">"/data/refs/octocoral_seeds.fasta"</span>,</span>
-<span>  custom_labels_db <span class="op">=</span> <span class="st">"/data/refs/octocoral_labels.fasta"</span>,</span>
-<span>  min_depth <span class="op">=</span> <span class="fl">500000</span>,</span>
-<span>  ncbi_api_key <span class="op">=</span> <span class="st">"YOUR_KEY"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>After setting up the project, open the app from the project directory
-and work through Assemble, Annotate, and Export exactly as in the test
-project:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="st">"~/octocorals/run_01"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/MitoPilot.html">MitoPilot</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<div class="alert alert-tip">
-<p><strong>Tip.</strong> Run a handful of samples through the whole
-pipeline before analyzing hundreds. Curation settings that are wrong for
-your clade are much cheaper to discover on a small test run.</p>
-</div>
-<div class="alert alert-hydra">
-<p><span class="hydra-tag">HYDRA</span> <strong>A Hydra project in
-full.</strong> Keep the data and the project on <code>/pool</code> or
-<code>/scratch</code> (not <code>/store</code>), and call
-<code><a href="../reference/hydra_setup.html">hydra_setup()</a></code> before anything else in the session:</p>
-<pre><code class="r"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/hydra_setup.html">hydra_setup</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"/pool/public/genomics/&lt;&lt;USER&gt;&gt;/octocorals/run_01"</span>,</span>
-<span>  mapping_fn <span class="op">=</span> <span class="st">"/pool/public/genomics/&lt;&lt;USER&gt;&gt;/octocorals/mapping.csv"</span>,</span>
-<span>  data_path <span class="op">=</span> <span class="st">"/pool/public/genomics/&lt;&lt;USER&gt;&gt;/octocorals/raw_data"</span>,</span>
-<span>  executor <span class="op">=</span> <span class="st">"NMNH_Hydra"</span>,</span>
-<span>  curate_target <span class="op">=</span> <span class="st">"octocoral_mito"</span>,</span>
-<span>  ncbi_api_key <span class="op">=</span> <span class="st">"YOUR_KEY"</span></span>
-<span><span class="op">)</span></span></code></pre>
-<p>Reference databases you pass to the <code>new_project</code> function
-must be readable from the compute nodes. Best to put them on shared
-storage rather than in your home directory.</p>
-</div>
-</div>
-</div>
-<div class="section level3">
-<h3 id="adding-samples-later">Adding samples later<a class="anchor" aria-label="anchor" href="#adding-samples-later"></a>
-</h3>
-<p><code><a href="../reference/add_samples.html">add_samples()</a></code> appends new rows to an existing project
-from an additional mapping file, so a project can grow as sequencing
-comes in rather than being re-created from scratch.</p>
-</div>
-<div class="section level3">
-<h3 id="using-pre-existing-mitogenome-assemblies">Using pre-existing mitogenome assemblies<a class="anchor" aria-label="anchor" href="#using-pre-existing-mitogenome-assemblies"></a>
-</h3>
-<p>If your mitogenomes were assembled elsewhere, for example by mapping
-to a reference in Geneious, use <code><a href="../reference/new_project_userAsmb.html">new_project_userAsmb()</a></code>
-instead. MitoPilot will skis assembly and let you perform annotation,
-curation, and export.</p>
-<p>It needs two extra columns in the mapping file:</p>
-<table class="table">
-<colgroup>
-<col width="50%">
-<col width="50%">
-</colgroup>
-<thead><tr class="header">
-<th>Column</th>
-<th>Contents</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td><code>Assembly</code></td>
-<td>File name of the assembly FASTA for the sample (one file per
-sample)</td>
-</tr>
-<tr class="even">
-<td><code>Topology</code></td>
+<tr>
 <td>
-<code>circular</code> or <code>linear</code>
+<i class="fa fa-hourglass state-icon"></i> Hold / Waiting
+</td>
+<td>
+Ready to be updated, but will be skipped on the next run
+</td>
+</tr>
+<tr>
+<td>
+<i class="fa fa-person-running state-icon"></i> Ready to Run
+</td>
+<td>
+Will be updated on the next run
+</td>
+</tr>
+<tr>
+<td>
+<i class="fa fa-circle-half-stroke state-icon"></i> In Progress
+</td>
+<td>
+Partway through the current module
+</td>
+</tr>
+<tr>
+<td>
+<i class="fa fa-circle-check state-icon"></i> Completed Successfully
+</td>
+<td>
+Processed without problems
+</td>
+</tr>
+<tr>
+<td>
+<i class="fa fa-triangle-exclamation state-icon"></i> Completed with
+Warning
+</td>
+<td>
+Finished, but may have failed or needs manual review
 </td>
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/new_project_userAsmb.html">new_project_userAsmb</a></span><span class="op">(</span></span>
-<span>  path <span class="op">=</span> <span class="st">"~/my_assemblies/run_01"</span>,</span>
-<span>  mapping_fn <span class="op">=</span> <span class="st">"~/my_assemblies/mapping.csv"</span>,</span>
-<span>  data_path <span class="op">=</span> <span class="st">"~/my_assemblies/raw_data"</span>,</span>
-<span>  assembly_path <span class="op">=</span> <span class="st">"~/my_assemblies/assemblies"</span>,</span>
-<span>  executor <span class="op">=</span> <span class="st">"local"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>You still run the Assemble module, but it only maps reads to your
-assemblies to compute coverage and error rates.</p>
-<p>If you have no reads at all, set <code>no_raw_data = TRUE</code> and
-omit <code>data_path</code>. MitoPilot will skip read mapping entirely
-and hide the coverage columns that depend on it.</p>
-<div class="alert alert-warning">
-<p><strong>Warning.</strong> A project holds either MitoPilot assemblies
-or externally supplied ones, never both. Use separate projects if you
-have a mix.</p>
-</div>
+<p>The Annotate module has no separate half-circle state; a unit being
+worked on shows the runner icon until it finishes.</p>
 <hr class="part-break">
+</div>
+<div class="section level2">
+<h2 id="test-project-walkthrough">Test project walkthrough<a class="anchor" aria-label="anchor" href="#test-project-walkthrough"></a>
+</h2>
+<p>Now you’re ready to start running the test project samples through
+each MitoPilot module. Follow the links below to begin.</p>
+<div class="step-nav no-rule">
+<p><a href="Test-Project-Assemble.html">1. Assemble</a>
+<a href="Test-Project-Annotate.html">2. Annotate</a>
+<a href="Test-Project-Export.html">3. Export</a></p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="where-to-go-next">Where to go next<a class="anchor" aria-label="anchor" href="#where-to-go-next"></a>
 </h2>
+<p>Once you’re comfortable with MitoPilot, try <a href="Your-Own-Project.html">starting a project</a> with your own
+sequence data!</p>
+<p>Additional articles for you to explore:</p>
 <ul>
-<li><a href="Multiple-Assemblies.html">Multiple paths and
-scaffolds</a></li>
-<li>
-<a href="Ruleset-Browser.html">Curation ruleset browser</a> and <a href="Fish-Mitogenome-Curation.html">Fish mitogenome curation</a>
-</li>
 <li><a href="custom_dbs.html">Building custom databases</a></li>
+<li><a href="Difficult-Assemblies.html">Handling difficult
+assemblies</a></li>
 <li>
-<a href="Custom-HPC.html">HPC cluster support</a>, <a href="NMNH-Hydra.html">NMNH Hydra</a>, and <a href="NOAA-SEDNA.html">NOAA SEDNA</a>
+<a href="Ruleset-Browser.html">Curation ruleset browser</a> and <a href="Curation-and-Validation.html">curation and validation
+details</a>
+</li>
+<li>
+<a href="Custom-HPC.html">HPC cluster support</a>, <a href="NMNH-Hydra.html">Smithsonian Hydra</a>, and <a href="NOAA-SEDNA.html">NOAA SEDNA</a>
 </li>
 <li>
 <a href="FAQ.html">FAQ</a> and <a href="Troubleshooting.html">troubleshooting</a>
