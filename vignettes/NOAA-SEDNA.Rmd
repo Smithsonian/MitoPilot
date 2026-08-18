@@ -2,7 +2,7 @@
 title: "NOAA SEDNA Setup"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{NOAA SEDNA}
+  %\VignetteIndexEntry{NOAA SEDNA Setup}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -49,7 +49,6 @@ In the new R session, run the following to install MitoPilot. It will take a whi
 ```{R eval=F}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
-  install.packages("remotes")
 }
 BiocManager::install("Smithsonian/MitoPilot")
 ```
@@ -58,12 +57,12 @@ If install was successful, you can exit the R session using `quit()`.
 
 ## Updating MitoPilot
 
-If you need to update MitoPilot, simply run the BiocManager installation command again. 
-If you would like to ensure that you’re using the latest MitoPilot version, run `remove.packages("MitoPilot")` prior to installation.
+See [updating, pinning, and rolling back](Installation.html#updating-pinning-and-rolling-back).
+Note that some releases change the project database schema and require
+`backwards_compatibility()` before existing projects will open.
 
-After updating MitoPilot, we recommend restarting R (in RStudio, Session > Restart R or run `.rs.restartR()`) and then reloading the package with `library(MitoPilot)`.
-
-We also recommend clearing your Singularity cache with `singularity cache clean` to ensure you are using the latest MitoPilot Singularity image. 
+On SEDNA, activate the `MitoPilot_deps` environment first, and remember that a
+stale Singularity image will keep an updated package running old pipeline code.
 
 ## Setting up RStudio server
 

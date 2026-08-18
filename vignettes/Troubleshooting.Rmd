@@ -78,6 +78,19 @@ Double check the R1 and R2 columns of your map file and make sure all of the `da
 
 ## Other errors
 
+### Inspecting the project database directly
+
+MitoPilot stores sample metadata, processing parameters, and results in a
+`.sqlite` database in the project directory, created automatically when the
+project is initialized. The app is the normal way to read it, but when
+troubleshooting it is often quicker to query it yourself.
+
+From R, use [{DBI}](https://dbi.r-dbi.org/) and
+[{dbplyr}](https://dbplyr.tidyverse.org/), which the package itself relies on
+heavily. Outside R, a graphical client such as
+[DB Browser for SQLite](https://sqlitebrowser.org/) works well. Close the app
+first if you intend to write anything.
+
 ### "database disk image is malformed"
 
 You may encounter an error message in your R Studio console that looks something like this:

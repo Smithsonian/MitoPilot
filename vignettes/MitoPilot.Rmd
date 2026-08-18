@@ -80,57 +80,16 @@ can also check out the [2025 workshop website](https://smithsonianworkshops.gith
 
 <hr class="part-break" />
 
-# What you need
+# Before you begin
 
-| Requirement | Notes |
-|---|---|
-| [R](https://www.r-project.org/) >= 4.4.0 | RStudio is recommended but not required |
-| [Nextflow](https://www.nextflow.io/docs/latest/install.html) 24.10.x - 25.10.x | Needs Java 17 or newer |
-| [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html) | Containerized execution is handled by Nextflow |
-| Disk space | About 15 GB for the container image, plus room for your data |
-| Internet access | Reference annotations and taxonomy are fetched from NCBI |
-
-<div class="alert alert-note">
-<strong>Note.</strong> MitoPilot checks your Nextflow version when the package
-loads and when you create or open a project. If the version is too old the
-package refuses to load; if it is too new, MitoPilot quietly pins
-<code>NXF_VER</code> to a version that works.
-</div>
-
-<hr class="part-break" />
-
-# Install
+MitoPilot needs R, Java, Nextflow, and a container runtime (Docker locally, or
+Singularity/Apptainer on a cluster), plus about 15 GB of disk for the container
+image. [Installation and Requirements](Installation.html) has the full list and
+the install commands. Work through that page first, then come back here.
 
 Everything in this tutorial happens in **R**, preferably from RStudio. The only
 steps that need a **terminal** are installing Nextflow and, on a cluster,
 checking on submitted jobs; those are called out where they come up.
-
-Open R and run the following.
-
-```r
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-}
-BiocManager::install("Smithsonian/MitoPilot", ask = FALSE)
-```
-
-The first install pulls a long list of dependencies and takes a while. Warnings
-about system library paths that are not writeable are usually harmless.
-
-To update later:
-
-```r
-remove.packages("MitoPilot")
-BiocManager::install("Smithsonian/MitoPilot")
-.rs.restartR()   # or restart R yourself
-```
-
-<div class="alert alert-tip">
-<strong>Tip.</strong> Each MitoPilot version pairs with a matching container
-image. If needed, you can clear your container cache
-(<code>docker image prune</code> or <code>singularity cache clean</code>) to ensure a
-new image is pulled. Careful, this will clear all cached images, not just MitoPilot.
-</div>
 
 Load the package:
 
@@ -139,9 +98,6 @@ library(MitoPilot)
 ```
 
 You should see a welcome message naming the Nextflow version MitoPilot will use.
-If Nextflow cannot be found, make sure it is on your `PATH` in the same R session
-(`Sys.which("nextflow")`). See [HPC cluster support](Custom-HPC.html) if you
-are working on a cluster.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
@@ -234,7 +190,15 @@ Two icons sit to the left of each sample ID:
 - **The state.** Status of the sample in the current module. The pipeline sets
   these automatically, but you can override them with the `STATE` button. This
   is how you can park samples you do not want to process yet or reset samples that 
-  have already completed the pipeline.
+  have already completed the pipeline. There are five states:
+
+| State | Meaning |
+|---|---|
+| Hold / Waiting | Ready to be updated, but will be skipped on the next run |
+| Ready to Run | Will be updated on the next run |
+| In Progress | Partway through the current module |
+| Completed Successfully | Processed without problems |
+| Completed with Warning | Finished, but may have failed or needs manual review |
 
 Clicking a column header sorts alphanumerically. The search box at the top right filters
 everything, and most columns have their own filter box.
@@ -289,6 +253,12 @@ what you want, type a new name in the **Parameter set name** box, and click
 samples can use different parameter sets, which can allow you to selectively tweak 
 memory usage, assembly method, etc. for difficult samples.
 
+If several rows are selected when you open an options window, your changes apply
+to all of them; selecting any locked sample blocks the change. Editing an
+existing set in place, rather than saving under a new name, affects every sample
+using that set, so MitoPilot warns you when that reaches beyond the rows you
+selected.
+
 For the test project the defaults are fine.
 
 <div class="alert alert-hydra">
@@ -333,6 +303,11 @@ a project this size.
 Each line is a pipeline step, with a count of how many samples have finished it.
 **Stop / Interrupt** halts the run; you can resume it later without redoing
 completed work.
+
+You can also copy the Nextflow command shown in the update window and run it in a
+terminal from the project directory. That is the way to add extra Nextflow command
+line options or override input parameters, and it is what you paste into a job
+submission script on a cluster.
 
 <div class="alert alert-warning">
 <strong>Warning.</strong> Running from the app ties the pipeline to the app
@@ -913,6 +888,10 @@ That is the minimum. Everything below is optional, but for anything other than a
 ray-finned fish you will want at least `curate_target` and custom assembly
 databases.
 
+Run from RStudio, this also creates and opens a new RStudio project. On RStudio
+Server on a cluster you usually want `Rproj = FALSE` to stay in your current
+session.
+
 ### Arguments worth setting
 
 Many of these options can also be set in the MitoPilot app. Setting them at project
@@ -960,6 +939,22 @@ though the BLAST search itself is local, because MitoPilot fetches
 templates (`"slurm"`, `"sge"`, `"pbs"`, `"lsf"`, `"awsbatch"`), a site profile
 (`"NMNH_Hydra"`, `"NOAA_SEDNA"`), or a profile you saved yourself with
 `generate_config()`. See [HPC cluster support](Custom-HPC.html).
+
+**Processing parameters** for the pipeline modules can also be set here, not just
+in the app. Anything you pass to `new_project()` overrides the stored default for
+every sample in the new project, for example:
+
+```r
+new_project(
+  mapping_fn = "path/to/mapping_file.csv",
+  executor = "local",
+  assemble_memory = 24,
+  getOrganelle = "-F 'anonym' -R 20 -k '21,45,65,85,105,115' -J 1 -M 1 --expected-max-size 20000 --target-genome-size 16500"
+)
+```
+
+For the complete list of parameters that can be set at initialization, see the
+[`new_db()`](../reference/new_db.html) documentation.
 
 Below is a more complete `new_project` example for an octocoral dataset on a SLURM cluster:
 
@@ -1020,7 +1015,11 @@ your home directory.
 
 `add_samples()` appends new rows to an existing project from an additional
 mapping file, so a project can grow as sequencing comes in rather than being
-re-created from scratch.
+re-created from scratch. `update_sample_metadata()` revises or adds metadata
+columns, and `update_sample_seqdata()` updates the raw-data file names.
+
+Close the app before using any of them, since they need sole access to the
+project database. Each one backs the database up first, so you can revert.
 
 ## Using pre-existing mitogenome assemblies
 

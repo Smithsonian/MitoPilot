@@ -2,7 +2,7 @@
 title: "Smithsonian Hydra Setup"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Smithsonian Hydra}
+  %\VignetteIndexEntry{Smithsonian Hydra Setup}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

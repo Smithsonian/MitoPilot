@@ -135,6 +135,23 @@ List everything available (built-in templates plus your saved profiles):
 list_configs()
 ```
 
+## The project `.config` file
+
+`new_project()` writes a `.config` file into the project directory, built from
+your executor's template. It may contain placeholders in the form
+`<<PARAMETER_NAME>>` that you need to fill in. Every generated config includes
+`rawDir = '<<RAW_DIR>>'`, which must point at the directory holding the raw reads
+named in your mapping file. Review the `.config` after creating a project and
+make sure nothing is left unfilled. The same file is where you point individual
+processing steps at a different container image.
+
+If you would rather supply a Nextflow config of your own instead of using a
+template or a saved profile, pass it directly:
+
+```r
+new_project(..., config = "path/to/.config")
+```
+
 ## Per-process resources
 
 The generated config sets defaults for CPUs and memory that work for most
