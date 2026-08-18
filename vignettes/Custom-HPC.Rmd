@@ -79,12 +79,17 @@ Smithsonian Hydra cluster (`NMNH_Hydra`), and the NOAA SEDNA cluster
 for the four most common schedulers, plus a helper function to build a Nextflow 
 config for your cluster once and reuse it for every project. See below for details.
 
-| Scheduler | `scheduler =` | Nextflow executor |
-|-----------|---------------|-------------------|
+Pass the value in the middle column to `generate_config(scheduler = ...)`:
+
+| Scheduler | Value | Nextflow executor |
+|---|---|---|
 | SLURM | `"slurm"` | `slurm` |
 | SGE / UGE | `"sge"` | `sge` |
-| PBS Pro / OpenPBS / Torque | `"pbs"` | `pbspro` (edit to `pbs` for Torque/OpenPBS) |
+| PBS Pro, OpenPBS, Torque | `"pbs"` | `pbspro` [^pbs] |
 | IBM Spectrum LSF | `"lsf"` | `lsf` |
+
+[^pbs]: The generated config uses the `pbspro` executor. On Torque or OpenPBS,
+edit that line in the `.config` to `pbs`.
 
 `generate_config()` builds a Nextflow config from a generic template, fills in
 your cluster-specific settings, and saves it as a **named profile** in your
