@@ -36,6 +36,14 @@ articles:
   contents:
   - 'Installation'
 
+- title: "Test project walkthrough"
+  navbar: Test project
+  contents:
+  - 'Test-Project-Assemble'
+  - 'Test-Project-Annotate'
+  - 'Test-Project-Export'
+  - 'Your-Own-Project'
+
 - title: "Help"
   navbar: Help
   contents:
@@ -54,7 +62,7 @@ articles:
   contents:
   - 'Multiple-Assemblies'
   - 'Ruleset-Browser'
-  - 'Fish-Mitogenome-Curation'
+  - 'Curation-and-Validation'
   - 'custom_dbs'
 
 reference:
