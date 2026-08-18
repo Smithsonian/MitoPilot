@@ -613,11 +613,11 @@ A few units stand out in the test project. For example, SRR21844202 has an extra
 warnings. 
 
 SCAFFJOIN is missing `atp8` and `trnK` and carries eight warnings.
-This is an real consequence of joining scaffolds across coverage gaps. The
+This is a real consequence of joining scaffolds across coverage gaps. The
 sequence in those gaps is set to "N", so the genes in those gaps cannot be annotated.
 
 <div class="alert alert-note">
-<strong>Note.</strong> The <strong><code>Warnings column includes</code></strong> dropdown menu at
+<strong>Note.</strong> The <strong>Warnings column includes</strong> dropdown menu at
 the top filters which warning types are counted. Narrow it to one warning type to
 pull out every sample with that problem and work through them as a batch.
 </div>
@@ -631,7 +631,7 @@ Click `details` on any row. Here we'll look at sample SRR19434536.
 The annotation table lists every gene with its position, strand, and the tool
 that called it. The **Notes** column records changes made during automatic curation, such as
 a start position moved upstream or a stop codon trimmed.
-**Warnings** shows what validation the flagged. The `nt` and `aa` buttons copy the
+**Warnings** shows what validation flagged. The `nt` and `aa` buttons copy the
 nucleotide or amino acid sequence to your clipboard.
 
 The badges along the top track the sample: topology, ID verified, reviewed,
@@ -916,7 +916,7 @@ databases.
 ### Arguments worth setting
 
 Many of these options can also be set in the MitoPilot app. Setting them at project
-initilization may save you time.
+initialization may save you time.
 
 **`curate_target`** picks the curation and validation ruleset, which controls
 expected gene content, allowed start and stop codons, gene naming, and the
@@ -1025,7 +1025,7 @@ re-created from scratch.
 ## Using pre-existing mitogenome assemblies
 
 If your mitogenomes were assembled elsewhere, for example by mapping to a reference
-in Geneious, use `new_project_userAsmb()` instead. MitoPilot will skis assembly
+in Geneious, use `new_project_userAsmb()` instead. MitoPilot will skip assembly
 and let you perform annotation, curation, and export.
 
 It needs two extra columns in the mapping file:

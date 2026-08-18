@@ -42,9 +42,12 @@ A quick vocabulary primer if containers are new to you:
 **1. Pull the image once.** From an interactive session or compute node (not the
 login node):
 
+The image tag must match your installed MitoPilot version. Get it with
+`packageVersion("MitoPilot")`, which for this build of the documentation is
+`r as.character(utils::packageVersion("MitoPilot"))`.
+
 ```{bash eval=FALSE}
-# NOTE: match the tag to the latest MitoPilot version
-singularity pull mitopilot.sif docker://macguigand/mitopilot:1.5.2
+singularity pull mitopilot.sif docker://macguigand/mitopilot:<version>
 ```
 
 **2. Start an R session.** By default a Singularity container can only see your
@@ -105,7 +108,7 @@ This writes `config.my_cluster` to your config directory. Prefer to be prompted
 interactively? Pass `interactive = TRUE` and leave the cluster values unset.
 
 <div class="alert alert-note">
-  <strong>Note:</strong> Saved cluster configs need no extra binding if running R with Docker/Singularity. The `generate_config()` writes its profiles to `~/.config/R/MitoPilot` inside your home directory, and Singularity mounts your home automatically. A profile you save once therefor persists and is found by `new_project()` on every later run, with no `--bind` needed. (This only breaks if you deliberately launch with `--contain` or `--no-home`, which detach the home directory.)
+  <strong>Note:</strong> Saved cluster configs need no extra binding if running R with Docker/Singularity. The `generate_config()` writes its profiles to `~/.config/R/MitoPilot` inside your home directory, and Singularity mounts your home automatically. A profile you save once therefore persists and is found by `new_project()` on every later run, with no `--bind` needed. (This only breaks if you deliberately launch with `--contain` or `--no-home`, which detach the home directory.)
 </div>
 
 ## Reuse your cluster config for every project
