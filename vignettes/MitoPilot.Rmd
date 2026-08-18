@@ -1066,5 +1066,5 @@ externally supplied ones, never both. Use separate projects if you have a mix.
   [Fish mitogenome curation](Fish-Mitogenome-Curation.html)
 - [Building custom databases](custom_dbs.html)
 - [HPC cluster support](Custom-HPC.html),
-  [NMNH Hydra](NMNH-Hydra.html), and [NOAA SEDNA](NOAA-SEDNA.html)
+  [Smithsonian Hydra](NMNH-Hydra.html), and [NOAA SEDNA](NOAA-SEDNA.html)
 - [FAQ](FAQ.html) and [troubleshooting](Troubleshooting.html)

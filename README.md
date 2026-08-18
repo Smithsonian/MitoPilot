@@ -184,7 +184,7 @@ BLAST results into the curation databases.
 We provide detailed installation instructions for the following
 computing clusters:
 
-  - [Smithsonian NMNH
+  - [Smithsonian
     Hydra](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
   - [NOAA
     SEDNA](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html)

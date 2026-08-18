@@ -156,7 +156,7 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
   )
 }
 
-#' Detect whether we are running on the NMNH Hydra cluster
+#' Detect whether we are running on the Smithsonian Hydra cluster
 #'
 #' Mirrors the check used by the non-headless "Submit as Job" handler: greps
 #' `/etc/hosts` for "hydra".
@@ -172,7 +172,7 @@ is_hydra_cluster <- function() {
     any(grepl("hydra", motd_output, ignore.case = TRUE))
 }
 
-#' Configure the R session environment for the NMNH Hydra cluster
+#' Configure the R session environment for the Smithsonian Hydra cluster
 #'
 #' RStudio Server sessions on Hydra start with a stripped `PATH` that omits the
 #' Univa Grid Engine, Java, and user `~/bin` directories, so Nextflow cannot find
@@ -185,7 +185,7 @@ is_hydra_cluster <- function() {
 #' @export
 hydra_setup <- function() {
   if (!is_hydra_cluster()) {
-    warning("Not running on the NMNH Hydra cluster; environment unchanged.")
+    warning("Not running on the Smithsonian Hydra cluster; environment unchanged.")
     return(invisible(FALSE))
   }
 
@@ -215,7 +215,7 @@ hydra_setup <- function() {
 #' Hydra-specific submission script
 #'
 #' Reproduces the script format used by the non-headless "Submit as Job" handler
-#' on NMNH Hydra (SGE directives, java module load, NXF_OPTS).
+#' on Smithsonian Hydra (SGE directives, java module load, NXF_OPTS).
 #'
 #' @param full_nf_cmd The full `nextflow ...` command string to run.
 #' @param job_name Job name for the scheduler.

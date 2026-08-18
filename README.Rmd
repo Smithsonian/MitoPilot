@@ -1,5 +1,7 @@
 ---
-output: github_document
+output:
+  github_document:
+    html_preview: false
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -103,7 +105,7 @@ Curation reference databases can be specified independently of the annotation re
 
 We provide detailed installation instructions for the following computing clusters:
 
-- [Smithsonian NMNH Hydra](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
+- [Smithsonian Hydra](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html)
 - [NOAA SEDNA](https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html)
 
 To use MitoPilot, you will need [R (>=4.4.0)](https://www.r-project.org/) and [Nextflow (>= 24.10.x, <= 25.10.x)](https://www.nextflow.io/docs/latest/install.html). In addition, depending or where Nextflow will be executing the pipeline (e.g., locally or on a remote cluster), you may also need to install [Docker](https://docs.docker.com/engine/install/) or [Singularity](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html#quick-installation-steps).
