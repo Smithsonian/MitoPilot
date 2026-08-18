@@ -19,10 +19,21 @@ Caused by:
   Process `WF2:ANNOTATE:annotate (SAMPLE_ID)` terminated with an error exit status (140)
 ```
 
-The number identifies the cause. Nextflow retries a failed process automatically
-(up to a few times), and each retry requests more memory (the requested memory is
-multiplied by the attempt number), so a step that fails once often succeeds on
-retry. A process that fails on every retry needs your attention.
+The number identifies the cause. Whether the step is retried depends on which
+step it is:
+
+| Step | On failure |
+|---|---|
+| `ASSEMBLE` | Retried on exit 137-140 only, up to `assemble.maxRetries`. Each attempt requests more memory. |
+| `SCAFFOLD_JOIN`, `BLAST_GENBANK`, `BLAST_REF_FETCH` | Retried up to 3 times (these fail mostly on transient network or resource problems). |
+| `PREPROCESS`, `COVERAGE`, `ANNOTATE`, `CURATE`, `ORF`, `VALIDATE`, `BLAST_REF_ALIGN` | **Not retried.** The sample is skipped and the run continues without it. |
+
+For the steps that are not retried there is no free second attempt: the sample
+keeps whatever state it had before, and the only way forward is to change the
+options (usually memory) and rerun. Because the run continues past a skipped
+sample and then exits with a non-zero status at the end, a red exit code
+alongside a handful of per-sample warnings is the normal shape of a partly
+failed run, not a sign that the whole batch died.
 
 ### "exit status (137)"
 
@@ -32,10 +43,13 @@ memory limit, and a process that exceeds it is killed outright rather than allow
 to finish. It can also appear when a job hits a scheduler time limit, or when a
 container is stopped manually.
 
-Because each retry requests more memory, a one-off 137 that then succeeds needs no
-action. If a step fails with 137 on every retry, increase its requested memory in
-the R Shiny GUI for the process that failed, then rerun the workflow (the same fix
-as `exit status (140)` below).
+For `ASSEMBLE`, each retry requests more memory (the request is multiplied by the
+attempt number), so a one-off 137 that then succeeds needs no action.
+
+For every other step a 137 is final. Increase the requested memory in the R Shiny
+GUI for the process that failed, then rerun the workflow (the same fix as
+`exit status (140)` below). If raising memory does not help, check your cluster's
+walltime limit: a job killed at the time limit also reports 137.
 
 ### "exit status (140)"
 
@@ -63,6 +77,19 @@ Often this indicates that one or more of your input FASTQ files could not be fou
 Double check the R1 and R2 columns of your map file and make sure all of the `data_path` contains all of your sequence read files.
 
 ## Other errors
+
+### Inspecting the project database directly
+
+MitoPilot stores sample metadata, processing parameters, and results in a
+`.sqlite` database in the project directory, created automatically when the
+project is initialized. The app is the normal way to read it, but when
+troubleshooting it is often quicker to query it yourself.
+
+From R, use [{DBI}](https://dbi.r-dbi.org/) and
+[{dbplyr}](https://dbplyr.tidyverse.org/), which the package itself relies on
+heavily. Outside R, a graphical client such as
+[DB Browser for SQLite](https://sqlitebrowser.org/) works well. Close the app
+first if you intend to write anything.
 
 ### "database disk image is malformed"
 

@@ -6,11 +6,11 @@ Authors@R: c(
     person("Dan", "MacGuigan", , "macguigand@si.edu", role = c("aut", "cre"))
   )
 Description: An R package for mitogenome assembly and annotation from
-    genome skimming data that uses Nexflow and includes an R-Shiny app for
+    genome skimming data that uses Nextflow and includes an R-Shiny app for
     project management and curation of results.
 License: GPL (>= 3)
 URL: https://github.com/Smithsonian/MitoPilot,
-    https://Smithsonian.github.io/MitoPilot/
+    https://smithsonian.github.io/MitoPilot/
 BugReports: https://github.com/Smithsonian/MitoPilot/issues
 Depends:
     R (>= 4.4.0)

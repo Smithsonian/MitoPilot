@@ -10,6 +10,7 @@
 #' data.frames and never touch Shiny or the database directly.
 #'
 #' @name scaffold_join
+#' @keywords internal
 NULL
 
 #' Is a sample eligible for automatic scaffold joining?

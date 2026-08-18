@@ -9,3 +9,37 @@
   margin-top: 0.5rem;
   margin-bottom: 1.5rem;
 }
+
+/* Compact taxonomic scope table on the home page (32 rows).
+   Selector shape mirrors Bootstrap's `.table > :not(caption) > * > *` so the
+   cell padding override actually wins. */
+table.clade-table {
+  font-size: 0.94rem;
+  line-height: 1.25;
+  width: auto;
+  max-width: 100%;
+  margin: 0.75rem 0 1.25rem;
+  display: block;
+  overflow-x: auto;
+}
+table.clade-table > :not(caption) > * > * {
+  padding: 1px 12px 1px 0;
+  border-bottom-width: 0;
+  box-shadow: none;
+  white-space: nowrap;
+  vertical-align: baseline;
+  background: none;
+}
+table.clade-table > thead > tr > th {
+  font-weight: 600;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+table.clade-table p {
+  margin: 0;
+}
+table.clade-table code {
+  font-size: 0.95em;
+  padding: 0;
+  background: none;
+}

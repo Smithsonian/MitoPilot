@@ -726,7 +726,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         opts_help("Per-gene curation rules (expected length, start/stop codons, etc.) ",
                   "for the selected target.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/Fish-Mitogenome-Curation.html"),
+                  href = "https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.html"),
         size = "m",
         footer = tagList(
           actionButton(ns("update_curate_opts"), "Update"),

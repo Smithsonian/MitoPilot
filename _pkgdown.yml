@@ -31,28 +31,119 @@ navbar:
     - github
 
 articles:
-- title: "Help"
-  navbar: ~
+- title: "Setup"
+  navbar: Setup
   contents:
-  - 'FAQ'
-  - 'Troubleshooting'
+  - 'Installation'
 
-- title: "Nextflow Executors"
-  navbar: ~
+- title: "Test project walkthrough"
+  navbar: Test project
+  contents:
+  - 'Test-Project-Assemble'
+  - 'Test-Project-Annotate'
+  - 'Test-Project-Export'
+
+- title: "Usage"
+  navbar: Usage
+  contents:
+  - 'Your-Own-Project'
+  - 'Difficult-Assemblies'
+  - 'Ruleset-Browser'
+  - 'Curation-and-Validation'
+  - 'custom_dbs'
+
+- title: "Computing Environments"
+  navbar: Computing Environments
   contents:
   - 'Custom-HPC'
   - 'NMNH-Hydra'
   - 'NOAA-SEDNA'
 
-- title: "Usage"
-  navbar: ~
+- title: "Help"
+  navbar: Help
   contents:
-  - 'Multiple-Assemblies'
-  - 'Ruleset-Browser'
-  - 'Fish-Mitogenome-Curation'
-  - 'custom_dbs'
+  - 'FAQ'
+  - 'Troubleshooting'
 
+reference:
+- title: "Getting started"
+  desc: >
+    Create a project and launch the app.
+  contents:
+  - MitoPilot
+  - new_project
+  - new_project_userAsmb
+  - new_test_project
 
+- title: "Project database"
+  desc: >
+    Create, migrate, edit, and export the project SQLite database.
+  contents:
+  - new_db
+  - new_db_userAsmb
+  - add_samples
+  - update_sample_metadata
+  - update_sample_seqdata
+  - backwards_compatibility
+  - export_db_to_csv
 
+- title: "Cluster configuration"
+  desc: >
+    Nextflow executor profiles and remote access.
+  contents:
+  - generate_config
+  - list_configs
+  - mitopilot_config_dir
+  - nextflow_cmd
+  - tunnel_instructions
+  - hydra_setup
 
+- title: "Reference databases"
+  desc: >
+    Custom assembly and curation databases, and reference selection by BLAST.
+  contents:
+  - custom_assembly_db
+  - custom_curation_db
+  - fetch_blast_ref
+  - fetch_blast_refs
+  - patch_blast_ref_meta
+  - compute_blast_ref_alignment
+  - get_top_hits_local
 
+- title: "Export and quality control"
+  desc: >
+    Build submission files and review protein-coding gene outliers.
+  contents:
+  - export_files
+  - flag_PCG_outliers
+  - make_PCG_alignments
+  - compare_aa
+
+- title: "Curation rulesets"
+  desc: >
+    One curate / validate / params triplet per clade. See the
+    [Ruleset Browser](../articles/Ruleset-Browser.html) for what each ruleset
+    enforces.
+  contents:
+  - ruleset_browser
+  - starts_with("curate_")
+  - starts_with("validate_")
+  - starts_with("params_")
+
+- title: "Pipeline internals"
+  desc: >
+    Called by the Nextflow workflows. Not intended for direct use.
+  contents:
+  - annotate
+  - annotate_mitos2
+  - annotate_trnaScan
+  - annotate_arwen
+  - annotate_aragorn
+  - annotate_mitofinder
+  - coverage
+  - coverage_trim
+  - orf_finder
+  - rotate_asmb
+  - run_scaffold_join
+  - get_assembly
+  - get_assembly_userAsmb

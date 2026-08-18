@@ -1,8 +1,8 @@
 ---
-title: "Multiple Paths and Scaffolds"
+title: "Difficult Assemblies"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Multiple-Assemblies}
+  %\VignetteIndexEntry{Difficult Assemblies}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -99,7 +99,7 @@ Export behaves differently for the two cases, matching the biology.
 
 **Multiple scaffolds export as separate records.** A sample contributing more
 than one scaffold produces one GenBank record per scaffold. To keep SeqIDs unique
-within a submission, MitoPilot add as suffix as `ID_p<path>_s<scaffold>` (a
+within a submission, MitoPilot adds a suffix `ID_p<path>_s<scaffold>` (a
 single-unit sample keeps its plain `ID`). Because a sample split across scaffolds
 *could* instead be one fragmented genome, export asks you to confirm.
 

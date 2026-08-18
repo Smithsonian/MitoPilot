@@ -1,0 +1,13 @@
+citHeader("To cite MitoPilot in publications, please use:")
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "MitoPilot: Mitogenome Assembly, Annotation, and Curation",
+  author   = c(
+    person("Devin", "Leopold"),
+    person("Dan", "MacGuigan")
+  ),
+  year     = "2026",
+  note     = sprintf("R package version %s", meta$Version),
+  url      = "https://smithsonian.github.io/MitoPilot/"
+)

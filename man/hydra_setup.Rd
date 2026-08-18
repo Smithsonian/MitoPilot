@@ -2,7 +2,7 @@
 % Please edit documentation in R/update_mitopilot.R
 \name{hydra_setup}
 \alias{hydra_setup}
-\title{Configure the R session environment for the NMNH Hydra cluster}
+\title{Configure the R session environment for the Smithsonian Hydra cluster}
 \usage{
 hydra_setup()
 }
