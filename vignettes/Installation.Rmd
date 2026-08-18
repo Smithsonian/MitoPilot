@@ -51,8 +51,8 @@ img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 }
 .part-break {
   border: none;
-  border-top: 4px solid #101820;
-  margin: 5.5em 0 3.4em;
+  border-top: 3px solid #c9d1d6;
+  margin: 2.2em 0 1.6em;
 }
 </style>
 

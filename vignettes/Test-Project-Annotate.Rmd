@@ -51,10 +51,81 @@ img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 }
 .part-break {
   border: none;
-  border-top: 4px solid #101820;
-  margin: 5.5em 0 3.4em;
+  border-top: 3px solid #c9d1d6;
+  margin: 2.2em 0 1.6em;
+}
+.next-step {
+  text-align: right;
+  margin: 2.5em 0 1em;
+}
+.next-step a {
+  display: inline-block;
+  background-color: #1f6f8b;
+  color: #ffffff !important;
+  font-weight: 600;
+  font-size: 1.05rem;
+  padding: 10px 22px;
+  border-radius: 6px;
+  text-decoration: none !important;
+  border: none;
+}
+.next-step a:hover,
+.next-step a:focus {
+  background-color: #17566b;
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+.step-nav {
+  margin: 0 0 2.5em;
+  padding-bottom: 1.2em;
+  border-bottom: 1px solid #dde3e6;
+}
+/* pandoc wraps the row contents in a <p>, so that is the flex container. */
+.step-nav p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.step-nav .step-label {
+  font-weight: 600;
+  color: #6b7b85;
+  margin-right: 4px;
+}
+.step-nav a,
+.step-nav .current {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none !important;
+  border: 1px solid #c8dde5;
+}
+.step-nav a {
+  background-color: #e4f0f4;
+  color: #1f6f8b !important;
+}
+.step-nav a:hover,
+.step-nav a:focus {
+  background-color: #d3e7ee;
+  color: #17566b !important;
+  text-decoration: none !important;
+}
+.step-nav .current {
+  background-color: #1f6f8b;
+  color: #ffffff;
+  border-color: #1f6f8b;
 }
 </style>
+
+<div class="step-nav">
+<span class="step-label">Test project:</span>
+<a href="Test-Project-Assemble.html">1. Assemble</a>
+<span class="current">2. Annotate</span>
+<a href="Test-Project-Export.html">3. Export</a>
+</div>
 
 This module finds the genes, curates the gene models against reference sequences from GenBank,
 and validates the result against rules for your taxonomic group. It attempts to flag any issues
@@ -227,11 +298,4 @@ underlying problem. They record the state at the time the Annotate module ran. U
 When you are satisfied, select the samples and click **LOCK** to release them to
 the Export module.
 
-<hr class="part-break" />
-
-# Test project walkthrough
-
-- [Assemble](Test-Project-Assemble.html)
-- **Annotate**
-- [Export](Test-Project-Export.html)
-- [Starting your own project](Your-Own-Project.html)
+<p class="next-step"><a href="Test-Project-Export.html">Next: Export &rarr;</a></p>

@@ -51,8 +51,84 @@ img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 }
 .part-break {
   border: none;
-  border-top: 4px solid #101820;
-  margin: 5.5em 0 3.4em;
+  border-top: 3px solid #c9d1d6;
+  margin: 2.2em 0 1.6em;
+}
+.step-nav {
+  margin: 0 0 2.5em;
+  padding-bottom: 1.2em;
+  border-bottom: 1px solid #dde3e6;
+}
+.step-nav.no-rule {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* pandoc wraps the row contents in a <p>, so that is the flex container. */
+.step-nav p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.step-nav .step-label {
+  font-weight: 600;
+  color: #6b7b85;
+  margin-right: 4px;
+}
+.step-nav a,
+.step-nav .current {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none !important;
+  border: 1px solid #c8dde5;
+}
+.step-nav a {
+  background-color: #e4f0f4;
+  color: #1f6f8b !important;
+}
+.step-nav a:hover,
+.step-nav a:focus {
+  background-color: #d3e7ee;
+  color: #17566b !important;
+  text-decoration: none !important;
+}
+.step-nav .current {
+  background-color: #1f6f8b;
+  color: #ffffff;
+  border-color: #1f6f8b;
+}
+.state-icon {
+  color: #1f6f8b;
+  width: 1.3em;
+  text-align: center;
+  margin-right: 2px;
+}
+table.state-table {
+  width: auto;
+  max-width: 100%;
+  font-size: 0.92rem;
+  line-height: 1.3;
+  margin: 0.75rem 0 1.25rem;
+}
+/* mirrors Bootstrap's own selector so the padding override wins */
+table.state-table > :not(caption) > * > * {
+  padding: 2px 18px 2px 0;
+  border-bottom-width: 0;
+  box-shadow: none;
+  vertical-align: baseline;
+  background: none;
+}
+table.state-table > thead > tr > th {
+  font-weight: 600;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+table.state-table p {
+  margin: 0;
 }
 </style>
 
@@ -72,11 +148,11 @@ order; the whole test project takes an afternoon at most.
 <strong>Are you a Smithsonian user?</strong>
 Boxes like this one flag the
 places where usage on the Smithsonian Hydra computing cluster differs from a generic setup. 
-Before starting this tutorial, work
-through the
+Before starting this tutorial, work through the Hydra
 <a href="NMNH-Hydra.html#get-an-r-session-on-hydra">Get an R session</a> and
-<a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a> sections. Smithsonian users
-can also check out the [2025 workshop website](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/)
+<a href="NMNH-Hydra.html#install-nextflow">Install Nextflow</a> sections. Users
+can also check out the [2025 Smithsonian workshop webpage](https://smithsonianworkshops.github.io/MitoPilot_workshop_2025/),
+although it is slightly outdated.
 </div>
 
 <hr class="part-break" />
@@ -119,7 +195,7 @@ no effect anywhere else, and warns if you are not on Hydra.
 
 <hr class="part-break" />
 
-# Run the test project
+# Set up the test project
 
 MitoPilot ships with a small test dataset: 15 samples of pre-filtered Illumina
 reads, mostly marine fishes. It is deliberately messy. Some samples assemble
@@ -153,11 +229,11 @@ test project.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
-<strong>Use the Hydra executor, and pick the right disk.</strong> Pass
+<strong>Project setup.</strong> Pass
 <code>executor = "NMNH_Hydra"</code> so work is dispatched to compute nodes
 instead of running on the login or RStudio node. Put projects under
-<code>/pool</code> or <code>/scratch</code>. Home directories are far too small
-for Nextflow work directories, and projects cannot be run from
+<code>/pool</code> or <code>/scratch</code>. Home directories are far too small 
+and projects cannot be run from
 <code>/store</code>.
 </div>
 
@@ -165,7 +241,7 @@ for Nextflow work directories, and projects cannot be run from
 
 # Open the app
 
-Once your project is initialized, run the following in your R session:
+Once your test project is initialized, run the following in your R session:
 
 ```r
 wd <- "~/MitoPilot_test/run_01"
@@ -183,9 +259,13 @@ Each row is a sample. The dropdown at the top left switches between the three
 pipeline modules, **Assemble**, **Annotate**, and **Export**, which you work
 through in that order. The circular arrow refreshes the table.
 
+Clicking a column header sorts alphanumerically. The search box at the top right filters
+everything, and most columns have their own filter box.
+
 Two icons sit to the left of each sample ID:
 
-- **The lock.** Unlocked samples are available for the next pipeline run to process.
+- **The lock** (<i class="fa fa-lock-open state-icon"></i> unlocked,
+  <i class="fa fa-lock state-icon"></i> locked). Unlocked samples are available for the next pipeline run to process.
   Locking a sample freezes it in the current module and makes it available for the next
   module. Select samples and use the `LOCK` button to toggle.
 - **The state.** Status of the sample in the current module. The pipeline sets
@@ -193,32 +273,46 @@ Two icons sit to the left of each sample ID:
   is how you can park samples you do not want to process yet or reset samples that 
   have already completed the pipeline. There are five states:
 
-| State | Meaning |
-|---|---|
-| Hold / Waiting | Ready to be updated, but will be skipped on the next run |
-| Ready to Run | Will be updated on the next run |
-| In Progress | Partway through the current module |
-| Completed Successfully | Processed without problems |
-| Completed with Warning | Finished, but may have failed or needs manual review |
+<table class="state-table">
+<thead>
+<tr><th>State</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><i class="fa fa-hourglass state-icon"></i> Hold / Waiting</td><td>Ready to be updated, but will be skipped on the next run</td></tr>
+<tr><td><i class="fa fa-person-running state-icon"></i> Ready to Run</td><td>Will be updated on the next run</td></tr>
+<tr><td><i class="fa fa-circle-half-stroke state-icon"></i> In Progress</td><td>Partway through the current module</td></tr>
+<tr><td><i class="fa fa-circle-check state-icon"></i> Completed Successfully</td><td>Processed without problems</td></tr>
+<tr><td><i class="fa fa-triangle-exclamation state-icon"></i> Completed with Warning</td><td>Finished, but may have failed or needs manual review</td></tr>
+</tbody>
+</table>
 
-Clicking a column header sorts alphanumerically. The search box at the top right filters
-everything, and most columns have their own filter box.
+The Annotate module has no separate half-circle state; a unit being worked on
+shows the runner icon until it finishes.
+
 
 <hr class="part-break" />
 
 # Test project walkthrough
 
-- [Assemble](Test-Project-Assemble.html)
-- [Annotate](Test-Project-Annotate.html)
-- [Export](Test-Project-Export.html)
-- [Starting your own project](Your-Own-Project.html)
+Now you're ready to start running the test project samples
+through each MitoPilot module. Follow the links below to begin.
+
+<div class="step-nav no-rule">
+<a href="Test-Project-Assemble.html">1. Assemble</a>
+<a href="Test-Project-Annotate.html">2. Annotate</a>
+<a href="Test-Project-Export.html">3. Export</a>
+</div>
 
 # Where to go next
 
-- [Multiple paths and scaffolds](Multiple-Assemblies.html)
-- [Curation ruleset browser](Ruleset-Browser.html) and
-  [curation and validation](Curation-and-Validation.html)
+Once you're comfortable with MitoPilot, try [starting a project](Your-Own-Project.html) with 
+your own sequence data!
+
+Additional articles for you to explore:
+
 - [Building custom databases](custom_dbs.html)
+- [Handling difficult assemblies](Difficult-Assemblies.html)
+- [Curation ruleset browser](Ruleset-Browser.html) and [curation and validation details](Curation-and-Validation.html)
 - [HPC cluster support](Custom-HPC.html),
   [Smithsonian Hydra](NMNH-Hydra.html), and [NOAA SEDNA](NOAA-SEDNA.html)
 - [FAQ](FAQ.html) and [troubleshooting](Troubleshooting.html)

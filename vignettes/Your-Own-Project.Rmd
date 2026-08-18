@@ -51,8 +51,55 @@ img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 }
 .part-break {
   border: none;
-  border-top: 4px solid #101820;
-  margin: 5.5em 0 3.4em;
+  border-top: 3px solid #c9d1d6;
+  margin: 2.2em 0 1.6em;
+}
+.step-nav {
+  margin: 0 0 2.5em;
+  padding-bottom: 1.2em;
+  border-bottom: 1px solid #dde3e6;
+}
+.step-nav.no-rule {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* pandoc wraps the row contents in a <p>, so that is the flex container. */
+.step-nav p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.step-nav .step-label {
+  font-weight: 600;
+  color: #6b7b85;
+  margin-right: 4px;
+}
+.step-nav a,
+.step-nav .current {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none !important;
+  border: 1px solid #c8dde5;
+}
+.step-nav a {
+  background-color: #e4f0f4;
+  color: #1f6f8b !important;
+}
+.step-nav a:hover,
+.step-nav a:focus {
+  background-color: #d3e7ee;
+  color: #17566b !important;
+  text-decoration: none !important;
+}
+.step-nav .current {
+  background-color: #1f6f8b;
+  color: #ffffff;
+  border-color: #1f6f8b;
 }
 </style>
 
@@ -285,7 +332,11 @@ externally supplied ones, never both. Use separate projects if you have a mix.
 
 # Test project walkthrough
 
-- [Assemble](Test-Project-Assemble.html)
-- [Annotate](Test-Project-Annotate.html)
-- [Export](Test-Project-Export.html)
-- **Starting your own project**
+If you have not run the test project yet, it is the fastest way to learn the
+interface before committing your own data:
+
+<div class="step-nav no-rule">
+<a href="Test-Project-Assemble.html">1. Assemble</a>
+<a href="Test-Project-Annotate.html">2. Annotate</a>
+<a href="Test-Project-Export.html">3. Export</a>
+</div>
