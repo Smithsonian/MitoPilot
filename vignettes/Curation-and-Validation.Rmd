@@ -62,29 +62,49 @@ the Annotate module.
 
 # Choosing a ruleset
 
-The ruleset is chosen with `curate_target` at project initialization, and it
-determines expected gene content, allowed start and stop codons, length limits,
-permitted overlaps, gene naming, and the genetic code.
+The ruleset determines expected gene content, allowed start and stop codons,
+length limits, permitted overlaps, gene naming, and the genetic code. You can set
+it either when you create the project or later in the app.
+
+**At project initialization**, pass `curate_target`. This becomes the default for
+every sample in the project:
 
 ```r
 new_project(..., curate_target = "octocoral_mito")
 ```
 
-MitoPilot ships rulesets for 33 groups of animals. The
-[curation ruleset browser](Ruleset-Browser.html) lists them all with their
-testing status and every parameter value.
+**In the app**, open the `Curate Opts.` window from the Annotate module and use
+the **Target** dropdown, which lists every available ruleset as
+"Scientific name (common name)". As with the other options windows, nothing is
+editable until you tick **Edit**, and changes apply to the rows you have
+selected. Because curation options are saved as named sets, different samples in
+the same project can use different rulesets, which is what you want for a mixed
+run.
+
+<div class="alert alert-warning">
+<strong>Warning.</strong> Changing the ruleset only affects samples the next time
+they are curated. Samples already curated under the old ruleset keep their
+existing gene models until you reset their state and re-run the Annotate module.
+</div>
+
+The [curation ruleset browser](Ruleset-Browser.html) lists every ruleset with its
+testing status and parameter values.
 
 ## If there is no ruleset for your clade
 
-There is no generic fallback ruleset, so pick the nearest available clade and
-override the parts that are wrong for your group. The overrides go through the
-matching `params_*()` function, described in the next section. Gene content,
-start and stop codons, and the genetic code are the fields most likely to need
-changing.
+There is no generic fallback ruleset, and building one yourself is not
+recommended: getting the expected gene content, start and stop codons, length
+limits, and genetic code right for a new clade takes real curation experience,
+and a ruleset that is subtly wrong will silently edit your gene models.
 
-If you get a ruleset working for a new group, please open an
+If MitoPilot does not cover your group, please open an
 [issue](https://github.com/Smithsonian/MitoPilot/issues) or contact Dan MacGuigan
-at <macguigand@si.edu> so it can be added.
+at <macguigand@si.edu>. We are actively adding rulesets and are glad to work with
+you on one for your taxa.
+
+In the meantime you can select the closest available clade to get annotations
+you can review by hand, but treat the automated curation and the validation
+warnings with caution, since both are being applied under the wrong expectations.
 
 # Curation parameters
 
