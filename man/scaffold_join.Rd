@@ -14,3 +14,4 @@ Pure-logic functions here back both the automatic Nextflow join (WF1) and the
 in-app manual override editor, so they take/return plain vectors and
 data.frames and never touch Shiny or the database directly.
 }
+\keyword{internal}
