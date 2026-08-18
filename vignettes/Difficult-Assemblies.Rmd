@@ -1,8 +1,8 @@
 ---
-title: "Multiple Paths and Scaffolds"
+title: "Difficult Assemblies"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Multiple-Assemblies}
+  %\VignetteIndexEntry{Difficult Assemblies}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

@@ -42,28 +42,28 @@ articles:
   - 'Test-Project-Assemble'
   - 'Test-Project-Annotate'
   - 'Test-Project-Export'
+
+- title: "Usage"
+  navbar: Usage
+  contents:
   - 'Your-Own-Project'
+  - 'Difficult-Assemblies'
+  - 'Ruleset-Browser'
+  - 'Curation-and-Validation'
+  - 'custom_dbs'
+
+- title: "Computing Environments"
+  navbar: Computing Environments
+  contents:
+  - 'Custom-HPC'
+  - 'NMNH-Hydra'
+  - 'NOAA-SEDNA'
 
 - title: "Help"
   navbar: Help
   contents:
   - 'FAQ'
   - 'Troubleshooting'
-
-- title: "Nextflow Executors"
-  navbar: Nextflow Executors
-  contents:
-  - 'Custom-HPC'
-  - 'NMNH-Hydra'
-  - 'NOAA-SEDNA'
-
-- title: "Usage"
-  navbar: Usage
-  contents:
-  - 'Multiple-Assemblies'
-  - 'Ruleset-Browser'
-  - 'Curation-and-Validation'
-  - 'custom_dbs'
 
 reference:
 - title: "Getting started"
