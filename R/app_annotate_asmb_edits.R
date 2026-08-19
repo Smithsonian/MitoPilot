@@ -1,17 +1,15 @@
-#' Undoable assembly edits for the Annotate details modal
-#'
-#' Backs the two controls that rewrite a unit's assembly in place: "Linearize"
-#' (rotate a circular molecule and open it) and "Trim unannotated ends" (cut a
-#' linear molecule back to its outermost annotated feature). Both snapshot the
-#' unit before their first edit so "Restore assembly" can put it back.
-#'
-#' Tracking follows the Linearize precedent: the `assemblies` row and the unit's
-#' on-disk annotate artifacts are rewritten together and an "EDITED:" note goes
-#' into `annotate.annotate_notes`, which VALIDATE strips when WF2 regenerates the
-#' assembly. Export needs no changes - it reads `assemblies.sequence` through
-#' [get_assembly()] and coordinates from `annotations`, so both follow.
-#'
-#' @noRd
+# Undoable assembly edits for the Annotate details modal
+#
+# Backs the two controls that rewrite a unit's assembly in place: "Linearize"
+# (rotate a circular molecule and open it) and "Trim unannotated ends" (cut a
+# linear molecule back to its outermost annotated feature). Both snapshot the
+# unit before their first edit so "Restore assembly" can put it back.
+#
+# Tracking follows the Linearize precedent: the `assemblies` row and the unit's
+# on-disk annotate artifacts are rewritten together and an "EDITED:" note goes
+# into `annotate.annotate_notes`, which VALIDATE strips when WF2 regenerates the
+# assembly. Export needs no changes - it reads `assemblies.sequence` through
+# get_assembly() and coordinates from `annotations`, so both follow.
 
 #' DDL for the pre-edit snapshot table.
 #' A row exists only while a unit carries an un-restored edit.
