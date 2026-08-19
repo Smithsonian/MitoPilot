@@ -1,3 +1,8 @@
+/* Hide the package logo on article pages; keep it on home and reference. */
+.template-article img.logo {
+  display: none;
+}
+
 /* Bootstrap styles the <figcaption> element, but pandoc emits a div/p with a
    class instead. Markup differs by pandoc version, so cover both. */
 .float > .figcaption,
