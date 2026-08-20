@@ -163,6 +163,18 @@ circ_overlap_len <- function(p1, p2, q1, q2, L) {
   total
 }
 
+#' Wrap a coordinate onto a circular sequence of length L
+#'
+#' Maps any integer (including 0, negatives, and values past L) onto [1, L].
+#'
+#' @param p coordinate(s)
+#' @param L length of the contig
+#'
+#' @noRd
+wrap_pos <- function(p, L) {
+  as.integer(((p - 1L) %% L) + 1L)
+}
+
 #' Extract a possibly wrap-around region [p1, p2] from a sequence
 #'
 #' When p1 > p2 the region spans the circular origin, so it is reconstructed as
@@ -758,6 +770,24 @@ splice_join_cds <- function(members, seq, genetic_code) {
     partial_stop <- exons$partial_stop[n]
   }
 
+  # Gene span. min/max is right while every exon sits on one arc, but an exon
+  # that crosses the origin is stored pos1 > pos2, and min/max then reports a
+  # span that excludes it entirely. Fall back to the shortest circular arc that
+  # covers every exon.
+  if (any(wraps)) {
+    reach <- vapply(exons$pos1, function(st) {
+      max(vapply(seq_len(n), function(i) circ_len(st, exons$pos2[i], L), numeric(1)))
+    }, numeric(1))
+    st <- exons$pos1[which.min(reach)]
+    gene_pos1 <- st
+    gene_pos2 <- exons$pos2[which.max(
+      vapply(seq_len(n), function(i) circ_len(st, exons$pos2[i], L), numeric(1))
+    )]
+  } else {
+    gene_pos1 <- min(exons$pos1)
+    gene_pos2 <- max(exons$pos2)
+  }
+
   list(
     dna = as.character(merged),
     translation = translation,
@@ -765,8 +795,8 @@ splice_join_cds <- function(members, seq, genetic_code) {
     stop_codon = stop_codon,
     partial_start = partial_start,
     partial_stop = partial_stop,
-    pos1 = min(exons$pos1),
-    pos2 = max(exons$pos2),
+    pos1 = gene_pos1,
+    pos2 = gene_pos2,
     length = sum(seg_len),
     direction = direction,
     segments = segments

@@ -17,6 +17,14 @@ rotate_asmb <- function(
   # check if gene exists in annotation
   # if not return unaltered assembly and annotation
   if(start_gene %nin% annotations$gene){
+    warning(
+      "rotate_asmb: start gene '", start_gene, "' is not annotated on this ",
+      "assembly, so it was not rotated. Any feature spanning the current ",
+      "origin stays split across it. Set a different start_gene (one of: ",
+      paste(utils::head(unique(annotations$gene), 10), collapse = ", "),
+      if (length(unique(annotations$gene)) > 10) ", ..." else "", ").",
+      call. = FALSE
+    )
     return(list(assembly, annotations))
   }
 
@@ -24,6 +32,23 @@ rotate_asmb <- function(
   start <- dplyr::filter(annotations, gene %in% start_gene) |>
     dplyr::select(pos1, pos2, direction) |>
     dplyr::slice(1)
+
+  # Warn if the new origin falls inside another feature: rotating there splits
+  # that feature across the origin, which every downstream consumer then has to
+  # handle as a wrap-around (pos1 > pos2) annotation.
+  cut <- if (start$direction == "+") start$pos1 else start$pos2 + 1L
+  cut <- ((cut - 1L) %% seq_length) + 1L
+  before_cut <- ((cut - 2L) %% seq_length) + 1L
+  split <- circ_overlap(cut, cut, annotations$pos1, annotations$pos2) &
+    circ_overlap(before_cut, before_cut, annotations$pos1, annotations$pos2)
+  if (any(split, na.rm = TRUE)) {
+    warning(
+      "rotate_asmb: rotating to '", start_gene, "' cuts through ",
+      paste(unique(annotations$gene[which(split)]), collapse = ", "),
+      ", which will span the origin of the rotated assembly.",
+      call. = FALSE
+    )
+  }
 
   # Rotate sequence
   if (start$direction == "+") {

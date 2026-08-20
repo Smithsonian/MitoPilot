@@ -419,13 +419,20 @@ annotate <- function(
   oh_idx <- which(annotations$gene == "OH") |> rev()
   to_remove <- NULL
   for (idx in oh_idx) {
+    oh_L <- contig_lens[[annotations$contig[idx]]]
+    oh_len <- circ_len(annotations$pos1[idx], annotations$pos2[idx], oh_L)
     containing <- annotations |>
       dplyr::filter(dplyr::row_number() != idx) |>
+      dplyr::filter(contig == annotations$contig[idx]) |>
+      dplyr::rowwise() |>
+      # circular containment: a feature spanning the origin is stored pos1 > pos2,
+      # so pos1 <= x & pos2 >= y never fires for it however deeply it nests the OH
       dplyr::filter(
-        contig == annotations$contig[idx] &
-          pos1 <= annotations$pos1[idx] &
-          pos2 >= annotations$pos2[idx]
-      )
+        circ_overlap_len(
+          pos1, pos2, annotations$pos1[idx], annotations$pos2[idx], oh_L
+        ) == oh_len
+      ) |>
+      dplyr::ungroup()
     if (nrow(containing) > 0L) {
       to_remove <- c(to_remove, idx)
     }
@@ -434,17 +441,27 @@ annotate <- function(
     annotations <- annotations[-to_remove, ]
   }
 
-  # Extend OH annotations to (putative) full length ctrl region
+  # Extend OH annotations to (putative) full length ctrl region.
+  # The extension assumes the table's first/last row on a contig sit at the
+  # contig's first/last base. A feature spanning the origin breaks that (it sorts
+  # last by pos1 yet also occupies [1, pos2]), so leave the OH where MITOS2 put it
+  # rather than stretching it across the whole contig.
   oh_idx <- which(annotations$gene == "OH")
   for (idx in oh_idx) {
-    if (idx == min(which(annotations$contig == annotations$contig[idx]))) {
+    ctg <- annotations$contig[idx]
+    ctg_rows <- which(annotations$contig == ctg)
+    if (any(annotations$pos1[ctg_rows] > annotations$pos2[ctg_rows])) {
+      annotations$gene[idx] <- "ctrl"
+      next
+    }
+    if (idx == min(ctg_rows)) {
       annotations$pos1[idx] <- 1
     } else {
       annotations$pos1[idx] <- annotations$pos2[idx - 1] + 1
     }
 
-    if (idx == max(which(annotations$contig == annotations$contig[idx]))) {
-      annotations$pos2[idx] <- contig_lens[annotations$contig[idx]]
+    if (idx == max(ctg_rows)) {
+      annotations$pos2[idx] <- contig_lens[ctg]
     } else {
       annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
     }

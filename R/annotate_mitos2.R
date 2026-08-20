@@ -107,7 +107,9 @@ annotate_mitos2 <- function(
   run_mitos(out)
   message("finished MITOS2")
 
-  contig_len <- length(assembly[[1]]) # NOTE: this will be problematic when we deal with fragmented assemblies
+  # Per-contig lengths, keyed by contig name (a single scalar taken from the
+  # first sequence is wrong the moment an assembly has more than one contig).
+  contig_lens <- setNames(Biostrings::width(assembly), names(assembly))
 
   # Format Mitos Output ----
   parse_mitos_dir <- function(dir) {
@@ -176,15 +178,17 @@ annotate_mitos2 <- function(
               ),
               .after = "direction"
             ) |>
-            dplyr::mutate(length = as.numeric(ifelse(pos1 < pos2,
-                                                     (1 + abs(pos2 - pos1)),
-                                                     ifelse(pos1 > pos2,
-                                                            (abs(contig_len - pos1) + abs(1 + pos2)),
-                                                            NA_character_
-                                                     )
-            )
-            ),
-            .before = "direction") |>
+            # pos1 > pos2 means the feature spans the origin of a circular
+            # contig, so its length is the arc around the origin (circ_len),
+            # measured against THIS contig's length.
+            dplyr::mutate(
+              length = as.numeric(dplyr::case_when(
+                pos1 < pos2 ~ pos2 - pos1 + 1,
+                pos1 > pos2 ~ unname(contig_lens[contig]) - pos1 + pos2 + 1,
+                .default = NA_real_
+              )),
+              .before = "direction"
+            ) |>
             dplyr::filter(
               gene != "OH" |
                 stringr::str_detect(geneId, "OH_0") |
@@ -192,149 +196,39 @@ annotate_mitos2 <- function(
             ) |>
             dplyr::rowwise() |>
             dplyr::mutate(
-              # below code is ugly but it works
-              # dplyr::case_when() does not work because it evaluates all statements
-              # regardless of whether they are true or false
-              start_codon = ifelse(
-                type == "PCG" & direction == "+" & pos1 < pos2,
+              # Coding-strand sequence for this feature. extract_circ_region()
+              # reads across the origin, so a feature stored pos1 > pos2 (it wraps
+              # the origin of a circular contig) needs no special case, and the
+              # contig length is taken from the contig itself rather than from a
+              # shared scalar that only ever described the first one.
+              .cds = if (type == "PCG") {
                 suppressWarnings({
-                  Biostrings::subseq(assembly[contig], pos1, pos2) |>
-                    as.character() |>
-                    substr(start = 1, stop = 3)
-                }),
-                ifelse(
-                  type == "PCG" & direction == "+" & pos1 > pos2,
-                  suppressWarnings({
-                    # this can happen if a PCG annotation wraps around the end of a circular assembly
-                    # concatenate gene chunks
-                    Biostrings::xscat(
-                      Biostrings::subseq(assembly[contig], pos1, contig_len),
-                      Biostrings::subseq(assembly[contig], 1, pos2)
+                  s <- extract_circ_region(assembly[contig], pos1, pos2)
+                  if (direction == "-") s <- Biostrings::reverseComplement(s)
+                  unname(as.character(s))
+                })
+              } else NA_character_,
+              start_codon = if (type == "PCG" && !is.na(.cds)) {
+                substr(.cds, 1L, 3L)
+              } else NA_character_,
+              stop_codon = if (type == "PCG" && !is.na(.cds)) {
+                n <- nchar(.cds)
+                len <- if (n %% 3L == 0L) 3L else n %% 3L
+                substr(.cds, n - len + 1L, n)
+              } else NA_character_,
+              translation = if (type == "PCG" && !is.na(.cds)) {
+                suppressWarnings(
+                  Biostrings::DNAString(substr(.cds, 1L, nchar(.cds) - nchar(stop_codon))) |>
+                    Biostrings::translate(
+                      genetic.code = Biostrings::getGeneticCode(genetic_code),
+                      if.fuzzy.codon = "solve"
                     ) |>
-                      as.character() |>
-                      substr(start = 1, stop = 3)
-                  }),
-                  ifelse(
-                    type == "PCG" & direction == "-" & pos1 < pos2,
-                    suppressWarnings({
-                      Biostrings::subseq(assembly[contig], pos1, pos2) |>
-                        Biostrings::reverseComplement() |>
-                        as.character() |>
-                        substr(start = 1, stop = 3)
-                    }),
-                    ifelse(
-                      type == "PCG" & direction == "-" & pos1 > pos2,
-                      suppressWarnings({
-                        #  this can happen if a PCG annotation wraps around the end of a circular assembly
-                        # concatenate gene chunks
-                        Biostrings::xscat(
-                          Biostrings::subseq(assembly[contig], pos1, contig_len),
-                          Biostrings::subseq(assembly[contig], 1, pos2)
-                        ) |>
-                          Biostrings::reverseComplement() |>
-                          as.character()  |>
-                          substr(start = 1, stop = 3)
-                      }),
-                      NA_character_
-                    )
-                  )
-                )
-              ),
-              stop_codon = ifelse(
-                type == "PCG" & direction == "+" & pos1 < pos2,
-                suppressWarnings({
-                  len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
-                  Biostrings::subseq(assembly[contig], pos1, pos2) |>
-                    as.character() |>
-                    substr(start = length - len + 1, stop = length)
-                }),
-                ifelse(
-                  type == "PCG" & direction == "+" & pos1 > pos2,
-                  suppressWarnings({
-                    # this can happen if a PCG annotation wraps around the end of a circular assembly
-                    # concatenate gene chunks
-                    len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
-                    Biostrings::xscat(
-                      Biostrings::subseq(assembly[contig], pos1, contig_len),
-                      Biostrings::subseq(assembly[contig], 1, pos2)
-                    ) |>
-                      as.character() |>
-                      substr(start = length - len + 1, stop = length)
-                  }),
-                  ifelse(
-                    type == "PCG" & direction == "-" & pos1 < pos2,
-                    suppressWarnings({
-                      len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
-                      Biostrings::subseq(assembly[contig], pos1, pos2) |>
-                        Biostrings::reverseComplement() |>
-                        as.character() |>
-                        substr(start = length - len + 1, stop = length)
-                    }),
-                    ifelse(
-                      type == "PCG" & direction == "-" & pos1 > pos2,
-                      suppressWarnings({
-                        len <- dplyr::if_else(length %% 3 == 0L, 3, length %% 3)
-                        #  this can happen if a PCG annotation wraps around the end of a circular assembly
-                        # concatenate gene chunks
-                        Biostrings::xscat(
-                          Biostrings::subseq(assembly[contig], pos1, contig_len),
-                          Biostrings::subseq(assembly[contig], 1, pos2)
-                        ) |>
-                          Biostrings::reverseComplement() |>
-                          as.character()  |>
-                          substr(start = length - len + 1, stop = length)
-                      }),
-                      NA_character_
-                    )
-                  )
-                )
-              ),
-              translation = ifelse(
-                type == "PCG" & direction == "+" & pos1 < pos2,
-                suppressWarnings({
-                  Biostrings::subseq(assembly[contig], pos1, pos2 - nchar(stop_codon)) |>
-                    Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
                     as.character()
-                }),
-                ifelse(
-                  type == "PCG" & direction == "+" & pos1 > pos2,
-                  suppressWarnings({
-                    # this can happen if a PCG annotation wraps around the end of a circular assembly
-                    # concatenate gene chunks
-                    Biostrings::xscat(
-                      Biostrings::subseq(assembly[contig], pos1, contig_len),
-                      Biostrings::subseq(assembly[contig], 1, pos2 - nchar(stop_codon))
-                    ) |>
-                      Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
-                      as.character()
-                  }),
-                  ifelse(
-                    type == "PCG" & direction == "-" & pos1 < pos2,
-                    suppressWarnings({
-                      Biostrings::subseq(assembly[contig], pos1 + nchar(stop_codon), pos2) |>
-                        Biostrings::reverseComplement() |>
-                        Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
-                        as.character()
-                    }),
-                    ifelse(
-                      type == "PCG" & direction == "-" & pos1 > pos2,
-                      suppressWarnings({
-                        #  this can happen if a PCG annotation wraps around the end of a circular assembly
-                        # concatenate gene chunks
-                        Biostrings::xscat(
-                          Biostrings::subseq(assembly[contig], pos1 + nchar(stop_codon), contig_len),
-                          Biostrings::subseq(assembly[contig], 1, pos2)
-                        ) |>
-                          Biostrings::reverseComplement() |>
-                          Biostrings::translate(genetic.code = Biostrings::getGeneticCode(genetic_code), if.fuzzy.codon = "solve") |>
-                          as.character()
-                      }),
-                      NA_character_
-                    )
-                  )
                 )
-              )
-            )
+              } else NA_character_
+            ) |>
+            dplyr::ungroup() |>
+            dplyr::select(-.cds)
         }()
 
       annotations <- annotations |>

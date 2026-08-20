@@ -76,6 +76,27 @@ validate_mito_core <- function(
   # default PCG ruleset so they are validated like any other PCG.
   rules <- augment_rules_for_unknown_genes(rules, annotations, default_rules)
 
+  ## contig lengths ----
+  # Needed to measure a feature that spans the origin of a circular contig, which
+  # is stored pos1 > pos2. The coverage table carries one row per base, so its
+  # highest Position is the contig length; without coverage, fall back to the
+  # furthest annotated base.
+  contig_lens <- if (!is.null(coverage) && all(c("SeqId", "Position") %in% names(coverage))) {
+    tapply(coverage$Position, coverage$SeqId, max, na.rm = TRUE)
+  } else {
+    tapply(
+      pmax(annotations$pos1, annotations$pos2), annotations$contig,
+      max, na.rm = TRUE
+    )
+  }
+  ctg_len <- function(seqid) {
+    L <- suppressWarnings(as.numeric(contig_lens[as.character(seqid)]))
+    if (length(L) != 1L || is.na(L)) {
+      L <- max(c(annotations$pos1, annotations$pos2), na.rm = TRUE)
+    }
+    L
+  }
+
   # counter for warnings
   total_warnings <- 0
 
@@ -133,6 +154,10 @@ validate_mito_core <- function(
   for (i in seq_len(nrow(annotations))) {
     list2env(annotations[i, ], envir = environment())
     gene_rules <- rules[[gene]]
+    # An origin-spanning feature is stored pos1 > pos2; measure it around the
+    # circle rather than trusting the stored length or plain interval maths.
+    L_i <- ctg_len(contig)
+    feat_length <- if (isTRUE(pos1 > pos2)) circ_len(pos1, pos2, L_i) else length
 
     ## Overlaps ----
     # logic to handle case when there are no other annotations on the same strand
@@ -141,14 +166,14 @@ validate_mito_core <- function(
         dplyr::filter(contig == {{ contig }} & direction == {{ direction }}) |>
         dplyr::rowwise() |>
         dplyr::mutate(
-          overlap = length(intersect(seq(pos1, pos2), seq({{ pos1 }}, {{ pos2 }})))
+          overlap = circ_overlap_len({{ pos1 }}, {{ pos2 }}, pos1, pos2, L_i)
         ) |>
         dplyr::filter(overlap > 0L)
     } else {
       overlapping <- dplyr::filter(annotations[-i, ], contig == {{ contig }} & direction == {{ direction }})
     }
     # Max Overlap
-    if (nrow(overlapping) > 0L && any(overlapping$overlap / length > max_overlap)) {
+    if (nrow(overlapping) > 0L && any(overlapping$overlap / feat_length > max_overlap)) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max overlap")
       total_warnings <- total_warnings + 1
     } else if (nrow(overlapping) > 0L && !is.null(gene_rules$overlap)) {
@@ -156,7 +181,7 @@ validate_mito_core <- function(
       while (direction == "+") {
         if (i == 1) break
         start_ol <- overlapping |>
-          dplyr::filter({{ pos1 }} %in% seq(pos1, pos2))
+          dplyr::filter(circ_overlap({{ pos1 }}, {{ pos1 }}, pos1, pos2))
         if (nrow(start_ol) == 0L) break
         if (max(start_ol$overlap) > gene_rules$overlap$start) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max start overlap")
@@ -167,7 +192,7 @@ validate_mito_core <- function(
       while (direction == "-") {
         if (i == nrow(annotations)) break
         start_ol <- overlapping |>
-          dplyr::filter({{ pos2 }} %in% seq(pos1, pos2))
+          dplyr::filter(circ_overlap({{ pos2 }}, {{ pos2 }}, pos1, pos2))
         if (nrow(start_ol) == 0L) break
         if (max(start_ol$overlap) > gene_rules$overlap$start) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max start overlap")
@@ -179,7 +204,7 @@ validate_mito_core <- function(
       while (direction == "+") {
         if (i == nrow(annotations)) break
         stop_ol <- overlapping |>
-          dplyr::filter({{ pos2 }} %in% seq(pos1, pos2))
+          dplyr::filter(circ_overlap({{ pos2 }}, {{ pos2 }}, pos1, pos2))
         if (nrow(stop_ol) == 0L) break
         if (max(stop_ol$overlap) > 1 && !gene_rules$overlap$stop) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max stop overlap")
@@ -190,7 +215,7 @@ validate_mito_core <- function(
       while (direction == "-") {
         if (i == 1) break
         stop_ol <- overlapping |>
-          dplyr::filter({{ pos1 }} %in% seq(pos1, pos2))
+          dplyr::filter(circ_overlap({{ pos1 }}, {{ pos1 }}, pos1, pos2))
         if (nrow(stop_ol) == 0L) break
         if (max(stop_ol$overlap) > 1 && !gene_rules$overlap$stop) {
           annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max stop overlap")
@@ -202,13 +227,15 @@ validate_mito_core <- function(
 
     ## tRNA within PCG or rRNA ----
     if (type == "tRNA") {
+      # circular containment: the whole tRNA arc falls inside the other feature
       containing <- annotations[-i, ] |>
+        dplyr::filter(contig == {{ contig }} & type %in% c("PCG", "rRNA")) |>
+        dplyr::rowwise() |>
         dplyr::filter(
-          contig == {{ contig }} &
-          type %in% c("PCG", "rRNA") &
-          pos1 <= {{ pos1 }} &
-          pos2 >= {{ pos2 }}
-        )
+          circ_overlap_len(pos1, pos2, {{ pos1 }}, {{ pos2 }}, L_i) ==
+            circ_len({{ pos1 }}, {{ pos2 }}, L_i)
+        ) |>
+        dplyr::ungroup()
       if (nrow(containing) > 0L) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "tRNA within PCG or rRNA")
         total_warnings = total_warnings + 1
@@ -222,11 +249,11 @@ validate_mito_core <- function(
     }
 
     ## Length limits ----
-    if (!is.na(gene_rules$max_len %||% NA) && length > gene_rules$max_len) {
+    if (!is.na(gene_rules$max_len %||% NA) && feat_length > gene_rules$max_len) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "exceeds max length")
       total_warnings <- total_warnings + 1
     }
-    if (!is.na(gene_rules$min_len %||% NA) && length < gene_rules$min_len) {
+    if (!is.na(gene_rules$min_len %||% NA) && feat_length < gene_rules$min_len) {
       annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "below min length")
       total_warnings <- total_warnings + 1
     }
