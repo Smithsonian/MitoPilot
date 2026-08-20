@@ -163,6 +163,47 @@ circ_overlap_len <- function(p1, p2, q1, q2, L) {
   total
 }
 
+#' Extend an OH call to the (putative) full-length control region
+#'
+#' MITOS2 reports the origin of replication (OH) as a short locus; the control
+#' region is taken to fill the gap between its neighbours. The first/last row on
+#' a contig is normally bounded by the contig edges - but a feature spanning the
+#' origin sorts last by `pos1` while also occupying `[1, pos2]`, so it, not the
+#' edge, is what bounds an OH sitting at either end of the table.
+#'
+#' @param annotations annotation table, sorted by contig then pos1
+#' @param contig_lens named vector of contig lengths
+#'
+#' @return `annotations` with each OH row renamed "ctrl" and extended
+#'
+#' @noRd
+extend_oh_to_ctrl <- function(annotations, contig_lens) {
+  for (idx in which(annotations$gene == "OH")) {
+    ctg <- annotations$contig[idx]
+    ctg_rows <- which(annotations$contig == ctg)
+    wrapped <- ctg_rows[annotations$pos1[ctg_rows] > annotations$pos2[ctg_rows]]
+
+    if (idx != min(ctg_rows)) {
+      annotations$pos1[idx] <- annotations$pos2[idx - 1] + 1
+    } else if (length(wrapped) > 0) {
+      annotations$pos1[idx] <- annotations$pos2[wrapped[1]] + 1
+    } else {
+      annotations$pos1[idx] <- 1
+    }
+
+    if (idx != max(ctg_rows)) {
+      annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
+    } else if (length(wrapped) > 0) {
+      annotations$pos2[idx] <- annotations$pos1[wrapped[1]] - 1
+    } else {
+      annotations$pos2[idx] <- contig_lens[[ctg]]
+    }
+    annotations$length[idx] <- abs(annotations$pos2[idx] - annotations$pos1[idx]) + 1
+    annotations$gene[idx] <- "ctrl"
+  }
+  annotations
+}
+
 #' Wrap a coordinate onto a circular sequence of length L
 #'
 #' Maps any integer (including 0, negatives, and values past L) onto [1, L].

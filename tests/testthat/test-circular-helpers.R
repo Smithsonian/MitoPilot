@@ -101,3 +101,62 @@ test_that("splice_join_cds keeps min/max span when no exon wraps", {
   expect_equal(res$pos1, 100L)
   expect_equal(res$pos2, 350L)
 })
+
+# extend_oh_to_ctrl(): the control region fills the gap between the OH's
+# neighbours. A feature spanning the origin sorts last by pos1 while also sitting
+# at [1, pos2], so it - not the contig edge - bounds an OH at either end.
+oh_tbl <- function(...) {
+  rows <- list(...)
+  data.frame(
+    contig = "ctg1",
+    gene = vapply(rows, `[[`, character(1), 1),
+    pos1 = vapply(rows, function(r) as.integer(r[[2]]), integer(1)),
+    pos2 = vapply(rows, function(r) as.integer(r[[3]]), integer(1)),
+    length = 0L, stringsAsFactors = FALSE
+  )
+}
+lens <- c(ctg1 = 900L)
+
+test_that("an interior OH is extended to its neighbours whether or not anything wraps", {
+  # OH between trnP (300-370) and trnF (600-670)
+  base <- oh_tbl(list("trnP", 300, 370), list("OH", 400, 450), list("trnF", 600, 670))
+  res <- extend_oh_to_ctrl(base, lens)
+  expect_equal(res$gene[2], "ctrl")
+  expect_equal(c(res$pos1[2], res$pos2[2]), c(371L, 599L))
+  expect_equal(res$length[2], 229L)
+
+  # same layout, plus a gene crossing the origin (sorts last by pos1)
+  with_wrap <- rbind(base, oh_tbl(list("atp8", 850, 100)))
+  res2 <- extend_oh_to_ctrl(with_wrap, lens)
+  expect_equal(c(res2$pos1[2], res2$pos2[2]), c(371L, 599L))
+})
+
+test_that("an OH at the table edges is bounded by the contig when nothing wraps", {
+  res <- extend_oh_to_ctrl(
+    oh_tbl(list("OH", 50, 80), list("trnF", 600, 670)), lens
+  )
+  expect_equal(c(res$pos1[1], res$pos2[1]), c(1L, 599L))
+
+  res <- extend_oh_to_ctrl(
+    oh_tbl(list("trnF", 100, 170), list("OH", 800, 850)), lens
+  )
+  expect_equal(c(res$pos1[2], res$pos2[2]), c(171L, 900L))
+})
+
+test_that("an OH at the table edges is bounded by the origin-spanning feature", {
+  # atp8 850..100 wraps, so it occupies 1..100 and 850..900
+  res <- extend_oh_to_ctrl(
+    oh_tbl(list("OH", 200, 250), list("trnF", 600, 670), list("atp8", 850, 100)),
+    lens
+  )
+  # first row: bounded below by the wrapping feature's far end, not by 1
+  expect_equal(res$pos1[1], 101L)
+  expect_equal(res$pos2[1], 599L)
+
+  res <- extend_oh_to_ctrl(
+    oh_tbl(list("trnF", 100, 170), list("atp8", 300, 200), list("OH", 700, 750)),
+    lens
+  )
+  # last row: bounded above by the wrapping feature's start, not by the contig end
+  expect_equal(res$pos2[3], 299L)
+})

@@ -441,33 +441,7 @@ annotate <- function(
     annotations <- annotations[-to_remove, ]
   }
 
-  # Extend OH annotations to (putative) full length ctrl region.
-  # The extension assumes the table's first/last row on a contig sit at the
-  # contig's first/last base. A feature spanning the origin breaks that (it sorts
-  # last by pos1 yet also occupies [1, pos2]), so leave the OH where MITOS2 put it
-  # rather than stretching it across the whole contig.
-  oh_idx <- which(annotations$gene == "OH")
-  for (idx in oh_idx) {
-    ctg <- annotations$contig[idx]
-    ctg_rows <- which(annotations$contig == ctg)
-    if (any(annotations$pos1[ctg_rows] > annotations$pos2[ctg_rows])) {
-      annotations$gene[idx] <- "ctrl"
-      next
-    }
-    if (idx == min(ctg_rows)) {
-      annotations$pos1[idx] <- 1
-    } else {
-      annotations$pos1[idx] <- annotations$pos2[idx - 1] + 1
-    }
-
-    if (idx == max(ctg_rows)) {
-      annotations$pos2[idx] <- contig_lens[ctg]
-    } else {
-      annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
-    }
-    annotations$length[idx] <- abs(annotations$pos2[idx] - annotations$pos1[idx]) + 1
-    annotations$gene[idx] <- "ctrl"
-  }
+  annotations <- extend_oh_to_ctrl(annotations, contig_lens)
 
   # Ensure PCG codon/translation columns exist even when MITOS2 is off (only
   # MITOS2 emits them); downstream curation selects these columns by name.
