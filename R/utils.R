@@ -155,7 +155,7 @@ add_cols <- function(dat, cols, .after = dplyr::everything()) {
   }
   dat |>
     dplyr::bind_rows(dplyr::tibble(!!!cols[!names(cols) %in% names(dat)], .rows = 0)) |>
-    dplyr::relocate(names(cols), .after = .after)
+    dplyr::relocate(dplyr::all_of(names(cols)), .after = {{ .after }})
 }
 
 
