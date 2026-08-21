@@ -261,7 +261,8 @@ annotate_mitofinder <- function(
 
   # Compute start/stop codons and translation for PCGs, mirroring annotate_mitos2()
   # output so downstream curation has the same fields. MitoFinder coordinates are
-  # always pos1 <= pos2 (no circular wrap), so only the forward/reverse cases apply.
+  # normally pos1 <= pos2; extract_circ_region() reads across the origin anyway so
+  # a pos1 > pos2 call yields the gene rather than aborting the whole sample.
   gc <- Biostrings::getGeneticCode(as.character(genetic_code))
   annotations <- annotations |>
     dplyr::rowwise() |>
@@ -269,7 +270,7 @@ annotate_mitofinder <- function(
       # coding-strand sequence for this feature (reverse-complemented when on "-")
       .cds = if (type == "PCG") {
         suppressWarnings({
-          s <- Biostrings::subseq(assembly[contig], pos1, pos2)
+          s <- extract_circ_region(assembly[contig], pos1, pos2)
           if (direction == "-") s <- Biostrings::reverseComplement(s)
           unname(as.character(s))
         })

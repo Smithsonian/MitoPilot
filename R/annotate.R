@@ -419,13 +419,25 @@ annotate <- function(
   oh_idx <- which(annotations$gene == "OH") |> rev()
   to_remove <- NULL
   for (idx in oh_idx) {
+    oh_L <- contig_lens[[annotations$contig[idx]]]
+    oh_len <- circ_len(annotations$pos1[idx], annotations$pos2[idx], oh_L)
     containing <- annotations |>
       dplyr::filter(dplyr::row_number() != idx) |>
-      dplyr::filter(
-        contig == annotations$contig[idx] &
-          pos1 <= annotations$pos1[idx] &
-          pos2 >= annotations$pos2[idx]
-      )
+      dplyr::filter(contig == annotations$contig[idx])
+    # circular containment: a feature spanning the origin is stored pos1 > pos2,
+    # so pos1 <= x & pos2 >= y never fires for it however deeply it nests the OH.
+    # Guarded: a rowwise filter still evaluates its predicate on an empty table,
+    # where the scalar circ_* helpers get zero-length input and abort.
+    if (nrow(containing) > 0L) {
+      containing <- containing |>
+        dplyr::rowwise() |>
+        dplyr::filter(
+          circ_overlap_len(
+            pos1, pos2, annotations$pos1[idx], annotations$pos2[idx], oh_L
+          ) == oh_len
+        ) |>
+        dplyr::ungroup()
+    }
     if (nrow(containing) > 0L) {
       to_remove <- c(to_remove, idx)
     }
@@ -434,23 +446,7 @@ annotate <- function(
     annotations <- annotations[-to_remove, ]
   }
 
-  # Extend OH annotations to (putative) full length ctrl region
-  oh_idx <- which(annotations$gene == "OH")
-  for (idx in oh_idx) {
-    if (idx == min(which(annotations$contig == annotations$contig[idx]))) {
-      annotations$pos1[idx] <- 1
-    } else {
-      annotations$pos1[idx] <- annotations$pos2[idx - 1] + 1
-    }
-
-    if (idx == max(which(annotations$contig == annotations$contig[idx]))) {
-      annotations$pos2[idx] <- contig_lens[annotations$contig[idx]]
-    } else {
-      annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
-    }
-    annotations$length[idx] <- abs(annotations$pos2[idx] - annotations$pos1[idx]) + 1
-    annotations$gene[idx] <- "ctrl"
-  }
+  annotations <- extend_oh_to_ctrl(annotations, contig_lens)
 
   # Ensure PCG codon/translation columns exist even when MITOS2 is off (only
   # MITOS2 emits them); downstream curation selects these columns by name.

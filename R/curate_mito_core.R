@@ -73,6 +73,33 @@ curate_mito_core <- function(
       \(x) setNames(x, stringr::str_extract(x, "^\\S+"))
     }()
 
+  ## circular-coordinate helpers ----
+  # A feature spanning the origin of a circular contig is stored pos1 > pos2, and
+  # the boundary arithmetic below can push a coordinate off either end. These wrap
+  # coordinates onto the circle and read across the origin; on linear contigs they
+  # are identity / plain subseq, so linear behaviour is unchanged.
+  is_circ <- function(seqid) stringr::str_detect(contig_key[[seqid]], "circular")
+  ctg_len <- function(seqid) Biostrings::width(assembly[contig_key[seqid]])[[1]]
+  circ_pos <- function(seqid, p) {
+    if (!is_circ(seqid)) {
+      return(p)
+    }
+    wrap_pos(p, ctg_len(seqid))
+  }
+  ctg_seq <- function(seqid, p1, p2) {
+    extract_circ_region(
+      assembly[contig_key[seqid]],
+      circ_pos(seqid, p1),
+      circ_pos(seqid, p2)
+    )
+  }
+  feat_len <- function(seqid, p1, p2) {
+    if (p1 <= p2) {
+      return(as.integer(abs(p2 - p1) + 1L))
+    }
+    as.integer(circ_len(p1, p2, ctg_len(seqid)))
+  }
+
   ## load coverage ----
   if (!is.null(coverage_fn)) {
     coverage <- tryCatch(
@@ -242,14 +269,40 @@ curate_mito_core <- function(
 
   ## apply punctuation model ----
   gene_idx <- which(annotations$type == "rRNA")
+  # Circular neighbours: the table is sorted by pos1, so a feature spanning the
+  # origin sorts last while sitting immediately before the first row. On a
+  # circular contig it, not the table edge, is the neighbour of the end rows.
+  neighbour_row <- function(idx, side) {
+    ctg <- annotations$contig[idx]
+    rows <- which(annotations$contig == ctg)
+    circ <- is_circ(ctg)
+    wrap <- setdiff(rows[annotations$pos1[rows] > annotations$pos2[rows]], idx)
+    # A wrapping row is not the table-order neighbour it appears to be: it
+    # precedes the contig's first row and follows its last.
+    ord <- if (circ) setdiff(rows, wrap) else rows
+    k <- match(idx, ord)
+    if (is.na(k)) {
+      # idx is itself a wrapping row: its neighbours are the outer ordinary rows
+      if (length(ord) == 0L) return(NA_integer_)
+      return(if (side == "before") ord[length(ord)] else ord[1])
+    }
+    if (side == "before") {
+      if (k > 1L) ord[k - 1L] else if (circ && length(wrap) > 0L) wrap[1] else NA_integer_
+    } else {
+      if (k < length(ord)) ord[k + 1L] else if (circ && length(wrap) > 0L) wrap[1] else NA_integer_
+    }
+  }
+
   for (idx in gene_idx) {
     # Apply tRNA punctuation model
-    before <- annotations[idx - 1, ] |>
-      dplyr::filter(type == "tRNA" & contig == annotations$contig[idx])
+    ctg <- annotations$contig[idx]
+    before_row <- neighbour_row(idx, "before")
+    before <- annotations[if (is.na(before_row)) 0L else before_row, ] |>
+      dplyr::filter(type == "tRNA" & contig == ctg)
     if (nrow(before) == 1) {
-      if (annotations$pos1[idx] - before$pos2 != 1) {
-        pos1_new <- before$pos2 + 1
-        if (annotations$pos2[idx] - pos1_new + 1 <= rules[[annotations$gene[idx]]][["max_len"]]) {
+      if (circ_pos(ctg, before$pos2 + 1) != annotations$pos1[idx]) {
+        pos1_new <- circ_pos(ctg, before$pos2 + 1)
+        if (feat_len(ctg, pos1_new, annotations$pos2[idx]) <= rules[[annotations$gene[idx]]][["max_len"]]) {
           pos1_change <- pos1_new - annotations$pos1[idx]
           annotations$pos1[idx] <- pos1_new
           annotations$notes[idx] <- semicolon_paste(
@@ -259,12 +312,15 @@ curate_mito_core <- function(
         }
       }
     }
-    after <- annotations[idx + 1, ] |>
-      dplyr::filter(type == "tRNA" & contig == annotations$contig[idx])
+    after_row <- neighbour_row(idx, "after")
+    # a single neighbour cannot bound both ends
+    if (!is.na(after_row) && isTRUE(after_row == before_row)) after_row <- NA_integer_
+    after <- annotations[if (is.na(after_row)) 0L else after_row, ] |>
+      dplyr::filter(type == "tRNA" & contig == ctg)
     if (nrow(after) == 1) {
-      if (after$pos1 - annotations$pos2[idx] != 1) {
-        pos2_new <- after$pos1 - 1
-        if (pos2_new - annotations$pos1[idx] + 1 <= rules[[annotations$gene[idx]]][["max_len"]]) {
+      if (circ_pos(ctg, annotations$pos2[idx] + 1) != after$pos1) {
+        pos2_new <- circ_pos(ctg, after$pos1 - 1)
+        if (feat_len(ctg, annotations$pos1[idx], pos2_new) <= rules[[annotations$gene[idx]]][["max_len"]]) {
           pos2_change <- pos2_new - annotations$pos2[idx]
           annotations$pos2[idx] <- pos2_new
           annotations$notes[idx] <- semicolon_paste(
@@ -274,7 +330,7 @@ curate_mito_core <- function(
         }
       }
     }
-    annotations$length[idx] <- 1 + abs(annotations$pos2[idx] - annotations$pos1[idx])
+    annotations$length[idx] <- feat_len(ctg, annotations$pos1[idx], annotations$pos2[idx])
   }
 
   # PCGs ----
@@ -342,8 +398,8 @@ curate_mito_core <- function(
     db <- file.path(nuc_ref_dir, paste0(gene, ".fas"))
     if (!file.exists(db)) next
     nt <- tryCatch({
-      s <- Biostrings::subseq(
-        assembly[contig_key[annotations$contig[i]]],
+      s <- ctg_seq(
+        annotations$contig[i],
         annotations$pos1[i], annotations$pos2[i]
       )
       if (identical(annotations$direction[i], "-")) s <- Biostrings::reverseComplement(s)
@@ -384,26 +440,22 @@ curate_mito_core <- function(
       if (direction == "+") {
         while (gaps_target > 0) {
           pos1_new <- pos1 - (3 * gaps_target)
-          if (pos1_new <= 0) {
+          if (pos1_new <= 0 && !is_circ(contig)) {
             gaps_target <- gaps_target - 1
             next
           }
-          new_start_codon <- Biostrings::subseq(
-            assembly[contig_key[contig]],
-            pos1_new,
-            pos1_new + 2
-          ) |>
+          new_start_codon <- ctg_seq(contig, pos1_new, pos1_new + 2) |>
             as.character()
           if (!new_start_codon %in% start_opts) {
             gaps_target <- gaps_target - 1
             next
           }
           cur$notes <- semicolon_paste(cur$notes, stringr::str_glue("extending start {pos1 - pos1_new} bp"))
-          cur$pos1 <- pos1 <- pos1_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos1 <- pos1 <- circ_pos(contig, pos1_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$start_codon <- start_codon <- new_start_codon
-          cur$translation <- translation <- Biostrings::subseq(
-            assembly[contig_key[contig]],
+          cur$translation <- translation <- ctg_seq(
+            contig,
             pos1,
             pos2 - .codon_len(stop_codon)
           ) |>
@@ -420,15 +472,11 @@ curate_mito_core <- function(
       if (direction == "-") {
         while (gaps_target > 0) {
           pos2_new <- pos2 + (3 * gaps_target)
-          if (pos2_new >= assembly[contig_key[contig]]@ranges@width) {
+          if (pos2_new >= ctg_len(contig) && !is_circ(contig)) {
             gaps_target <- gaps_target - 1
             next
           }
-          new_start_codon <- Biostrings::subseq(
-            assembly[contig_key[contig]],
-            pos2_new - 2,
-            pos2_new
-          ) |>
+          new_start_codon <- ctg_seq(contig, pos2_new - 2, pos2_new) |>
             Biostrings::reverseComplement() |>
             as.character()
           if (!new_start_codon %in% start_opts) {
@@ -436,11 +484,11 @@ curate_mito_core <- function(
             next
           }
           cur$notes <- notes <- semicolon_paste(notes, stringr::str_glue("extending start {pos2_new - pos2} bp"))
-          cur$pos2 <- pos2 <- pos2_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos2 <- pos2 <- circ_pos(contig, pos2_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$start_codon <- start_codon <- new_start_codon
-          cur$translation <- translation <- Biostrings::subseq(
-            assembly[contig_key[contig]],
+          cur$translation <- translation <- ctg_seq(
+            contig,
             pos1 + .codon_len(stop_codon),
             pos2
           ) |>
@@ -463,14 +511,14 @@ curate_mito_core <- function(
       if (direction == "+") {
         while (gaps_target > 0) {
           pos2_new <- pos2 - .codon_len(stop_codon) + 3 + (3 * gaps_target)
-          if ((pos2_new + 1) > assembly[contig_key[contig]]@ranges@width) {
+          if ((pos2_new + 1) > ctg_len(contig) && !is_circ(contig)) {
             gaps_target <- gaps_target - 1
             next
           }
-          new_stop_codon <- Biostrings::subseq(
-            assembly[contig_key[contig]],
+          new_stop_codon <- ctg_seq(
+            contig,
             pos2_new - 2,
-            min(pos2_new, assembly[contig_key[contig]]@ranges@width)
+            if (is_circ(contig)) pos2_new else min(pos2_new, ctg_len(contig))
           ) |>
             as.character()
           while (nchar(new_stop_codon) > 0 && !new_stop_codon %in% stop_opts) {
@@ -482,8 +530,8 @@ curate_mito_core <- function(
             next
           }
           # reject if new translation has internal stop codon
-          translation <- Biostrings::subseq(
-            assembly[contig_key[contig]],
+          translation <- ctg_seq(
+            contig,
             pos1,
             pos2_new - nchar(new_stop_codon)
           ) |>
@@ -497,8 +545,8 @@ curate_mito_core <- function(
             notes,
             stringr::str_glue("extending end {abs(pos2_new - pos2)} bp")
           )
-          cur$pos2 <- pos2 <- pos2_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos2 <- pos2 <- circ_pos(contig, pos2_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$stop_codon <- stop_codon <- new_stop_codon
           cur$translation <- translation
           refHits <- get_top_hits(
@@ -512,13 +560,13 @@ curate_mito_core <- function(
       if (direction == "-") {
         while (gaps_target > 0) {
           pos1_new <- pos1 + .codon_len(stop_codon) - 3 - (3 * gaps_target)
-          if ((pos1_new + 2) < 1) {
+          if ((pos1_new + 2) < 1 && !is_circ(contig)) {
             gaps_target <- gaps_target - 1
             next
           }
-          new_stop_codon <- Biostrings::subseq(
-            assembly[contig_key[contig]],
-            max(pos1_new, 1),
+          new_stop_codon <- ctg_seq(
+            contig,
+            if (is_circ(contig)) pos1_new else max(pos1_new, 1),
             pos1_new + 2
           ) |>
             Biostrings::reverseComplement() |>
@@ -535,8 +583,8 @@ curate_mito_core <- function(
             next
           }
           # reject if new translation has internal stop codon
-          translation <- Biostrings::subseq(
-            assembly[contig_key[contig]],
+          translation <- ctg_seq(
+            contig,
             pos1_new + nchar(new_stop_codon),
             pos2
           ) |>
@@ -551,8 +599,8 @@ curate_mito_core <- function(
             notes,
             stringr::str_glue("extending end {abs(pos1_new - pos1)} bp")
           )
-          cur$pos1 <- pos1 <- pos1_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos1 <- pos1 <- circ_pos(contig, pos1_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$stop_codon <- stop_codon <- new_stop_codon
           cur$translation <- translation
           refHits <- get_top_hits(
@@ -569,8 +617,8 @@ curate_mito_core <- function(
     ### START ----
     if (isTRUE(refHits$gap_leading[1] != 0) && (sum(refHits$gap_leading < 0L, na.rm = TRUE) / nrow(refHits)) > 0.5) {
       if (direction == "+") {
-        alt_starts <- Biostrings::subseq(
-          assembly[contig_key[contig]],
+        alt_starts <- ctg_seq(
+          contig,
           pos1 + 3,
           pos1 + 3 + (3 * max(abs(refHits$gap_leading[refHits$gap_leading < 0]))) - 1
         ) |>
@@ -588,7 +636,7 @@ curate_mito_core <- function(
             next
           }
           pos1_new <- pos1 + (3 * alt_idx)
-          translation_new <- Biostrings::subseq(assembly[contig_key[contig]], pos1_new, pos2 - .codon_len(stop_codon)) |>
+          translation_new <- ctg_seq(contig, pos1_new, pos2 - .codon_len(stop_codon)) |>
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
           refHits_new <- get_top_hits(
@@ -604,8 +652,8 @@ curate_mito_core <- function(
             notes,
             stringr::str_glue("trimming start {abs(pos1_new - pos1)} bp")
           )
-          cur$pos1 <- pos1 <- pos1_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos1 <- pos1 <- circ_pos(contig, pos1_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$start_codon <- start_codon <- names(alt_starts)[alt_idx]
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
@@ -613,8 +661,8 @@ curate_mito_core <- function(
         }
       }
       if (direction == "-") {
-        alt_starts <- Biostrings::subseq(
-          assembly[contig_key[contig]],
+        alt_starts <- ctg_seq(
+          contig,
           pos2 - 3 - (3 * max(abs(refHits$gap_leading[refHits$gap_leading < 0]))) + 1,
           pos2 - 3
         ) |>
@@ -633,7 +681,7 @@ curate_mito_core <- function(
             next
           }
           pos2_new <- pos2 - (3 * alt_idx)
-          translation_new <- Biostrings::subseq(assembly[contig_key[contig]], pos1 + .codon_len(stop_codon), pos2_new) |>
+          translation_new <- ctg_seq(contig, pos1 + .codon_len(stop_codon), pos2_new) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(genetic.code = genetic_code) |>
             as.character()
@@ -650,8 +698,8 @@ curate_mito_core <- function(
             notes,
             stringr::str_glue("trimming start {abs(pos2_new - pos2)} bp")
           )
-          cur$pos2 <- pos2 <- pos2_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos2 <- pos2 <- circ_pos(contig, pos2_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$start_codon <- start_codon <- names(alt_starts)[alt_idx]
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
@@ -663,8 +711,8 @@ curate_mito_core <- function(
     ### STOP ----
     if (isTRUE(refHits$gap_trailing[1] != 0) && (sum(refHits$gap_trailing < 0L, na.rm = TRUE) / nrow(refHits)) > 0.5) {
       if (direction == "+") {
-        alt_stops <- Biostrings::subseq(
-          assembly[contig_key[contig]],
+        alt_stops <- ctg_seq(
+          contig,
           pos2 - .codon_len(stop_codon) - (3 * max(abs(refHits$gap_trailing[refHits$gap_trailing < 0]))) + 1,
           pos2 - .codon_len(stop_codon)
         ) |>
@@ -684,8 +732,8 @@ curate_mito_core <- function(
             next
           }
           pos2_new <- pos2 - .codon_len(stop_codon) + 3 - (3 * alt_idx) - (3 - nchar(alt_stops[[alt_idx]]))
-          translation_new <- Biostrings::subseq(
-            assembly[contig_key[contig]],
+          translation_new <- ctg_seq(
+            contig,
             pos1,
             pos2_new - nchar(alt_stops[[alt_idx]])
           ) |>
@@ -704,8 +752,8 @@ curate_mito_core <- function(
             notes,
             stringr::str_glue("trimming end {abs(pos2_new - pos2)} bp")
           )
-          cur$pos2 <- pos2 <- pos2_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos2 <- pos2 <- circ_pos(contig, pos2_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$stop_codon <- stop_codon <- alt_stops[[alt_idx]]
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
@@ -713,8 +761,8 @@ curate_mito_core <- function(
         }
       }
       if (direction == "-") {
-        alt_stops <- Biostrings::subseq(
-          assembly[contig_key[contig]],
+        alt_stops <- ctg_seq(
+          contig,
           pos1 + .codon_len(stop_codon),
           pos1 + .codon_len(stop_codon) + (3 * max(abs(refHits$gap_trailing[refHits$gap_trailing < 0]))) - 1
         ) |>
@@ -735,8 +783,8 @@ curate_mito_core <- function(
             next
           }
           pos1_new <- pos1 + .codon_len(stop_codon) - 3 + (3 * alt_idx) + (3 - nchar(alt_stops[[alt_idx]]))
-          translation_new <- Biostrings::subseq(
-            assembly[contig_key[contig]],
+          translation_new <- ctg_seq(
+            contig,
             pos1 + nchar(alt_stops[[alt_idx]]),
             pos2
           ) |>
@@ -756,8 +804,8 @@ curate_mito_core <- function(
             notes,
             stringr::str_glue("trimming end {abs(pos1_new - pos1)} bp")
           )
-          cur$pos1 <- pos1 <- pos1_new
-          cur$length <- length <- abs(pos2 - pos1) + 1
+          cur$pos1 <- pos1 <- circ_pos(contig, pos1_new)
+          cur$length <- length <- feat_len(contig, pos1, pos2)
           cur$stop_codon <- stop_codon <- alt_stops[[alt_idx]]
           cur$translation <- translation <- translation_new
           refHits <- refHits_new
@@ -786,17 +834,25 @@ curate_mito_core <- function(
       if (idx == nrow(annotations)) break
       if (overlap_rules$stop) break
       if (.codon_len(annotations$stop_codon[idx]) < 1) break
-      codon_positions <- (annotations$pos2[idx] - .codon_len(annotations$stop_codon[idx]) + 1):annotations$pos2[idx]
+      ctg <- annotations$contig[idx]
+      codon_positions <- circ_pos(ctg, seq(
+        annotations$pos2[idx] - .codon_len(annotations$stop_codon[idx]) + 1,
+        annotations$pos2[idx]
+      ))
       overlaps <- annotations[(idx + 1):nrow(annotations), ] |>
         dplyr::filter(pos1 %in% codon_positions) |>
         dplyr::filter(direction == annotations$direction[idx])
       if (nrow(overlaps) != 1L) break
-      overlap <- sum(overlaps$pos1:overlaps$pos2 %in% codon_positions)
+      overlap <- sum(vapply(
+        codon_positions,
+        \(p) circ_overlap(p, p, overlaps$pos1, overlaps$pos2),
+        logical(1)
+      ))
       new_stop <- stringr::str_sub(annotations$stop_codon[idx], 1, .codon_len(annotations$stop_codon[idx]) - overlap)
       if (nchar(new_stop) < 1) break
       if (!new_stop %in% stop_opts) break
       annotations$stop_codon[idx] <- new_stop
-      annotations$pos2[idx] <- annotations$pos2[idx] - overlap
+      annotations$pos2[idx] <- circ_pos(ctg, annotations$pos2[idx] - overlap)
       annotations$length[idx] <- annotations$length[idx] - overlap
       annotations$notes[idx] <- semicolon_paste(
         annotations$notes[idx],
@@ -808,17 +864,25 @@ curate_mito_core <- function(
       if (idx == 1) break
       if (overlap_rules$stop) break
       if (.codon_len(annotations$stop_codon[idx]) < 1) break
-      codon_positions <- annotations$pos1[idx]:(annotations$pos1[idx] + .codon_len(annotations$stop_codon[idx]) - 1)
+      ctg <- annotations$contig[idx]
+      codon_positions <- circ_pos(ctg, seq(
+        annotations$pos1[idx],
+        annotations$pos1[idx] + .codon_len(annotations$stop_codon[idx]) - 1
+      ))
       overlaps <- annotations[1:(idx - 1), ] |>
         dplyr::filter(pos2 %in% codon_positions) |>
         dplyr::filter(direction == annotations$direction[idx])
       if (nrow(overlaps) != 1L) break
-      overlap <- sum(overlaps$pos1:overlaps$pos2 %in% codon_positions)
+      overlap <- sum(vapply(
+        codon_positions,
+        \(p) circ_overlap(p, p, overlaps$pos1, overlaps$pos2),
+        logical(1)
+      ))
       new_stop <- stringr::str_sub(annotations$stop_codon[idx], 1, .codon_len(annotations$stop_codon[idx]) - overlap)
       if (nchar(new_stop) < 1) break
       if (!new_stop %in% stop_opts) break
       annotations$stop_codon[idx] <- new_stop
-      annotations$pos1[idx] <- annotations$pos1[idx] + overlap
+      annotations$pos1[idx] <- circ_pos(ctg, annotations$pos1[idx] + overlap)
       annotations$length[idx] <- annotations$length[idx] - overlap
       annotations$notes[idx] <- semicolon_paste(
         annotations$notes[idx],

@@ -1,3 +1,49 @@
+# MitoPilot 1.5.3
+
+Released 2026-08-21. Container: `macguigand/mitopilot:1.5.3`
+
+## Bug Fixes
+
+### Origin-spanning features on circular assemblies
+
+A feature that runs across the origin of a circular assembly is stored with its start position after its end position. Nothing downstream expected that, so a single wrapping feature could stop a project outright.
+
+- **Curation no longer crashes on a wrapping feature.** Every boundary adjustment handed those coordinates straight to a sequence-extraction call that refuses a start after an end, so the whole curation step exited with an error and the run stopped. Sequence extraction and length are now wrap-aware, and extension or trimming may cross the origin on a circular contig. Linear assemblies behave exactly as before.
+- **Export writes a wrapping feature as two intervals** in the submission table. A single line spanning the origin does not mean "wraps" to table2asn, it means "minus strand", so the feature was being submitted backwards. Also fixed in export: the 3' end of a `transl_except`, minus-strand exon coordinates in the GFF, and a crash in the PCG outlier review when an exon wrapped.
+- **Validation checks are circular-aware.** Overlap, containment, and length tests measured a wrapping feature as if it ran the long way around the genome, so genuine overlaps went unreported and non-overlapping features were flagged.
+- **The control region keeps its extension when a neighbour wraps.** An origin-adjacent OH call is now bounded by the wrapping feature rather than by the contig edge. Three test samples were finishing with a stunted control region and a spurious "below minimum length" warning.
+- **The annotation editor handles wrapping throughout**: nudging boundaries, copy FASTA, rRNA alignment, the boundary viewer, the zoom track, the linearize guard, and merge / un-merge.
+- **Rotating an assembly now warns** when the requested start gene is not present, and when the new origin would cut through a feature.
+- **MITOS2 annotations use the right contig length.** On a multi-contig unit the first contig's length was applied to every contig, which mis-placed wrap calculations on all the others.
+
+### Database writes
+
+- **Scaffold mappings could be wiped.** The delete and insert halves of a scaffold-mapping update were sent as two independent database operators with no guaranteed ordering, so the delete could land last and leave the table empty. Both now run inside a single transaction from the pipeline driver.
+
+### HPC
+
+- **NOAA SEDNA memory now scales with the retry attempt**, matching every other cluster profile. A retry was re-requesting the same memory that had just failed, so a step that ran out of memory would fail again identically.
+
+### Container builds
+
+- **A stale package archive can no longer be shipped in the image.** The Dockerfile picks up the package archive by name order, so a leftover build of an older version won out over the new one and the container quietly shipped the wrong MitoPilot. All three deploy scripts now clear old archives first.
+
+## Documentation
+
+- The website has been rewritten and reorganized: **Get Started is now a full tutorial** built around the bundled test project, the README is a landing page with installation moved to its own article, and the curation documentation is clade-neutral with the ruleset chosen in the app rather than hand-written.
+- The article on handling difficult assemblies replaces the old multiple-assemblies page, the reference index is grouped by topic, screenshots are regenerated for the current app, and a citation file is included with the package.
+- A maintainer guide for building the container was added, and the legacy GenBank download script was retired.
+
+## Internal
+
+- `run_app()` is no longer exported. `MitoPilot()` is the documented way to start the app and passes everything through, so nothing changes for users.
+- The documentation build is capped at 20 minutes so a stalled runner fails fast instead of hanging for over an hour.
+
+**Note**
+To update older MitoPilot projects, please run [`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html). This will add any missing fields to the SQL database and attempt to update the Docker/Singularity container version in your project `.config` file.
+
+**Full Changelog**: https://github.com/Smithsonian/MitoPilot/compare/1.5.2...1.5.3
+
 # MitoPilot 1.5.2
 
 Released 2026-08-14. Container: `macguigand/mitopilot:1.5.2`

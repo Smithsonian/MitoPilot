@@ -135,6 +135,52 @@ annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Circular-coordinate helpers ----
+    # A feature spanning the origin of a circular unit is stored pos1 > pos2, and
+    # a boundary nudge can push a coordinate off either end. These wrap onto the
+    # contig and read across the origin. On a linear unit they are identity /
+    # plain subseq, so linear editing is unchanged.
+    unit_is_circ <- function() isTRUE(rv$updating$topology == "circular")
+    # Contig length. Prefer the loaded sequence; otherwise fall back to the
+    # per-base coverage table, the same extent the figures use.
+    .seq_width <- function(s = NULL) {
+      if (!is.null(s)) return(as.integer(Biostrings::width(s)[[1]]))
+      as.integer(max(
+        c(rv$coverage$Position, rv$annotations$pos1, rv$annotations$pos2),
+        na.rm = TRUE
+      ))
+    }
+    circ_edit_pos <- function(p, s) {
+      if (!unit_is_circ()) return(p)
+      wrap_pos(p, .seq_width(s))
+    }
+    circ_edit_seq <- function(s, p1, p2) {
+      extract_circ_region(s, circ_edit_pos(p1, s), circ_edit_pos(p2, s))
+    }
+    circ_edit_len <- function(p1, p2, s = NULL) {
+      if (p1 <= p2 || !unit_is_circ()) return(as.integer(abs(p2 - p1) + 1L))
+      as.integer(circ_len(p1, p2, .seq_width(s)))
+    }
+    # Bounds for a boundary nudge. A linear unit stops at the contig ends and at
+    # the opposite boundary. A circular one may cross the origin, so the codon
+    # search is bounded by the feature growing to the whole contig instead - and
+    # it must still bound, or the search loop spins forever.
+    edit_grow_ok <- function(p1, p2, s) {
+      if (unit_is_circ()) {
+        circ_edit_len(p1, p2, s) < .seq_width(s)
+      } else {
+        p1 > 0 && p2 <= .seq_width(s)
+      }
+    }
+    edit_shrink_ok <- function(p1, p2, s) {
+      if (unit_is_circ()) circ_edit_len(p1, p2, s) > 3L else p1 < p2
+    }
+    # Hard bound on a codon search. A circular unit has no edge to stop at and a
+    # feature that grows past its own far end shrinks again, so the bounds above
+    # cannot end a scan that never finds a matching codon. One pass round the
+    # contig is always enough.
+    .codon_budget <- function(s = NULL) as.integer(.seq_width(s) %/% 3L) + 1L
+
     # Skips the count recompute on the initial annotation load (validated counts
     # already in the db); set TRUE right before each load, see update_counts().
     skip_count_update <- FALSE
@@ -774,7 +820,9 @@ annotations_details_server <- function(id, rv) {
         dplyr::filter(scaffold == !!rv$annotations$scaffold[idx]) |>
         dplyr::collect() |>
         dplyr::pull(sequence) |>
-        stringr::str_sub(rv$annotations$pos1[idx], rv$annotations$pos2[idx])
+        Biostrings::DNAString() |>
+        extract_circ_region(rv$annotations$pos1[idx], rv$annotations$pos2[idx]) |>
+        as.character()
       session$sendCustomMessage(
         "copy_to_clipboard", list(text = paste(name, seq, sep = "\n"))
       )
@@ -1792,16 +1840,21 @@ annotations_details_server <- function(id, rv) {
       sg <- rv$annotations |> dplyr::filter(pos1 > 0)
       sg_c1 <- s_pos_to_col(sg$pos1)
       sg_c2 <- s_pos_to_col(sg$pos2)
-      sg_lo <- pmin(sg_c1, sg_c2)
-      sg_hi <- pmax(sg_c1, sg_c2)
+      # A gene spanning the origin (pos1 > pos2) covers two arcs in alignment
+      # columns. pmin/pmax would collapse it into everything in between and draw
+      # a full-width block where the gene is not, so split it into its two arms.
+      wrapped <- which(sg_c1 > sg_c2)
+      sg_idx <- c(seq_len(nrow(sg)), wrapped)
+      sg_lo <- c(sg_c1, rep(1L, length(wrapped)))
+      sg_hi <- c(ifelse(sg_c1 > sg_c2, aln_len, sg_c2), sg_c2[wrapped])
       sg_in <- sg_hi >= win_start & sg_lo <= win_end
       sample_gene_df <- if (any(sg_in)) {
         data.frame(
           xmin = to_local(pmax(sg_lo[sg_in], win_start)) - 0.5,
           xmax = to_local(pmin(sg_hi[sg_in], win_end)) + 0.5,
-          gene = sg$gene[sg_in],
-          fill = type_color(sg$type[sg_in]),
-          forward = sg$direction[sg_in] == "+",
+          gene = sg$gene[sg_idx][sg_in],
+          fill = type_color(sg$type[sg_idx][sg_in]),
+          forward = sg$direction[sg_idx][sg_in] == "+",
           stringsAsFactors = FALSE
         )
       } else NULL
@@ -2036,7 +2089,7 @@ annotations_details_server <- function(id, rv) {
         scaffold = rv$annotations$scaffold[sel], con = session$userData$con
       ), error = function(e) NULL)
       focal_seq <- tryCatch({
-        s <- Biostrings::subseq(asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel])
+        s <- extract_circ_region(asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel])
         if (rv$annotations$direction[sel] == "-") s <- Biostrings::reverseComplement(s)
         as.character(s)
       }, error = function(e) NA_character_)
@@ -2064,7 +2117,7 @@ annotations_details_server <- function(id, rv) {
                               error = function(e) NULL)
           if (!is.null(ref_dna)) {
             ref_seq_chr <- tryCatch({
-              s <- Biostrings::subseq(ref_dna, refrow$pos1, refrow$pos2)
+              s <- extract_circ_region(ref_dna, refrow$pos1, refrow$pos2)
               if (identical(refrow$direction, "-")) s <- Biostrings::reverseComplement(s)
               as.character(s)
             }, error = function(e) NULL)
@@ -2345,7 +2398,13 @@ annotations_details_server <- function(id, rv) {
       flank <- 12L; inN <- 15L
       grp <- grp_of(sel)
       is_join <- !is.na(grp)
-      seglen <- function(i) as.integer(abs(rv$annotations$pos2[i] - rv$annotations$pos1[i]) + 1L)
+      seglen <- function(i) circ_edit_len(rv$annotations$pos1[i], rv$annotations$pos2[i], asm)
+      # coordinate wrapped onto the contig (identity on a linear unit)
+      wrapc <- function(p) circ_edit_pos(as.integer(p), asm)
+      # bases from `from` forward around the circle to `to` (0 when equal)
+      fwd_off <- function(from, to) {
+        if (unit_is_circ()) circ_len(from, to, width) - 1L else as.integer(to - from)
+      }
       # Members of this gene, 5'->3'. A single-feature PCG is its own only member
       # (no neighbouring segments to highlight).
       mem <- if (is_join) join_members(grp) else sel
@@ -2354,6 +2413,9 @@ annotations_details_server <- function(id, rv) {
       this_len <- seglen(sel)
 
       gseq <- function(a, b) {
+        if (unit_is_circ()) {
+          return(as.character(extract_circ_region(asm, wrapc(a), wrapc(b))))
+        }
         a <- max(1L, as.integer(a)); b <- min(as.integer(width), as.integer(b))
         if (a > b) return("")
         as.character(Biostrings::subseq(asm, a, b))
@@ -2380,16 +2442,18 @@ annotations_details_server <- function(id, rv) {
       # coloured AND grouped into the spliced reading frame of that exon.
       mem_len <- vapply(mem, seglen, integer(1))
       mem_cum <- cumsum(c(0L, mem_len))[seq_along(mem)]
-      lo_of <- vapply(mem, function(i) as.integer(min(rv$annotations$pos1[i], rv$annotations$pos2[i])), integer(1))
-      hi_of <- vapply(mem, function(i) as.integer(max(rv$annotations$pos1[i], rv$annotations$pos2[i])), integer(1))
+      # Stored bounds, not min/max: an origin-spanning member has pos1 > pos2 and
+      # min/max would turn its arc into the complementary one.
+      lo_of <- vapply(mem, function(i) as.integer(rv$annotations$pos1[i]), integer(1))
+      hi_of <- vapply(mem, function(i) as.integer(rv$annotations$pos2[i]), integer(1))
       pos_member <- function(pos) {
-        hit <- which(pos >= lo_of & pos <= hi_of)
+        hit <- which(circ_overlap(pos, pos, lo_of, hi_of))
         if (length(hit)) hit[1] else 0L
       }
       # Spliced-CDS phase (bases already used in the current codon) at a genomic
       # position within member k, using k's 5' end as its coding start.
       pos_phase <- function(pos, k) {
-        off <- if (dir == "-") hi_of[k] - pos else pos - lo_of[k]
+        off <- if (dir == "-") fwd_off(pos, hi_of[k]) else fwd_off(lo_of[k], pos)
         (mem_cum[k] + off) %% 3
       }
       comp1 <- function(chars) {
@@ -2404,10 +2468,19 @@ annotations_details_server <- function(id, rv) {
       # are ascending genomic coords; revcomp reverses + complements for display
       # on the - strand so it reads 5'->3'.
       flank_span <- function(gstart, gend, revcomp) {
-        gstart <- max(1L, as.integer(gstart)); gend <- min(as.integer(width), as.integer(gend))
-        if (gstart > gend) return(NULL)
-        chars <- strsplit(as.character(Biostrings::subseq(asm, gstart, gend)), "")[[1]]
-        positions <- gstart:gend
+        if (unit_is_circ()) {
+          n <- as.integer(gend) - as.integer(gstart) + 1L
+          if (n < 1L) return(NULL)
+          positions <- wrapc(seq.int(as.integer(gstart), as.integer(gend)))
+          chars <- strsplit(as.character(
+            extract_circ_region(asm, positions[1], positions[n])
+          ), "")[[1]]
+        } else {
+          gstart <- max(1L, as.integer(gstart)); gend <- min(as.integer(width), as.integer(gend))
+          if (gstart > gend) return(NULL)
+          chars <- strsplit(as.character(Biostrings::subseq(asm, gstart, gend)), "")[[1]]
+          positions <- gstart:gend
+        }
         if (revcomp) { chars <- rev(comp1(chars)); positions <- rev(positions) }
         cls <- vapply(positions, pos_member, integer(1))
         spans <- list(); i <- 1L; n <- length(chars)
@@ -2430,7 +2503,11 @@ annotations_details_server <- function(id, rv) {
       # Whether more assembly sequence continues past the shown flank at each end
       # (i.e. we are not at a linear-assembly boundary). Used to add a "..."
       # continuation marker at the outer edge of each line.
-      if (dir == "-") {
+      if (unit_is_circ()) {
+        # a circle always continues past the shown flank
+        more5 <- TRUE
+        more3 <- TRUE
+      } else if (dir == "-") {
         more5 <- (p2 + flank) < width
         more3 <- (p1 - flank) > 1L
       } else {
@@ -2443,10 +2520,10 @@ annotations_details_server <- function(id, rv) {
       # (intron / neighbouring-segment) bases as if they were coding.
       if (dir == "-") {
         flank5 <- flank_span(p2 + 1, p2 + flank, TRUE)
-        in5 <- rc(gseq(max(p1, p2 - inN + 1), p2))
+        in5 <- rc(gseq(wrapc(p2 - min(inN, this_len) + 1L), p2))
       } else {
         flank5 <- flank_span(p1 - flank, p1 - 1, FALSE)
-        in5 <- gseq(p1, min(p2, p1 + inN - 1))
+        in5 <- gseq(p1, wrapc(p1 + min(inN, this_len) - 1L))
       }
       line5 <- tags$div(
         style = "font-family: 'Courier New', Courier, monospace; white-space: nowrap;",
@@ -2457,9 +2534,9 @@ annotations_details_server <- function(id, rv) {
       # 3' end of the segment: inside-codons | flank
       phase3 <- (cum_before + max(0L, this_len - inN)) %% 3
       if (dir == "-") {
-        in3 <- rc(gseq(p1, min(p2, p1 + inN - 1))); flank3 <- flank_span(p1 - flank, p1 - 1, TRUE)
+        in3 <- rc(gseq(p1, wrapc(p1 + min(inN, this_len) - 1L))); flank3 <- flank_span(p1 - flank, p1 - 1, TRUE)
       } else {
-        in3 <- gseq(max(p1, p2 - inN + 1), p2); flank3 <- flank_span(p2 + 1, p2 + flank, FALSE)
+        in3 <- gseq(wrapc(p2 - min(inN, this_len) + 1L), p2); flank3 <- flank_span(p2 + 1, p2 + flank, FALSE)
       }
       line3 <- tags$div(
         style = "font-family: 'Courier New', Courier, monospace; white-space: nowrap;",
@@ -2624,13 +2701,24 @@ annotations_details_server <- function(id, rv) {
         start <- rv$annotations$pos2[selected()] + 1
       }
 
-      # Ensure that the split does not occur inside any annotations
-      chk <- rv$annotations |>
-        dplyr::filter(pos1 < start & pos2 > start)
+      # Ensure that the split does not occur inside any annotation. The cut lands
+      # immediately before `start`, so a feature is split when it covers both
+      # `start` and the base before it - a circular test, since a feature already
+      # spanning the origin covers positions on both sides of position 1.
+      asmb_w <- .seq_width()
+      cut_at <- wrap_pos(as.integer(start), asmb_w)
+      before_cut <- wrap_pos(as.integer(start) - 1L, asmb_w)
+      chk <- rv$annotations[
+        circ_overlap(cut_at, cut_at, rv$annotations$pos1, rv$annotations$pos2) &
+          circ_overlap(before_cut, before_cut, rv$annotations$pos1, rv$annotations$pos2),
+      ]
       if (nrow(chk) > 0) {
         shinyWidgets::sendSweetAlert(
           title = "Operation failed",
-          text = "The selected break point would split the {rv$annotations$gene[selected()]} annotation."
+          text = stringr::str_glue(
+            "The selected break point would split the ",
+            "{paste(unique(chk$gene), collapse = ', ')} annotation."
+          )
         )
         req(F)
       }
@@ -3279,13 +3367,13 @@ annotations_details_server <- function(id, rv) {
       if (length(grp) != 1 || is.na(grp)) return(FALSE)
       others <- setdiff(join_members(grp), idx)
       if (length(others) == 0) return(FALSE)
-      lo <- min(new_pos1, new_pos2)
-      hi <- max(new_pos1, new_pos2)
-      any(vapply(others, function(i) {
-        olo <- min(rv$annotations$pos1[i], rv$annotations$pos2[i])
-        ohi <- max(rv$annotations$pos1[i], rv$annotations$pos2[i])
-        lo <= ohi && olo <= hi
-      }, logical(1)))
+      # circ_overlap, not min/max: min/max on an origin-spanning segment tests
+      # the complementary arc, so real collisions are missed and distant
+      # segments are refused.
+      any(circ_overlap(
+        new_pos1, new_pos2,
+        rv$annotations$pos1[others], rv$annotations$pos2[others]
+      ))
     }
 
     # Edit Annotation ----
@@ -3403,43 +3491,45 @@ annotations_details_server <- function(id, rv) {
       if (rv$annotations$direction[selected()] == "+") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos1 <- pos1 - 3
-            req(pos1 > 0)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos1 <- circ_edit_pos(pos1 - 3, rv$editing$assembly)
+            req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
               as.character()
             if (isTRUE(input$single_codon)) break
             keep_going <- codon %nin% rv$editing$params$start_codons
           }
         }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
           Biostrings::translate(genetic.code = rv$gcode)
       }
       if (rv$annotations$direction[selected()] == "-") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos2 <- pos2 + 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos2 <- circ_edit_pos(pos2 + 3, rv$editing$assembly)
+            req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
               Biostrings::reverseComplement() |>
               as.character()
             if (isTRUE(input$single_codon)) break
             keep_going <- codon %nin% rv$editing$params$start_codons
           }
         }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
           Biostrings::translate(genetic.code = rv$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$start_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`start-add`, {
@@ -3461,44 +3551,46 @@ annotations_details_server <- function(id, rv) {
       if (rv$annotations$direction[selected()] == "+") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos1 <- pos1 + 3
-            req(pos1 < pos2)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos1 <- circ_edit_pos(pos1 + 3, rv$editing$assembly)
+            req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
               as.character()
             if (isTRUE(input$single_codon)) break
             keep_going <- codon %nin% rv$editing$params$start_codons
           }
         }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
           Biostrings::translate(genetic.code = rv$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos2 <- pos2 - 3
-            req(pos2 > pos1)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos2 <- circ_edit_pos(pos2 - 3, rv$editing$assembly)
+            req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
               Biostrings::reverseComplement() |>
               as.character()
             if (isTRUE(input$single_codon)) break
             keep_going <- codon %nin% rv$editing$params$start_codons
           }
         }
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
           Biostrings::translate(genetic.code = rv$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$start_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`start-minus`, {
@@ -3518,22 +3610,23 @@ annotations_details_server <- function(id, rv) {
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
-        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
+        pos2 <- circ_edit_pos(pos2 + (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos2 <- pos2 + 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos2 <- circ_edit_pos(pos2 + 3, rv$editing$assembly)
+            req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
               as.character() |>
               stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
               na.omit() |>
               purrr::pluck(1)
             if (isTRUE(input$single_codon) && length(codon) > 0) break
             if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos2 - 2, pos2) |>
+              codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
                 as.character()
               break
             }
@@ -3541,21 +3634,22 @@ annotations_details_server <- function(id, rv) {
             keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
           }
         }
-        pos2 <- pos2 - (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
+        pos2 <- circ_edit_pos(pos2 - (3 - nchar(codon)), rv$editing$assembly)
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(codon)) |>
           Biostrings::translate(genetic.code = rv$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
+        pos1 <- circ_edit_pos(pos1 - (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos1 <- pos1 - 3
-            req(pos1 >= 1)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos1 <- circ_edit_pos(pos1 - 3, rv$editing$assembly)
+            req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
               Biostrings::reverseComplement() |>
               as.character() |>
               stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
@@ -3563,8 +3657,7 @@ annotations_details_server <- function(id, rv) {
               purrr::pluck(1)
             if (isTRUE(input$single_codon) && length(codon) > 0) break
             if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos1, pos1 + 2) |>
+              codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
                 Biostrings::reverseComplement() |>
                 as.character()
               break
@@ -3573,16 +3666,15 @@ annotations_details_server <- function(id, rv) {
             keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
           }
         }
-        pos1 <- pos1 + (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
+        pos1 <- circ_edit_pos(pos1 + (3 - nchar(codon)), rv$editing$assembly)
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
           Biostrings::translate(genetic.code = rv$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$stop_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`stop-add`, {
@@ -3602,14 +3694,16 @@ annotations_details_server <- function(id, rv) {
       pos1 <- rv$annotations$pos1[selected()]
       pos2 <- rv$annotations$pos2[selected()]
       if (rv$annotations$direction[selected()] == "+") {
-        pos2 <- pos2 + (3 - nchar(rv$annotations$stop_codon[selected()]))
+        pos2 <- circ_edit_pos(pos2 + (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos2 <- pos2 - 3
-            req(pos2 <= rv$editing$assembly@ranges@width)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos2 - 2, pos2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos2 <- circ_edit_pos(pos2 - 3, rv$editing$assembly)
+            req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
               as.character() |>
               stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
               na.omit() |>
@@ -3618,8 +3712,7 @@ annotations_details_server <- function(id, rv) {
               break
             }
             if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos2 - 2, pos2) |>
+              codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
                 as.character()
               break
             }
@@ -3627,21 +3720,22 @@ annotations_details_server <- function(id, rv) {
             keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
           }
         }
-        pos2 <- pos2 - (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1, pos2 - nchar(codon)) |>
+        pos2 <- circ_edit_pos(pos2 - (3 - nchar(codon)), rv$editing$assembly)
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(codon)) |>
           Biostrings::translate(genetic.code = rv$gcode) |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
-        pos1 <- pos1 - (3 - nchar(rv$annotations$stop_codon[selected()]))
+        pos1 <- circ_edit_pos(pos1 - (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
-            pos1 <- pos1 + 3
-            req(pos1 >= 1)
-            codon <- rv$editing$assembly |>
-              Biostrings::subseq(pos1, pos1 + 2) |>
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
+            pos1 <- circ_edit_pos(pos1 + 3, rv$editing$assembly)
+            req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
+            codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
               Biostrings::reverseComplement() |>
               as.character() |>
               stringr::str_extract(paste0("^", rv$editing$params$stop_codons)) |>
@@ -3651,8 +3745,7 @@ annotations_details_server <- function(id, rv) {
               break
             }
             if (isTRUE(input$single_codon) && length(codon) == 0) {
-              codon <- rv$editing$assembly |>
-                Biostrings::subseq(pos1, pos1 + 2) |>
+              codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
                 Biostrings::reverseComplement() |>
                 as.character()
               break
@@ -3661,16 +3754,15 @@ annotations_details_server <- function(id, rv) {
             keep_going <- !any(stringr::str_detect(rv$editing$params$stop_codons, paste0("^", codon)))
           }
         }
-        pos1 <- pos1 + (3 - nchar(codon))
-        rv$annotations$translation[selected()] <- rv$editing$assembly |>
-          Biostrings::subseq(pos1 + nchar(codon), pos2) |>
+        pos1 <- circ_edit_pos(pos1 + (3 - nchar(codon)), rv$editing$assembly)
+        rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
           Biostrings::translate(genetic.code = rv$gcode) |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
-      rv$annotations$length[selected()] <- abs(pos1 - pos2) + 1
+      rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$stop_codon[selected()] <- unname(codon)
     })
     observeEvent(input$`stop-minus`, {
@@ -3864,9 +3956,9 @@ annotations_details_server <- function(id, rv) {
       } else {
         pos2 <- pos2 + (if (outward) step else -step)
       }
-      pos1 <- max(1L, as.integer(pos1))
-      pos2 <- min(as.integer(width), as.integer(pos2))
-      req(pos1 < pos2)
+      pos1 <- if (unit_is_circ()) circ_edit_pos(pos1, rv$editing$assembly) else max(1L, as.integer(pos1))
+      pos2 <- if (unit_is_circ()) circ_edit_pos(pos2, rv$editing$assembly) else min(as.integer(width), as.integer(pos2))
+      req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
       # Block edits that would push this segment into a neighbouring segment of
       # the same joined gene.
       if (seg_would_overlap(sel, pos1, pos2)) {
@@ -3879,7 +3971,7 @@ annotations_details_server <- function(id, rv) {
       }
       rv$annotations$pos1[sel] <- pos1
       rv$annotations$pos2[sel] <- pos2
-      rv$annotations$length[sel] <- abs(pos2 - pos1) + 1L
+      rv$annotations$length[sel] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       # rRNA: moving an end means the exact boundary is uncertain, so auto-flag it
       # partial. For a joined-PCG segment the moved end is usually an internal
       # splice junction (not a partial gene end), so do not auto-flag.
@@ -4247,6 +4339,21 @@ annotations_details_server <- function(id, rv) {
         req(F)
       }
 
+      # A member spanning the origin is stored pos1 > pos2, and min/max over it
+      # yields the complementary arc - silently discarding the real gene. There
+      # is no unambiguous "span" across an origin, so refuse instead of guessing.
+      if (any(merge_anns$pos1 > merge_anns$pos2)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Cannot span the origin",
+          text = paste(
+            "One of these annotations crosses the start of the assembly, so a",
+            "spanned region is ambiguous. Rotate the assembly first, or join the",
+            "segments instead."
+          ),
+          type = "warning"
+        )
+        req(F)
+      }
       new_pos1 <- min(merge_anns$pos1)
       new_pos2 <- max(merge_anns$pos2)
       direction <- merge_anns$direction[1]
@@ -4267,29 +4374,23 @@ annotations_details_server <- function(id, rv) {
           con = session$userData$con
         )
         if (direction == "+") {
-          merged$start_codon <- assembly |>
-            Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+          merged$start_codon <- extract_circ_region(assembly, new_pos1, new_pos1 + 2) |>
             as.character()
-          merged$stop_codon <- assembly |>
-            Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+          merged$stop_codon <- extract_circ_region(assembly, new_pos2 - 2, new_pos2) |>
             as.character()
-          merged$translation <- assembly |>
-            Biostrings::subseq(new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
+          merged$translation <- extract_circ_region(assembly, new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
             Biostrings::translate(
               genetic.code = rv$gcode
             ) |>
             as.character()
         } else {
-          merged$start_codon <- assembly |>
-            Biostrings::subseq(new_pos2 - 2, new_pos2) |>
+          merged$start_codon <- extract_circ_region(assembly, new_pos2 - 2, new_pos2) |>
             Biostrings::reverseComplement() |>
             as.character()
-          merged$stop_codon <- assembly |>
-            Biostrings::subseq(new_pos1, new_pos1 + 2) |>
+          merged$stop_codon <- extract_circ_region(assembly, new_pos1, new_pos1 + 2) |>
             Biostrings::reverseComplement() |>
             as.character()
-          merged$translation <- assembly |>
-            Biostrings::subseq(new_pos1 + nchar(merged$stop_codon), new_pos2) |>
+          merged$translation <- extract_circ_region(assembly, new_pos1 + nchar(merged$stop_codon), new_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
               genetic.code = rv$gcode
@@ -4723,7 +4824,7 @@ annotations_details_server <- function(id, rv) {
             gene = orig_gene,
             pos1 = orig_pos1,
             pos2 = orig_pos2,
-            length = abs(orig_pos2 - orig_pos1) + 1,
+            length = circ_edit_len(orig_pos1, orig_pos2),
             notes = stringr::str_remove(notes, "^DELETED: from \\d+-\\d+(; )?"),
             edited = 1L,
             time_stamp = as.numeric(Sys.time())
@@ -4769,42 +4870,30 @@ annotations_details_server <- function(id, rv) {
         dplyr::mutate(
           pos1 = merged_orig_pos1,
           pos2 = merged_orig_pos2,
-          length = abs(merged_orig_pos2 - merged_orig_pos1) + 1,
+          length = circ_edit_len(merged_orig_pos1, merged_orig_pos2, assembly),
           notes = stringr::str_remove(notes, "^MERGED:[^;]*(; )?"),
           edited = 1L,
           time_stamp = as.numeric(Sys.time())
         )
       if (merged_row$type == "PCG") {
         if (direction == "+") {
-          reverted$start_codon <- assembly |>
-            Biostrings::subseq(merged_orig_pos1, merged_orig_pos1 + 2) |>
+          reverted$start_codon <- extract_circ_region(assembly, merged_orig_pos1, merged_orig_pos1 + 2) |>
             as.character()
-          reverted$stop_codon <- assembly |>
-            Biostrings::subseq(merged_orig_pos2 - 2, merged_orig_pos2) |>
+          reverted$stop_codon <- extract_circ_region(assembly, merged_orig_pos2 - 2, merged_orig_pos2) |>
             as.character()
-          reverted$translation <- assembly |>
-            Biostrings::subseq(
-              merged_orig_pos1,
-              merged_orig_pos2 - nchar(reverted$stop_codon)
-            ) |>
+          reverted$translation <- extract_circ_region(assembly, merged_orig_pos1, merged_orig_pos2 - nchar(reverted$stop_codon)) |>
             Biostrings::translate(
               genetic.code = rv$gcode
             ) |>
             as.character()
         } else {
-          reverted$start_codon <- assembly |>
-            Biostrings::subseq(merged_orig_pos2 - 2, merged_orig_pos2) |>
+          reverted$start_codon <- extract_circ_region(assembly, merged_orig_pos2 - 2, merged_orig_pos2) |>
             Biostrings::reverseComplement() |>
             as.character()
-          reverted$stop_codon <- assembly |>
-            Biostrings::subseq(merged_orig_pos1, merged_orig_pos1 + 2) |>
+          reverted$stop_codon <- extract_circ_region(assembly, merged_orig_pos1, merged_orig_pos1 + 2) |>
             Biostrings::reverseComplement() |>
             as.character()
-          reverted$translation <- assembly |>
-            Biostrings::subseq(
-              merged_orig_pos1 + nchar(reverted$stop_codon),
-              merged_orig_pos2
-            ) |>
+          reverted$translation <- extract_circ_region(assembly, merged_orig_pos1 + nchar(reverted$stop_codon), merged_orig_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
               genetic.code = rv$gcode
@@ -4829,7 +4918,7 @@ annotations_details_server <- function(id, rv) {
             gene = orig_gene,
             pos1 = p1,
             pos2 = p2,
-            length = abs(p2 - p1) + 1,
+            length = circ_edit_len(p1, p2),
             notes = stringr::str_remove(notes, "^DELETED: from \\d+-\\d+(; )?"),
             edited = 1L,
             time_stamp = as.numeric(Sys.time())

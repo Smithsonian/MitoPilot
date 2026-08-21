@@ -268,6 +268,22 @@ trim_assembly_ends <- function(con, id, path, scaffold, dir_out) {
   if (from <= 1L && to >= n) {
     stop("The annotations already span the whole assembly; nothing to trim.", call. = FALSE)
   }
+  # MIN(pos1)/MAX(pos2) does not describe a feature that spans the origin
+  # (pos1 > pos2), and the constant shift below would drive its coordinates
+  # negative. Refuse rather than corrupt them.
+  wrapped <- DBI::dbGetQuery(
+    con,
+    "SELECT COUNT(*) n FROM annotations
+     WHERE ID = ? AND path = ? AND scaffold = ? AND pos1 > 0 AND pos1 > pos2",
+    params = key
+  )
+  if (isTRUE(wrapped$n[1] > 0)) {
+    stop(
+      "This unit has a feature spanning the start of the assembly, so its ends ",
+      "cannot be trimmed. Rotate so no feature crosses the start, then trim.",
+      call. = FALSE
+    )
+  }
 
   cov_fn <- resolve_unit_coverage_file(dir_out, id, path, scaffold)
   cov <- if (file.exists(cov_fn)) tryCatch(utils::read.csv(cov_fn), error = function(e) NULL) else NULL

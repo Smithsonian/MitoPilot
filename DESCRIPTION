@@ -1,6 +1,6 @@
 Package: MitoPilot
 Title: Mitogenome assembly, annotation, and curation
-Version: 1.5.2
+Version: 1.5.3
 Authors@R: c(
     person("Devin", "Leopold", , "devin.leopold@gmail.com", role = c("aut")),
     person("Dan", "MacGuigan", , "macguigand@si.edu", role = c("aut", "cre"))
@@ -64,7 +64,8 @@ Imports:
     httr2
 Suggests:
     knitr,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    withr
 VignetteBuilder:
     knitr
 biocViews:

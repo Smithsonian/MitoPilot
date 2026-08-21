@@ -163,6 +163,75 @@ circ_overlap_len <- function(p1, p2, q1, q2, L) {
   total
 }
 
+#' Extend an OH call to the (putative) full-length control region
+#'
+#' MITOS2 reports the origin of replication (OH) as a short locus; the control
+#' region is taken to fill the gap between its neighbours. The first/last row on
+#' a contig is normally bounded by the contig edges - but a feature spanning the
+#' origin sorts last by `pos1` while also occupying `[1, pos2]`, so it, not the
+#' edge, is what bounds an OH sitting at either end of the table.
+#'
+#' @param annotations annotation table, sorted by contig then pos1
+#' @param contig_lens named vector of contig lengths
+#'
+#' @return `annotations` with each OH row renamed "ctrl" and extended
+#'
+#' @noRd
+extend_oh_to_ctrl <- function(annotations, contig_lens) {
+  for (idx in which(annotations$gene == "OH")) {
+    ctg <- annotations$contig[idx]
+    L <- contig_lens[[ctg]]
+    ctg_rows <- which(annotations$contig == ctg)
+    # every origin-spanning feature on this contig, the OH itself excluded
+    wrapped <- setdiff(
+      ctg_rows[annotations$pos1[ctg_rows] > annotations$pos2[ctg_rows]], idx
+    )
+
+    pos1 <- if (idx != min(ctg_rows)) {
+      annotations$pos2[idx - 1] + 1
+    } else if (length(wrapped) > 0) {
+      # clear ALL of them: stopping after the first leaves the ctrl region
+      # overlapping any feature that reaches further past the origin
+      max(annotations$pos2[wrapped]) + 1
+    } else {
+      1
+    }
+
+    pos2 <- if (idx != max(ctg_rows)) {
+      annotations$pos1[idx + 1] - 1
+    } else if (length(wrapped) > 0) {
+      min(annotations$pos1[wrapped]) - 1
+    } else {
+      L
+    }
+
+    # The bounds cross when the OH itself overlaps a neighbour. Keep the called
+    # coordinates rather than emitting an inverted region, which every
+    # downstream consumer would read as a wrap around the origin.
+    if (pos1 > pos2) {
+      pos1 <- annotations$pos1[idx]
+      pos2 <- annotations$pos2[idx]
+    }
+    annotations$pos1[idx] <- pos1
+    annotations$pos2[idx] <- pos2
+    annotations$length[idx] <- circ_len(pos1, pos2, L)
+    annotations$gene[idx] <- "ctrl"
+  }
+  annotations
+}
+
+#' Wrap a coordinate onto a circular sequence of length L
+#'
+#' Maps any integer (including 0, negatives, and values past L) onto [1, L].
+#'
+#' @param p coordinate(s)
+#' @param L length of the contig
+#'
+#' @noRd
+wrap_pos <- function(p, L) {
+  as.integer(((p - 1L) %% L) + 1L)
+}
+
 #' Extract a possibly wrap-around region [p1, p2] from a sequence
 #'
 #' When p1 > p2 the region spans the circular origin, so it is reconstructed as
@@ -758,6 +827,21 @@ splice_join_cds <- function(members, seq, genetic_code) {
     partial_stop <- exons$partial_stop[n]
   }
 
+  # Gene span. min/max is right while every exon sits on one arc, but an exon
+  # that crosses the origin is stored pos1 > pos2, and min/max then reports a
+  # span that excludes it entirely. Fall back to the shortest circular arc that
+  # covers every exon.
+  if (any(wraps)) {
+    # arc[i, j] = arc from exon i's start round to exon j's end
+    arc <- outer(exons$pos1, exons$pos2, Vectorize(circ_len, c("p1", "p2")), L = L)
+    k <- which.min(apply(arc, 1, max))
+    gene_pos1 <- exons$pos1[k]
+    gene_pos2 <- exons$pos2[which.max(arc[k, ])]
+  } else {
+    gene_pos1 <- min(exons$pos1)
+    gene_pos2 <- max(exons$pos2)
+  }
+
   list(
     dna = as.character(merged),
     translation = translation,
@@ -765,8 +849,8 @@ splice_join_cds <- function(members, seq, genetic_code) {
     stop_codon = stop_codon,
     partial_start = partial_start,
     partial_stop = partial_stop,
-    pos1 = min(exons$pos1),
-    pos2 = max(exons$pos2),
+    pos1 = gene_pos1,
+    pos2 = gene_pos2,
     length = sum(seg_len),
     direction = direction,
     segments = segments
