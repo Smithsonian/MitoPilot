@@ -348,8 +348,15 @@ export_files <- function(
     # sequence name, to be used as first column in GFF
     seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)
 
-    # Trim un-annotated ends of linear assemblies
-    if (dat$topology == "linear") {
+    # Trim un-annotated ends of linear assemblies. A pos1 > pos2 row is a
+    # wrap-around, which MIN/MAX cannot describe and the constant shift below
+    # would drive negative, so leave the assembly untrimmed instead.
+    if (dat$topology == "linear" && any(annotations$pos1 > annotations$pos2)) {
+      message(
+        .seqid, ": a feature spans the start of this linear assembly, ",
+        "so its un-annotated ends were not trimmed."
+      )
+    } else if (dat$topology == "linear") {
       start <- min(annotations$pos1)
       if (start > 1) {
         seq <- Biostrings::subseq(seq, start, seq@ranges@width)
@@ -483,11 +490,12 @@ export_files <- function(
             cur$partial_start <- spliced$partial_start
             cur$partial_stop <- spliced$partial_stop
             cur$length <- spliced$length
-            # Gene span across all exons, kept low..high so the wrap test below
-            # stays the same one every other feature type uses. The .tbl
-            # orientation is applied by tbl_locations().
-            cur$pos1 <- exons[1,]$pos1
-            cur$pos2 <- exons[nrow(exons),]$pos2
+            # Gene span across all exons, from the splice helper: sorting by
+            # pos1 and taking the outer bounds reports a near-whole-circle span
+            # once an exon crosses the origin. The .tbl orientation is applied
+            # by tbl_locations().
+            cur$pos1 <- spliced$pos1
+            cur$pos2 <- spliced$pos2
             wraps <- isTRUE(dat$topology == "circular") && isTRUE(cur$pos1 > cur$pos2)
             pos <- tbl_locations(cur$pos1, cur$pos2, cur$direction, wraps, asmb_len)
           }

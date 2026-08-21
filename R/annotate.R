@@ -423,16 +423,21 @@ annotate <- function(
     oh_len <- circ_len(annotations$pos1[idx], annotations$pos2[idx], oh_L)
     containing <- annotations |>
       dplyr::filter(dplyr::row_number() != idx) |>
-      dplyr::filter(contig == annotations$contig[idx]) |>
-      dplyr::rowwise() |>
-      # circular containment: a feature spanning the origin is stored pos1 > pos2,
-      # so pos1 <= x & pos2 >= y never fires for it however deeply it nests the OH
-      dplyr::filter(
-        circ_overlap_len(
-          pos1, pos2, annotations$pos1[idx], annotations$pos2[idx], oh_L
-        ) == oh_len
-      ) |>
-      dplyr::ungroup()
+      dplyr::filter(contig == annotations$contig[idx])
+    # circular containment: a feature spanning the origin is stored pos1 > pos2,
+    # so pos1 <= x & pos2 >= y never fires for it however deeply it nests the OH.
+    # Guarded: a rowwise filter still evaluates its predicate on an empty table,
+    # where the scalar circ_* helpers get zero-length input and abort.
+    if (nrow(containing) > 0L) {
+      containing <- containing |>
+        dplyr::rowwise() |>
+        dplyr::filter(
+          circ_overlap_len(
+            pos1, pos2, annotations$pos1[idx], annotations$pos2[idx], oh_L
+          ) == oh_len
+        ) |>
+        dplyr::ungroup()
+    }
     if (nrow(containing) > 0L) {
       to_remove <- c(to_remove, idx)
     }

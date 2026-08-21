@@ -175,6 +175,11 @@ annotations_details_server <- function(id, rv) {
     edit_shrink_ok <- function(p1, p2, s) {
       if (unit_is_circ()) circ_edit_len(p1, p2, s) > 3L else p1 < p2
     }
+    # Hard bound on a codon search. A circular unit has no edge to stop at and a
+    # feature that grows past its own far end shrinks again, so the bounds above
+    # cannot end a scan that never finds a matching codon. One pass round the
+    # contig is always enough.
+    .codon_budget <- function(s = NULL) as.integer(.seq_width(s) %/% 3L) + 1L
 
     # Skips the count recompute on the initial annotation load (validated counts
     # already in the db); set TRUE right before each load, see update_counts().
@@ -3486,7 +3491,10 @@ annotations_details_server <- function(id, rv) {
       if (rv$annotations$direction[selected()] == "+") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos1 <- circ_edit_pos(pos1 - 3, rv$editing$assembly)
             req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
@@ -3501,7 +3509,10 @@ annotations_details_server <- function(id, rv) {
       if (rv$annotations$direction[selected()] == "-") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos2 <- circ_edit_pos(pos2 + 3, rv$editing$assembly)
             req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
@@ -3540,7 +3551,10 @@ annotations_details_server <- function(id, rv) {
       if (rv$annotations$direction[selected()] == "+") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos1 <- circ_edit_pos(pos1 + 3, rv$editing$assembly)
             req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
@@ -3556,7 +3570,10 @@ annotations_details_server <- function(id, rv) {
       if (rv$annotations$direction[selected()] == "-") {
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos2 <- circ_edit_pos(pos2 - 3, rv$editing$assembly)
             req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
@@ -3596,7 +3613,10 @@ annotations_details_server <- function(id, rv) {
         pos2 <- circ_edit_pos(pos2 + (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos2 <- circ_edit_pos(pos2 + 3, rv$editing$assembly)
             req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
@@ -3623,7 +3643,10 @@ annotations_details_server <- function(id, rv) {
         pos1 <- circ_edit_pos(pos1 - (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos1 <- circ_edit_pos(pos1 - 3, rv$editing$assembly)
             req(edit_grow_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>
@@ -3674,7 +3697,10 @@ annotations_details_server <- function(id, rv) {
         pos2 <- circ_edit_pos(pos2 + (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos2 <- circ_edit_pos(pos2 - 3, rv$editing$assembly)
             req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos2 - 2, pos2) |>
@@ -3703,7 +3729,10 @@ annotations_details_server <- function(id, rv) {
         pos1 <- circ_edit_pos(pos1 - (3 - nchar(rv$annotations$stop_codon[selected()])), rv$editing$assembly)
         for (counter in seq_len(n_steps)) {
           keep_going <- TRUE
+          steps_left <- .codon_budget(rv$editing$assembly)
           while (keep_going) {
+            req(steps_left > 0L)
+            steps_left <- steps_left - 1L
             pos1 <- circ_edit_pos(pos1 + 3, rv$editing$assembly)
             req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
             codon <- circ_edit_seq(rv$editing$assembly, pos1, pos1 + 2) |>

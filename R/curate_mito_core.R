@@ -269,11 +269,36 @@ curate_mito_core <- function(
 
   ## apply punctuation model ----
   gene_idx <- which(annotations$type == "rRNA")
+  # Circular neighbours: the table is sorted by pos1, so a feature spanning the
+  # origin sorts last while sitting immediately before the first row. On a
+  # circular contig it, not the table edge, is the neighbour of the end rows.
+  neighbour_row <- function(idx, side) {
+    ctg <- annotations$contig[idx]
+    rows <- which(annotations$contig == ctg)
+    circ <- is_circ(ctg)
+    wrap <- setdiff(rows[annotations$pos1[rows] > annotations$pos2[rows]], idx)
+    # A wrapping row is not the table-order neighbour it appears to be: it
+    # precedes the contig's first row and follows its last.
+    ord <- if (circ) setdiff(rows, wrap) else rows
+    k <- match(idx, ord)
+    if (is.na(k)) {
+      # idx is itself a wrapping row: its neighbours are the outer ordinary rows
+      if (length(ord) == 0L) return(NA_integer_)
+      return(if (side == "before") ord[length(ord)] else ord[1])
+    }
+    if (side == "before") {
+      if (k > 1L) ord[k - 1L] else if (circ && length(wrap) > 0L) wrap[1] else NA_integer_
+    } else {
+      if (k < length(ord)) ord[k + 1L] else if (circ && length(wrap) > 0L) wrap[1] else NA_integer_
+    }
+  }
+
   for (idx in gene_idx) {
     # Apply tRNA punctuation model
-    before <- annotations[idx - 1, ] |>
-      dplyr::filter(type == "tRNA" & contig == annotations$contig[idx])
     ctg <- annotations$contig[idx]
+    before_row <- neighbour_row(idx, "before")
+    before <- annotations[if (is.na(before_row)) 0L else before_row, ] |>
+      dplyr::filter(type == "tRNA" & contig == ctg)
     if (nrow(before) == 1) {
       if (circ_pos(ctg, before$pos2 + 1) != annotations$pos1[idx]) {
         pos1_new <- circ_pos(ctg, before$pos2 + 1)
@@ -287,8 +312,11 @@ curate_mito_core <- function(
         }
       }
     }
-    after <- annotations[idx + 1, ] |>
-      dplyr::filter(type == "tRNA" & contig == annotations$contig[idx])
+    after_row <- neighbour_row(idx, "after")
+    # a single neighbour cannot bound both ends
+    if (!is.na(after_row) && isTRUE(after_row == before_row)) after_row <- NA_integer_
+    after <- annotations[if (is.na(after_row)) 0L else after_row, ] |>
+      dplyr::filter(type == "tRNA" & contig == ctg)
     if (nrow(after) == 1) {
       if (circ_pos(ctg, annotations$pos2[idx] + 1) != after$pos1) {
         pos2_new <- circ_pos(ctg, after$pos1 - 1)

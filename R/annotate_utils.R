@@ -180,25 +180,41 @@ circ_overlap_len <- function(p1, p2, q1, q2, L) {
 extend_oh_to_ctrl <- function(annotations, contig_lens) {
   for (idx in which(annotations$gene == "OH")) {
     ctg <- annotations$contig[idx]
+    L <- contig_lens[[ctg]]
     ctg_rows <- which(annotations$contig == ctg)
-    wrapped <- ctg_rows[annotations$pos1[ctg_rows] > annotations$pos2[ctg_rows]]
+    # every origin-spanning feature on this contig, the OH itself excluded
+    wrapped <- setdiff(
+      ctg_rows[annotations$pos1[ctg_rows] > annotations$pos2[ctg_rows]], idx
+    )
 
-    if (idx != min(ctg_rows)) {
-      annotations$pos1[idx] <- annotations$pos2[idx - 1] + 1
+    pos1 <- if (idx != min(ctg_rows)) {
+      annotations$pos2[idx - 1] + 1
     } else if (length(wrapped) > 0) {
-      annotations$pos1[idx] <- annotations$pos2[wrapped[1]] + 1
+      # clear ALL of them: stopping after the first leaves the ctrl region
+      # overlapping any feature that reaches further past the origin
+      max(annotations$pos2[wrapped]) + 1
     } else {
-      annotations$pos1[idx] <- 1
+      1
     }
 
-    if (idx != max(ctg_rows)) {
-      annotations$pos2[idx] <- annotations$pos1[idx + 1] - 1
+    pos2 <- if (idx != max(ctg_rows)) {
+      annotations$pos1[idx + 1] - 1
     } else if (length(wrapped) > 0) {
-      annotations$pos2[idx] <- annotations$pos1[wrapped[1]] - 1
+      min(annotations$pos1[wrapped]) - 1
     } else {
-      annotations$pos2[idx] <- contig_lens[[ctg]]
+      L
     }
-    annotations$length[idx] <- abs(annotations$pos2[idx] - annotations$pos1[idx]) + 1
+
+    # The bounds cross when the OH itself overlaps a neighbour. Keep the called
+    # coordinates rather than emitting an inverted region, which every
+    # downstream consumer would read as a wrap around the origin.
+    if (pos1 > pos2) {
+      pos1 <- annotations$pos1[idx]
+      pos2 <- annotations$pos2[idx]
+    }
+    annotations$pos1[idx] <- pos1
+    annotations$pos2[idx] <- pos2
+    annotations$length[idx] <- circ_len(pos1, pos2, L)
     annotations$gene[idx] <- "ctrl"
   }
   annotations

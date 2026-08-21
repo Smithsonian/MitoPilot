@@ -229,13 +229,18 @@ validate_mito_core <- function(
     if (type == "tRNA") {
       # circular containment: the whole tRNA arc falls inside the other feature
       containing <- annotations[-i, ] |>
-        dplyr::filter(contig == {{ contig }} & type %in% c("PCG", "rRNA")) |>
-        dplyr::rowwise() |>
-        dplyr::filter(
-          circ_overlap_len(pos1, pos2, {{ pos1 }}, {{ pos2 }}, L_i) ==
-            circ_len({{ pos1 }}, {{ pos2 }}, L_i)
-        ) |>
-        dplyr::ungroup()
+        dplyr::filter(contig == {{ contig }} & type %in% c("PCG", "rRNA"))
+      # rowwise filtering evaluates its predicate even on an empty table, where
+      # the scalar circ_* helpers get zero-length input and abort
+      if (nrow(containing) > 0L) {
+        containing <- containing |>
+          dplyr::rowwise() |>
+          dplyr::filter(
+            circ_overlap_len(pos1, pos2, {{ pos1 }}, {{ pos2 }}, L_i) ==
+              circ_len({{ pos1 }}, {{ pos2 }}, L_i)
+          ) |>
+          dplyr::ungroup()
+      }
       if (nrow(containing) > 0L) {
         annotations$warnings[i] <- warnings <- semicolon_paste(warnings, "tRNA within PCG or rRNA")
         total_warnings = total_warnings + 1

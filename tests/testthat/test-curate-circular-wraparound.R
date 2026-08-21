@@ -170,3 +170,51 @@ test_that("the rRNA punctuation model gives an origin-spanning rRNA a circular l
   expect_equal(rrn$pos1, 800L)
   expect_equal(rrn$length, 301L)
 })
+
+test_that("the punctuation model uses a tRNA that sits across the origin", {
+  # trnP 880..40 wraps, so it sorts LAST by pos1 while circularly sitting just
+  # before rrnS 45..500. The 4 bp gap must still be closed.
+  s <- base_seq()
+  ann <- rbind(
+    ann_row(45, 500, gene = "rrnS", type = "rRNA", start_codon = NA, stop_codon = NA),
+    ann_row(880, 40, gene = "trnP", type = "tRNA", start_codon = NA, stop_codon = NA)
+  )
+  ann$translation <- NA_character_
+  d <- write_fixture(s, ann)
+
+  res <- run_curate(d, function(...) hits())
+  rrn <- res[res$gene == "rrnS", ]
+
+  expect_equal(rrn$pos1, 41L)
+  expect_equal(rrn$length, 460L)
+})
+
+test_that("the punctuation model leaves a linear contig's edge rows alone", {
+  s <- base_seq()
+  ann <- rbind(
+    ann_row(45, 500, gene = "rrnS", type = "rRNA", start_codon = NA, stop_codon = NA),
+    ann_row(880, 40, gene = "trnP", type = "tRNA", start_codon = NA, stop_codon = NA)
+  )
+  ann$translation <- NA_character_
+  d <- write_fixture(s, ann, circular = FALSE)
+
+  res <- run_curate(d, function(...) hits())
+  expect_equal(res$pos1[res$gene == "rrnS"], 45L)
+})
+
+test_that("two PCGs spanning the origin are both curated", {
+  # cox1 850..150 (+) and nad1 880..60 (-) both cross the origin
+  s <- base_seq() |>
+    set_codon(850L, "ATG") |> set_codon(844L, "ATG") |> set_codon(148L, "TAA") |>
+    set_codon(58L, "CAT") |> set_codon(64L, "CAT") |> set_codon(880L, "TTA")
+  ann <- rbind(ann_row(850, 150), ann_row(880, 60, direction = "-", gene = "nad1"))
+  d <- write_fixture(s, ann)
+  writeLines(">ref\nMKKK", file.path(d, "featureProt", "nad1.fas"))
+
+  res <- run_curate(d, function(...) hits(gap_leading = 2L))
+
+  expect_equal(nrow(res), 2L)
+  expect_equal(res$length[res$gene == "cox1"], 207L)
+  expect_true(all(res$pos1 >= 1L & res$pos1 <= 900L))
+  expect_true(all(res$pos2 >= 1L & res$pos2 <= 900L))
+})

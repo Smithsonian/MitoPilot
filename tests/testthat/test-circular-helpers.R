@@ -160,3 +160,89 @@ test_that("an OH at the table edges is bounded by the origin-spanning feature", 
   # last row: bounded above by the wrapping feature's start, not by the contig end
   expect_equal(res$pos2[3], 299L)
 })
+
+# extend_oh_to_ctrl ----
+# The OH call is grown into the control region using its neighbours. A feature
+# spanning the origin sorts last by pos1 while occupying [1, pos2], so it, not
+# the contig edge, bounds an OH at either end of the table.
+
+oh_lens <- c(ctg1 = 10000L)
+
+oh_row <- function(gene, pos1, pos2, contig = "ctg1") {
+  data.frame(contig = contig, gene = gene, pos1 = as.integer(pos1),
+             pos2 = as.integer(pos2), length = 0L, stringsAsFactors = FALSE)
+}
+
+test_that("an OH at the head of the table is bounded by the wrapping feature", {
+  ann <- rbind(oh_row("OH", 300, 320), oh_row("nad2", 500, 700),
+               oh_row("nad1", 9800, 100))
+  res <- extend_oh_to_ctrl(ann, oh_lens)
+  expect_equal(res$gene[1], "ctrl")
+  expect_equal(c(res$pos1[1], res$pos2[1]), c(101L, 499L))
+  expect_equal(res$length[1], 399L)
+})
+
+test_that("the ctrl region clears EVERY feature spanning the origin", {
+  # nad1 9700..50 and trnP 9900..120 both cover the origin; the first free base
+  # after the origin is 121, not 51.
+  ann <- rbind(oh_row("OH", 300, 320), oh_row("nad2", 500, 700),
+               oh_row("nad1", 9700, 50), oh_row("trnP", 9900, 120))
+  res <- extend_oh_to_ctrl(ann, oh_lens)
+  expect_equal(c(res$pos1[1], res$pos2[1]), c(121L, 499L))
+})
+
+test_that("crossed bounds keep the called coordinates instead of inverting", {
+  # OH 130..140 sits inside the post-origin arm of nad1, so its neighbours give
+  # pos1 = 201 and pos2 = 149. An inverted region reads as a wrap downstream.
+  ann <- rbind(oh_row("OH", 130, 140), oh_row("nad2", 150, 400),
+               oh_row("nad1", 9800, 200))
+  res <- extend_oh_to_ctrl(ann, oh_lens)
+  expect_equal(c(res$pos1[1], res$pos2[1]), c(130L, 140L))
+  expect_equal(res$gene[1], "ctrl")
+})
+
+test_that("without a wrapping feature the contig edges still bound the ctrl region", {
+  res <- extend_oh_to_ctrl(rbind(oh_row("OH", 50, 60), oh_row("nad2", 500, 700)), oh_lens)
+  expect_equal(c(res$pos1[1], res$pos2[1]), c(1L, 499L))
+  res2 <- extend_oh_to_ctrl(rbind(oh_row("nad2", 500, 700), oh_row("OH", 5000, 5010)), oh_lens)
+  expect_equal(c(res2$pos1[2], res2$pos2[2]), c(701L, 10000L))
+})
+
+test_that("a wrapping feature on another contig does not bound this OH", {
+  l2 <- c(ctg1 = 10000L, ctg2 = 8000L)
+  ann <- rbind(
+    oh_row("OH", 50, 60), oh_row("nad2", 500, 700),
+    oh_row("nad5", 100, 300, contig = "ctg2"), oh_row("nad6", 7900, 40, contig = "ctg2")
+  )
+  res <- extend_oh_to_ctrl(ann, l2)
+  expect_equal(c(res$pos1[1], res$pos2[1]), c(1L, 499L))
+})
+
+test_that("a ctrl region spanning the origin gets a circular length", {
+  ann <- rbind(oh_row("nad2", 100, 400), oh_row("OH", 9500, 9600))
+  res <- extend_oh_to_ctrl(ann, oh_lens)
+  expect_equal(c(res$pos1[2], res$pos2[2]), c(401L, 10000L))
+  expect_equal(res$length[2], 9600L)
+})
+
+test_that("circ_overlap is symmetric and agrees with circ_overlap_len", {
+  set.seed(1)
+  for (i in 1:200) {
+    p <- sample.int(L, 2); q <- sample.int(L, 2)
+    expect_equal(
+      as.logical(circ_overlap(p[1], p[2], q[1], q[2])),
+      as.logical(circ_overlap(q[1], q[2], p[1], p[2])),
+      info = paste(c(p, q), collapse = " ")
+    )
+    expect_equal(
+      as.logical(circ_overlap(p[1], p[2], q[1], q[2])),
+      circ_overlap_len(p[1], p[2], q[1], q[2], L) > 0L,
+      info = paste(c(p, q), collapse = " ")
+    )
+  }
+})
+
+test_that("circ_overlap_len measures two intervals that both span the origin", {
+  expect_equal(circ_overlap_len(850, 100, 800, 50, L), circ_len(850, 50, L))
+  expect_equal(circ_overlap_len(850, 100, 850, 100, L), circ_len(850, 100, L))
+})

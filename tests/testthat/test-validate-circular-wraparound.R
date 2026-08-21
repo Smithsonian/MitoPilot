@@ -77,3 +77,43 @@ test_that("a genuine overlap across the origin is still reported", {
   res <- run_validate(ann)
   expect_match(res$warnings[res$gene == "trnP"], "exceeds max overlap")
 })
+
+test_that("a contig with no PCG or rRNA does not abort validation", {
+  # The tRNA containment check filters to PCG/rRNA rows first. On an empty
+  # result a rowwise filter still evaluates its predicate, and the scalar
+  # circ_* helpers abort on zero-length input.
+  ann <- rbind(vrow("trnF", "tRNA", 100, 167), vrow("trnP", "tRNA", 300, 367))
+  expect_no_error(run_validate(ann))
+})
+
+test_that("a single wrapping annotation is validated on its own", {
+  expect_no_error(run_validate(vrow("trnF", "tRNA", 9950, 20)))
+})
+
+test_that("two wrapping PCGs that overlap each other are both flagged", {
+  # nad1 9700..50 (351 bp) and nad2 9900..120 (221 bp) share 151 bp
+  ann <- rbind(vrow("nad1", "PCG", 9700, 50), vrow("nad2", "PCG", 9900, 120))
+  res <- run_validate(ann)
+  expect_true(all(grepl("exceeds max overlap", res$warnings)))
+})
+
+test_that("a wrapping tRNA inside a wrapping PCG is caught", {
+  ann <- rbind(vrow("nad1", "PCG", 9500, 500), vrow("trnF", "tRNA", 9950, 20))
+  res <- run_validate(ann)
+  expect_match(res$warnings[res$gene == "trnF"], "tRNA within PCG or rRNA")
+})
+
+test_that("a wrapping tRNA sticking out of a wrapping PCG is not called contained", {
+  ann <- rbind(vrow("nad1", "PCG", 9960, 10), vrow("trnF", "tRNA", 9950, 20))
+  res <- run_validate(ann)
+  expect_false(any(grepl("tRNA within", res$warnings), na.rm = TRUE))
+})
+
+test_that("a wrapping rRNA is measured around the circle, not across it", {
+  # 1001 bp is over the 1000 bp rrnS limit only by the true arc, and the bogus
+  # complementary arc (9001) would trip it for the wrong reason
+  ann <- rbind(vrow("rrnS", "rRNA", 9500, 400, length = 9101L),
+               vrow("trnF", "tRNA", 9990, 40, length = 9951L))
+  res <- run_validate(ann)
+  expect_false(isTRUE(grepl("exceeds max length", res$warnings[res$gene == "trnF"])))
+})
