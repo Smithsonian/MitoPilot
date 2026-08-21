@@ -150,7 +150,7 @@ annotations_details_server <- function(id, rv) {
         na.rm = TRUE
       ))
     }
-    circ_edit_pos <- function(p, s = NULL) {
+    circ_edit_pos <- function(p, s) {
       if (!unit_is_circ()) return(p)
       wrap_pos(p, .seq_width(s))
     }
@@ -2700,10 +2700,7 @@ annotations_details_server <- function(id, rv) {
       # immediately before `start`, so a feature is split when it covers both
       # `start` and the base before it - a circular test, since a feature already
       # spanning the origin covers positions on both sides of position 1.
-      asmb_w <- as.integer(max(
-        c(rv$coverage$Position, rv$annotations$pos1, rv$annotations$pos2),
-        na.rm = TRUE
-      ))
+      asmb_w <- .seq_width()
       cut_at <- wrap_pos(as.integer(start), asmb_w)
       before_cut <- wrap_pos(as.integer(start) - 1L, asmb_w)
       chk <- rv$annotations[

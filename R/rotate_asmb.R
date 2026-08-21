@@ -20,9 +20,7 @@ rotate_asmb <- function(
     warning(
       "rotate_asmb: start gene '", start_gene, "' is not annotated on this ",
       "assembly, so it was not rotated. Any feature spanning the current ",
-      "origin stays split across it. Set a different start_gene (one of: ",
-      paste(utils::head(unique(annotations$gene), 10), collapse = ", "),
-      if (length(unique(annotations$gene)) > 10) ", ..." else "", ").",
+      "origin stays split across it.",
       call. = FALSE
     )
     return(list(assembly, annotations))
@@ -36,9 +34,8 @@ rotate_asmb <- function(
   # Warn if the new origin falls inside another feature: rotating there splits
   # that feature across the origin, which every downstream consumer then has to
   # handle as a wrap-around (pos1 > pos2) annotation.
-  cut <- if (start$direction == "+") start$pos1 else start$pos2 + 1L
-  cut <- ((cut - 1L) %% seq_length) + 1L
-  before_cut <- ((cut - 2L) %% seq_length) + 1L
+  cut <- wrap_pos(if (start$direction == "+") start$pos1 else start$pos2 + 1L, seq_length)
+  before_cut <- wrap_pos(cut - 1L, seq_length)
   split <- circ_overlap(cut, cut, annotations$pos1, annotations$pos2) &
     circ_overlap(before_cut, before_cut, annotations$pos1, annotations$pos2)
   if (any(split, na.rm = TRUE)) {

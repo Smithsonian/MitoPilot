@@ -816,14 +816,11 @@ splice_join_cds <- function(members, seq, genetic_code) {
   # span that excludes it entirely. Fall back to the shortest circular arc that
   # covers every exon.
   if (any(wraps)) {
-    reach <- vapply(exons$pos1, function(st) {
-      max(vapply(seq_len(n), function(i) circ_len(st, exons$pos2[i], L), numeric(1)))
-    }, numeric(1))
-    st <- exons$pos1[which.min(reach)]
-    gene_pos1 <- st
-    gene_pos2 <- exons$pos2[which.max(
-      vapply(seq_len(n), function(i) circ_len(st, exons$pos2[i], L), numeric(1))
-    )]
+    # arc[i, j] = arc from exon i's start round to exon j's end
+    arc <- outer(exons$pos1, exons$pos2, Vectorize(circ_len, c("p1", "p2")), L = L)
+    k <- which.min(apply(arc, 1, max))
+    gene_pos1 <- exons$pos1[k]
+    gene_pos2 <- exons$pos2[which.max(arc[k, ])]
   } else {
     gene_pos1 <- min(exons$pos1)
     gene_pos2 <- max(exons$pos2)
