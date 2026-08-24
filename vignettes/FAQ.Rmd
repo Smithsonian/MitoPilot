@@ -16,6 +16,27 @@ Please see the
 
 Yes! See the ["Initializing a Project with User Assemblies"](https://smithsonian.github.io/MitoPilot/#initializing-a-project-with-user-assemblies) section of the main page.
 
+## Can MitoPilot find the mitogenome in my whole assembly?
+
+Yes. Create the project with `new_project_userAsmb(find_mitogenome = TRUE)` and
+supply a MitoFinder database for your clade via `mitofinder_db`. Each sample's
+contigs are BLASTed against the metazoan mitogenome database bundled with
+MitoPilot, the best candidates are confirmed by annotating them with MitoFinder,
+and only confirmed contigs continue through the pipeline.
+
+The search is built for large inputs: the FASTA is split into chunks searched in
+parallel, short contigs are dropped before the search, and contigs are pulled out
+by name rather than by loading the file into memory. Assemblies of over a million
+contigs are routine.
+
+NUMTs are handled by requiring the match to cover a good fraction of the contig,
+not just to be strong. A nuclear scaffold carrying a mitochondrial insertion
+matches over a tiny slice of itself and is rejected on that basis, with the
+reason recorded in the **Candidates** table.
+
+See ["Finding the mitogenome in a whole assembly"](Your-Own-Project.html#finding-the-mitogenome-in-a-whole-assembly)
+for details.
+
 ## Can MitoPilot circularize my own assemblies?
 
 Yes, if there is sequence overlap at the ends of your contigs.

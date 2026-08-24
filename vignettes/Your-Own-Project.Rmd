@@ -323,6 +323,59 @@ If you have no reads at all, set `no_raw_data = TRUE` and omit `data_path`.
 MitoPilot will skip read mapping entirely and hide the coverage columns that
 depend on it.
 
+### Finding the mitogenome in a whole assembly
+
+If your FASTA files hold whole assemblies rather than mitogenomes, thousands or
+even millions of contigs each, set `find_mitogenome = TRUE`. MitoPilot will
+locate the mitochondrial contigs before anything else runs:
+
+```r
+new_project_userAsmb(
+  path = "~/my_assemblies/run_01",
+  mapping_fn = "~/my_assemblies/mapping.csv",
+  data_path = "~/my_assemblies/raw_data",
+  assembly_path = "~/my_assemblies/assemblies",
+  find_mitogenome = TRUE,
+  mitofinder_db = "~/dbs/mitofinder_Percidae_refseq.gb",
+  executor = "local"
+)
+```
+
+The search runs in two passes. First every contig above the length floor is
+BLASTed against the metazoan mitogenome database bundled with MitoPilot; the
+FASTA is split into chunks searched in parallel, so a draft genome is tractable.
+The contigs of a sample vote together for a single closest reference, which keeps
+a mitogenome split across several contigs from being pulled apart. Surviving
+contigs must match that reference closely, over enough bases, and across enough
+of their own length. That last rule is what separates a real mitochondrial contig
+from a nuclear scaffold carrying a NUMT: the real one is almost entirely
+mitochondrial, while a 2 Mb scaffold with a 5 kb insertion covers a quarter of a
+percent of itself.
+
+Second, MitoFinder annotates the survivors and a contig is confirmed once it
+carries enough mitochondrial genes. Only confirmed contigs continue through the
+pipeline, as scaffolds of the sample's assembly. A sample where nothing is
+confirmed is marked failed with a note explaining how far the search got, and the
+rest of your samples carry on.
+
+<div class="alert alert-warning">
+<strong>Required.</strong> The confirmation step needs a MitoFinder GenBank
+database for your clade. Build one with
+`custom_assembly_db(clade = "<your clade>", db_type = "mitofinder")` and pass its
+`.gb` file as `mitofinder_db`. Project creation refuses the search without it.
+</div>
+
+The **Mito Search** column of the Assemble table summarizes each sample, and the
+**Candidates** link opens the full evidence: every contig considered, its length,
+the reference it matched, percent identity, how much of the contig aligned, how
+many mitochondrial genes it carried, and why it was kept or dropped. Thresholds
+live in the **Find Mito Opts.** modal, and a per-sample log is written to
+`out/<ID>/assemble/user/find_mito.log`.
+
+On a real genome skim assembled to 1.4 million contigs, the search reduced the
+sample to its single 16,891 bp mitochondrial contig, carrying 15 genes, in about
+two minutes.
+
 ### Circularizing linear assemblies
 
 Assemblers sometimes report a circular mitogenome as a linear contig whose end
