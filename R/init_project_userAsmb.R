@@ -20,6 +20,12 @@
 #'   trimming is disabled. Use this to annotate an assembly you already have.
 #' @param assembly_path Path to the directory where the mitogenome assemblies are located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
+#' @param attempt_circularization (logical) Attempt to circularize linear,
+#'   single-contig user assemblies during WF1 (default = FALSE). Redundant
+#'   overlap between the contig ends is trimmed, and when raw reads are
+#'   available the new junction must be supported by reads before the assembly
+#'   is called circular. Settings are editable later in the app's
+#'   circularization options modal. See [circularize_asmb()].
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from each sample's curation ruleset; a number sets a
 #'   project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
@@ -55,6 +61,7 @@ new_project_userAsmb <- function(
     no_raw_data = FALSE,
     assembly_path = "NA",
     genetic_code = NULL,
+    attempt_circularization = FALSE,
     executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     config = NULL,
@@ -144,6 +151,7 @@ new_project_userAsmb <- function(
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
     no_raw_data = no_raw_data,
+    attempt_circularization = attempt_circularization,
     ...
   )
 

@@ -16,6 +16,26 @@ Please see the
 
 Yes! See the ["Initializing a Project with User Assemblies"](https://smithsonian.github.io/MitoPilot/#initializing-a-project-with-user-assemblies) section of the main page.
 
+## Can MitoPilot circularize my own assemblies?
+
+Yes, if there is sequence overlap at the ends of your contigs.
+
+Create the project with `new_project_userAsmb(attempt_circularization = TRUE)`.
+During the Assemble module MitoPilot BLASTs each contig against itself, trims
+the redundant overlap, and relabels the sample `circular`.
+If you supplied raw reads, it also maps them across the new junction and keeps
+the assembly linear unless enough reads span it, so a repeat is not mistaken for
+a real circle.
+
+It cannot invent sequence that is missing. A contig with a genuine gap between
+its ends stays linear no matter how the thresholds are set.
+
+Only samples marked `linear` in the mapping file are
+considered. Results appear in the **Circularization** column of the Assemble
+table, and the thresholds live in the **Circularize Opts.** modal. See
+["Circularizing linear assemblies"](Your-Own-Project.html#circularizing-linear-assemblies)
+for details.
+
 ## How do I skip processing certain samples?
 
 There are two ways to make MitoPilot skip a set of samples when running the Assembly or Annotate modules.

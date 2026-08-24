@@ -32,6 +32,13 @@ new_db_userAsmb(
   orf_min_len = 300,
   orf_max_overlap = 0.1,
   min_assembly_length = 500,
+  attempt_circularization = FALSE,
+  circularize_min_overlap = 220,
+  circularize_min_identity = 99,
+  circularize_min_junction_reads = 5,
+  circularize_min_overhang = 30,
+  circularize_cpus = 4,
+  circularize_memory = 8,
   no_raw_data = FALSE
 )
 }
@@ -96,6 +103,26 @@ Editable later in the curation-options modal.}
 of the ORF length, before an ORF is discarded (default = 0.1)}
 
 \item{min_assembly_length}{Minimum scaffold length to include in analysis (default = 500)}
+
+\item{attempt_circularization}{Try to circularize linear single-contig
+assemblies in WF1 (default = FALSE). See [circularize_asmb()].}
+
+\item{circularize_min_overlap}{Shortest accepted self-overlap, bp (default = 220)}
+
+\item{circularize_min_identity}{Percent identity required for the self-overlap
+(default = 99)}
+
+\item{circularize_min_junction_reads}{Reads that must span the new junction
+before an assembly is called circular (default = 5). Ignored when the
+project has no raw data.}
+
+\item{circularize_min_overhang}{Bases a read must extend past the junction on
+each side to count (default = 30)}
+
+\item{circularize_cpus}{Default # cpus for the circularization step (default = 4)}
+
+\item{circularize_memory}{Default memory (GB) for the circularization step
+(default = 8)}
 
 \item{no_raw_data}{(logical) Initialize a project with no raw reads (default =
 FALSE). When TRUE, annotation coverage trimming (`coverage_trim`) is disabled

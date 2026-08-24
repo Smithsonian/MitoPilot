@@ -1,10 +1,14 @@
 include {coverage_userAsmb; coverage_userAsmb_noReads} from './coverage_userAsmb.nf'
+include {CIRCULARIZE_userAsmb; CIRCULARIZE_userAsmb_noReads} from './circularize_workflow.nf'
 
 params.sqlRead =  'SELECT s.ID, s.assembly, s.topology, ' +
-                  'a.assemble_opts, opts.min_assembly_length ' +
+                  'a.assemble_opts, opts.min_assembly_length, ' +
+                  'copts.attempt, copts.min_overlap, copts.min_identity, ' +
+                  'copts.min_junction_reads, copts.min_overhang, copts.cpus, copts.memory ' +
                   'FROM samples s ' +
                   'JOIN assemble a ON s.ID = a.ID ' +
                   'JOIN assemble_opts opts ON a.assemble_opts = opts.assemble_opts ' +
+                  'LEFT JOIN circularize_opts copts ON a.circularize_opts = copts.circularize_opts ' +
                   'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 
@@ -175,7 +179,14 @@ workflow COVERAGE_userAsmb {
                     it[0],                                          // ID
                     file(params.asmbDir + "/" + it[1]),             // assembly
                     it[2],                                          // topology
-                    it[3]                                          // assemble opts dummy var
+                    it[3],                                          // assemble opts dummy var
+                    [ attempt:            it[5],                    // circularization opts
+                      min_overlap:        it[6],
+                      min_identity:       it[7],
+                      min_junction_reads: it[8],
+                      min_overhang:       it[9],
+                      cpus:               it[10],
+                      memory:             it[11] ]
                 )
                 min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
@@ -197,9 +208,14 @@ workflow COVERAGE_userAsmb {
                     it[1][1],                                                   // assembly
                     it[1][2],                                                   // topology
                     it[1][3],                                                   // assemble opts dummy var
+                    it[1][4],                                                   // circularization opts
                 )
             }
-            .set { coverage_in }
+            .set { circ_in }
+
+        // Optional circularization (pass-through when switched off)
+        CIRCULARIZE_userAsmb(circ_in)
+        CIRCULARIZE_userAsmb.out.coverage_in.set { coverage_in }
 
         // Coverage
         coverage_userAsmb(coverage_in).set { coverage_out }
@@ -222,7 +238,14 @@ workflow COVERAGE_userAsmb_noReads {
                     it[0],                                          // ID
                     file(params.asmbDir + "/" + it[1]),             // assembly
                     it[2],                                          // topology
-                    it[3]                                          // assemble opts dummy var
+                    it[3],                                          // assemble opts dummy var
+                    [ attempt:            it[5],                    // circularization opts
+                      min_overlap:        it[6],
+                      min_identity:       it[7],
+                      min_junction_reads: it[8],
+                      min_overhang:       it[9],
+                      cpus:               it[10],
+                      memory:             it[11] ]
                 )
                 min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
                 min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
@@ -234,9 +257,8 @@ workflow COVERAGE_userAsmb_noReads {
         query_ch.min_len_summary.set { min_len_summary }
 
         // No reads to cross in; feed the assembly straight to the no-reads process
-        sample_info
-            .map{ it -> tuple(it[0], it[1], it[2], it[3]) }
-            .set { coverage_in }
+        CIRCULARIZE_userAsmb_noReads(sample_info)
+        CIRCULARIZE_userAsmb_noReads.out.coverage_in.set { coverage_in }
 
         coverage_userAsmb_noReads(coverage_in).set { coverage_out }
 

@@ -427,6 +427,39 @@ backwards_compatibility <- function(
     )
   }
 
+  # circularization options for user-supplied assemblies (WF1 circularize step)
+  if (!DBI::dbExistsTable(con, "circularize_opts")) {
+    message("added 'circularize_opts' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE circularize_opts (
+        circularize_opts TEXT NOT NULL,
+        attempt INTEGER,
+        min_overlap INTEGER,
+        min_identity REAL,
+        min_junction_reads INTEGER,
+        min_overhang INTEGER,
+        cpus INTEGER,
+        memory INTEGER,
+        PRIMARY KEY (circularize_opts)
+      );"
+    )
+    DBI::dbExecute(
+      con,
+      "INSERT INTO circularize_opts VALUES ('default', 0, 220, 99, 5, 30, 4, 8)"
+    )
+  }
+  assemble_fields <- DBI::dbListFields(con, "assemble")
+  if (!("circularize_opts" %in% assemble_fields)) {
+    message("added 'circularize_opts' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_opts TEXT")
+    DBI::dbExecute(con, "UPDATE assemble SET circularize_opts = 'default'")
+  }
+  if (!("circularize_notes" %in% assemble_fields)) {
+    message("added 'circularize_notes' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_notes TEXT")
+  }
+
   # if reviewed column doesn't exist, add it
   if(!("reviewed" %in% names(annotate_table))){
     message("added 'reviewed' column to annotate table")

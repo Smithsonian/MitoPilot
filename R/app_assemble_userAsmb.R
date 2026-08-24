@@ -3,12 +3,12 @@
 # always visible. Mirrors ASSEMBLE_COL_GROUPS but drops assemble_opts (no
 # assembler step in user-assemble mode).
 ASSEMBLE_COL_GROUPS_USERASMB <- list(
-  Options  = c("pre_opts", "blast_opts"),
+  Options  = c("pre_opts", "circularize_opts", "blast_opts"),
   Stats    = c("trimmed_reads", "mean_length", "topology", "length",
                "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes")
+  Metadata = c("time_stamp", "assemble_notes", "circularize_notes")
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -107,6 +107,8 @@ assemble_server_userAsmb <- function(id) {
       pre_opts = dplyr::tbl(session$userData$con, "pre_opts") |>
         dplyr::collect(),
       blast_opts = dplyr::tbl(session$userData$con, "blast_opts") |>
+        dplyr::collect(),
+      circularize_opts = dplyr::tbl(session$userData$con, "circularize_opts") |>
         dplyr::collect(),
       data = fetch_assemble_data_userAsmb(),
       updating = NULL
@@ -283,6 +285,20 @@ assemble_server_userAsmb <- function(id) {
               html = T,
               width = 130,
               cell = rt_link(ns("set_pre_opts"))
+            ),
+            circularize_opts = colDef(
+              show = TRUE, class = .grp("circularize_opts"), headerClass = .grp("circularize_opts"),
+              name = "Circularize Opts.",
+              html = T,
+              width = 140,
+              cell = rt_link(ns("set_circularize_opts"))
+            ),
+            circularize_notes = colDef(
+              show = TRUE, class = .grp("circularize_notes"), headerClass = .grp("circularize_notes"),
+              name = "Circularization",
+              minWidth = 160,
+              html = T,
+              cell = rt_longtext()
             ),
             blast_opts = colDef(
               show = T, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
@@ -707,6 +723,139 @@ assemble_server_userAsmb <- function(id) {
             .default = NA_character_
           )
         )
+      rv$updating <- rv$updating_indirect <- NULL
+      removeModal()
+      trigger("update_assemble_table")
+    })
+
+    # Set Circularization Opts ----
+    observeEvent(input$set_circularize_opts, {
+      row <- as.numeric(input$set_circularize_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      } else {
+        selected <- c(row, selected()) |> unique()
+      }
+      req(all(rv$data$assemble_lock[selected] == 0))
+      rv$updating <- rv$data |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      circularize_opts_modal(rv)
+    })
+    observeEvent(input$circularize_opts, ignoreInit = T, {
+      exists <- input$circularize_opts %in% rv$circularize_opts$circularize_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_circularize_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$circularize_opts[
+          rv$circularize_opts$circularize_opts == input$circularize_opts,
+        ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "attempt_circularization",
+          value = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+        updateNumericInput(inputId = "circ_min_overlap", value = cur$min_overlap)
+        updateNumericInput(inputId = "circ_min_identity", value = cur$min_identity)
+        updateNumericInput(inputId = "circ_min_junction_reads", value = cur$min_junction_reads)
+        updateNumericInput(inputId = "circ_min_overhang", value = cur$min_overhang)
+        updateNumericInput(inputId = "circ_opts_cpus", value = cur$cpus)
+        updateNumericInput(inputId = "circ_opts_memory", value = cur$memory)
+        circularize_params_toggle(
+          isTRUE(as.logical(cur$attempt %||% 0L)),
+          isTRUE(session$userData$no_raw_data)
+        )
+      }
+    })
+    # Thresholds and resources are meaningless with the step switched off
+    observeEvent(input$attempt_circularization, ignoreInit = T, {
+      circularize_params_toggle(
+        isTRUE(input$attempt_circularization),
+        isTRUE(session$userData$no_raw_data)
+      )
+    })
+    observeEvent(input$edit_circularize_opts, ignoreInit = T, {
+      for (fld in c("attempt_circularization", "circ_min_overlap", "circ_min_identity",
+                    "circ_min_junction_reads", "circ_min_overhang",
+                    "circ_opts_cpus", "circ_opts_memory")) {
+        shinyjs::toggleState(fld, condition = input$edit_circularize_opts)
+      }
+      if (input$edit_circularize_opts && input$circularize_opts %in% rv$data$circularize_opts) {
+        rv$updating_indirect <- rv$data |>
+          dplyr::filter(circularize_opts == input$circularize_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
+          )
+          shinyWidgets::updatePrettyCheckbox(inputId = "edit_circularize_opts", value = FALSE)
+          req(F)
+        }
+        if (nrow(rv$updating_indirect) > 0L) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_circularize_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit circularization options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
+          )
+        }
+      } else {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    observeEvent(input$editing_circularize_opts_indirect, ignoreInit = T, {
+      if (!input$editing_circularize_opts_indirect) {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(inputId = "edit_circularize_opts", value = FALSE)
+      }
+    })
+    observeEvent(input$update_circularize_opts, ignoreInit = T, {
+      if (input$edit_circularize_opts) {
+        # The read-based fields are absent from the modal in a no-raw-data
+        # project, so fall back to the stored values rather than writing NULL.
+        cur <- rv$circularize_opts[
+          rv$circularize_opts$circularize_opts == input$circularize_opts,
+        ]
+        dplyr::tbl(session$userData$con, "circularize_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              circularize_opts   = req(input$circularize_opts),
+              attempt            = as.integer(isTRUE(input$attempt_circularization)),
+              min_overlap        = as.integer(input$circ_min_overlap %||% 220L),
+              min_identity       = as.numeric(input$circ_min_identity %||% 99),
+              min_junction_reads = as.integer(
+                input$circ_min_junction_reads %||% cur$min_junction_reads %||% 5L
+              ),
+              min_overhang       = as.integer(
+                input$circ_min_overhang %||% cur$min_overhang %||% 30L
+              ),
+              cpus               = as.integer(input$circ_opts_cpus %||% 4L),
+              memory             = as.integer(input$circ_opts_memory %||% 8L)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "circularize_opts"
+          )
+        rv$circularize_opts <- dplyr::tbl(session$userData$con, "circularize_opts") |>
+          dplyr::collect()
+      }
+      update <- data.frame(
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
+        circularize_opts = input$circularize_opts,
+        assemble_switch = 1L
+      )
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(
+          update,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(update, by = "ID")
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")

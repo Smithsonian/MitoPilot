@@ -323,6 +323,44 @@ If you have no reads at all, set `no_raw_data = TRUE` and omit `data_path`.
 MitoPilot will skip read mapping entirely and hide the coverage columns that
 depend on it.
 
+### Circularizing linear assemblies
+
+Assemblers sometimes report a circular mitogenome as a linear contig whose end
+repeats its start. Set `attempt_circularization = TRUE` and MitoPilot will try
+to close linear contigs for you during the Assemble module:
+
+```r
+new_project_userAsmb(
+  path = "~/my_assemblies/run_01",
+  mapping_fn = "~/my_assemblies/mapping.csv",
+  data_path = "~/my_assemblies/raw_data",
+  assembly_path = "~/my_assemblies/assemblies",
+  attempt_circularization = TRUE,
+  executor = "local"
+)
+```
+
+Each eligible contig is compared against itself with BLAST. 
+Only samples marked `linear` in your mapping file are considered. 
+Click a sample's **Circularize Opts.** cell to adjust the thresholds for
+circularization.
+
+If the contig ends overlap, the duplicate end is trimmed and the sample is relabeled
+`circular`. When you have raw reads, MitoPilot also maps them across the
+new junction and leaves the assembly linear unless enough reads span it, This 
+mitigates the issue of repeats being mistaken for a real circle.
+
+The outcome for every sample appears in the **Circularization** column of the
+Assemble table, alongside a per-sample log in
+`out/<ID>/assemble/user/circularize.log`:
+
+| Note | Meaning |
+|---|---|
+| `circular: trimmed 231 bp overlap, 42 junction reads` | Closed, with read support |
+| `circular: trimmed 231 bp overlap (no reads to confirm)` | Closed in a `no_raw_data` project |
+| `linear: no self-overlap found` | The contig ends do not overlap |
+| `linear: 231 bp overlap found but only 2 junction reads (5 required)` | Overlap present, reads did not back it up |
+
 <div class="alert alert-warning">
 <strong>Warning.</strong> A project holds either MitoPilot assemblies or
 externally supplied ones, never both. Use separate projects if you have a mix.

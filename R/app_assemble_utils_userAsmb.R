@@ -34,6 +34,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       assembly,
       topology,
       pre_opts,
+      circularize_opts,
       blast_opts,
       reads,
       trimmed_reads,
@@ -50,7 +51,8 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       blast_lineage,
       blast_hits,
       time_stamp,
-      assemble_notes
+      assemble_notes,
+      circularize_notes
     ) |>
     dplyr::mutate(
       output = dplyr::case_when(
@@ -345,3 +347,175 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   }
 }
 
+
+#' Update the circularization options
+#'
+#' Settings for the optional WF1 step that trims a redundant end-to-start
+#' overlap from linear user assemblies. See [circularize_asmb()].
+#'
+#' @param rv the local reactive vals object
+#' @param session current shiny session
+#'
+#' @noRd
+circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+
+  if (length(unique(rv$updating$circularize_opts)) != 1) {
+    shinyWidgets::show_alert(
+      title = "Multiple circularization parameter sets selected",
+      text = "Cannot edit different parameter sets simultaneously",
+      type = "error",
+      closeOnClickOutside = FALSE,
+    )
+    return(invisible(NULL))
+  }
+
+  # Read-based confirmation is impossible without raw data, so those two
+  # thresholds stay hidden in a no-raw-data project.
+  no_raw <- isTRUE(session$userData$no_raw_data)
+  current <- rv$circularize_opts[
+    rv$circularize_opts$circularize_opts == rv$updating$circularize_opts[1],
+  ]
+
+  showModal(
+    modalDialog(
+      title = stringr::str_glue("Setting Circularization Options for {nrow(rv$updating)} Samples"),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        selectizeInput(
+          ns("circularize_opts"),
+          label = "Parameter set name:",
+          choices = rv$circularize_opts$circularize_opts,
+          selected = current$circularize_opts,
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ),
+        div(
+          class = "form-group shiny-input-container",
+          style = "margin-top: 39px;",
+          shinyWidgets::prettyCheckbox(
+            ns("edit_circularize_opts"),
+            label = "Edit",
+            value = FALSE,
+            status = "primary"
+          )
+        )
+      ),
+      opts_help("Reusable named set of options applied to the selected samples; ",
+                "check Edit to change values or type a new name to create a set."),
+      shinyWidgets::prettyCheckbox(
+        ns("attempt_circularization"),
+        label = "Attempt to circularize linear assemblies",
+        value = isTRUE(as.logical(current$attempt %||% 0L)),
+        status = "primary"
+      ) |> shinyjs::disabled(),
+      opts_help("Assemblers often report a circular mitogenome as a linear contig ",
+                "whose end repeats its start. When switched on, the contig is ",
+                "BLASTed against itself, any redundant overlap is trimmed, and the ",
+                "assembly is relabeled circular. Only linear, single-contig ",
+                "assemblies are considered; everything else is left untouched."),
+      div(
+        id = ns("circ_thresholds_group"),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("circ_min_overlap"), "Min. overlap (bp):",
+              width = "100%",
+              value = current$min_overlap %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("circ_min_identity"), "Min. identity (%):",
+              width = "100%",
+              value = current$min_identity %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
+        opts_help("How long and how similar the overlap between the contig ends must ",
+                  "be before it is treated as a redundant copy rather than a repeat.")
+      ),
+      if (!no_raw) {
+        div(
+          id = ns("circ_reads_group"),
+          div(
+            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+            div(
+              style = "flex: 1",
+              numericInput(
+                ns("circ_min_junction_reads"), "Min. junction reads:",
+                width = "100%",
+                value = current$min_junction_reads %||% numeric(0)
+              ) |> shinyjs::disabled()
+            ),
+            div(
+              style = "flex: 1",
+              numericInput(
+                ns("circ_min_overhang"), "Min. read overhang (bp):",
+                width = "100%",
+                value = current$min_overhang %||% numeric(0)
+              ) |> shinyjs::disabled()
+            )
+          ),
+          opts_help("Reads are mapped across the new junction to confirm it. An ",
+                    "assembly stays linear unless at least this many reads cross ",
+                    "the junction, each extending the given number of bases past ",
+                    "it on both sides.")
+        )
+      },
+      div(
+        id = ns("circ_resources_group"),
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("circ_opts_cpus"), "CPUs:",
+            width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("circ_opts_memory"), "Memory (GB):",
+            width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
+      size = "m",
+      footer = tagList(
+        actionButton(ns("update_circularize_opts"), "Update"),
+        modalButton("Cancel")
+      )
+    )
+  )
+
+  if (!isTRUE(as.logical(current$attempt %||% 0L))) {
+    circularize_params_toggle(FALSE, no_raw)
+  }
+}
+
+#' Show or hide the circularization parameter groups
+#'
+#' The thresholds and resources only matter when the step is switched on.
+#'
+#' @param show (logical) reveal the parameter groups
+#' @param no_raw (logical) project has no raw reads, so the read-based group
+#'   does not exist
+#'
+#' @noRd
+circularize_params_toggle <- function(show, no_raw = FALSE) {
+  groups <- c("circ_thresholds_group", "circ_resources_group")
+  if (!no_raw) {
+    groups <- c(groups, "circ_reads_group")
+  }
+  for (g in groups) {
+    shinyjs::toggle(id = g, condition = isTRUE(show))
+  }
+}

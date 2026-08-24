@@ -35,6 +35,19 @@
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
 #' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
+#' @param attempt_circularization Try to circularize linear single-contig
+#'   assemblies in WF1 (default = FALSE). See [circularize_asmb()].
+#' @param circularize_min_overlap Shortest accepted self-overlap, bp (default = 220)
+#' @param circularize_min_identity Percent identity required for the self-overlap
+#'   (default = 99)
+#' @param circularize_min_junction_reads Reads that must span the new junction
+#'   before an assembly is called circular (default = 5). Ignored when the
+#'   project has no raw data.
+#' @param circularize_min_overhang Bases a read must extend past the junction on
+#'   each side to count (default = 30)
+#' @param circularize_cpus Default # cpus for the circularization step (default = 4)
+#' @param circularize_memory Default memory (GB) for the circularization step
+#'   (default = 8)
 #' @param no_raw_data (logical) Initialize a project with no raw reads (default =
 #'   FALSE). When TRUE, annotation coverage trimming (`coverage_trim`) is disabled
 #'   since no read-depth information is available.
@@ -72,6 +85,14 @@ new_db_userAsmb <- function(
     # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
     # set per-scaffold ignore flags; matches the regular pipeline default)
     min_assembly_length = 500,
+    # Default circularization options (see circularize_asmb())
+    attempt_circularization = FALSE,
+    circularize_min_overlap = 220,
+    circularize_min_identity = 99,
+    circularize_min_junction_reads = 5,
+    circularize_min_overhang = 30,
+    circularize_cpus = 4,
+    circularize_memory = 8,
     # Skip read-mapping coverage (no raw data). Disables annotate coverage trim.
     no_raw_data = FALSE) {
   # Read mapping file
@@ -244,6 +265,8 @@ new_db_userAsmb <- function(
       assemble_lock INTEGER,
       hide_switch INTEGER,
       assemble_opts TEXT,
+      circularize_opts TEXT,
+      circularize_notes TEXT,
       blast_opts TEXT,
       blast_accession TEXT,
       blast_accession_auto TEXT,
@@ -272,6 +295,8 @@ new_db_userAsmb <- function(
           assemble_lock = 0,
           hide_switch = 0,
           assemble_opts = "user",
+          circularize_opts = "default",
+          circularize_notes = NA_character_,
           blast_opts = "default",
           poor_blast_ref = NA_character_,
           time_stamp = NA_integer_
@@ -303,6 +328,40 @@ new_db_userAsmb <- function(
       in_place = TRUE,
       copy = TRUE,
       by = "assemble_opts"
+    )
+
+  ## Circularization options ----
+  # Named settings profile for the optional WF1 circularization step
+  # (see circularize_asmb()). `attempt` is the master on/off switch.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE circularize_opts (
+      circularize_opts TEXT NOT NULL,
+      attempt INTEGER,
+      min_overlap INTEGER,
+      min_identity REAL,
+      min_junction_reads INTEGER,
+      min_overhang INTEGER,
+      cpus INTEGER,
+      memory INTEGER,
+      PRIMARY KEY (circularize_opts)
+    );"
+  )
+  dplyr::tbl(con, "circularize_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        circularize_opts = "default",
+        attempt = as.integer(attempt_circularization),
+        min_overlap = circularize_min_overlap,
+        min_identity = circularize_min_identity,
+        min_junction_reads = circularize_min_junction_reads,
+        min_overhang = circularize_min_overhang,
+        cpus = circularize_cpus,
+        memory = circularize_memory
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "circularize_opts"
     )
 
   ## BLAST options ----
