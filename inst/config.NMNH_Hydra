@@ -69,6 +69,12 @@ params {
         container = process.container
         executor = process.executor
     }
+    find_mito {
+        chunk_size = 50000              // contigs per parallel BLAST chunk
+        clusterOptions = "-l mres=64G,h_data=16G,h_vmem=16G,himem -S /bin/bash"
+        container = process.container
+        executor = process.executor
+    }
     scaffold_join {
         cpus = 1
         clusterOptions = "-l mres=32G,h_data=32G,h_vmem=32G,himem -S /bin/bash"

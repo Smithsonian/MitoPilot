@@ -20,6 +20,15 @@
 #'   trimming is disabled. Use this to annotate an assembly you already have.
 #' @param assembly_path Path to the directory where the mitogenome assemblies are located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
+#' @param find_mitogenome (logical) Search each supplied assembly for its
+#'   mitochondrial contigs before the rest of WF1 runs (default = FALSE). Use
+#'   this when your FASTA files hold whole assemblies rather than a mitogenome:
+#'   contigs are BLASTed against the bundled metazoan mitogenome database, the
+#'   survivors confirmed with MitoFinder, and only those carried forward. See
+#'   [find_mito()].
+#' @param mitofinder_db Path to a MitoFinder GenBank database, built with
+#'   [custom_assembly_db()] (`db_type = "mitofinder"`). Required when
+#'   `find_mitogenome = TRUE`.
 #' @param attempt_circularization (logical) Attempt to circularize linear,
 #'   single-contig user assemblies during WF1 (default = FALSE). Redundant
 #'   overlap between the contig ends is trimmed, and when raw reads are
@@ -61,6 +70,8 @@ new_project_userAsmb <- function(
     no_raw_data = FALSE,
     assembly_path = "NA",
     genetic_code = NULL,
+    find_mitogenome = FALSE,
+    mitofinder_db = NULL,
     attempt_circularization = FALSE,
     executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
@@ -96,6 +107,21 @@ new_project_userAsmb <- function(
   # Normalize assembly path (if provided)----
   if(length(assembly_path)==1){
     assembly_path <- normalizePath(assembly_path)
+  }
+
+  # The mitogenome search cannot confirm anything without a MitoFinder
+  # reference, so refuse at project creation rather than at the end of a run.
+  if (isTRUE(find_mitogenome)) {
+    if (is.null(mitofinder_db) || !nzchar(mitofinder_db) || !file.exists(mitofinder_db)) {
+      stop(
+        "find_mitogenome = TRUE requires a MitoFinder reference database.\n",
+        "Build one for your clade with:\n",
+        "  custom_assembly_db(clade = \"<your clade>\", db_type = \"mitofinder\")\n",
+        "then pass its .gb file as mitofinder_db.",
+        call. = FALSE
+      )
+    }
+    mitofinder_db <- normalizePath(mitofinder_db)
   }
 
   # Read mapping file ----
@@ -152,6 +178,8 @@ new_project_userAsmb <- function(
     mapping_id = mapping_id,
     no_raw_data = no_raw_data,
     attempt_circularization = attempt_circularization,
+    find_mitogenome = find_mitogenome,
+    mitofinder_db = mitofinder_db,
     ...
   )
 

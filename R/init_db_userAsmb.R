@@ -35,6 +35,25 @@
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
 #' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
+#' @param find_mitogenome Search each user-supplied assembly for its
+#'   mitochondrial contigs before the rest of WF1 runs (default = FALSE). See
+#'   [find_mito()].
+#' @param mitofinder_db Path to a MitoFinder GenBank database, built with
+#'   [custom_assembly_db()] (`db_type = "mitofinder"`). Required when
+#'   `find_mitogenome = TRUE`.
+#' @param find_min_contig_length Contigs shorter than this are never searched,
+#'   bp (default = 500)
+#' @param find_min_identity Percent identity required against the reference
+#'   (default = 70)
+#' @param find_min_aligned_length Aligned bases required (default = 300)
+#' @param find_min_aligned_fraction Fraction of the contig the alignment must
+#'   cover (default = 0.5). The NUMT filter.
+#' @param find_max_candidates Most contigs carried into MitoFinder confirmation
+#'   (default = 20)
+#' @param find_min_genes Mitochondrial genes a contig must carry to be confirmed
+#'   (default = 3)
+#' @param find_cpus Default # cpus for the search steps (default = 4)
+#' @param find_memory Default memory (GB) for the search steps (default = 8)
 #' @param attempt_circularization Try to circularize linear single-contig
 #'   assemblies in WF1 (default = FALSE). See [circularize_asmb()].
 #' @param circularize_min_overlap Shortest accepted self-overlap, bp (default = 220)
@@ -85,6 +104,17 @@ new_db_userAsmb <- function(
     # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
     # set per-scaffold ignore flags; matches the regular pipeline default)
     min_assembly_length = 500,
+    # Default mitogenome-search options (see find_mito())
+    find_mitogenome = FALSE,
+    mitofinder_db = NULL,
+    find_min_contig_length = 500,
+    find_min_identity = 70,
+    find_min_aligned_length = 300,
+    find_min_aligned_fraction = 0.5,
+    find_max_candidates = 20,
+    find_min_genes = 3,
+    find_cpus = 4,
+    find_memory = 8,
     # Default circularization options (see circularize_asmb())
     attempt_circularization = FALSE,
     circularize_min_overlap = 220,
@@ -267,6 +297,8 @@ new_db_userAsmb <- function(
       assemble_opts TEXT,
       circularize_opts TEXT,
       circularize_notes TEXT,
+      find_mito_opts TEXT,
+      find_mito_notes TEXT,
       blast_opts TEXT,
       blast_accession TEXT,
       blast_accession_auto TEXT,
@@ -297,6 +329,8 @@ new_db_userAsmb <- function(
           assemble_opts = "user",
           circularize_opts = "default",
           circularize_notes = NA_character_,
+          find_mito_opts = "default",
+          find_mito_notes = NA_character_,
           blast_opts = "default",
           poor_blast_ref = NA_character_,
           time_stamp = NA_integer_
@@ -363,6 +397,68 @@ new_db_userAsmb <- function(
       copy = TRUE,
       by = "circularize_opts"
     )
+
+  ## Mitogenome search options ----
+  # Settings for the optional WF1 step that locates mitochondrial contigs in a
+  # large user-supplied assembly (see find_mito()).
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE find_mito_opts (
+      find_mito_opts TEXT NOT NULL,
+      attempt INTEGER,
+      mitofinder_db TEXT,
+      min_contig_length INTEGER,
+      min_identity REAL,
+      min_aligned_length INTEGER,
+      min_aligned_fraction REAL,
+      max_candidates INTEGER,
+      min_genes INTEGER,
+      cpus INTEGER,
+      memory INTEGER,
+      PRIMARY KEY (find_mito_opts)
+    );"
+  )
+  dplyr::tbl(con, "find_mito_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        find_mito_opts = "default",
+        attempt = as.integer(find_mitogenome),
+        mitofinder_db = mitofinder_db %||% NA_character_,
+        min_contig_length = find_min_contig_length,
+        min_identity = find_min_identity,
+        min_aligned_length = find_min_aligned_length,
+        min_aligned_fraction = find_min_aligned_fraction,
+        max_candidates = find_max_candidates,
+        min_genes = find_min_genes,
+        cpus = find_cpus,
+        memory = find_memory
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "find_mito_opts"
+    )
+
+  ## Mitogenome search evidence ----
+  # One row per screened candidate contig: what the search saw and why each
+  # contig was kept or dropped.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE mito_candidates (
+      ID TEXT NOT NULL,
+      contig TEXT NOT NULL,
+      length INTEGER,
+      accession TEXT,
+      pident REAL,
+      aligned_length INTEGER,
+      aligned_fraction REAL,
+      genes INTEGER,
+      rank INTEGER,
+      selected INTEGER,
+      reason TEXT,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, contig)
+    );"
+  )
 
   ## BLAST options ----
   DBI::dbExecute(

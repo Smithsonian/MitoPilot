@@ -12,6 +12,8 @@ new_project_userAsmb(
   no_raw_data = FALSE,
   assembly_path = "NA",
   genetic_code = NULL,
+  find_mitogenome = FALSE,
+  mitofinder_db = NULL,
   attempt_circularization = FALSE,
   executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
     "NOAA_SEDNA"),
@@ -54,6 +56,17 @@ a AWS s3 bucket even if not using AWS for pipeline execution.}
 \item{genetic_code}{Optional NCBI translation table override. Default `NULL`
 auto-selects from each sample's curation ruleset; a number sets a
 project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
+
+\item{find_mitogenome}{(logical) Search each supplied assembly for its
+mitochondrial contigs before the rest of WF1 runs (default = FALSE). Use
+this when your FASTA files hold whole assemblies rather than a mitogenome:
+contigs are BLASTed against the bundled metazoan mitogenome database, the
+survivors confirmed with MitoFinder, and only those carried forward. See
+[find_mito()].}
+
+\item{mitofinder_db}{Path to a MitoFinder GenBank database, built with
+[custom_assembly_db()] (`db_type = "mitofinder"`). Required when
+`find_mitogenome = TRUE`.}
 
 \item{attempt_circularization}{(logical) Attempt to circularize linear,
 single-contig user assemblies during WF1 (default = FALSE). Redundant

@@ -1,14 +1,20 @@
 include {coverage_userAsmb; coverage_userAsmb_noReads} from './coverage_userAsmb.nf'
 include {CIRCULARIZE_userAsmb; CIRCULARIZE_userAsmb_noReads} from './circularize_workflow.nf'
+include {FIND_MITO_userAsmb} from './find_mito_workflow.nf'
 
 params.sqlRead =  'SELECT s.ID, s.assembly, s.topology, ' +
                   'a.assemble_opts, opts.min_assembly_length, ' +
                   'copts.attempt, copts.min_overlap, copts.min_identity, ' +
-                  'copts.min_junction_reads, copts.min_overhang, copts.cpus, copts.memory ' +
+                  'copts.min_junction_reads, copts.min_overhang, copts.cpus, copts.memory, ' +
+                  's.genetic_code, ' +
+                  'fopts.attempt, fopts.mitofinder_db, fopts.min_contig_length, ' +
+                  'fopts.min_identity, fopts.min_aligned_length, fopts.min_aligned_fraction, ' +
+                  'fopts.max_candidates, fopts.min_genes, fopts.cpus, fopts.memory ' +
                   'FROM samples s ' +
                   'JOIN assemble a ON s.ID = a.ID ' +
                   'JOIN assemble_opts opts ON a.assemble_opts = opts.assemble_opts ' +
                   'LEFT JOIN circularize_opts copts ON a.circularize_opts = copts.circularize_opts ' +
+                  'LEFT JOIN find_mito_opts fopts ON a.find_mito_opts = fopts.find_mito_opts ' +
                   'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 
@@ -188,12 +194,30 @@ workflow COVERAGE_userAsmb {
                       cpus:               it[10],
                       memory:             it[11] ]
                 )
+                gcode: tuple(it[0], it[12] == null ? 2 : (it[12] as Integer))
+                find_opts: tuple(it[0], [ attempt:              it[13],
+                      mitofinder_db:        it[14],
+                      min_contig_length:    it[15],
+                      min_identity:         it[16],
+                      min_aligned_length:   it[17],
+                      min_aligned_fraction: it[18],
+                      max_candidates:       it[19],
+                      min_genes:            it[20],
+                      cpus:                 it[21],
+                      memory:               it[22] ])
                 min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
             }
             .set { query_ch }
 
-        query_ch.info.set { sample_info }
+        // Optional mitogenome search runs first, so a multi-contig assembly is
+        // cut down before anything is written to the database.
+        query_ch.info
+            .join(query_ch.gcode)
+            .join(query_ch.find_opts)
+            .set { find_in }
+        FIND_MITO_userAsmb(find_in)
+        FIND_MITO_userAsmb.out.sample_info.set { sample_info }
         query_ch.min_len_scaffolds.set { min_len_lookup }
         query_ch.min_len_summary.set { min_len_summary }
 
@@ -247,12 +271,30 @@ workflow COVERAGE_userAsmb_noReads {
                       cpus:               it[10],
                       memory:             it[11] ]
                 )
+                gcode: tuple(it[0], it[12] == null ? 2 : (it[12] as Integer))
+                find_opts: tuple(it[0], [ attempt:              it[13],
+                      mitofinder_db:        it[14],
+                      min_contig_length:    it[15],
+                      min_identity:         it[16],
+                      min_aligned_length:   it[17],
+                      min_aligned_fraction: it[18],
+                      max_candidates:       it[19],
+                      min_genes:            it[20],
+                      cpus:                 it[21],
+                      memory:               it[22] ])
                 min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
                 min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
             }
             .set { query_ch }
 
-        query_ch.info.set { sample_info }
+        // Optional mitogenome search runs first, so a multi-contig assembly is
+        // cut down before anything is written to the database.
+        query_ch.info
+            .join(query_ch.gcode)
+            .join(query_ch.find_opts)
+            .set { find_in }
+        FIND_MITO_userAsmb(find_in)
+        FIND_MITO_userAsmb.out.sample_info.set { sample_info }
         query_ch.min_len_scaffolds.set { min_len_lookup }
         query_ch.min_len_summary.set { min_len_summary }
 

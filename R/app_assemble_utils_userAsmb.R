@@ -34,6 +34,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       assembly,
       topology,
       pre_opts,
+      find_mito_opts,
       circularize_opts,
       blast_opts,
       reads,
@@ -52,7 +53,8 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       blast_hits,
       time_stamp,
       assemble_notes,
-      circularize_notes
+      circularize_notes,
+      find_mito_notes
     ) |>
     dplyr::mutate(
       output = dplyr::case_when(
@@ -61,6 +63,11 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       ),
       view = dplyr::case_when(
         assemble_switch > 1 ~ "details",
+        .default = NA_character_
+      ),
+      # Link to the search evidence, shown only once a search has run
+      mito_candidates = dplyr::case_when(
+        !is.na(find_mito_notes) ~ "candidates",
         .default = NA_character_
       )
     )
@@ -518,4 +525,227 @@ circularize_params_toggle <- function(show, no_raw = FALSE) {
   for (g in groups) {
     shinyjs::toggle(id = g, condition = isTRUE(show))
   }
+}
+
+#' Update the mitogenome search options
+#'
+#' Settings for the optional WF1 step that locates mitochondrial contigs inside
+#' a large user-supplied assembly. See [find_mito()].
+#'
+#' @param rv the local reactive vals object
+#' @param session current shiny session
+#'
+#' @noRd
+find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+
+  if (length(unique(rv$updating$find_mito_opts)) != 1) {
+    shinyWidgets::show_alert(
+      title = "Multiple mitogenome search parameter sets selected",
+      text = "Cannot edit different parameter sets simultaneously",
+      type = "error",
+      closeOnClickOutside = FALSE,
+    )
+    return(invisible(NULL))
+  }
+
+  current <- rv$find_mito_opts[
+    rv$find_mito_opts$find_mito_opts == rv$updating$find_mito_opts[1],
+  ]
+
+  showModal(
+    modalDialog(
+      title = stringr::str_glue("Setting Mitogenome Search Options for {nrow(rv$updating)} Samples"),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        selectizeInput(
+          ns("find_mito_opts"),
+          label = "Parameter set name:",
+          choices = rv$find_mito_opts$find_mito_opts,
+          selected = current$find_mito_opts,
+          options = list(
+            create = TRUE,
+            maxItems = 1
+          )
+        ),
+        div(
+          class = "form-group shiny-input-container",
+          style = "margin-top: 39px;",
+          shinyWidgets::prettyCheckbox(
+            ns("edit_find_mito_opts"),
+            label = "Edit",
+            value = FALSE,
+            status = "primary"
+          )
+        )
+      ),
+      opts_help("Reusable named set of options applied to the selected samples; ",
+                "check Edit to change values or type a new name to create a set."),
+      shinyWidgets::prettyCheckbox(
+        ns("find_mitogenome"),
+        label = "Search the assembly for mitochondrial contigs",
+        value = isTRUE(as.logical(current$attempt %||% 0L)),
+        status = "primary"
+      ) |> shinyjs::disabled(),
+      opts_help("Use this when your FASTA holds a whole assembly rather than a ",
+                "mitogenome. Contigs are BLASTed against the bundled metazoan ",
+                "mitogenome database, the survivors are confirmed with MitoFinder, ",
+                "and only those continue through the pipeline. A sample where ",
+                "nothing is confirmed is marked failed."),
+      div(
+        id = ns("find_mito_params_group"),
+        textInput(
+          ns("find_mitofinder_db"),
+          label = "MitoFinder reference database (.gb):",
+          value = current$mitofinder_db %||% "",
+          width = "100%"
+        ) |> shinyjs::disabled(),
+        opts_help("GenBank database used to confirm candidate contigs. Build one ",
+                  "for your clade with custom_assembly_db(db_type = \"mitofinder\"). ",
+                  "Required while the search is switched on."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_min_contig_length"), "Min. contig length (bp):",
+              width = "100%", value = current$min_contig_length %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_min_identity"), "Min. identity (%):",
+              width = "100%", value = current$min_identity %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
+        opts_help("Contigs shorter than the minimum length are never searched, ",
+                  "which keeps the short tail of a draft genome out of the BLAST."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_min_aligned_length"), "Min. aligned length (bp):",
+              width = "100%", value = current$min_aligned_length %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_min_aligned_fraction"), "Min. aligned fraction:",
+              width = "100%", min = 0, max = 1, step = 0.05,
+              value = current$min_aligned_fraction %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
+        opts_help("The aligned fraction is the NUMT filter: a real mitochondrial ",
+                  "contig is almost entirely mitochondrial, while a nuclear ",
+                  "scaffold carrying a NUMT aligns over a small slice of itself."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_max_candidates"), "Max. candidates:",
+              width = "100%", value = current$max_candidates %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_min_genes"), "Min. genes to confirm:",
+              width = "100%", value = current$min_genes %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
+        opts_help("Only the best candidates go to MitoFinder, and a candidate is ",
+                  "confirmed once it carries at least this many mitochondrial genes."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_opts_cpus"), "CPUs:",
+              width = "100%", value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("find_opts_memory"), "Memory (GB):",
+              width = "100%", value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        )
+      ),
+      size = "m",
+      footer = tagList(
+        actionButton(ns("update_find_mito_opts"), "Update"),
+        modalButton("Cancel")
+      )
+    )
+  )
+
+  if (!isTRUE(as.logical(current$attempt %||% 0L))) {
+    shinyjs::hide(id = "find_mito_params_group")
+  }
+}
+
+#' Show the evidence behind a sample's mitogenome search
+#'
+#' @param id sample ID
+#' @param session current shiny session
+#'
+#' @noRd
+mito_candidates_modal <- function(id, session = getDefaultReactiveDomain()) {
+  rows <- dplyr::tbl(session$userData$con, "mito_candidates") |>
+    dplyr::filter(ID == !!id) |>
+    dplyr::collect() |>
+    dplyr::arrange(dplyr::desc(selected), rank, dplyr::desc(aligned_length))
+
+  if (nrow(rows) == 0L) {
+    shinyWidgets::show_alert(
+      title = "No search results",
+      text = "This sample has no mitogenome search records yet.",
+      type = "info"
+    )
+    return(invisible(NULL))
+  }
+
+  showModal(
+    modalDialog(
+      title = stringr::str_glue("Mitogenome Search Candidates: {id}"),
+      size = "l",
+      easyClose = TRUE,
+      opts_help("Every contig the search considered, best first. 'Kept' contigs ",
+                "were carried forward as scaffolds of the assembly; the rest were ",
+                "dropped for the reason shown."),
+      reactable::reactable(
+        rows |>
+          dplyr::transmute(
+            Contig = contig,
+            `Length (bp)` = length,
+            Reference = accession,
+            `Identity (%)` = pident,
+            `Aligned (bp)` = aligned_length,
+            `Aligned fraction` = round(aligned_fraction, 3),
+            Genes = genes,
+            Outcome = dplyr::if_else(selected == 1L, "kept", "dropped"),
+            Reason = dplyr::coalesce(reason, "")
+          ),
+        defaultPageSize = 15,
+        compact = TRUE,
+        highlight = TRUE,
+        wrap = FALSE,
+        resizable = TRUE,
+        columns = list(
+          Contig = reactable::colDef(minWidth = 160),
+          Reason = reactable::colDef(minWidth = 260)
+        )
+      ),
+      footer = modalButton("Close")
+    )
+  )
 }

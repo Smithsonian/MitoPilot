@@ -32,6 +32,16 @@ new_db_userAsmb(
   orf_min_len = 300,
   orf_max_overlap = 0.1,
   min_assembly_length = 500,
+  find_mitogenome = FALSE,
+  mitofinder_db = NULL,
+  find_min_contig_length = 500,
+  find_min_identity = 70,
+  find_min_aligned_length = 300,
+  find_min_aligned_fraction = 0.5,
+  find_max_candidates = 20,
+  find_min_genes = 3,
+  find_cpus = 4,
+  find_memory = 8,
   attempt_circularization = FALSE,
   circularize_min_overlap = 220,
   circularize_min_identity = 99,
@@ -103,6 +113,35 @@ Editable later in the curation-options modal.}
 of the ORF length, before an ORF is discarded (default = 0.1)}
 
 \item{min_assembly_length}{Minimum scaffold length to include in analysis (default = 500)}
+
+\item{find_mitogenome}{Search each user-supplied assembly for its
+mitochondrial contigs before the rest of WF1 runs (default = FALSE). See
+[find_mito()].}
+
+\item{mitofinder_db}{Path to a MitoFinder GenBank database, built with
+[custom_assembly_db()] (`db_type = "mitofinder"`). Required when
+`find_mitogenome = TRUE`.}
+
+\item{find_min_contig_length}{Contigs shorter than this are never searched,
+bp (default = 500)}
+
+\item{find_min_identity}{Percent identity required against the reference
+(default = 70)}
+
+\item{find_min_aligned_length}{Aligned bases required (default = 300)}
+
+\item{find_min_aligned_fraction}{Fraction of the contig the alignment must
+cover (default = 0.5). The NUMT filter.}
+
+\item{find_max_candidates}{Most contigs carried into MitoFinder confirmation
+(default = 20)}
+
+\item{find_min_genes}{Mitochondrial genes a contig must carry to be confirmed
+(default = 3)}
+
+\item{find_cpus}{Default # cpus for the search steps (default = 4)}
+
+\item{find_memory}{Default memory (GB) for the search steps (default = 8)}
 
 \item{attempt_circularization}{Try to circularize linear single-contig
 assemblies in WF1 (default = FALSE). See [circularize_asmb()].}

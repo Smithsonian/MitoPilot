@@ -460,6 +460,62 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_notes TEXT")
   }
 
+  # mitogenome-search options for user-supplied assemblies (WF1 find_mito step)
+  if (!DBI::dbExistsTable(con, "find_mito_opts")) {
+    message("added 'find_mito_opts' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE find_mito_opts (
+        find_mito_opts TEXT NOT NULL,
+        attempt INTEGER,
+        mitofinder_db TEXT,
+        min_contig_length INTEGER,
+        min_identity REAL,
+        min_aligned_length INTEGER,
+        min_aligned_fraction REAL,
+        max_candidates INTEGER,
+        min_genes INTEGER,
+        cpus INTEGER,
+        memory INTEGER,
+        PRIMARY KEY (find_mito_opts)
+      );"
+    )
+    DBI::dbExecute(
+      con,
+      "INSERT INTO find_mito_opts VALUES ('default', 0, NULL, 500, 70, 300, 0.5, 20, 3, 4, 8)"
+    )
+  }
+  if (!DBI::dbExistsTable(con, "mito_candidates")) {
+    message("added 'mito_candidates' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE mito_candidates (
+        ID TEXT NOT NULL,
+        contig TEXT NOT NULL,
+        length INTEGER,
+        accession TEXT,
+        pident REAL,
+        aligned_length INTEGER,
+        aligned_fraction REAL,
+        genes INTEGER,
+        rank INTEGER,
+        selected INTEGER,
+        reason TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, contig)
+      );"
+    )
+  }
+  if (!("find_mito_opts" %in% assemble_fields)) {
+    message("added 'find_mito_opts' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_opts TEXT")
+    DBI::dbExecute(con, "UPDATE assemble SET find_mito_opts = 'default'")
+  }
+  if (!("find_mito_notes" %in% assemble_fields)) {
+    message("added 'find_mito_notes' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_notes TEXT")
+  }
+
   # if reviewed column doesn't exist, add it
   if(!("reviewed" %in% names(annotate_table))){
     message("added 'reviewed' column to annotate table")

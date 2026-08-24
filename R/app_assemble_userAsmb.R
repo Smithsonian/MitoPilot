@@ -3,12 +3,13 @@
 # always visible. Mirrors ASSEMBLE_COL_GROUPS but drops assemble_opts (no
 # assembler step in user-assemble mode).
 ASSEMBLE_COL_GROUPS_USERASMB <- list(
-  Options  = c("pre_opts", "circularize_opts", "blast_opts"),
+  Options  = c("pre_opts", "find_mito_opts", "circularize_opts", "blast_opts"),
   Stats    = c("trimmed_reads", "mean_length", "topology", "length",
                "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes", "circularize_notes")
+  Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
+               "find_mito_notes", "mito_candidates")
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -109,6 +110,8 @@ assemble_server_userAsmb <- function(id) {
       blast_opts = dplyr::tbl(session$userData$con, "blast_opts") |>
         dplyr::collect(),
       circularize_opts = dplyr::tbl(session$userData$con, "circularize_opts") |>
+        dplyr::collect(),
+      find_mito_opts = dplyr::tbl(session$userData$con, "find_mito_opts") |>
         dplyr::collect(),
       data = fetch_assemble_data_userAsmb(),
       updating = NULL
@@ -285,6 +288,27 @@ assemble_server_userAsmb <- function(id) {
               html = T,
               width = 130,
               cell = rt_link(ns("set_pre_opts"))
+            ),
+            find_mito_opts = colDef(
+              show = TRUE, class = .grp("find_mito_opts"), headerClass = .grp("find_mito_opts"),
+              name = "Find Mito Opts.",
+              html = T,
+              width = 140,
+              cell = rt_link(ns("set_find_mito_opts"))
+            ),
+            find_mito_notes = colDef(
+              show = TRUE, class = .grp("find_mito_notes"), headerClass = .grp("find_mito_notes"),
+              name = "Mito Search",
+              minWidth = 180,
+              html = T,
+              cell = rt_longtext()
+            ),
+            mito_candidates = colDef(
+              show = TRUE, class = .grp("mito_candidates"), headerClass = .grp("mito_candidates"),
+              name = "Candidates",
+              html = T,
+              width = 110,
+              cell = rt_link(ns("show_mito_candidates"))
             ),
             circularize_opts = colDef(
               show = TRUE, class = .grp("circularize_opts"), headerClass = .grp("circularize_opts"),
@@ -723,6 +747,156 @@ assemble_server_userAsmb <- function(id) {
             .default = NA_character_
           )
         )
+      rv$updating <- rv$updating_indirect <- NULL
+      removeModal()
+      trigger("update_assemble_table")
+    })
+
+    # Set Mitogenome Search Opts ----
+    observeEvent(input$set_find_mito_opts, {
+      row <- as.numeric(input$set_find_mito_opts)
+      if (length(selected()) > 0 && !row %in% selected()) {
+        req(F)
+      } else {
+        selected <- c(row, selected()) |> unique()
+      }
+      req(all(rv$data$assemble_lock[selected] == 0))
+      rv$updating <- rv$data |> dplyr::slice(selected)
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      find_mito_opts_modal(rv)
+    })
+    observeEvent(input$show_mito_candidates, {
+      mito_candidates_modal(rv$data$ID[as.numeric(input$show_mito_candidates)])
+    })
+    observeEvent(input$find_mito_opts, ignoreInit = T, {
+      exists <- input$find_mito_opts %in% rv$find_mito_opts$find_mito_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_find_mito_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$find_mito_opts[
+          rv$find_mito_opts$find_mito_opts == input$find_mito_opts,
+        ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "find_mitogenome",
+          value = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+        updateTextInput(inputId = "find_mitofinder_db", value = cur$mitofinder_db %||% "")
+        updateNumericInput(inputId = "find_min_contig_length", value = cur$min_contig_length)
+        updateNumericInput(inputId = "find_min_identity", value = cur$min_identity)
+        updateNumericInput(inputId = "find_min_aligned_length", value = cur$min_aligned_length)
+        updateNumericInput(inputId = "find_min_aligned_fraction", value = cur$min_aligned_fraction)
+        updateNumericInput(inputId = "find_max_candidates", value = cur$max_candidates)
+        updateNumericInput(inputId = "find_min_genes", value = cur$min_genes)
+        updateNumericInput(inputId = "find_opts_cpus", value = cur$cpus)
+        updateNumericInput(inputId = "find_opts_memory", value = cur$memory)
+        shinyjs::toggle(
+          id = "find_mito_params_group",
+          condition = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+      }
+    })
+    # Parameters are meaningless with the search switched off
+    observeEvent(input$find_mitogenome, ignoreInit = T, {
+      shinyjs::toggle(
+        id = "find_mito_params_group",
+        condition = isTRUE(input$find_mitogenome)
+      )
+    })
+    observeEvent(input$edit_find_mito_opts, ignoreInit = T, {
+      for (fld in c("find_mitogenome", "find_mitofinder_db", "find_min_contig_length",
+                    "find_min_identity", "find_min_aligned_length",
+                    "find_min_aligned_fraction", "find_max_candidates",
+                    "find_min_genes", "find_opts_cpus", "find_opts_memory")) {
+        shinyjs::toggleState(fld, condition = input$edit_find_mito_opts)
+      }
+      if (input$edit_find_mito_opts && input$find_mito_opts %in% rv$data$find_mito_opts) {
+        rv$updating_indirect <- rv$data |>
+          dplyr::filter(find_mito_opts == input$find_mito_opts) |>
+          dplyr::anti_join(rv$updating, by = "ID")
+        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
+          shinyWidgets::sendSweetAlert(
+            title = "Attempting to edit locked samples",
+            text = "Processing parameters associated with locked samples can not be edited.",
+            type = "warning"
+          )
+          shinyWidgets::updatePrettyCheckbox(inputId = "edit_find_mito_opts", value = FALSE)
+          req(F)
+        }
+        if (nrow(rv$updating_indirect) > 0L) {
+          shinyWidgets::confirmSweetAlert(
+            inputId = "editing_find_mito_opts_indirect",
+            title = "Editing beyond selection",
+            text = "You are attempting to edit mitogenome search options that apply to samples beyond the current selection. Are you sure you want to proceed?",
+            btn_colors = c("#0056b3", "#0056b3")
+          )
+        }
+      } else {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      }
+    })
+    observeEvent(input$editing_find_mito_opts_indirect, ignoreInit = T, {
+      if (!input$editing_find_mito_opts_indirect) {
+        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+        shinyWidgets::updatePrettyCheckbox(inputId = "edit_find_mito_opts", value = FALSE)
+      }
+    })
+    observeEvent(input$update_find_mito_opts, ignoreInit = T, {
+      if (input$edit_find_mito_opts) {
+        # A search with no reference database can never confirm anything, so
+        # refuse to save that combination rather than fail mid-run.
+        db_path <- trimws(input$find_mitofinder_db %||% "")
+        if (isTRUE(input$find_mitogenome) && (!nzchar(db_path) || !file.exists(db_path))) {
+          shinyWidgets::sendSweetAlert(
+            title = "MitoFinder database not found",
+            text = paste0(
+              "The mitogenome search confirms candidates with MitoFinder, which needs ",
+              "a GenBank reference database. Build one for your clade with ",
+              "custom_assembly_db(db_type = \"mitofinder\") and enter the path to its ",
+              ".gb file."
+            ),
+            type = "error"
+          )
+          req(F)
+        }
+        dplyr::tbl(session$userData$con, "find_mito_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              find_mito_opts       = req(input$find_mito_opts),
+              attempt              = as.integer(isTRUE(input$find_mitogenome)),
+              mitofinder_db        = db_path,
+              min_contig_length    = as.integer(input$find_min_contig_length %||% 500L),
+              min_identity         = as.numeric(input$find_min_identity %||% 70),
+              min_aligned_length   = as.integer(input$find_min_aligned_length %||% 300L),
+              min_aligned_fraction = as.numeric(input$find_min_aligned_fraction %||% 0.5),
+              max_candidates       = as.integer(input$find_max_candidates %||% 20L),
+              min_genes            = as.integer(input$find_min_genes %||% 3L),
+              cpus                 = as.integer(input$find_opts_cpus %||% 4L),
+              memory               = as.integer(input$find_opts_memory %||% 8L)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "find_mito_opts"
+          )
+        rv$find_mito_opts <- dplyr::tbl(session$userData$con, "find_mito_opts") |>
+          dplyr::collect()
+      }
+      update <- data.frame(
+        ID = c(rv$updating$ID, rv$updating_indirect$ID),
+        find_mito_opts = input$find_mito_opts,
+        assemble_switch = 1L
+      )
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(
+          update,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |>
+        dplyr::rows_update(update, by = "ID")
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
