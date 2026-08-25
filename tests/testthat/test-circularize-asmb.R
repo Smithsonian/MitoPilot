@@ -206,3 +206,63 @@ test_that("count_junction_reads window_bp and position are integer on a populate
   expect_type(res$window_bp, "integer")
   expect_type(res$depth$position, "integer")
 })
+
+test_that("evidence is written for an accepted overlap with no reads", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 26)
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  ev <- withr::local_tempdir()
+  writeLines(c(">contig", paste0(core, substr(core, 1, 300))), fa)
+
+  circularize_asmb(fa, id = "s1", evidence_dir = ev)
+
+  ov <- utils::read.csv(file.path(ev, "circularize_overlap.csv"))
+  expect_equal(nrow(ov), 1L)
+  expect_equal(ov$ID, "s1")
+  expect_equal(ov$accepted, 1L)
+  expect_equal(ov$trimmed, 300L)
+  expect_equal(nchar(ov$aln_query), nchar(ov$aln_subject))
+  # No reads, so the depth file is header only
+  dp <- utils::read.csv(file.path(ev, "circularize_depth.csv"))
+  expect_equal(nrow(dp), 0L)
+})
+
+test_that("evidence is written for a rejected overlap", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 27)
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  ev <- withr::local_tempdir()
+  writeLines(c(">contig", paste0(core, substr(core, 1, 100))), fa)
+
+  circularize_asmb(fa, id = "s2", evidence_dir = ev, min_overlap = 220)
+
+  ov <- utils::read.csv(file.path(ev, "circularize_overlap.csv"))
+  expect_equal(nrow(ov), 1L)
+  expect_equal(ov$accepted, 0L)
+  expect_equal(ov$trimmed, 0L)
+  expect_match(ov$reason, "below the 220 bp minimum")
+})
+
+test_that("no end-anchored hit writes header-only evidence", {
+  skip_if_no_blastn()
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  ev <- withr::local_tempdir()
+  writeLines(c(">contig", random_seq(6000, seed = 28)), fa)
+
+  circularize_asmb(fa, id = "s3", evidence_dir = ev)
+
+  expect_equal(nrow(utils::read.csv(file.path(ev, "circularize_overlap.csv"))), 0L)
+  expect_equal(nrow(utils::read.csv(file.path(ev, "circularize_depth.csv"))), 0L)
+})
+
+test_that("a multi-contig assembly still writes both files", {
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  ev <- withr::local_tempdir()
+  writeLines(c(">a", random_seq(1000, seed = 29), ">b", random_seq(1000, seed = 30)), fa)
+
+  circularize_asmb(fa, id = "s4", evidence_dir = ev)
+
+  expect_true(file.exists(file.path(ev, "circularize_overlap.csv")))
+  expect_true(file.exists(file.path(ev, "circularize_depth.csv")))
+  expect_equal(nrow(utils::read.csv(file.path(ev, "circularize_overlap.csv"))), 0L)
+})

@@ -14,7 +14,9 @@ circularize_asmb(
   min_overhang = 30,
   cpus = 4,
   out_fn = NULL,
-  log_fn = NULL
+  log_fn = NULL,
+  id = "sample",
+  evidence_dir = NULL
 )
 }
 \arguments{
@@ -39,6 +41,11 @@ circularize_asmb(
 returning the result only.}
 
 \item{log_fn}{Optional path for a plain-text log}
+
+\item{id}{Sample ID, recorded in the evidence CSVs (default = "sample")}
+
+\item{evidence_dir}{Optional directory to write `circularize_overlap.csv`
+and `circularize_depth.csv` into}
 }
 \value{
 (invisibly) a list with `circular` (logical), `sequence`
