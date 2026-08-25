@@ -97,6 +97,8 @@ process circularize_noReads {
         "!{assembly}", "NA", "NA",
         min_overlap = !{opts.min_overlap},
         min_identity = !{opts.min_identity},
+        min_junction_reads = !{opts.min_junction_reads},
+        min_overhang = !{opts.min_overhang},
         cpus = !{task.cpus},
         id = "!{id}",
         evidence_dir = "!{outDir}",

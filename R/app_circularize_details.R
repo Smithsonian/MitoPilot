@@ -68,9 +68,14 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
   depth <- dplyr::tbl(session$userData$con, "circularize_depth") |>
     dplyr::filter(ID == !!id) |>
     dplyr::collect()
-  # Ignore rows left by an earlier run with a wider window.
-  if (nrow(depth) > 0L && !is.na(ov$window_bp)) {
-    depth <- depth[abs(depth$rel_position) <= ov$window_bp, ]
+  # Ignore rows left by an earlier run with a wider window. NA window_bp
+  # means no reads were mapped this run, so any depth rows are stale.
+  if (nrow(depth) > 0L) {
+    if (is.na(ov$window_bp)) {
+      depth <- depth[0, ]
+    } else {
+      depth <- depth[abs(depth$rel_position) <= ov$window_bp, ]
+    }
   }
 
   rv$circ_evidence <- list(overlap = ov, depth = depth)
