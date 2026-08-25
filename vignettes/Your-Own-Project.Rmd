@@ -365,10 +365,10 @@ database for your clade. Build one with
 `.gb` file as `mitofinder_db`. Project creation refuses the search without it.
 </div>
 
-The **Mito Search** column of the Assemble table summarizes each sample, and the
-**Candidates** link opens the full evidence: every contig considered, its length,
-the reference it matched, percent identity, how much of the contig aligned, how
-many mitochondrial genes it carried, and why it was kept or dropped. Thresholds
+The **Mito Search** column of the Assemble table summarizes each sample. Click
+the summary to open the full evidence: every contig considered, its length, the
+reference it matched, percent identity, how much of the contig aligned, how many
+mitochondrial genes it carried, and why it was kept or dropped. Thresholds
 live in the **Find Mito Opts.** modal, and a per-sample log is written to
 `out/<ID>/assemble/user/find_mito.log`.
 

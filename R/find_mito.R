@@ -212,7 +212,7 @@ find_mito_note <- function(n_screened, evidence, confirmed, accession) {
     return(paste0(
       "found ", length(confirmed), " mitochondrial contig",
       if (length(confirmed) == 1L) "" else "s",
-      " of ", n_screened, " screened (reference ", accession, ")"
+      " of ", n_screened, " screened"
     ))
   }
   if (n_cand > 0L) {

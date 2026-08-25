@@ -9,7 +9,7 @@ ASSEMBLE_COL_GROUPS_USERASMB <- list(
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
-               "find_mito_notes", "mito_candidates")
+               "find_mito_notes")
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -296,18 +296,12 @@ assemble_server_userAsmb <- function(id) {
               width = 140,
               cell = rt_link(ns("set_find_mito_opts"))
             ),
+            # The note doubles as the link to the search evidence.
             find_mito_notes = colDef(
               show = TRUE, class = .grp("find_mito_notes"), headerClass = .grp("find_mito_notes"),
               name = "Mito Search",
               minWidth = 180,
               html = T,
-              cell = rt_longtext()
-            ),
-            mito_candidates = colDef(
-              show = TRUE, class = .grp("mito_candidates"), headerClass = .grp("mito_candidates"),
-              name = "Candidates",
-              html = T,
-              width = 110,
               cell = rt_link(ns("show_mito_candidates"))
             ),
             circularize_opts = colDef(

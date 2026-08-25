@@ -64,11 +64,6 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       view = dplyr::case_when(
         assemble_switch > 1 ~ "details",
         .default = NA_character_
-      ),
-      # Link to the search evidence, shown only once a search has run
-      mito_candidates = dplyr::case_when(
-        !is.na(find_mito_notes) ~ "candidates",
-        .default = NA_character_
       )
     )
 }

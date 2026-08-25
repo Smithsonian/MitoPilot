@@ -32,7 +32,7 @@ contigs are routine.
 NUMTs are handled by requiring the match to cover a good fraction of the contig,
 not just to be strong. A nuclear scaffold carrying a mitochondrial insertion
 matches over a tiny slice of itself and is rejected on that basis, with the
-reason recorded in the **Candidates** table.
+reason recorded in the search evidence.
 
 See ["Finding the mitogenome in a whole assembly"](Your-Own-Project.html#finding-the-mitogenome-in-a-whole-assembly)
 for details.
