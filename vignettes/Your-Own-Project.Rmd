@@ -414,6 +414,13 @@ Assemble table, alongside a per-sample log in
 | `linear: no self-overlap found` | The contig ends do not overlap |
 | `linear: 231 bp overlap found but only 2 junction reads (5 required)` | Overlap present, reads did not back it up |
 
+Click the summary to open the evidence: where the overlap sits on the contig,
+the two overlapping copies aligned base by base, and the read depth across the
+junction with the required overhang marked. A sample whose overlap was found but
+not used shows the same alignment along with the threshold it missed, which is
+the quickest way to decide whether to adjust **Min. overlap** or
+**Min. identity**.
+
 <div class="alert alert-warning">
 <strong>Warning.</strong> A project holds either MitoPilot assemblies or
 externally supplied ones, never both. Use separate projects if you have a mix.

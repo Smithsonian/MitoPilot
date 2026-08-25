@@ -57,6 +57,9 @@ table, and the thresholds live in the **Circularize Opts.** modal. See
 ["Circularizing linear assemblies"](Your-Own-Project.html#circularizing-linear-assemblies)
 for details.
 
+The call is not a black box: clicking a sample's **Circularization** note opens
+the overlap alignment and the junction read depth it was based on.
+
 ## How do I skip processing certain samples?
 
 There are two ways to make MitoPilot skip a set of samples when running the Assembly or Annotate modules.
