@@ -311,12 +311,13 @@ assemble_server_userAsmb <- function(id) {
               width = 140,
               cell = rt_link(ns("set_circularize_opts"))
             ),
+            # The note doubles as the link to the circularization evidence.
             circularize_notes = colDef(
               show = TRUE, class = .grp("circularize_notes"), headerClass = .grp("circularize_notes"),
               name = "Circularization",
               minWidth = 160,
               html = T,
-              cell = rt_longtext()
+              cell = rt_link(ns("show_circularize_details"))
             ),
             blast_opts = colDef(
               show = T, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
@@ -798,6 +799,93 @@ assemble_server_userAsmb <- function(id) {
     )
     observeEvent(input$show_mito_candidates, {
       mito_candidates_modal(rv$data$ID[as.numeric(input$show_mito_candidates)])
+    })
+    observeEvent(input$show_circularize_details, {
+      circularize_details_modal(
+        rv, rv$data$ID[as.numeric(input$show_circularize_details)]
+      )
+    })
+
+    output$circ_schematic <- renderPlot({
+      ev <- req(rv$circ_evidence)$overlap
+      blocks <- data.frame(
+        xmin = c(ev$qstart, ev$sstart), xmax = c(ev$qend, ev$send),
+        label = c("start copy", "end copy")
+      )
+      ggplot2::ggplot() +
+        ggplot2::geom_rect(
+          ggplot2::aes(xmin = 1, xmax = ev$send, ymin = 0.45, ymax = 0.55),
+          fill = "grey85"
+        ) +
+        ggplot2::geom_rect(
+          data = blocks,
+          ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0.3, ymax = 0.7,
+                       fill = label)
+        ) +
+        ggplot2::scale_fill_manual(values = c("start copy" = "#0056b3",
+                                              "end copy" = "#FF6670"),
+                                   name = NULL) +
+        ggplot2::scale_y_continuous(limits = c(0, 1), breaks = NULL) +
+        ggplot2::labs(x = "contig position (bp)", y = NULL) +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(legend.position = "bottom",
+                       panel.grid.major.y = ggplot2::element_blank())
+    })
+
+    output$circ_alignment <- renderPlot({
+      ev <- req(rv$circ_evidence)$overlap
+      from <- as.integer(input$circ_aln_from %||% 1L)
+      # 60 lettered columns is about what stays readable at this width.
+      df <- circularize_aln_df(ev$aln_query, ev$aln_subject,
+                               from = from, to = from + 59L)
+      req(nrow(df) > 0)
+      long <- rbind(
+        data.frame(col = df$col, y = 2, base = df$base_q, match = df$match),
+        data.frame(col = df$col, y = 1, base = df$base_s, match = df$match)
+      )
+      ggplot2::ggplot(long) +
+        ggplot2::geom_tile(
+          ggplot2::aes(x = col, y = y,
+                       fill = ifelse(match, "match", "mismatch")),
+          color = "white"
+        ) +
+        ggplot2::geom_text(ggplot2::aes(x = col, y = y, label = base), size = 3) +
+        ggplot2::scale_fill_manual(values = c(match = "#DDE6F0",
+                                              mismatch = "#FF6670"),
+                                   name = NULL) +
+        ggplot2::scale_y_continuous(breaks = c(1, 2),
+                                    labels = c("end copy", "start copy")) +
+        ggplot2::labs(x = "alignment column", y = NULL) +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(legend.position = "bottom",
+                       panel.grid = ggplot2::element_blank())
+    })
+
+    output$circ_depth <- renderPlot({
+      ev <- req(rv$circ_evidence)
+      d <- ev$depth
+      req(nrow(d) > 0)
+      long <- rbind(
+        data.frame(rel_position = d$rel_position, depth = d$depth,
+                   track = "all reads"),
+        data.frame(rel_position = d$rel_position, depth = d$depth_spanning,
+                   track = "junction spanning")
+      )
+      ggplot2::ggplot(long, ggplot2::aes(x = rel_position, y = depth,
+                                         color = track)) +
+        ggplot2::annotate("rect",
+                          xmin = -ev$overlap$min_overhang,
+                          xmax = ev$overlap$min_overhang,
+                          ymin = 0, ymax = Inf, alpha = 0.12, fill = "#0056b3") +
+        ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
+                            color = "grey40") +
+        ggplot2::geom_line() +
+        ggplot2::scale_color_manual(values = c("all reads" = "grey50",
+                                               "junction spanning" = "#0056b3"),
+                                    name = NULL) +
+        ggplot2::labs(x = "distance from junction (bp)", y = "depth") +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(legend.position = "bottom")
     })
     observeEvent(input$find_mito_opts, ignoreInit = T, {
       exists <- input$find_mito_opts %in% rv$find_mito_opts$find_mito_opts
