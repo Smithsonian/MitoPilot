@@ -398,6 +398,46 @@ new_db_userAsmb <- function(
       by = "circularize_opts"
     )
 
+  ## Circularization evidence ----
+  # What the overlap search found for each sample, and the read depth across
+  # the junction it produced. Read by the circularization details modal.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE circularize_overlap (
+      ID TEXT NOT NULL,
+      qstart INTEGER,
+      qend INTEGER,
+      sstart INTEGER,
+      send INTEGER,
+      length INTEGER,
+      pident REAL,
+      mismatches INTEGER,
+      aln_query TEXT,
+      aln_subject TEXT,
+      accepted INTEGER,
+      reason TEXT,
+      trimmed INTEGER,
+      junction_reads INTEGER,
+      min_junction_reads INTEGER,
+      window_bp INTEGER,
+      min_overhang INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID)
+    );"
+  )
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE circularize_depth (
+      ID TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      rel_position INTEGER,
+      depth INTEGER,
+      depth_spanning INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, position)
+    );"
+  )
+
   ## Mitogenome search options ----
   # Settings for the optional WF1 step that locates mitochondrial contigs in a
   # large user-supplied assembly (see find_mito()).
