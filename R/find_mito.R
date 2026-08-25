@@ -293,7 +293,9 @@ find_mito <- function(
           "; candidates: ", length(sel$candidates))
 
   evidence <- sel$evidence
-  evidence$genes <- NA_integer_
+  # rep(), not a bare NA: a sample with no BLAST hits has no evidence rows, and
+  # assigning a length-1 value to a zero-row data frame is an error.
+  evidence$genes <- rep(NA_integer_, nrow(evidence))
   confirmed <- character(0)
 
   if (length(sel$candidates) > 0L) {

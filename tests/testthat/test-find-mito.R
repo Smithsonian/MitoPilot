@@ -209,3 +209,24 @@ test_that("a missing MitoFinder database is a clear error", {
     "custom_assembly_db"
   )
 })
+
+
+test_that("a sample with no BLAST hits is reported, not crashed on", {
+  # Regression: find_mito() added a genes column to a zero-row evidence table,
+  # which errors. The process then died instead of writing the "fail" status, so
+  # the sample was never marked failed and carried no explanation.
+  d <- withr::local_tempdir()
+  hits <- file.path(d, "hits_1.txt")
+  writeLines("# screened=1200", hits)
+  fasta <- file.path(d, "asm.fasta")
+  writeLines(c(">scaffold_1", "ACGTACGTAC"), fasta)
+
+  res <- find_mito(assembly_fn = fasta, hits_fn = hits, id = "s1",
+                   out_dir = file.path(d, "out"))
+
+  expect_length(res$confirmed, 0L)
+  expect_match(res$note, "no BLAST hits among 1200 screened contigs")
+  expect_equal(readLines(file.path(d, "out", "status.txt")), "fail")
+  expect_true(file.exists(file.path(d, "out", "s1_mito_contigs.fasta")))
+  expect_true(file.exists(file.path(d, "out", "find_mito_candidates.csv")))
+})
