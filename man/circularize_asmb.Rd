@@ -12,7 +12,6 @@ circularize_asmb(
   min_identity = 99,
   min_junction_reads = 5,
   min_overhang = 30,
-  offset = 40,
   cpus = 4,
   out_fn = NULL,
   log_fn = NULL
@@ -33,9 +32,6 @@ circularize_asmb(
 
 \item{min_overhang}{Bases a read must extend past the junction on each side
 (default = 30)}
-
-\item{offset}{Tolerance for how far the overlap may sit from the contig ends
-(bp, default = 40)}
 
 \item{cpus}{Number of CPUs for read mapping (default = 4)}
 

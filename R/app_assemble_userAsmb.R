@@ -753,18 +753,55 @@ assemble_server_userAsmb <- function(id) {
     })
 
     # Set Mitogenome Search Opts ----
-    observeEvent(input$set_find_mito_opts, {
-      row <- as.numeric(input$set_find_mito_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
-      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      find_mito_opts_modal(rv)
-    })
+    opts_modal_server(
+      rv, "find_mito_opts",
+      fields = c("find_mitogenome", "find_mitofinder_db", "find_min_contig_length",
+                 "find_min_identity", "find_min_aligned_length",
+                 "find_min_aligned_fraction", "find_max_candidates",
+                 "find_min_genes", "find_opts_cpus", "find_opts_memory"),
+      label = "mitogenome search options",
+      modal = find_mito_opts_modal,
+      save = function() {
+        # A search with no reference database can never confirm anything, so
+        # refuse to save that combination rather than fail mid-run.
+        db_path <- trimws(input$find_mitofinder_db %||% "")
+        if (isTRUE(input$find_mitogenome) && (!nzchar(db_path) || !file.exists(db_path))) {
+          shinyWidgets::sendSweetAlert(
+            title = "MitoFinder database not found",
+            text = paste0(
+              "The mitogenome search confirms candidates with MitoFinder, which needs ",
+              "a GenBank reference database. Build one for your clade with ",
+              "custom_assembly_db(db_type = \"mitofinder\") and enter the path to its ",
+              ".gb file."
+            ),
+            type = "error"
+          )
+          req(F)
+        }
+        dplyr::tbl(session$userData$con, "find_mito_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              find_mito_opts       = req(input$find_mito_opts),
+              attempt              = as.integer(isTRUE(input$find_mitogenome)),
+              mitofinder_db        = db_path,
+              min_contig_length    = as.integer(input$find_min_contig_length %||% 500L),
+              min_identity         = as.numeric(input$find_min_identity %||% 70),
+              min_aligned_length   = as.integer(input$find_min_aligned_length %||% 300L),
+              min_aligned_fraction = as.numeric(input$find_min_aligned_fraction %||% 0.5),
+              max_candidates       = as.integer(input$find_max_candidates %||% 20L),
+              min_genes            = as.integer(input$find_min_genes %||% 3L),
+              cpus                 = as.integer(input$find_opts_cpus %||% 4L),
+              memory               = as.integer(input$find_opts_memory %||% 8L)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "find_mito_opts"
+          )
+        rv$find_mito_opts <- dplyr::tbl(session$userData$con, "find_mito_opts") |>
+          dplyr::collect()
+      },
+      input = input, session = session, selected = selected
+    )
     observeEvent(input$show_mito_candidates, {
       mito_candidates_modal(rv$data$ID[as.numeric(input$show_mito_candidates)])
     })
@@ -804,189 +841,16 @@ assemble_server_userAsmb <- function(id) {
         condition = isTRUE(input$find_mitogenome)
       )
     })
-    observeEvent(input$edit_find_mito_opts, ignoreInit = T, {
-      for (fld in c("find_mitogenome", "find_mitofinder_db", "find_min_contig_length",
-                    "find_min_identity", "find_min_aligned_length",
-                    "find_min_aligned_fraction", "find_max_candidates",
-                    "find_min_genes", "find_opts_cpus", "find_opts_memory")) {
-        shinyjs::toggleState(fld, condition = input$edit_find_mito_opts)
-      }
-      if (input$edit_find_mito_opts && input$find_mito_opts %in% rv$data$find_mito_opts) {
-        rv$updating_indirect <- rv$data |>
-          dplyr::filter(find_mito_opts == input$find_mito_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(inputId = "edit_find_mito_opts", value = FALSE)
-          req(F)
-        }
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_find_mito_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit mitogenome search options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      }
-    })
-    observeEvent(input$editing_find_mito_opts_indirect, ignoreInit = T, {
-      if (!input$editing_find_mito_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(inputId = "edit_find_mito_opts", value = FALSE)
-      }
-    })
-    observeEvent(input$update_find_mito_opts, ignoreInit = T, {
-      if (input$edit_find_mito_opts) {
-        # A search with no reference database can never confirm anything, so
-        # refuse to save that combination rather than fail mid-run.
-        db_path <- trimws(input$find_mitofinder_db %||% "")
-        if (isTRUE(input$find_mitogenome) && (!nzchar(db_path) || !file.exists(db_path))) {
-          shinyWidgets::sendSweetAlert(
-            title = "MitoFinder database not found",
-            text = paste0(
-              "The mitogenome search confirms candidates with MitoFinder, which needs ",
-              "a GenBank reference database. Build one for your clade with ",
-              "custom_assembly_db(db_type = \"mitofinder\") and enter the path to its ",
-              ".gb file."
-            ),
-            type = "error"
-          )
-          req(F)
-        }
-        dplyr::tbl(session$userData$con, "find_mito_opts") |>
-          dplyr::rows_upsert(
-            data.frame(
-              find_mito_opts       = req(input$find_mito_opts),
-              attempt              = as.integer(isTRUE(input$find_mitogenome)),
-              mitofinder_db        = db_path,
-              min_contig_length    = as.integer(input$find_min_contig_length %||% 500L),
-              min_identity         = as.numeric(input$find_min_identity %||% 70),
-              min_aligned_length   = as.integer(input$find_min_aligned_length %||% 300L),
-              min_aligned_fraction = as.numeric(input$find_min_aligned_fraction %||% 0.5),
-              max_candidates       = as.integer(input$find_max_candidates %||% 20L),
-              min_genes            = as.integer(input$find_min_genes %||% 3L),
-              cpus                 = as.integer(input$find_opts_cpus %||% 4L),
-              memory               = as.integer(input$find_opts_memory %||% 8L)
-            ),
-            in_place = TRUE,
-            copy = TRUE,
-            by = "find_mito_opts"
-          )
-        rv$find_mito_opts <- dplyr::tbl(session$userData$con, "find_mito_opts") |>
-          dplyr::collect()
-      }
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        find_mito_opts = input$find_mito_opts,
-        assemble_switch = 1L
-      )
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(
-          update,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = "ID"
-        )
-      rv$data <- rv$data |>
-        dplyr::rows_update(update, by = "ID")
-      rv$updating <- rv$updating_indirect <- NULL
-      removeModal()
-      trigger("update_assemble_table")
-    })
 
     # Set Circularization Opts ----
-    observeEvent(input$set_circularize_opts, {
-      row <- as.numeric(input$set_circularize_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
-      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      circularize_opts_modal(rv)
-    })
-    observeEvent(input$circularize_opts, ignoreInit = T, {
-      exists <- input$circularize_opts %in% rv$circularize_opts$circularize_opts
-      shinyWidgets::updatePrettyCheckbox(
-        inputId = "edit_circularize_opts",
-        value = !exists
-      )
-      if (exists) {
-        cur <- rv$circularize_opts[
-          rv$circularize_opts$circularize_opts == input$circularize_opts,
-        ]
-        shinyWidgets::updatePrettyCheckbox(
-          inputId = "attempt_circularization",
-          value = isTRUE(as.logical(cur$attempt %||% 0L))
-        )
-        updateNumericInput(inputId = "circ_min_overlap", value = cur$min_overlap)
-        updateNumericInput(inputId = "circ_min_identity", value = cur$min_identity)
-        updateNumericInput(inputId = "circ_min_junction_reads", value = cur$min_junction_reads)
-        updateNumericInput(inputId = "circ_min_overhang", value = cur$min_overhang)
-        updateNumericInput(inputId = "circ_opts_cpus", value = cur$cpus)
-        updateNumericInput(inputId = "circ_opts_memory", value = cur$memory)
-        circularize_params_toggle(
-          isTRUE(as.logical(cur$attempt %||% 0L)),
-          isTRUE(session$userData$no_raw_data)
-        )
-      }
-    })
-    # Thresholds and resources are meaningless with the step switched off
-    observeEvent(input$attempt_circularization, ignoreInit = T, {
-      circularize_params_toggle(
-        isTRUE(input$attempt_circularization),
-        isTRUE(session$userData$no_raw_data)
-      )
-    })
-    observeEvent(input$edit_circularize_opts, ignoreInit = T, {
-      for (fld in c("attempt_circularization", "circ_min_overlap", "circ_min_identity",
-                    "circ_min_junction_reads", "circ_min_overhang",
-                    "circ_opts_cpus", "circ_opts_memory")) {
-        shinyjs::toggleState(fld, condition = input$edit_circularize_opts)
-      }
-      if (input$edit_circularize_opts && input$circularize_opts %in% rv$data$circularize_opts) {
-        rv$updating_indirect <- rv$data |>
-          dplyr::filter(circularize_opts == input$circularize_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(inputId = "edit_circularize_opts", value = FALSE)
-          req(F)
-        }
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_circularize_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit circularization options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      }
-    })
-    observeEvent(input$editing_circularize_opts_indirect, ignoreInit = T, {
-      if (!input$editing_circularize_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(inputId = "edit_circularize_opts", value = FALSE)
-      }
-    })
-    observeEvent(input$update_circularize_opts, ignoreInit = T, {
-      if (input$edit_circularize_opts) {
+    opts_modal_server(
+      rv, "circularize_opts",
+      fields = c("attempt_circularization", "circ_min_overlap", "circ_min_identity",
+                 "circ_min_junction_reads", "circ_min_overhang",
+                 "circ_opts_cpus", "circ_opts_memory"),
+      label = "circularization options",
+      modal = circularize_opts_modal,
+      save = function() {
         # The read-based fields are absent from the modal in a no-raw-data
         # project, so fall back to the stored values rather than writing NULL.
         cur <- rv$circularize_opts[
@@ -1014,40 +878,44 @@ assemble_server_userAsmb <- function(id) {
           )
         rv$circularize_opts <- dplyr::tbl(session$userData$con, "circularize_opts") |>
           dplyr::collect()
-      }
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        circularize_opts = input$circularize_opts,
-        assemble_switch = 1L
+      },
+      input = input, session = session, selected = selected
+    )
+    observeEvent(input$circularize_opts, ignoreInit = T, {
+      exists <- input$circularize_opts %in% rv$circularize_opts$circularize_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_circularize_opts",
+        value = !exists
       )
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(
-          update,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = "ID"
+      if (exists) {
+        cur <- rv$circularize_opts[
+          rv$circularize_opts$circularize_opts == input$circularize_opts,
+        ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "attempt_circularization",
+          value = isTRUE(as.logical(cur$attempt %||% 0L))
         )
-      rv$data <- rv$data |>
-        dplyr::rows_update(update, by = "ID")
-      rv$updating <- rv$updating_indirect <- NULL
-      removeModal()
-      trigger("update_assemble_table")
+        updateNumericInput(inputId = "circ_min_overlap", value = cur$min_overlap)
+        updateNumericInput(inputId = "circ_min_identity", value = cur$min_identity)
+        updateNumericInput(inputId = "circ_min_junction_reads", value = cur$min_junction_reads)
+        updateNumericInput(inputId = "circ_min_overhang", value = cur$min_overhang)
+        updateNumericInput(inputId = "circ_opts_cpus", value = cur$cpus)
+        updateNumericInput(inputId = "circ_opts_memory", value = cur$memory)
+        shinyjs::toggle(
+          id = "circ_params_group",
+          condition = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+      }
+    })
+    # Thresholds and resources are meaningless with the step switched off
+    observeEvent(input$attempt_circularization, ignoreInit = T, {
+      shinyjs::toggle(
+        id = "circ_params_group",
+        condition = isTRUE(input$attempt_circularization)
+      )
     })
 
     # Set BLAST Opts ----
-    observeEvent(input$set_blast_opts, {
-      row <- as.numeric(input$set_blast_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
-      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      blast_opts_modal(rv)
-    })
     observeEvent(input$blast_opts, ignoreInit = T, {
       exists <- input$blast_opts %in% rv$blast_opts$blast_opts
       shinyWidgets::updatePrettyCheckbox(
@@ -1096,45 +964,6 @@ assemble_server_userAsmb <- function(id) {
         }
       }
     })
-    observeEvent(input$edit_blast_opts, ignoreInit = T, {
-      shinyjs::toggleState("run_blast",       condition = input$edit_blast_opts)
-      shinyjs::toggleState("taxids",          condition = input$edit_blast_opts)
-      shinyjs::toggleState("remote_blast",    condition = input$edit_blast_opts)
-      shinyjs::toggleState("remote_fallback", condition = input$edit_blast_opts)
-      shinyjs::toggleState("entrez_query",    condition = input$edit_blast_opts)
-      shinyjs::toggleState("max_target_seqs", condition = input$edit_blast_opts)
-      shinyjs::toggleState("extra_opts",      condition = input$edit_blast_opts)
-      if (input$edit_blast_opts && input$blast_opts %in% rv$data$blast_opts) {
-        rv$updating_indirect <- rv$data |>
-          dplyr::filter(blast_opts == input$blast_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
-          req(F)
-        }
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_blast_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit BLAST options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      }
-    })
-    observeEvent(input$editing_blast_opts_indirect, ignoreInit = T, {
-      if (!input$editing_blast_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
-      }
-    })
     observeEvent(input$run_blast, ignoreInit = T, {
       if (isTRUE(input$run_blast)) {
         shinyjs::show(id = "blast_taxids_group")
@@ -1157,8 +986,13 @@ assemble_server_userAsmb <- function(id) {
         condition = isTRUE(input$run_blast) && isTRUE(input$remote_blast)
       )
     })
-    observeEvent(input$update_blast_opts, ignoreInit = T, {
-      if (input$edit_blast_opts) {
+    opts_modal_server(
+      rv, "blast_opts",
+      fields = c("run_blast", "taxids", "remote_blast", "remote_fallback",
+                 "entrez_query", "max_target_seqs", "extra_opts"),
+      label = "BLAST options",
+      modal = blast_opts_modal,
+      save = function() {
         # Numeric NCBI taxon IDs only; validated here, with no network lookup, so
         # the save path keeps working offline.
         taxids <- paste(
@@ -1209,26 +1043,9 @@ assemble_server_userAsmb <- function(id) {
           )
         rv$blast_opts <- dplyr::tbl(session$userData$con, "blast_opts") |>
           dplyr::collect()
-      }
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        blast_opts = input$blast_opts,
-        assemble_switch = 1L
-      )
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(
-          update,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = "ID"
-        )
-      rv$data <- rv$data |>
-        dplyr::rows_update(update, by = "ID")
-      rv$updating <- rv$updating_indirect <- NULL
-      removeModal()
-      trigger("update_assemble_table")
-    })
+      },
+      input = input, session = session, selected = selected
+    )
 
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {

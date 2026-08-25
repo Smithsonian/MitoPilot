@@ -29,8 +29,8 @@ select_mito_contigs(
 \value{
 a list with `accession` (the winning reference, NA when there are no
   hits), `candidates` (character vector of contig names, best first) and
-  `evidence` (one row per screened contig with the numbers behind the call
-  and a `reason` for anything dropped)
+  `evidence` (one row per contig that hit the winning reference, with the
+  numbers behind the call and a `reason` for anything dropped)
 }
 \description{
 Given the merged per-contig hits from the WF1 screen (all contigs of one

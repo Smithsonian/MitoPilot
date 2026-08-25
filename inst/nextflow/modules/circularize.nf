@@ -3,8 +3,8 @@
 // spanning the new junction before calling the assembly circular.
 // See R/circularize_asmb.R.
 process circularize {
-    executor params.circularize.executor
-    container params.circularize.container
+    executor params.circularize?.executor ?: params.assemble.executor
+    container params.circularize?.container ?: params.assemble.container
 
     publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy',
         pattern: "${id}/assemble/${assembler}/circularize.log"
@@ -12,8 +12,8 @@ process circularize {
     errorStrategy 'ignore'
     clusterOptions {
         def opts_str = [
-            (params.circularize.executor == 'sge') ? '-S /bin/bash' : '',
-            params.circularize.clusterOptions ?: ''
+            (params.circularize?.executor ?: params.assemble.executor) == 'sge' ? '-S /bin/bash' : '',
+            params.circularize?.clusterOptions ?: ''
         ].findAll { it }.join(' ')
         opts_str ?: null
     }
@@ -53,8 +53,8 @@ process circularize {
 
 // No-reads variant: overlap trimming only, nothing to confirm the junction with.
 process circularize_noReads {
-    executor params.circularize.executor
-    container params.circularize.container
+    executor params.circularize?.executor ?: params.assemble.executor
+    container params.circularize?.container ?: params.assemble.container
 
     publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy',
         pattern: "${id}/assemble/${assembler}/circularize.log"
@@ -62,8 +62,8 @@ process circularize_noReads {
     errorStrategy 'ignore'
     clusterOptions {
         def opts_str = [
-            (params.circularize.executor == 'sge') ? '-S /bin/bash' : '',
-            params.circularize.clusterOptions ?: ''
+            (params.circularize?.executor ?: params.assemble.executor) == 'sge' ? '-S /bin/bash' : '',
+            params.circularize?.clusterOptions ?: ''
         ].findAll { it }.join(' ')
         opts_str ?: null
     }

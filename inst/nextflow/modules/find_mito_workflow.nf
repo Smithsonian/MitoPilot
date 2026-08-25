@@ -75,7 +75,7 @@ workflow FIND_MITO_userAsmb {
             .map { id, assembly, topology, opts_id, copts, gcode, fopts ->
                 tuple(id, assembly, fopts)
             }
-            .splitFasta(by: params.find_mito.chunk_size, file: true, elem: 1)
+            .splitFasta(by: params.find_mito?.chunk_size ?: 50000, file: true, elem: 1)
             .set { chunks }
 
         find_mito_screen(chunks)

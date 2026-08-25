@@ -17,8 +17,6 @@
 #' @param min_junction_reads Reads that must span the junction (default = 5)
 #' @param min_overhang Bases a read must extend past the junction on each side
 #'   (default = 30)
-#' @param offset Tolerance for how far the overlap may sit from the contig ends
-#'   (bp, default = 40)
 #' @param cpus Number of CPUs for read mapping (default = 4)
 #' @param out_fn Path for the output fasta. Defaults to overwriting nothing and
 #'   returning the result only.
@@ -37,7 +35,6 @@ circularize_asmb <- function(
     min_identity = 99,
     min_junction_reads = 5,
     min_overhang = 30,
-    offset = 40,
     cpus = 4,
     out_fn = NULL,
     log_fn = NULL) {
@@ -71,8 +68,7 @@ circularize_asmb <- function(
   trim <- trim_end_overlap(
     seq,
     min_overlap = min_overlap,
-    min_identity = min_identity,
-    offset = offset
+    min_identity = min_identity
   )
   add_log(trim$log)
 
@@ -125,49 +121,37 @@ circularize_asmb <- function(
 
 #' Trim a redundant end-to-start overlap from a contig
 #'
-#' Repeatedly self-BLASTs the sequence and removes the duplicated copy at the
-#' contig end until no qualifying overlap remains.
+#' Self-BLASTs the sequence and removes the duplicated copy at the contig end.
 #'
 #' @param seq contig sequence (character)
-#' @param min_overlap,min_identity,offset detection thresholds, see
-#'   [circularize_asmb()]
-#' @param max_rounds maximum trimming iterations (default = 5)
+#' @param min_overlap,min_identity detection thresholds, see [circularize_asmb()]
 #'
-#' @return list with `sequence`, `trimmed` (total bp removed) and `log`
+#' @return list with `sequence`, `trimmed` (bp removed) and `log`
 #'
 #' @noRd
 trim_end_overlap <- function(seq,
                              min_overlap = 220,
-                             min_identity = 99,
-                             offset = 40,
-                             max_rounds = 5) {
-  total <- 0L
-  log <- character(0)
-  for (i in seq_len(max_rounds)) {
-    hit <- find_end_overlap(
-      seq,
-      min_overlap = min_overlap,
-      min_identity = min_identity,
-      offset = offset
-    )
-    if (is.null(hit)) {
-      break
-    }
-    # Drop the duplicated copy at the contig end, keeping the copy at the start.
-    seq <- substr(seq, 1L, hit$sstart - 1L)
-    total <- total + hit$trimmed
-    log <- c(log, paste0(
-      "round ", i, ": removed ", hit$trimmed, " bp overlap (",
-      round(hit$pident, 1), "% identity), new length ", nchar(seq), " bp"
-    ))
+                             min_identity = 99) {
+  hit <- find_end_overlap(seq, min_overlap = min_overlap, min_identity = min_identity)
+  if (is.null(hit)) {
+    return(list(sequence = seq, trimmed = 0L, log = character(0)))
   }
-  list(sequence = seq, trimmed = total, log = log)
+  # Drop the duplicated copy at the contig end, keeping the copy at the start.
+  seq <- substr(seq, 1L, hit$sstart - 1L)
+  list(
+    sequence = seq,
+    trimmed = hit$trimmed,
+    log = paste0(
+      "removed ", hit$trimmed, " bp overlap (", round(hit$pident, 1),
+      "% identity), new length ", nchar(seq), " bp"
+    )
+  )
 }
 
 #' Find an end-to-start self-overlap with BLAST
 #'
 #' @param seq contig sequence (character)
-#' @param min_overlap,min_identity,offset detection thresholds
+#' @param min_overlap,min_identity detection thresholds
 #' @param blastn path to the blastn binary
 #'
 #' @return list with `sstart`, `trimmed` and `pident`, or NULL if no qualifying
@@ -177,8 +161,9 @@ trim_end_overlap <- function(seq,
 find_end_overlap <- function(seq,
                              min_overlap = 220,
                              min_identity = 99,
-                             offset = 40,
                              blastn = getOption("MitoPilot.blastn", "blastn")) {
+  # Tolerance for how far the overlap may sit from the contig ends
+  offset <- 40L
   len <- nchar(seq)
   if (len < 2 * min_overlap) {
     return(NULL)

@@ -48,16 +48,14 @@ test_that("a nuclear scaffold carrying a NUMT is rejected by the fraction rule",
   expect_match(numt$reason, "possible NUMT")
 })
 
-test_that("contigs matching a different reference are dropped with a reason", {
+test_that("contigs matching a different reference are dropped", {
   hits <- rbind(
     hit("ctg1", "NC_001", 98, 16400, 30000, 16500),
     hit("ctg9", "NC_999", 99, 900, 1500, 1000)
   )
   res <- select_mito_contigs(hits)
   expect_equal(res$candidates, "ctg1")
-  other <- res$evidence[res$evidence$contig == "ctg9", ]
-  expect_equal(other$selected, 0L)
-  expect_match(other$reason, "not the sample reference NC_001")
+  expect_false("ctg9" %in% res$evidence$contig)
 })
 
 test_that("low identity and short alignments are rejected", {

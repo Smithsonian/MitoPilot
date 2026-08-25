@@ -3,14 +3,14 @@
 // of the FASTA so a draft genome stays tractable; the pick job then selects,
 // extracts and confirms. See R/find_mito.R.
 process find_mito_screen {
-    executor params.find_mito.executor
-    container params.find_mito.container
+    executor params.find_mito?.executor ?: params.assemble.executor
+    container params.find_mito?.container ?: params.assemble.container
 
     errorStrategy 'ignore'
     clusterOptions {
         def opts_str = [
-            (params.find_mito.executor == 'sge') ? '-S /bin/bash' : '',
-            params.find_mito.clusterOptions ?: ''
+            (params.find_mito?.executor ?: params.assemble.executor) == 'sge' ? '-S /bin/bash' : '',
+            params.find_mito?.clusterOptions ?: ''
         ].findAll { it }.join(' ')
         opts_str ?: null
     }
@@ -24,8 +24,8 @@ process find_mito_screen {
         tuple val(id), path("hits_${task.index}.txt")
 
     shell:
-    db_dir = params.blast_gb?.db_dir ?: '/ref_dbs/mito_metazoa'
-    db_name = params.blast_gb?.db_name ?: 'mito_metazoa'
+    db_dir = params.blast_gb.db_dir
+    db_name = params.blast_gb.db_name
     '''
     export BLASTDB=!{db_dir}
 
@@ -62,8 +62,8 @@ process find_mito_screen {
 // Per sample: merge the chunk hits, select candidate contigs, pull them out of
 // the original FASTA, and confirm them with MitoFinder.
 process find_mito_pick {
-    executor params.find_mito.executor
-    container params.find_mito.container
+    executor params.find_mito?.executor ?: params.assemble.executor
+    container params.find_mito?.container ?: params.assemble.container
 
     publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy',
         pattern: "${outDir}/find_mito*"
@@ -71,8 +71,8 @@ process find_mito_pick {
     errorStrategy 'ignore'
     clusterOptions {
         def opts_str = [
-            (params.find_mito.executor == 'sge') ? '-S /bin/bash' : '',
-            params.find_mito.clusterOptions ?: ''
+            (params.find_mito?.executor ?: params.assemble.executor) == 'sge' ? '-S /bin/bash' : '',
+            params.find_mito?.clusterOptions ?: ''
         ].findAll { it }.join(' ')
         opts_str ?: null
     }
@@ -102,7 +102,7 @@ process find_mito_pick {
         hits_fn = list.files(".", pattern = "^hits_.*txt$", full.names = TRUE),
         id = "!{id}",
         mitofinder_db = "!{mitofinder_db}",
-        genetic_code = !{genetic_code ?: 2},
+        genetic_code = !{genetic_code},
         min_identity = !{opts.min_identity},
         min_aligned_length = !{opts.min_aligned_length},
         min_aligned_fraction = !{opts.min_aligned_fraction},

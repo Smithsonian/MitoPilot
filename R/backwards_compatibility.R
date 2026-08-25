@@ -17,7 +17,8 @@
 #'     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
 #'     to the GitHub-hosted reference db).
 #'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
-#'     normalized to TEXT), BLAST result columns, "blast_opts".
+#'     normalized to TEXT), BLAST result columns, "blast_opts",
+#'     "circularize_opts"/"circularize_notes", "find_mito_opts"/"find_mito_notes".
 #'   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
 #'     "remote_fallback" (any parameter set carrying a non-default Entrez query is
 #'     switched to the remote search, with a warning, since the local database
@@ -25,7 +26,8 @@
 #'   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
 #'     column as INTEGER so assembly does not crash).
 #'   \item New tables: "orf_opts", "blast_opts", "export_opts",
-#'     "scaffold_mappings", "assemblies", "assembly_blast", and the
+#'     "scaffold_mappings", "assemblies", "assembly_blast", "circularize_opts",
+#'     "find_mito_opts", "mito_candidates", and the
 #'     "blast_ref_annotations"/"blast_ref_sequences"/"blast_ref_alignment" set.
 #' }
 #'
@@ -82,6 +84,16 @@ backwards_compatibility <- function(
   curate_opts_table <- DBI::dbReadTable(con, "curate_opts") # read in curate opts table
 
   assemble_table <- DBI::dbReadTable(con, "assemble")
+
+  # The circularization and mitogenome-search schema only belongs to
+  # user-assembly projects, whose mapping file carries an "assembly" column.
+  user_asmb <- is_user_asmb(con)
+  user_asmb_current <- !user_asmb || (
+    all(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+          DBI::dbListTables(con)) &&
+      all(c("circularize_opts", "circularize_notes", "find_mito_opts",
+            "find_mito_notes") %in% names(assemble_table))
+  )
 
   # read .config; the .config is regenerated wholesale from the current built-in
   # template (see migrate_config()) rather than patched line by line. Container
@@ -217,6 +229,7 @@ backwards_compatibility <- function(
       )) &&
       !stale_ref_branch &&
       "export_opts" %in% DBI::dbListTables(con) &&
+      user_asmb_current &&
       "synteny_accession" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
@@ -427,93 +440,97 @@ backwards_compatibility <- function(
     )
   }
 
-  # circularization options for user-supplied assemblies (WF1 circularize step)
-  if (!DBI::dbExistsTable(con, "circularize_opts")) {
-    message("added 'circularize_opts' table")
-    DBI::dbExecute(
-      con,
-      "CREATE TABLE circularize_opts (
-        circularize_opts TEXT NOT NULL,
-        attempt INTEGER,
-        min_overlap INTEGER,
-        min_identity REAL,
-        min_junction_reads INTEGER,
-        min_overhang INTEGER,
-        cpus INTEGER,
-        memory INTEGER,
-        PRIMARY KEY (circularize_opts)
-      );"
-    )
-    DBI::dbExecute(
-      con,
-      "INSERT INTO circularize_opts VALUES ('default', 0, 220, 99, 5, 30, 4, 8)"
-    )
-  }
-  assemble_fields <- DBI::dbListFields(con, "assemble")
-  if (!("circularize_opts" %in% assemble_fields)) {
-    message("added 'circularize_opts' column to assemble table")
-    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_opts TEXT")
-    DBI::dbExecute(con, "UPDATE assemble SET circularize_opts = 'default'")
-  }
-  if (!("circularize_notes" %in% assemble_fields)) {
-    message("added 'circularize_notes' column to assemble table")
-    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_notes TEXT")
-  }
+  # Circularization and mitogenome-search schema; user-assembly projects only,
+  # the regular pipeline has neither step.
+  if (user_asmb) {
+    # circularization options for user-supplied assemblies (WF1 circularize step)
+    if (!DBI::dbExistsTable(con, "circularize_opts")) {
+      message("added 'circularize_opts' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE circularize_opts (
+          circularize_opts TEXT NOT NULL,
+          attempt INTEGER,
+          min_overlap INTEGER,
+          min_identity REAL,
+          min_junction_reads INTEGER,
+          min_overhang INTEGER,
+          cpus INTEGER,
+          memory INTEGER,
+          PRIMARY KEY (circularize_opts)
+        );"
+      )
+      DBI::dbExecute(
+        con,
+        "INSERT INTO circularize_opts VALUES ('default', 0, 220, 99, 5, 30, 4, 8)"
+      )
+    }
+    assemble_fields <- DBI::dbListFields(con, "assemble")
+    if (!("circularize_opts" %in% assemble_fields)) {
+      message("added 'circularize_opts' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_opts TEXT")
+      DBI::dbExecute(con, "UPDATE assemble SET circularize_opts = 'default'")
+    }
+    if (!("circularize_notes" %in% assemble_fields)) {
+      message("added 'circularize_notes' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_notes TEXT")
+    }
 
-  # mitogenome-search options for user-supplied assemblies (WF1 find_mito step)
-  if (!DBI::dbExistsTable(con, "find_mito_opts")) {
-    message("added 'find_mito_opts' table")
-    DBI::dbExecute(
-      con,
-      "CREATE TABLE find_mito_opts (
-        find_mito_opts TEXT NOT NULL,
-        attempt INTEGER,
-        mitofinder_db TEXT,
-        min_contig_length INTEGER,
-        min_identity REAL,
-        min_aligned_length INTEGER,
-        min_aligned_fraction REAL,
-        max_candidates INTEGER,
-        min_genes INTEGER,
-        cpus INTEGER,
-        memory INTEGER,
-        PRIMARY KEY (find_mito_opts)
-      );"
-    )
-    DBI::dbExecute(
-      con,
-      "INSERT INTO find_mito_opts VALUES ('default', 0, NULL, 500, 70, 300, 0.5, 20, 3, 4, 8)"
-    )
-  }
-  if (!DBI::dbExistsTable(con, "mito_candidates")) {
-    message("added 'mito_candidates' table")
-    DBI::dbExecute(
-      con,
-      "CREATE TABLE mito_candidates (
-        ID TEXT NOT NULL,
-        contig TEXT NOT NULL,
-        length INTEGER,
-        accession TEXT,
-        pident REAL,
-        aligned_length INTEGER,
-        aligned_fraction REAL,
-        genes INTEGER,
-        rank INTEGER,
-        selected INTEGER,
-        reason TEXT,
-        time_stamp INTEGER,
-        PRIMARY KEY (ID, contig)
-      );"
-    )
-  }
-  if (!("find_mito_opts" %in% assemble_fields)) {
-    message("added 'find_mito_opts' column to assemble table")
-    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_opts TEXT")
-    DBI::dbExecute(con, "UPDATE assemble SET find_mito_opts = 'default'")
-  }
-  if (!("find_mito_notes" %in% assemble_fields)) {
-    message("added 'find_mito_notes' column to assemble table")
-    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_notes TEXT")
+    # mitogenome-search options for user-supplied assemblies (WF1 find_mito step)
+    if (!DBI::dbExistsTable(con, "find_mito_opts")) {
+      message("added 'find_mito_opts' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE find_mito_opts (
+          find_mito_opts TEXT NOT NULL,
+          attempt INTEGER,
+          mitofinder_db TEXT,
+          min_contig_length INTEGER,
+          min_identity REAL,
+          min_aligned_length INTEGER,
+          min_aligned_fraction REAL,
+          max_candidates INTEGER,
+          min_genes INTEGER,
+          cpus INTEGER,
+          memory INTEGER,
+          PRIMARY KEY (find_mito_opts)
+        );"
+      )
+      DBI::dbExecute(
+        con,
+        "INSERT INTO find_mito_opts VALUES ('default', 0, NULL, 500, 70, 300, 0.5, 20, 3, 4, 8)"
+      )
+    }
+    if (!DBI::dbExistsTable(con, "mito_candidates")) {
+      message("added 'mito_candidates' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE mito_candidates (
+          ID TEXT NOT NULL,
+          contig TEXT NOT NULL,
+          length INTEGER,
+          accession TEXT,
+          pident REAL,
+          aligned_length INTEGER,
+          aligned_fraction REAL,
+          genes INTEGER,
+          rank INTEGER,
+          selected INTEGER,
+          reason TEXT,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, contig)
+        );"
+      )
+    }
+    if (!("find_mito_opts" %in% assemble_fields)) {
+      message("added 'find_mito_opts' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_opts TEXT")
+      DBI::dbExecute(con, "UPDATE assemble SET find_mito_opts = 'default'")
+    }
+    if (!("find_mito_notes" %in% assemble_fields)) {
+      message("added 'find_mito_notes' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_notes TEXT")
+    }
   }
 
   # if reviewed column doesn't exist, add it
@@ -1972,6 +1989,22 @@ backwards_compatibility <- function(
 #'
 #' @param con An open connection to a project database.
 #' @noRd
+#' Is this a user-assembly project?
+#'
+#' User-assembly projects take a FASTA per sample, so their mapping file (and
+#' therefore the samples table) carries an "assembly" column that the regular
+#' read-based pipeline never has.
+#'
+#' @param con database connection
+#'
+#' @noRd
+is_user_asmb <- function(con) {
+  isTRUE(tryCatch(
+    "assembly" %in% DBI::dbListFields(con, "samples"),
+    error = function(e) FALSE
+  ))
+}
+
 schema_gaps <- function(con) {
   has <- function(expr) isTRUE(tryCatch(expr, error = function(e) FALSE))
   gaps <- character(0)
@@ -2000,6 +2033,13 @@ schema_gaps <- function(con) {
   if (has(any(c("text", "real") %in%
               DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t))) {
     gaps <- c(gaps, "the samples.genetic_code column is not stored as an integer")
+  }
+  if (is_user_asmb(con) &&
+      (!has(all(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+                DBI::dbListTables(con))) ||
+       !has(all(c("circularize_opts", "circularize_notes", "find_mito_opts",
+                  "find_mito_notes") %in% DBI::dbListFields(con, "assemble"))))) {
+    gaps <- c(gaps, "the circularization and mitogenome-search tables are missing")
   }
   gaps
 }

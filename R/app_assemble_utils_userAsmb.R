@@ -355,6 +355,111 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
 }
 
 
+#' Wire up the shared behaviour of an Assemble options modal
+#'
+#' Every options column in the Assemble table (mitogenome search, circularization,
+#' BLAST) behaves the same way: clicking the cell opens a modal for the selected
+#' rows, the "Edit" checkbox unlocks the fields, editing a parameter set that
+#' reaches beyond the selection asks for confirmation, and Update writes the
+#' sample-to-parameter-set assignment back. Only the fields and the parameter-set
+#' save itself differ, so those come in as arguments.
+#'
+#' @param rv the local reactive vals object
+#' @param name options column / table name, e.g. "blast_opts"
+#' @param fields input ids the Edit checkbox enables and disables
+#' @param label human-readable name for the confirmation prompt, e.g.
+#'   "BLAST options"
+#' @param modal function(rv) that shows the modal
+#' @param save function() that validates and upserts the parameter set. Called
+#'   only when Edit is checked; use `req(FALSE)` inside it to abort the update.
+#' @param input,session the module's input object and session
+#' @param selected reactive giving the currently selected table rows
+#'
+#' @noRd
+opts_modal_server <- function(rv, name, fields, label, modal, save,
+                              input, session, selected) {
+  edit_id <- paste0("edit_", name)
+  indirect_id <- paste0("editing_", name, "_indirect")
+
+  observeEvent(input[[paste0("set_", name)]], {
+    row <- as.numeric(input[[paste0("set_", name)]])
+    if (length(selected()) > 0 && !row %in% selected()) {
+      req(F)
+    }
+    rows <- c(row, selected()) |> unique()
+    req(all(rv$data$assemble_lock[rows] == 0))
+    rv$updating <- rv$data |> dplyr::slice(rows)
+    rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+    modal(rv)
+  })
+
+  observeEvent(input[[edit_id]], ignoreInit = T, {
+    editing <- isTRUE(input[[edit_id]])
+    for (fld in fields) {
+      shinyjs::toggleState(fld, condition = editing)
+    }
+    set_name <- input[[name]]
+    if (editing && set_name %in% rv$data[[name]]) {
+      rv$updating_indirect <- rv$data |>
+        dplyr::filter(.data[[name]] == set_name) |>
+        dplyr::anti_join(rv$updating, by = "ID")
+      if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
+        shinyWidgets::sendSweetAlert(
+          title = "Attempting to edit locked samples",
+          text = "Processing parameters associated with locked samples can not be edited.",
+          type = "warning"
+        )
+        shinyWidgets::updatePrettyCheckbox(inputId = edit_id, value = FALSE)
+        req(F)
+      }
+      if (nrow(rv$updating_indirect) > 0L) {
+        shinyWidgets::confirmSweetAlert(
+          inputId = indirect_id,
+          title = "Editing beyond selection",
+          text = paste0(
+            "You are attempting to edit ", label, " that apply to samples beyond ",
+            "the current selection. Are you sure you want to proceed?"
+          ),
+          btn_colors = c("#0056b3", "#0056b3")
+        )
+      }
+    } else {
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+    }
+  })
+
+  observeEvent(input[[indirect_id]], ignoreInit = T, {
+    if (!input[[indirect_id]]) {
+      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
+      shinyWidgets::updatePrettyCheckbox(inputId = edit_id, value = FALSE)
+    }
+  })
+
+  observeEvent(input[[paste0("update_", name)]], ignoreInit = T, {
+    if (isTRUE(input[[edit_id]])) {
+      save()
+    }
+    update <- data.frame(
+      ID = c(rv$updating$ID, rv$updating_indirect$ID),
+      assemble_switch = 1L
+    )
+    update[[name]] <- input[[name]]
+    dplyr::tbl(session$userData$con, "assemble") |>
+      dplyr::rows_update(
+        update,
+        unmatched = "ignore",
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+    rv$data <- rv$data |>
+      dplyr::rows_update(update, by = "ID")
+    rv$updating <- rv$updating_indirect <- NULL
+    removeModal()
+    trigger("update_assemble_table")
+  })
+}
+
 #' Update the circularization options
 #'
 #' Settings for the optional WF1 step that trims a redundant end-to-start
@@ -424,7 +529,7 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
                 "assembly is relabeled circular. Only linear, single-contig ",
                 "assemblies are considered; everything else is left untouched."),
       div(
-        id = ns("circ_thresholds_group"),
+        id = ns("circ_params_group"),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -445,54 +550,52 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
           )
         ),
         opts_help("How long and how similar the overlap between the contig ends must ",
-                  "be before it is treated as a redundant copy rather than a repeat.")
-      ),
-      if (!no_raw) {
-        div(
-          id = ns("circ_reads_group"),
-          div(
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+                  "be before it is treated as a redundant copy rather than a repeat."),
+        if (!no_raw) {
+          tagList(
             div(
-              style = "flex: 1",
-              numericInput(
-                ns("circ_min_junction_reads"), "Min. junction reads:",
-                width = "100%",
-                value = current$min_junction_reads %||% numeric(0)
-              ) |> shinyjs::disabled()
+              style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+              div(
+                style = "flex: 1",
+                numericInput(
+                  ns("circ_min_junction_reads"), "Min. junction reads:",
+                  width = "100%",
+                  value = current$min_junction_reads %||% numeric(0)
+                ) |> shinyjs::disabled()
+              ),
+              div(
+                style = "flex: 1",
+                numericInput(
+                  ns("circ_min_overhang"), "Min. read overhang (bp):",
+                  width = "100%",
+                  value = current$min_overhang %||% numeric(0)
+                ) |> shinyjs::disabled()
+              )
             ),
-            div(
-              style = "flex: 1",
-              numericInput(
-                ns("circ_min_overhang"), "Min. read overhang (bp):",
-                width = "100%",
-                value = current$min_overhang %||% numeric(0)
-              ) |> shinyjs::disabled()
-            )
+            opts_help("Reads are mapped across the new junction to confirm it. An ",
+                      "assembly stays linear unless at least this many reads cross ",
+                      "the junction, each extending the given number of bases past ",
+                      "it on both sides.")
+          )
+        },
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("circ_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
           ),
-          opts_help("Reads are mapped across the new junction to confirm it. An ",
-                    "assembly stays linear unless at least this many reads cross ",
-                    "the junction, each extending the given number of bases past ",
-                    "it on both sides.")
-        )
-      },
-      div(
-        id = ns("circ_resources_group"),
-        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-        div(
-          style = "flex: 1",
-          numericInput(
-            ns("circ_opts_cpus"), "CPUs:",
-            width = "100%",
-            value = current$cpus %||% numeric(0)
-          ) |> shinyjs::disabled()
-        ),
-        div(
-          style = "flex: 1",
-          numericInput(
-            ns("circ_opts_memory"), "Memory (GB):",
-            width = "100%",
-            value = current$memory %||% numeric(0)
-          ) |> shinyjs::disabled()
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("circ_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
         )
       ),
       size = "m",
@@ -504,26 +607,7 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
   )
 
   if (!isTRUE(as.logical(current$attempt %||% 0L))) {
-    circularize_params_toggle(FALSE, no_raw)
-  }
-}
-
-#' Show or hide the circularization parameter groups
-#'
-#' The thresholds and resources only matter when the step is switched on.
-#'
-#' @param show (logical) reveal the parameter groups
-#' @param no_raw (logical) project has no raw reads, so the read-based group
-#'   does not exist
-#'
-#' @noRd
-circularize_params_toggle <- function(show, no_raw = FALSE) {
-  groups <- c("circ_thresholds_group", "circ_resources_group")
-  if (!no_raw) {
-    groups <- c(groups, "circ_reads_group")
-  }
-  for (g in groups) {
-    shinyjs::toggle(id = g, condition = isTRUE(show))
+    shinyjs::hide(id = "circ_params_group")
   }
 }
 

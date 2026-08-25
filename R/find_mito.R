@@ -20,8 +20,8 @@
 #'
 #' @return a list with `accession` (the winning reference, NA when there are no
 #'   hits), `candidates` (character vector of contig names, best first) and
-#'   `evidence` (one row per screened contig with the numbers behind the call
-#'   and a `reason` for anything dropped)
+#'   `evidence` (one row per contig that hit the winning reference, with the
+#'   numbers behind the call and a `reason` for anything dropped)
 #'
 #' @export
 #'
@@ -90,47 +90,21 @@ select_mito_contigs <- function(hits,
   scored$selected <- as.integer(keep & !over_cap)
   scored$rank[!as.logical(scored$selected)] <- NA_integer_
 
-  # Contigs whose best reference was not the winner never had a chance; keep
-  # them in the evidence so the user can see they were considered.
-  others <- per_ref |>
-    dplyr::filter(.data$saccver != winner) |>
-    dplyr::group_by(.data$qseqid) |>
-    dplyr::slice_max(.data$bitscore, n = 1, with_ties = FALSE) |>
-    dplyr::ungroup() |>
-    dplyr::filter(.data$qseqid %nin% scored$qseqid)
-
-  evidence <- rbind(
-    data.frame(
-      contig = scored$qseqid,
-      length = as.integer(scored$qlen),
-      accession = winner,
-      pident = round(scored$pident, 2),
-      aligned_length = as.integer(scored$aligned_length),
-      aligned_fraction = round(scored$aligned_fraction, 4),
-      rank = scored$rank,
-      selected = scored$selected,
-      reason = scored$reason
-    ),
-    if (nrow(others) > 0L) {
-      data.frame(
-        contig = others$qseqid,
-        length = as.integer(others$qlen),
-        accession = others$saccver,
-        pident = round(others$pident, 2),
-        aligned_length = as.integer(others$aligned_length),
-        aligned_fraction = round(pmin(1, others$aligned_length / others$qlen), 4),
-        rank = NA_integer_,
-        selected = 0L,
-        reason = paste0("best hit was ", others$saccver, ", not the sample reference ", winner)
-      )
-    } else {
-      empty
-    }
+  evidence <- data.frame(
+    contig = scored$qseqid,
+    length = as.integer(scored$qlen),
+    accession = winner,
+    pident = round(scored$pident, 2),
+    aligned_length = as.integer(scored$aligned_length),
+    aligned_fraction = round(scored$aligned_fraction, 4),
+    rank = scored$rank,
+    selected = scored$selected,
+    reason = scored$reason
   )
 
   list(
     accession = winner,
-    candidates = evidence$contig[evidence$selected == 1L][order(evidence$rank[evidence$selected == 1L])],
+    candidates = evidence$contig[evidence$selected == 1L],
     evidence = evidence
   )
 }
@@ -139,24 +113,14 @@ select_mito_contigs <- function(hits,
 #'
 #' @param path file written by the screen processes, or a vector of chunk files
 #'
-#' @return data frame of hits, empty if nothing was found
+#' @return data frame of hits, NULL if nothing was found
 #'
 #' @noRd
 read_screen_hits <- function(path) {
   cols <- c("qseqid", "saccver", "pident", "length", "bitscore", "qlen")
-  rows <- lapply(path[file.exists(path)], function(p) {
-    if (file.size(p) == 0L) {
-      return(NULL)
-    }
+  rows <- lapply(path[file.exists(path) & file.size(path) > 0L], function(p) {
     utils::read.delim(p, header = FALSE, col.names = cols, comment.char = "#")
   })
-  rows <- rows[!vapply(rows, is.null, logical(1))]
-  if (length(rows) == 0L) {
-    return(stats::setNames(
-      data.frame(character(0), character(0), numeric(0), integer(0), numeric(0), integer(0)),
-      cols
-    ))
-  }
   do.call(rbind, rows)
 }
 
@@ -186,12 +150,16 @@ count_mitofinder_genes <- function(workdir) {
   )
   gene_files <- gene_files[!grepl("_final_genes_NT\\.fasta$", gene_files)]
 
-  counts <- vapply(infos, function(info) {
+  counts <- integer(0)
+  for (info in infos) {
     line <- grep("^Initial contig name:", readLines(info, warn = FALSE), value = TRUE)
     if (length(line) == 0L) {
-      return(c(contig = NA_character_, n = NA_character_))
+      next
     }
     contig <- trimws(sub("^Initial contig name:", "", line[1]))
+    if (!nzchar(contig)) {
+      next
+    }
 
     # Multi-contig runs name the gene file after the .infos file; a single-contig
     # run names the .infos after the job instead, leaving exactly one gene file.
@@ -203,16 +171,9 @@ count_mitofinder_genes <- function(workdir) {
     } else {
       NA_character_
     }
-    n <- if (is.na(f)) 0L else length(grep("^>", readLines(f, warn = FALSE)))
-    c(contig = contig, n = as.character(n))
-  }, character(2))
-
-  contigs <- counts["contig", ]
-  keep <- !is.na(contigs) & nzchar(contigs)
-  if (!any(keep)) {
-    return(integer(0))
+    counts[contig] <- if (is.na(f)) 0L else length(grep("^>", readLines(f, warn = FALSE)))
   }
-  stats::setNames(as.integer(counts["n", keep]), contigs[keep])
+  counts
 }
 
 #' Confirm screened candidates with MitoFinder gene counts
@@ -319,7 +280,7 @@ find_mito <- function(
   }, integer(1)))
 
   hits <- read_screen_hits(hits_fn)
-  add_log("screened ", n_screened, " contigs, ", nrow(hits), " BLAST hits")
+  add_log("screened ", n_screened, " contigs, ", nrow(hits) %||% 0L, " BLAST hits")
 
   sel <- select_mito_contigs(
     hits,

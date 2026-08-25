@@ -878,3 +878,63 @@ test_that("export_seqid suffixes only samples with more than one exported unit",
   )
   expect_identical(export_seqid("S1", 1, 1, 1L), "S1")
 })
+
+
+test_that("a user-assembly project gains the circularization and search schema", {
+  # Regression: the new tables sat behind the "nothing to update" early exit, so
+  # a project current on everything else never received them and the app then
+  # failed reading columns that were never added.
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10", has_asmb_dir = TRUE)
+
+  # Mark it as a user-assembly project: its mapping carries an assembly column
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN assembly TEXT")
+  DBI::dbExecute(con, "UPDATE samples SET assembly = 's1.fasta'")
+  DBI::dbDisconnect(con)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  expect_true(all(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+                    DBI::dbListTables(con)))
+  expect_cols(con, "assemble", c("circularize_opts", "circularize_notes",
+                                 "find_mito_opts", "find_mito_notes"))
+  # every sample points at the default parameter sets
+  got <- DBI::dbGetQuery(con, "SELECT circularize_opts, find_mito_opts FROM assemble")
+  expect_true(all(got$circularize_opts == "default"))
+  expect_true(all(got$find_mito_opts == "default"))
+  # both steps are off by default
+  expect_equal(DBI::dbGetQuery(con, "SELECT attempt FROM circularize_opts")$attempt, 0L)
+  expect_equal(DBI::dbGetQuery(con, "SELECT attempt FROM find_mito_opts")$attempt, 0L)
+
+  # the app gate is satisfied, and a re-run is a no-op
+  expect_false(any(grepl("mitogenome-search", schema_gaps(con))))
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
+})
+
+test_that("a read-based project is not given the user-assembly schema", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10")
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  expect_false(any(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+                     DBI::dbListTables(con)))
+  expect_false(any(grepl("mitogenome-search", schema_gaps(con))))
+})
