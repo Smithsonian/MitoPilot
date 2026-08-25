@@ -181,3 +181,28 @@ test_that("window_depth handles no intervals", {
                     win_start = 8L, win_end = 13L)
   expect_equal(d, rep(0L, 6L))
 })
+
+test_that("count_junction_reads window_bp is integer on the empty-return path", {
+  # Contig too short for flank to clear min_overhang, forces the empty return.
+  res <- count_junction_reads("A", "NA", "NA", min_overhang = 30)
+  expect_type(res$window_bp, "integer")
+  expect_type(res$depth$position, "integer")
+})
+
+test_that("count_junction_reads window_bp and position are integer on a populated window", {
+  local_mocked_bindings(
+    system = function(...) invisible(0L),
+    system2 = function(command, args, ...) {
+      if (identical(command, "samtools")) {
+        return(paste("read1", "99", "junction", "1900", "60", "200M",
+                     "=", "1900", "200", "SEQ", "QUAL", sep = "\t"))
+      }
+      character(0)
+    },
+    .package = "base"
+  )
+  res <- count_junction_reads(random_seq(2000, seed = 42), "r1.fq", "r2.fq",
+                              min_overhang = 30)
+  expect_type(res$window_bp, "integer")
+  expect_type(res$depth$position, "integer")
+})

@@ -303,7 +303,7 @@ count_junction_reads <- function(seq,
                                  cpus = 4,
                                  min_mapq = 20) {
   len <- nchar(seq)
-  flank <- min(500L, floor(len / 2))
+  flank <- min(500L, len %/% 2L)
   empty <- list(
     count = 0L, window_bp = 0L,
     depth = data.frame(
