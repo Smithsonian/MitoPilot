@@ -44,6 +44,33 @@ test_that("the trivial full-length self hit is not mistaken for an overlap", {
   expect_null(find_end_overlap(random_seq(6000, seed = 4)))
 })
 
+test_that("a qualifying overlap comes back accepted with aligned strings", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 21)
+  hit <- find_end_overlap(paste0(core, substr(core, 1, 300)))
+  expect_true(hit$accepted)
+  expect_true(is.na(hit$reason))
+  expect_equal(hit$trimmed, 300L)
+  expect_equal(nchar(hit$qseq), nchar(hit$sseq))
+  expect_equal(hit$mismatches, 0L)
+})
+
+test_that("an overlap below the length floor comes back rejected, not dropped", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 22)
+  hit <- find_end_overlap(paste0(core, substr(core, 1, 100)), min_overlap = 220)
+  expect_false(hit$accepted)
+  expect_match(hit$reason, "100 bp below the 220 bp minimum")
+})
+
+test_that("an overlap below the identity floor comes back rejected", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 23)
+  hit <- find_end_overlap(paste0(core, substr(core, 1, 400)), min_identity = 100.5)
+  expect_false(hit$accepted)
+  expect_match(hit$reason, "identical, below")
+})
+
 test_that("a tandem duplication collapses to a single copy", {
   skip_if_no_blastn()
   unit <- random_seq(3000, seed = 10)

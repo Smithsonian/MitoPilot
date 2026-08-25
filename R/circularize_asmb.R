@@ -150,12 +150,15 @@ trim_end_overlap <- function(seq,
 
 #' Find an end-to-start self-overlap with BLAST
 #'
+#' Returns the single best end-anchored hit, whether or not it clears the
+#' thresholds. The caller trims only when `accepted`; a rejected hit is still
+#' reported so the user can see what was found and why it was not used.
+#'
 #' @param seq contig sequence (character)
-#' @param min_overlap,min_identity detection thresholds
+#' @param min_overlap,min_identity acceptance thresholds
 #' @param blastn path to the blastn binary
 #'
-#' @return list with `sstart`, `trimmed` and `pident`, or NULL if no qualifying
-#'   overlap was found
+#' @return list describing the best hit, or NULL when no end-anchored hit exists
 #'
 #' @noRd
 find_end_overlap <- function(seq,
@@ -165,9 +168,6 @@ find_end_overlap <- function(seq,
   # Tolerance for how far the overlap may sit from the contig ends
   offset <- 40L
   len <- nchar(seq)
-  if (len < 2 * min_overlap) {
-    return(NULL)
-  }
 
   tmp <- tempfile(fileext = ".fasta")
   on.exit(unlink(tmp), add = TRUE)
@@ -178,7 +178,7 @@ find_end_overlap <- function(seq,
     c(
       "-query", shQuote(tmp), "-subject", shQuote(tmp),
       "-dust", "no", "-evalue", "1e-10",
-      "-outfmt", shQuote("6 qstart qend sstart send length pident")
+      "-outfmt", shQuote("6 qstart qend sstart send length pident qseq sseq")
     ),
     stdout = TRUE, stderr = FALSE
   ))
@@ -189,26 +189,52 @@ find_end_overlap <- function(seq,
   hits <- utils::read.delim(
     text = paste(out, collapse = "\n"),
     header = FALSE,
-    col.names = c("qstart", "qend", "sstart", "send", "length", "pident")
+    colClasses = "character",
+    col.names = c("qstart", "qend", "sstart", "send", "length", "pident",
+                  "qseq", "sseq")
   )
+  for (col in c("qstart", "qend", "sstart", "send", "length")) {
+    hits[[col]] <- as.integer(hits[[col]])
+  }
+  hits$pident <- as.numeric(hits$pident)
 
+  # Structural: what makes a hit a candidate at all. The 0.9 rule drops the
+  # trivial full-length self match, which would otherwise always win.
   hits <- hits[
-    hits$sstart < hits$send &                 # same strand
-      hits$qstart <= offset &                 # query end of the alignment sits at the contig start
-      hits$send >= len - offset &             # subject end sits at the contig end
-      hits$length >= min_overlap &
-      hits$length < 0.9 * len &               # drop the trivial full-length self hit
-      hits$pident >= min_identity,
+    hits$sstart < hits$send &
+      hits$qstart <= offset &
+      hits$send >= len - offset &
+      hits$length < 0.9 * len,
   ]
   if (nrow(hits) == 0L) {
     return(NULL)
   }
 
   hit <- hits[which.max(hits$length), ]
+
+  # Thresholds label the winner rather than discard it.
+  reason <- if (hit$length < min_overlap) {
+    paste0("overlap ", hit$length, " bp below the ", min_overlap, " bp minimum")
+  } else if (hit$pident < min_identity) {
+    paste0("overlap ", round(hit$pident, 1), "% identical, below ",
+           min_identity, "%")
+  } else {
+    NA_character_
+  }
+
   list(
     sstart = hit$sstart,
     trimmed = len - hit$sstart + 1L,
-    pident = hit$pident
+    pident = hit$pident,
+    qstart = hit$qstart,
+    qend = hit$qend,
+    send = hit$send,
+    length = hit$length,
+    qseq = hit$qseq,
+    sseq = hit$sseq,
+    mismatches = sum(strsplit(hit$qseq, "")[[1]] != strsplit(hit$sseq, "")[[1]]),
+    accepted = is.na(reason),
+    reason = reason
   )
 }
 
