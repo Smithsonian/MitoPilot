@@ -135,7 +135,11 @@ test_that("circularize_asmb keeps a contig linear when reads do not span the jun
 
   # Stub the read check rather than shipping a fastq: the mapping itself is
   # bowtie2's business, the veto logic is ours.
-  local_mocked_bindings(count_junction_reads = function(...) 1L)
+  local_mocked_bindings(count_junction_reads = function(...) {
+    list(count = 1L, window_bp = 500L,
+         depth = data.frame(position = integer(0), rel_position = integer(0),
+                            depth = integer(0), depth_spanning = integer(0)))
+  })
   res <- circularize_asmb(fa, paired_reads_1 = "r1.fq", paired_reads_2 = "r2.fq")
   expect_false(res$circular)
   expect_equal(res$trimmed, 0L)
@@ -148,9 +152,32 @@ test_that("circularize_asmb calls a contig circular when reads span the junction
   fa <- withr::local_tempfile(fileext = ".fasta")
   writeLines(c(">contig", paste0(core, substr(core, 1, 300))), fa)
 
-  local_mocked_bindings(count_junction_reads = function(...) 12L)
+  local_mocked_bindings(count_junction_reads = function(...) {
+    list(count = 12L, window_bp = 500L,
+         depth = data.frame(position = integer(0), rel_position = integer(0),
+                            depth = integer(0), depth_spanning = integer(0)))
+  })
   res <- circularize_asmb(fa, paired_reads_1 = "r1.fq", paired_reads_2 = "r2.fq")
   expect_true(res$circular)
   expect_equal(res$trimmed, 300L)
   expect_match(res$note, "12 junction reads")
+})
+
+test_that("window_depth counts overlapping intervals per position", {
+  # Two reads over a 10 bp contig, junction at position 10, window +/- 3.
+  d <- window_depth(starts = c(8L, 9L), ends = c(12L, 11L),
+                    win_start = 8L, win_end = 13L)
+  expect_length(d, 6L)
+  expect_equal(d, c(1L, 2L, 2L, 2L, 1L, 0L))
+})
+
+test_that("window_depth clips intervals to the window", {
+  d <- window_depth(starts = 1L, ends = 100L, win_start = 8L, win_end = 13L)
+  expect_equal(d, rep(1L, 6L))
+})
+
+test_that("window_depth handles no intervals", {
+  d <- window_depth(starts = integer(0), ends = integer(0),
+                    win_start = 8L, win_end = 13L)
+  expect_equal(d, rep(0L, 6L))
 })

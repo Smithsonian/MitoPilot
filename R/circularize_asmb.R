@@ -90,13 +90,14 @@ circularize_asmb <- function(
     )))
   }
 
-  support <- count_junction_reads(
+  junction <- count_junction_reads(
     trim$sequence,
     paired_reads_1 = paired_reads_1,
     paired_reads_2 = paired_reads_2,
     min_overhang = min_overhang,
     cpus = cpus
   )
+  support <- junction$count
   add_log("junction-spanning reads: ", support)
 
   if (support < min_junction_reads) {
@@ -249,6 +250,35 @@ find_end_overlap <- function(seq,
   )
 }
 
+#' Per-position depth over a window from alignment intervals
+#'
+#' Difference array plus cumsum, so no interval library is needed for what is a
+#' few hundred positions.
+#'
+#' @param starts,ends 1-based inclusive alignment intervals on the reference
+#' @param win_start,win_end 1-based inclusive window bounds
+#'
+#' @return integer vector of length `win_end - win_start + 1`
+#'
+#' @noRd
+window_depth <- function(starts, ends, win_start, win_end) {
+  n <- win_end - win_start + 1L
+  if (length(starts) == 0L) {
+    return(integer(n))
+  }
+  s <- pmax(starts, win_start)
+  e <- pmin(ends, win_end)
+  keep <- s <= e
+  if (!any(keep)) {
+    return(integer(n))
+  }
+  # nbins n+1 so an interval ending on the last position still has a slot for
+  # its closing -1.
+  opened <- tabulate(s[keep] - win_start + 1L, nbins = n + 1L)
+  closed <- tabulate(e[keep] - win_start + 2L, nbins = n + 1L)
+  cumsum(opened - closed)[seq_len(n)]
+}
+
 #' Count reads spanning the junction of a circularized contig
 #'
 #' Maps reads to the contig with its first `flank` bases appended (the same
@@ -262,7 +292,8 @@ find_end_overlap <- function(seq,
 #' @param cpus threads for bowtie2
 #' @param min_mapq minimum mapping quality (default = 20)
 #'
-#' @return integer count of spanning reads
+#' @return list with `count` (integer spanning reads), `window_bp` (integer),
+#'   and `depth` (data frame of position, rel_position, depth, depth_spanning)
 #'
 #' @noRd
 count_junction_reads <- function(seq,
@@ -273,8 +304,15 @@ count_junction_reads <- function(seq,
                                  min_mapq = 20) {
   len <- nchar(seq)
   flank <- min(500L, floor(len / 2))
+  empty <- list(
+    count = 0L, window_bp = 0L,
+    depth = data.frame(
+      position = integer(0), rel_position = integer(0),
+      depth = integer(0), depth_spanning = integer(0)
+    )
+  )
   if (flank <= min_overhang) {
-    return(0L)
+    return(empty)
   }
 
   wd <- tempfile("junction")
@@ -299,17 +337,32 @@ count_junction_reads <- function(seq,
     stdout = TRUE, stderr = FALSE
   ))
   if (length(sam) == 0L) {
-    return(0L)
+    return(empty)
   }
 
   fields <- stringr::str_split(sam, "\t", simplify = TRUE)
   starts <- as.integer(fields[, 4])
   ends <- starts + cigar_ref_length(fields[, 6]) - 1L
 
-  sum(
-    !is.na(starts) & !is.na(ends) &
-      starts <= len - min_overhang &
-      ends >= len + min_overhang
+  ok <- !is.na(starts) & !is.na(ends)
+  spanning <- ok &
+    starts <= len - min_overhang &
+    ends >= len + min_overhang
+
+  win_start <- len - flank + 1L
+  win_end <- len + flank
+  position <- win_start:win_end
+
+  list(
+    count = sum(spanning),
+    window_bp = flank,
+    depth = data.frame(
+      position = position,
+      rel_position = position - len,
+      depth = window_depth(starts[ok], ends[ok], win_start, win_end),
+      depth_spanning = window_depth(starts[spanning], ends[spanning],
+                                    win_start, win_end)
+    )
   )
 }
 
