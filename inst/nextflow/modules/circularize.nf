@@ -7,7 +7,7 @@ process circularize {
     container params.circularize?.container ?: params.assemble.container
 
     publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy',
-        pattern: "${id}/assemble/${assembler}/circularize.log"
+        pattern: "${id}/assemble/${assembler}/circularize*"
 
     errorStrategy 'ignore'
     clusterOptions {
@@ -28,6 +28,8 @@ process circularize {
             path("${outDir}/${id}_circularized.fasta"),
             path("${outDir}/topology.txt"),
             path("${outDir}/note.txt"),
+            path("${outDir}/circularize_overlap.csv"),
+            path("${outDir}/circularize_depth.csv"),
             val(assembler),
             path("${outDir}/circularize.log")
 
@@ -44,6 +46,8 @@ process circularize {
         min_junction_reads = !{opts.min_junction_reads},
         min_overhang = !{opts.min_overhang},
         cpus = !{task.cpus},
+        id = "!{id}",
+        evidence_dir = "!{outDir}",
         out_fn = "!{outDir}/!{id}_circularized.fasta",
         log_fn = "!{outDir}/circularize.log");
       writeLines(if (res$circular) "circular" else "linear", "!{outDir}/topology.txt");
@@ -57,7 +61,7 @@ process circularize_noReads {
     container params.circularize?.container ?: params.assemble.container
 
     publishDir "$launchDir/${params.publishDir}", overwrite: true, mode: 'copy',
-        pattern: "${id}/assemble/${assembler}/circularize.log"
+        pattern: "${id}/assemble/${assembler}/circularize*"
 
     errorStrategy 'ignore'
     clusterOptions {
@@ -78,6 +82,8 @@ process circularize_noReads {
             path("${outDir}/${id}_circularized.fasta"),
             path("${outDir}/topology.txt"),
             path("${outDir}/note.txt"),
+            path("${outDir}/circularize_overlap.csv"),
+            path("${outDir}/circularize_depth.csv"),
             val(assembler),
             path("${outDir}/circularize.log")
 
@@ -92,6 +98,8 @@ process circularize_noReads {
         min_overlap = !{opts.min_overlap},
         min_identity = !{opts.min_identity},
         cpus = !{task.cpus},
+        id = "!{id}",
+        evidence_dir = "!{outDir}",
         out_fn = "!{outDir}/!{id}_circularized.fasta",
         log_fn = "!{outDir}/circularize.log");
       writeLines(if (res$circular) "circular" else "linear", "!{outDir}/topology.txt");
