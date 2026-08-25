@@ -20,8 +20,10 @@ circularize_aln_df <- function(aln_query, aln_subject, from = 1L, to = NULL) {
   q <- strsplit(aln_query, "")[[1]]
   s <- strsplit(aln_subject, "")[[1]]
   n <- min(length(q), length(s))
-  from <- max(1L, as.integer(from))
-  to <- if (is.null(to)) n else min(n, as.integer(to))
+  from <- as.integer(from)
+  from <- if (length(from) != 1L || is.na(from)) 1L else max(1L, from)
+  to <- as.integer(to)
+  to <- if (length(to) != 1L || is.na(to)) n else min(n, to)
   if (from > to) {
     return(empty)
   }

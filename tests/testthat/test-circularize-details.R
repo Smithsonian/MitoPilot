@@ -29,3 +29,26 @@ test_that("empty input yields no rows", {
   expect_equal(nrow(circularize_aln_df(NA_character_, NA_character_)), 0L)
   expect_equal(nrow(circularize_aln_df("", "")), 0L)
 })
+
+test_that("NA bounds are treated as absent, not an error", {
+  df <- circularize_aln_df("ACGT", "ACGT", from = NA_integer_)
+  expect_equal(df$col, 1:4)
+  df <- circularize_aln_df("ACGT", "ACGT", to = NA_integer_)
+  expect_equal(df$col, 1:4)
+  df <- circularize_aln_df("ACGT", "ACGT", from = NA_integer_, to = NA_integer_)
+  expect_equal(df$col, 1:4)
+})
+
+test_that("a negative from clamps to 1", {
+  df <- circularize_aln_df("ACGT", "ACGT", from = -5L)
+  expect_equal(df$col, 1:4)
+})
+
+test_that("from > to within range yields zero rows with correct column types", {
+  df <- circularize_aln_df("ACGT", "ACGT", from = 3L, to = 2L)
+  expect_equal(nrow(df), 0L)
+  expect_type(df$col, "integer")
+  expect_type(df$base_q, "character")
+  expect_type(df$base_s, "character")
+  expect_type(df$match, "logical")
+})
