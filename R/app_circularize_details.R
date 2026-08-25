@@ -87,7 +87,7 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
       "read depth across the junction trimming it produced. Use it to judge ",
       "whether the overlap is a real circular junction or a repeat."
     ),
-    tags$p(tags$b(outcome), if (!is.na(ov$reason)) paste0(": ", ov$reason)),
+    tags$p(tags$b(outcome), if (!is.na(ov$reason) && nzchar(ov$reason)) paste0(": ", ov$reason)),
     reactable::reactable(
       data.frame(
         `Aligned length (bp)` = ov$length,
