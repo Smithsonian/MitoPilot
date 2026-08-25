@@ -121,20 +121,30 @@ circularize_asmb <- function(
 
 #' Trim a redundant end-to-start overlap from a contig
 #'
-#' Self-BLASTs the sequence and removes the duplicated copy at the contig end.
+#' Self-BLASTs the sequence and removes the duplicated copy at the contig end,
+#' but only when the overlap clears the thresholds. The hit is returned either
+#' way so the caller can record what was found.
 #'
 #' @param seq contig sequence (character)
 #' @param min_overlap,min_identity detection thresholds, see [circularize_asmb()]
 #'
-#' @return list with `sequence`, `trimmed` (bp removed) and `log`
+#' @return list with `sequence`, `trimmed` (bp removed), `log`, and `hit`
 #'
 #' @noRd
 trim_end_overlap <- function(seq,
                              min_overlap = 220,
                              min_identity = 99) {
-  hit <- find_end_overlap(seq, min_overlap = min_overlap, min_identity = min_identity)
+  hit <- find_end_overlap(seq, min_overlap = min_overlap,
+                          min_identity = min_identity)
   if (is.null(hit)) {
-    return(list(sequence = seq, trimmed = 0L, log = character(0)))
+    return(list(sequence = seq, trimmed = 0L, log = character(0), hit = NULL))
+  }
+  if (!hit$accepted) {
+    return(list(
+      sequence = seq, trimmed = 0L,
+      log = paste0("overlap not used: ", hit$reason),
+      hit = hit
+    ))
   }
   # Drop the duplicated copy at the contig end, keeping the copy at the start.
   seq <- substr(seq, 1L, hit$sstart - 1L)
@@ -144,7 +154,8 @@ trim_end_overlap <- function(seq,
     log = paste0(
       "removed ", hit$trimmed, " bp overlap (", round(hit$pident, 1),
       "% identity), new length ", nchar(seq), " bp"
-    )
+    ),
+    hit = hit
   )
 }
 

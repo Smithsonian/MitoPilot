@@ -37,6 +37,23 @@ test_that("an overlap shorter than min_overlap is rejected", {
   expect_equal(trim_end_overlap(seq, min_overlap = 80)$trimmed, 100L)
 })
 
+test_that("a rejected overlap is reported but not trimmed", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 24)
+  res <- trim_end_overlap(paste0(core, substr(core, 1, 100)), min_overlap = 220)
+  expect_equal(res$trimmed, 0L)
+  expect_equal(res$sequence, paste0(core, substr(core, 1, 100)))
+  expect_false(res$hit$accepted)
+  expect_match(res$hit$reason, "below the 220 bp minimum")
+})
+
+test_that("no end-anchored hit leaves no evidence", {
+  skip_if_no_blastn()
+  res <- trim_end_overlap(random_seq(6000, seed = 25))
+  expect_equal(res$trimmed, 0L)
+  expect_null(res$hit)
+})
+
 test_that("the trivial full-length self hit is not mistaken for an overlap", {
   skip_if_no_blastn()
   # Every sequence aligns to itself end to end; only the 90% rule keeps that hit
