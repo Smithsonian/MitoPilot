@@ -938,3 +938,30 @@ test_that("a read-based project is not given the user-assembly schema", {
                      DBI::dbListTables(con)))
   expect_false(any(grepl("mitogenome-search", schema_gaps(con))))
 })
+
+test_that("a user-assembly project gains the circularization evidence tables", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10", has_asmb_dir = TRUE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN assembly TEXT")
+  DBI::dbExecute(con, "UPDATE samples SET assembly = 's1.fasta'")
+  DBI::dbDisconnect(con)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  expect_true(all(c("circularize_overlap", "circularize_depth") %in%
+                    DBI::dbListTables(con)))
+  expect_false(any(grepl("circularization", schema_gaps(con))))
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
+})

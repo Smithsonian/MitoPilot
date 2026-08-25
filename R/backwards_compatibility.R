@@ -89,7 +89,8 @@ backwards_compatibility <- function(
   # user-assembly projects, whose mapping file carries an "assembly" column.
   user_asmb <- is_user_asmb(con)
   user_asmb_current <- !user_asmb || (
-    all(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+    all(c("circularize_opts", "find_mito_opts", "mito_candidates",
+          "circularize_overlap", "circularize_depth") %in%
           DBI::dbListTables(con)) &&
       all(c("circularize_opts", "circularize_notes", "find_mito_opts",
             "find_mito_notes") %in% names(assemble_table))
@@ -519,6 +520,48 @@ backwards_compatibility <- function(
           reason TEXT,
           time_stamp INTEGER,
           PRIMARY KEY (ID, contig)
+        );"
+      )
+    }
+    if (!DBI::dbExistsTable(con, "circularize_overlap")) {
+      message("added 'circularize_overlap' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE circularize_overlap (
+          ID TEXT NOT NULL,
+          qstart INTEGER,
+          qend INTEGER,
+          sstart INTEGER,
+          send INTEGER,
+          length INTEGER,
+          pident REAL,
+          mismatches INTEGER,
+          aln_query TEXT,
+          aln_subject TEXT,
+          accepted INTEGER,
+          reason TEXT,
+          trimmed INTEGER,
+          junction_reads INTEGER,
+          min_junction_reads INTEGER,
+          window_bp INTEGER,
+          min_overhang INTEGER,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID)
+        );"
+      )
+    }
+    if (!DBI::dbExistsTable(con, "circularize_depth")) {
+      message("added 'circularize_depth' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE circularize_depth (
+          ID TEXT NOT NULL,
+          position INTEGER NOT NULL,
+          rel_position INTEGER,
+          depth INTEGER,
+          depth_spanning INTEGER,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, position)
         );"
       )
     }
@@ -2040,6 +2083,11 @@ schema_gaps <- function(con) {
        !has(all(c("circularize_opts", "circularize_notes", "find_mito_opts",
                   "find_mito_notes") %in% DBI::dbListFields(con, "assemble"))))) {
     gaps <- c(gaps, "the circularization and mitogenome-search tables are missing")
+  }
+  if (is_user_asmb(con) &&
+      !has(all(c("circularize_overlap", "circularize_depth") %in%
+               DBI::dbListTables(con)))) {
+    gaps <- c(gaps, "the circularization evidence tables are missing")
   }
   gaps
 }
