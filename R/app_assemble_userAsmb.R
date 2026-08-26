@@ -272,7 +272,7 @@ assemble_server_userAsmb <- function(id) {
             ),
             topology = colDef(
               show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
-              width = 100,
+              minWidth = 140,
               name = "Topology"
             ),
             assembly = colDef(
@@ -577,19 +577,9 @@ assemble_server_userAsmb <- function(id) {
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_lock) |>
         dplyr::slice(selected())
-      ## Ensure single assemble ---
-      # TODO - could relax this constraint
-      assemblies <- dplyr::tbl(session$userData$con, "assemblies") |>
-        dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
-        dplyr::pull(ID)
-      if (any(duplicated(assemblies))) {
-        shinyWidgets::sendSweetAlert(
-          title = "Multiple assemblies detected.",
-          text = "Only one assembly 'path' for each sample can be locked for annotation. Please open the assembly details and 'ignore' all but one assembly or use the consensus trimming feature.",
-          type = "warning"
-        )
-        req(F)
-      }
+      # Locking advances every non-ignored contig of the sample. Each contig is
+      # its own annotation unit and was seeded its own annotate row by WF1, so a
+      # fragmented user assembly no longer has to be reduced to one contig.
       lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
       rv$updating$assemble_lock <- as.numeric(!lock_current)
       dplyr::tbl(session$userData$con, "assemble") |>
@@ -804,6 +794,19 @@ assemble_server_userAsmb <- function(id) {
       circularize_details_modal(
         rv, rv$data$ID[as.numeric(input$show_circularize_details)]
       )
+    })
+
+    # Paging between contigs: the selection lives in rv, so the body and both
+    # plots follow it.
+    observeEvent(input$circ_contig, {
+      req(input$circ_contig %in% as.character(rv$circ_overlaps$contig))
+      rv$circ_contig <- input$circ_contig
+      circularize_load_evidence(rv, session = session)
+    })
+
+    output$circ_body <- renderUI({
+      ev <- req(rv$circ_evidence)
+      circularize_details_body(ev$overlap, ev$depth, session$ns)
     })
 
     output$circ_schematic <- renderPlot({

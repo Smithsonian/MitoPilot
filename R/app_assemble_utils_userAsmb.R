@@ -1,3 +1,28 @@
+#' Summarise a sample's per-contig topology values
+#'
+#' Circularization is decided per contig, so a sample no longer has one
+#' topology. Report the single value when the contigs agree, and a count of each
+#' otherwise.
+#'
+#' @param topology character vector, one value per non-ignored contig
+#'
+#' @return "circular", "linear", or a mixture such as "2 circular, 1 linear";
+#'   NA when there is nothing to summarise
+#'
+#' @noRd
+summarize_topology <- function(topology) {
+  topology <- as.character(topology)
+  topology <- topology[!is.na(topology) & nzchar(topology)]
+  if (length(topology) == 0L) {
+    return(NA_character_)
+  }
+  n <- table(topology)
+  if (length(n) == 1L) {
+    return(names(n))
+  }
+  paste(paste(as.integer(n), names(n)), collapse = ", ")
+}
+
 #' Populate assemble table
 #'
 #' @param db database connection
@@ -16,9 +41,21 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon, topology, assembly)
 
+  # Topology is decided per contig. Summarise the sample's non-ignored contigs,
+  # falling back to the user-declared value until WF1 has written any.
+  unit_topology <- dplyr::tbl(db, "assemblies") |>
+    dplyr::filter(ignore == 0) |>
+    dplyr::select(ID, topology) |>
+    dplyr::collect() |>
+    dplyr::group_by(ID) |>
+    dplyr::summarise(unit_topology = summarize_topology(topology), .groups = "drop")
+
   out <- dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
+    dplyr::left_join(unit_topology, by = "ID") |>
+    dplyr::mutate(topology = dplyr::coalesce(unit_topology, topology)) |>
+    dplyr::select(-unit_topology) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(
       blast_ref_status = poor_blast_ref,

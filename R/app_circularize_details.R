@@ -36,11 +36,6 @@ circularize_aln_df <- function(aln_query, aln_subject, from = 1L, to = NULL) {
   )
 }
 
-#' Show the evidence behind a sample's circularization call
-#'
-#' @param rv assemble module reactiveValues; the evidence is stashed here so the
-#'   plot renderers re-run when a different sample's modal is opened
-#' @param id sample ID
 #' Base colours for the aligned copies
 #'
 #' Same palette the assembly details modal uses for its path alignments, so a
@@ -177,35 +172,65 @@ circularize_aln_html <- function(ov) {
   )
 }
 
+#' One-line outcome for a stored overlap row
+#'
+#' @param ov one row of `circularize_overlap`
+#'
+#' @return single label string
+#'
+#' @noRd
+circ_outcome <- function(ov) {
+  if (isTRUE(as.logical(ov$accepted))) "overlap accepted" else "overlap not used"
+}
+
+#' Picker choices for a sample's contigs
+#'
+#' Named so the dropdown reads "contig (outcome)" while the value stays the
+#' contig name the evidence tables are keyed on.
+#'
+#' @param ov_all all `circularize_overlap` rows for one sample
+#'
+#' @return named character vector
+#'
+#' @noRd
+circ_contig_choices <- function(ov_all) {
+  labels <- vapply(
+    seq_len(nrow(ov_all)),
+    function(i) paste0(ov_all$contig[i], " (", circ_outcome(ov_all[i, ]), ")"),
+    character(1)
+  )
+  stats::setNames(as.character(ov_all$contig), labels)
+}
+
+#' Load one contig's evidence into the module's reactiveValues
+#'
+#' The panels read `rv$circ_evidence`, so the selection has to land in a
+#' reactive store: a non-reactive stash would leave the plots on the previously
+#' selected contig.
+#'
+#' @param rv assemble module reactiveValues
 #' @param session current shiny session
 #'
 #' @noRd
-circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain()) {
-  ns <- session$ns
-
-  ov <- dplyr::tbl(session$userData$con, "circularize_overlap") |>
-    dplyr::filter(ID == !!id) |>
-    dplyr::collect()
-
+circularize_load_evidence <- function(rv, session = getDefaultReactiveDomain()) {
+  ov_all <- rv$circ_overlaps
+  contig <- rv$circ_contig
+  if (is.null(ov_all) || nrow(ov_all) == 0L || is.null(contig)) {
+    rv$circ_evidence <- NULL
+    return(invisible(NULL))
+  }
+  ov <- ov_all[ov_all$contig == contig, , drop = FALSE]
   if (nrow(ov) == 0L) {
-    shinyWidgets::show_alert(
-      title = "No circularization evidence",
-      text = paste0(
-        "No end overlap was found for this sample, so there is nothing to ",
-        "compare. Samples with a multi-contig assembly, or with the step ",
-        "switched off, have no evidence either."
-      ),
-      type = "info"
-    )
+    rv$circ_evidence <- NULL
     return(invisible(NULL))
   }
   ov <- ov[1, ]
-  ov_contig <- ov$contig
 
   # Depth must follow the contig the overlap row belongs to, or a fragmented
   # sample blends every contig into one plot.
+  id <- rv$circ_id
   depth <- dplyr::tbl(session$userData$con, "circularize_depth") |>
-    dplyr::filter(ID == !!id, contig == !!ov_contig) |>
+    dplyr::filter(ID == !!id, contig == !!contig) |>
     dplyr::collect()
   # Ignore rows left by an earlier run with a wider window. NA window_bp
   # means no reads were mapped this run, so any depth rows are stale.
@@ -218,20 +243,27 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
   }
 
   rv$circ_evidence <- list(overlap = ov, depth = depth)
+  invisible(NULL)
+}
 
-  aln_len <- if (is.na(ov$aln_query)) 0L else nchar(ov$aln_query)
-  outcome <- if (isTRUE(as.logical(ov$accepted))) "overlap accepted" else "overlap not used"
-
-  showModal(modalDialog(
-    title = stringr::str_glue("Circularization: {id}"),
-    size = "l",
-    easyClose = TRUE,
-    opts_help(
-      "The redundant overlap the search found between the contig ends, and the ",
-      "read depth across the junction trimming it produced. Use it to judge ",
-      "whether the overlap is a real circular junction or a repeat."
+#' Body of the circularization modal, for one contig
+#'
+#' Separate from the modal so it can be re-rendered when the picker changes
+#' without rebuilding the dialog around it.
+#'
+#' @param ov one row of `circularize_overlap`
+#' @param depth that contig's `circularize_depth` rows
+#' @param ns module namespace function
+#'
+#' @return a shiny tag list
+#'
+#' @noRd
+circularize_details_body <- function(ov, depth, ns) {
+  tagList(
+    tags$p(
+      tags$b(circ_outcome(ov)),
+      if (!is.na(ov$reason) && nzchar(ov$reason)) paste0(": ", ov$reason)
     ),
-    tags$p(tags$b(outcome), if (!is.na(ov$reason) && nzchar(ov$reason)) paste0(": ", ov$reason)),
     reactable::reactable(
       data.frame(
         `Contig length (bp)` = circ_length_label(ov$contig_length, ov$trimmed),
@@ -270,7 +302,65 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
         "No junction coverage: this project has no raw reads, or the overlap",
         "was not used, so no reads were mapped."
       ), top = 14)
-    },
+    }
+  )
+}
+
+#' Show the evidence behind a sample's circularization calls
+#'
+#' Circularization is decided per contig, so the modal pages between the
+#' contigs the search found evidence for. It declines only when the sample has
+#' no evidence at all; a sample with evidence for some of its contigs shows
+#' what it has.
+#'
+#' @param rv assemble module reactiveValues; the evidence and the current
+#'   selection are stashed here so the panels re-run when either changes
+#' @param id sample ID
+#' @param session current shiny session
+#'
+#' @noRd
+circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+
+  ov_all <- dplyr::tbl(session$userData$con, "circularize_overlap") |>
+    dplyr::filter(ID == !!id) |>
+    dplyr::collect() |>
+    dplyr::arrange(contig)
+
+  if (nrow(ov_all) == 0L) {
+    shinyWidgets::show_alert(
+      title = "No circularization evidence",
+      text = paste0(
+        "No end overlap was found for any contig of this sample, so there is ",
+        "nothing to compare. Samples with the step switched off have no ",
+        "evidence either."
+      ),
+      type = "info"
+    )
+    return(invisible(NULL))
+  }
+
+  rv$circ_id <- id
+  rv$circ_overlaps <- ov_all
+  rv$circ_contig <- as.character(ov_all$contig[1])
+  circularize_load_evidence(rv, session = session)
+
+  showModal(modalDialog(
+    title = stringr::str_glue("Circularization: {id}"),
+    size = "l",
+    easyClose = TRUE,
+    opts_help(
+      "The redundant overlap the search found between the contig ends, and the ",
+      "read depth across the junction trimming it produced. Use it to judge ",
+      "whether the overlap is a real circular junction or a repeat."
+    ),
+    selectInput(
+      ns("circ_contig"), "Contig",
+      choices = circ_contig_choices(ov_all),
+      selected = rv$circ_contig,
+      width = "100%"
+    ),
+    uiOutput(ns("circ_body")),
     footer = modalButton("Close")
   ))
 
