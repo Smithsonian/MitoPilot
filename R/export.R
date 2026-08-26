@@ -254,6 +254,16 @@ export_files <- function(
     curation_opts <-  dplyr::tbl(con, "annotate") |>
       dplyr::filter(ID == !!.x & path == !!.path & scaffold == !!.scaffold) |>
       dplyr::pull("curate_opts")
+    if (length(curation_opts) == 0) {
+      # A user-supplied assembly is annotated as one genome, so a single annotate
+      # row covers every contig of the sample and a sibling contig has none of its
+      # own. Fall back to the sample's row rather than querying with no value.
+      curation_opts <- dplyr::tbl(con, "annotate") |>
+        dplyr::filter(ID == !!.x) |>
+        dplyr::arrange(path, scaffold) |>
+        dplyr::pull("curate_opts")
+    }
+    curation_opts <- curation_opts[1] %|NA|% "default"
 
     curate_rules <- dplyr::tbl(con, "curate_opts") |>
       dplyr::filter(curate_opts == !!curation_opts) |>
@@ -310,9 +320,20 @@ export_files <- function(
       scaffold = .scaffold,
       con = con
     )
-    # Override fragmented topology with the kept scaffold's per-scaffold topology
-    if (isTRUE(dat$topology == "fragmented") && !is.na(kept$topology[1])) {
+    # Topology is per record. Each export unit is one scaffold and assemblies
+    # carries that scaffold's own value, while annotate.topology summarizes the
+    # whole unit ("fragmented") and, for user assemblies, covers every contig of
+    # the sample from a single row. Only a per-scaffold value may reach a defline.
+    if (!is.na(kept$topology[1]) && nzchar(kept$topology[1])) {
       dat$topology <- kept$topology[1]
+    }
+    unit_topology <- as.character(dat$topology)[1]
+    if (!isTRUE(unit_topology %in% c("circular", "linear"))) {
+      warning(
+        .seqid, ": no per-scaffold topology found (found '",
+        unit_topology %|NA|% "NA", "'). Exporting as linear."
+      )
+      dat$topology <- "linear"
     }
     # Reference for the note, resolved per unit via the same helper the synteny view
     # and both tables use, so the note always names the reference the user was shown.

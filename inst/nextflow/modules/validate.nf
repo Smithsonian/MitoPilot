@@ -186,7 +186,13 @@ process write_curated_result {
         def selIdx = params.userAsmb ? (0..<descs.size()).toList() : (0..<descs.size()).findAll { descs[it].split(/\s+/, 2)[0] == targetSid }
         def scaffolds = selIdx.size()
         def totLen = (selIdx.collect { lengths[it] }.sum() ?: 0) as int
-        def topology = selIdx.collect { def p = descs[it].split(/\s+/, 2); p.length > 1 ? p[1] : '' }.join(';')
+        // One annotate row summarizes every contig selected above, so a mixed
+        // user assembly has no single topology. Collapse it to the 'fragmented'
+        // sentinel rather than joining values with ';': the joined string reads
+        // as a topology downstream and would reach a submission defline.
+        def topoVals = selIdx.collect { def p = descs[it].split(/\s+/, 2); p.length > 1 ? p[1] : '' }
+                             .findAll { it.length() > 0 }.unique()
+        def topology = topoVals.size() == 1 ? topoVals[0] : (topoVals.size() > 1 ? 'fragmented' : '')
 
         // summary is CSV; its fields never contain commas (structure joins with
         // '|', missing/extra with ';', the rest are integers)
