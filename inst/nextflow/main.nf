@@ -12,10 +12,6 @@ params.ts = workflow.start.toInstant().getEpochSecond().toString()
 // project .config setting rawDir = 'NA' (see new_project_userAsmb(no_raw_data)).
 params.noRawData = (params.rawDir == 'NA')
 
-// User-supplied-assembly projects: WF2 validates each sample's contigs together
-// as one unit (no per-scaffold split). Standard read-based projects leave this
-// false and validate per (ID, path, scaffold). Set via `--userAsmb true`.
-params.userAsmb = false
 
 // Modules
 include {PREPROCESS} from './modules/preprocess_workflow.nf'

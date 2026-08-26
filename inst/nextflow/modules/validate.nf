@@ -24,16 +24,15 @@ process validate {
 
     shell:
     dir = "${id}/annotate"
-    scafArg = params.userAsmb ? 'all' : "${scaffold}"
-    outCsv  = params.userAsmb ? "${id}_annotations_${path}.csv" : "${id}_annotations_${path}.${scaffold}.csv"
+    scafArg = "${scaffold}"
+    outCsv  = "${id}_annotations_${path}.${scaffold}.csv"
     '''
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
-    # Subset the per-path curated annotations to this unit. The standard flow keeps
-    # only this scaffold so gene-count validation never pools separate genomes;
-    # userAsmb keeps every contig (one genome per sample). The output filename
-    # propagates to the validate outputs (annotations tsv + summary csv).
-    Rscript -e "ann <- utils::read.csv('!{annotations}'); sc <- '!{scafArg}'; keep <- if (identical(sc, 'all')) rep(TRUE, nrow(ann)) else sub('^.*[.]', '', as.character(ann[['contig']])) == sc; utils::write.csv(ann[keep, , drop = FALSE], '!{outCsv}', row.names = FALSE)"
+    # Subset the per-path curated annotations to this unit, so gene-count
+    # validation never pools separate genomes. The output filename propagates to
+    # the validate outputs (annotations tsv + summary csv).
+    Rscript -e "ann <- utils::read.csv('!{annotations}'); sc <- '!{scafArg}'; keep <- sub('^.*[.]', '', as.character(ann[['contig']])) == sc; utils::write.csv(ann[keep, , drop = FALSE], '!{outCsv}', row.names = FALSE)"
     Rscript -e "MitoPilot::validate_!{opts.target}( \
         annotations_fn = '!{outCsv}', \
         coverage_fn = '!{coverage}', \
@@ -117,7 +116,7 @@ process write_curated_result {
             "UPDATE assemblies SET sequence = ?, length = ?, depth = ?, gc = ?, errors = ?, " +
             "time_stamp = ? WHERE ID = ? AND path = ? AND scaffold = ?")
         groups.each { sid, rows ->
-            if (!params.userAsmb && sid != targetSid) return  // standard: only this unit; userAsmb: all contigs
+            if (sid != targetSid) return  // only this unit's row
             rows.sort { a, b -> (a[ci['Position']] as int) <=> (b[ci['Position']] as int) }
             def seq    = rows.collect { it[ci['Call']] }.join('')
             def depth  = rows.collect { it[ci['MeanDepth']] }.join(' ')
@@ -134,17 +133,11 @@ process write_curated_result {
         updAsm.close()
 
         // ---- annotations: clear stale rows, insert validated coordinates ----
-        // Standard: scoped to this scaffold unit so a sibling unit of the same
-        // path is not wiped (the validated TSV holds only this scaffold's rows).
-        // userAsmb: whole path (all contigs validated together).
-        def del
-        if (params.userAsmb) {
-            del = conn.prepareStatement("DELETE FROM annotations WHERE ID = ? AND path = ? AND time_stamp != ?")
-            del.setString(1, id.toString()); del.setInt(2, path as int); del.setString(3, ts)
-        } else {
-            del = conn.prepareStatement("DELETE FROM annotations WHERE ID = ? AND path = ? AND scaffold = ? AND time_stamp != ?")
-            del.setString(1, id.toString()); del.setInt(2, path as int); del.setInt(3, scaffold as int); del.setString(4, ts)
-        }
+        // Scoped to this scaffold unit so a sibling unit of the same path is not
+        // wiped (the validated TSV holds only this scaffold's rows).
+        def del = conn.prepareStatement(
+            "DELETE FROM annotations WHERE ID = ? AND path = ? AND scaffold = ? AND time_stamp != ?")
+        del.setString(1, id.toString()); del.setInt(2, path as int); del.setInt(3, scaffold as int); del.setString(4, ts)
         del.executeUpdate(); del.close()
 
         def annLines = new File(annotations_fn.toString()).readLines()
@@ -181,15 +174,14 @@ process write_curated_result {
             } else { cur.append(l.trim()) }
         }
         if (started) lengths << cur.length()
-        // Restrict the summary to this scaffold unit (assembly FASTA is per-path);
-        // userAsmb summarizes all contigs of the path together.
-        def selIdx = params.userAsmb ? (0..<descs.size()).toList() : (0..<descs.size()).findAll { descs[it].split(/\s+/, 2)[0] == targetSid }
+        // Restrict the summary to this scaffold unit (assembly FASTA is per-path).
+        def selIdx = (0..<descs.size()).findAll { descs[it].split(/\s+/, 2)[0] == targetSid }
         def scaffolds = selIdx.size()
         def totLen = (selIdx.collect { lengths[it] }.sum() ?: 0) as int
-        // One annotate row summarizes every contig selected above, so a mixed
-        // user assembly has no single topology. Collapse it to the 'fragmented'
-        // sentinel rather than joining values with ';': the joined string reads
-        // as a topology downstream and would reach a submission defline.
+        // A unit is normally one record with one topology. If it ever spans
+        // several with mixed topologies, collapse to the 'fragmented' sentinel
+        // rather than joining values with ';': the joined string reads as a
+        // topology downstream and would reach a submission defline.
         def topoVals = selIdx.collect { def p = descs[it].split(/\s+/, 2); p.length > 1 ? p[1] : '' }
                              .findAll { it.length() > 0 }.unique()
         def topology = topoVals.size() == 1 ? topoVals[0] : (topoVals.size() > 1 ? 'fragmented' : '')

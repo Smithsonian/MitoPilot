@@ -4,20 +4,15 @@ include {prepare_ref_db} from './prepare_ref_db.nf'
 
 // CURATE runs per (ID, path, scaffold): each unit is curated independently using
 // its own curate_opts/annotate_opts and its own per-scaffold BLAST reference.
-// userAsmb projects curate the whole path as one unit (scaffold literal 1), so the
-// reference comes from the sample-level assemble row rather than a per-scaffold one
-// (a per-scaffold accession would vary across contigs and defeat the DISTINCT).
-// Mirrors VALIDATE's userAsmb branch.
-def scafSel  = params.userAsmb ? '1 AS scaffold' : 'a.scaffold'
-def scafJoin = params.userAsmb ? 'an.scaffold = 1' : 'an.scaffold = a.scaffold'
-def blastAcc = params.userAsmb ? 'b.blast_accession' : 'a.blast_accession'
+// User-supplied assemblies follow the same contract; BLAST_GENBANK writes
+// assemblies.blast_accession per contig on that path too.
 
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' + scafSel + ', b.assemble_opts, an.curate_opts, ' +
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, a.scaffold, b.assemble_opts, an.curate_opts, ' +
                     'd.cpus, d.memory, d.target, d.params, d.max_blast_hits, ' +
-                    'd.ref_dir, d.ref_db, e.feature_trim, ' + blastAcc + ', f.genetic_code, e.ref_based_rc ' +
+                    'd.ref_dir, d.ref_db, e.feature_trim, a.blast_accession, f.genetic_code, e.ref_based_rc ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND ' + scafJoin + ' ' +
+                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold ' +
                     'JOIN curate_opts d ON d.curate_opts = an.curate_opts ' +
                     'JOIN annotate_opts e ON e.annotate_opts = an.annotate_opts ' +
                     'JOIN samples f ON a.ID = f.ID ' +

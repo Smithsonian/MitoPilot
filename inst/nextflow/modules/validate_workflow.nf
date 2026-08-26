@@ -5,27 +5,14 @@ include {write_curated_result} from './validate.nf'
 // VALIDATE runs per (ID, path, scaffold): each unit is validated, warned, and
 // summarized on its own. CURATE now emits per (ID, path, scaffold) too, so its
 // files join the validate query directly by (id, path, scaffold).
-//
-// userAsmb projects are the exception: a user-supplied assembly is one genome, so
-// all its contigs are validated together as a single unit (scaffold literal 1,
-// the seeded annotate row). The validate process + writer read params.userAsmb to
-// skip the per-scaffold split.
-params.sqlRead = params.userAsmb ?
-                   ('SELECT DISTINCT a.ID, a.path, 1 AS scaffold, c.curate_opts, ' +
-                        'd.cpus, d.memory, d.target, d.params ' +
-                    'FROM assemblies a ' +
-                    'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate c ON a.ID = c.ID AND a.path = c.path AND c.scaffold = 1 ' +
-                    'JOIN curate_opts d ON c.curate_opts = d.curate_opts ' +
-                    'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0')
-                 :
-                   ('SELECT DISTINCT a.ID, a.path, a.scaffold, c.curate_opts, ' +
-                        'd.cpus, d.memory, d.target, d.params ' +
-                    'FROM assemblies a ' +
-                    'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate c ON a.ID = c.ID AND a.path = c.path AND a.scaffold = c.scaffold ' +
-                    'JOIN curate_opts d ON c.curate_opts = d.curate_opts ' +
-                    'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0')
+// User-supplied assemblies follow the same contract: each contig is its own unit.
+params.sqlRead = 'SELECT DISTINCT a.ID, a.path, a.scaffold, c.curate_opts, ' +
+                     'd.cpus, d.memory, d.target, d.params ' +
+                 'FROM assemblies a ' +
+                 'JOIN assemble b ON a.ID = b.ID ' +
+                 'JOIN annotate c ON a.ID = c.ID AND a.path = c.path AND a.scaffold = c.scaffold ' +
+                 'JOIN curate_opts d ON c.curate_opts = d.curate_opts ' +
+                 'WHERE c.annotate_switch = 1 AND c.annotate_lock = 0 AND b.assemble_lock = 1 AND a.ignore = 0'
 
 workflow VALIDATE {
     take:
