@@ -1205,27 +1205,30 @@ read_outcome <- function(dir) {
        note = paste(readLines(file.path(dir, "join_note.txt")), collapse = ""))
 }
 
-test_that("join reports 'declined' when the toggle is off", {
+test_that("join reports 'skipped' with no note when the toggle is off", {
   dir <- withr::local_tempdir()
   f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
-  run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = FALSE,
-                    scaffold_hits = f$hits)
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = FALSE,
+                           scaffold_hits = f$hits)
   out <- read_outcome(dir)
-  expect_equal(out$status, "declined")
-  expect_true(nzchar(out$note))
-  expect_match(out$note, "turned off")
+  expect_equal(out$status, "skipped")
+  expect_equal(res$outcome, "skipped")
+  # a toggled-off sample must not put anything in the Assemble table
+  expect_equal(out$note, "")
+  expect_equal(file.size(file.path(dir, "join_note.txt")), 0)
   expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
 })
 
 test_that("join reports 'declined' when the scaffold hits disagree", {
   dir <- withr::local_tempdir()
   f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_2|99")
-  run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
-                    scaffold_hits = f$hits)
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
+                           scaffold_hits = f$hits)
   out <- read_outcome(dir)
   expect_equal(out$status, "declined")
   expect_match(out$note, "different reference mitogenomes")
   expect_match(out$note, "NC_1")
+  expect_equal(res$outcome, "declined")
   expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
 })
 
@@ -1238,6 +1241,7 @@ test_that("a successful join reports 'joined' with no reason", {
   out <- read_outcome(dir)
   expect_equal(out$status, "joined")
   expect_equal(out$note, "")
+  expect_equal(file.size(file.path(dir, "join_note.txt")), 0)
   expect_equal(res$outcome, "joined")
   expect_true(file.exists(file.path(dir, "X_joined_row.csv")))
 })

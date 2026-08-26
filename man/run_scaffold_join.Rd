@@ -54,7 +54,8 @@ joins, and writes the joined `{ID}_assembly_0.fasta`,
 opened here; DB writes are done in Groovy (see scaffold_join_workflow.nf).
 }
 \details{
-Every exit also writes `join_status.txt` ("joined" or "declined") and
-`join_note.txt` (the reason, empty when joined), so the workflow can tell a
-deliberate decline from a crashed task (which writes neither).
+Every exit also writes `join_status.txt` ("joined", "declined" when the join
+ran and refused, or "skipped" when it is toggled off) and `join_note.txt` (a
+reason for "declined", empty otherwise), so the workflow can tell each of
+those apart from a crashed task, which writes neither file.
 }
