@@ -7,12 +7,12 @@ params.sqlWriteCircNotes = 'UPDATE assemble SET circularize_notes = ? WHERE ID =
 // Upsert keyed on the primary key rather than a DELETE + INSERT pair, which
 // nf-sqldb may commit in either order.
 params.sqlWriteCircOverlap = '''INSERT INTO circularize_overlap
-    (ID, qstart, qend, sstart, send, length, pident, mismatches,
+    (ID, contig, qstart, qend, sstart, send, length, pident, mismatches,
      aln_query, aln_subject, q_ctx_left, q_ctx_right, s_ctx_left, s_ctx_right,
      accepted, reason, contig_length, trimmed,
      junction_reads, min_junction_reads, window_bp, min_overhang, time_stamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(ID) DO UPDATE SET
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ID, contig) DO UPDATE SET
       qstart = excluded.qstart, qend = excluded.qend,
       sstart = excluded.sstart, send = excluded.send,
       length = excluded.length, pident = excluded.pident,
@@ -28,9 +28,9 @@ params.sqlWriteCircOverlap = '''INSERT INTO circularize_overlap
       time_stamp = excluded.time_stamp'''
 
 params.sqlWriteCircDepth = '''INSERT INTO circularize_depth
-    (ID, position, rel_position, depth, depth_spanning, time_stamp)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(ID, position) DO UPDATE SET
+    (ID, contig, position, rel_position, depth, depth_spanning, time_stamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ID, contig, position) DO UPDATE SET
       rel_position = excluded.rel_position,
       depth = excluded.depth,
       depth_spanning = excluded.depth_spanning,
@@ -69,7 +69,7 @@ workflow CIRCULARIZE_userAsmb {
         circ_out
             .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> ov_f }
             .splitCsv(header: true, quote: '"')
-            .map { row -> tuple(row.ID, row.qstart, row.qend, row.sstart, row.send,
+            .map { row -> tuple(row.ID, row.contig, row.qstart, row.qend, row.sstart, row.send,
                                 row.length, row.pident, row.mismatches,
                                 row.aln_query, row.aln_subject,
                                 row.q_ctx_left ?: '', row.q_ctx_right ?: '',
@@ -85,7 +85,7 @@ workflow CIRCULARIZE_userAsmb {
         circ_out
             .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> dp_f }
             .splitCsv(header: true, quote: '"')
-            .map { row -> tuple(row.ID, row.position, row.rel_position,
+            .map { row -> tuple(row.ID, row.contig, row.position, row.rel_position,
                                 row.depth, row.depth_spanning, params.ts) }
             .sqlInsert(statement: params.sqlWriteCircDepth, db: 'sqlite')
 
@@ -138,7 +138,7 @@ workflow CIRCULARIZE_userAsmb_noReads {
         circ_out
             .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> ov_f }
             .splitCsv(header: true, quote: '"')
-            .map { row -> tuple(row.ID, row.qstart, row.qend, row.sstart, row.send,
+            .map { row -> tuple(row.ID, row.contig, row.qstart, row.qend, row.sstart, row.send,
                                 row.length, row.pident, row.mismatches,
                                 row.aln_query, row.aln_subject,
                                 row.q_ctx_left ?: '', row.q_ctx_right ?: '',
@@ -154,7 +154,7 @@ workflow CIRCULARIZE_userAsmb_noReads {
         circ_out
             .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> dp_f }
             .splitCsv(header: true, quote: '"')
-            .map { row -> tuple(row.ID, row.position, row.rel_position,
+            .map { row -> tuple(row.ID, row.contig, row.position, row.rel_position,
                                 row.depth, row.depth_spanning, params.ts) }
             .sqlInsert(statement: params.sqlWriteCircDepth, db: 'sqlite')
 

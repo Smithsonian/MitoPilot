@@ -5,8 +5,8 @@
 #'
 #' @param dir output directory
 #' @param id sample ID
-#' @param results list of per-contig results, each with `hit`, `trimmed` and
-#'   `junction`
+#' @param results list of per-contig results, each with `contig`, `hit`,
+#'   `trimmed` and `junction`
 #' @param min_junction_reads,min_overhang thresholds in force for this run
 #'
 #' @noRd
@@ -15,7 +15,7 @@ write_circularize_evidence <- function(dir, id, results,
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
 
   empty_overlap <- data.frame(
-    ID = character(0), qstart = integer(0), qend = integer(0),
+    ID = character(0), contig = character(0), qstart = integer(0), qend = integer(0),
     sstart = integer(0), send = integer(0), length = integer(0),
     pident = numeric(0), mismatches = integer(0),
     aln_query = character(0), aln_subject = character(0),
@@ -34,6 +34,7 @@ write_circularize_evidence <- function(dir, id, results,
     }
     data.frame(
       ID = id,
+      contig = res$contig,
       qstart = hit$qstart, qend = hit$qend,
       sstart = hit$sstart, send = hit$send,
       length = hit$length, pident = round(hit$pident, 2),
@@ -57,14 +58,14 @@ write_circularize_evidence <- function(dir, id, results,
                    row.names = FALSE, na = "")
 
   empty_depth <- data.frame(
-    ID = character(0), position = integer(0), rel_position = integer(0),
+    ID = character(0), contig = character(0), position = integer(0), rel_position = integer(0),
     depth = integer(0), depth_spanning = integer(0)
   )
   depth_rows <- function(res) {
     if (is.null(res$junction) || nrow(res$junction$depth) == 0L) {
       return(NULL)
     }
-    cbind(ID = id, res$junction$depth)
+    cbind(ID = id, contig = res$contig, res$junction$depth)
   }
 
   depth <- do.call(rbind, c(list(empty_depth), lapply(results, depth_rows)))
@@ -239,7 +240,9 @@ circularize_asmb <- function(
     vapply(results, function(res) res$sequence, character(1))
   ) |> setNames(names(assembly))
 
-  note <- if (length(results) == 1L) {
+  note <- if (length(results) == 0L) {
+    "not attempted: assembly contains no contigs"
+  } else if (length(results) == 1L) {
     results[[1]]$note
   } else {
     paste(vapply(results, function(res) paste0(res$contig, ": ", res$note),

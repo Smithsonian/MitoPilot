@@ -358,3 +358,56 @@ test_that("the evidence CSV carries the context columns", {
   expect_equal(nchar(ov$q_ctx_right), 50L)
   expect_equal(nchar(ov$s_ctx_left), 50L)
 })
+
+test_that("evidence is keyed by contig when only some contigs overlap", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 51)
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  ev <- withr::local_tempdir()
+  writeLines(c(
+    ">frag1 length=6300", paste0(core, substr(core, 1, 300)),
+    ">frag2 length=6000", random_seq(6000, seed = 52)
+  ), fa)
+
+  circularize_asmb(fa, id = "s5", evidence_dir = ev)
+
+  ov <- utils::read.csv(file.path(ev, "circularize_overlap.csv"))
+  expect_true("contig" %in% names(ov))
+  # frag2 has no end-anchored hit, so it contributes no row
+  expect_equal(ov$contig, "frag1")
+  expect_equal(ov$ID, "s5")
+  expect_equal(ov$accepted, 1L)
+})
+
+test_that("the evidence writer emits one block of rows per contig", {
+  mk <- function(contig, n_depth) {
+    list(
+      contig = contig,
+      hit = list(qstart = 1L, qend = 300L, sstart = 6001L, send = 6300L,
+                 length = 300L, pident = 100, mismatches = 0L,
+                 qseq = "A", sseq = "A",
+                 q_ctx_left = "", q_ctx_right = "C",
+                 s_ctx_left = "G", s_ctx_right = "",
+                 accepted = TRUE, reason = NA_character_,
+                 contig_length = 6300L),
+      trimmed = 300L,
+      junction = list(
+        count = 7L, window_bp = 2L,
+        depth = data.frame(position = seq_len(n_depth),
+                           rel_position = seq_len(n_depth) - 1L,
+                           depth = 10L, depth_spanning = 7L)
+      )
+    )
+  }
+  ev <- withr::local_tempdir()
+  write_circularize_evidence(
+    ev, "s6", list(mk("frag1", 3L), mk("frag2", 2L)),
+    min_junction_reads = 5, min_overhang = 30
+  )
+
+  ov <- utils::read.csv(file.path(ev, "circularize_overlap.csv"))
+  expect_equal(ov$contig, c("frag1", "frag2"))
+  dp <- utils::read.csv(file.path(ev, "circularize_depth.csv"))
+  expect_equal(dp$contig, c(rep("frag1", 3), rep("frag2", 2)))
+  expect_equal(nrow(unique(dp[, c("ID", "contig", "position")])), nrow(dp))
+})

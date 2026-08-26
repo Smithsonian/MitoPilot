@@ -237,7 +237,7 @@ new_db_userAsmb <- function(
       trimmed_reads INTEGER,
       mean_length INTEGER,
       time_stamp INTEGER,
-      PRIMARY KEY (ID)
+      PRIMARY KEY (ID, contig)
     );"
   )
   dplyr::tbl(con, "preprocess") |>
@@ -310,7 +310,7 @@ new_db_userAsmb <- function(
       synteny_accession TEXT,
       poor_blast_ref TEXT,
       time_stamp INTEGER,
-      PRIMARY KEY (ID)
+      PRIMARY KEY (ID, contig)
     );"
   )
   dplyr::tbl(con, "assemble") |>
@@ -405,6 +405,7 @@ new_db_userAsmb <- function(
     con,
     "CREATE TABLE circularize_overlap (
       ID TEXT NOT NULL,
+      contig TEXT NOT NULL,
       qstart INTEGER,
       qend INTEGER,
       sstart INTEGER,
@@ -427,19 +428,20 @@ new_db_userAsmb <- function(
       window_bp INTEGER,
       min_overhang INTEGER,
       time_stamp INTEGER,
-      PRIMARY KEY (ID)
+      PRIMARY KEY (ID, contig)
     );"
   )
   DBI::dbExecute(
     con,
     "CREATE TABLE circularize_depth (
       ID TEXT NOT NULL,
+      contig TEXT NOT NULL,
       position INTEGER NOT NULL,
       rel_position INTEGER,
       depth INTEGER,
       depth_spanning INTEGER,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, position)
+      PRIMARY KEY (ID, contig, position)
     );"
   )
 
