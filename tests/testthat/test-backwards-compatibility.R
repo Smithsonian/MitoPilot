@@ -1049,7 +1049,7 @@ test_that("single-key circularization evidence tables are rebuilt per contig", {
   )
 })
 
-test_that("an existing circularize_overlap table gains the context columns", {
+test_that("a pre-context circularize_overlap table is brought up to date", {
   # Regression: the modal's contig-context view was added after the table
   # shipped, so a project migrated at the earlier version has the table but not
   # the columns, and must not be told it is up to date.

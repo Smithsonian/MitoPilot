@@ -237,7 +237,7 @@ new_db_userAsmb <- function(
       trimmed_reads INTEGER,
       mean_length INTEGER,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, contig)
+      PRIMARY KEY (ID)
     );"
   )
   dplyr::tbl(con, "preprocess") |>
@@ -310,7 +310,7 @@ new_db_userAsmb <- function(
       synteny_accession TEXT,
       poor_blast_ref TEXT,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, contig)
+      PRIMARY KEY (ID)
     );"
   )
   dplyr::tbl(con, "assemble") |>

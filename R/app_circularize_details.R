@@ -200,9 +200,12 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
     return(invisible(NULL))
   }
   ov <- ov[1, ]
+  ov_contig <- ov$contig
 
+  # Depth must follow the contig the overlap row belongs to, or a fragmented
+  # sample blends every contig into one plot.
   depth <- dplyr::tbl(session$userData$con, "circularize_depth") |>
-    dplyr::filter(ID == !!id) |>
+    dplyr::filter(ID == !!id, contig == !!ov_contig) |>
     dplyr::collect()
   # Ignore rows left by an earlier run with a wider window. NA window_bp
   # means no reads were mapped this run, so any depth rows are stale.
