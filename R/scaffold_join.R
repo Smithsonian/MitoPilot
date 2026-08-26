@@ -87,6 +87,28 @@ redo_join_plan <- function(ids, assemblies_df, missing_ids = character(0),
        no_ref = no_ref)
 }
 
+#' IDs with no BLAST reference accession recorded
+#'
+#' Must be fed the `assemble` table as stored, NOT the Assemble app table:
+#' the app blanks `blast_accession` for display whenever a sample keeps more
+#' than one scaffold, and every join-eligible sample keeps more than one, so
+#' the display value would refuse a redo for exactly the samples the redo
+#' exists for.
+#'
+#' @param ids Character vector of sample IDs.
+#' @param assemble_df data.frame with `ID` and `blast_accession` columns,
+#'   collected from the `assemble` table.
+#' @return Character vector, the subset of `ids` with no usable accession.
+#' @noRd
+redo_join_no_ref_ids <- function(ids, assemble_df) {
+  if (is.null(assemble_df) || nrow(assemble_df) == 0L ||
+      !"blast_accession" %in% names(assemble_df)) {
+    return(character(0))
+  }
+  acc <- assemble_df$blast_accession[match(ids, assemble_df$ID)]
+  ids[is.na(acc) | !nzchar(as.character(acc))]
+}
+
 #' Choose a single reference accession for a multi-scaffold sample
 #'
 #' Scaffolds can carry different BLAST hits, but all must map to ONE reference or

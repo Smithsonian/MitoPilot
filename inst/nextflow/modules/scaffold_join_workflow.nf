@@ -320,6 +320,14 @@ workflow SCAFFOLD_JOIN {
 
         // Entered but produced no outcome file: the task crashed (errorStrategy
         // 'ignore' emits nothing). Same idiom as the ref-fetch failure detection.
+        //
+        // Unguarded on purpose. A redo arrives here mixed into the same channel
+        // as a normal run, so this write CAN demote a sample that was at 2. That
+        // is the intended outcome, not an oversight: the user asked for the join
+        // to be redone, it crashed, and whatever is on disk for the sample may
+        // now be inconsistent with what the database says. Reporting it as
+        // failed is honest. Do not add a CASE guard here; sqlWriteJoinRedoMissing
+        // is guarded for a different reason (nothing ran, so nothing changed).
         join_in
             .map { it -> tuple(it[0], true) }
             .join(join_outcome.map { id, status, note -> tuple(id, true) }, remainder: true)

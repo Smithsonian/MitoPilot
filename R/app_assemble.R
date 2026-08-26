@@ -687,7 +687,7 @@ assemble_server <- function(id) {
       toggles <- tryCatch(
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::filter(ID %in% ids) |>
-          dplyr::select(ID, assemble_opts) |>
+          dplyr::select(ID, assemble_opts, blast_accession) |>
           dplyr::inner_join(
             dplyr::tbl(session$userData$con, "assemble_opts") |>
               dplyr::select(assemble_opts, join_scaffolds),
@@ -704,11 +704,11 @@ assemble_server <- function(id) {
       }
       # No reference accession means the join has nothing to align against. A
       # fragmented sample with BLAST off sits legitimately at state 2, and a
-      # redo would report a missing input and mark it failed.
-      no_ref_ids <- {
-        acc <- rv$data$blast_accession[match(ids, rv$data$ID)]
-        ids[is.na(acc) | !nzchar(as.character(acc))]
-      }
+      # redo would report a missing input and mark it failed. Read the accession
+      # from the database, not rv$data: the table blanks it for display whenever
+      # a sample keeps more than one scaffold, which is every join-eligible
+      # sample.
+      no_ref_ids <- redo_join_no_ref_ids(ids, toggles)
       plan <- redo_join_plan(ids, asmb, missing_ids, join_off_ids, no_ref_ids)
 
       if (length(plan$not_eligible) > 0 || length(plan$missing_output) > 0 ||

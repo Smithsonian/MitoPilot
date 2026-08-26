@@ -1339,3 +1339,52 @@ test_that("redo_join_plan puts a doubly faulted id in exactly one bucket", {
   expect_equal(plan$no_ref, character(0))
   expect_equal(plan$ready, character(0))
 })
+
+test_that("redo_join_no_ref_ids reads the stored accession, not the blanked display value", {
+  skip_if_not_installed("RSQLite")
+  # The Assemble table blanks blast_accession whenever a sample keeps more than
+  # one scaffold, which is every join-eligible sample. Sourcing the refusal from
+  # that value refused a redo for exactly the samples it exists for.
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbWriteTable(con, "assemble", data.frame(
+    ID = "frag", assemble_lock = 0L, assemble_switch = 2L,
+    assemble_opts = "d", blast_opts = "d", topology = NA_character_,
+    length = "1000;900", paths = 1L, scaffolds = 2L,
+    blast_accession = "NC_000001", blast_species = "sp", blast_pident = 99,
+    blast_qcovs = 99, blast_evalue = 0, blast_lineage = "x",
+    poor_blast_ref = "ok", time_stamp = "2026-01-01", assemble_notes = "",
+    join_notes = NA_character_, join_switch = NA_integer_,
+    stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "preprocess", data.frame(
+    ID = "frag", R1 = "a", R2 = "b", pre_opts = "d", reads = 100,
+    trimmed_reads = 90, mean_length = 150, time_stamp = "2026-01-01",
+    stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "samples", data.frame(
+    ID = "frag", Taxon = "T", stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "assemble_opts", data.frame(
+    assemble_opts = "d", min_assembly_length = 10, join_scaffolds = 1L,
+    stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "assemblies", data.frame(
+    ID = c("frag", "frag"), path = c(1L, 1L), scaffold = c(1L, 2L),
+    length = c(1000, 900), ignore = c(0L, 0L),
+    blast_accession = c("NC_000001", "NC_000001"), blast_species = "sp",
+    blast_pident = 99, blast_qcovs = 99, blast_evalue = 0,
+    blast_lineage = "x", stringsAsFactors = FALSE))
+
+  display <- fetch_assemble_data(session = list(userData = list(con = con)))
+  stored <- DBI::dbGetQuery(con, "SELECT ID, blast_accession FROM assemble")
+  asmb <- DBI::dbGetQuery(con, "SELECT ID, path, scaffold FROM assemblies")
+
+  # The display value really is blanked while the stored one is not.
+  expect_true(is.na(display$blast_accession))
+  expect_equal(stored$blast_accession, "NC_000001")
+
+  expect_equal(redo_join_no_ref_ids("frag", stored), character(0))
+  expect_equal(redo_join_no_ref_ids("frag", display), "frag")
+
+  plan <- redo_join_plan("frag", asmb,
+                         no_ref_ids = redo_join_no_ref_ids("frag", stored))
+  expect_equal(plan$ready, "frag")
+  expect_equal(plan$no_ref, character(0))
+})
