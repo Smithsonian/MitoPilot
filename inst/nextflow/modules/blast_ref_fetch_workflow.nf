@@ -55,13 +55,18 @@ params.sqlWriteRefSeq = '''INSERT OR REPLACE INTO blast_ref_sequences
     VALUES (?, ?, ?, ?, ?, ?, ?)'''
 
 // Written when the top-hit ref fetch fails after all retries. Guarded WHERE
-// assemble_switch = 4 so terminal state=3 rows are untouched. Strips any prior
-// [ref] note segment then appends the new one. (-resume retries the fetch.)
+// assemble_switch IN (3, 4): state 2 rows stay untouched as before, but a row
+// already at 3 still receives this diagnostic. That matters because the scaffold
+// join now also writes 3 for a sample dropped before the join, and the two
+// sqlInsert operators can commit in either order; the old '= 4' guard lost the
+// [ref] note and poor_blast_ref whenever the join won the race. Writing 3 onto a
+// row already at 3 cannot change the state machine.
+// Strips any prior [ref] note segment then appends the new one. (-resume retries.)
 params.sqlWriteBlastRefFetchFailed = "UPDATE assemble SET " +
     "assemble_switch = 3, " +
     "assemble_notes = ${appendTaggedNoteSql('[ref]', params.refFetchFailedMsg)}, " +
     "poor_blast_ref = 'failed' " +
-    "WHERE ID = ? AND assemble_switch = 4"
+    "WHERE ID = ? AND assemble_switch IN (3, 4)"
 
 // Mark state=2 (WF1 complete), poor_blast_ref='good' on top-hit ref fetch success.
 // Strips stale [blast]/[ref] failure note segments but preserves assembly warnings
@@ -73,12 +78,15 @@ params.sqlWriteBlastRefGood = "UPDATE assemble SET " +
     "WHERE ID = ? AND assemble_switch = 4"
 
 // Same, minus the state promotion, for IDs withheld because a later step (the
-// scaffold join) owns their final state. Same guard, so a terminal state=3 row
-// is untouched.
+// scaffold join) owns their final state. NOT guarded on assemble_switch: this
+// statement never writes assemble_switch, so it cannot resurrect a terminal row,
+// and the scaffold join may already have written 2 or 3 for this sample by the
+// time it lands. Guarding on 4 would silently drop the reference verdict in that
+// ordering, which is the whole point of splitting the statement.
 params.sqlWriteBlastRefGoodHeld = "UPDATE assemble SET " +
     "poor_blast_ref = 'good', " +
     "assemble_notes = ${stripBlastAndRefTagsSql()} " +
-    "WHERE ID = ? AND assemble_switch = 4"
+    "WHERE ID = ?"
 
 workflow BLAST_REF_FETCH {
     take:

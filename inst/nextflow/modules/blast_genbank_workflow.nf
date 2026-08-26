@@ -64,17 +64,23 @@ params.sqlWriteBlastHitScaffold = '''INSERT INTO assemblies
       time_stamp      = excluded.time_stamp'''
 params.sqlWriteAssembleSwitch = 'UPDATE assemble SET assemble_switch = ? WHERE ID = ? AND assemble_switch = 4'
 // Connection / tool failure: blast produced no output file after all retries.
+// Both of these are guarded WHERE assemble_switch IN (3, 4), not '= 4'. A state 2
+// row is still protected exactly as before. A row already at 3 now still receives
+// the [blast] note and poor_blast_ref, because the scaffold join writes 3 for a
+// sample it never received, and the two sqlInsert operators commit in either
+// order. Both statements write 3 themselves, so landing on a 3 row is a no-op for
+// the state and adds only the diagnostic these statements own.
 params.sqlWriteBlastNoOutput = "UPDATE assemble SET " +
     "assemble_switch = 3, " +
     "assemble_notes = ${appendTaggedNoteSql('[blast]', params.blastNoOutputMsg)}, " +
     "poor_blast_ref = 'failed' " +
-    "WHERE ID = ? AND assemble_switch = 4"
+    "WHERE ID = ? AND assemble_switch IN (3, 4)"
 // Genuine no-hit: blast ran cleanly but every path returned no significant hit.
 params.sqlWriteBlastNoHit = "UPDATE assemble SET " +
     "assemble_switch = 3, " +
     "assemble_notes = ${appendTaggedNoteSql('[blast]', params.blastNoHitMsg)}, " +
     "poor_blast_ref = 'failed' " +
-    "WHERE ID = ? AND assemble_switch = 4"
+    "WHERE ID = ? AND assemble_switch IN (3, 4)"
 params.sqlWriteAssemblyBlast = 'INSERT OR REPLACE INTO assembly_blast (ID, path, blast_opts, blast_accession, blast_species, blast_pident, blast_qcovs, blast_evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
 params.sqlDeleteAssemblyBlast = 'DELETE FROM assembly_blast WHERE ID = ? AND time_stamp != ?'
 params.sqlWriteCandidate = 'INSERT OR REPLACE INTO blast_ref_candidates (ID, path, scaffold, rank, accession, species, pident, qcovs, evalue, time_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
