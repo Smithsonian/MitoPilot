@@ -1235,7 +1235,7 @@ backwards_compatibility <- function(
   # if mitofinder_db column doesn't exist, add it
   if(!("mitofinder_db" %in% names(assemble_opts_table))){
     message("added 'mitofinder_db' column to assemble_opts table")
-    assemble_opts_table$mitofinder_db <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
+    assemble_opts_table$mitofinder_db <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/devel-DJM/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
                                              nrow(assemble_opts_table))
     # add new columns to database
     glue::glue_sql(

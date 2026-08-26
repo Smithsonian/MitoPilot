@@ -44,7 +44,7 @@
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
 #' @param assembler Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
-#'   Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
+#'   Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)
 #' @param mitofinder Default MitoFinder command line options
 #' @param max_paths Maximum number of assembly paths allowed for a sample to
 #'   continue past the Assemble step (default = 10). Samples exceeding this are
@@ -77,7 +77,7 @@ new_db <- function(
       "--expected-max-size 20000",
       "--target-genome-size 16500"
     ),
-    mitofinder_db = "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
+    mitofinder_db = "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
     mitofinder = paste(
       "--megahit"
     ),
