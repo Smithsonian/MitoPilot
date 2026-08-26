@@ -81,7 +81,11 @@ workflow WF1 {
         }
         .set { join_dropped }
 
-    SCAFFOLD_JOIN(join_rows.complete, join_dropped)
+    // Third channel: samples the app queued for a join-only redo
+    // (assemble.join_switch = 1). SCAFFOLD_JOIN rebuilds their inputs from the
+    // published assembly output and mixes them into the same input channel, so
+    // the join itself cannot tell the two routes apart.
+    SCAFFOLD_JOIN(join_rows.complete, join_dropped, ASSEMBLE.out.join_redo)
 
 }
 

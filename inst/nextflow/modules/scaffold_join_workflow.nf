@@ -43,7 +43,16 @@ params.sqlSyncAnnotateJoin = '''INSERT OR REPLACE INTO annotate
 params.sqlWriteJoinDone   = 'UPDATE assemble SET assemble_switch = 2, join_notes = ?, join_switch = NULL WHERE ID = ?'
 params.sqlWriteJoinFailed = 'UPDATE assemble SET assemble_switch = 3, join_notes = ?, join_switch = NULL WHERE ID = ?'
 
+params.joinRedoMissingMsg = "Scaffold join redo did not run: this sample's published assembly output is not on disk, so there was nothing to join from. Missing: "
+
 params.joinCrashedMsg = "Scaffold join failed. The task produced no outcome file, so it died rather than declining to join. Check .command.log in the task's work directory (empty except for a signal message means the scheduler killed it: exit 137 = OOM, exit 140 = SGE runtime limit). To retry, re-run the scaffold join for this sample."
+
+// Nextflow's file() returns a single Path for one match and a List for many.
+// The redo path below always wants a list, empty when nothing matched.
+def asFileList(x) {
+    if (x == null) return []
+    return (x instanceof List) ? x : [x]
+}
 
 // Precomputed scaffold->reference mappings (one row per ID/scaffold/ref) so the
 // in-app manual join editor needs no minimap2. The clear + insert must run in
@@ -121,9 +130,100 @@ workflow SCAFFOLD_JOIN {
         // tuple(id, missing_inputs) - join-eligible samples that never reached
         // the join because an upstream step failed for them.
         dropped
+        // tuple(id, assemble_opts, join_scaffolds, blast_accession) - samples the
+        // app queued for a join-only redo (assemble.join_switch = 1).
+        redo
 
     main:
-        scaffold_join(input)
+        // Redo path: rebuild the join's inputs from the PUBLISHED outputs of the
+        // run that assembled the sample, never from the assembly channel (which
+        // this sample is not in) and never from Nextflow's cache. -resume would
+        // probably cache-hit the assembly, but that stops being true the moment
+        // work/ is cleaned or the run is launched without -resume, whereas
+        // out/<ID>/assemble/<assemble_opts>/ is the pipeline's durable record.
+        //
+        // assemble_opts doubles as that directory name, so a sample moved to a
+        // different option set after it assembled has its output under the OLD
+        // name and resolves to nothing here. That is reported below, not skipped.
+        redo
+            .map { id, opts, join_scaffolds, blast_accession ->
+                def dir = "${workflow.launchDir}/${params.publishDir}/${id}/assemble/${opts}"
+                def base = file(dir)
+                def fastas = []
+                def covs = []
+                def ref_fa = null
+                // Globbing a directory that is not there throws, and a missing
+                // directory is precisely the case this has to report, so nothing
+                // below runs until the directory is known to exist.
+                if (base.exists()) {
+                    // assembly_0 is a PREVIOUS join's output; the redo re-joins
+                    // the original fragmented assembly, so both globs exclude it.
+                    fastas = asFileList(file("${dir}/${id}_assembly_*.fasta"))
+                        .findAll { f -> f.name != "${id}_assembly_0.fasta" }
+                        .sort { f -> f.name }
+                    covs = asFileList(file("${dir}/${id}_assembly_*_coverageStats.csv"))
+                        .findAll { f -> f.name != "${id}_assembly_0_coverageStats.csv" }
+                        .sort { f -> f.name }
+                    // The published reference cache is the per-accession JSON
+                    // bundle (blast_ref_sequence.txt never leaves the task work
+                    // directory), so the reference FASTA the join wants is
+                    // rebuilt from it here.
+                    if (blast_accession) {
+                        def json = file("${dir}/blast_ref_${blast_accession}/remote_blast_ref.json")
+                        if (json.exists()) {
+                            def seq = null
+                            try {
+                                seq = new groovy.json.JsonSlurper().parseText(json.text)?.sequence
+                            } catch (Exception e) {
+                                seq = null
+                            }
+                            if (seq) {
+                                ref_fa = file("${workflow.workDir}/scaffold_join_redo/${id}_${blast_accession}_ref.fa")
+                                ref_fa.parent.mkdirs()
+                                ref_fa.text = ">${blast_accession}\n${seq}\n"
+                            }
+                        }
+                    }
+                }
+                def missing = []
+                if (!fastas) missing << 'the assembly FASTA'
+                if (!covs)   missing << 'the coverage statistics'
+                if (!ref_fa) missing << 'the cached BLAST reference'
+                // Empty scaffold_hits: run_scaffold_join() then reads the
+                // per-scaffold hits from the assemblies table, which a redo can
+                // trust because BLAST committed them in an earlier run.
+                tuple(id, fastas ? fastas[0] : null, opts, join_scaffolds,
+                      covs, ref_fa, '', missing.join(', '), dir)
+            }
+            .branch { row ->
+                ready:   row[7] == ''
+                missing: true
+            }
+            .set { redo_rows }
+
+        redo_rows.ready
+            .map { id, fasta, opts, join_scaffolds, covs, ref_fa, hits, missing, dir ->
+                tuple(id, fasta, opts, join_scaffolds, covs, ref_fa, hits) }
+            .set { redo_input }
+
+        // Missing published output is reported as a failure with a note, never
+        // dropped: a redo request that silently disappears is the same bug this
+        // workflow's state writes exist to fix. sqlWriteJoinFailed also clears
+        // join_switch, so the request does not queue itself forever.
+        redo_rows.missing
+            .map { id, fasta, opts, join_scaffolds, covs, ref_fa, hits, missing, dir ->
+                tuple(params.joinRedoMissingMsg + missing + ' (expected under ' + dir +
+                      '). The assembly parameter set may have been renamed or ' +
+                      'reassigned, or the output directory moved. Re-run Assembly ' +
+                      'for this sample.', id)
+            }
+            .sqlInsert(statement: params.sqlWriteJoinFailed, db: 'sqlite')
+
+        // One channel from here on, so nothing downstream (the join process, the
+        // crash detection, the state writes) knows which route a sample took.
+        input.mix(redo_input).set { join_in }
+
+        scaffold_join(join_in)
 
         // Always-present mappings: clear stale rows and insert the fresh set
         // in one driver-side transaction (see write_scaffold_mappings).
@@ -173,7 +273,7 @@ workflow SCAFFOLD_JOIN {
 
         // Entered but produced no outcome file: the task crashed (errorStrategy
         // 'ignore' emits nothing). Same idiom as the ref-fetch failure detection.
-        input
+        join_in
             .map { it -> tuple(it[0], true) }
             .join(join_outcome.map { id, note -> tuple(id, true) }, remainder: true)
             .filter { id, entered, reported -> entered != null && reported == null }

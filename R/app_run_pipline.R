@@ -90,7 +90,10 @@ pipeline_server <- function(id) {
       # Count samples to update ----
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::filter(assemble_switch %in% c(1, 4)) |>
+          # join_switch = 1 is a join-only redo: WF1 admits it on its own
+          # (assemble_workflow.nf), so the launch gate has to as well or the
+          # modal reports "nothing to update" and refuses to start the run.
+          dplyr::filter(assemble_switch %in% c(1, 4) | join_switch == 1) |>
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
