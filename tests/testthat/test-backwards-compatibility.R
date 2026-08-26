@@ -132,7 +132,7 @@ create_v1310_db <- function(path) {
   )")
   DBI::dbExecute(con, "INSERT INTO assemble_opts VALUES (
     'default', '{}', 'GetOrganelle',
-    'https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/devel-DJM/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb',
+    'https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb',
     '--megahit'
   )")
 

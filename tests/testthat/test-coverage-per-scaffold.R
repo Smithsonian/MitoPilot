@@ -179,66 +179,99 @@ test_that("coverage() computes seam depth per scaffold", {
 
 nf_topology_awk <- function(id) {
   nf <- readLines(
-    system.file("nextflow/modules/coverage_userAsmb.nf", package = "MitoPilot")
+    system.file("nextflow/modules/coverage_userAsmb.nf", package = "MitoPilot"),
+    warn = FALSE
   )
-  starts <- grep("^\\s*awk 'NR==FNR", nf)
+  starts <- grep("^\\s*awk -v mapf=topology_map.txt '", nf)
   expect_length(starts, 2)
-  ends <- grep("\\{print\\}' !\\{topology_map\\} !\\{assembly\\}", nf)
+  ends <- grep("\\{print\\}' topology_map.txt !\\{assembly\\}", nf)
   expect_length(ends, 2)
   progs <- vapply(seq_along(starts), function(i) {
     block <- paste(nf[starts[i]:ends[i]], collapse = "\n")
-    block <- sub("^\\s*awk '", "", block)
-    sub("' !\\{topology_map\\}.*$", "", block)
+    block <- sub("^\\s*awk -v mapf=topology_map.txt '", "", block)
+    sub("' topology_map.txt.*$", "", block)
   }, character(1))
   expect_equal(progs[1], progs[2])
-  gsub("!\\{id\\}", id, progs[1], fixed = FALSE)
+  gsub("!\\{id\\}", id, progs[1])
 }
 
+# Runs the shipped awk the way the process does: from the task directory, with
+# the map named topology_map.txt, so FILENAME matches.
 stamp <- function(map_lines, contigs, id = "SAMP") {
   d <- withr::local_tempdir()
-  map_fn <- file.path(d, "topology_map.txt")
-  fa <- file.path(d, "in.fasta")
-  writeLines(map_lines, map_fn)
-  writeLines(as.vector(rbind(paste0(">", contigs), "ACGT")), fa)
-  out <- system2("awk", c(shQuote(nf_topology_awk(id)), map_fn, fa), stdout = TRUE)
-  out[startsWith(out, ">")]
+  withr::local_dir(d)
+  writeLines(map_lines, "topology_map.txt")
+  writeLines(as.vector(rbind(paste0(">", contigs), "ACGT")), "in.fasta")
+  out <- system2(
+    "awk",
+    c("-v", "mapf=topology_map.txt", shQuote(nf_topology_awk(id)),
+      "topology_map.txt", "in.fasta"),
+    stdout = TRUE
+  )
+  out
 }
+
+headers_of <- function(x) x[startsWith(x, ">")]
 
 test_that("the coverage awk stamps each record with its own topology", {
   skip_on_os("windows")
 
   # mixed
   expect_equal(
-    stamp(c("ctgA circular", "ctgB linear"), c("ctgA", "ctgB")),
+    headers_of(stamp(c("ctgA circular", "ctgB linear"), c("ctgA", "ctgB"))),
     c(">SAMP.1.1 circular", ">SAMP.1.2 linear")
   )
   # all circular
   expect_equal(
-    stamp(c("ctgA circular", "ctgB circular"), c("ctgA", "ctgB")),
+    headers_of(stamp(c("ctgA circular", "ctgB circular"), c("ctgA", "ctgB"))),
     c(">SAMP.1.1 circular", ">SAMP.1.2 circular")
   )
   # all linear
   expect_equal(
-    stamp(c("ctgA linear", "ctgB linear"), c("ctgA", "ctgB")),
+    headers_of(stamp(c("ctgA linear", "ctgB linear"), c("ctgA", "ctgB"))),
     c(">SAMP.1.1 linear", ">SAMP.1.2 linear")
   )
   # single contig
-  expect_equal(stamp("ctgA circular", "ctgA"), ">SAMP.1.1 circular")
+  expect_equal(headers_of(stamp("ctgA circular", "ctgA")), ">SAMP.1.1 circular")
 
   # lookup uses the incoming contig name, not the new one, and ignores the
   # FASTA description
   expect_equal(
-    stamp(c("ctgA circular", "ctgB linear"), c("ctgA some description", "ctgB")),
+    headers_of(stamp(c("ctgA circular", "ctgB linear"), c("ctgA some description", "ctgB"))),
     c(">SAMP.1.1 circular", ">SAMP.1.2 linear")
   )
 
   # the skip branch's default map applies to every record
   expect_equal(
-    stamp("* circular", c("ctgA", "ctgB")),
+    headers_of(stamp("* circular", c("ctgA", "ctgB"))),
     c(">SAMP.1.1 circular", ">SAMP.1.2 circular")
   )
-  expect_equal(stamp("* linear", c("ctgA", "ctgB")), c(">SAMP.1.1 linear", ">SAMP.1.2 linear"))
+  expect_equal(
+    headers_of(stamp("* linear", c("ctgA", "ctgB"))),
+    c(">SAMP.1.1 linear", ">SAMP.1.2 linear")
+  )
 
   # an unlisted contig with no default falls back to linear
-  expect_equal(stamp("ctgA circular", c("ctgA", "ctgZ")), c(">SAMP.1.1 circular", ">SAMP.1.2 linear"))
+  expect_equal(
+    headers_of(stamp("ctgA circular", c("ctgA", "ctgZ"))),
+    c(">SAMP.1.1 circular", ">SAMP.1.2 linear")
+  )
+})
+
+test_that("an empty topology map keeps every record, headers intact", {
+  skip_on_os("windows")
+
+  # The NR==FNR idiom would treat the assembly as the map when the map has no
+  # lines, swallowing the first header and dropping the record from the output.
+  out <- stamp(character(0), c("ctgA", "ctgB", "ctgC"))
+  expect_equal(
+    out,
+    c(">SAMP.1.1 linear", "ACGT", ">SAMP.1.2 linear", "ACGT", ">SAMP.1.3 linear", "ACGT")
+  )
+
+  # a map that is a single empty line is equally harmless
+  expect_equal(
+    headers_of(stamp("", c("ctgA", "ctgB"))),
+    c(">SAMP.1.1 linear", ">SAMP.1.2 linear")
+  )
 })
