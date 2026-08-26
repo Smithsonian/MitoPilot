@@ -1181,3 +1181,63 @@ test_that("zoom base map works with no colinear offset and refuses a false one",
   junk <- paste(sample(c("A", "C", "G", "T"), 3000, TRUE), collapse = "")
   expect_length(zoom_window_base_maps(ref, lay, list("1" = junk), 2001L, 2060L), 0L)
 })
+
+# --- outcome reporting -------------------------------------------------------
+
+join_fixture <- function(dir, hits) {
+  set.seed(7)
+  ref <- paste(sample(c("A", "C", "G", "T"), 3000, TRUE), collapse = "")
+  a <- substring(ref, 1, 1500)
+  b <- substring(ref, 1501, 3000)
+  asm <- file.path(dir, "asm.fasta")
+  writeLines(c(">X.1.1", a, ">X.1.2", b), asm)
+  reff <- file.path(dir, "ref.fa")
+  writeLines(c(">ref", ref), reff)
+  cov <- file.path(dir, "cov.csv")
+  utils::write.csv(data.frame(
+    SeqId = c("X.1.1", "X.1.2"), MeanDepth = c(30, 30),
+    GC = c(0.4, 0.4), ErrorRate = c(0.01, 0.01)), cov, row.names = FALSE)
+  list(asm = asm, ref = reff, cov = cov, hits = hits)
+}
+
+read_outcome <- function(dir) {
+  list(status = readLines(file.path(dir, "join_status.txt")),
+       note = paste(readLines(file.path(dir, "join_note.txt")), collapse = ""))
+}
+
+test_that("join reports 'declined' when the toggle is off", {
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
+  run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = FALSE,
+                    scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+  expect_equal(out$status, "declined")
+  expect_true(nzchar(out$note))
+  expect_match(out$note, "turned off")
+  expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
+})
+
+test_that("join reports 'declined' when the scaffold hits disagree", {
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_2|99")
+  run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
+                    scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+  expect_equal(out$status, "declined")
+  expect_match(out$note, "different reference mitogenomes")
+  expect_match(out$note, "NC_1")
+  expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
+})
+
+test_that("a successful join reports 'joined' with no reason", {
+  skip_if_not_installed("pwalign")
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
+                           scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+  expect_equal(out$status, "joined")
+  expect_equal(out$note, "")
+  expect_equal(res$outcome, "joined")
+  expect_true(file.exists(file.path(dir, "X_joined_row.csv")))
+})

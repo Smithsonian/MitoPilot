@@ -110,6 +110,40 @@ scaffold_hits_disagree <- function(scaffolds_df) {
   length(unique(acc)) > 1
 }
 
+#' Record the join's outcome next to its other outputs
+#'
+#' Mirrors the `status.txt` / `note.txt` pair [find_mito()] writes: the workflow
+#' declares these files and turns them into sample state. Written on every exit
+#' of [run_scaffold_join()], so a missing file means the task died.
+#'
+#' @param out_dir directory the join writes its outputs to.
+#' @param outcome "joined" or "declined".
+#' @param note human-readable reason, shown in the app's Assemble table. Empty
+#'   for a successful join.
+#' @noRd
+write_join_outcome <- function(out_dir, outcome, note = "") {
+  writeLines(outcome, file.path(out_dir, "join_status.txt"))
+  writeLines(note, file.path(out_dir, "join_note.txt"))
+  invisible(list(outcome = outcome, note = note))
+}
+
+#' Why the join declined to build a joined scaffold
+#'
+#' @param auto_join the sample's join toggle.
+#' @param sc per-scaffold BLAST hits (may be NULL).
+#' @return single human-readable string.
+#' @noRd
+join_declined_note <- function(auto_join, sc) {
+  if (!isTRUE(auto_join)) {
+    return("scaffold joining is turned off for this sample, so the scaffolds were left separate")
+  }
+  acc <- sc$blast_accession
+  acc <- unique(acc[!is.na(acc) & nzchar(acc) & acc != "NO HIT"])
+  paste0("the scaffolds matched different reference mitogenomes (",
+         paste(acc, collapse = ", "),
+         "), so they were left separate for review")
+}
+
 #' Locate the minimap2 binary
 #'
 #' Honors `options(MitoPilot.minimap2=)`, else `minimap2` on PATH. Returns "" if
@@ -1346,6 +1380,10 @@ joined_assemblies_row <- function(ID, seq, depth_vec, gc_vec, err_vec,
 #' `assemblies` columns) for the workflow to `sqlInsert`. No DB connection is
 #' opened here; DB writes are done in Groovy (see scaffold_join_workflow.nf).
 #'
+#' Every exit also writes `join_status.txt` ("joined" or "declined") and
+#' `join_note.txt` (the reason, empty when joined), so the workflow can tell a
+#' deliberate decline from a crashed task (which writes neither).
+#'
 #' @param assembly_fasta path to the multi-scaffold assembly FASTA (headers
 #'   `ID.path.scaffold [topology]`).
 #' @param coverage_csvs character vector of per-scaffold coverageStats CSV paths.
@@ -1459,7 +1497,10 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   # Gate the automatic Path 0: only when enabled AND the scaffolds' BLAST hits
   # agree. Otherwise emit mappings only and leave the sample fragmented.
   if (!isTRUE(auto_join) || (!is.null(sc) && scaffold_hits_disagree(sc))) {
-    return(invisible(list(skipped = TRUE, mappings = mappings)))
+    note <- join_declined_note(auto_join, sc)
+    write_join_outcome(out_dir, "declined", note)
+    return(invisible(list(skipped = TRUE, mappings = mappings,
+                          outcome = "declined", note = note)))
   }
 
   res <- build_joined_assembly(scaffolds_df, ref_seq, gap_len = gap_len,
@@ -1473,6 +1514,8 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   # (write.csv would quote the header -> '"ID"' and break the sqlInsert keys).
   readr::write_csv(row, file.path(out_dir, paste0(ID, "_joined_row.csv")),
                    quote = "none", na = "")
+  write_join_outcome(out_dir, "joined")
+  res$outcome <- "joined"
   invisible(res)
 }
 

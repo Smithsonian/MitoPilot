@@ -53,3 +53,8 @@ joins, and writes the joined `{ID}_assembly_0.fasta`,
 `assemblies` columns) for the workflow to `sqlInsert`. No DB connection is
 opened here; DB writes are done in Groovy (see scaffold_join_workflow.nf).
 }
+\details{
+Every exit also writes `join_status.txt` ("joined" or "declined") and
+`join_note.txt` (the reason, empty when joined), so the workflow can tell a
+deliberate decline from a crashed task (which writes neither).
+}
