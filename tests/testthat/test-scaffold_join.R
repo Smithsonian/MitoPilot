@@ -1310,3 +1310,32 @@ test_that("a successful join reports 'joined' with no reason", {
   expect_equal(res$outcome, "joined")
   expect_true(file.exists(file.path(dir, "X_joined_row.csv")))
 })
+
+test_that("redo_join_plan refuses samples with no BLAST reference", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s2"),
+    path = c(1, 1, 1, 1),
+    scaffold = c(1, 2, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # s2 is fragmented but has no accession, so it sits legitimately at state 2.
+  # A redo would report a missing input and demote it.
+  plan <- redo_join_plan(c("s1", "s2"), asmb, no_ref_ids = "s2")
+  expect_equal(plan$ready, "s1")
+  expect_equal(plan$no_ref, "s2")
+  expect_equal(plan$join_off, character(0))
+  expect_equal(plan$missing_output, character(0))
+})
+
+test_that("redo_join_plan puts a doubly faulted id in exactly one bucket", {
+  asmb <- data.frame(
+    ID = c("s1", "s1"),
+    path = c(1, 1),
+    scaffold = c(1, 2),
+    stringsAsFactors = FALSE
+  )
+  plan <- redo_join_plan("s1", asmb, join_off_ids = "s1", no_ref_ids = "s1")
+  expect_equal(plan$join_off, "s1")
+  expect_equal(plan$no_ref, character(0))
+  expect_equal(plan$ready, character(0))
+})

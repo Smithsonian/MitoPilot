@@ -61,6 +61,15 @@ params.sqlWriteJoinSkipped = 'UPDATE assemble SET ' +
     'join_notes = CASE WHEN assemble_switch = 4 THEN NULL ELSE join_notes END, ' +
     'join_switch = NULL WHERE ID = ?'
 
+// A redo whose inputs are not on disk. Same shape as sqlWriteJoinSkipped: the
+// note is always recorded, but the state may not be demoted from 2. A
+// fragmented sample with BLAST switched off legitimately sits at 2 with no
+// reference accession, is join-eligible, and has published output, so a stale
+// or mistaken queued redo would otherwise turn a healthy sample into a failure.
+params.sqlWriteJoinRedoMissing = 'UPDATE assemble SET ' +
+    'assemble_switch = CASE WHEN assemble_switch = 2 THEN 2 ELSE 3 END, ' +
+    'join_notes = ?, join_switch = NULL WHERE ID = ?'
+
 params.joinRedoMissingMsg = "Scaffold join redo did not run: this sample's published assembly output is not on disk, so there was nothing to join from. Missing: "
 
 params.joinCrashedMsg = "Scaffold join failed. The task produced no outcome file, so it died rather than declining to join. Check .command.log in the task's work directory (empty except for a signal message means the scheduler killed it: exit 137 = OOM, exit 140 = SGE runtime limit). To retry, re-run the scaffold join for this sample."
@@ -233,7 +242,7 @@ workflow SCAFFOLD_JOIN {
 
         // Missing published output is reported as a failure with a note, never
         // dropped: a redo request that silently disappears is the same bug this
-        // workflow's state writes exist to fix. sqlWriteJoinFailed also clears
+        // workflow's state writes exist to fix. The write also clears
         // join_switch, so the request does not queue itself forever.
         redo_rows.missing
             .map { id, fasta, opts, join_scaffolds, covs, ref_fa, hits, missing, dir ->
@@ -242,7 +251,7 @@ workflow SCAFFOLD_JOIN {
                       'reassigned, or the output directory moved. Re-run Assembly ' +
                       'for this sample.', id)
             }
-            .sqlInsert(statement: params.sqlWriteJoinFailed, db: 'sqlite')
+            .sqlInsert(statement: params.sqlWriteJoinRedoMissing, db: 'sqlite')
 
         // One channel from here on, so nothing downstream (the join process, the
         // crash detection, the state writes) knows which route a sample took.

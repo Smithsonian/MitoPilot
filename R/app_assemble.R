@@ -6,7 +6,7 @@ ASSEMBLE_COL_GROUPS <- list(
                "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes")
+  Metadata = c("time_stamp", "assemble_notes", "join_notes")
 )
 # Reverse lookup col -> group, used to tag colDefs with a CSS class so the
 # column-group picker can show/hide columns via CSS without re-rendering
@@ -436,6 +436,14 @@ assemble_server <- function(id) {
               minWidth = 150,
               cell = rt_longtext()
             ),
+            join_notes = colDef(
+              show = TRUE, class = .grp("join_notes"), headerClass = .grp("join_notes"),
+              name = "Scaffold Join Notes",
+              html = TRUE,
+              align = "left",
+              minWidth = 150,
+              cell = rt_longtext()
+            ),
             view = colDef(
               show = TRUE,
               sticky = "right",
@@ -694,10 +702,17 @@ assemble_server <- function(id) {
         off <- is.na(toggles$join_scaffolds) | toggles$join_scaffolds == 0
         unique(toggles$ID[off])
       }
-      plan <- redo_join_plan(ids, asmb, missing_ids, join_off_ids)
+      # No reference accession means the join has nothing to align against. A
+      # fragmented sample with BLAST off sits legitimately at state 2, and a
+      # redo would report a missing input and mark it failed.
+      no_ref_ids <- {
+        acc <- rv$data$blast_accession[match(ids, rv$data$ID)]
+        ids[is.na(acc) | !nzchar(as.character(acc))]
+      }
+      plan <- redo_join_plan(ids, asmb, missing_ids, join_off_ids, no_ref_ids)
 
       if (length(plan$not_eligible) > 0 || length(plan$missing_output) > 0 ||
-          length(plan$join_off) > 0) {
+          length(plan$join_off) > 0 || length(plan$no_ref) > 0) {
         shinyWidgets::sendSweetAlert(
           title = "Redo scaffold join not queued for some samples",
           text = shiny::tags$div(
@@ -724,6 +739,14 @@ assemble_server <- function(id) {
                 "set, so a redo would report the sample as skipped and mark it ",
                 "done. Turn 'join_scaffolds' on first for: ",
                 tags$code(paste(plan$join_off, collapse = ", "))
+              )
+            },
+            if (length(plan$no_ref) > 0) {
+              shiny::tags$p(
+                "No BLAST reference was ever selected, so the join has nothing ",
+                "to align the scaffolds against. Set a reference (or run BLAST) ",
+                "first for: ",
+                tags$code(paste(plan$no_ref, collapse = ", "))
               )
             },
             shiny::tags$p(

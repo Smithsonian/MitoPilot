@@ -65,19 +65,26 @@ redo_join_eligible_ids <- function(ids, assemblies_df) {
 #'   the join would run, report "skipped", and finalise the sample as done,
 #'   which on a sample sitting at state 3 would launder a real failure into a
 #'   success.
-#' @return list with four character vectors partitioning `ids`: `ready`
+#' @param no_ref_ids Character vector of IDs with no BLAST reference accession.
+#'   The join has nothing to align scaffolds against, so a redo would report the
+#'   sample as missing an input. A fragmented sample with BLAST switched off is
+#'   legitimately at state 2, and the redo must not demote it.
+#' @return list with five character vectors partitioning `ids`: `ready`
 #'   (safe to set `join_switch = 1`), `not_eligible`, `missing_output`,
-#'   `join_off`.
+#'   `join_off`, `no_ref`.
 #' @noRd
 redo_join_plan <- function(ids, assemblies_df, missing_ids = character(0),
-                           join_off_ids = character(0)) {
+                           join_off_ids = character(0),
+                           no_ref_ids = character(0)) {
   eligible <- redo_join_eligible_ids(ids, assemblies_df)
   not_eligible <- setdiff(ids, eligible)
   missing_output <- intersect(eligible, missing_ids)
   join_off <- setdiff(intersect(eligible, join_off_ids), missing_output)
-  ready <- setdiff(eligible, c(missing_output, join_off))
+  no_ref <- setdiff(intersect(eligible, no_ref_ids), c(missing_output, join_off))
+  ready <- setdiff(eligible, c(missing_output, join_off, no_ref))
   list(ready = ready, not_eligible = not_eligible,
-       missing_output = missing_output, join_off = join_off)
+       missing_output = missing_output, join_off = join_off,
+       no_ref = no_ref)
 }
 
 #' Choose a single reference accession for a multi-scaffold sample
