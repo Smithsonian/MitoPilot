@@ -17,8 +17,9 @@
 #'     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
 #'     to the GitHub-hosted reference db).
 #'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
-#'     normalized to TEXT), BLAST result columns, "blast_opts",
-#'     "circularize_opts"/"circularize_notes", "find_mito_opts"/"find_mito_notes".
+#'     normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
+#'     "join_switch", "circularize_opts"/"circularize_notes",
+#'     "find_mito_opts"/"find_mito_notes".
 #'   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
 #'     "remote_fallback" (any parameter set carrying a non-default Entrez query is
 #'     switched to the remote search, with a warning, since the local database
@@ -180,6 +181,8 @@ backwards_compatibility <- function(
       "blast_ref_override" %in% DBI::dbListTables(con) &&
       !any(c("export_group", "export_time_stamp") %in% names(samples_table)) &&
       "poor_blast_ref" %in% names(assemble_table) &&
+      "join_notes" %in% names(assemble_table) &&
+      "join_switch" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
       "blast_accession" %in% names(assemble_table) &&
@@ -424,6 +427,19 @@ backwards_compatibility <- function(
     message("added 'join_scaffolds' column to assemble_opts table")
     DBI::dbExecute(con, "ALTER TABLE assemble_opts ADD COLUMN join_scaffolds INTEGER")
     DBI::dbExecute(con, "UPDATE assemble_opts SET join_scaffolds = 0 WHERE join_scaffolds IS NULL")
+  }
+
+  # join_notes/join_switch: regular-pipeline scaffold-join state and redo
+  # trigger, kept off assemble_notes/assemble_switch which the coverage
+  # workflow and assembly redo already own.
+  assemble_fields_early <- DBI::dbListFields(con, "assemble")
+  if (!("join_notes" %in% assemble_fields_early)) {
+    message("added 'join_notes' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN join_notes TEXT")
+  }
+  if (!("join_switch" %in% assemble_fields_early)) {
+    message("added 'join_switch' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN join_switch INTEGER")
   }
 
   # precomputed scaffold->reference mappings table (for the in-app join editor)
@@ -2104,6 +2120,9 @@ schema_gaps <- function(con) {
   if (has(any(c("text", "real") %in%
               DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t))) {
     gaps <- c(gaps, "the samples.genetic_code column is not stored as an integer")
+  }
+  if (!has(all(c("join_notes", "join_switch") %in% DBI::dbListFields(con, "assemble")))) {
+    gaps <- c(gaps, "the assemble table lacks the scaffold-join columns ('join_notes', 'join_switch')")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%

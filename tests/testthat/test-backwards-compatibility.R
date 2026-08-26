@@ -512,6 +512,31 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
 })
 
 
+test_that("backwards_compatibility adds join_notes/join_switch to assemble and is idempotent", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10")
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_false(all(c("join_notes", "join_switch") %in% DBI::dbListFields(con, "assemble")))
+  DBI::dbDisconnect(con)
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, update_config = FALSE))
+
+  con2 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con2), add = TRUE)
+  expect_cols(con2, "assemble", c("join_notes", "join_switch"))
+  expect_equal(schema_gaps(con2), character(0))
+
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    regexp = "nothing to update"
+  )
+})
+
 test_that("backwards_compatibility migrates an unmodified default export template to {completeness}", {
   td <- tempfile()
   dir.create(td)

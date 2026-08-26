@@ -276,6 +276,8 @@ new_db <- function(
       blast_lineage TEXT,
       synteny_accession TEXT,
       poor_blast_ref TEXT,
+      join_notes TEXT,
+      join_switch INTEGER,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
@@ -296,6 +298,8 @@ new_db <- function(
           assemble_opts = "default",
           blast_opts = "default",
           poor_blast_ref = NA_character_,
+          join_notes = NA_character_,
+          join_switch = NA_integer_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
