@@ -51,12 +51,14 @@ params.sqlWriteJoinFailed = 'UPDATE assemble SET assemble_switch = 3, join_notes
 //     this point with the toggle off is a success), but a sample already at 3
 //     stays at 3. Without the CASE, a redo queued on a crashed sample whose
 //     toggle happens to be off would silently promote it to done.
-//   join_notes      - not touched at all. Clearing it would erase the note that
-//     explains an existing failure, including when the toggle is flipped off
-//     between queueing a redo and running it.
+//   join_notes      - cleared only on that same 4 -> 2 promotion, so a normal
+//     run with the toggle off finishes clean instead of wearing a stale note
+//     from an earlier run. On any other state (a redo of a sample already at 3)
+//     the note is left alone, so a toggled-off redo cannot launder a failure.
 // join_switch is still cleared, so the redo resolves rather than looping.
 params.sqlWriteJoinSkipped = 'UPDATE assemble SET ' +
     'assemble_switch = CASE WHEN assemble_switch = 4 THEN 2 ELSE assemble_switch END, ' +
+    'join_notes = CASE WHEN assemble_switch = 4 THEN NULL ELSE join_notes END, ' +
     'join_switch = NULL WHERE ID = ?'
 
 params.joinRedoMissingMsg = "Scaffold join redo did not run: this sample's published assembly output is not on disk, so there was nothing to join from. Missing: "
