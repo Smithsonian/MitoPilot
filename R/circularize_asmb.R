@@ -5,30 +5,33 @@
 #'
 #' @param dir output directory
 #' @param id sample ID
-#' @param hit hit list from [find_end_overlap()], or NULL
-#' @param trimmed bp actually removed
-#' @param junction junction list from [count_junction_reads()], or NULL
+#' @param results list of per-contig results, each with `hit`, `trimmed` and
+#'   `junction`
 #' @param min_junction_reads,min_overhang thresholds in force for this run
 #'
 #' @noRd
-write_circularize_evidence <- function(dir, id, hit, trimmed, junction,
+write_circularize_evidence <- function(dir, id, results,
                                        min_junction_reads, min_overhang) {
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
 
-  overlap <- if (is.null(hit)) {
-    data.frame(
-      ID = character(0), qstart = integer(0), qend = integer(0),
-      sstart = integer(0), send = integer(0), length = integer(0),
-      pident = numeric(0), mismatches = integer(0),
-      aln_query = character(0), aln_subject = character(0),
-      q_ctx_left = character(0), q_ctx_right = character(0),
-      s_ctx_left = character(0), s_ctx_right = character(0),
-      accepted = integer(0), reason = character(0),
-      contig_length = integer(0), trimmed = integer(0),
-      junction_reads = integer(0), min_junction_reads = integer(0),
-      window_bp = integer(0), min_overhang = integer(0)
-    )
-  } else {
+  empty_overlap <- data.frame(
+    ID = character(0), qstart = integer(0), qend = integer(0),
+    sstart = integer(0), send = integer(0), length = integer(0),
+    pident = numeric(0), mismatches = integer(0),
+    aln_query = character(0), aln_subject = character(0),
+    q_ctx_left = character(0), q_ctx_right = character(0),
+    s_ctx_left = character(0), s_ctx_right = character(0),
+    accepted = integer(0), reason = character(0),
+    contig_length = integer(0), trimmed = integer(0),
+    junction_reads = integer(0), min_junction_reads = integer(0),
+    window_bp = integer(0), min_overhang = integer(0)
+  )
+
+  overlap_row <- function(res) {
+    hit <- res$hit
+    if (is.null(hit)) {
+      return(NULL)
+    }
     data.frame(
       ID = id,
       qstart = hit$qstart, qend = hit$qend,
@@ -41,28 +44,120 @@ write_circularize_evidence <- function(dir, id, hit, trimmed, junction,
       accepted = as.integer(hit$accepted),
       reason = hit$reason %||% NA_character_,
       contig_length = as.integer(hit$contig_length),
-      trimmed = as.integer(trimmed),
-      junction_reads = if (is.null(junction)) NA_integer_ else as.integer(junction$count),
+      trimmed = as.integer(res$trimmed),
+      junction_reads = if (is.null(res$junction)) NA_integer_ else as.integer(res$junction$count),
       min_junction_reads = as.integer(min_junction_reads),
-      window_bp = if (is.null(junction)) NA_integer_ else as.integer(junction$window_bp),
+      window_bp = if (is.null(res$junction)) NA_integer_ else as.integer(res$junction$window_bp),
       min_overhang = as.integer(min_overhang)
     )
   }
+
+  overlap <- do.call(rbind, c(list(empty_overlap), lapply(results, overlap_row)))
   utils::write.csv(overlap, file.path(dir, "circularize_overlap.csv"),
                    row.names = FALSE, na = "")
 
-  depth <- if (is.null(junction) || nrow(junction$depth) == 0L) {
-    data.frame(
-      ID = character(0), position = integer(0), rel_position = integer(0),
-      depth = integer(0), depth_spanning = integer(0)
-    )
-  } else {
-    cbind(ID = id, junction$depth)
+  empty_depth <- data.frame(
+    ID = character(0), position = integer(0), rel_position = integer(0),
+    depth = integer(0), depth_spanning = integer(0)
+  )
+  depth_rows <- function(res) {
+    if (is.null(res$junction) || nrow(res$junction$depth) == 0L) {
+      return(NULL)
+    }
+    cbind(ID = id, res$junction$depth)
   }
+
+  depth <- do.call(rbind, c(list(empty_depth), lapply(results, depth_rows)))
   utils::write.csv(depth, file.path(dir, "circularize_depth.csv"),
                    row.names = FALSE, na = "")
 
   invisible(NULL)
+}
+
+#' Attempt to circularize one contig
+#'
+#' Reads are mapped only once an overlap has been accepted and trimmed: a
+#' bowtie2 index per contig is the expensive part of this function and there is
+#' nothing to confirm when nothing was removed.
+#'
+#' @param seq contig sequence (character)
+#' @param paired_reads_1,paired_reads_2 paths to reads (fastq), or "NA"
+#' @param min_overlap,min_identity,min_junction_reads,min_overhang,cpus
+#'   thresholds, see [circularize_asmb()]
+#'
+#' @return list with `circular`, `sequence` (character), `trimmed`, `note`,
+#'   `hit`, `junction` and `log`
+#'
+#' @noRd
+circularize_contig <- function(seq,
+                               paired_reads_1 = "NA",
+                               paired_reads_2 = "NA",
+                               min_overlap = 220,
+                               min_identity = 99,
+                               min_junction_reads = 5,
+                               min_overhang = 30,
+                               cpus = 4) {
+  log_lines <- paste0("input length: ", nchar(seq), " bp")
+
+  trim <- trim_end_overlap(
+    seq,
+    min_overlap = min_overlap,
+    min_identity = min_identity
+  )
+  log_lines <- c(log_lines, trim$log)
+
+  out <- function(circular, sequence, trimmed, note, junction = NULL) {
+    list(circular = circular, sequence = sequence, trimmed = trimmed,
+         note = note, hit = trim$hit, junction = junction, log = log_lines)
+  }
+
+  if (trim$trimmed == 0L) {
+    note <- if (is.null(trim$hit)) {
+      "linear: no self-overlap found"
+    } else {
+      paste0("linear: ", trim$hit$reason)
+    }
+    return(out(FALSE, seq, 0L, note))
+  }
+
+  # No reads to consult: the overlap alone decides.
+  if (identical(as.character(paired_reads_1), "NA")) {
+    return(out(
+      TRUE, trim$sequence, trim$trimmed,
+      paste0("circular: trimmed ", trim$trimmed, " bp overlap (no reads to confirm)")
+    ))
+  }
+
+  junction <- count_junction_reads(
+    trim$sequence,
+    paired_reads_1 = paired_reads_1,
+    paired_reads_2 = paired_reads_2,
+    min_overhang = min_overhang,
+    cpus = cpus
+  )
+  support <- junction$count
+  log_lines <- c(log_lines, paste0("junction-spanning reads: ", support))
+
+  if (support < min_junction_reads) {
+    return(out(
+      FALSE, seq, 0L,
+      paste0(
+        "linear: ", trim$trimmed, " bp overlap found but only ", support,
+        " junction read", if (support == 1L) "" else "s",
+        " (", min_junction_reads, " required)"
+      ),
+      junction = junction
+    ))
+  }
+
+  out(
+    TRUE, trim$sequence, trim$trimmed,
+    paste0(
+      "circular: trimmed ", trim$trimmed, " bp overlap, ", support,
+      " junction reads"
+    ),
+    junction = junction
+  )
 }
 
 #' Attempt to circularize a linear mitogenome assembly
@@ -73,10 +168,13 @@ write_circularize_evidence <- function(dir, id, hit, trimmed, junction,
 #' supplied) requires reads spanning the resulting junction before calling the
 #' assembly circular.
 #'
+#' Every contig of a fragmented assembly is attempted independently; a fragment
+#' can be a circular molecule reported linearly just as a whole assembly can.
+#'
 #' The overlap detection follows the approach used by MitoHiFi's
 #' `circularizationCheck` (MIT licensed, Genome Research Ltd).
 #'
-#' @param assembly_fn Path to the input assembly (fasta, single contig)
+#' @param assembly_fn Path to the input assembly (fasta)
 #' @param paired_reads_1 Path to forward reads (fastq), or "NA" for none
 #' @param paired_reads_2 Path to reverse reads (fastq), or "NA" for none
 #' @param min_overlap Shortest accepted self-overlap (bp, default = 220)
@@ -92,8 +190,10 @@ write_circularize_evidence <- function(dir, id, hit, trimmed, junction,
 #' @param evidence_dir Optional directory to write `circularize_overlap.csv`
 #'   and `circularize_depth.csv` into
 #'
-#' @return (invisibly) a list with `circular` (logical), `sequence`
-#'   (DNAStringSet), `trimmed` (bp removed) and `note` (human-readable summary)
+#' @return (invisibly) a list with `circular` (logical, TRUE when every contig
+#'   is circular), `sequence` (DNAStringSet), `trimmed` (bp removed across all
+#'   contigs), `note` (human-readable summary) and `contigs`, a list of
+#'   per-contig results each carrying `contig`, `circular`, `trimmed` and `note`
 #'
 #' @export
 #'
@@ -112,94 +212,61 @@ circularize_asmb <- function(
     evidence_dir = NULL) {
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
 
-  log_lines <- character(0)
-  add_log <- function(...) {
-    log_lines <<- c(log_lines, paste0(...))
-  }
+  # Scaffold numbers do not exist yet at this point in WF1, so the contig name
+  # is the only stable key. First token only, matching BLAST qseqid and the
+  # mito_candidates table.
+  contigs <- sub("\\s.*$", "", names(assembly))
 
-  finish <- function(res, hit = NULL, junction = NULL) {
-    if (!is.null(out_fn)) {
-      Biostrings::writeXStringSet(res$sequence, out_fn)
-    }
-    if (!is.null(log_fn)) {
-      writeLines(c(log_lines, res$note), log_fn)
-    }
-    if (!is.null(evidence_dir)) {
-      write_circularize_evidence(
-        evidence_dir, id, hit, res$trimmed, junction,
-        min_junction_reads = min_junction_reads, min_overhang = min_overhang
-      )
-    }
-    invisible(res)
-  }
-
-  if (length(assembly) != 1L) {
-    return(finish(list(
-      circular = FALSE, sequence = assembly, trimmed = 0L,
-      note = "not attempted: assembly contains more than one contig"
-    )))
-  }
-
-  seq <- as.character(assembly[[1]])
-  add_log("input length: ", nchar(seq), " bp")
-
-  trim <- trim_end_overlap(
-    seq,
-    min_overlap = min_overlap,
-    min_identity = min_identity
-  )
-  add_log(trim$log)
-
-  if (trim$trimmed == 0L) {
-    note <- if (is.null(trim$hit)) {
-      "linear: no self-overlap found"
-    } else {
-      paste0("linear: ", trim$hit$reason)
-    }
-    return(finish(list(
-      circular = FALSE, sequence = assembly, trimmed = 0L, note = note
-    ), hit = trim$hit))
-  }
-
-  trimmed_set <- Biostrings::DNAStringSet(trim$sequence) |>
-    setNames(names(assembly))
-
-  # No reads to consult: the overlap alone decides.
-  if (identical(as.character(paired_reads_1), "NA")) {
-    return(finish(list(
-      circular = TRUE, sequence = trimmed_set, trimmed = trim$trimmed,
-      note = paste0("circular: trimmed ", trim$trimmed, " bp overlap (no reads to confirm)")
-    ), hit = trim$hit))
-  }
-
-  junction <- count_junction_reads(
-    trim$sequence,
-    paired_reads_1 = paired_reads_1,
-    paired_reads_2 = paired_reads_2,
-    min_overhang = min_overhang,
-    cpus = cpus
-  )
-  support <- junction$count
-  add_log("junction-spanning reads: ", support)
-
-  if (support < min_junction_reads) {
-    return(finish(list(
-      circular = FALSE, sequence = assembly, trimmed = 0L,
-      note = paste0(
-        "linear: ", trim$trimmed, " bp overlap found but only ", support,
-        " junction read", if (support == 1L) "" else "s",
-        " (", min_junction_reads, " required)"
-      )
-    ), hit = trim$hit, junction = junction))
-  }
-
-  finish(list(
-    circular = TRUE, sequence = trimmed_set, trimmed = trim$trimmed,
-    note = paste0(
-      "circular: trimmed ", trim$trimmed, " bp overlap, ", support,
-      " junction reads"
+  results <- lapply(seq_along(assembly), function(i) {
+    res <- circularize_contig(
+      as.character(assembly[[i]]),
+      paired_reads_1 = paired_reads_1,
+      paired_reads_2 = paired_reads_2,
+      min_overlap = min_overlap,
+      min_identity = min_identity,
+      min_junction_reads = min_junction_reads,
+      min_overhang = min_overhang,
+      cpus = cpus
     )
-  ), hit = trim$hit, junction = junction)
+    c(list(contig = contigs[i]), res)
+  })
+
+  log_lines <- unlist(lapply(results, function(res) {
+    if (length(results) == 1L) res$log else paste0(res$contig, ": ", res$log)
+  }), use.names = FALSE)
+
+  sequence <- Biostrings::DNAStringSet(
+    vapply(results, function(res) res$sequence, character(1))
+  ) |> setNames(names(assembly))
+
+  note <- if (length(results) == 1L) {
+    results[[1]]$note
+  } else {
+    paste(vapply(results, function(res) paste0(res$contig, ": ", res$note),
+                 character(1)), collapse = "; ")
+  }
+
+  res <- list(
+    circular = length(results) > 0L && all(vapply(results, function(r) r$circular, logical(1))),
+    sequence = sequence,
+    trimmed = sum(vapply(results, function(r) as.integer(r$trimmed), integer(1))),
+    note = note,
+    contigs = results
+  )
+
+  if (!is.null(out_fn)) {
+    Biostrings::writeXStringSet(res$sequence, out_fn)
+  }
+  if (!is.null(log_fn)) {
+    writeLines(c(log_lines, res$note), log_fn)
+  }
+  if (!is.null(evidence_dir)) {
+    write_circularize_evidence(
+      evidence_dir, id, results,
+      min_junction_reads = min_junction_reads, min_overhang = min_overhang
+    )
+  }
+  invisible(res)
 }
 
 #' Trim a redundant end-to-start overlap from a contig

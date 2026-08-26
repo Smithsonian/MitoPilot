@@ -103,7 +103,8 @@ test_that("cigar_ref_length ignores soft clips and insertions", {
   expect_equal(cigar_ref_length("*"), NA_integer_)
 })
 
-test_that("circularize_asmb leaves a multi-contig assembly untouched", {
+test_that("circularize_asmb leaves a multi-contig assembly with no overlaps alone", {
+  skip_if_no_blastn()
   fa <- withr::local_tempfile(fileext = ".fasta")
   writeLines(
     c(">a", random_seq(1000, seed = 5), ">b", random_seq(1000, seed = 6)),
@@ -112,7 +113,64 @@ test_that("circularize_asmb leaves a multi-contig assembly untouched", {
   res <- circularize_asmb(fa)
   expect_false(res$circular)
   expect_equal(res$trimmed, 0L)
-  expect_match(res$note, "more than one contig")
+  expect_equal(vapply(res$contigs, function(x) x$contig, character(1)), c("a", "b"))
+  expect_match(res$note, "a: linear")
+})
+
+test_that("circularize_asmb attempts every contig and maps reads only for accepted overlaps", {
+  skip_if_no_blastn()
+  circ <- random_seq(6000, seed = 51)
+  short <- random_seq(6000, seed = 52)
+  plain <- random_seq(6000, seed = 53)
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  writeLines(c(
+    ">c_circular some description", paste0(circ, substr(circ, 1, 300)),
+    ">c_short", paste0(short, substr(short, 1, 100)),
+    ">c_plain", plain
+  ), fa)
+
+  mapped <- character(0)
+  local_mocked_bindings(count_junction_reads = function(seq, ...) {
+    mapped <<- c(mapped, substr(seq, 1, 20))
+    list(count = 12L, window_bp = 500L,
+         depth = data.frame(position = integer(0), rel_position = integer(0),
+                            depth = integer(0), depth_spanning = integer(0)))
+  })
+  res <- circularize_asmb(fa, paired_reads_1 = "r1.fq", paired_reads_2 = "r2.fq")
+
+  expect_equal(vapply(res$contigs, function(x) x$contig, character(1)),
+               c("c_circular", "c_short", "c_plain"))
+  expect_equal(vapply(res$contigs, function(x) x$circular, logical(1)),
+               c(TRUE, FALSE, FALSE))
+  expect_equal(vapply(res$contigs, function(x) as.integer(x$trimmed), integer(1)),
+               c(300L, 0L, 0L))
+  expect_match(res$contigs[[2]]$note, "below the 220 bp minimum")
+  expect_equal(res$contigs[[3]]$note, "linear: no self-overlap found")
+  expect_false(res$circular)
+  expect_equal(res$trimmed, 300L)
+
+  # Reads mapped for the accepted contig only, never for the other two.
+  expect_equal(mapped, substr(circ, 1, 20))
+})
+
+test_that("circularize_asmb writes the trimmed multi-contig assembly and per-contig evidence", {
+  skip_if_no_blastn()
+  circ <- random_seq(6000, seed = 54)
+  plain <- random_seq(6000, seed = 55)
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  out <- withr::local_tempfile(fileext = ".fasta")
+  ev <- withr::local_tempdir()
+  writeLines(c(">c1", paste0(circ, substr(circ, 1, 300)), ">c2", plain), fa)
+
+  circularize_asmb(fa, id = "s5", out_fn = out, evidence_dir = ev)
+
+  got <- Biostrings::readDNAStringSet(out)
+  expect_equal(names(got), c("c1", "c2"))
+  expect_equal(as.character(got[[1]]), circ)
+  expect_equal(as.character(got[[2]]), plain)
+  ov <- utils::read.csv(file.path(ev, "circularize_overlap.csv"))
+  expect_equal(nrow(ov), 1L)
+  expect_equal(ov$trimmed, 300L)
 })
 
 test_that("circularize_asmb without reads calls a trimmed contig circular", {
@@ -256,6 +314,7 @@ test_that("no end-anchored hit writes header-only evidence", {
 })
 
 test_that("a multi-contig assembly still writes both files", {
+  skip_if_no_blastn()
   fa <- withr::local_tempfile(fileext = ".fasta")
   ev <- withr::local_tempdir()
   writeLines(c(">a", random_seq(1000, seed = 29), ">b", random_seq(1000, seed = 30)), fa)

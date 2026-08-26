@@ -20,7 +20,7 @@ circularize_asmb(
 )
 }
 \arguments{
-\item{assembly_fn}{Path to the input assembly (fasta, single contig)}
+\item{assembly_fn}{Path to the input assembly (fasta)}
 
 \item{paired_reads_1}{Path to forward reads (fastq), or "NA" for none}
 
@@ -48,8 +48,10 @@ returning the result only.}
 and `circularize_depth.csv` into}
 }
 \value{
-(invisibly) a list with `circular` (logical), `sequence`
-  (DNAStringSet), `trimmed` (bp removed) and `note` (human-readable summary)
+(invisibly) a list with `circular` (logical, TRUE when every contig
+  is circular), `sequence` (DNAStringSet), `trimmed` (bp removed across all
+  contigs), `note` (human-readable summary) and `contigs`, a list of
+  per-contig results each carrying `contig`, `circular`, `trimmed` and `note`
 }
 \description{
 Many assemblers emit a circular molecule as a linear contig whose end
@@ -59,6 +61,9 @@ supplied) requires reads spanning the resulting junction before calling the
 assembly circular.
 }
 \details{
+Every contig of a fragmented assembly is attempted independently; a fragment
+can be a circular molecule reported linearly just as a whole assembly can.
+
 The overlap detection follows the approach used by MitoHiFi's
 `circularizationCheck` (MIT licensed, Genome Research Ltd).
 }
