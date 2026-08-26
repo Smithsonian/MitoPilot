@@ -19,8 +19,11 @@ coverage <- function(
   assembly <- Biostrings::readDNAStringSet(assembly_fn)
   assembly_len <- assembly@ranges@width
   seq_ids <- names(assembly)
-  circular <- all(stringr::str_detect(seq_ids, "circular"))
   ids <- stringr::str_split(seq_ids, " ", simplify = T)[, 1]
+  # Topology is per scaffold: a multi-scaffold assembly can mix circular and
+  # linear records, so the junction construct is applied only to the circular
+  # ones instead of once per sample.
+  circular_ids <- .coverage_circular_ids(seq_ids, ids)
   names(assembly) <- ids
   names(assembly_len) <- ids
   basename_prefix <- basename(assembly_fn) |> stringr::str_remove("\\.[^\\.]+$")
@@ -45,11 +48,8 @@ coverage <- function(
     })
   } else {
 
-  # If the assembly is circular and only has one sequence, add a 500bp overlap for mapping
-  if (circular && length(seq_ids) == 1) {
-    assembly <- Biostrings::xscat(assembly, Biostrings::subseq(assembly, start = 1, end = 500)) |>
-      setNames(ids)
-  }
+  # Circular scaffolds get a 500bp overlap appended for mapping
+  assembly <- .coverage_extend_circular(assembly, circular_ids)
   assembly_working <- assembly_fn |>
     stringr::str_remove("\\.[^\\.]+$") |>
     paste0("_working.fasta")
@@ -121,20 +121,7 @@ coverage <- function(
   }
 
   # Reform circular assembly ---
-  if (circular && length(seq_ids) == 1) {
-    to_move <- coverage$Position > assembly_len
-    coverage$Position[to_move] <- coverage$Position[to_move] - assembly_len
-    coverage <- coverage |>
-      dplyr::summarise(
-        Call = Call[1],
-        Depth = sum(Depth),
-        Correct = sum(Correct),
-        .by = c(SeqId, Position)
-      ) |>
-      dplyr::mutate(
-        ErrorRate = dplyr::if_else(Depth == 0, NA_real_, (Depth - Correct) / Depth)
-      )
-  }
+  coverage <- .coverage_reform_circular(coverage, assembly_len, circular_ids)
 
   # Add missing coverage at end ----
   for(id in unique(coverage$SeqId)){
@@ -179,7 +166,7 @@ coverage <- function(
   } else {
     stats_long <- stats_long |>
       dplyr::mutate(
-        Scaffold = stringr::str_glue("{ifelse(circular==TRUE,'Circular','Linear')} ({dplyr::n()} bp)"),
+        Scaffold = stringr::str_glue("{ifelse(SeqId[1] %in% circular_ids,'Circular','Linear')} ({dplyr::n()} bp)"),
         .by = c(SeqId, Stat)
       )
   }
@@ -239,6 +226,64 @@ coverage <- function(
   )
 
   return(invisible(stats_out))
+}
+
+#' Scaffold ids whose FASTA description marks them circular
+#'
+#' Topology is stamped into the FASTA description, one value per record, so
+#' circularity is read per scaffold rather than collapsed to one value per
+#' sample.
+#'
+#' @param seq_ids full FASTA header lines (id plus description)
+#' @param ids scaffold ids (first whitespace-delimited token of each header)
+#' @return character vector of the ids marked circular
+#' @noRd
+.coverage_circular_ids <- function(seq_ids, ids = stringr::str_split(seq_ids, " ", simplify = T)[, 1]) {
+  ids[stringr::str_detect(seq_ids, "circular")]
+}
+
+#' Append each circular scaffold's own first `flank` bases to itself
+#'
+#' The junction construct used for mapping. Applied per scaffold, so a linear
+#' scaffold sharing an assembly with a circular one is left alone.
+#' @noRd
+.coverage_extend_circular <- function(assembly, circular_ids, flank = 500) {
+  hit <- names(assembly) %in% circular_ids
+  if (!any(hit)) {
+    return(assembly)
+  }
+  ext <- assembly[hit]
+  end <- pmin(flank, Biostrings::width(ext))
+  assembly[hit] <- Biostrings::xscat(ext, Biostrings::subseq(ext, start = 1, end = end))
+  assembly
+}
+
+#' Fold junction-construct positions back onto the scaffold they came from
+#'
+#' Positions past a circular scaffold's true length are the appended copy of its
+#' start; moving them back and summing recombines the seam depth. Linear
+#' scaffolds are passed through untouched.
+#' @noRd
+.coverage_reform_circular <- function(coverage, assembly_len, circular_ids) {
+  is_circ <- coverage$SeqId %in% circular_ids
+  if (!any(is_circ)) {
+    return(coverage)
+  }
+  circ <- coverage[is_circ, ]
+  lens <- assembly_len[circ$SeqId]
+  to_move <- circ$Position > lens
+  circ$Position[to_move] <- circ$Position[to_move] - lens[to_move]
+  circ <- circ |>
+    dplyr::summarise(
+      Call = Call[1],
+      Depth = sum(Depth),
+      Correct = sum(Correct),
+      .by = c(SeqId, Position)
+    ) |>
+    dplyr::mutate(
+      ErrorRate = dplyr::if_else(Depth == 0, NA_real_, (Depth - Correct) / Depth)
+    )
+  dplyr::bind_rows(coverage[!is_circ, ], circ)
 }
 
 #' Rolling-window coverage stats (MeanDepth/ErrorRate/GC + outlier masks)

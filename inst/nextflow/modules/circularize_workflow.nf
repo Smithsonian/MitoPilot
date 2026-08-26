@@ -41,12 +41,21 @@ params.sqlWriteCircDepth = '''INSERT INTO circularize_depth
 // independently, so a fragmented assembly can come back with some contigs
 // circular and others linear.
 //
-// The downstream topology slot is therefore no longer a single word. For a
-// circularized sample it carries the text of the process's topology map,
-// "<contig> circular|linear", one contig per line. For a skipped sample it is
-// still the bare declared topology, which applies to every record.
+// The downstream topology slot is therefore a topology MAP FILE, in every
+// branch, so the coverage awk never has to tell two shapes apart. A
+// circularized sample gets the process's own map; a skipped sample has no
+// contig names, so it gets a one-line default map that applies to every record.
 def circ_eligible(topology, opts) {
     opts?.attempt?.toString() == '1' && topology == 'linear'
+}
+
+// Default map for a sample that was never circularized. "*" is the wildcard the
+// coverage awk falls back to when a contig name is not listed.
+def default_topology_map(id, topology) {
+    def f = file("${workflow.workDir}/topology_default/${id}_topology_map.txt")
+    f.parent.mkdirs()
+    f.text = "* ${topology}\n"
+    return f
 }
 
 // Read-based projects. Input/output tuple: (id, reads, assembly, topology, opts_id).
@@ -100,16 +109,16 @@ workflow CIRCULARIZE_userAsmb {
         br.run
             .map { id, reads, assembly, topology, opts_id, copts -> tuple(id, reads) }
             .join(circ_out.map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f ->
-                tuple(id, fasta, topo_map.text.trim(), opts_id)
+                tuple(id, fasta, topo_map, opts_id)
             })
-            .map { id, reads, fasta, topology, opts_id ->
-                tuple(id, reads, fasta, topology, opts_id)
+            .map { id, reads, fasta, topo_map, opts_id ->
+                tuple(id, reads, fasta, topo_map, opts_id)
             }
             .set { circularized }
 
         br.skip
             .map { id, reads, assembly, topology, opts_id, copts ->
-                tuple(id, reads, assembly, topology, opts_id)
+                tuple(id, reads, assembly, default_topology_map(id, topology), opts_id)
             }
             .mix(circularized)
             .set { out_ch }
@@ -166,13 +175,13 @@ workflow CIRCULARIZE_userAsmb_noReads {
 
         circ_out
             .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f ->
-                tuple(id, fasta, topo_map.text.trim(), opts_id)
+                tuple(id, fasta, topo_map, opts_id)
             }
             .set { circularized }
 
         br.skip
             .map { id, assembly, topology, opts_id, copts ->
-                tuple(id, assembly, topology, opts_id)
+                tuple(id, assembly, default_topology_map(id, topology), opts_id)
             }
             .mix(circularized)
             .set { out_ch }

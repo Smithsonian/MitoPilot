@@ -2,7 +2,7 @@
 // overlap from a linear contig and, when reads are available, require reads
 // spanning the new junction before calling that contig circular. Every contig
 // of the assembly is attempted independently, so the process emits a topology
-// MAP (topology_map.tsv: "<contig> circular|linear", one contig per line,
+// MAP (topology_map.txt: "<contig> circular|linear", one contig per line,
 // space separated) rather than one topology value for the whole sample.
 // See R/circularize_asmb.R.
 process circularize {
@@ -29,7 +29,7 @@ process circularize {
     output:
         tuple val(id),
             path("${outDir}/${id}_circularized.fasta"),
-            path("${outDir}/topology_map.tsv"),
+            path("${outDir}/topology_map.txt"),
             path("${outDir}/note.txt"),
             path("${outDir}/circularize_overlap.csv"),
             path("${outDir}/circularize_depth.csv"),
@@ -55,7 +55,7 @@ process circularize {
         log_fn = "!{outDir}/circularize.log");
       writeLines(vapply(res$contigs, function(ctg)
         paste(ctg$contig, if (ctg$circular) "circular" else "linear"),
-        character(1)), "!{outDir}/topology_map.tsv");
+        character(1)), "!{outDir}/topology_map.txt");
       writeLines(res$note, "!{outDir}/note.txt")'
     '''
 }
@@ -85,7 +85,7 @@ process circularize_noReads {
     output:
         tuple val(id),
             path("${outDir}/${id}_circularized.fasta"),
-            path("${outDir}/topology_map.tsv"),
+            path("${outDir}/topology_map.txt"),
             path("${outDir}/note.txt"),
             path("${outDir}/circularize_overlap.csv"),
             path("${outDir}/circularize_depth.csv"),
@@ -111,7 +111,7 @@ process circularize_noReads {
         log_fn = "!{outDir}/circularize.log");
       writeLines(vapply(res$contigs, function(ctg)
         paste(ctg$contig, if (ctg$circular) "circular" else "linear"),
-        character(1)), "!{outDir}/topology_map.tsv");
+        character(1)), "!{outDir}/topology_map.txt");
       writeLines(res$note, "!{outDir}/note.txt")'
     '''
 }
