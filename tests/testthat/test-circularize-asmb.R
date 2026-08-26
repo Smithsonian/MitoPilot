@@ -266,3 +266,36 @@ test_that("a multi-contig assembly still writes both files", {
   expect_true(file.exists(file.path(ev, "circularize_depth.csv")))
   expect_equal(nrow(utils::read.csv(file.path(ev, "circularize_overlap.csv"))), 0L)
 })
+
+
+test_that("the overlap hit carries flanking contig context", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 41)
+  hit <- find_end_overlap(paste0(core, substr(core, 1, 400)))
+  expect_true(hit$accepted)
+  # The 5' copy sits at the contig start, so it has no room on its left.
+  expect_equal(nchar(hit$q_ctx_left), 0L)
+  expect_equal(nchar(hit$q_ctx_right), 50L)
+  # The 3' copy runs to the contig end, so no room on its right.
+  expect_equal(nchar(hit$s_ctx_left), 50L)
+  expect_equal(nchar(hit$s_ctx_right), 0L)
+  # Context is real contig sequence, taken from just past the aligned block.
+  expect_equal(hit$q_ctx_right, substr(core, hit$qend + 1L, hit$qend + 50L))
+})
+
+test_that("the evidence CSV carries the context columns", {
+  skip_if_no_blastn()
+  core <- random_seq(6000, seed = 42)
+  fa <- withr::local_tempfile(fileext = ".fasta")
+  ev <- withr::local_tempdir()
+  writeLines(c(">contig", paste0(core, substr(core, 1, 400))), fa)
+
+  circularize_asmb(fa, id = "s1", evidence_dir = ev)
+
+  ov <- utils::read.csv(file.path(ev, "circularize_overlap.csv"),
+                        colClasses = "character")
+  expect_true(all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right")
+                  %in% names(ov)))
+  expect_equal(nchar(ov$q_ctx_right), 50L)
+  expect_equal(nchar(ov$s_ctx_left), 50L)
+})

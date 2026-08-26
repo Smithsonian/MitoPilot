@@ -415,11 +415,18 @@ Assemble table, alongside a per-sample log in
 | `linear: 231 bp overlap found but only 2 junction reads (5 required)` | Overlap present, reads did not back it up |
 
 Click the summary to open the evidence: where the overlap sits on the contig,
-the two overlapping copies aligned base by base, and the read depth across the
-junction with the required overhang marked. A sample whose overlap was found but
-not used shows the same alignment along with the threshold it missed, which is
-the quickest way to decide whether to adjust **Min. overlap** or
+the two overlapping copies aligned base by base with 50 bp of flanking sequence
+either side, and the read depth around the seam. A sample whose overlap was
+found but not used shows the same alignment along with the threshold it missed,
+which is the quickest way to decide whether to adjust **Min. overlap** or
 **Min. identity**.
+
+The depth panel plots the assembly's own coverage either side of the seam, the
+3' end to the left and the 5' end to the right, so a genuine circular junction
+shows coverage carrying straight across rather than falling away. Under it sits
+the depth contributed by reads that actually cross the seam with the required
+overhang. Expect that second track to sit below the first even for a good
+junction, since a read only counts when it clears the overhang on both sides.
 
 <div class="alert alert-warning">
 <strong>Warning.</strong> A project holds either MitoPilot assemblies or

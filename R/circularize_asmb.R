@@ -21,6 +21,8 @@ write_circularize_evidence <- function(dir, id, hit, trimmed, junction,
       sstart = integer(0), send = integer(0), length = integer(0),
       pident = numeric(0), mismatches = integer(0),
       aln_query = character(0), aln_subject = character(0),
+      q_ctx_left = character(0), q_ctx_right = character(0),
+      s_ctx_left = character(0), s_ctx_right = character(0),
       accepted = integer(0), reason = character(0), trimmed = integer(0),
       junction_reads = integer(0), min_junction_reads = integer(0),
       window_bp = integer(0), min_overhang = integer(0)
@@ -33,6 +35,8 @@ write_circularize_evidence <- function(dir, id, hit, trimmed, junction,
       length = hit$length, pident = round(hit$pident, 2),
       mismatches = hit$mismatches,
       aln_query = hit$qseq, aln_subject = hit$sseq,
+      q_ctx_left = hit$q_ctx_left, q_ctx_right = hit$q_ctx_right,
+      s_ctx_left = hit$s_ctx_left, s_ctx_right = hit$s_ctx_right,
       accepted = as.integer(hit$accepted),
       reason = hit$reason %||% NA_character_,
       trimmed = as.integer(trimmed),
@@ -244,6 +248,7 @@ trim_end_overlap <- function(seq,
 #'
 #' @param seq contig sequence (character)
 #' @param min_overlap,min_identity acceptance thresholds
+#' @param context_bp contig sequence kept either side of each copy, for display
 #' @param blastn path to the blastn binary
 #'
 #' @return list describing the best hit, or NULL when no end-anchored hit exists
@@ -252,6 +257,7 @@ trim_end_overlap <- function(seq,
 find_end_overlap <- function(seq,
                              min_overlap = 220,
                              min_identity = 99,
+                             context_bp = 50L,
                              blastn = getOption("MitoPilot.blastn", "blastn")) {
   # Tolerance for how far the overlap may sit from the contig ends
   offset <- 40L
@@ -310,6 +316,13 @@ find_end_overlap <- function(seq,
     NA_character_
   }
 
+  # Contig sequence either side of each copy, so the modal can show the overlap
+  # in context. Clipped where the copy already sits against a contig end, which
+  # is the usual case for the 5' copy's left side and the 3' copy's right side.
+  ctx <- function(from, to) {
+    if (from > to) "" else substr(seq, max(1L, from), min(len, to))
+  }
+
   list(
     sstart = hit$sstart,
     trimmed = len - hit$sstart + 1L,
@@ -320,6 +333,10 @@ find_end_overlap <- function(seq,
     length = hit$length,
     qseq = hit$qseq,
     sseq = hit$sseq,
+    q_ctx_left = ctx(hit$qstart - context_bp, hit$qstart - 1L),
+    q_ctx_right = ctx(hit$qend + 1L, hit$qend + context_bp),
+    s_ctx_left = ctx(hit$sstart - context_bp, hit$sstart - 1L),
+    s_ctx_right = ctx(hit$send + 1L, hit$send + context_bp),
     mismatches = sum(strsplit(hit$qseq, "")[[1]] != strsplit(hit$sseq, "")[[1]]),
     accepted = is.na(reason),
     reason = reason
@@ -355,6 +372,40 @@ window_depth <- function(starts, ends, win_start, win_end) {
   cumsum(opened - closed)[seq_len(n)]
 }
 
+#' Per-contig depth from alignments against the doubled junction reference
+#'
+#' The mapping reference is the contig followed by a copy of its own first
+#' `flank` bases, so a read landing in that first `flank` bases aligns equally
+#' well to either copy and bowtie2 places it arbitrarily. Folding the appended
+#' block back onto the contig start recombines the two copies into the contig's
+#' real coverage, which is why the caller must NOT pre-filter on mapping
+#' quality: an ambiguous read is placed once and folding puts it back.
+#'
+#' @param starts,ends 1-based inclusive alignment intervals on the doubled
+#'   reference
+#' @param len contig length (the fold point)
+#'
+#' @return integer vector of length `len`, depth per contig position
+#'
+#' @noRd
+contig_depth <- function(starts, ends, len) {
+  if (length(starts) == 0L) {
+    return(integer(len))
+  }
+  # An interval crossing the fold point contributes to both ends, so split it.
+  head_keep <- starts <= len
+  tail_keep <- ends > len
+  s <- c(starts[head_keep], pmax(starts[tail_keep] - len, 1L))
+  e <- c(pmin(ends[head_keep], len), ends[tail_keep] - len)
+  keep <- s <= e
+  if (!any(keep)) {
+    return(integer(len))
+  }
+  s <- pmax(s[keep], 1L)
+  e <- pmin(e[keep], len)
+  cumsum(tabulate(s, nbins = len + 1L) - tabulate(e + 1L, nbins = len + 1L))[seq_len(len)]
+}
+
 #' Count reads spanning the junction of a circularized contig
 #'
 #' Maps reads to the contig with its first `flank` bases appended (the same
@@ -362,11 +413,18 @@ window_depth <- function(starts, ends, win_start, win_end) {
 #' aligned reference block extends `min_overhang` bases past the seam on both
 #' sides.
 #'
+#' Two depth tracks come back. `depth` is the contig's own coverage either side
+#' of the junction, folded so both ends read as one continuous curve. It counts
+#' every alignment, because the duplicated block makes reads there ambiguous and
+#' a mapping-quality filter would empty it. `depth_spanning` counts only reads
+#' that cross the seam with `min_overhang` on both sides, and does apply the
+#' filter, since a spanning read has to be placed uniquely to mean anything.
+#'
 #' @param seq circularized contig sequence (character)
 #' @param paired_reads_1,paired_reads_2 paths to reads (fastq)
 #' @param min_overhang bases required either side of the junction
 #' @param cpus threads for bowtie2
-#' @param min_mapq minimum mapping quality (default = 20)
+#' @param min_mapq minimum mapping quality for a spanning read (default = 20)
 #'
 #' @return list with `count` (integer spanning reads), `window_bp` (integer),
 #'   and `depth` (data frame of position, rel_position, depth, depth_spanning)
@@ -407,9 +465,11 @@ count_junction_reads <- function(seq,
     "| samtools view -bS - | samtools sort - > {bam}"
   ) |> system()
 
+  # No -q here: the depth track needs the ambiguous alignments in the duplicated
+  # block. The filter is applied in R, to the spanning track only.
   sam <- suppressWarnings(system2(
     "samtools",
-    c("view", "-q", min_mapq, shQuote(bam)),
+    c("view", shQuote(bam)),
     stdout = TRUE, stderr = FALSE
   ))
   if (length(sam) == 0L) {
@@ -418,24 +478,31 @@ count_junction_reads <- function(seq,
 
   fields <- stringr::str_split(sam, "\t", simplify = TRUE)
   starts <- as.integer(fields[, 4])
+  mapq <- as.integer(fields[, 5])
   ends <- starts + cigar_ref_length(fields[, 6]) - 1L
 
   ok <- !is.na(starts) & !is.na(ends)
   spanning <- ok &
+    !is.na(mapq) & mapq >= min_mapq &
     starts <= len - min_overhang &
     ends >= len + min_overhang
 
   win_start <- len - flank + 1L
   win_end <- len + flank
   position <- win_start:win_end
+  rel_position <- position - len
+
+  # Negative offsets are the contig's 3' end running into the seam, positive
+  # offsets its 5' start running out of it.
+  cov <- contig_depth(starts[ok], ends[ok], len)
 
   list(
     count = sum(spanning),
     window_bp = flank,
     depth = data.frame(
       position = position,
-      rel_position = position - len,
-      depth = window_depth(starts[ok], ends[ok], win_start, win_end),
+      rel_position = rel_position,
+      depth = cov[ifelse(rel_position <= 0L, len + rel_position, rel_position)],
       depth_spanning = window_depth(starts[spanning], ends[spanning],
                                     win_start, win_end)
     )

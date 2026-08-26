@@ -810,7 +810,7 @@ assemble_server_userAsmb <- function(id) {
       ev <- req(rv$circ_evidence)$overlap
       blocks <- data.frame(
         xmin = c(ev$qstart, ev$sstart), xmax = c(ev$qend, ev$send),
-        label = c("start copy", "end copy")
+        label = c("5' end", "3' end")
       )
       ggplot2::ggplot() +
         ggplot2::geom_rect(
@@ -822,8 +822,8 @@ assemble_server_userAsmb <- function(id) {
           ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0.3, ymax = 0.7,
                        fill = label)
         ) +
-        ggplot2::scale_fill_manual(values = c("start copy" = "#0056b3",
-                                              "end copy" = "#FF6670"),
+        ggplot2::scale_fill_manual(values = c("5' end" = "#0056b3",
+                                              "3' end" = "#FF6670"),
                                    name = NULL) +
         ggplot2::scale_y_continuous(limits = c(0, 1), breaks = NULL) +
         ggplot2::labs(x = "contig position (bp)", y = NULL) +
@@ -832,44 +832,15 @@ assemble_server_userAsmb <- function(id) {
                        panel.grid.major.y = ggplot2::element_blank())
     })
 
-    output$circ_alignment <- renderPlot({
-      ev <- req(rv$circ_evidence)$overlap
-      from <- as.integer(input$circ_aln_from %||% 1L)
-      # 60 lettered columns is about what stays readable at this width.
-      df <- circularize_aln_df(ev$aln_query, ev$aln_subject,
-                               from = from, to = from + 59L)
-      req(nrow(df) > 0)
-      long <- rbind(
-        data.frame(col = df$col, y = 2, base = df$base_q, match = df$match),
-        data.frame(col = df$col, y = 1, base = df$base_s, match = df$match)
-      )
-      ggplot2::ggplot(long) +
-        ggplot2::geom_tile(
-          ggplot2::aes(x = col, y = y,
-                       fill = ifelse(match, "match", "mismatch")),
-          color = "white"
-        ) +
-        ggplot2::geom_text(ggplot2::aes(x = col, y = y, label = base), size = 3) +
-        ggplot2::scale_fill_manual(values = c(match = "#DDE6F0",
-                                              mismatch = "#FF6670"),
-                                   name = NULL) +
-        ggplot2::scale_y_continuous(breaks = c(1, 2),
-                                    labels = c("end copy", "start copy")) +
-        ggplot2::labs(x = "alignment column", y = NULL) +
-        ggplot2::theme_minimal(base_size = 11) +
-        ggplot2::theme(legend.position = "bottom",
-                       panel.grid = ggplot2::element_blank())
-    })
-
     output$circ_depth <- renderPlot({
       ev <- req(rv$circ_evidence)
       d <- ev$depth
       req(nrow(d) > 0)
       long <- rbind(
         data.frame(rel_position = d$rel_position, depth = d$depth,
-                   track = "all reads"),
+                   track = "assembly depth"),
         data.frame(rel_position = d$rel_position, depth = d$depth_spanning,
-                   track = "junction spanning")
+                   track = "crosses the seam")
       )
       ggplot2::ggplot(long, ggplot2::aes(x = rel_position, y = depth,
                                          color = track)) +
@@ -880,13 +851,17 @@ assemble_server_userAsmb <- function(id) {
         ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
                             color = "grey40") +
         ggplot2::geom_line() +
-        ggplot2::scale_color_manual(values = c("all reads" = "grey50",
-                                               "junction spanning" = "#0056b3"),
+        ggplot2::scale_color_manual(values = c("assembly depth" = "grey50",
+                                               "crosses the seam" = "#0056b3"),
                                     name = NULL) +
-        ggplot2::labs(x = "distance from junction (bp)", y = "depth") +
+        ggplot2::labs(
+          x = "bases from the seam (negative = 3' end, positive = 5' end)",
+          y = "depth"
+        ) +
         ggplot2::theme_minimal(base_size = 11) +
         ggplot2::theme(legend.position = "bottom")
     })
+
     observeEvent(input$find_mito_opts, ignoreInit = T, {
       exists <- input$find_mito_opts %in% rv$find_mito_opts$find_mito_opts
       shinyWidgets::updatePrettyCheckbox(

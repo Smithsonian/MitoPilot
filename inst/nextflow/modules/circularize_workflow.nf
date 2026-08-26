@@ -8,15 +8,18 @@ params.sqlWriteCircNotes = 'UPDATE assemble SET circularize_notes = ? WHERE ID =
 // nf-sqldb may commit in either order.
 params.sqlWriteCircOverlap = '''INSERT INTO circularize_overlap
     (ID, qstart, qend, sstart, send, length, pident, mismatches,
-     aln_query, aln_subject, accepted, reason, trimmed,
+     aln_query, aln_subject, q_ctx_left, q_ctx_right, s_ctx_left, s_ctx_right,
+     accepted, reason, trimmed,
      junction_reads, min_junction_reads, window_bp, min_overhang, time_stamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ID) DO UPDATE SET
       qstart = excluded.qstart, qend = excluded.qend,
       sstart = excluded.sstart, send = excluded.send,
       length = excluded.length, pident = excluded.pident,
       mismatches = excluded.mismatches,
       aln_query = excluded.aln_query, aln_subject = excluded.aln_subject,
+      q_ctx_left = excluded.q_ctx_left, q_ctx_right = excluded.q_ctx_right,
+      s_ctx_left = excluded.s_ctx_left, s_ctx_right = excluded.s_ctx_right,
       accepted = excluded.accepted, reason = excluded.reason,
       trimmed = excluded.trimmed,
       junction_reads = excluded.junction_reads,
@@ -68,7 +71,10 @@ workflow CIRCULARIZE_userAsmb {
             .splitCsv(header: true, quote: '"')
             .map { row -> tuple(row.ID, row.qstart, row.qend, row.sstart, row.send,
                                 row.length, row.pident, row.mismatches,
-                                row.aln_query, row.aln_subject, row.accepted,
+                                row.aln_query, row.aln_subject,
+                                row.q_ctx_left ?: '', row.q_ctx_right ?: '',
+                                row.s_ctx_left ?: '', row.s_ctx_right ?: '',
+                                row.accepted,
                                 row.reason ?: '', row.trimmed,
                                 row.junction_reads ?: null,
                                 row.min_junction_reads, row.window_bp ?: null,
@@ -133,7 +139,10 @@ workflow CIRCULARIZE_userAsmb_noReads {
             .splitCsv(header: true, quote: '"')
             .map { row -> tuple(row.ID, row.qstart, row.qend, row.sstart, row.send,
                                 row.length, row.pident, row.mismatches,
-                                row.aln_query, row.aln_subject, row.accepted,
+                                row.aln_query, row.aln_subject,
+                                row.q_ctx_left ?: '', row.q_ctx_right ?: '',
+                                row.s_ctx_left ?: '', row.s_ctx_right ?: '',
+                                row.accepted,
                                 row.reason ?: '', row.trimmed,
                                 row.junction_reads ?: null,
                                 row.min_junction_reads, row.window_bp ?: null,

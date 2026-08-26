@@ -93,7 +93,12 @@ backwards_compatibility <- function(
           "circularize_overlap", "circularize_depth") %in%
           DBI::dbListTables(con)) &&
       all(c("circularize_opts", "circularize_notes", "find_mito_opts",
-            "find_mito_notes") %in% names(assemble_table))
+            "find_mito_notes") %in% names(assemble_table)) &&
+      isTRUE(tryCatch(
+        all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right") %in%
+              DBI::dbListFields(con, "circularize_overlap")),
+        error = function(e) FALSE
+      ))
   )
 
   # read .config; the .config is regenerated wholesale from the current built-in
@@ -538,6 +543,10 @@ backwards_compatibility <- function(
           mismatches INTEGER,
           aln_query TEXT,
           aln_subject TEXT,
+          q_ctx_left TEXT,
+          q_ctx_right TEXT,
+          s_ctx_left TEXT,
+          s_ctx_right TEXT,
           accepted INTEGER,
           reason TEXT,
           trimmed INTEGER,
@@ -549,6 +558,19 @@ backwards_compatibility <- function(
           PRIMARY KEY (ID)
         );"
       )
+    } else {
+      # Projects migrated before the modal showed contig context around the
+      # overlap. Values arrive on the next circularization run.
+      overlap_fields <- DBI::dbListFields(con, "circularize_overlap")
+      for (col in c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right")) {
+        if (!(col %in% overlap_fields)) {
+          message("added '", col, "' column to circularize_overlap table")
+          DBI::dbExecute(
+            con,
+            paste0("ALTER TABLE circularize_overlap ADD COLUMN ", col, " TEXT")
+          )
+        }
+      }
     }
     if (!DBI::dbExistsTable(con, "circularize_depth")) {
       message("added 'circularize_depth' table")
@@ -2085,9 +2107,11 @@ schema_gaps <- function(con) {
     gaps <- c(gaps, "the circularization and mitogenome-search tables are missing")
   }
   if (is_user_asmb(con) &&
-      !has(all(c("circularize_overlap", "circularize_depth") %in%
-               DBI::dbListTables(con)))) {
-    gaps <- c(gaps, "the circularization evidence tables are missing")
+      (!has(all(c("circularize_overlap", "circularize_depth") %in%
+                DBI::dbListTables(con))) ||
+       !has(all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right") %in%
+                DBI::dbListFields(con, "circularize_overlap"))))) {
+    gaps <- c(gaps, "the circularization evidence tables are missing or out of date")
   }
   gaps
 }

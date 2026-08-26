@@ -41,6 +41,88 @@ circularize_aln_df <- function(aln_query, aln_subject, from = 1L, to = NULL) {
 #' @param rv assemble module reactiveValues; the evidence is stashed here so the
 #'   plot renderers re-run when a different sample's modal is opened
 #' @param id sample ID
+#' Base colours for the aligned copies
+#'
+#' Same palette the assembly details modal uses for its path alignments, so a
+#' base is the same colour wherever the app draws sequence.
+#'
+#' @noRd
+CIRC_BASE_COLORS <- c(
+  A = "#a2fa8c", C = "#ffd18c", G = "#f38d8a",
+  T = "#8ab8f5", U = "#8ab8f5", `-` = "#BBBBBB"
+)
+
+#' Render the overlap alignment as scrollable coloured sequence
+#'
+#' HTML rather than a plot: a 1200 bp overlap drawn as tiles is a raster tens of
+#' thousands of pixels wide, while this scrolls natively at any length.
+#'
+#' @param ov one row of `circularize_overlap`
+#'
+#' @return a shiny tag
+#'
+#' @noRd
+circularize_aln_html <- function(ov) {
+  aln <- circularize_aln_df(ov$aln_query, ov$aln_subject)
+  if (nrow(aln) == 0L) {
+    return(tags$p(tags$em("No alignment stored for this sample.")))
+  }
+
+  blank <- function(x) if (length(x) != 1L || is.na(x)) "" else x
+  ql <- blank(ov$q_ctx_left); qr <- blank(ov$q_ctx_right)
+  sl <- blank(ov$s_ctx_left); sr <- blank(ov$s_ctx_right)
+
+  # The two copies keep different amounts of flanking sequence, so pad the
+  # shorter side to keep the rows in register with each other.
+  pad <- function(x, n) paste0(strrep(" ", n - nchar(x)), x)
+  rpad <- function(x, n) paste0(x, strrep(" ", n - nchar(x)))
+  nl <- max(nchar(ql), nchar(sl))
+  nr <- max(nchar(qr), nchar(sr))
+
+  chars <- function(x) if (nchar(x) == 0L) character(0) else strsplit(x, "")[[1]]
+  q_all <- c(chars(pad(ql, nl)), aln$base_q, chars(rpad(qr, nr)))
+  s_all <- c(chars(pad(sl, nl)), aln$base_s, chars(rpad(sr, nr)))
+  is_aln <- c(rep(FALSE, nl), rep(TRUE, nrow(aln)), rep(FALSE, nr))
+  matched <- c(rep(NA, nl), aln$match, rep(NA, nr))
+
+  cell <- function(b, aligned) {
+    if (identical(b, " ")) {
+      return(tags$span(class = "mp-circ-b", HTML("&nbsp;")))
+    }
+    bg <- if (!aligned) "#EEEEEE" else CIRC_BASE_COLORS[[toupper(b)]] %||% "#666666"
+    tags$span(
+      class = "mp-circ-b",
+      style = paste0("background:", bg, ";", if (!aligned) "color:#888888;" else ""),
+      b
+    )
+  }
+  bar <- function(m) {
+    tags$span(class = "mp-circ-b", if (is.na(m)) HTML("&nbsp;") else if (m) "|" else HTML("&nbsp;"))
+  }
+
+  row <- function(label, content) {
+    div(class = "mp-circ-row", tags$span(class = "mp-circ-lab", label), content)
+  }
+
+  tagList(
+    tags$style(HTML(paste0(
+      ".mp-circ-scroll{overflow-x:auto;white-space:nowrap;border:1px solid #DDD;",
+      "padding:6px 0;background:#FFF;}",
+      ".mp-circ-row{white-space:nowrap;line-height:1.5;}",
+      ".mp-circ-lab{display:inline-block;width:70px;font-size:11px;color:#555;",
+      "text-align:right;padding-right:8px;position:sticky;left:0;background:#FFF;}",
+      ".mp-circ-b{display:inline-block;width:11px;text-align:center;",
+      "font-family:monospace;font-size:12px;}"
+    ))),
+    div(
+      class = "mp-circ-scroll",
+      row("5' end", lapply(seq_along(q_all), function(i) cell(q_all[i], is_aln[i]))),
+      row("", lapply(matched, bar)),
+      row("3' end", lapply(seq_along(s_all), function(i) cell(s_all[i], is_aln[i])))
+    )
+  )
+}
+
 #' @param session current shiny session
 #'
 #' @noRd
@@ -113,17 +195,21 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
     tags$b("Where the overlap sits"),
     plotOutput(ns("circ_schematic"), height = "90px"),
     tags$b("Aligned copies"),
-    div(
-      style = "display: flex; align-items: center; gap: 1em;",
-      sliderInput(ns("circ_aln_from"), "Alignment column:",
-                  min = 1L, max = max(1L, aln_len), value = 1L,
-                  step = 10L, width = "100%")
+    opts_help(
+      "The whole overlap, with up to 50 bp of flanking contig sequence greyed ",
+      "either side. Scroll sideways to read it. The bar between the rows marks ",
+      "matching positions."
     ),
-    plotOutput(ns("circ_alignment"), height = "120px"),
+    circularize_aln_html(ov),
     if (nrow(depth) > 0L) {
       tagList(
         tags$b("Read depth across the junction"),
-        plotOutput(ns("circ_depth"), height = "180px")
+        opts_help(
+          "The assembly's own depth either side of the seam, and how much of it ",
+          "comes from reads that actually cross the seam. A real circular ",
+          "junction shows depth carrying across it, not falling away."
+        ),
+        plotOutput(ns("circ_depth"), height = "200px")
       )
     } else {
       tags$p(tags$em(

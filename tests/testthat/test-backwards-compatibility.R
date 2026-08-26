@@ -965,3 +965,40 @@ test_that("a user-assembly project gains the circularization evidence tables", {
     "nothing to update"
   )
 })
+
+
+test_that("an existing circularize_overlap table gains the context columns", {
+  # Regression: the modal's contig-context view was added after the table
+  # shipped, so a project migrated at the earlier version has the table but not
+  # the columns, and must not be told it is up to date.
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10", has_asmb_dir = TRUE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN assembly TEXT")
+  DBI::dbExecute(con, "UPDATE samples SET assembly = 's1.fasta'")
+  # The pre-context version of the table
+  DBI::dbExecute(con, "CREATE TABLE circularize_overlap (
+    ID TEXT NOT NULL, aln_query TEXT, aln_subject TEXT, PRIMARY KEY (ID))")
+  DBI::dbDisconnect(con)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_true(any(grepl("circularization", schema_gaps(con))))
+  DBI::dbDisconnect(con)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_cols(con, "circularize_overlap",
+              c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right"))
+  expect_false(any(grepl("circularization", schema_gaps(con))))
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
+})

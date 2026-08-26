@@ -52,3 +52,28 @@ test_that("from > to within range yields zero rows with correct column types", {
   expect_type(df$base_s, "character")
   expect_type(df$match, "logical")
 })
+
+
+test_that("contig_depth folds the duplicated block onto the contig start", {
+  # Reference is contig[1..10] plus a copy of contig[1..5], so an alignment at
+  # reference 11-13 is really contig 1-3.
+  d <- contig_depth(starts = 11L, ends = 13L, len = 10L)
+  expect_equal(d, c(1L, 1L, 1L, rep(0L, 7)))
+})
+
+test_that("contig_depth splits an alignment that crosses the fold point", {
+  # Reference 9-12 covers contig 9, 10 and then wraps to contig 1, 2.
+  d <- contig_depth(starts = 9L, ends = 12L, len = 10L)
+  expect_equal(d, c(1L, 1L, 0L, 0L, 0L, 0L, 0L, 0L, 1L, 1L))
+})
+
+test_that("contig_depth sums both copies rather than losing one", {
+  # One read at the contig start, one at the appended copy of it: folding must
+  # recombine them, which is the whole point of not filtering on mapping quality.
+  d <- contig_depth(starts = c(1L, 11L), ends = c(3L, 13L), len = 10L)
+  expect_equal(d[1:3], c(2L, 2L, 2L))
+})
+
+test_that("contig_depth handles no alignments", {
+  expect_equal(contig_depth(integer(0), integer(0), len = 5L), integer(5))
+})
