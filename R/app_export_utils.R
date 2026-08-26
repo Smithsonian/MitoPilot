@@ -335,10 +335,16 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
 
   out |>
     dplyr::mutate(
-      # Per-scaffold topology wins; completeness below is derived from it.
+      # Per-scaffold topology wins, and anything not usable as a topology is
+      # coerced to "linear". Same rule and same order as export_files(), so the
+      # table can never disagree with the defline it is previewing.
       topology = dplyr::if_else(
         !is.na(scaffold_topology) & scaffold_topology != "",
         scaffold_topology, topology
+      ),
+      topology = dplyr::if_else(
+        !is.na(topology) & topology %in% c("circular", "linear"),
+        topology, "linear"
       ),
       # Ref-align status is only meaningful when this unit has a real BLAST hit
       # (mirrors the Annotate table).

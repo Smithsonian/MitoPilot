@@ -592,6 +592,24 @@ assemble_server_userAsmb <- function(id) {
         )
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating, by = "ID")
+      # One click can now hand several contigs to annotation, so say how many.
+      # The lock itself is still per sample; the units are what WF2 will run.
+      if (lock_current == 0) {
+        n_units <- dplyr::tbl(session$userData$con, "assemblies") |>
+          dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
+          dplyr::count() |>
+          dplyr::pull(n)
+        shiny::showNotification(
+          paste0(
+            "Locked ", nrow(rv$updating),
+            ngettext(nrow(rv$updating), " sample", " samples"),
+            ": ", n_units, ngettext(n_units, " contig", " contigs"),
+            " will be annotated."
+          ),
+          type = "message",
+          duration = 5
+        )
+      }
       trigger("update_assemble_table")
       trigger("refresh_annotate")
       trigger("refresh_export")

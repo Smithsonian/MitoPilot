@@ -30,11 +30,31 @@ test_that("contigs that disagree report a count of each", {
   )
 })
 
-test_that("nothing to summarise gives NA, not an empty string", {
+test_that("no contigs at all gives NA, not an empty string", {
   expect_true(is.na(summarize_topology(character(0))))
-  expect_true(is.na(summarize_topology(c(NA_character_, ""))))
-  # a sample with one usable value among unusable ones still reports it
-  expect_equal(summarize_topology(c(NA_character_, "circular")), "circular")
+})
+
+test_that("a contig with no topology yet is counted, not dropped", {
+  # dropping it produced "1 circular, 1 linear" for a three-contig sample: a
+  # truthful label with a wrong contig count
+  expect_equal(
+    summarize_topology(c("circular", "linear", NA_character_)),
+    "1 circular, 1 linear, 1 unknown"
+  )
+  expect_equal(
+    summarize_topology(c("circular", "circular", "")),
+    "2 circular, 1 unknown"
+  )
+  expect_equal(summarize_topology(c(NA_character_, "")), "unknown")
+  # the counts always add up to the number of contigs handed in
+  n_counted <- function(x) {
+    lab <- summarize_topology(x)
+    if (!grepl("[0-9]", lab)) length(x) else sum(as.integer(
+      regmatches(lab, gregexpr("[0-9]+", lab))[[1]]
+    ))
+  }
+  expect_equal(n_counted(c("circular", "linear", NA_character_)), 3L)
+  expect_equal(n_counted(c("circular", "circular", "circular")), 3L)
 })
 
 # --- 2. the Assemble table ---------------------------------------------------
@@ -78,8 +98,9 @@ test_that("the Assemble table summarises each sample's contig topologies", {
 
   expect_equal(topo[["mixed"]], "2 circular, 1 linear")
   expect_equal(topo[["circ"]], "circular")
-  # no assemblies rows yet: fall back to the topology the user declared
-  expect_equal(topo[["fresh"]], "linear")
+  # no assemblies rows yet: the declared value is an input, not a measurement,
+  # and must not be shown as though WF1 had confirmed it
+  expect_equal(topo[["fresh"]], "linear (declared)")
 })
 
 test_that("an ignored contig is left out of the summary", {
@@ -94,6 +115,31 @@ test_that("an ignored contig is left out of the summary", {
   expect_equal(out$topology[out$ID == "mixed"], "circular")
 })
 
+test_that("a sample with every contig ignored does not pass off the declared value", {
+  con <- assemble_db(data.frame(
+    ID = "mixed", path = 1L, scaffold = c(1L, 2L),
+    topology = c("circular", "linear"), ignore = c(1L, 1L),
+    stringsAsFactors = FALSE
+  ))
+  withr::defer(DBI::dbDisconnect(con))
+
+  out <- fetch_assemble_data_userAsmb(list(userData = list(con = con)))
+  # nothing measured survives, so the column falls back and says it fell back
+  expect_equal(out$topology[out$ID == "mixed"], "linear (declared)")
+})
+
+test_that("a contig with no topology written yet is visible in the table", {
+  con <- assemble_db(data.frame(
+    ID = "mixed", path = 1L, scaffold = 1:3,
+    topology = c("circular", "linear", NA_character_), ignore = 0L,
+    stringsAsFactors = FALSE
+  ))
+  withr::defer(DBI::dbDisconnect(con))
+
+  out <- fetch_assemble_data_userAsmb(list(userData = list(con = con)))
+  expect_equal(out$topology[out$ID == "mixed"], "1 circular, 1 linear, 1 unknown")
+})
+
 test_that("a fresh project with no assemblies rows still renders", {
   con <- assemble_db(data.frame(
     ID = character(0), path = integer(0), scaffold = integer(0),
@@ -102,7 +148,7 @@ test_that("a fresh project with no assemblies rows still renders", {
   withr::defer(DBI::dbDisconnect(con))
 
   out <- fetch_assemble_data_userAsmb(list(userData = list(con = con)))
-  expect_equal(unique(out$topology), "linear")
+  expect_equal(unique(out$topology), "linear (declared)")
 })
 
 # --- 3. the lock guard -------------------------------------------------------
@@ -250,6 +296,19 @@ test_that("a legacy joined topology never survives into the Export table", {
   out <- fetch_export_data(con = con)
   expect_false(any(grepl(";", out$topology, fixed = TRUE)))
   expect_equal(sort(out$topology), c("circular", "linear"))
+})
+
+test_that("an unusable topology is coerced the way the defline is", {
+  # assemblies has nothing for this contig and annotate carries the sentinel.
+  # export_files() coerces that to "linear" (R/export.R, the unusable-value
+  # branch, covered in test-export-topology.R), so the table must not show
+  # "fragmented" next to a file that says "linear".
+  con <- export_db(NA_character_, annotate_topology = "fragmented")
+  withr::defer(DBI::dbDisconnect(con))
+
+  out <- fetch_export_data(con = con)
+  expect_equal(out$topology, "linear")
+  expect_equal(out$completeness, "partial genome")
 })
 
 test_that("the regular pipeline's single-unit sample is unchanged", {

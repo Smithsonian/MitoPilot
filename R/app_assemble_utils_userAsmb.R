@@ -2,20 +2,22 @@
 #'
 #' Circularization is decided per contig, so a sample no longer has one
 #' topology. Report the single value when the contigs agree, and a count of each
-#' otherwise.
+#' otherwise. A contig whose topology has not been written yet counts as
+#' "unknown" rather than being dropped, so the counts always add up to the
+#' number of contigs handed in.
 #'
 #' @param topology character vector, one value per non-ignored contig
 #'
 #' @return "circular", "linear", or a mixture such as "2 circular, 1 linear";
-#'   NA when there is nothing to summarise
+#'   NA when there are no contigs at all
 #'
 #' @noRd
 summarize_topology <- function(topology) {
   topology <- as.character(topology)
-  topology <- topology[!is.na(topology) & nzchar(topology)]
   if (length(topology) == 0L) {
     return(NA_character_)
   }
+  topology[is.na(topology) | !nzchar(topology)] <- "unknown"
   n <- table(topology)
   if (length(n) == 1L) {
     return(names(n))
@@ -41,20 +43,28 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
   taxa <- dplyr::tbl(db, "samples") |>
     dplyr::select(ID, Taxon, topology, assembly)
 
-  # Topology is decided per contig. Summarise the sample's non-ignored contigs,
-  # falling back to the user-declared value until WF1 has written any.
+  # Topology is decided per contig. Summarise the sample's non-ignored contigs.
+  # A sample with none (never run, or every contig ignored) has no measured
+  # topology at all, so it falls back to the value the user declared and says
+  # so: the declared value is an input, not a result.
   unit_topology <- dplyr::tbl(db, "assemblies") |>
-    dplyr::filter(ignore == 0) |>
-    dplyr::select(ID, topology) |>
+    dplyr::select(ID, topology, ignore) |>
     dplyr::collect() |>
     dplyr::group_by(ID) |>
-    dplyr::summarise(unit_topology = summarize_topology(topology), .groups = "drop")
+    dplyr::summarise(
+      unit_topology = summarize_topology(topology[ignore == 0]),
+      .groups = "drop"
+    )
 
   out <- dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
     dplyr::left_join(unit_topology, by = "ID") |>
-    dplyr::mutate(topology = dplyr::coalesce(unit_topology, topology)) |>
+    dplyr::mutate(topology = dplyr::case_when(
+      !is.na(unit_topology) ~ unit_topology,
+      is.na(topology) ~ NA_character_,
+      .default = paste0(topology, " (declared)")
+    )) |>
     dplyr::select(-unit_topology) |>
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(

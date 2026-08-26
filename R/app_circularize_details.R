@@ -202,6 +202,29 @@ circ_contig_choices <- function(ov_all) {
   stats::setNames(as.character(ov_all$contig), labels)
 }
 
+#' Caption saying how much of the sample the picker covers
+#'
+#' @param n_evidence contigs with a stored overlap row
+#' @param n_contigs non-ignored contigs in `assemblies`
+#'
+#' @return single label string
+#'
+#' @noRd
+circ_coverage_label <- function(n_evidence, n_contigs) {
+  if (length(n_contigs) != 1L || is.na(n_contigs) || n_contigs < n_evidence) {
+    return(paste0("Evidence for ", n_evidence,
+                  ngettext(n_evidence, " contig.", " contigs.")))
+  }
+  paste0(
+    "Evidence for ", n_evidence, " of ", n_contigs, " contigs.",
+    if (n_evidence < n_contigs) {
+      " The rest had no end overlap to compare, so they are not listed."
+    } else {
+      ""
+    }
+  )
+}
+
 #' Load one contig's evidence into the module's reactiveValues
 #'
 #' The panels read `rv$circ_evidence`, so the selection has to land in a
@@ -340,6 +363,14 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
     return(invisible(NULL))
   }
 
+  # Contigs the search found no overlap for have no evidence row at all, so the
+  # picker is not a list of the sample's contigs. Say how many of them it covers
+  # rather than letting a short list imply a short assembly.
+  n_contigs <- dplyr::tbl(session$userData$con, "assemblies") |>
+    dplyr::filter(ID == !!id, ignore == 0) |>
+    dplyr::count() |>
+    dplyr::pull(n)
+
   rv$circ_id <- id
   rv$circ_overlaps <- ov_all
   rv$circ_contig <- as.character(ov_all$contig[1])
@@ -360,6 +391,7 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
       selected = rv$circ_contig,
       width = "100%"
     ),
+    circ_caption(circ_coverage_label(nrow(ov_all), n_contigs), top = 0),
     uiOutput(ns("circ_body")),
     footer = modalButton("Close")
   ))
