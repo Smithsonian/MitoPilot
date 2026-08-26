@@ -27,6 +27,32 @@ check_single_path <- function(units) {
   invisible(TRUE)
 }
 
+#' Curation-options profile for one export unit
+#'
+#' A user-supplied assembly is annotated as one genome, so a single `annotate`
+#' row covers every contig of the sample and a sibling contig has no row of its
+#' own. Falling back to the sample's row keeps the caller from querying
+#' `curate_opts` with no value, which builds `WHERE curate_opts IN ()`.
+#'
+#' @param con An open SQLite connection to the project database.
+#' @param ID,path,scaffold The export unit.
+#'
+#' @return A single profile name; "default" when the sample has no annotate row.
+#'
+#' @noRd
+unit_curate_opts <- function(con, ID, path, scaffold) {
+  opts <- dplyr::tbl(con, "annotate") |>
+    dplyr::filter(ID == !!ID & path == !!path & scaffold == !!scaffold) |>
+    dplyr::pull("curate_opts")
+  if (length(opts) == 0) {
+    opts <- dplyr::tbl(con, "annotate") |>
+      dplyr::filter(ID == !!ID) |>
+      dplyr::arrange(path, scaffold) |>
+      dplyr::pull("curate_opts")
+  }
+  opts[1] %|NA|% "default"
+}
+
 # Map internal rRNA gene names to their export convention (rrnS -> rrn12,
 # rrnL -> rrn16). Operates on the prefix so make.unique suffixes are preserved
 # (rrnS.1 -> rrn12.1); non-rRNA names pass through unchanged.
@@ -251,19 +277,7 @@ export_files <- function(
       dplyr::filter(pos1 > 0) |>
       dplyr::collect()
 
-    curation_opts <-  dplyr::tbl(con, "annotate") |>
-      dplyr::filter(ID == !!.x & path == !!.path & scaffold == !!.scaffold) |>
-      dplyr::pull("curate_opts")
-    if (length(curation_opts) == 0) {
-      # A user-supplied assembly is annotated as one genome, so a single annotate
-      # row covers every contig of the sample and a sibling contig has none of its
-      # own. Fall back to the sample's row rather than querying with no value.
-      curation_opts <- dplyr::tbl(con, "annotate") |>
-        dplyr::filter(ID == !!.x) |>
-        dplyr::arrange(path, scaffold) |>
-        dplyr::pull("curate_opts")
-    }
-    curation_opts <- curation_opts[1] %|NA|% "default"
+    curation_opts <- unit_curate_opts(con, .x, .path, .scaffold)
 
     curate_rules <- dplyr::tbl(con, "curate_opts") |>
       dplyr::filter(curate_opts == !!curation_opts) |>
@@ -1268,9 +1282,7 @@ get_export_PCG_annotations <- function(con, group) {
   for (.i in seq_len(nrow(loop_units))) {
     u <- loop_units[.i, ]
     # Curation rules for the current unit
-    curation_opts <- dplyr::tbl(con, "annotate") |>
-      dplyr::filter(ID == !!u$ID & path == !!u$path & scaffold == !!u$scaffold) |>
-      dplyr::pull("curate_opts")
+    curation_opts <- unit_curate_opts(con, u$ID, u$path, u$scaffold)
 
     curate_rules <- dplyr::tbl(con, "curate_opts") |>
       dplyr::filter(curate_opts == !!curation_opts) |>
