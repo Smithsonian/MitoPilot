@@ -1,6 +1,9 @@
 // Optional WF1 step for user-provided assemblies: trim a redundant end-to-start
 // overlap from a linear contig and, when reads are available, require reads
-// spanning the new junction before calling the assembly circular.
+// spanning the new junction before calling that contig circular. Every contig
+// of the assembly is attempted independently, so the process emits a topology
+// MAP (topology_map.tsv: "<contig> circular|linear", one contig per line,
+// space separated) rather than one topology value for the whole sample.
 // See R/circularize_asmb.R.
 process circularize {
     executor params.circularize?.executor ?: params.assemble.executor
@@ -26,7 +29,7 @@ process circularize {
     output:
         tuple val(id),
             path("${outDir}/${id}_circularized.fasta"),
-            path("${outDir}/topology.txt"),
+            path("${outDir}/topology_map.tsv"),
             path("${outDir}/note.txt"),
             path("${outDir}/circularize_overlap.csv"),
             path("${outDir}/circularize_depth.csv"),
@@ -50,7 +53,9 @@ process circularize {
         evidence_dir = "!{outDir}",
         out_fn = "!{outDir}/!{id}_circularized.fasta",
         log_fn = "!{outDir}/circularize.log");
-      writeLines(if (res$circular) "circular" else "linear", "!{outDir}/topology.txt");
+      writeLines(vapply(res$contigs, function(ctg)
+        paste(ctg$contig, if (ctg$circular) "circular" else "linear"),
+        character(1)), "!{outDir}/topology_map.tsv");
       writeLines(res$note, "!{outDir}/note.txt")'
     '''
 }
@@ -80,7 +85,7 @@ process circularize_noReads {
     output:
         tuple val(id),
             path("${outDir}/${id}_circularized.fasta"),
-            path("${outDir}/topology.txt"),
+            path("${outDir}/topology_map.tsv"),
             path("${outDir}/note.txt"),
             path("${outDir}/circularize_overlap.csv"),
             path("${outDir}/circularize_depth.csv"),
@@ -104,7 +109,9 @@ process circularize_noReads {
         evidence_dir = "!{outDir}",
         out_fn = "!{outDir}/!{id}_circularized.fasta",
         log_fn = "!{outDir}/circularize.log");
-      writeLines(if (res$circular) "circular" else "linear", "!{outDir}/topology.txt");
+      writeLines(vapply(res$contigs, function(ctg)
+        paste(ctg$contig, if (ctg$circular) "circular" else "linear"),
+        character(1)), "!{outDir}/topology_map.tsv");
       writeLines(res$note, "!{outDir}/note.txt")'
     '''
 }

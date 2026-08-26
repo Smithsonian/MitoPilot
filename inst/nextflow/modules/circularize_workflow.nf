@@ -37,8 +37,14 @@ params.sqlWriteCircDepth = '''INSERT INTO circularize_depth
       time_stamp = excluded.time_stamp'''
 
 // Samples eligible for circularization: the option is switched on and the user
-// declared the assembly linear. Multi-contig assemblies are passed through
-// untouched by circularize_asmb() itself, which records why in its note.
+// declared the assembly linear. Every contig of the assembly is then attempted
+// independently, so a fragmented assembly can come back with some contigs
+// circular and others linear.
+//
+// The downstream topology slot is therefore no longer a single word. For a
+// circularized sample it carries the text of the process's topology map,
+// "<contig> circular|linear", one contig per line. For a skipped sample it is
+// still the bare declared topology, which applies to every record.
 def circ_eligible(topology, opts) {
     opts?.attempt?.toString() == '1' && topology == 'linear'
 }
@@ -63,11 +69,11 @@ workflow CIRCULARIZE_userAsmb {
         ).set { circ_out }
 
         circ_out
-            .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> tuple(note_f.text.trim(), id) }
+            .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f -> tuple(note_f.text.trim(), id) }
             .sqlInsert(statement: params.sqlWriteCircNotes, db: 'sqlite')
 
         circ_out
-            .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> ov_f }
+            .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f -> ov_f }
             .splitCsv(header: true, quote: '"')
             .map { row -> tuple(row.ID, row.contig, row.qstart, row.qend, row.sstart, row.send,
                                 row.length, row.pident, row.mismatches,
@@ -83,7 +89,7 @@ workflow CIRCULARIZE_userAsmb {
             .sqlInsert(statement: params.sqlWriteCircOverlap, db: 'sqlite')
 
         circ_out
-            .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> dp_f }
+            .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f -> dp_f }
             .splitCsv(header: true, quote: '"')
             .map { row -> tuple(row.ID, row.contig, row.position, row.rel_position,
                                 row.depth, row.depth_spanning, params.ts) }
@@ -93,8 +99,8 @@ workflow CIRCULARIZE_userAsmb {
         // the downstream coverage tuple keeps its shape.
         br.run
             .map { id, reads, assembly, topology, opts_id, copts -> tuple(id, reads) }
-            .join(circ_out.map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f ->
-                tuple(id, fasta, topo_f.text.trim(), opts_id)
+            .join(circ_out.map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f ->
+                tuple(id, fasta, topo_map.text.trim(), opts_id)
             })
             .map { id, reads, fasta, topology, opts_id ->
                 tuple(id, reads, fasta, topology, opts_id)
@@ -132,11 +138,11 @@ workflow CIRCULARIZE_userAsmb_noReads {
         ).set { circ_out }
 
         circ_out
-            .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> tuple(note_f.text.trim(), id) }
+            .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f -> tuple(note_f.text.trim(), id) }
             .sqlInsert(statement: params.sqlWriteCircNotes, db: 'sqlite')
 
         circ_out
-            .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> ov_f }
+            .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f -> ov_f }
             .splitCsv(header: true, quote: '"')
             .map { row -> tuple(row.ID, row.contig, row.qstart, row.qend, row.sstart, row.send,
                                 row.length, row.pident, row.mismatches,
@@ -152,15 +158,15 @@ workflow CIRCULARIZE_userAsmb_noReads {
             .sqlInsert(statement: params.sqlWriteCircOverlap, db: 'sqlite')
 
         circ_out
-            .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f -> dp_f }
+            .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f -> dp_f }
             .splitCsv(header: true, quote: '"')
             .map { row -> tuple(row.ID, row.contig, row.position, row.rel_position,
                                 row.depth, row.depth_spanning, params.ts) }
             .sqlInsert(statement: params.sqlWriteCircDepth, db: 'sqlite')
 
         circ_out
-            .map { id, fasta, topo_f, note_f, ov_f, dp_f, opts_id, log_f ->
-                tuple(id, fasta, topo_f.text.trim(), opts_id)
+            .map { id, fasta, topo_map, note_f, ov_f, dp_f, opts_id, log_f ->
+                tuple(id, fasta, topo_map.text.trim(), opts_id)
             }
             .set { circularized }
 
