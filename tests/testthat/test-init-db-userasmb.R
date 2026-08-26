@@ -31,4 +31,5 @@ test_that("new_db_userAsmb creates a usable project database", {
   expect_equal(nrow(DBI::dbReadTable(con, "preprocess")), 2L)
   expect_equal(nrow(DBI::dbReadTable(con, "assemble")), 2L)
   expect_false(any(grepl("circularization", schema_gaps(con))))
+  expect_length(schema_gaps(con), 0L)
 })
