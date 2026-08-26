@@ -48,6 +48,12 @@ process scaffold_join {
             path("${id}/assemble/${opts}/${id}_scaffold_mappings.csv"), emit: mappings
         tuple val(id),
             path("${id}/assemble/${opts}/${id}_joined_row.csv"), optional: true, emit: row
+        // Written on EVERY non-crash exit of run_scaffold_join(): status is one
+        // of joined / declined / skipped, note is zero bytes unless there is a
+        // reason. Not optional, so absence of this pair means the task died.
+        tuple val(id),
+            path("${id}/assemble/${opts}/join_status.txt"),
+            path("${id}/assemble/${opts}/join_note.txt"), emit: outcome
 
     shell:
     dir = "${id}/assemble/${opts}"

@@ -72,6 +72,14 @@ params.sqlWriteBlastRefGood = "UPDATE assemble SET " +
     "assemble_notes = ${stripBlastAndRefTagsSql()} " +
     "WHERE ID = ? AND assemble_switch = 4"
 
+// Same, minus the state promotion, for IDs withheld because a later step (the
+// scaffold join) owns their final state. Same guard, so a terminal state=3 row
+// is untouched.
+params.sqlWriteBlastRefGoodHeld = "UPDATE assemble SET " +
+    "poor_blast_ref = 'good', " +
+    "assemble_notes = ${stripBlastAndRefTagsSql()} " +
+    "WHERE ID = ? AND assemble_switch = 4"
+
 workflow BLAST_REF_FETCH {
     take:
         // input: tuple(id, blast_accession, blast_species, blast_evalue, opts_id, is_top)
@@ -80,6 +88,10 @@ workflow BLAST_REF_FETCH {
         scaffold_map
         // ref_batches: tuple(id, opts_id, [accessions]) - one per-sample fetch batch
         ref_batches
+        // withhold_ids: IDs whose state 2 promotion is owned by a later step (the
+        // scaffold join). They stay at 4 here so the join can report the real
+        // outcome. Pass channel.empty() when nothing follows the fetch.
+        withhold_ids
 
     main:
         // Track top-hit IDs entering the workflow so failures can be detected below
@@ -218,11 +230,28 @@ workflow BLAST_REF_FETCH {
             .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id, true) }
             .set { succeeded_top_ids }
 
-        // Mark poor_blast_ref = 'good' for IDs whose top-hit ref fetch succeeded
-        ref_out
-            .filter { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> is_top }
-            .map    { id, accession, is_top, csv_file, seq_file, gc_file, json_file -> tuple(id) }
+        // Mark poor_blast_ref = 'good' for IDs whose top-hit ref fetch succeeded.
+        // Withheld IDs are skipped: for them WF1 is not finished when the
+        // reference lands, and promoting here is what used to report a failed
+        // scaffold join as a success.
+        succeeded_top_ids
+            .join(withhold_ids.map { id -> tuple(id, true) }, remainder: true)
+            .filter { id, success_flag, withhold_flag -> success_flag != null }
+            .branch { id, success_flag, withhold_flag ->
+                held:  withhold_flag != null
+                ready: true
+            }
+            .set { ref_good }
+
+        ref_good.ready
+            .map { id, success_flag, withhold_flag -> tuple(id) }
             .sqlInsert(statement: params.sqlWriteBlastRefGood, db: 'sqlite')
+
+        // Withheld IDs still get poor_blast_ref and the note cleanup; only the
+        // state promotion is left to the step that owns it.
+        ref_good.held
+            .map { id, success_flag, withhold_flag -> tuple(id) }
+            .sqlInsert(statement: params.sqlWriteBlastRefGoodHeld, db: 'sqlite')
 
         // Failure message is embedded in params.sqlWriteBlastRefFetchFailed (with [ref] tag)
         // and the UPDATE is guarded WHERE assemble_switch = 4.

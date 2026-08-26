@@ -30,6 +30,21 @@ params.sqlSyncAnnotateJoin = '''INSERT OR REPLACE INTO annotate
      (SELECT orf_opts FROM annotate WHERE ID = ? ORDER BY path, scaffold LIMIT 1),
      1, 0, "no", ?)'''
 
+// Sample state written by the join itself. Before this existed the reference
+// fetch promoted every sample to state 2 before the join had run, so a crashed
+// join was reported as a success.
+//   joined / skipped -> state 2, no note (a stale note from an earlier run is
+//                       cleared, not left to mislead).
+//   declined         -> state 2, note explaining why nothing was joined.
+//   crashed / dropped-> state 3, note naming what went wrong.
+// join_switch is cleared either way so a queued redo does not repeat forever.
+// No assemble_switch guard: the samples reaching these writes were withheld at 4
+// by BLAST_REF_FETCH, and a redo deliberately re-reports a sample at 2 or 3.
+params.sqlWriteJoinDone   = 'UPDATE assemble SET assemble_switch = 2, join_notes = ?, join_switch = NULL WHERE ID = ?'
+params.sqlWriteJoinFailed = 'UPDATE assemble SET assemble_switch = 3, join_notes = ?, join_switch = NULL WHERE ID = ?'
+
+params.joinCrashedMsg = "Scaffold join failed. The task produced no outcome file, so it died rather than declining to join. Check .command.log in the task's work directory (empty except for a signal message means the scheduler killed it: exit 137 = OOM, exit 140 = SGE runtime limit). To retry, re-run the scaffold join for this sample."
+
 // Precomputed scaffold->reference mappings (one row per ID/scaffold/ref) so the
 // in-app manual join editor needs no minimap2. The clear + insert must run in
 // one driver-side transaction: two independent sqlInsert operators batch and
@@ -103,6 +118,9 @@ workflow SCAFFOLD_JOIN {
     take:
         // tuple(id, assembly_fasta, opts_id, auto_join, cov_csvs, ref_seq_file, scaffold_hits)
         input
+        // tuple(id, missing_inputs) - join-eligible samples that never reached
+        // the join because an upstream step failed for them.
+        dropped
 
     main:
         scaffold_join(input)
@@ -138,4 +156,38 @@ workflow SCAFFOLD_JOIN {
                               (r.topology == 'circular') ? 'no' : 'yes',
                               r.ID, r.ID, r.ID, params.ts) }
             .sqlInsert(statement: params.sqlSyncAnnotateJoin, db: 'sqlite')
+
+        // Outcome -> state. Mapped by the status VALUE, never by the note text.
+        scaffold_join.out.outcome
+            .map { id, status_file, note_file ->
+                def status = status_file.text.trim()
+                def note   = note_file.text.trim()
+                // Only a decline carries a reason; clear any stale note otherwise.
+                tuple(id, (status == 'declined' && note) ? note : null)
+            }
+            .set { join_outcome }
+
+        join_outcome
+            .map { id, note -> tuple(note, id) }
+            .sqlInsert(statement: params.sqlWriteJoinDone, db: 'sqlite')
+
+        // Entered but produced no outcome file: the task crashed (errorStrategy
+        // 'ignore' emits nothing). Same idiom as the ref-fetch failure detection.
+        input
+            .map { it -> tuple(it[0], true) }
+            .join(join_outcome.map { id, note -> tuple(id, true) }, remainder: true)
+            .filter { id, entered, reported -> entered != null && reported == null }
+            .map    { id, entered, reported -> tuple(params.joinCrashedMsg, id) }
+            .sqlInsert(statement: params.sqlWriteJoinFailed, db: 'sqlite')
+
+        // Never reached the join at all: an upstream step failed for the sample.
+        // Without this the sample simply vanished from the channel and kept the
+        // state 2 that the reference fetch had already written.
+        dropped
+            .map { id, missing ->
+                tuple('Scaffold join did not run. Missing input: ' + missing +
+                      '. An earlier step failed for this sample; check its ' +
+                      'assemble notes, then re-run.', id)
+            }
+            .sqlInsert(statement: params.sqlWriteJoinFailed, db: 'sqlite')
 }

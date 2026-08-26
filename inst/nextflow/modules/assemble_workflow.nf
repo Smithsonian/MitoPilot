@@ -362,6 +362,18 @@ workflow ASSEMBLE {
             }
             .sqlInsert(statement: 'INSERT OR REPLACE INTO annotate (ID, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts, annotate_switch, annotate_lock, reviewed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, "no")', db: 'sqlite')
 
+        // Single-path multi-scaffold samples eligible for scaffold joining,
+        // carrying the per-sample join_scaffolds toggle. Built once here so the
+        // two emits below cannot drift into two definitions of "eligible".
+        // tuple(id, assembly_fasta, opts_id, status, join_scaffolds)
+        pass_ch.join_meta
+            .filter { id, n_paths, n_scaffolds, status, fasta, opts ->
+                (status == '4' || status == '2') && n_paths == 1 && n_scaffolds > 1 }
+            .map    { id, n_paths, n_scaffolds, status, fasta, opts ->
+                tuple(id, fasta, opts, status) }
+            .join(join_lookup)
+            .set { join_eligible_meta }
+
     emit:
         // Two named channels with different gating:
         //   cov   - usable assemblies (status 4, or status 2 from run_blast=0).
@@ -378,11 +390,16 @@ workflow ASSEMBLE {
         // mapping precompute runs for ALL eligible samples; the join_scaffolds
         // toggle (joined in here) only gates the automatic Path 0 BUILD downstream.
         // tuple(id, assembly_fasta, opts_id, join_scaffolds)
-        join_eligible = pass_ch.join_meta
-                    .filter { id, n_paths, n_scaffolds, status, fasta, opts ->
-                        (status == '4' || status == '2') && n_paths == 1 && n_scaffolds > 1 }
-                    .map    { id, n_paths, n_scaffolds, status, fasta, opts ->
-                        tuple(id, fasta, opts) }
-                    .join(join_lookup)
+        join_eligible = join_eligible_meta
+                    .map { id, fasta, opts, status, join_scaffolds ->
+                        tuple(id, fasta, opts, join_scaffolds) }
+        // IDs that are expected to reach the scaffold join in THIS run: eligible
+        // and still heading through BLAST (status 4). status 2 samples are
+        // run_blast = 0, already finalized by this workflow, and never get a
+        // fetched reference, so they must not be withheld from state 2 nor
+        // reported as missing an input.
+        join_expected = join_eligible_meta
+                    .filter { id, fasta, opts, status, join_scaffolds -> status == '4' }
+                    .map    { id, fasta, opts, status, join_scaffolds -> id }
 
 }
