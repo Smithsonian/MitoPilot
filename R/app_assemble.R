@@ -626,6 +626,11 @@ assemble_server <- function(id) {
           )
           req(nrow(upd) > 0L)
         }
+        # A locked sample is never admitted by WF1 (its query requires
+        # assemble_lock = 0), so a pending join redo could never run and the
+        # flag would sit at 1 forever, keeping the Update modal reporting work
+        # that cannot be done. Locking resolves it.
+        upd$join_switch <- NA_integer_
       }
       upd$assemble_lock <- as.numeric(!lock_current)
       rv$updating <- upd
@@ -668,9 +673,31 @@ assemble_server <- function(id) {
         error = function(e) NULL
       )
       missing_ids <- if (!is.null(stale)) stale$ID else character(0)
-      plan <- redo_join_plan(ids, asmb, missing_ids)
+      # Scaffold-join toggle, per sample, via its assembly parameter set. A redo
+      # on a toggled-off sample would run the join, get "skipped" back, and
+      # finalise the sample as done, erasing a state-3 failure. Refused here.
+      toggles <- tryCatch(
+        dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::filter(ID %in% ids) |>
+          dplyr::select(ID, assemble_opts) |>
+          dplyr::inner_join(
+            dplyr::tbl(session$userData$con, "assemble_opts") |>
+              dplyr::select(assemble_opts, join_scaffolds),
+            by = "assemble_opts"
+          ) |>
+          dplyr::collect(),
+        error = function(e) NULL
+      )
+      join_off_ids <- if (is.null(toggles) || nrow(toggles) == 0L) {
+        character(0)
+      } else {
+        off <- is.na(toggles$join_scaffolds) | toggles$join_scaffolds == 0
+        unique(toggles$ID[off])
+      }
+      plan <- redo_join_plan(ids, asmb, missing_ids, join_off_ids)
 
-      if (length(plan$not_eligible) > 0 || length(plan$missing_output) > 0) {
+      if (length(plan$not_eligible) > 0 || length(plan$missing_output) > 0 ||
+          length(plan$join_off) > 0) {
         shinyWidgets::sendSweetAlert(
           title = "Redo scaffold join not queued for some samples",
           text = shiny::tags$div(
@@ -689,6 +716,14 @@ assemble_server <- function(id) {
                 shiny::tags$ul(stale_assemble_items(
                   stale[stale$ID %in% plan$missing_output, , drop = FALSE]
                 ))
+              )
+            },
+            if (length(plan$join_off) > 0) {
+              shiny::tags$p(
+                "Scaffold joining is switched off in the assembly parameter ",
+                "set, so a redo would report the sample as skipped and mark it ",
+                "done. Turn 'join_scaffolds' on first for: ",
+                tags$code(paste(plan$join_off, collapse = ", "))
               )
             },
             shiny::tags$p(

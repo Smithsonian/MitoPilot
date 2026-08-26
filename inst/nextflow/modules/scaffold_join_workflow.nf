@@ -33,15 +33,31 @@ params.sqlSyncAnnotateJoin = '''INSERT OR REPLACE INTO annotate
 // Sample state written by the join itself. Before this existed the reference
 // fetch promoted every sample to state 2 before the join had run, so a crashed
 // join was reported as a success.
-//   joined / skipped -> state 2, no note (a stale note from an earlier run is
+//   joined           -> state 2, no note (a stale note from an earlier run is
 //                       cleared, not left to mislead).
 //   declined         -> state 2, note explaining why nothing was joined.
+//   skipped          -> see sqlWriteJoinSkipped below.
 //   crashed / dropped-> state 3, note naming what went wrong.
 // join_switch is cleared either way so a queued redo does not repeat forever.
-// No assemble_switch guard: the samples reaching these writes were withheld at 4
-// by BLAST_REF_FETCH, and a redo deliberately re-reports a sample at 2 or 3.
+// No assemble_switch guard: joined and declined are real verdicts from a task
+// that ran, and a redo deliberately re-reports a sample at 2 or 3.
 params.sqlWriteJoinDone   = 'UPDATE assemble SET assemble_switch = 2, join_notes = ?, join_switch = NULL WHERE ID = ?'
 params.sqlWriteJoinFailed = 'UPDATE assemble SET assemble_switch = 3, join_notes = ?, join_switch = NULL WHERE ID = ?'
+
+// "skipped" means the join_scaffolds toggle is off, so the task deliberately did
+// no work and has NO opinion about the sample. It therefore may not overwrite an
+// opinion something else already recorded:
+//   assemble_switch - promoted 4 -> 2 exactly as before (a normal run reaching
+//     this point with the toggle off is a success), but a sample already at 3
+//     stays at 3. Without the CASE, a redo queued on a crashed sample whose
+//     toggle happens to be off would silently promote it to done.
+//   join_notes      - not touched at all. Clearing it would erase the note that
+//     explains an existing failure, including when the toggle is flipped off
+//     between queueing a redo and running it.
+// join_switch is still cleared, so the redo resolves rather than looping.
+params.sqlWriteJoinSkipped = 'UPDATE assemble SET ' +
+    'assemble_switch = CASE WHEN assemble_switch = 4 THEN 2 ELSE assemble_switch END, ' +
+    'join_switch = NULL WHERE ID = ?'
 
 params.joinRedoMissingMsg = "Scaffold join redo did not run: this sample's published assembly output is not on disk, so there was nothing to join from. Missing: "
 
@@ -188,7 +204,14 @@ workflow SCAFFOLD_JOIN {
                 def missing = []
                 if (!fastas) missing << 'the assembly FASTA'
                 if (!covs)   missing << 'the coverage statistics'
-                if (!ref_fa) missing << 'the cached BLAST reference'
+                // No accession is a different fault from an accession whose
+                // cached reference is gone: nothing is missing from disk, the
+                // sample simply never got a reference to join against.
+                if (!ref_fa) {
+                    missing << (blast_accession
+                        ? 'the cached BLAST reference'
+                        : 'a BLAST reference (none was ever selected for this sample)')
+                }
                 // Empty scaffold_hits: run_scaffold_join() then reads the
                 // per-scaffold hits from the assemblies table, which a redo can
                 // trust because BLAST committed them in an earlier run.
@@ -263,19 +286,32 @@ workflow SCAFFOLD_JOIN {
                 def status = status_file.text.trim()
                 def note   = note_file.text.trim()
                 // Only a decline carries a reason; clear any stale note otherwise.
-                tuple(id, (status == 'declined' && note) ? note : null)
+                tuple(id, status, (status == 'declined' && note) ? note : null)
             }
             .set { join_outcome }
 
+        // "skipped" is split off because it is the one outcome that carries no
+        // verdict about the sample, so it gets the non-destructive write.
         join_outcome
-            .map { id, note -> tuple(note, id) }
+            .branch { id, status, note ->
+                skipped: status == 'skipped'
+                verdict: true
+            }
+            .set { outcome_ch }
+
+        outcome_ch.verdict
+            .map { id, status, note -> tuple(note, id) }
             .sqlInsert(statement: params.sqlWriteJoinDone, db: 'sqlite')
+
+        outcome_ch.skipped
+            .map { id, status, note -> tuple(id) }
+            .sqlInsert(statement: params.sqlWriteJoinSkipped, db: 'sqlite')
 
         // Entered but produced no outcome file: the task crashed (errorStrategy
         // 'ignore' emits nothing). Same idiom as the ref-fetch failure detection.
         join_in
             .map { it -> tuple(it[0], true) }
-            .join(join_outcome.map { id, note -> tuple(id, true) }, remainder: true)
+            .join(join_outcome.map { id, status, note -> tuple(id, true) }, remainder: true)
             .filter { id, entered, reported -> entered != null && reported == null }
             .map    { id, entered, reported -> tuple(params.joinCrashedMsg, id) }
             .sqlInsert(statement: params.sqlWriteJoinFailed, db: 'sqlite')

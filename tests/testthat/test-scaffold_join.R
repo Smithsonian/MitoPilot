@@ -38,6 +38,36 @@ test_that("redo_join_plan partitions ids into ready/not_eligible/missing_output"
   expect_equal(plan$ready, "s1")
   expect_equal(plan$not_eligible, "s2")
   expect_equal(plan$missing_output, "s3")
+  expect_equal(plan$join_off, character(0))
+})
+
+test_that("redo_join_plan refuses samples whose scaffold join is toggled off", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s2"),
+    path = c(1, 1, 1, 1),
+    scaffold = c(1, 2, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # A redo on a toggled-off sample returns "skipped", which would finalise it as
+  # done and, at state 3, erase the note explaining the failure.
+  plan <- redo_join_plan(c("s1", "s2"), asmb, join_off_ids = "s2")
+  expect_equal(plan$ready, "s1")
+  expect_equal(plan$join_off, "s2")
+  expect_equal(plan$missing_output, character(0))
+})
+
+test_that("redo_join_plan reports missing output ahead of a toggled-off join", {
+  asmb <- data.frame(
+    ID = c("s1", "s1"),
+    path = c(1, 1),
+    scaffold = c(1, 2),
+    stringsAsFactors = FALSE
+  )
+  # Both faults at once must land in exactly one bucket, never two.
+  plan <- redo_join_plan("s1", asmb, missing_ids = "s1", join_off_ids = "s1")
+  expect_equal(plan$missing_output, "s1")
+  expect_equal(plan$join_off, character(0))
+  expect_equal(plan$ready, character(0))
 })
 
 test_that("redo_join_plan: nothing ready when all requested ids fail a check", {

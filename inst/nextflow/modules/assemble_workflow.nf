@@ -19,6 +19,19 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'WHERE (a.assemble_switch IN (1, 4) OR a.join_switch = 1) ' +
                   'AND a.assemble_lock = 0'
 
+// A join-only redo the redo path deliberately does not service (the sample is
+// being re-assembled by this same run, so the normal route runs its join). The
+// flag has to be resolved anyway: nothing else clears it if the re-assembly ends
+// single-scaffold or fails, and a stuck 1 makes every later run admit a no-op
+// row and the app's Update modal report work that can never be done.
+//
+// This is NOT the second competing clearing write the spec warns against. That
+// warning is about a second write racing the outcome write for the SAME sample:
+// this statement touches one column, writes the same NULL that the outcome write
+// would, is therefore order-independent and idempotent, and never touches
+// assemble_switch or join_notes.
+params.sqlClearJoinSwitch = 'UPDATE assemble SET join_switch = NULL WHERE ID = ?'
+
 params.sqlDeleteAssemblies =  'DELETE FROM assemblies WHERE ID = ? AND time_stamp != ?'
 
 // Upsert, NOT `INSERT OR REPLACE`: REPLACE is delete-then-insert, so every column
@@ -133,10 +146,27 @@ workflow ASSEMBLE {
         // route, so admitting them here would feed the join twice.
         query_ch.join_redo
             .filter { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
-                join_switch == 1 && assemble_switch != 1 && assemble_switch != 4 }
-            .map    { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
+                join_switch == 1 }
+            .branch { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
+                // States 1 and 4 are being (re-)assembled by this same run and
+                // reach the join by the normal route, so servicing them here
+                // would feed the join twice for one sample.
+                moot: assemble_switch == 1 || assemble_switch == 4
+                redo: true
+            }
+            .set { redo_branch }
+
+        redo_branch.redo
+            .map { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
                 tuple(id, opts, join_scaffolds, blast_accession) }
             .set { join_redo_ch }
+
+        // Resolve the flag for the requests this workflow will not service, so
+        // it cannot stick at 1 forever.
+        redo_branch.moot
+            .map { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
+                tuple(id) }
+            .sqlInsert(statement: params.sqlClearJoinSwitch, db: 'sqlite')
 
         // Assemble Input Channel
         input

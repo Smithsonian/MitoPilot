@@ -60,15 +60,24 @@ redo_join_eligible_ids <- function(ids, assemblies_df) {
 #' @param assemblies_df data.frame with `ID`, `path`, `scaffold` for those IDs.
 #' @param missing_ids Character vector of IDs known to be missing published
 #'   assembly output.
-#' @return list with three character vectors partitioning `ids`: `ready`
-#'   (safe to set `join_switch = 1`), `not_eligible`, `missing_output`.
+#' @param join_off_ids Character vector of IDs whose assembly parameter set has
+#'   the scaffold-join toggle off. Queueing a redo for one of those is refused:
+#'   the join would run, report "skipped", and finalise the sample as done,
+#'   which on a sample sitting at state 3 would launder a real failure into a
+#'   success.
+#' @return list with four character vectors partitioning `ids`: `ready`
+#'   (safe to set `join_switch = 1`), `not_eligible`, `missing_output`,
+#'   `join_off`.
 #' @noRd
-redo_join_plan <- function(ids, assemblies_df, missing_ids = character(0)) {
+redo_join_plan <- function(ids, assemblies_df, missing_ids = character(0),
+                           join_off_ids = character(0)) {
   eligible <- redo_join_eligible_ids(ids, assemblies_df)
   not_eligible <- setdiff(ids, eligible)
   missing_output <- intersect(eligible, missing_ids)
-  ready <- setdiff(eligible, missing_output)
-  list(ready = ready, not_eligible = not_eligible, missing_output = missing_output)
+  join_off <- setdiff(intersect(eligible, join_off_ids), missing_output)
+  ready <- setdiff(eligible, c(missing_output, join_off))
+  list(ready = ready, not_eligible = not_eligible,
+       missing_output = missing_output, join_off = join_off)
 }
 
 #' Choose a single reference accession for a multi-scaffold sample
