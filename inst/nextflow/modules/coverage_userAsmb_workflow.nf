@@ -147,13 +147,14 @@ workflow COVERAGE_userAsmb_WRITE {
                 def max_len        = lengths_list.max() ?: 0
                 def status         = '4'
                 def notes          = ''
+                // Fragmented assemblies are a normal outcome: each contig is its own
+                // unit downstream, so note it and keep status 4 (matches
+                // assemble_workflow.nf).
                 if (max_scaffolds > 1) {
-                    notes = 'Output contains disconnected contigs'
                     def n_passing = lengths_list.count { it >= (min_assembly_length as Integer) }
-                    if (n_passing != 1) {
-                        topo_str = 'fragmented'
-                        status   = '3'
-                    }
+                    notes = (n_passing == 1)
+                        ? 'Output contains disconnected contigs'
+                        : 'Output contains disconnected contigs (fragmented)'
                 }
                 if (max_paths > 1) {
                     status = '3'
@@ -166,6 +167,47 @@ workflow COVERAGE_userAsmb_WRITE {
                 tuple(max_paths, max_scaffolds, length_str, topo_str, status, notes, params.ts, id)
             }
             .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
+
+        // Seed one annotate row PER non-ignored unit (ID, path, scaffold), the same
+        // way assemble_workflow.nf does for the regular pipeline. WF2 reads its work
+        // list from assemblies JOIN annotate on (ID, path, scaffold), so a contig
+        // with no annotate row is silently invisible.
+        //
+        // The unit list comes from assemblies_ch (this run's own records), NOT from a
+        // query on assemblies: fromQuery runs once at session ignition, before any
+        // task, so it cannot see rows this run writes.
+        //
+        // Options (annotate/curate/orf) and linear_complete ARE safe to query: they
+        // are user-set before launch. They are inherited from the sample's existing
+        // annotate rows (min-path row) so a re-run preserves the user's choices.
+        channel.fromQuery(
+                'SELECT an.ID, an.annotate_opts, an.curate_opts, an.orf_opts, ' +
+                'COALESCE(co.linear_complete, 0) ' +
+                'FROM (SELECT ID, annotate_opts, curate_opts, orf_opts, MIN(path) ' +
+                      'FROM annotate GROUP BY ID) an ' +
+                'LEFT JOIN curate_opts co ON co.curate_opts = an.curate_opts;', db: 'sqlite')
+            .set { unit_opts }
+
+        assemblies_ch
+            .filter { row -> row[8] == 0 }                          // non-ignored units only
+            .map    { row -> tuple(row[0], row[1], row[2], row[5]) } // ID, path, scaffold, topology
+            .combine(unit_opts, by: 0)                      // + opts, linear_complete
+            .map { id, path, scaffold, topology, annotate_opts, curate_opts, orf_opts, linear_complete ->
+                def partial = (topology == 'circular' || (linear_complete as Integer) == 1) ? 'no' : 'yes'
+                tuple(id, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts)
+            }
+            // Idempotent: an existing unit keeps its row and all of its state. Only
+            // topology/partial are refreshed, and only on a unit nobody has worked on
+            // yet (still switch 1, unlocked), because circularization can change a
+            // contig's topology between runs.
+            .sqlInsert(statement: '''INSERT INTO annotate
+                (ID, path, scaffold, topology, partial, annotate_opts, curate_opts, orf_opts,
+                 annotate_switch, annotate_lock, reviewed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 'no')
+                ON CONFLICT(ID, path, scaffold) DO UPDATE SET
+                  topology = excluded.topology,
+                  partial  = excluded.partial
+                WHERE annotate.annotate_switch = 1 AND annotate.annotate_lock = 0''', db: 'sqlite')
 
     emit:
         // tuple(id, assembly, opts_id) for single-contig BLAST search
