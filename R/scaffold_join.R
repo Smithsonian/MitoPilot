@@ -33,6 +33,44 @@ scaffold_join_eligible <- function(assemblies_df) {
   n_paths == 1 && max_scaf > 1
 }
 
+#' Which of a set of sample IDs are join-eligible
+#'
+#' Applies [scaffold_join_eligible()] per sample. Backs the app's "Redo
+#' scaffold join" action.
+#'
+#' @param ids Character vector of sample IDs to check.
+#' @param assemblies_df data.frame with `ID`, `path`, `scaffold` for those IDs.
+#' @return The subset of `ids` that are join-eligible.
+#' @noRd
+redo_join_eligible_ids <- function(ids, assemblies_df) {
+  eligible <- vapply(ids, function(id) {
+    scaffold_join_eligible(assemblies_df[assemblies_df$ID == id, , drop = FALSE])
+  }, logical(1))
+  ids[eligible]
+}
+
+#' Classify sample IDs for a scaffold-join redo request
+#'
+#' Combines join-eligibility with a check for missing published assembly
+#' output, so both preconditions of the "Redo scaffold join" action are
+#' testable without Shiny. Callers get `missing_ids` from
+#' [stale_assemble_dirs()] (`$ID` column).
+#'
+#' @param ids Character vector of requested sample IDs.
+#' @param assemblies_df data.frame with `ID`, `path`, `scaffold` for those IDs.
+#' @param missing_ids Character vector of IDs known to be missing published
+#'   assembly output.
+#' @return list with three character vectors partitioning `ids`: `ready`
+#'   (safe to set `join_switch = 1`), `not_eligible`, `missing_output`.
+#' @noRd
+redo_join_plan <- function(ids, assemblies_df, missing_ids = character(0)) {
+  eligible <- redo_join_eligible_ids(ids, assemblies_df)
+  not_eligible <- setdiff(ids, eligible)
+  missing_output <- intersect(eligible, missing_ids)
+  ready <- setdiff(eligible, missing_output)
+  list(ready = ready, not_eligible = not_eligible, missing_output = missing_output)
+}
+
 #' Choose a single reference accession for a multi-scaffold sample
 #'
 #' Scaffolds can carry different BLAST hits, but all must map to ONE reference or

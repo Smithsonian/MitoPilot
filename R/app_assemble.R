@@ -644,6 +644,80 @@ assemble_server <- function(id) {
       trigger("refresh_export")
     })
 
+    # Redo Scaffold Join ----
+    # Narrower than Set State: only queues the join (join_switch = 1),
+    # assemble_switch is left alone so this never re-enters assembly.
+    init("redo_join")
+    on("redo_join", {
+      req(session$userData$mode == "Assemble")
+      req(selected())
+      req(all(rv$data$assemble_lock[req(selected())] == 0))
+      ids <- unique(rv$data$ID[selected()])
+
+      asmb <- dplyr::tbl(session$userData$con, "assemblies") |>
+        dplyr::filter(ID %in% ids, path > 0) |>
+        dplyr::select(ID, path, scaffold) |>
+        dplyr::collect()
+      stale <- tryCatch(
+        stale_assemble_dirs(
+          session$userData$con,
+          session$userData$dir_out,
+          ids = ids,
+          pending_only = FALSE
+        ),
+        error = function(e) NULL
+      )
+      missing_ids <- if (!is.null(stale)) stale$ID else character(0)
+      plan <- redo_join_plan(ids, asmb, missing_ids)
+
+      if (length(plan$not_eligible) > 0 || length(plan$missing_output) > 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "Redo scaffold join not queued for some samples",
+          text = shiny::tags$div(
+            if (length(plan$not_eligible) > 0) {
+              shiny::tags$p(
+                "Not join-eligible (need exactly one assembler path fragmented ",
+                "into more than one scaffold): ",
+                tags$code(paste(plan$not_eligible, collapse = ", "))
+              )
+            },
+            if (length(plan$missing_output) > 0) {
+              shiny::tags$div(
+                shiny::tags$p(
+                  "Published assembly output is not on disk for a redo to use:"
+                ),
+                shiny::tags$ul(stale_assemble_items(
+                  stale[stale$ID %in% plan$missing_output, , drop = FALSE]
+                ))
+              )
+            },
+            shiny::tags$p(
+              if (length(plan$ready) > 0) {
+                "The rest of the selected samples were queued for a join redo."
+              } else {
+                "No samples were queued."
+              }
+            )
+          ),
+          html = TRUE,
+          type = if (length(plan$ready) > 0) "warning" else "error"
+        )
+      }
+      req(length(plan$ready) > 0)
+
+      upd <- data.frame(ID = plan$ready, join_switch = 1L, stringsAsFactors = FALSE)
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(
+          upd,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |> dplyr::rows_update(upd, by = "ID")
+      trigger("update_assemble_table")
+    })
+
     # Set Pre-process Opts ----
     observeEvent(input$set_pre_opts, {
       row <- as.numeric(input$set_pre_opts)

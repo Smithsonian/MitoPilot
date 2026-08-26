@@ -212,6 +212,11 @@ app_server <- function(input, output, session) {
   observeEvent(input$lock, {
     trigger("lock")
   })
+  # Redo Scaffold Join
+  #init("redo_join")
+  observeEvent(input$redo_join, {
+    trigger("redo_join")
+  })
   # Run
   init("run_modal")
   observeEvent(input$run_modal, {

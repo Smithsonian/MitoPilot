@@ -13,6 +13,41 @@ test_that("scaffold_join_eligible: single scaffold is not eligible", {
   expect_false(scaffold_join_eligible(df))
 })
 
+test_that("redo_join_eligible_ids keeps only join-eligible samples", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s3", "s3", "s3", "s3"),
+    path = c(1, 1, 1, 1, 1, 2, 2),
+    scaffold = c(1, 2, 1, 1, 2, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # s1: single path, 2 scaffolds -> eligible
+  # s2: single path, 1 scaffold -> not eligible
+  # s3: two paths -> not eligible
+  expect_equal(redo_join_eligible_ids(c("s1", "s2", "s3"), asmb), "s1")
+})
+
+test_that("redo_join_plan partitions ids into ready/not_eligible/missing_output", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s3", "s3"),
+    path = c(1, 1, 1, 1, 1),
+    scaffold = c(1, 2, 1, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # s1, s3 eligible; s2 is single-scaffold. s3's output is reported missing.
+  plan <- redo_join_plan(c("s1", "s2", "s3"), asmb, missing_ids = "s3")
+  expect_equal(plan$ready, "s1")
+  expect_equal(plan$not_eligible, "s2")
+  expect_equal(plan$missing_output, "s3")
+})
+
+test_that("redo_join_plan: nothing ready when all requested ids fail a check", {
+  asmb <- data.frame(ID = "s1", path = 1, scaffold = 1, stringsAsFactors = FALSE)
+  plan <- redo_join_plan("s1", asmb, missing_ids = character(0))
+  expect_equal(plan$ready, character(0))
+  expect_equal(plan$not_eligible, "s1")
+  expect_equal(plan$missing_output, character(0))
+})
+
 test_that("choose_reference weights by length * pident", {
   df <- data.frame(
     blast_accession = c("A", "B", "B"),
