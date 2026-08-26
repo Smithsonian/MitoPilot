@@ -77,3 +77,17 @@ test_that("contig_depth sums both copies rather than losing one", {
 test_that("contig_depth handles no alignments", {
   expect_equal(contig_depth(integer(0), integer(0), len = 5L), integer(5))
 })
+
+
+test_that("circ_length_label shows before and after when something was trimmed", {
+  expect_equal(circ_length_label(16996L, 400L), "16,996 -> 16,596")
+})
+
+test_that("circ_length_label shows one number when nothing was trimmed", {
+  expect_equal(circ_length_label(16596L, 0L), "16,596")
+})
+
+test_that("circ_length_label survives missing values", {
+  expect_equal(circ_length_label(NA_integer_, 400L), "unknown")
+  expect_equal(circ_length_label(16596L, NA_integer_), "16,596")
+})

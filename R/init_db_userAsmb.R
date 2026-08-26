@@ -420,6 +420,7 @@ new_db_userAsmb <- function(
       s_ctx_right TEXT,
       accepted INTEGER,
       reason TEXT,
+      contig_length INTEGER,
       trimmed INTEGER,
       junction_reads INTEGER,
       min_junction_reads INTEGER,

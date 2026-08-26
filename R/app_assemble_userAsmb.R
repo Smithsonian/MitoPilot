@@ -810,7 +810,7 @@ assemble_server_userAsmb <- function(id) {
       ev <- req(rv$circ_evidence)$overlap
       blocks <- data.frame(
         xmin = c(ev$qstart, ev$sstart), xmax = c(ev$qend, ev$send),
-        label = c("5' end", "3' end")
+        label = factor(c("5' end", "3' end"), levels = c("5' end", "3' end"))
       )
       ggplot2::ggplot() +
         ggplot2::geom_rect(

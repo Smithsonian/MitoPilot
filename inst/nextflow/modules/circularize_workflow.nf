@@ -9,9 +9,9 @@ params.sqlWriteCircNotes = 'UPDATE assemble SET circularize_notes = ? WHERE ID =
 params.sqlWriteCircOverlap = '''INSERT INTO circularize_overlap
     (ID, qstart, qend, sstart, send, length, pident, mismatches,
      aln_query, aln_subject, q_ctx_left, q_ctx_right, s_ctx_left, s_ctx_right,
-     accepted, reason, trimmed,
+     accepted, reason, contig_length, trimmed,
      junction_reads, min_junction_reads, window_bp, min_overhang, time_stamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ID) DO UPDATE SET
       qstart = excluded.qstart, qend = excluded.qend,
       sstart = excluded.sstart, send = excluded.send,
@@ -21,7 +21,7 @@ params.sqlWriteCircOverlap = '''INSERT INTO circularize_overlap
       q_ctx_left = excluded.q_ctx_left, q_ctx_right = excluded.q_ctx_right,
       s_ctx_left = excluded.s_ctx_left, s_ctx_right = excluded.s_ctx_right,
       accepted = excluded.accepted, reason = excluded.reason,
-      trimmed = excluded.trimmed,
+      contig_length = excluded.contig_length, trimmed = excluded.trimmed,
       junction_reads = excluded.junction_reads,
       min_junction_reads = excluded.min_junction_reads,
       window_bp = excluded.window_bp, min_overhang = excluded.min_overhang,
@@ -75,7 +75,8 @@ workflow CIRCULARIZE_userAsmb {
                                 row.q_ctx_left ?: '', row.q_ctx_right ?: '',
                                 row.s_ctx_left ?: '', row.s_ctx_right ?: '',
                                 row.accepted,
-                                row.reason ?: '', row.trimmed,
+                                row.reason ?: '', row.contig_length,
+                                row.trimmed,
                                 row.junction_reads ?: null,
                                 row.min_junction_reads, row.window_bp ?: null,
                                 row.min_overhang, params.ts) }
@@ -143,7 +144,8 @@ workflow CIRCULARIZE_userAsmb_noReads {
                                 row.q_ctx_left ?: '', row.q_ctx_right ?: '',
                                 row.s_ctx_left ?: '', row.s_ctx_right ?: '',
                                 row.accepted,
-                                row.reason ?: '', row.trimmed,
+                                row.reason ?: '', row.contig_length,
+                                row.trimmed,
                                 row.junction_reads ?: null,
                                 row.min_junction_reads, row.window_bp ?: null,
                                 row.min_overhang, params.ts) }

@@ -52,6 +52,39 @@ CIRC_BASE_COLORS <- c(
   T = "#8ab8f5", U = "#8ab8f5", `-` = "#BBBBBB"
 )
 
+#' Caption above a panel, matching the assembly details modal
+#'
+#' @param ... caption text
+#' @param top top margin in px
+#'
+#' @noRd
+circ_caption <- function(..., top = 10) {
+  div(
+    style = paste0("font-size: 11px; color: #555; margin: ", top, "px 0 4px 0;"),
+    ...
+  )
+}
+
+#' Contig length before and after trimming
+#'
+#' @param contig_length length of the contig handed to the search
+#' @param trimmed bp removed
+#'
+#' @return single label string
+#'
+#' @noRd
+circ_length_label <- function(contig_length, trimmed) {
+  if (length(contig_length) != 1L || is.na(contig_length)) {
+    return("unknown")
+  }
+  trimmed <- if (length(trimmed) != 1L || is.na(trimmed)) 0L else trimmed
+  if (trimmed <= 0L) {
+    return(format(contig_length, big.mark = ","))
+  }
+  paste0(format(contig_length, big.mark = ","), " -> ",
+         format(contig_length - trimmed, big.mark = ","))
+}
+
 #' Render the overlap alignment as scrollable coloured sequence
 #'
 #' HTML rather than a plot: a 1200 bp overlap drawn as tiles is a raster tens of
@@ -85,40 +118,61 @@ circularize_aln_html <- function(ov) {
   is_aln <- c(rep(FALSE, nl), rep(TRUE, nrow(aln)), rep(FALSE, nr))
   matched <- c(rep(NA, nl), aln$match, rep(NA, nr))
 
-  cell <- function(b, aligned) {
+  # A mismatched column is what the reader is hunting for, so it gets the loud
+  # mark and a matched column gets a faint tick.
+  cell <- function(b, aligned, mismatch) {
     if (identical(b, " ")) {
       return(tags$span(class = "mp-circ-b", HTML("&nbsp;")))
     }
     bg <- if (!aligned) "#EEEEEE" else CIRC_BASE_COLORS[[toupper(b)]] %||% "#666666"
     tags$span(
-      class = "mp-circ-b",
+      class = if (mismatch) "mp-circ-b mp-circ-x" else "mp-circ-b",
       style = paste0("background:", bg, ";", if (!aligned) "color:#888888;" else ""),
       b
     )
   }
   bar <- function(m) {
-    tags$span(class = "mp-circ-b", if (is.na(m)) HTML("&nbsp;") else if (m) "|" else HTML("&nbsp;"))
+    if (is.na(m)) {
+      tags$span(class = "mp-circ-b", HTML("&nbsp;"))
+    } else if (m) {
+      tags$span(class = "mp-circ-b mp-circ-match", HTML("&nbsp;"))
+    } else {
+      tags$span(class = "mp-circ-b mp-circ-mm", HTML("&nbsp;"))
+    }
   }
 
   row <- function(label, content) {
     div(class = "mp-circ-row", tags$span(class = "mp-circ-lab", label), content)
   }
 
+  n_mm <- sum(!aln$match)
   tagList(
     tags$style(HTML(paste0(
-      ".mp-circ-scroll{overflow-x:auto;white-space:nowrap;border:1px solid #DDD;",
-      "padding:6px 0;background:#FFF;}",
-      ".mp-circ-row{white-space:nowrap;line-height:1.5;}",
+      ".mp-circ-scroll{overflow-x:auto;white-space:nowrap;border:1px solid #ddd;",
+      "border-radius:4px;padding:8px 0;background:#FFF;}",
+      ".mp-circ-row{white-space:nowrap;line-height:1.4;}",
       ".mp-circ-lab{display:inline-block;width:70px;font-size:11px;color:#555;",
       "text-align:right;padding-right:8px;position:sticky;left:0;background:#FFF;}",
       ".mp-circ-b{display:inline-block;width:11px;text-align:center;",
-      "font-family:monospace;font-size:12px;}"
+      "font-family:\"Courier New\", Courier, monospace;font-size:12px;}",
+      ".mp-circ-match{border-top:1px solid #CCC;height:6px;}",
+      ".mp-circ-mm{background:#E55330;height:8px;border-radius:1px;}",
+      ".mp-circ-x{outline:1px solid #E55330;outline-offset:-1px;font-weight:bold;}"
     ))),
     div(
       class = "mp-circ-scroll",
-      row("5' end", lapply(seq_along(q_all), function(i) cell(q_all[i], is_aln[i]))),
+      row("5' end", lapply(seq_along(q_all), function(i) cell(q_all[i], is_aln[i], isTRUE(!matched[i])))),
       row("", lapply(matched, bar)),
-      row("3' end", lapply(seq_along(s_all), function(i) cell(s_all[i], is_aln[i])))
+      row("3' end", lapply(seq_along(s_all), function(i) cell(s_all[i], is_aln[i], isTRUE(!matched[i]))))
+    ),
+    div(
+      style = "font-size: 11px; color: #555; margin: 4px 0 0 0;",
+      if (n_mm == 0L) {
+        "No mismatches: the two copies are identical over the whole overlap."
+      } else {
+        paste0(n_mm, " mismatched position", if (n_mm == 1L) "" else "s",
+               " marked in red.")
+      }
     )
   )
 }
@@ -177,11 +231,12 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
     tags$p(tags$b(outcome), if (!is.na(ov$reason) && nzchar(ov$reason)) paste0(": ", ov$reason)),
     reactable::reactable(
       data.frame(
+        `Contig length (bp)` = circ_length_label(ov$contig_length, ov$trimmed),
         `Aligned length (bp)` = ov$length,
         `Identity (%)` = ov$pident,
         Mismatches = ov$mismatches,
-        `Contig start` = paste0(ov$qstart, "-", ov$qend),
-        `Contig end` = paste0(ov$sstart, "-", ov$send),
+        `5' copy` = paste0(ov$qstart, "-", ov$qend),
+        `3' copy` = paste0(ov$sstart, "-", ov$send),
         `Trimmed (bp)` = ov$trimmed,
         `Junction reads` = ifelse(
           is.na(ov$junction_reads), "no reads",
@@ -191,31 +246,27 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
       ),
       compact = TRUE, sortable = FALSE, highlight = FALSE
     ),
-    tags$hr(),
-    tags$b("Where the overlap sits"),
+    circ_caption("Where the overlap sits on the contig:", top = 14),
     plotOutput(ns("circ_schematic"), height = "90px"),
-    tags$b("Aligned copies"),
-    opts_help(
-      "The whole overlap, with up to 50 bp of flanking contig sequence greyed ",
-      "either side. Scroll sideways to read it. The bar between the rows marks ",
-      "matching positions."
-    ),
+    circ_caption(paste(
+      "The whole overlap, with up to 50 bp of flanking contig sequence greyed",
+      "either side. Scroll sideways to read it:"
+    ), top = 14),
     circularize_aln_html(ov),
     if (nrow(depth) > 0L) {
       tagList(
-        tags$b("Read depth across the junction"),
-        opts_help(
-          "The assembly's own depth either side of the seam, and how much of it ",
-          "comes from reads that actually cross the seam. A real circular ",
-          "junction shows depth carrying across it, not falling away."
-        ),
+        circ_caption(paste(
+          "Assembly depth either side of the seam, the 3' end to the left and",
+          "the 5' end to the right, and how much of it comes from reads that",
+          "cross the seam. A real junction carries depth straight across:"
+        ), top = 14),
         plotOutput(ns("circ_depth"), height = "200px")
       )
     } else {
-      tags$p(tags$em(
-        "No junction coverage: this project has no raw reads, or the overlap ",
+      circ_caption(paste(
+        "No junction coverage: this project has no raw reads, or the overlap",
         "was not used, so no reads were mapped."
-      ))
+      ), top = 14)
     },
     footer = modalButton("Close")
   ))

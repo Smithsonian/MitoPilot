@@ -95,7 +95,8 @@ backwards_compatibility <- function(
       all(c("circularize_opts", "circularize_notes", "find_mito_opts",
             "find_mito_notes") %in% names(assemble_table)) &&
       isTRUE(tryCatch(
-        all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right") %in%
+        all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right",
+              "contig_length") %in%
               DBI::dbListFields(con, "circularize_overlap")),
         error = function(e) FALSE
       ))
@@ -549,6 +550,7 @@ backwards_compatibility <- function(
           s_ctx_right TEXT,
           accepted INTEGER,
           reason TEXT,
+          contig_length INTEGER,
           trimmed INTEGER,
           junction_reads INTEGER,
           min_junction_reads INTEGER,
@@ -562,12 +564,16 @@ backwards_compatibility <- function(
       # Projects migrated before the modal showed contig context around the
       # overlap. Values arrive on the next circularization run.
       overlap_fields <- DBI::dbListFields(con, "circularize_overlap")
-      for (col in c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right")) {
+      added <- c(q_ctx_left = "TEXT", q_ctx_right = "TEXT",
+                 s_ctx_left = "TEXT", s_ctx_right = "TEXT",
+                 contig_length = "INTEGER")
+      for (col in names(added)) {
         if (!(col %in% overlap_fields)) {
           message("added '", col, "' column to circularize_overlap table")
           DBI::dbExecute(
             con,
-            paste0("ALTER TABLE circularize_overlap ADD COLUMN ", col, " TEXT")
+            paste0("ALTER TABLE circularize_overlap ADD COLUMN ", col, " ",
+                   added[[col]])
           )
         }
       }
@@ -2109,7 +2115,8 @@ schema_gaps <- function(con) {
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%
                 DBI::dbListTables(con))) ||
-       !has(all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right") %in%
+       !has(all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right",
+                  "contig_length") %in%
                 DBI::dbListFields(con, "circularize_overlap"))))) {
     gaps <- c(gaps, "the circularization evidence tables are missing or out of date")
   }
