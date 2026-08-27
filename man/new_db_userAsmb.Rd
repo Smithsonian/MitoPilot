@@ -122,6 +122,11 @@ of the ORF length, before an ORF is discarded (default = 0.1)}
 
 \item{min_assembly_length}{Minimum scaffold length to include in analysis (default = 500)}
 
+\item{join_scaffolds}{(logical) Order a fragmented single-path assembly
+against its BLAST reference into one joined sequence during WF1 (default =
+FALSE). Samples whose contigs match different reference mitogenomes are
+left alone.}
+
 \item{find_mitogenome}{Search each user-supplied assembly for its
 mitochondrial contigs before the rest of WF1 runs (default = FALSE). See
 [find_mito()].}
