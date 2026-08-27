@@ -13,6 +13,7 @@ circularize_asmb(
   min_junction_reads = 5,
   min_overhang = 30,
   cpus = 4,
+  max_contigs = 100,
   out_fn = NULL,
   log_fn = NULL,
   id = "sample",
@@ -36,6 +37,10 @@ circularize_asmb(
 (default = 30)}
 
 \item{cpus}{Number of CPUs for read mapping (default = 4)}
+
+\item{max_contigs}{Most contigs an assembly may hold before the attempt is
+skipped altogether (default = 100). Guards a draft genome that reached this
+step without a mitogenome search to trim it down first.}
 
 \item{out_fn}{Path for the output fasta. Defaults to overwriting nothing and
 returning the result only.}

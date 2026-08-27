@@ -184,6 +184,9 @@ circularize_contig <- function(seq,
 #' @param min_overhang Bases a read must extend past the junction on each side
 #'   (default = 30)
 #' @param cpus Number of CPUs for read mapping (default = 4)
+#' @param max_contigs Most contigs an assembly may hold before the attempt is
+#'   skipped altogether (default = 100). Guards a draft genome that reached this
+#'   step without a mitogenome search to trim it down first.
 #' @param out_fn Path for the output fasta. Defaults to overwriting nothing and
 #'   returning the result only.
 #' @param log_fn Optional path for a plain-text log
@@ -207,6 +210,7 @@ circularize_asmb <- function(
     min_junction_reads = 5,
     min_overhang = 30,
     cpus = 4,
+    max_contigs = 100,
     out_fn = NULL,
     log_fn = NULL,
     id = "sample",
@@ -218,7 +222,11 @@ circularize_asmb <- function(
   # mito_candidates table.
   contigs <- sub("\\s.*$", "", names(assembly))
 
-  results <- lapply(seq_along(assembly), function(i) {
+  # Too many contigs to self-BLAST one by one. Everything is passed through
+  # unchanged and no per-contig topology is claimed.
+  skipped <- length(assembly) > max_contigs
+
+  results <- if (skipped) list() else lapply(seq_along(assembly), function(i) {
     res <- circularize_contig(
       as.character(assembly[[i]]),
       paired_reads_1 = paired_reads_1,
@@ -236,11 +244,18 @@ circularize_asmb <- function(
     if (length(results) == 1L) res$log else paste0(res$contig, ": ", res$log)
   }), use.names = FALSE)
 
-  sequence <- Biostrings::DNAStringSet(
-    vapply(results, function(res) res$sequence, character(1))
-  ) |> setNames(names(assembly))
+  sequence <- if (skipped) {
+    assembly
+  } else {
+    Biostrings::DNAStringSet(
+      vapply(results, function(res) res$sequence, character(1))
+    ) |> setNames(names(assembly))
+  }
 
-  note <- if (length(results) == 0L) {
+  note <- if (skipped) {
+    paste0("not attempted: ", length(assembly), " contigs exceeds max_contigs (",
+           max_contigs, ")")
+  } else if (length(results) == 0L) {
     "not attempted: assembly contains no contigs"
   } else if (length(results) == 1L) {
     results[[1]]$note

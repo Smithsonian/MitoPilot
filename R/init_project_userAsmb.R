@@ -5,10 +5,11 @@
 #' @param mapping_fn Path to a mapping file. Should be a csv that minimally
 #'   includes an `ID` column with a unique identifier for each sample, a `Taxon`
 #'   column containing taxonomic information for each sample, and columns
-#'   `R1` and `R2` specifying the names of the raw paired read inputs, an `Assembly` column
-#'   containing names of mitogenome assembly fasta files (one contig/scaffold sequence per sample),
-#'   and a `Topology` column containing information about the assembly topology
-#'   ("circular" or "linear") May include additional columns with other sample metadata.
+#'   `R1` and `R2` specifying the names of the raw paired read inputs, and an `Assembly`
+#'   column containing names of assembly fasta files. An optional `Topology` column
+#'   ("circular" or "linear") declares the topology of a single-contig assembly; an
+#'   assembly holding more than one contig is recorded as "multi" and any declaration
+#'   is ignored. May include additional columns with other sample metadata.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param data_path Path to the directory where the raw data is located. Can be
@@ -183,6 +184,7 @@ new_project_userAsmb <- function(
     genetic_code = genetic_code,
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
+    assembly_path = assembly_path,
     no_raw_data = no_raw_data,
     attempt_circularization = attempt_circularization,
     join_scaffolds = join_scaffolds,

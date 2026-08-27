@@ -63,6 +63,8 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::mutate(topology = dplyr::case_when(
       !is.na(unit_topology) ~ unit_topology,
       is.na(topology) ~ NA_character_,
+      # "multi" is derived from the assembly, not declared by the user.
+      topology == "multi" ~ "multi",
       .default = paste0(topology, " (declared)")
     )) |>
     dplyr::select(-unit_topology) |>

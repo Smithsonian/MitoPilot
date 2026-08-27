@@ -47,6 +47,7 @@ articles:
   navbar: Usage
   contents:
   - 'Your-Own-Project'
+  - 'Your-Own-Assemblies'
   - 'Difficult-Assemblies'
   - 'Ruleset-Browser'
   - 'Curation-and-Validation'

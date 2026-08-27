@@ -48,14 +48,78 @@ test_that("a nuclear scaffold carrying a NUMT is rejected by the fraction rule",
   expect_match(numt$reason, "possible NUMT")
 })
 
-test_that("contigs matching a different reference are dropped", {
+test_that("off-reference junk is recorded with a reason, not selected", {
   hits <- rbind(
     hit("ctg1", "NC_001", 98, 16400, 30000, 16500),
-    hit("ctg9", "NC_999", 99, 900, 1500, 1000)
+    hit("numt9", "NC_999", 92, 900, 1500, 100000)
   )
   res <- select_mito_contigs(hits)
   expect_equal(res$candidates, "ctg1")
-  expect_false("ctg9" %in% res$evidence$contig)
+  junk <- res$evidence[res$evidence$contig == "numt9", ]
+  expect_equal(junk$selected, 0L)
+  expect_match(junk$reason, "possible NUMT")
+})
+
+test_that("two mitogenomes from different references are both kept", {
+  # Contamination: the sample carries its own mitogenome and a second species'.
+  # The whole-sample vote picks one reference, so the second used to vanish.
+  hits <- rbind(
+    hit("mito_1", "NC_001", 99, 16400, 30000, 16500),
+    hit("mito_2", "NC_999", 99, 15900, 28000, 16100)
+  )
+  res <- select_mito_contigs(hits)
+  expect_equal(res$candidates, c("mito_1", "mito_2"))
+  expect_equal(res$accession, c("NC_001", "NC_999"))
+  expect_equal(res$evidence$accession[res$evidence$contig == "mito_2"], "NC_999")
+  expect_equal(res$evidence$rank[res$evidence$contig == "mito_2"], 2L)
+})
+
+test_that("each contig is scored against one reference only", {
+  # mito_1 hits both references; it must not be re-evaluated in the second
+  # round, or it would appear twice in the evidence table.
+  hits <- rbind(
+    hit("mito_1", "NC_001", 99, 16400, 30000, 16500),
+    hit("mito_1", "NC_002", 90, 15000, 20000, 16500),
+    hit("mito_2", "NC_999", 99, 15900, 28000, 16100)
+  )
+  res <- select_mito_contigs(hits)
+  expect_equal(sum(res$evidence$contig == "mito_1"), 1L)
+  expect_equal(res$candidates, c("mito_1", "mito_2"))
+})
+
+test_that("the search stops at the first reference with no passing contig", {
+  # NC_555 outscores NC_777 but only carries a NUMT, so the search stops there
+  # and never reaches NC_777.
+  hits <- rbind(
+    hit("mito_1", "NC_001", 99, 16400, 30000, 16500),
+    hit("numt_a", "NC_555", 95, 9000, 15000, 900000),
+    hit("mito_3", "NC_777", 99, 5000, 9000, 5100)
+  )
+  res <- select_mito_contigs(hits)
+  expect_equal(res$candidates, "mito_1")
+  expect_equal(res$accession, c("NC_001", "NC_555"))
+  expect_false("mito_3" %in% res$evidence$contig)
+})
+
+test_that("the candidate cap is a budget shared across references", {
+  hits <- rbind(
+    hit("a1", "NC_001", 99, 6000, 11000, 6100),
+    hit("a2", "NC_001", 99, 5000, 10000, 5100),
+    hit("b1", "NC_999", 99, 4000, 7000, 4100),
+    hit("b2", "NC_999", 99, 3000, 6000, 3100)
+  )
+  res <- select_mito_contigs(hits, max_candidates = 3)
+  expect_equal(res$candidates, c("a1", "a2", "b1"))
+  expect_match(res$evidence$reason[res$evidence$contig == "b2"], "3-candidate cap")
+})
+
+test_that("max_references bounds how many mitogenomes are reported", {
+  hits <- do.call(rbind, lapply(1:4, function(i) {
+    hit(paste0("mito_", i), paste0("NC_00", i), 99, 16000 - i, 30000 - i, 16100)
+  }))
+  res <- select_mito_contigs(hits, max_references = 2)
+  expect_length(res$accession, 2L)
+  expect_equal(res$candidates, c("mito_1", "mito_2"))
 })
 
 test_that("low identity and short alignments are rejected", {

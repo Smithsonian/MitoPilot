@@ -1,0 +1,259 @@
+---
+title: "Using Your Own Assemblies"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Using Your Own Assemblies}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+/* Smithsonian palette: blue #009CDE, yellow #FFCD00, black #101820 */
+.alert-hydra {
+  border-color: #101820;
+  background-color: #E7F6FC;
+  color: #101820;
+}
+.alert-hydra .hydra-tag {
+  display: inline-block;
+  background-color: #FFCD00;
+  color: #101820;
+  font-size: 0.75em;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-right: 6px;
+  vertical-align: 2px;
+}
+strong { font-weight: bold; }
+img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+.figure { margin: 1.2em 0; }
+.figure .caption, p.caption {
+  font-size: 0.82em;
+  line-height: 1.35;
+  color: #6c757d;
+  font-style: italic;
+  margin-top: 0.4em;
+}
+.part-break {
+  border: none;
+  border-top: 3px solid #c9d1d6;
+  margin: 2.2em 0 1.6em;
+}
+.step-nav {
+  margin: 0 0 2.5em;
+  padding-bottom: 1.2em;
+  border-bottom: 1px solid #dde3e6;
+}
+.step-nav.no-rule {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* pandoc wraps the row contents in a <p>, so that is the flex container. */
+.step-nav p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.step-nav .step-label {
+  font-weight: 600;
+  color: #6b7b85;
+  margin-right: 4px;
+}
+.step-nav a,
+.step-nav .current {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none !important;
+  border: 1px solid #c8dde5;
+}
+.step-nav a {
+  background-color: #e4f0f4;
+  color: #1f6f8b !important;
+}
+.step-nav a:hover,
+.step-nav a:focus {
+  background-color: #d3e7ee;
+  color: #17566b !important;
+  text-decoration: none !important;
+}
+.step-nav .current {
+  background-color: #1f6f8b;
+  color: #ffffff;
+  border-color: #1f6f8b;
+}
+</style>
+
+If your mitogenomes were assembled elsewhere, for example by mapping to a reference
+in Geneious, use `new_project_userAsmb()` instead. MitoPilot will skip assembly
+and let you perform annotation, curation, and export.
+
+The basics every project shares, what you need, how the mapping file is laid
+out, and how a project is initialized, are covered in
+[Starting Your Own Project](Your-Own-Project.html). Read that first if you have
+not already; this page only covers what differs.
+
+## Setting up the project
+
+A user-assembly project needs one extra column in the mapping file, plus an
+optional second:
+
+| Column | Contents |
+|---|---|
+| `Assembly` | File name of the assembly FASTA for the sample (one file per sample) |
+| `Topology` | Optional. `circular` or `linear`, for a single-contig assembly only |
+
+`Topology` is your statement about a finished mitogenome you are handing over:
+say `circular` and MitoPilot will not try to circularize it, say `linear` (or
+leave the column out) and it may. It only applies to an assembly holding a
+single contig. If the FASTA holds more than one contig, there is no single
+answer to give, so MitoPilot records the sample as `multi`, ignores anything you
+declared, and works out each contig's own topology as the pipeline runs. 
+
+```r
+new_project_userAsmb(
+  path = "~/my_assemblies/run_01",
+  mapping_fn = "~/my_assemblies/mapping.csv",
+  data_path = "~/my_assemblies/raw_data",
+  assembly_path = "~/my_assemblies/assemblies",
+  executor = "local"
+)
+```
+
+You still run the Assemble module, but it only maps reads to your assemblies to
+compute coverage and error rates.
+
+If you have no reads at all, set `no_raw_data = TRUE` and omit `data_path`.
+MitoPilot will skip read mapping entirely and hide the coverage columns that
+depend on it.
+
+<div class="alert alert-warning">
+<strong>Warning.</strong> A project holds either MitoPilot assemblies or
+externally supplied ones, never both. Use separate projects if you have a mix.
+</div>
+
+## Finding the mitogenome in a whole assembly
+
+If your FASTA files hold whole assemblies rather than mitogenomes, thousands or
+even millions of contigs each, set `find_mitogenome = TRUE`. MitoPilot will
+locate the mitochondrial contigs before anything else runs:
+
+```r
+# add to the new_project_userAsmb() call above:
+  find_mitogenome = TRUE,
+  mitofinder_db = "~/dbs/mitofinder_Percidae_refseq.gb",
+```
+
+MitoPilot BLASTs every contig against a bundled metazoan mitogenome database,
+then confirms the best candidates by annotating them with MitoFinder. Only
+confirmed contigs continue through the pipeline, as scaffolds of the sample's
+assembly.
+
+A nuclear scaffold carrying a mitochondrial insertion (a NUMT) matches only a
+sliver of its own length, and is rejected on that basis. A sample carrying two
+mitogenomes, its own and a contaminant's, yields both. A sample where nothing is
+confirmed is marked failed with a note, and the rest of your samples carry on.
+
+<div class="alert alert-warning">
+<strong>Required.</strong> The confirmation step needs a MitoFinder GenBank
+database for your clade. Build one with
+`custom_assembly_db(clade = "<your clade>", db_type = "mitofinder")` and pass its
+`.gb` file as `mitofinder_db`. Project creation refuses the search without it.
+</div>
+
+The **Mito Search** column of the Assemble table summarizes each sample. Click
+the summary to open the full evidence: every contig considered, its length, the
+reference it matched, percent identity, how much of the contig aligned, how many
+mitochondrial genes it carried, and why it was kept or dropped. Thresholds
+live in the **Find Mito Opts.** modal, and a per-sample log is written to
+`out/<ID>/assemble/user/find_mito.log`.
+
+On a real genome skim of 1.4 million contigs, the search returned the single
+16,891 bp mitochondrial contig in about two minutes.
+
+## Circularizing linear assemblies
+
+Assemblers sometimes report a circular mitogenome as a linear contig whose end
+repeats its start. Set `attempt_circularization = TRUE` and MitoPilot will try
+to close linear contigs for you during the Assemble module:
+
+```r
+# add to the new_project_userAsmb() call above:
+  attempt_circularization = TRUE,
+```
+
+Each eligible contig is compared against itself with BLAST. Every sample is
+considered except those you declared `circular`, since you have already told
+MitoPilot those are closed. A multi-contig assembly is eligible too, and each of
+its contigs is attempted on its own. Click a sample's **Circularize Opts.** cell
+to adjust the thresholds for circularization.
+
+If the contig ends overlap, the duplicate end is trimmed and the sample is relabeled
+`circular`. When you have raw reads, MitoPilot also maps them across the
+new junction and leaves the assembly linear unless enough reads span it. This
+mitigates the issue of repeats being mistaken for a real circle.
+
+The outcome for every sample appears in the **Circularization** column of the
+Assemble table:
+
+| Note | Meaning |
+|---|---|
+| `circular: trimmed 231 bp overlap, 42 junction reads` | Closed, with read support |
+| `circular: trimmed 231 bp overlap (no reads to confirm)` | Closed in a `no_raw_data` project |
+| `linear: no self-overlap found` | The contig ends do not overlap |
+| `linear: 231 bp overlap found but only 2 junction reads (5 required)` | Overlap present, reads did not back it up |
+| `not attempted: 4,812 contigs exceeds max_contigs (100)` | Too big to work through contig by contig |
+
+That last case only comes up on a whole draft assembly that reached this step
+without a mitogenome search to narrow it down first. Turn on `find_mitogenome`
+and circularization will see only the confirmed mitochondrial contigs.
+
+Click the summary to see where the overlap sits, the two copies aligned base by
+base, and the read depth across the seam. A sample whose overlap was found but
+rejected shows the threshold it missed.
+
+## Joining fragmented assemblies
+
+Some assemblers leave the mitogenome split into more than one contig. 
+Set `join_scaffolds = TRUE` and MitoPilot will order a sample's
+contigs against its BLAST reference and join them into a single sequence
+during the Assemble module:
+
+```r
+# add to the new_project_userAsmb() call above:
+  join_scaffolds = TRUE,
+```
+
+A sample is eligible when it has a single assembler path made up of more than
+one contig. If those contigs match different reference mitogenomes, MitoPilot
+leaves them separate for review rather than joining them, so a contaminated
+sample is never spliced into a chimera; the reason is left in the sample's
+notes.
+
+Because eligibility is any multi-contig assembly, not just mitochondrial
+scaffolds, use `join_scaffolds` alongside `find_mitogenome = TRUE` on
+whole-genome assemblies, so the join only sees contigs already confirmed
+mitochondrial.
+
+The joined result can be reviewed and adjusted by hand in the app, and
+re-queued at any time with the **Redo Scaffold Join** button.
+

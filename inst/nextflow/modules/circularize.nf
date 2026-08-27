@@ -57,6 +57,10 @@ process circularize {
         paste(ctg$contig, if (ctg$circular) "circular" else "linear"),
         character(1)), "!{outDir}/topology_map.txt");
       writeLines(res$note, "!{outDir}/note.txt")'
+
+    # No map means nothing was examined (too many contigs, or none at all), so
+    # no contig gets a topology claimed for it.
+    [ -s !{outDir}/topology_map.txt ] || echo "* unknown" > !{outDir}/topology_map.txt
     '''
 }
 
@@ -113,5 +117,9 @@ process circularize_noReads {
         paste(ctg$contig, if (ctg$circular) "circular" else "linear"),
         character(1)), "!{outDir}/topology_map.txt");
       writeLines(res$note, "!{outDir}/note.txt")'
+
+    # No map means nothing was examined (too many contigs, or none at all), so
+    # no contig gets a topology claimed for it.
+    [ -s !{outDir}/topology_map.txt ] || echo "* unknown" > !{outDir}/topology_map.txt
     '''
 }

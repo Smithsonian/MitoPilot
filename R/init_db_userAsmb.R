@@ -1,10 +1,15 @@
 #' Initialize a new project database
 #'
 #' @param db_path Path to the new database file
-#' @param mapping_fn Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", "R2", "Assembly", and "Topology"
+#' @param mapping_fn Path to the mapping CSV file. Must contain columns "ID",
+#'   "Taxon, "R1", "R2", and "Assembly". An optional "Topology" column may
+#'   declare "circular" or "linear" for a single-contig assembly.
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
+#' @param assembly_path Directory holding the user-supplied assembly files. Used
+#'   to count each assembly's contigs so a multi-contig assembly is recorded with
+#'   topology "multi".
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset; a number sets an override on the
 #'   default curate_opts set. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
@@ -77,6 +82,7 @@ new_db_userAsmb <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    assembly_path = NULL,
     genetic_code = NULL,
     # Default annotation options
     annotate_cpus = 6,
@@ -164,21 +170,11 @@ new_db_userAsmb <- function(
     stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
   }
 
-  # check for assembly and topology columns
+  # check for the assembly column; Topology is optional
   if ("Assembly" %nin% colnames(mapping)) {
     stop("Mapping file missing Assembly column")
   }
-  if ("Topology" %nin% colnames(mapping)) {
-    stop("Mapping file missing Topology column")
-  }
-
-  # Confirm topology field contains only lowercase "linear" or "circular"
-  if (any(mapping$Topology %nin% c("circular", "linear"))) {
-    bad_IDs <- mapping[[mapping_id]][mapping$Topology %nin% c("circular", "linear")]
-    message("problematic samples:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
-  }
+  validate_declared_topology(mapping, mapping_id = mapping_id)
 
   # No raw reads: R1/R2 are not needed, so tolerate their absence in the mapping.
   # Added here (before samples/preprocess are built) so both tables carry the
@@ -208,10 +204,10 @@ new_db_userAsmb <- function(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code,
-      topology = .data[["Topology"]],
+      topology = resolve_sample_topology(mapping, assembly_path, mapping_id),
       assembly = .data[["Assembly"]]
     ) |>
-    dplyr::select(-Topology, -Assembly)
+    dplyr::select(-dplyr::any_of("Topology"), -Assembly)
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},

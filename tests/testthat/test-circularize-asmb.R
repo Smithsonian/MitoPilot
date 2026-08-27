@@ -411,3 +411,24 @@ test_that("the evidence writer emits one block of rows per contig", {
   expect_equal(dp$contig, c(rep("frag1", 3), rep("frag2", 2)))
   expect_equal(nrow(unique(dp[, c("ID", "contig", "position")])), nrow(dp))
 })
+
+test_that("an assembly with too many contigs is passed through untouched", {
+  # No blastn needed: the point is that nothing is attempted. A draft genome
+  # that skipped the mitogenome search would otherwise be self-BLASTed contig
+  # by contig.
+  td <- withr::local_tempdir()
+  asm_fn <- file.path(td, "asm.fasta")
+  writeLines(vapply(1:5, function(i) {
+    paste0(">contig", i, "\n", random_seq(1000, seed = i))
+  }, character(1)), asm_fn)
+
+  out_fn <- file.path(td, "out.fasta")
+  res <- circularize_asmb(asm_fn, out_fn = out_fn, max_contigs = 4)
+
+  expect_length(res$contigs, 0L)
+  expect_false(res$circular)
+  expect_match(res$note, "not attempted")
+  expect_match(res$note, "5 contigs")
+  expect_equal(as.character(Biostrings::readDNAStringSet(out_fn)),
+               as.character(Biostrings::readDNAStringSet(asm_fn)))
+})

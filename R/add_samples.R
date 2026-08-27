@@ -56,15 +56,7 @@ add_samples <- function(
     stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
   }
 
-  if ("Topology" %in% colnames(mapping)) {
-    # Confirm topology field contains only lowercase "linear" or "circular"
-    if (any(mapping$Topology %nin% c("circular", "linear"))) {
-      bad_IDs <- mapping[[mapping_id]][mapping$Topology %nin% c("circular", "linear")]
-      message("problematic samples:")
-      message(paste(bad_IDs, collapse=", "))
-      stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
-    }
-  }
+  validate_declared_topology(mapping, mapping_id = mapping_id)
 
   # genetic_code auto-selects from each sample's curation ruleset; it is filled
   # in below by .sync_sample_genetic_codes() after the annotate rows (which carry
@@ -77,16 +69,16 @@ add_samples <- function(
 
   # Metadata table ----
   ##############################################################################################################
-  if("Assembly" %in% colnames(mapping) & "Topology" %in% colnames(mapping)){
+  if("Assembly" %in% colnames(mapping)){
     mapping <- mapping |>
       dplyr::mutate(
         ID = .data[[mapping_id]],
         Taxon = .data[[mapping_taxon]],
         genetic_code = genetic_code,
-        topology = .data[["Topology"]],
+        topology = resolve_sample_topology(mapping, project_asmb_dir(path), mapping_id),
         assembly = .data[["Assembly"]],
       ) |>
-      dplyr::select(-Topology, -Assembly)
+      dplyr::select(-dplyr::any_of("Topology"), -Assembly)
   } else {
     mapping <- mapping |>
       dplyr::mutate(

@@ -5,6 +5,15 @@
 #' reference the sample as a whole matches best and keep the contigs that match
 #' it convincingly.
 #'
+#' The vote runs in rounds. Each round scores only the contigs that hit that
+#' round's winning reference, then drops all of them from the pool, pass or
+#' fail, so every contig is judged against exactly one reference. Rounds keep
+#' the anti-splitting behaviour within a mitogenome while letting a second,
+#' unrelated mitogenome (a contaminant, or a mixed sample) win its own round.
+#' The search stops at the first round that selects nothing: references are
+#' visited strongest first, so a reference carrying only NUMT-grade hits means
+#' the weaker ones behind it carry less.
+#'
 #' The fraction rule is the NUMT filter: a real mitochondrial contig is almost
 #' entirely mitochondrial, while a nuclear scaffold carrying a NUMT aligns over
 #' a tiny slice of itself.
@@ -16,11 +25,14 @@
 #' @param min_aligned_length Aligned bases required (default = 300)
 #' @param min_aligned_fraction Fraction of the contig the alignment must cover
 #'   (default = 0.5)
-#' @param max_candidates Most contigs carried into confirmation (default = 20)
+#' @param max_candidates Most contigs carried into confirmation, counted across
+#'   all references (default = 20)
+#' @param max_references Most references the vote may award, a safety net on
+#'   very messy assemblies (default = 5)
 #'
-#' @return a list with `accession` (the winning reference, NA when there are no
-#'   hits), `candidates` (character vector of contig names, best first) and
-#'   `evidence` (one row per contig that hit the winning reference, with the
+#' @return a list with `accession` (the winning references in the order they
+#'   won, NA when there are no hits), `candidates` (character vector of contig
+#'   names, best first) and `evidence` (one row per contig scored, with the
 #'   numbers behind the call and a `reason` for anything dropped)
 #'
 #' @export
@@ -29,7 +41,8 @@ select_mito_contigs <- function(hits,
                                 min_identity = 70,
                                 min_aligned_length = 300,
                                 min_aligned_fraction = 0.5,
-                                max_candidates = 20) {
+                                max_candidates = 20,
+                                max_references = 5) {
   empty <- data.frame(
     contig = character(0), length = integer(0), accession = character(0),
     pident = numeric(0), aligned_length = integer(0),
@@ -52,16 +65,75 @@ select_mito_contigs <- function(hits,
       .groups = "drop"
     )
 
-  # The whole sample votes for one reference, so a mitogenome broken across
-  # several contigs is not split between near-identical references.
-  winner <- per_ref |>
-    dplyr::group_by(.data$saccver) |>
-    dplyr::summarise(total = sum(.data$bitscore), .groups = "drop") |>
-    dplyr::arrange(dplyr::desc(.data$total)) |>
-    dplyr::slice(1) |>
-    dplyr::pull(.data$saccver)
+  pool <- per_ref
+  rounds <- list()
+  candidates <- character(0)
+  accessions <- character(0)
 
-  scored <- per_ref |>
+  for (i in seq_len(max_references)) {
+    if (nrow(pool) == 0L || length(candidates) >= max_candidates) {
+      break
+    }
+
+    # The contigs still in the pool vote for one reference, so a mitogenome
+    # broken across several contigs is not split between near-identical
+    # references.
+    winner <- pool |>
+      dplyr::group_by(.data$saccver) |>
+      dplyr::summarise(total = sum(.data$bitscore), .groups = "drop") |>
+      dplyr::arrange(dplyr::desc(.data$total)) |>
+      dplyr::slice(1) |>
+      dplyr::pull(.data$saccver)
+
+    evidence <- score_against_reference(
+      pool, winner,
+      min_identity = min_identity,
+      min_aligned_length = min_aligned_length,
+      min_aligned_fraction = min_aligned_fraction,
+      max_candidates = max_candidates,
+      n_taken = length(candidates)
+    )
+
+    rounds[[length(rounds) + 1L]] <- evidence
+    accessions <- c(accessions, winner)
+    kept <- evidence$contig[evidence$selected == 1L]
+    candidates <- c(candidates, kept)
+
+    # Everything judged this round leaves the pool, pass or fail: a NUMT-bearing
+    # scaffold left behind would vote for a fresh reference every round.
+    pool <- pool[!(pool$qseqid %in% evidence$contig), , drop = FALSE]
+    if (length(kept) == 0L) {
+      break
+    }
+  }
+
+  list(
+    accession = accessions,
+    candidates = candidates,
+    evidence = do.call(rbind, rounds)
+  )
+}
+
+#' Score one round of the reference vote
+#'
+#' @param pool contig/reference pairs still in play
+#' @param winner accession this round awarded
+#' @param min_identity,min_aligned_length,min_aligned_fraction,max_candidates
+#'   thresholds, see [select_mito_contigs()]
+#' @param n_taken candidates already selected by earlier rounds, so `rank` keeps
+#'   counting and `max_candidates` stays a budget across the whole search
+#'
+#' @return evidence rows for every contig that hit `winner`
+#'
+#' @noRd
+score_against_reference <- function(pool,
+                                    winner,
+                                    min_identity,
+                                    min_aligned_length,
+                                    min_aligned_fraction,
+                                    max_candidates,
+                                    n_taken = 0L) {
+  scored <- pool |>
     dplyr::filter(.data$saccver == winner) |>
     dplyr::mutate(
       aligned_fraction = pmin(1, .data$aligned_length / .data$qlen)
@@ -82,15 +154,16 @@ select_mito_contigs <- function(hits,
   )
 
   keep <- is.na(scored$reason)
-  # Rank among the contigs that passed, then apply the cap.
+  # Rank among the contigs that passed, continuing the count from earlier
+  # rounds, then apply the cap.
   scored$rank <- NA_integer_
-  scored$rank[keep] <- seq_len(sum(keep))
+  scored$rank[keep] <- n_taken + seq_len(sum(keep))
   over_cap <- keep & scored$rank > max_candidates
   scored$reason[over_cap] <- paste0("beyond the ", max_candidates, "-candidate cap")
   scored$selected <- as.integer(keep & !over_cap)
   scored$rank[!as.logical(scored$selected)] <- NA_integer_
 
-  evidence <- data.frame(
+  data.frame(
     contig = scored$qseqid,
     length = as.integer(scored$qlen),
     accession = winner,
@@ -100,12 +173,6 @@ select_mito_contigs <- function(hits,
     rank = scored$rank,
     selected = scored$selected,
     reason = scored$reason
-  )
-
-  list(
-    accession = winner,
-    candidates = evidence$contig[evidence$selected == 1L],
-    evidence = evidence
   )
 }
 
@@ -219,7 +286,8 @@ find_mito_note <- function(n_screened, evidence, confirmed, accession) {
     return(paste0(
       "no contig confirmed: ", n_cand, " candidate",
       if (n_cand == 1L) "" else "s",
-      " matched ", accession, " but carried too few mitochondrial genes"
+      " matched ", paste(accession, collapse = ", "),
+      " but carried too few mitochondrial genes"
     ))
   }
   if (nrow(evidence) > 0L) {
@@ -289,7 +357,7 @@ find_mito <- function(
     min_aligned_fraction = min_aligned_fraction,
     max_candidates = max_candidates
   )
-  add_log("reference: ", sel$accession %||% NA_character_,
+  add_log("references: ", paste(sel$accession %||% NA_character_, collapse = ", "),
           "; candidates: ", length(sel$candidates))
 
   evidence <- sel$evidence

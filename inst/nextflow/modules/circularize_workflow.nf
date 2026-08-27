@@ -36,8 +36,8 @@ params.sqlWriteCircDepth = '''INSERT INTO circularize_depth
       depth_spanning = excluded.depth_spanning,
       time_stamp = excluded.time_stamp'''
 
-// Samples eligible for circularization: the option is switched on and the user
-// declared the assembly linear. Every contig of the assembly is then attempted
+// Samples eligible for circularization: the option is switched on and the
+// assembly is not already declared circular. Every contig is then attempted
 // independently, so a fragmented assembly can come back with some contigs
 // circular and others linear.
 //
@@ -48,13 +48,15 @@ params.sqlWriteCircDepth = '''INSERT INTO circularize_depth
 // consuming process writes the text into its own task directory, so nothing is
 // written to workDir from a channel closure.
 def circ_eligible(topology, opts) {
-    opts?.attempt?.toString() == '1' && topology == 'linear'
+    opts?.attempt?.toString() == '1' && topology in ['linear', 'multi']
 }
 
 // Default map for a sample that was never circularized. "*" is the wildcard the
 // coverage awk falls back to when a contig name is not listed.
+// A multi-contig assembly has no sample-level topology to hand down, so its
+// contigs stay "unknown" until something actually examines them.
 def default_topology_map(topology) {
-    return "* ${topology}" as String
+    return "* ${topology == 'multi' ? 'unknown' : topology}" as String
 }
 
 // Read-based projects. Input/output tuple: (id, reads, assembly, topology, opts_id).

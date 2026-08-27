@@ -9,6 +9,7 @@ new_db_userAsmb(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  assembly_path = NULL,
   genetic_code = NULL,
   annotate_cpus = 6,
   annotate_memory = 36,
@@ -56,12 +57,18 @@ new_db_userAsmb(
 \arguments{
 \item{db_path}{Path to the new database file}
 
-\item{mapping_fn}{Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", "R2", "Assembly", and "Topology"}
+\item{mapping_fn}{Path to the mapping CSV file. Must contain columns "ID",
+"Taxon, "R1", "R2", and "Assembly". An optional "Topology" column may
+declare "circular" or "linear" for a single-contig assembly.}
 
 \item{mapping_id}{Column name of the mapping file to use as the primary key}
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{assembly_path}{Directory holding the user-supplied assembly files. Used
+to count each assembly's contigs so a multi-contig assembly is recorded with
+topology "multi".}
 
 \item{genetic_code}{Optional NCBI translation table override. Default `NULL`
 auto-selects from the curation ruleset; a number sets an override on the
