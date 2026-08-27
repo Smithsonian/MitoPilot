@@ -101,7 +101,8 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       time_stamp,
       assemble_notes,
       circularize_notes,
-      find_mito_notes
+      find_mito_notes,
+      join_notes
     ) |>
     dplyr::mutate(
       output = dplyr::case_when(

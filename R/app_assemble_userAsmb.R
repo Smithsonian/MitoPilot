@@ -9,7 +9,7 @@ ASSEMBLE_COL_GROUPS_USERASMB <- list(
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
-               "find_mito_notes")
+               "find_mito_notes", "join_notes")
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -319,6 +319,14 @@ assemble_server_userAsmb <- function(id) {
               html = T,
               cell = rt_link(ns("show_circularize_details"))
             ),
+            join_notes = colDef(
+              show = TRUE, class = .grp("join_notes"), headerClass = .grp("join_notes"),
+              name = "Scaffold Join Notes",
+              html = TRUE,
+              align = "left",
+              minWidth = 150,
+              cell = rt_longtext()
+            ),
             blast_opts = colDef(
               show = T, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
               name = "BLAST Opts.",
@@ -613,6 +621,116 @@ assemble_server_userAsmb <- function(id) {
       trigger("update_assemble_table")
       trigger("refresh_annotate")
       trigger("refresh_export")
+    })
+
+    # Redo Scaffold Join ----
+    # Narrower than Set State: only queues the join (join_switch = 1),
+    # assemble_switch is left alone so this never re-enters assembly.
+    init("redo_join")
+    on("redo_join", {
+      req(session$userData$mode == "Assemble")
+      req(selected())
+      req(all(rv$data$assemble_lock[req(selected())] == 0))
+      ids <- unique(rv$data$ID[selected()])
+
+      asmb <- dplyr::tbl(session$userData$con, "assemblies") |>
+        dplyr::filter(ID %in% ids, path > 0) |>
+        dplyr::select(ID, path, scaffold) |>
+        dplyr::collect()
+      stale <- tryCatch(
+        stale_assemble_dirs(
+          session$userData$con,
+          session$userData$dir_out,
+          ids = ids,
+          pending_only = FALSE
+        ),
+        error = function(e) NULL
+      )
+      missing_ids <- if (!is.null(stale)) stale$ID else character(0)
+      toggles <- tryCatch(
+        dplyr::tbl(session$userData$con, "assemble") |>
+          dplyr::filter(ID %in% ids) |>
+          dplyr::select(ID, assemble_opts, blast_accession) |>
+          dplyr::inner_join(
+            dplyr::tbl(session$userData$con, "assemble_opts") |>
+              dplyr::select(assemble_opts, join_scaffolds),
+            by = "assemble_opts"
+          ) |>
+          dplyr::collect(),
+        error = function(e) NULL
+      )
+      join_off_ids <- if (is.null(toggles) || nrow(toggles) == 0L) {
+        character(0)
+      } else {
+        off <- is.na(toggles$join_scaffolds) | toggles$join_scaffolds == 0
+        unique(toggles$ID[off])
+      }
+      no_ref_ids <- redo_join_no_ref_ids(ids, toggles)
+      plan <- redo_join_plan(ids, asmb, missing_ids, join_off_ids, no_ref_ids)
+
+      if (length(plan$not_eligible) > 0 || length(plan$missing_output) > 0 ||
+          length(plan$join_off) > 0 || length(plan$no_ref) > 0) {
+        shinyWidgets::sendSweetAlert(
+          title = "Redo scaffold join not queued for some samples",
+          text = shiny::tags$div(
+            if (length(plan$not_eligible) > 0) {
+              shiny::tags$p(
+                "Not join-eligible (need exactly one assembler path fragmented ",
+                "into more than one scaffold): ",
+                tags$code(paste(plan$not_eligible, collapse = ", "))
+              )
+            },
+            if (length(plan$missing_output) > 0) {
+              shiny::tags$div(
+                shiny::tags$p(
+                  "Published assembly output is not on disk for a redo to use:"
+                ),
+                shiny::tags$ul(stale_assemble_items(
+                  stale[stale$ID %in% plan$missing_output, , drop = FALSE]
+                ))
+              )
+            },
+            if (length(plan$join_off) > 0) {
+              shiny::tags$p(
+                "Scaffold joining is switched off in the assembly parameter ",
+                "set, so a redo would report the sample as skipped and mark it ",
+                "done. Turn 'join_scaffolds' on first for: ",
+                tags$code(paste(plan$join_off, collapse = ", "))
+              )
+            },
+            if (length(plan$no_ref) > 0) {
+              shiny::tags$p(
+                "No BLAST reference was ever selected, so the join has nothing ",
+                "to align the scaffolds against. Set a reference (or run BLAST) ",
+                "first for: ",
+                tags$code(paste(plan$no_ref, collapse = ", "))
+              )
+            },
+            shiny::tags$p(
+              if (length(plan$ready) > 0) {
+                "The rest of the selected samples were queued for a join redo."
+              } else {
+                "No samples were queued."
+              }
+            )
+          ),
+          html = TRUE,
+          type = if (length(plan$ready) > 0) "warning" else "error"
+        )
+      }
+      req(length(plan$ready) > 0)
+
+      upd <- data.frame(ID = plan$ready, join_switch = 1L, stringsAsFactors = FALSE)
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(
+          upd,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = "ID"
+        )
+      rv$data <- rv$data |> dplyr::rows_update(upd, by = "ID")
+      trigger("update_assemble_table")
     })
 
     # Set Pre-process Opts ----

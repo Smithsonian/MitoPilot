@@ -70,6 +70,7 @@ assemble_db <- function(assemblies) {
     pre_opts = "default", find_mito_opts = "default", circularize_opts = "default",
     blast_opts = "default", assemble_notes = NA_character_,
     circularize_notes = NA_character_, find_mito_notes = NA_character_,
+    join_notes = NA_character_,
     time_stamp = 1L, stringsAsFactors = FALSE
   ))
   DBI::dbWriteTable(con, "preprocess", data.frame(

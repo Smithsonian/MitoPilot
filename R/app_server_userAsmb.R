@@ -174,6 +174,10 @@ app_server_userAsmb <- function(input, output, session) {
   observeEvent(input$lock, {
     trigger("lock")
   })
+  # Redo Scaffold Join
+  observeEvent(input$redo_join, {
+    trigger("redo_join")
+  })
   # Run
   init("run_modal")
   observeEvent(input$run_modal, {

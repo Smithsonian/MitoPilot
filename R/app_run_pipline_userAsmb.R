@@ -52,7 +52,10 @@ pipeline_server_userAsmb <- function(id) {
       unit_label <- "samples"
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::filter(assemble_switch == 1) |>
+          # join_switch = 1 is a join-only redo: WF1 admits it on its own
+          # regardless of assemble_switch, so it counts as work to be done.
+          dplyr::filter(assemble_switch == 1 |
+                          (join_switch == 1 & assemble_lock == 0)) |>
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
