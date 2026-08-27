@@ -1,17 +1,59 @@
-# MitoPilot (development version)
+# MitoPilot 1.5.4
+
+Released 2026-08-27. Container: `macguigand/mitopilot:1.5.4`
 
 ## New Features
 
+This release is about **user-supplied assemblies**. MitoPilot can now take a whole draft genome rather than a finished mitogenome, find the mitochondrial contig(s) in it, and circularize them if evidence is present.
+
+### Finding the mitogenome in a whole assembly
+
+- Point MitoPilot at a FASTA holding a whole assembly, thousands or millions of contigs, and it will **locate the mitochondrial contigs before anything else runs**. Off by default; enable with `new_project_userAsmb(find_mitogenome = TRUE)`. Must also supply a MitoFinder database for your clade.
+- Contigs are screened against a reference, the best candidates are confirmed by annotating them, and only confirmed contigs continue through the pipeline. A sample where no confirmed mitochondrial contig is flagged, the rest of the batch carries on.
+- **Nuclear insertions (NUMTs) are filtered out** by requiring the match to cover a large fraction of the contig.
+- A sample carrying **more than one species' mitogenome** returns all of them, user can review and decide which to drop.
+- A new **Mito Search** column reports the outcome, including the full evidence behind every decision.
+- The search is built for large inputs: a full genome assembly of 1.4 million contigs reduces to its single mitochondrial contig in under four minutes.
+
+### Circularizing user-supplied assemblies
+
+- Assemblers often report a circular mitogenome as a linear contig whose end repeats its start. MitoPilot can now **trim that redundant overlap and circularize the sequence** during the Assemble module. Off by default; enable with `new_project_userAsmb(attempt_circularization = TRUE)`.
+- When raw reads are available, **reads must span the new junction** before the assembly is called circular, so a repeat is not mistaken for a real circle.
+- Circularization is attempted for each contig when a sample has multiple mitochondrial contigs.
+- A new **Circularization** column reports the outcome. Clicking it shows the overlap alignment alongside the read depth across the seam.
+
 ### Scaffold joining for user-supplied assemblies
 
-- A fragmented single-path assembly can now be **ordered against its BLAST reference into one joined sequence** during WF1, the same step the regular pipeline already had. Off by default; enable with `new_project_userAsmb(join_scaffolds = TRUE)` or by setting `join_scaffolds` in the assembly parameter set.
-- Samples whose contigs match **different** reference mitogenomes are left separate for review rather than joined, so a contaminated sample is never spliced together.
-- A new **"Redo Scaffold Join" action** in the Assemble tab lets a join be re-run without redoing the rest of assembly.
-- A new **Scaffold Join Notes** column shows why a join was declined or failed.
-- **Existing projects** are migrated automatically by `backwards_compatibility()`; the toggle defaults to off, so behaviour is unchanged unless it is switched on.
+- A fragmented single-path assembly can now be **ordered against its BLAST reference into one joined sequence**, the same step the regular pipeline already had. Off by default; enable with `new_project_userAsmb(join_scaffolds = TRUE)`.
+- Samples whose contigs match **different** reference mitogenomes are left separate for review, so a contaminated sample is never spliced together.
+
+### Fragmented assemblies are annotated contig by contig
+
+- A user assembly split across several contigs previously had only its first contig annotated. **Every contig is now its own annotation unit** and is annotated, curated, and exported like any other sequence.
+- The Assemble tab **no longer refuses to lock a sample with more than one contig**, which had been keeping fragmented user assemblies out of annotation entirely.
+
+### Topology of a multi-contig assembly
+
+- The `Topology` column in the mapping file now applies only to single-contig assemblies. An assembly holding more than one contig is recorded as **`multi`**, and MitoPilot works out each contig's own topology as the pipeline runs.
+
+### Test project for user assemblies
+
+- **`new_test_project_userAsmb()`** builds a ready-to-run project from nine user-supplied assemblies cut from real data, with examples of linear, circular, not-yet-circularized, and multi-contig assemblies.
+- The default MitoFinder reference database is now a **ten-species fish sample platter** rather than a single zebrafish record.
+
+## Bug Fixes
+
+- **Export reads each record's own topology** rather than applying one value across a mixed unit.
+- **The Annotate update dialog counts sequences, not samples**, which is what it has always actually been queuing.
+
+## Documentation
+
+- User-assembly material now has its **own article**, covering the mitogenome search, circularization, and scaffold joining, with the FAQ and reference index updated to match.
 
 **Note**
-A user-assembly project pinned to a container image older than this release now runs a pipeline step that image may not support. Rebuild or repoint the container before enabling `join_scaffolds`.
+Projects created with an earlier release should be updated with [`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html), which adds the new database fields and updates the container version in your project `.config` file. A user-assembly project pinned to an older container image must be repointed before the new WF1 steps will run.
+
+**Full Changelog**: https://github.com/Smithsonian/MitoPilot/compare/1.5.3...1.5.4
 
 # MitoPilot 1.5.3
 
