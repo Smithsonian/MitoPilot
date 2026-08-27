@@ -16,6 +16,14 @@ params.sqlUpsertJoined = '''INSERT OR REPLACE INTO assemblies
 
 params.sqlIgnoreOriginals = 'UPDATE assemblies SET ignore = 1 WHERE ID = ? AND path > 0'
 
+// The sample's assemble summary was written before the join, from the scaffolds
+// that have just been superseded, so it kept reporting fragment lengths. The
+// list is de-duplicated, which is right for equal-length assembly PATHS but hid
+// the staleness whenever the fragments were the same size. Rewrite it from the
+// joined row: one scaffold, one length. `paths` is untouched because a sample is
+// only join-eligible with a single path, so it is already 1.
+params.sqlWriteJoinedSummary = 'UPDATE assemble SET length = ?, scaffolds = 1 WHERE ID = ?'
+
 // annotate is keyed (ID, path, scaffold); the joined consensus is unit (ID,0,0).
 // Upsert that unit (inheriting the sample's option sets from an existing row) so
 // it becomes the single non-ignored annotation unit. The original path>0 units'
@@ -290,6 +298,11 @@ workflow SCAFFOLD_JOIN {
                               (r.topology == 'circular') ? 'no' : 'yes',
                               r.ID, r.ID, r.ID, params.ts) }
             .sqlInsert(statement: params.sqlSyncAnnotateJoin, db: 'sqlite')
+
+        // Independent of the state write below: disjoint columns on the same row.
+        joined_rows
+            .map { r -> tuple(r.length as Integer, r.ID) }
+            .sqlInsert(statement: params.sqlWriteJoinedSummary, db: 'sqlite')
 
         // Outcome -> state. Mapped by the status VALUE, never by the note text.
         scaffold_join.out.outcome

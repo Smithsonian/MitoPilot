@@ -1489,6 +1489,8 @@ assembly_coverage_details_server <- function(id, rv) {
       update <- data.frame(
         ID = ID, paths = -abs(rv$updating$paths), assemble_lock = 1,
         topology = topology,
+        # Summary now describes the consensus, not the scaffolds it replaced.
+        length = as.character(nchar(seq_str)), scaffolds = 1L,
         assemble_notes = compose_edit_notes(note)
       )
       if (!is.null(bl)) update <- cbind(update, bl)

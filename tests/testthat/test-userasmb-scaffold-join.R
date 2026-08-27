@@ -78,3 +78,35 @@ test_that("a scaffold with no BLAST hit is not a second opinion", {
                    blast_accession = c("NC_083079.1", "NO HIT"))
   expect_false(scaffold_hits_disagree(df))
 })
+
+# The Assemble table shows `assemble.length` verbatim. That column is written
+# once, before the join, as the ";"-joined list of DISTINCT scaffold lengths, so
+# a joined sample kept reporting its fragments. Worse when the fragments are
+# equal: three 6008 bp contigs dedupe to a bare "6008" that reads like a total.
+
+join_nf_sql <- function(name) {
+  p <- system.file("nextflow/modules/scaffold_join_workflow.nf", package = "MitoPilot")
+  if (!nzchar(p)) {
+    p <- testthat::test_path("../..", "inst/nextflow/modules/scaffold_join_workflow.nf")
+  }
+  line <- grep(paste0("^params\\.", name, "\\s*="), readLines(p, warn = FALSE),
+               value = TRUE)
+  expect_length(line, 1L)
+  sub("^[^']*'(.*)'\\s*$", "\\1", line)
+}
+
+test_that("a successful join rewrites the sample's assemble summary", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "CREATE TABLE assemble (ID TEXT PRIMARY KEY, length TEXT,
+                       paths INTEGER, scaffolds INTEGER)")
+  DBI::dbExecute(con, "INSERT INTO assemble VALUES ('S1', '6008', 1, 3)")
+
+  DBI::dbExecute(con, join_nf_sql("sqlWriteJoinedSummary"), params = list(18024L, "S1"))
+
+  row <- DBI::dbGetQuery(con, "SELECT * FROM assemble WHERE ID = 'S1'")
+  expect_equal(row$length, "18024")
+  expect_equal(row$scaffolds, 1L)
+  # Join eligibility is a single path, so paths is already 1 and is left alone.
+  expect_equal(row$paths, 1L)
+})
