@@ -74,6 +74,7 @@ reference:
   - new_project
   - new_project_userAsmb
   - new_test_project
+  - new_test_project_userAsmb
 
 - title: "Project database"
   desc: >
