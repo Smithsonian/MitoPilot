@@ -9,6 +9,14 @@ params.sqlWriteFindNotes = 'UPDATE assemble SET find_mito_notes = ? WHERE ID = ?
 params.sqlFailFindMito =
     'UPDATE assemble SET assemble_switch = 3, find_mito_notes = ?, time_stamp = ? WHERE ID = ?'
 
+// A failed sample keeps no contigs, so the annotate row seeded at project init
+// is left pointing at nothing. Switch it off rather than delete it: a re-run
+// that succeeds seeds the unit again. Untouched rows only, so a locked or
+// reviewed unit from an earlier run keeps its state. Safe to write here because
+// a failed sample never reaches the seeder, so this races nothing.
+params.sqlFailFindMitoUnits =
+    "UPDATE annotate SET annotate_switch = 0 WHERE ID = ? AND annotate_lock = 0 AND reviewed = 'no'"
+
 // Evidence behind every call. Upsert keyed on (ID, contig) rather than a
 // DELETE + INSERT pair, which nf-sqldb may commit in either order.
 params.sqlWriteCandidates = '''INSERT INTO mito_candidates
@@ -68,6 +76,10 @@ workflow FIND_MITO_userAsmb {
                 tuple(missing_db_note(), params.ts, id)
             }
             .sqlInsert(statement: params.sqlFailFindMito, db: 'sqlite')
+
+        br.no_db
+            .map { id, assembly, topology, opts_id, copts, gcode, fopts -> tuple(id) }
+            .sqlInsert(statement: params.sqlFailFindMitoUnits, db: 'sqlite')
 
         // Chunked fan-out: the FASTA is split into files of chunk_size contigs
         // so a draft genome is searched in parallel and never read whole.
@@ -136,6 +148,10 @@ workflow FIND_MITO_userAsmb {
                 tuple(note_f.text.trim(), params.ts, id)
             }
             .sqlInsert(statement: params.sqlFailFindMito, db: 'sqlite')
+
+        picked.empty
+            .map { id, fasta, status_f, note_f, cand_f, opts_id, log_f -> tuple(id) }
+            .sqlInsert(statement: params.sqlFailFindMitoUnits, db: 'sqlite')
 
         // Confirmed: swap the trimmed FASTA in and carry on with the rest of WF1.
         br.run

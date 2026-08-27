@@ -187,3 +187,47 @@ test_that("a fragmented user assembly is a note, not a failed sample", {
   expect_length(k, 1L)
   expect_match(paste(nf[k:(k + 2)], collapse = " "), "status\\s*=\\s*'3'")
 })
+
+# A sample the mitogenome search fails keeps no contigs, so the annotate row
+# seeded at project init points at nothing. WF1 must switch it off.
+fail_units_sql <- function() {
+  nf <- nf_lines("find_mito_workflow.nf")
+  start <- grep("^params.sqlFailFindMitoUnits", nf)
+  expect_length(start, 1L)
+  line <- nf[start + 1L]
+  sub("\"[[:space:]]*$", "", sub("^[^\"]*\"", "", line))
+}
+
+test_that("failing the mitogenome search switches off the sample's seeded unit", {
+  con <- seed_db()
+  withr::defer(DBI::dbDisconnect(con))
+  DBI::dbExecute(con, "INSERT INTO annotate
+    (ID, path, scaffold, annotate_switch, annotate_lock, reviewed) VALUES
+    ('nomito', 1, 1, 1, 0, 'no'),
+    ('locked', 1, 1, 1, 1, 'no'),
+    ('done',   1, 1, 1, 0, 'yes'),
+    ('other',  1, 1, 1, 0, 'no')")
+
+  DBI::dbExecute(con, fail_units_sql(), params = list("nomito"))
+
+  state <- function(id) DBI::dbGetQuery(con,
+    "SELECT annotate_switch FROM annotate WHERE ID = ?", params = list(id))$annotate_switch
+  expect_equal(state("nomito"), 0L)   # the zombie
+  expect_equal(state("other"), 1L)    # a different sample is untouched
+})
+
+test_that("a unit somebody has worked on survives the switch-off", {
+  con <- seed_db()
+  withr::defer(DBI::dbDisconnect(con))
+  DBI::dbExecute(con, "INSERT INTO annotate
+    (ID, path, scaffold, annotate_switch, annotate_lock, reviewed) VALUES
+    ('s1', 1, 1, 1, 1, 'no'),
+    ('s1', 1, 2, 1, 0, 'yes'),
+    ('s1', 1, 3, 1, 0, 'no')")
+
+  DBI::dbExecute(con, fail_units_sql(), params = list("s1"))
+
+  out <- DBI::dbGetQuery(con,
+    "SELECT scaffold, annotate_switch FROM annotate WHERE ID = 's1' ORDER BY scaffold")
+  expect_equal(out$annotate_switch, c(1L, 1L, 0L))  # locked, reviewed, untouched
+})
