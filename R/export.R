@@ -40,6 +40,13 @@ check_single_path <- function(units) {
 #' @return A single profile name; "default" when the sample has no annotate row.
 #'
 #' @noRd
+# Append src onto dest, creating dest if needed. Replaces shell `cat >>`, which
+# does not exist on Windows and broke on paths with spaces.
+append_file <- function(dest, src) {
+  if (!file.exists(dest)) file.create(dest)
+  file.append(dest, src)
+}
+
 unit_curate_opts <- function(con, ID, path, scaffold) {
   opts <- dplyr::tbl(con, "annotate") |>
     dplyr::filter(ID == !!ID & path == !!path & scaffold == !!scaffold) |>
@@ -703,23 +710,15 @@ export_files <- function(
             # concatenate sequences and tables by gene
             if (length(group) == 1) {
               group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_gene_tbl}"
-              ) |> system()
+              append_file(group_gene_tbl, gene_tbl_fn)
               group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_gene_fasta}"
-              ) |> system()
+              append_file(group_gene_fasta, gene_fn)
             }
 
             # concatenate all sequences and tables
             if (length(group) == 1) {
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-              ) |> system()
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_allgene_fasta}"
-              ) |> system()
+              append_file(group_allgene_tbl_fn, gene_tbl_fn)
+              append_file(group_allgene_fasta, gene_fn)
             }
           }
 
@@ -865,23 +864,15 @@ export_files <- function(
             # concatenate sequences and tables by gene
             if (length(group) == 1) {
               group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_gene_tbl}"
-              ) |> system()
+              append_file(group_gene_tbl, gene_tbl_fn)
               group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_gene_fasta}"
-              ) |> system()
+              append_file(group_gene_fasta, gene_fn)
             }
 
             # concatenate all sequences and tables
             if (length(group) == 1) {
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-              ) |> system()
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_allgene_fasta}"
-              ) |> system()
+              append_file(group_allgene_tbl_fn, gene_tbl_fn)
+              append_file(group_allgene_fasta, gene_fn)
             }
           }
         }
@@ -1013,23 +1004,15 @@ export_files <- function(
           # concatenate sequences and tables by gene
           if (length(group) == 1) {
             group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".tbl"))
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_gene_tbl}"
-            ) |> system()
+            append_file(group_gene_tbl, gene_tbl_fn)
             group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".fasta"))
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_gene_fasta}"
-            ) |> system()
+            append_file(group_gene_fasta, gene_fn)
           }
 
           # concatenate all sequences and tables
           if (length(group) == 1) {
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-            ) |> system()
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_allgene_fasta}"
-            ) |> system()
+            append_file(group_allgene_tbl_fn, gene_tbl_fn)
+            append_file(group_allgene_fasta, gene_fn)
           }
         }
 
@@ -1100,15 +1083,9 @@ export_files <- function(
     })
 
     if (length(group) == 1) {
-      stringr::str_glue(
-        "cat {tbl_fn} >> {group_tbl}"
-      ) |> system()
-      stringr::str_glue(
-        "cp {gff_fn} {group_gff_pth}"
-      ) |> system()
-      stringr::str_glue(
-        "cat {fasta_fn} >> {group_fasta}"
-      ) |> system()
+      append_file(group_tbl, tbl_fn)
+      file.copy(gff_fn, group_gff_pth, overwrite = TRUE)
+      append_file(group_fasta, fasta_fn)
     }
   })
 

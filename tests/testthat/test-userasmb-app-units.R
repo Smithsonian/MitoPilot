@@ -154,12 +154,16 @@ test_that("a fresh project with no assemblies rows still renders", {
 # --- 3. the lock guard -------------------------------------------------------
 
 test_that("the Assemble tab no longer refuses to lock a fragmented sample", {
-  src <- readLines(
-    testthat::test_path("../..", "R", "app_assemble_userAsmb.R"),
-    warn = FALSE
-  )
+  # Read the installed namespace, not the source tree: R CMD check runs the
+  # tests against an installed package, where R/ is gone.
+  ns <- asNamespace("MitoPilot")
+  src <- unlist(lapply(ls(ns, all.names = TRUE), function(nm) {
+    obj <- get0(nm, envir = ns, inherits = FALSE)
+    if (is.function(obj)) paste(deparse(obj), collapse = "\n") else NULL
+  }))
+  expect_true(length(src) > 0)
   expect_false(any(grepl("Multiple assemblies detected", src, fixed = TRUE)))
-  expect_false(any(grepl("any(duplicated(assemblies))", src, fixed = TRUE)))
+  expect_false(any(grepl("duplicated(assemblies)", src, fixed = TRUE)))
 })
 
 # The guard's real cost: every WF2 query gates on assemble_lock = 1, so a sample
