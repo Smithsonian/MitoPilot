@@ -87,7 +87,9 @@ pipeline_server <- function(id) {
       nf_cmd(nextflow_cmd(session$userData$mode))
       message(nf_cmd())
 
-      # Count samples to update ----
+      # Count what the run will update: samples in Assemble, one row per
+      # sequence (path/scaffold unit) in Annotate.
+      unit_label <- "samples"
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
           # join_switch = 1 is a join-only redo: WF1 admits it on its own
@@ -98,6 +100,7 @@ pipeline_server <- function(id) {
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
+        unit_label <- "sequences"
         samples <- dplyr::left_join(
           dplyr::tbl(session$userData$con, "assemble"),
           dplyr::tbl(session$userData$con, "annotate"),
@@ -155,7 +158,7 @@ pipeline_server <- function(id) {
           style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
           span(
             stringr::str_glue(
-              "{session$userData$mode}: updating {length(samples)} samples"
+              "{session$userData$mode}: updating {length(samples)} {unit_label}"
             )
           ),
           span(id = ns("gears"), class = "gears paused")
