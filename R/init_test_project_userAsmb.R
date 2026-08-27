@@ -1,11 +1,11 @@
 #' Initialize a test project for user-supplied assemblies
 #'
-#' Sets up a test project for the user-assembly workflow, with eight samples
+#' Sets up a test project for the user-assembly workflow, with nine samples
 #' that between them cover the shapes an assembly can arrive in: a linear
 #' mitogenome, a circular one, one that is circular but reported as linear, and
-#' five multi-contig assemblies holding one, two, or no mitogenomes. The
-#' assemblies ship with the package; the raw reads are the same fish data used
-#' by [new_test_project()].
+#' six multi-contig assemblies holding one, two, none, or one split across
+#' three contigs. The assemblies ship with the package; the raw reads are the
+#' same fish data used by [new_test_project()].
 #'
 #' The project is created with the mitogenome search and the circularization
 #' attempt both switched on, since that is what these samples are for.
@@ -109,6 +109,7 @@ new_test_project_userAsmb <- function(
     find_mitogenome = TRUE,
     mitofinder_db = mf_db,
     attempt_circularization = TRUE,
+    join_scaffolds = TRUE,
     executor = executor,
     Rproj = Rproj,
     force = force,

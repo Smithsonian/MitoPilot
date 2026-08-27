@@ -44,12 +44,12 @@ config files (default = FALSE).}
 \item{...}{Additional arguments passed to [new_project_userAsmb()]}
 }
 \description{
-Sets up a test project for the user-assembly workflow, with eight samples
+Sets up a test project for the user-assembly workflow, with nine samples
 that between them cover the shapes an assembly can arrive in: a linear
 mitogenome, a circular one, one that is circular but reported as linear, and
-five multi-contig assemblies holding one, two, or no mitogenomes. The
-assemblies ship with the package; the raw reads are the same fish data used
-by [new_test_project()].
+six multi-contig assemblies holding one, two, none, or one split across
+three contigs. The assemblies ship with the package; the raw reads are the
+same fish data used by [new_test_project()].
 }
 \details{
 The project is created with the mitogenome search and the circularization
