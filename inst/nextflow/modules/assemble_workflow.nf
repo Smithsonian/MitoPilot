@@ -244,7 +244,10 @@ workflow ASSEMBLE {
                     scaffold_counts << n
                 }
                 def n_scaffolds = scaffold_counts ? scaffold_counts.max() : 0
-                def length_str  = lengths.unique().sort().reverse().join(';')
+                // Every contig is listed: de-duplicating hid a fragmented
+                // assembly whose pieces were the same size behind one
+                // value that read like a total.
+                def length_str  = lengths.sort().reverse().join(';')
                 def lengths_all = lengths.sort().reverse().join(';')
                 def topo_str    = topologies.unique().sort().join(';')
                 tuple(it[0], n_paths, n_scaffolds, length_str, topo_str, lengths_all, it, it[8], it[9])

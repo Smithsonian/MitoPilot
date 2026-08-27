@@ -159,7 +159,10 @@ workflow COVERAGE_userAsmb_WRITE {
             .map { id, paths_list, scaffolds_list, lengths_list, topos_list, min_assembly_length ->
                 def max_paths      = paths_list.max()
                 def max_scaffolds  = scaffolds_list.max()
-                def length_str     = lengths_list.unique().sort().reverse().join(";")
+                // Every contig is listed: de-duplicating hid a fragmented
+                // assembly whose pieces were the same size behind one
+                // value that read like a total.
+                def length_str     = lengths_list.sort().reverse().join(";")
                 def topo_str       = topos_list.unique().sort().join(";")
                 def max_len        = lengths_list.max() ?: 0
                 def status         = '4'

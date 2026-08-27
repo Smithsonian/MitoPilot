@@ -62,3 +62,18 @@ test_that("a sample with nothing active reports no length", {
   expect_equal(out$scaffolds, 0L)
   expect_true(is.na(DBI::dbGetQuery(con, "SELECT length FROM assemble")$length))
 })
+
+test_that("WF1 lists every contig length, matching the app's recompute", {
+  # One column, one format. WF1 used to de-duplicate, so a fragmented sample
+  # showed a different shape before and after anything touched its contigs.
+  for (module in c("assemble_workflow.nf", "coverage_userAsmb_workflow.nf")) {
+    p <- system.file(file.path("nextflow/modules", module), package = "MitoPilot")
+    if (!nzchar(p)) {
+      p <- testthat::test_path("../..", "inst/nextflow/modules", module)
+    }
+    line <- grep("def length_str", readLines(p, warn = FALSE), value = TRUE)
+    expect_length(line, 1L)
+    expect_false(grepl("unique", line), info = module)
+    expect_true(grepl("reverse", line), info = module)
+  }
+})
