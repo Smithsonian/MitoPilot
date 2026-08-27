@@ -9,12 +9,14 @@ params.sqlRead =  'SELECT s.ID, s.assembly, s.topology, ' +
                   's.genetic_code, ' +
                   'fopts.attempt, fopts.mitofinder_db, fopts.min_contig_length, ' +
                   'fopts.min_identity, fopts.min_aligned_length, fopts.min_aligned_fraction, ' +
-                  'fopts.max_candidates, fopts.min_genes, fopts.cpus, fopts.memory ' +
+                  'fopts.max_candidates, fopts.min_genes, fopts.cpus, fopts.memory, ' +
+                  'opts.join_scaffolds, bopts.run_blast ' +
                   'FROM samples s ' +
                   'JOIN assemble a ON s.ID = a.ID ' +
                   'JOIN assemble_opts opts ON a.assemble_opts = opts.assemble_opts ' +
                   'LEFT JOIN circularize_opts copts ON a.circularize_opts = copts.circularize_opts ' +
                   'LEFT JOIN find_mito_opts fopts ON a.find_mito_opts = fopts.find_mito_opts ' +
+                  'LEFT JOIN blast_opts bopts ON a.blast_opts = bopts.blast_opts ' +
                   'WHERE a.assemble_switch IN (1, 4) AND a.assemble_lock = 0'
 
 
@@ -57,6 +59,19 @@ params.sqlWriteAssemblies = '''INSERT INTO assemblies
 params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?, topology=?, ' +
                             'assemble_switch=?, assemble_notes=?, time_stamp=?, poor_blast_ref=NULL WHERE ID=?'
 
+// Samples the app queued for a join-only redo (assemble.join_switch = 1). Read
+// separately from params.sqlRead because a redo sample sits at state 2 or 3 and
+// that query only admits 1 and 4.
+params.sqlReadJoinRedoUserAsmb =
+    'SELECT a.ID, a.assemble_opts, COALESCE(opts.join_scaffolds, 0), ' +
+    'COALESCE(a.join_switch, 0), COALESCE(a.assemble_switch, 0), a.blast_accession ' +
+    'FROM assemble a ' +
+    'JOIN assemble_opts opts ON a.assemble_opts = opts.assemble_opts ' +
+    'WHERE a.join_switch = 1 AND a.assemble_lock = 0'
+
+// A redo this run will not service must not leave the request queued forever.
+params.sqlClearJoinSwitchUserAsmb = 'UPDATE assemble SET join_switch = NULL WHERE ID = ?'
+
 
 // Shared writer: parse coverageStats -> assemblies/assemble DB writes + emit the
 // BLAST input. Lives in one place so the (data-loss-sensitive) DB write logic is
@@ -66,6 +81,8 @@ workflow COVERAGE_userAsmb_WRITE {
         coverage_out
         min_len_lookup
         min_len_summary
+        join_lookup
+        run_blast_lookup
 
     main:
         // Coverage output -> depth/gc/errors
@@ -166,7 +183,43 @@ workflow COVERAGE_userAsmb_WRITE {
                 }
                 tuple(max_paths, max_scaffolds, length_str, topo_str, status, notes, params.ts, id)
             }
-            .sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
+            .set { assemble_summary }
+
+        assemble_summary.sqlInsert(statement: params.sqlWriteAssemble , db: 'sqlite')
+
+        // Join eligibility comes off the same summary the assemble row is built
+        // from, so the table and the join can never disagree about how many
+        // paths and scaffolds a sample has.
+        assemble_summary
+            .map { paths, scaffolds, length_str, topo_str, status, notes, ts, id ->
+                tuple(id, paths as Integer, scaffolds as Integer, status)
+            }
+            .filter { id, n_paths, n_scaffolds, status ->
+                status == '4' && n_paths == 1 && n_scaffolds > 1
+            }
+            .join(coverage_out.map { files, wd, id, fasta, opts -> tuple(id, fasta, opts) })
+            .join(join_lookup)
+            .join(run_blast_lookup)
+            .set { join_eligible_meta }
+
+        // Join-only redo requests. States 1 and 4 are being reprocessed by this
+        // same run and reach the join by the normal route, so servicing them
+        // here would feed the join twice for one sample.
+        channel.fromQuery(params.sqlReadJoinRedoUserAsmb, db: 'sqlite')
+            .filter { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
+                join_switch == 1
+            }
+            .branch { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
+                moot: assemble_switch == 1 || assemble_switch == 4
+                redo: true
+            }
+            .set { redo_branch }
+
+        redo_branch.moot
+            .map { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
+                tuple(id)
+            }
+            .sqlInsert(statement: params.sqlClearJoinSwitchUserAsmb, db: 'sqlite')
 
         // Seed one annotate row PER non-ignored unit (ID, path, scaffold), the same
         // way assemble_workflow.nf does for the regular pipeline. WF2 reads its work
@@ -212,6 +265,41 @@ workflow COVERAGE_userAsmb_WRITE {
     emit:
         // tuple(id, assembly, opts_id) for single-contig BLAST search
         blast_in = coverage_out.map{ it -> tuple(it[2], it[3], it[4]) }
+
+        // Per-ID coverageStats CSV files, for the scaffold join to stitch.
+        cov_files = coverage_out
+            .map { files, wd, id, fasta, opts ->
+                def fl = (files instanceof List) ? files : [files]
+                tuple(id, fl.findAll { it.name ==~ /.*coverageStats\.csv/ })
+            }
+            .filter { id, csvs -> csvs.size() > 0 }
+            .groupTuple()
+            .map { id, lists -> tuple(id, lists.flatten()) }
+
+        // Single-path multi-scaffold samples eligible for the join, carrying the
+        // per-sample join_scaffolds toggle. The mapping precompute runs for ALL
+        // eligible samples; the toggle only gates the automatic Path 0 build.
+        join_eligible = join_eligible_meta
+            .map { id, np, ns, status, fasta, opts, join_scaffolds, run_blast ->
+                tuple(id, fasta, opts, join_scaffolds)
+            }
+
+        // IDs expected to reach the join in THIS run, withheld from the
+        // reference fetch's 4 -> 2 promotion so the join owns their final state.
+        // Samples with BLAST switched off never get a fetched reference, so they
+        // are excluded: withholding them would strand them, and reporting them
+        // would call a missing input a failure.
+        join_expected = join_eligible_meta
+            .filter { id, np, ns, status, fasta, opts, join_scaffolds, run_blast ->
+                (run_blast == null ? 1 : (run_blast as Integer)) == 1
+            }
+            .map { id, np, ns, status, fasta, opts, join_scaffolds, run_blast -> id }
+
+        // tuple(id, assemble_opts, join_scaffolds, blast_accession)
+        join_redo = redo_branch.redo
+            .map { id, opts, join_scaffolds, join_switch, assemble_switch, blast_accession ->
+                tuple(id, opts, join_scaffolds, blast_accession)
+            }
 }
 
 
@@ -249,6 +337,8 @@ workflow COVERAGE_userAsmb {
                       memory:               it[22] ])
                 min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
+                join_lookup:       tuple(it[0], it[23] == null ? 0 : (it[23] as Integer))
+                run_blast_lookup:  tuple(it[0], it[24] == null ? 1 : (it[24] as Integer))
             }
             .set { query_ch }
 
@@ -286,10 +376,15 @@ workflow COVERAGE_userAsmb {
         // Coverage
         coverage_userAsmb(coverage_in).set { coverage_out }
 
-        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary)
+        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary,
+                                query_ch.join_lookup, query_ch.run_blast_lookup)
 
     emit:
-        blast_in = COVERAGE_userAsmb_WRITE.out.blast_in
+        blast_in      = COVERAGE_userAsmb_WRITE.out.blast_in
+        cov_files     = COVERAGE_userAsmb_WRITE.out.cov_files
+        join_eligible = COVERAGE_userAsmb_WRITE.out.join_eligible
+        join_expected = COVERAGE_userAsmb_WRITE.out.join_expected
+        join_redo     = COVERAGE_userAsmb_WRITE.out.join_redo
 }
 
 
@@ -326,6 +421,8 @@ workflow COVERAGE_userAsmb_noReads {
                       memory:               it[22] ])
                 min_len_scaffolds: tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
                 min_len_summary:   tuple(it[0], it[4] == null ? 500 : (it[4] as Integer))
+                join_lookup:       tuple(it[0], it[23] == null ? 0 : (it[23] as Integer))
+                run_blast_lookup:  tuple(it[0], it[24] == null ? 1 : (it[24] as Integer))
             }
             .set { query_ch }
 
@@ -346,8 +443,13 @@ workflow COVERAGE_userAsmb_noReads {
 
         coverage_userAsmb_noReads(coverage_in).set { coverage_out }
 
-        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary)
+        COVERAGE_userAsmb_WRITE(coverage_out, min_len_lookup, min_len_summary,
+                                query_ch.join_lookup, query_ch.run_blast_lookup)
 
     emit:
-        blast_in = COVERAGE_userAsmb_WRITE.out.blast_in
+        blast_in      = COVERAGE_userAsmb_WRITE.out.blast_in
+        cov_files     = COVERAGE_userAsmb_WRITE.out.cov_files
+        join_eligible = COVERAGE_userAsmb_WRITE.out.join_eligible
+        join_expected = COVERAGE_userAsmb_WRITE.out.join_expected
+        join_redo     = COVERAGE_userAsmb_WRITE.out.join_redo
 }
