@@ -35,6 +35,10 @@
 #'   available the new junction must be supported by reads before the assembly
 #'   is called circular. Settings are editable later in the app's
 #'   circularization options modal. See [circularize_asmb()].
+#' @param join_scaffolds (logical) Order a fragmented single-path assembly
+#'   against its BLAST reference into one joined sequence during WF1 (default =
+#'   FALSE). Samples whose contigs match different reference mitogenomes are
+#'   left alone.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from each sample's curation ruleset; a number sets a
 #'   project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
@@ -73,6 +77,7 @@ new_project_userAsmb <- function(
     find_mitogenome = FALSE,
     mitofinder_db = NULL,
     attempt_circularization = FALSE,
+    join_scaffolds = FALSE,
     executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     config = NULL,
@@ -178,6 +183,7 @@ new_project_userAsmb <- function(
     mapping_id = mapping_id,
     no_raw_data = no_raw_data,
     attempt_circularization = attempt_circularization,
+    join_scaffolds = join_scaffolds,
     find_mitogenome = find_mitogenome,
     mitofinder_db = mitofinder_db,
     ...

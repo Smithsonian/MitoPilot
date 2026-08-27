@@ -32,6 +32,7 @@ new_db_userAsmb(
   orf_min_len = 300,
   orf_max_overlap = 0.1,
   min_assembly_length = 500,
+  join_scaffolds = FALSE,
   find_mitogenome = FALSE,
   mitofinder_db = NULL,
   find_min_contig_length = 500,

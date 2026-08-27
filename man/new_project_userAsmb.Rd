@@ -15,6 +15,7 @@ new_project_userAsmb(
   find_mitogenome = FALSE,
   mitofinder_db = NULL,
   attempt_circularization = FALSE,
+  join_scaffolds = FALSE,
   executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
     "NOAA_SEDNA"),
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
@@ -74,6 +75,11 @@ overlap between the contig ends is trimmed, and when raw reads are
 available the new junction must be supported by reads before the assembly
 is called circular. Settings are editable later in the app's
 circularization options modal. See [circularize_asmb()].}
+
+\item{join_scaffolds}{(logical) Order a fragmented single-path assembly
+against its BLAST reference into one joined sequence during WF1 (default =
+FALSE). Samples whose contigs match different reference mitogenomes are
+left alone.}
 
 \item{executor}{The executor to use for running the nextflow pipeline. May be
 a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",

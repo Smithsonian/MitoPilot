@@ -104,6 +104,9 @@ new_db_userAsmb <- function(
     # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
     # set per-scaffold ignore flags; matches the regular pipeline default)
     min_assembly_length = 500,
+    # Scaffold joining: order a fragmented single-path assembly against its BLAST
+    # reference into one Path 0. Off by default, as in the regular pipeline.
+    join_scaffolds = FALSE,
     # Default mitogenome-search options (see find_mito())
     find_mitogenome = FALSE,
     mitofinder_db = NULL,
@@ -354,6 +357,7 @@ new_db_userAsmb <- function(
     "CREATE TABLE assemble_opts (
       assemble_opts TEXT NOT NULL,
       min_assembly_length INTEGER,
+      join_scaffolds INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -361,7 +365,8 @@ new_db_userAsmb <- function(
     dplyr::rows_upsert(
       data.frame(
         assemble_opts = "user",
-        min_assembly_length = min_assembly_length
+        min_assembly_length = min_assembly_length,
+        join_scaffolds = as.integer(isTRUE(join_scaffolds))
       ),
       in_place = TRUE,
       copy = TRUE,
