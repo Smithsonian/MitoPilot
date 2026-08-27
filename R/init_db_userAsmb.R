@@ -199,12 +199,15 @@ new_db_userAsmb <- function(
   on.exit(DBI::dbDisconnect(con))
 
   # Metadata table ----
+  # Resolved outside the mutate so a warning reaches the user as itself, not
+  # wrapped in dplyr's "there was 1 warning in mutate()" report.
+  sample_topology <- resolve_sample_topology(mapping, assembly_path, mapping_id)
   mapping <- mapping |>
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code,
-      topology = resolve_sample_topology(mapping, assembly_path, mapping_id),
+      topology = sample_topology,
       assembly = .data[["Assembly"]]
     ) |>
     dplyr::select(-dplyr::any_of("Topology"), -Assembly)

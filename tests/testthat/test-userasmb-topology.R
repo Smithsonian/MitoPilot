@@ -20,6 +20,17 @@ test_that("a single-contig assembly keeps the declared topology", {
 test_that("a multi-contig assembly is recorded as multi", {
   td <- withr::local_tempdir()
   write_fasta(file.path(td, "s1.fasta"), 5)
+  mapping <- data.frame(ID = "s1", Assembly = "s1.fasta", Topology = "linear")
+
+  expect_silent(out <- resolve_sample_topology(mapping, td))
+  expect_equal(out, "multi")
+})
+
+test_that("only a circular declaration on a multi-contig assembly warns", {
+  # Declaring "linear" costs nothing: it is the default and an unknown contig is
+  # treated as linear anyway. Declaring "circular" is an assertion we override.
+  td <- withr::local_tempdir()
+  write_fasta(file.path(td, "s1.fasta"), 5)
   mapping <- data.frame(ID = "s1", Assembly = "s1.fasta", Topology = "circular")
 
   expect_warning(out <- resolve_sample_topology(mapping, td), "s1")

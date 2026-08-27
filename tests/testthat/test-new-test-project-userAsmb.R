@@ -9,7 +9,10 @@ test_that("the userAsmb test mapping matches the packaged data", {
   mapping <- utils::read.csv(mapping_fn)
   expect_true(all(c("ID", "Taxon", "R1", "R2", "Assembly", "Topology", "Donors")
                   %in% names(mapping)))
-  expect_true(all(mapping$Topology %in% c("linear", "circular")))
+  # Blank for the multi-contig samples: a draft assembly has no topology to
+  # declare, and MitoPilot works it out per contig instead.
+  expect_true(all(mapping$Topology %in% c("linear", "circular", "")))
+  expect_true(all(mapping$Topology[grepl("^UA_MULTI_", mapping$ID)] == ""))
   expect_false(any(duplicated(mapping$ID)))
 
   for (fn in mapping$Assembly) {

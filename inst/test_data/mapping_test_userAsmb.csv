@@ -2,9 +2,9 @@ ID,Taxon,R1,R2,Assembly,Topology,Donors,Expected
 UA_LINEAR,Conger oceanicus,UA_LINEAR_R1.fastq.gz,UA_LINEAR_R2.fastq.gz,UA_LINEAR.fasta,linear,SRR22396843,single linear mitogenome contig
 UA_CIRCULAR,Xyrichtys novacula,UA_CIRCULAR_R1.fastq.gz,UA_CIRCULAR_R2.fastq.gz,UA_CIRCULAR.fasta,circular,SRR22396640,single mitogenome contig - already circular
 UA_UNCIRC,Psychrolutes paradoxus,UA_UNCIRC_R1.fastq.gz,UA_UNCIRC_R2.fastq.gz,UA_UNCIRC.fasta,linear,SRR22396794,circular mitogenome reported as linear with a 400 bp duplicated end -> circularized
-UA_MULTI_ONE,Conger oceanicus,UA_MULTI_ONE_R1.fastq.gz,UA_MULTI_ONE_R2.fastq.gz,UA_MULTI_ONE.fasta,linear,SRR22396843,multi-contig assembly with one mitogenome -> search keeps 1 contig
-UA_MULTI_TWO,Conger oceanicus,UA_MULTI_TWO_R1.fastq.gz,UA_MULTI_TWO_R2.fastq.gz,UA_MULTI_TWO.fasta,linear,SRR22396843;SRR22396640,multi-contig assembly with two species' mitogenomes (contamination)
-UA_MULTI_NONE,Conger oceanicus,UA_MULTI_NONE_R1.fastq.gz,UA_MULTI_NONE_R2.fastq.gz,UA_MULTI_NONE.fasta,linear,SRR22396843,multi-contig assembly with no mitogenome -> search finds nothing
-UA_MULTI_UNCIRC,Psychrolutes paradoxus,UA_MULTI_UNCIRC_R1.fastq.gz,UA_MULTI_UNCIRC_R2.fastq.gz,UA_MULTI_UNCIRC.fasta,linear,SRR22396794,multi-contig assembly with one uncircularized mitogenome -> found then circularized
-UA_MULTI_MIXED,Conger oceanicus,UA_MULTI_MIXED_R1.fastq.gz,UA_MULTI_MIXED_R2.fastq.gz,UA_MULTI_MIXED.fasta,linear,SRR22396843;SRR22396794,multi-contig assembly with two mitogenomes: one linear and one uncircularized
-UA_MULTI_FRAG,Conger oceanicus,UA_MULTI_FRAG_R1.fastq.gz,UA_MULTI_FRAG_R2.fastq.gz,UA_MULTI_FRAG.fasta,linear,SRR22396843,multi-contig assembly with one mitogenome split across 3 contigs -> found then joined
+UA_MULTI_ONE,Conger oceanicus,UA_MULTI_ONE_R1.fastq.gz,UA_MULTI_ONE_R2.fastq.gz,UA_MULTI_ONE.fasta,,SRR22396843,multi-contig assembly with one mitogenome -> search keeps 1 contig
+UA_MULTI_TWO,Conger oceanicus,UA_MULTI_TWO_R1.fastq.gz,UA_MULTI_TWO_R2.fastq.gz,UA_MULTI_TWO.fasta,,SRR22396843;SRR22396640,multi-contig assembly with two species' mitogenomes (contamination)
+UA_MULTI_NONE,Conger oceanicus,UA_MULTI_NONE_R1.fastq.gz,UA_MULTI_NONE_R2.fastq.gz,UA_MULTI_NONE.fasta,,SRR22396843,multi-contig assembly with no mitogenome -> search finds nothing
+UA_MULTI_UNCIRC,Psychrolutes paradoxus,UA_MULTI_UNCIRC_R1.fastq.gz,UA_MULTI_UNCIRC_R2.fastq.gz,UA_MULTI_UNCIRC.fasta,,SRR22396794,multi-contig assembly with one uncircularized mitogenome -> found then circularized
+UA_MULTI_MIXED,Conger oceanicus,UA_MULTI_MIXED_R1.fastq.gz,UA_MULTI_MIXED_R2.fastq.gz,UA_MULTI_MIXED.fasta,,SRR22396843;SRR22396794,multi-contig assembly with two mitogenomes: one linear and one uncircularized
+UA_MULTI_FRAG,Conger oceanicus,UA_MULTI_FRAG_R1.fastq.gz,UA_MULTI_FRAG_R2.fastq.gz,UA_MULTI_FRAG.fasta,,SRR22396843,multi-contig assembly with one mitogenome split across 3 contigs -> found then joined

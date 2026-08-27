@@ -75,16 +75,20 @@ resolve_sample_topology <- function(mapping, assembly_path = NULL, mapping_id = 
   } else {
     rep(NA_character_, nrow(mapping))
   }
-  stated <- !is.na(declared) & nzchar(declared)
-  declared[!stated] <- "linear"
+  declared[is.na(declared) | !nzchar(declared)] <- "linear"
 
   n_contigs <- count_assembly_contigs(mapping[["Assembly"]], assembly_path)
   multi <- !is.na(n_contigs) & n_contigs > 1L
 
-  if (any(multi & stated)) {
+  # Only a "circular" declaration on a multi-contig assembly is worth flagging:
+  # the user asserted the molecule is closed and it cannot be. "linear" is both
+  # the default and how an unknown contig is treated, so nothing is lost there.
+  conflict <- multi & declared == "circular"
+  if (any(conflict)) {
     warning(
-      "Ignoring the declared topology for multi-contig assemblies: ",
-      paste(mapping[[mapping_id]][multi & stated], collapse = ", "),
+      "Cannot declare a multi-contig assembly circular; recording it as ",
+      "\"multi\" instead: ",
+      paste(mapping[[mapping_id]][conflict], collapse = ", "),
       call. = FALSE
     )
   }

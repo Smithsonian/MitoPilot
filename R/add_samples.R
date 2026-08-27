@@ -70,12 +70,14 @@ add_samples <- function(
   # Metadata table ----
   ##############################################################################################################
   if("Assembly" %in% colnames(mapping)){
+    # Resolved outside the mutate so a warning reaches the user as itself.
+    sample_topology <- resolve_sample_topology(mapping, project_asmb_dir(path), mapping_id)
     mapping <- mapping |>
       dplyr::mutate(
         ID = .data[[mapping_id]],
         Taxon = .data[[mapping_taxon]],
         genetic_code = genetic_code,
-        topology = resolve_sample_topology(mapping, project_asmb_dir(path), mapping_id),
+        topology = sample_topology,
         assembly = .data[["Assembly"]],
       ) |>
       dplyr::select(-dplyr::any_of("Topology"), -Assembly)
