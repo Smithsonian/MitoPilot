@@ -43,7 +43,7 @@ This release is about **user-supplied assemblies**. MitoPilot can now take a who
 
 ## Bug Fixes
 
-- **The Assemble table reports the joined length after a scaffold join.** The length column was written before the join and kept describing the fragments it replaced. Also fixed for joins made by hand in the app.
+- **The Assemble table reports the lengths of the contigs that are actually active.** The length and scaffold counts were a snapshot taken before any join, so a joined sample kept describing the fragments it replaced, and ignoring or restoring a contig afterwards changed nothing. They are now refreshed whenever a join, an edit, or an ignore toggle changes what is active, and equal-length fragments are listed individually rather than collapsed into one value that looks like a total.
 - **Export reads each record's own topology** rather than applying one value across a mixed unit.
 - **The Annotate update dialog counts sequences, not samples**, which is what it has always actually been queuing.
 

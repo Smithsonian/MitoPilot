@@ -346,6 +346,14 @@ assembly_coverage_details_server <- function(id, rv) {
         rv$focal_assembly$scaffold[row],
         rv$focal_assembly$ignore[row]
       )
+      # Length/scaffolds track the active contigs, so an un-ignored scaffold
+      # reappears in the Assemble table instead of leaving a stale summary.
+      summ <- refresh_assemble_summary(session$userData$con, rv$updating$ID)
+      summ_update <- data.frame(ID = rv$updating$ID, length = summ$length,
+                                scaffolds = summ$scaffolds)
+      rv$updating$length <- summ$length
+      rv$updating$scaffolds <- summ$scaffolds
+      rv$data <- rv$data |> dplyr::rows_update(summ_update, by = "ID")
       reactable::updateReactable(
         "table",
         data = rv$focal_assembly,
@@ -1486,11 +1494,12 @@ assembly_coverage_details_server <- function(id, rv) {
       dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::rows_upsert(a, by = c("ID", "path", "scaffold"), copy = T, in_place = T)
 
+      # Summary now describes the consensus, not the scaffolds it replaced.
+      summ <- refresh_assemble_summary(session$userData$con, ID)
       update <- data.frame(
         ID = ID, paths = -abs(rv$updating$paths), assemble_lock = 1,
         topology = topology,
-        # Summary now describes the consensus, not the scaffolds it replaced.
-        length = as.character(nchar(seq_str)), scaffolds = 1L,
+        length = summ$length, scaffolds = summ$scaffolds,
         assemble_notes = compose_edit_notes(note)
       )
       if (!is.null(bl)) update <- cbind(update, bl)
@@ -1978,11 +1987,13 @@ assembly_coverage_details_server <- function(id, rv) {
         stringr::str_remove_all("\\[Assembly edited:[^\\]]*\\]\\s*") |>
         stringr::str_trim()
 
+      summ <- refresh_assemble_summary(session$userData$con, ID)
       update <- data.frame(
         ID = ID,
         paths = abs(rv$updating$paths),
         assemble_lock = 0L,
         assemble_switch = if (n_remaining > 1L) 3L else 2L,
+        length = summ$length, scaffolds = summ$scaffolds,
         assemble_notes = new_notes
       )
       rv$data <- rv$data |> dplyr::rows_update(update, by = "ID")
