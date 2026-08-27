@@ -90,19 +90,51 @@ workflow WF1_userAsmb {
 
     // No-reads projects skip PREPROCESS entirely and pull samples straight from
     // the DB; read-based projects preprocess then map reads for coverage. Either
-    // path emits the same blast_in, so BLAST is invoked once.
+    // path emits the same channels, so everything below is invoked once.
     if (params.noRawData) {
         COVERAGE_userAsmb_noReads()
-        blast_in = COVERAGE_userAsmb_noReads.out.blast_in
+        cov = COVERAGE_userAsmb_noReads.out
     } else {
         PREPROCESS()
         COVERAGE_userAsmb(PREPROCESS.out[0])
-        blast_in = COVERAGE_userAsmb.out.blast_in
+        cov = COVERAGE_userAsmb.out
     }
-    BLAST_GENBANK(blast_in)
-    // No scaffold join on this path, so nothing is withheld from the 4 -> 2
-    // promotion: the reference fetch stays the last word on state.
-    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map, BLAST_GENBANK.out.ref_batches, channel.empty())
+
+    BLAST_GENBANK(cov.blast_in)
+    // Join-eligible samples are withheld from the reference fetch's 4 -> 2
+    // promotion: SCAFFOLD_JOIN owns their final state.
+    BLAST_REF_FETCH(BLAST_GENBANK.out.ref_input, BLAST_GENBANK.out.scaffold_map,
+                    BLAST_GENBANK.out.ref_batches, cov.join_expected)
+
+    // remainder: true rather than plain inner joins, so a sample whose coverage
+    // or reference fetch failed is reported instead of silently vanishing while
+    // still counting as a success.
+    cov.join_eligible
+        .join(cov.cov_files, remainder: true)
+        .join(BLAST_REF_FETCH.out.ref_seq, remainder: true)
+        .join(BLAST_GENBANK.out.scaffold_hits, remainder: true)
+        .branch { row ->
+            complete:   !row.contains(null)
+            incomplete: true
+        }
+        .set { join_rows }
+
+    // Restrict to IDs actually expected to reach the join before reporting
+    // anything as failed. The filter comes FIRST: a remainder row for an ID with
+    // no left-hand entry is emitted shorter than the full tuple, so the
+    // positions below are only safe once the row is known to be join_eligible.
+    join_rows.incomplete
+        .join(cov.join_expected.map { id -> tuple(id, true) })
+        .map { row ->
+            def missing = []
+            if (row[4] == null) missing << 'coverage statistics'
+            if (row[5] == null) missing << 'the BLAST reference sequence'
+            if (row[6] == null) missing << 'scaffold BLAST hits'
+            tuple(row[0], missing.join(', '))
+        }
+        .set { join_dropped }
+
+    SCAFFOLD_JOIN(join_rows.complete, join_dropped, cov.join_redo)
 
 }
 
