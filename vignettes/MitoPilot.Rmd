@@ -224,9 +224,9 @@ Docker. To run on a cluster instead, see
 `TRUE` downloads about 10 GB of raw data, which takes much longer to process.
 
 If you already have assemblies and want to try that route instead, `new_test_project_userAsmb()`
-sets up the equivalent test project for user-supplied assemblies: eight samples covering
-linear, circular, not-yet-circularized, and multi-contig assemblies holding one, two, or no
-mitogenomes. It borrows the same fish reads.
+sets up the equivalent test project for user-supplied assemblies: nine samples covering
+linear, circular, not-yet-circularized, and six multi-contig assemblies holding one, two,
+none, or one split across three contigs. It borrows the same fish reads.
 
 MitoPilot lists the samples as it sets them up, then writes a hidden `.config`
 file holding the Nextflow settings for the project directory. The defaults are fine for the

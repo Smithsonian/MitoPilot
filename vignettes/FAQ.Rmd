@@ -60,6 +60,25 @@ for details.
 The call is not a black box: clicking a sample's **Circularization** note opens
 the overlap alignment and the junction read depth it was based on.
 
+## Can MitoPilot join a fragmented assembly into one sequence?
+
+Yes, if the fragments are a single assembler path and all match the same
+reference mitogenome.
+
+Create the project with `new_project_userAsmb(join_scaffolds = TRUE)`. During
+the Assemble module MitoPilot orders the sample's contigs against its BLAST
+reference and joins them into one sequence. If the contigs instead match
+different reference mitogenomes, MitoPilot leaves them separate for review
+rather than joining them, so a contaminated sample is never spliced into a
+chimera, and it records the reason in the sample's notes.
+
+Pair it with `find_mitogenome = TRUE` on whole-genome assemblies, since join
+eligibility otherwise covers any multi-contig assembly, not just mitochondrial
+contigs. The result can be reviewed in the app and re-queued with the
+**Redo Scaffold Join** button. See
+["Joining fragmented assemblies"](Your-Own-Project.html#joining-fragmented-assemblies)
+for details.
+
 ## How do I skip processing certain samples?
 
 There are two ways to make MitoPilot skip a set of samples when running the Assembly or Annotate modules.

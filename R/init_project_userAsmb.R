@@ -38,7 +38,9 @@
 #' @param join_scaffolds (logical) Order a fragmented single-path assembly
 #'   against its BLAST reference into one joined sequence during WF1 (default =
 #'   FALSE). Samples whose contigs match different reference mitogenomes are
-#'   left alone.
+#'   left alone. Because eligibility here is any multi-contig assembly rather
+#'   than just mitogenome scaffolds, use this alongside `find_mitogenome = TRUE`
+#'   so the join sees only confirmed mitochondrial contigs.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from each sample's curation ruleset; a number sets a
 #'   project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi

@@ -17,7 +17,7 @@ pieces <- Biostrings::DNAStringSet(lapply(seq_len(3), function(i) {
 names(pieces) <- paste0("mito_contig_", seq_len(3))
 
 # Middle piece flipped, so the join has to detect and correct the orientation.
-pieces[[2]] <- Biostrings::reverseComplement(pieces[[2]])
+pieces[2] <- Biostrings::reverseComplement(pieces[2])
 
 # Written 3, 1, 2 so file order carries no information about assembly order.
 out <- c(pieces[3], decoys[1:50], pieces[1], decoys[51:100], pieces[2])

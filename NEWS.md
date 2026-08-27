@@ -1,3 +1,18 @@
+# MitoPilot (development version)
+
+## New Features
+
+### Scaffold joining for user-supplied assemblies
+
+- A fragmented single-path assembly can now be **ordered against its BLAST reference into one joined sequence** during WF1, the same step the regular pipeline already had. Off by default; enable with `new_project_userAsmb(join_scaffolds = TRUE)` or by setting `join_scaffolds` in the assembly parameter set.
+- Samples whose contigs match **different** reference mitogenomes are left separate for review rather than joined, so a contaminated sample is never spliced together.
+- A new **"Redo Scaffold Join" action** in the Assemble tab lets a join be re-run without redoing the rest of assembly.
+- A new **Scaffold Join Notes** column shows why a join was declined or failed.
+- **Existing projects** are migrated automatically by `backwards_compatibility()`; the toggle defaults to off, so behaviour is unchanged unless it is switched on.
+
+**Note**
+A user-assembly project pinned to a container image older than this release now runs a pipeline step that image may not support. Rebuild or repoint the container before enabling `join_scaffolds`.
+
 # MitoPilot 1.5.3
 
 Released 2026-08-21. Container: `macguigand/mitopilot:1.5.3`

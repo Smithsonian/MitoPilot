@@ -590,6 +590,13 @@ assemble_server_userAsmb <- function(id) {
       # fragmented user assembly no longer has to be reduced to one contig.
       lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
       rv$updating$assemble_lock <- as.numeric(!lock_current)
+      if (lock_current == 0) {
+        # A locked sample is never admitted by WF1 (its query requires
+        # assemble_lock = 0), so a pending join redo could never run and the
+        # flag would sit at 1 forever, keeping the Update modal reporting work
+        # that cannot be done. Locking resolves it.
+        rv$updating$join_switch <- NA_integer_
+      }
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           rv$updating,
@@ -647,6 +654,9 @@ assemble_server_userAsmb <- function(id) {
         error = function(e) NULL
       )
       missing_ids <- if (!is.null(stale)) stale$ID else character(0)
+      # Scaffold-join toggle, per sample, via its assembly parameter set. A redo
+      # on a toggled-off sample would run the join, get "skipped" back, and
+      # finalise the sample as done, erasing a state-3 failure. Refused here.
       toggles <- tryCatch(
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::filter(ID %in% ids) |>
@@ -665,6 +675,12 @@ assemble_server_userAsmb <- function(id) {
         off <- is.na(toggles$join_scaffolds) | toggles$join_scaffolds == 0
         unique(toggles$ID[off])
       }
+      # No reference accession means the join has nothing to align against. A
+      # fragmented sample with BLAST off sits legitimately at state 2, and a
+      # redo would report a missing input and mark it failed. Read the accession
+      # from the database, not rv$data: the table blanks it for display whenever
+      # a sample keeps more than one scaffold, which is every join-eligible
+      # sample.
       no_ref_ids <- redo_join_no_ref_ids(ids, toggles)
       plan <- redo_join_plan(ids, asmb, missing_ids, join_off_ids, no_ref_ids)
 

@@ -79,7 +79,9 @@ circularization options modal. See [circularize_asmb()].}
 \item{join_scaffolds}{(logical) Order a fragmented single-path assembly
 against its BLAST reference into one joined sequence during WF1 (default =
 FALSE). Samples whose contigs match different reference mitogenomes are
-left alone.}
+left alone. Because eligibility here is any multi-contig assembly rather
+than just mitogenome scaffolds, use this alongside `find_mitogenome = TRUE`
+so the join sees only confirmed mitochondrial contigs.}
 
 \item{executor}{The executor to use for running the nextflow pipeline. May be
 a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
