@@ -6,6 +6,13 @@
 #' @export
 #'
 coverage_trim <- function(assembly, stats) {
+  # A contig no reads mapped to has no coverage at all, so every base would be
+  # masked and the trim would eat the whole contig. Nothing to trim: hand it
+  # back whole. The unit is flagged in annotate_notes by the validate writer.
+  if (is.null(stats) || nrow(stats) == 0L) {
+    return(list(assembly = assembly, stats = stats))
+  }
+
   # Handle missing tail coverage (edge case)
   stats <- data.frame(Position = seq_len(length(assembly))) |>
     dplyr::left_join(
@@ -58,7 +65,9 @@ coverage_trim <- function(assembly, stats) {
       stats$mask[1:min(good_lead15)] <- TRUE
     }
   }
-  if (sum(stats$mask[1:100]) > 10) {
+  # The trailing trim can shrink stats below the window, so re-check before
+  # indexing 1:100 into it.
+  if (nrow(stats) >= 100 && sum(stats$mask[1:100]) > 10) {
     leading_trim <- 1
     while (T) {
       if (leading_trim + 51 > nrow(stats)) break

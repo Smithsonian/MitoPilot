@@ -96,6 +96,10 @@ process write_curated_result {
         else st.setString(idx, v.toString())
     }
 
+    // Auto note for a unit no reads mapped to; regenerated on every run, never
+    // user-typed.
+    def NO_COVERAGE_NOTE = 'no read coverage: trim skipped'
+
     try {
         conn.autoCommit = false
         def pragma = conn.prepareStatement("PRAGMA busy_timeout=30000"); pragma.execute(); pragma.close()
@@ -112,6 +116,10 @@ process write_curated_result {
         // This writer runs per (id, path, scaffold); the curate coverage is
         // per-path, so update only this unit's scaffold row.
         def targetSid = "${id}.${path}.${scaffold}".toString()
+        // No coverage rows means no reads mapped to this contig: the coverage
+        // trim was skipped and the assemblies row keeps its WF1 sequence. Say so
+        // on the unit rather than letting it look like a normal result.
+        def noCoverage = !groups.containsKey(targetSid)
         def updAsm = conn.prepareStatement(
             "UPDATE assemblies SET sequence = ?, length = ?, depth = ?, gc = ?, errors = ?, " +
             "time_stamp = ? WHERE ID = ? AND path = ? AND scaffold = ?")
@@ -221,13 +229,22 @@ process write_curated_result {
             if (nrs.next()) {
                 def raw = nrs.getString(1)
                 if (raw != null) {
-                    def kept = raw.split('; ', -1).findAll { !it.trim().startsWith('EDITED:') }
+                    def kept = raw.split('; ', -1).findAll {
+                        !it.trim().startsWith('EDITED:') && it.trim() != NO_COVERAGE_NOTE
+                    }
                     cleanedNotes = kept.join('; ')
                     if (cleanedNotes.trim().length() == 0) cleanedNotes = null
                 }
             }
             nrs.close(); nq.close()
         } catch (Exception ignored) {}
+
+        // Re-derived every run (and stripped above), so it clears itself once the
+        // unit has coverage.
+        if (noCoverage) {
+            def keptNotes = (cleanedNotes ?: '').split('; ', -1).findAll { it.trim().length() > 0 }
+            cleanedNotes = (keptNotes + [NO_COVERAGE_NOTE]).join('; ')
+        }
 
         // Per-unit summary write; keyed by (ID, path, scaffold) so sibling units
         // of the same path are not clobbered (path/scaffold are the key, not SET).
