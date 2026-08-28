@@ -43,6 +43,7 @@ This release is about **user-supplied assemblies**. MitoPilot can now take a who
 
 ## Bug Fixes
 
+- **A gene containing ambiguous bases no longer kills the sample.** A protein-coding gene crossing a scaffold join contains the spacer of Ns the join inserts, and translation refused it outright, so curation died partway through with an unreadable error. Those codons are now translated as `X` and the gene is flagged with an `ambiguous bases in CDS` warning for review.
 - **The Assemble table reports the lengths of the contigs that are actually active.** The length and scaffold counts were a snapshot taken before any join, so a joined sample kept describing the fragments it replaced, and ignoring or restoring a contig afterwards changed nothing. They are now refreshed whenever a join, an edit, or an ignore toggle changes what is active, and equal-length fragments are listed individually rather than collapsed into one value that looks like a total.
 - **Export reads each record's own topology** rather than applying one value across a mixed unit.
 - **The Annotate update dialog counts sequences, not samples**, which is what it has always actually been queuing.

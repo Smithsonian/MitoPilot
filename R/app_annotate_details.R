@@ -3504,7 +3504,7 @@ annotations_details_server <- function(id, rv) {
           }
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = rv$gcode)
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve")
       }
       if (rv$annotations$direction[selected()] == "-") {
         for (counter in seq_len(n_steps)) {
@@ -3524,7 +3524,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -3564,7 +3564,7 @@ annotations_details_server <- function(id, rv) {
           }
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -3585,7 +3585,7 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -3636,7 +3636,7 @@ annotations_details_server <- function(id, rv) {
         }
         pos2 <- circ_edit_pos(pos2 - (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -3669,7 +3669,7 @@ annotations_details_server <- function(id, rv) {
         pos1 <- circ_edit_pos(pos1 + (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -3722,7 +3722,7 @@ annotations_details_server <- function(id, rv) {
         }
         pos2 <- circ_edit_pos(pos2 - (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -3757,7 +3757,7 @@ annotations_details_server <- function(id, rv) {
         pos1 <- circ_edit_pos(pos1 + (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
@@ -4380,7 +4380,7 @@ annotations_details_server <- function(id, rv) {
             as.character()
           merged$translation <- extract_circ_region(assembly, new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         } else {
@@ -4393,7 +4393,7 @@ annotations_details_server <- function(id, rv) {
           merged$translation <- extract_circ_region(assembly, new_pos1 + nchar(merged$stop_codon), new_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         }
@@ -4883,7 +4883,7 @@ annotations_details_server <- function(id, rv) {
             as.character()
           reverted$translation <- extract_circ_region(assembly, merged_orig_pos1, merged_orig_pos2 - nchar(reverted$stop_codon)) |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         } else {
@@ -4896,7 +4896,7 @@ annotations_details_server <- function(id, rv) {
           reverted$translation <- extract_circ_region(assembly, merged_orig_pos1 + nchar(reverted$stop_codon), merged_orig_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         }
