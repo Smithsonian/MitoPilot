@@ -1769,7 +1769,7 @@ redo_join_status <- function(con, dir_out, ID) {
 
   row <- q(DBI::dbGetQuery(
     con,
-    "SELECT a.join_switch, a.blast_accession, o.join_scaffolds
+    "SELECT a.ID, a.join_switch, a.blast_accession, o.join_scaffolds
        FROM assemble a
        JOIN assemble_opts o ON o.assemble_opts = a.assemble_opts
       WHERE a.ID = ?",

@@ -1439,3 +1439,23 @@ test_that("join declines when a junction cannot be sized", {
   j <- utils::read.csv(file.path(dir, "X_scaffold_junctions.csv"))
   expect_equal(nrow(j), 0L)
 })
+
+test_that("redo_join_status sees a recorded BLAST reference", {
+  db <- withr::local_tempfile(fileext = ".sqlite")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  withr::defer(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "assemblies", data.frame(
+    ID = "s1", path = c(1, 1), scaffold = c(1, 2), ignore = 0
+  ))
+  DBI::dbWriteTable(con, "assemble", data.frame(
+    ID = "s1", join_switch = NA_integer_, blast_accession = "NC_000001.1",
+    assemble_opts = "user", assemble_lock = 1
+  ))
+  DBI::dbWriteTable(con, "assemble_opts", data.frame(
+    assemble_opts = "user", join_scaffolds = 1
+  ))
+
+  # dir_out does not exist, so the missing-output check is skipped.
+  st <- redo_join_status(con, file.path(tempdir(), "no-such-out"), "s1")
+  expect_equal(st$state, "ready")
+})

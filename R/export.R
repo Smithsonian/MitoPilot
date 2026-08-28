@@ -162,6 +162,26 @@ gap_is_ours <- function(run, spacers = NULL) {
   any(spacers$start <= run$end & spacers$end >= run$start)
 }
 
+#' Runs of unknown bases this pipeline is willing to declare
+#'
+#' No length floor: the join sizes every junction it makes, so even a very short
+#' spacer is a gap of estimated length. Runs a supplied sequence arrived with are
+#' dropped by provenance, not by length.
+#'
+#' @param seq_chr the unit's sequence, upper case
+#' @param spacers recorded gap intervals for this unit, same coordinates
+#'
+#' @noRd
+declared_gaps <- function(seq_chr, spacers = NULL) {
+  gaps <- find_sequence_gaps(seq_chr, min_len = 1L)
+  if (nrow(gaps) == 0L) {
+    return(gaps)
+  }
+  keep <- vapply(seq_len(nrow(gaps)),
+                 function(i) gap_is_ours(gaps[i, ], spacers), logical(1))
+  gaps[keep, , drop = FALSE]
+}
+
 #' Write one gap feature
 #'
 #' NCBI advised (GenBank support, 2026-08-28) that a plain `gap` feature is
@@ -303,10 +323,6 @@ mark_tbl_3p <- function(pos) {
 #' @param out_dir directory to save the exported files
 #' @param generateAAalignments Generate group-level amino acid alignments
 #'   (default: TRUE)
-#' @param gap_min Shortest run of unknown bases (N) reported as an `assembly_gap`
-#'   feature, bp (default = 10, the INSDC convention). Shorter runs are treated
-#'   as ambiguous bases, and still counted in the note on a coding feature that
-#'   contains them.
 #' @param gene_export Export FASTAs and feature tables for individual genes?
 #'   (default: FALSE)
 #' @param review Run the PCG annotation outlier review after writing files and
@@ -339,7 +355,6 @@ export_files <- function(
     ),
     out_dir = NULL,
     generateAAalignments = T,
-    gap_min = 10,
     gene_export = F,
     review = TRUE,
     start_aa = 10,
@@ -594,11 +609,9 @@ export_files <- function(
     paste(c(seq_name, "MitoPilot", "region", 1, asmb_len, ".", "+", ".", f9), collapse = "\t") |>
       cat(file = gff_fn, sep = "\n", append = TRUE)
 
-    # Runs of unknown bases, whatever put them there. Declared as assembly_gap
-    # features so a submission carries no undeclared gaps, and used to note any
-    # coding feature sitting across one.
+    # Runs of unknown bases. Declared as gap features so a submission carries no
+    # undeclared gaps, and used to note any coding feature sitting across one.
     seq_chr <- toupper(as.character(seq)[1])
-    gaps <- find_sequence_gaps(seq_chr, min_len = gap_min)
 
     # Provenance for this unit's runs: was it joined, which junction lengths were
     # placeholders rather than measurements, and has the user said whether the
@@ -624,11 +637,7 @@ export_files <- function(
     }
     # Only runs this pipeline inserted are declared. A run the sequence arrived
     # with may be ambiguous base calls rather than a gap.
-    if (nrow(gaps) > 0) {
-      gaps <- gaps[vapply(seq_len(nrow(gaps)),
-                          function(i) gap_is_ours(gaps[i, ], spacers),
-                          logical(1)), , drop = FALSE]
-    }
+    gaps <- declared_gaps(seq_chr, spacers)
 
     gap_state <- new.env(parent = emptyenv())
     gap_state$i <- 1L

@@ -44,3 +44,20 @@ test_that("the gap block carries the estimated length", {
   expect_equal(out[1], "11\t22\tgap")
   expect_equal(out[2], "\t\t\testimated_length\t12")
 })
+
+test_that("a spacer shorter than the length floor is still declared", {
+  # The join sizes every junction it makes, so a 3 bp spacer is a real gap of
+  # estimated length, not an ambiguous base call.
+  seq <- paste0(strrep("A", 10), strrep("N", 3), strrep("C", 10))
+  spacers <- data.frame(start = 11L, end = 13L, size_known = 1L)
+
+  gaps <- declared_gaps(seq, spacers)
+  expect_equal(nrow(gaps), 1L)
+  expect_equal(gaps$length, 3L)
+})
+
+test_that("a run the sequence arrived with is not declared, at any length", {
+  seq <- paste0(strrep("A", 10), strrep("N", 40), strrep("C", 10))
+  expect_equal(nrow(declared_gaps(seq, NULL)), 0L)
+  expect_equal(nrow(declared_gaps(seq, data.frame(start = 100L, end = 110L))), 0L)
+})
