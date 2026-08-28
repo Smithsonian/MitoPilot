@@ -1680,6 +1680,18 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   res <- build_joined_assembly(scaffolds_df, ref_seq, gap_len = gap_len,
                                circular = circular)
 
+  # A junction the reference could not size would need a fabricated spacer, so
+  # the sample is left fragmented rather than joined into something that cannot
+  # be submitted.
+  unsized <- unsized_gaps(res$gap_intervals)
+  if (nrow(unsized) > 0) {
+    note <- unsized_join_note(unsized)
+    write_scaffold_junctions(out_dir, ID, NULL)
+    write_join_outcome(out_dir, "declined", note)
+    return(invisible(list(skipped = TRUE, mappings = mappings,
+                          outcome = "declined", note = note)))
+  }
+
   write_scaffold_junctions(out_dir, ID, res$gap_intervals)
   write_joined_files(out_dir, ID, res$seq, res$depth, res$gc, res$errors,
                      res$topology)
@@ -1692,6 +1704,38 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   write_join_outcome(out_dir, "joined")
   res$outcome <- "joined"
   invisible(res)
+}
+
+#' Junctions whose gap length the reference could not estimate
+#'
+#' GenBank expects the number of Ns to BE the estimated gap length, so a spacer
+#' of fabricated length cannot be submitted. A sample with one of these is left
+#' fragmented instead; NCBI accepts several sequences per BioSample.
+#'
+#' @param gap_intervals `gap_intervals` from [assemble_from_layout()]
+#'
+#' @return the unsized rows, empty when every gap was estimated
+#'
+#' @noRd
+unsized_gaps <- function(gap_intervals) {
+  if (is.null(gap_intervals) || nrow(gap_intervals) == 0L) {
+    return(gap_intervals)
+  }
+  gap_intervals[!is.na(gap_intervals$size_known) & gap_intervals$size_known == 0L,
+                , drop = FALSE]
+}
+
+#' Note explaining a join declined for unsized junctions
+#' @noRd
+unsized_join_note <- function(unsized) {
+  n <- nrow(unsized)
+  paste0(
+    "Not joined: ", n, " junction", if (n == 1L) "" else "s",
+    " could not be sized from the reference. GenBank expects the number of Ns ",
+    "to be the estimated gap length, so a fabricated spacer cannot be ",
+    "submitted. The contigs are left separate; they can be submitted as ",
+    "multiple sequences under one BioSample."
+  )
 }
 
 #' Whether one sample can have its scaffold join re-run by the pipeline

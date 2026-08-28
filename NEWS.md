@@ -1,3 +1,5 @@
+- **Gaps in a joined assembly are declared on export.** Each run of `N`s MitoPilot inserted is written as a `gap` feature carrying its estimated length, so a submission no longer contains undeclared gaps. Any coding feature containing unknown bases carries a note saying how many.
+- **A junction that cannot be sized is no longer padded.** MitoPilot used to insert a fixed 100 `N`s where the reference could not estimate a gap. NCBI expects the number of `N`s to be the estimated length, so such a sample is now left fragmented with a note; its contigs can be submitted as several sequences under one BioSample.
 # MitoPilot 1.5.4
 
 Released 2026-08-27. Container: `macguigand/mitopilot:1.5.4`

@@ -36,18 +36,11 @@ test_that("unknown bases are counted within a feature, wrap included", {
   expect_equal(count_unknown_bases(seq, 15, 3, TRUE, nchar(seq)), 2L)
 })
 
-test_that("the gap block carries the qualifiers INSDC requires", {
+test_that("the gap block carries the estimated length", {
   fn <- withr::local_tempfile()
-  write_tbl_gap(
-    data.frame(start = 11L, end = 22L, length = 12L), fn,
-    gap_qualifiers(data.frame(start = 11, end = 22, length = 12),
-                   data.frame(start = 11, end = 22, size_known = 1L),
-                   genus_match = "same")
-  )
+  write_tbl_gap(data.frame(start = 11L, end = 22L, length = 12L), fn)
   out <- readLines(fn)
 
-  expect_equal(out[1], "11\t22\tassembly_gap")
+  expect_equal(out[1], "11\t22\tgap")
   expect_equal(out[2], "\t\t\testimated_length\t12")
-  expect_equal(out[3], "\t\t\tgap_type\twithin scaffold")
-  expect_equal(out[4], "\t\t\tlinkage_evidence\talign-genus")
 })

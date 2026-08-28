@@ -1983,6 +1983,18 @@ assembly_coverage_details_server <- function(id, rv) {
           # described a single scaffold's hit and are meaningless for the joined
           # assembly. Use the stored accession, not the raw dropdown, so a reference
           # whose recompute failed cannot mislabel Path 0.
+          # Same refusal as the pipeline: a spacer of invented length cannot be
+          # submitted, so the sample stays fragmented instead.
+          unsized <- unsized_gaps(res$gap_intervals)
+          if (nrow(unsized) > 0) {
+            shinyWidgets::sendSweetAlert(
+              session = session,
+              title = "Cannot join: gap length unknown",
+              text = unsized_join_note(unsized),
+              type = "error"
+            )
+            req(FALSE)
+          }
           join_acc <- rv$join_ref_accession
           if (is.null(join_acc)) join_acc <- input$join_reference
           blast_row <- join_reference_blast_row(join_acc, rows)

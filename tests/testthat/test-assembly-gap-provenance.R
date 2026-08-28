@@ -106,9 +106,7 @@ test_that("a scaffold's own Ns are never mistaken for a spacer", {
   # and unsized.
   run <- find_sequence_gaps(joined$seq, min_len = 10)
   expect_equal(run$length, 140L)
-  q <- gap_qualifiers(run, iv, genus_match = "same")
-  expect_equal(q$estimated_length, "unknown")
-  expect_equal(q$linkage_evidence, "align-genus")
+  expect_true(gap_is_ours(run, iv))
 })
 
 test_that("a scaffold's own 100 bp gap does not borrow our evidence", {
@@ -126,16 +124,8 @@ test_that("a scaffold's own 100 bp gap does not borrow our evidence", {
   runs <- find_sequence_gaps(joined$seq, min_len = 10)
   expect_equal(nrow(runs), 2L)
 
-  own <- gap_qualifiers(runs[1, ], iv, genus_match = "same")
-  expect_false(own$ours)
-  expect_equal(own$estimated_length, "100")
-  expect_true(is.na(own$linkage_evidence))
-  expect_equal(own$gap_type, "unknown")
-
-  ours <- gap_qualifiers(runs[2, ], iv, genus_match = "same")
-  expect_true(ours$ours)
-  expect_equal(ours$estimated_length, "unknown")
-  expect_equal(ours$linkage_evidence, "align-genus")
+  expect_false(gap_is_ours(runs[1, ], iv))   # the scaffold's own gap
+  expect_true(gap_is_ours(runs[2, ], iv))    # the spacer we inserted
 })
 
 test_that("spacer positions survive a trim and a rotation", {
@@ -154,73 +144,59 @@ test_that("spacer positions survive a trim and a rotation", {
 
 # --- how export describes what it finds --------------------------------------
 
+# NCBI (S. Storz, 2026-08-28): a plain `gap` feature is enough, the number of Ns
+# must BE the estimated length, and a feature spanning an estimated gap stays
+# continuous. So the only question left is whether a run is one we inserted.
+
 spacer_df <- function(start, end, size_known) {
   data.frame(start = start, end = end, size_known = size_known)
 }
 
-test_that("a measured gap in a joined unit reports its length", {
-  q <- gap_qualifiers(data.frame(start = 11, end = 22, length = 12),
-                      spacer_df(11, 22, 1L), genus_match = "same")
-  expect_equal(q$estimated_length, "12")
-  expect_equal(q$linkage_evidence, "align-genus")
-  expect_equal(q$gap_type, "within scaffold")
+test_that("a run overlapping a spacer is ours", {
+  expect_true(gap_is_ours(data.frame(start = 11, end = 22, length = 12),
+                          spacer_df(11, 22, 1L)))
+  # partial overlap still counts: a scaffold's own Ns can fuse with a spacer
+  expect_true(gap_is_ours(data.frame(start = 1, end = 30, length = 30),
+                          spacer_df(11, 22, 1L)))
 })
 
-test_that("a placeholder gap reports an unknown length", {
-  q <- gap_qualifiers(data.frame(start = 11, end = 110, length = 100),
-                      spacer_df(11, 110, 0L), genus_match = "different")
-  expect_equal(q$estimated_length, "unknown")
-  expect_equal(q$linkage_evidence, "align-xgenus")
+test_that("a run we did not insert is not ours", {
+  expect_false(gap_is_ours(data.frame(start = 500, end = 599, length = 100),
+                           spacer_df(11, 110, 1L)))
+  expect_false(gap_is_ours(data.frame(start = 1, end = 12, length = 12), NULL))
+  expect_false(gap_is_ours(data.frame(start = 1, end = 12, length = 12),
+                           spacer_df(integer(0), integer(0), integer(0))))
 })
 
-test_that("linkage evidence uses the hyphenated feature-table spelling", {
-  # The underscore form belongs to AGP, a different file format.
-  ev <- function(g) gap_qualifiers(data.frame(start = 1, end = 12, length = 12),
-                                   spacer_df(1, 12, 1L), genus_match = g)$linkage_evidence
-  expect_equal(ev("same"), "align-genus")
-  expect_equal(ev("different"), "align-xgenus")
-})
-
-test_that("with no genus answer we claim nothing at all", {
-  q <- gap_qualifiers(data.frame(start = 1, end = 12, length = 12),
-                      spacer_df(1, 12, 1L), genus_match = NA_character_)
-  expect_true(is.na(q$linkage_evidence))
-  # linkage_evidence is mandatory for "within scaffold", so the scaffold claim
-  # goes too rather than emitting an invalid feature.
-  expect_equal(q$gap_type, "unknown")
-})
-
-test_that("Ns we did not put there never borrow our alignment as evidence", {
-  q <- gap_qualifiers(data.frame(start = 500, end = 599, length = 100),
-                      spacer_df(11, 110, 0L), genus_match = "same")
-  expect_false(q$ours)
-  expect_true(is.na(q$linkage_evidence))
-  expect_equal(q$gap_type, "unknown")
-  expect_equal(q$estimated_length, "100")
-})
-
-test_that("the written block carries the chosen qualifiers", {
+test_that("the gap feature carries only an estimated length", {
   fn <- withr::local_tempfile()
-  write_tbl_gap(
-    data.frame(start = 11L, end = 110L, length = 100L), fn,
-    gap_qualifiers(data.frame(start = 11, end = 110, length = 100),
-                   spacer_df(11, 110, 0L), genus_match = "different")
-  )
+  write_tbl_gap(data.frame(start = 11L, end = 22L, length = 12L), fn)
   out <- readLines(fn)
 
-  expect_equal(out[1], "11\t110\tassembly_gap")
-  expect_equal(out[2], "\t\t\testimated_length\tunknown")
-  expect_equal(out[3], "\t\t\tgap_type\twithin scaffold")
-  expect_equal(out[4], "\t\t\tlinkage_evidence\talign-xgenus")
-})
-
-test_that("no linkage_evidence line is written when none may be claimed", {
-  fn <- withr::local_tempfile()
-  write_tbl_gap(data.frame(start = 1L, end = 12L, length = 12L), fn)
-  out <- readLines(fn)
+  expect_equal(out[1], "11\t22\tgap")
   expect_equal(out[2], "\t\t\testimated_length\t12")
-  expect_equal(out[3], "\t\t\tgap_type\tunknown")
-  expect_length(out, 3L)
+  # no gap_type, no linkage_evidence: NCBI says the plain feature is enough
+  expect_length(out, 2L)
+})
+
+# --- a junction we cannot size is refused, not padded ------------------------
+
+test_that("unsized gaps are picked out of a join", {
+  iv <- data.frame(junction = c(1L, 2L), start = c(11L, 50L), end = c(22L, 149L),
+                   length = c(12L, 100L), size_known = c(1L, 0L))
+  expect_equal(nrow(unsized_gaps(iv)), 1L)
+  expect_equal(unsized_gaps(iv)$start, 50L)
+
+  sized_only <- iv[iv$size_known == 1L, , drop = FALSE]
+  expect_equal(nrow(unsized_gaps(sized_only)), 0L)
+  expect_equal(nrow(unsized_gaps(NULL) %||% data.frame()), 0L)
+})
+
+test_that("the refusal note says why and what to do instead", {
+  note <- unsized_join_note(data.frame(start = 50L, end = 149L))
+  expect_match(note, "could not be sized")
+  expect_match(note, "estimated gap length")
+  expect_match(note, "multiple sequences")
 })
 
 # --- the app writes its own provenance ---------------------------------------

@@ -246,45 +246,35 @@ The FASTA and the feature table are the two files you need for a
 
 ### Sequences containing unknown bases
 
-An assembly may contain runs of `N`, whether from a gap between joined pieces, a
-consensus built with ambiguity codes, or a sequence that arrived that way. The
-bases are exported as they are, never quietly removed, and MitoPilot declares
-them so a submission does not carry undeclared gaps:
+Where MitoPilot joins a fragmented assembly, it inserts `N`s between the pieces
+to represent the gap. NCBI accepts gapped mitogenome submissions, on one
+condition: **the number of `N`s must be the estimated gap length**. MitoPilot
+therefore only joins across a junction whose size it can estimate from the
+reference. A sample with a junction it cannot size is left fragmented, with a
+note saying so; its contigs can be submitted as several sequences under one
+BioSample, which NCBI also accepts.
 
-- A run of **10 or more** `N` is written as an
-  [`assembly_gap`](https://www.ncbi.nlm.nih.gov/genbank/wgs_gapped/) feature.
-  Shorter runs count as ambiguous bases, which GenBank accepts without a gap
-  feature.
-- Any coding feature containing unknown bases gets a note saying how many, for
-  example `contains 12 bases of unknown sequence`, and the affected codons
-  translate to `X`.
+On export, each run of 10 or more `N`s that MitoPilot inserted is written as a
+`gap` feature carrying its estimated length:
 
-Export prints a line per sample naming how many runs it declared.
+```
+6009	6020	gap
+			estimated_length	12
+```
 
-**How each gap is described.** `estimated_length` is the run's own length when
-MitoPilot knows the size, and `unknown` when the run is a placeholder for a
-junction it could not measure, which is the GenBank convention rather than
-claiming a measurement it does not have.
+That is all NCBI needs; the fuller `assembly_gap` feature, with its gap types and
+linkage evidence, belongs to whole-genome assembly submissions and is not
+required here.
 
-`linkage_evidence` says why the pieces either side are believed to belong
-together:
+A gene spanning such a gap stays a **single continuous feature**, since the gap
+length is an estimate rather than unknown. It carries a note saying how many
+bases are unknown, for example `contains 12 bases of unknown sequence`, and the
+affected codons translate to `X`.
 
-| Value | When |
-|---|---|
-| `align-genus` | MitoPilot ordered the pieces against a reference in the same genus as the sample |
-| `align-xgenus` | It ordered them against a reference in a different genus |
-| *(omitted)* | The `N`s were already in the sequence you supplied, so the ordering is not ours to vouch for. The gap is written as `gap_type unknown`, which is the only honest form: INSDC requires linkage evidence for a gap "within scaffold" and forbids it otherwise. |
-
-MitoPilot cannot tell whether the reference shares your sample's genus, because
-the `Taxon` column is free text and the reference's lineage stops at family. If
-any sample in the group has gaps, export asks: a table of those samples with
-their reference, and a **same / different** toggle per row. The answer is saved
-against the sample, so it is remembered if you re-export or move the sample to
-another group.
-
-Treat gapped regions as unverified: the bases are unknown, and where a gap length
-was estimated rather than observed, the surrounding coordinates are estimates
-too.
+Runs of `N`s that were already in a sequence you supplied are exported as they
+are but are **not** declared as gaps: they may be ambiguous base calls rather
+than a gap, and MitoPilot has nothing to say about them. They still contribute
+the note on any coding feature that contains them.
 
 The HTML report is the file to read first.
 

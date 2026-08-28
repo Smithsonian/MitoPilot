@@ -798,15 +798,11 @@ export_server <- function(id) {
       TRUE
     }
 
-    # Export option value: from the stash when the gap modal has replaced the
-    # export modal (its inputs are gone from the DOM), otherwise live.
-    exp_val <- function(name) {
-      if (!is.null(rv$export_stash)) rv$export_stash[[name]] else input[[name]]
-    }
+    exp_val <- function(name) input[[name]]
 
     run_export <- function() {
-      # TRUE while the export options modal (and its buttons) is still on screen
-      on_screen <- is.null(rv$export_stash)
+      # The export options modal is still on screen at this point.
+      on_screen <- TRUE
       group <- exp_val("export_group")
       # PCG review needs a multi-sample group; flag_PCG_outliers/export_files
       # only review when length(IDs) > 1.
@@ -829,7 +825,6 @@ export_server <- function(id) {
         gene_export = exp_val("export_genes")
       )
       # Options are captured; the stash has done its job.
-      rv$export_stash <- NULL
       # Where the files will land; surfaced via a popup once the user is done.
       rv$export_done_path <- file.path(
         session$userData$dir_out, "export", group
@@ -1202,105 +1197,6 @@ export_server <- function(id) {
       names(by_id)[vapply(by_id, function(p) length(unique(p)) > 1, logical(1))]
     }
 
-    # Pre-flight gate for samples whose sequence still contains runs of N. The
-    # same/different genus call is written to gap_evidence and decides the
-    # linkage_evidence qualifier on the exported assembly_gap features. Skipped
-    # entirely when no sample in the group has gaps.
-    gap_evidence_or_export <- function() {
-      rows <- gap_evidence_prompts(session$userData$con, input$export_group)
-      if (nrow(rows) == 0) {
-        check_overwrite_then_export()
-        return()
-      }
-      rv$gap_rows <- rows
-      # This modal REPLACES the export options modal, taking its inputs out of
-      # the DOM, so stash everything the export still needs (see exp_val()).
-      rv$export_stash <- list(
-        export_group = input$export_group,
-        fasta_header = input$fasta_header,
-        fasta_header_gene = input$fasta_header_gene,
-        include_alignments = input$include_alignments,
-        export_genes = input$export_genes,
-        review_outliers = input$review_outliers,
-        start_aa = input$start_aa,
-        stop_aa = input$stop_aa,
-        ident_pct = input$ident_pct
-      )
-      hdr <- c("Sample ID", "Taxon", "Reference", "Gaps",
-               "Reference vs sample genus")
-      modalDialog(
-        title = "Assembly gaps found",
-        size = "l",
-        p(
-          style = "color: #666; font-size: 0.9em;",
-          "These samples contain runs of N, which export as assembly_gap ",
-          "features. Your choice sets each gap's linkage_evidence qualifier: ",
-          "'align-genus' when the reference shares the sample's genus, ",
-          "'align-xgenus' when it does not. The suggestion below compares the ",
-          "first word of the taxon with the first word of the reference species."
-        ),
-        div(
-          style = "max-height: 45vh; overflow-y: auto;",
-          tags$table(
-            class = "table table-condensed",
-            tags$thead(tags$tr(lapply(hdr, tags$th))),
-            tags$tbody(lapply(seq_len(nrow(rows)), function(i) {
-              tags$tr(
-                tags$td(rows$ID[i]),
-                tags$td(if (is.na(rows$Taxon[i])) "" else rows$Taxon[i]),
-                tags$td(paste(
-                  stats::na.omit(c(rows$blast_accession[i], rows$blast_species[i])),
-                  collapse = " "
-                )),
-                tags$td(sprintf("%d runs, %d bp", rows$n_gaps[i], rows$gap_bp[i])),
-                tags$td(shinyWidgets::radioGroupButtons(
-                  inputId = ns(paste0("gap_genus_", i)),
-                  label = NULL,
-                  choices = c("same", "different"),
-                  selected = rows$genus_match[i],
-                  size = "sm"
-                ))
-              )
-            }))
-          )
-        ),
-        footer = tagList(
-          actionButton(ns("gap_cancel"), "Cancel export", class = "btn-danger"),
-          actionButton(ns("gap_confirm"), "Continue", class = "btn-primary")
-        )
-      ) |> showModal()
-    }
-
-    observeEvent(input$gap_confirm, ignoreInit = TRUE, {
-      rows <- rv$gap_rows
-      req(!is.null(rows), nrow(rows) > 0)
-      ts <- as.integer(Sys.time())
-      for (i in seq_len(nrow(rows))) {
-        choice <- input[[paste0("gap_genus_", i)]] %||% rows$genus_match[i]
-        # Tolerant of a project that predates the table, like the read side.
-        tryCatch(
-          DBI::dbExecute(
-            session$userData$con,
-            "INSERT OR REPLACE INTO gap_evidence (ID, genus_match, time_stamp)
-               VALUES (?, ?, ?)",
-            params = list(rows$ID[i], as.character(choice), ts)
-          ),
-          error = function(e) NULL
-        )
-      }
-      rv$gap_rows <- NULL
-      removeModal()
-      check_overwrite_then_export()
-    })
-
-    # Abort the export; nothing is written to gap_evidence. Reopen the export
-    # options modal this one replaced, so Cancel does not dump the user out.
-    observeEvent(input$gap_cancel, ignoreInit = TRUE, {
-      rv$gap_rows <- NULL
-      rv$export_stash <- NULL
-      removeModal()
-      trigger("export")
-    })
 
     check_overwrite_then_export <- function() {
       group <- exp_val("export_group")
@@ -1371,12 +1267,12 @@ export_server <- function(id) {
         )
         return()
       }
-      gap_evidence_or_export()
+      check_overwrite_then_export()
     })
 
     observeEvent(input$fragmented_confirm, ignoreInit = T, {
       req(input$fragmented_confirm)
-      gap_evidence_or_export()
+      check_overwrite_then_export()
     })
 
     observeEvent(input$overwrite_confirm, ignoreInit = T, {

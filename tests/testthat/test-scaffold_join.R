@@ -1249,6 +1249,30 @@ test_that("zoom base map works with no colinear offset and refuses a false one",
 
 # --- outcome reporting -------------------------------------------------------
 
+# The join now refuses any junction the reference cannot size, so these outcome
+# tests need a real mapping. minimap2 is not installed on CI, so stand in for it
+# with the placement the two halves genuinely have.
+mock_join_mapping <- function() {
+  testthat::local_mocked_bindings(
+    run_minimap2_paf = function(query_seqs, ...) {
+      nm <- names(query_seqs)
+      data.frame(
+        scaffold = nm,
+        qlen = 1500L,
+        qstart = 0L,
+        qend = 1500L,
+        strand = "+",
+        ref_start = ifelse(nm == "X.1.1", 0L, 1500L),
+        ref_end = ifelse(nm == "X.1.1", 1500L, 3000L),
+        nmatch = 1500L,
+        cigar = NA_character_,
+        stringsAsFactors = FALSE
+      )
+    },
+    .env = parent.frame()
+  )
+}
+
 join_fixture <- function(dir, hits) {
   set.seed(7)
   ref <- paste(sample(c("A", "C", "G", "T"), 3000, TRUE), collapse = "")
@@ -1299,6 +1323,7 @@ test_that("join reports 'declined' when the scaffold hits disagree", {
 
 test_that("a successful join reports 'joined' with no reason", {
   skip_if_not_installed("pwalign")
+  mock_join_mapping()
   dir <- withr::local_tempdir()
   f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
   res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
@@ -1387,4 +1412,30 @@ test_that("redo_join_no_ref_ids reads the stored accession, not the blanked disp
                          no_ref_ids = redo_join_no_ref_ids("frag", stored))
   expect_equal(plan$ready, "frag")
   expect_equal(plan$no_ref, character(0))
+})
+
+test_that("join declines when a junction cannot be sized", {
+  # No mapping means no estimate, and GenBank expects the number of Ns to BE the
+  # estimated length, so the sample is left fragmented rather than padded.
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
+  testthat::local_mocked_bindings(
+    run_minimap2_paf = function(...) {
+      data.frame(scaffold = character(0), qlen = integer(0), qstart = integer(0),
+                 qend = integer(0), strand = character(0), ref_start = integer(0),
+                 ref_end = integer(0), nmatch = integer(0), cigar = character(0),
+                 stringsAsFactors = FALSE)
+    }
+  )
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
+                           scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+
+  expect_equal(out$status, "declined")
+  expect_match(out$note, "could not be sized")
+  expect_equal(res$outcome, "declined")
+  expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
+  # and no stale intervals left describing a Path 0 that was never written
+  j <- utils::read.csv(file.path(dir, "X_scaffold_junctions.csv"))
+  expect_equal(nrow(j), 0L)
 })

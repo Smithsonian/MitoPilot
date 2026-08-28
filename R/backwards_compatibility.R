@@ -27,7 +27,7 @@
 #'   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
 #'     column as INTEGER so assembly does not crash).
 #'   \item New tables: "orf_opts", "blast_opts", "export_opts",
-#'     "scaffold_mappings", "scaffold_junctions", "gap_evidence",
+#'     "scaffold_mappings", "scaffold_junctions",
 #'     "assemblies", "assembly_blast", "circularize_opts",
 #'     "find_mito_opts", "mito_candidates", and the
 #'     "blast_ref_annotations"/"blast_ref_sequences"/"blast_ref_alignment" set.
@@ -262,7 +262,7 @@ backwards_compatibility <- function(
         error = function(e) FALSE
       )) &&
       isTRUE(tryCatch(
-        all(c("scaffold_junctions", "gap_evidence") %in% DBI::dbListTables(con)),
+        DBI::dbExistsTable(con, "scaffold_junctions"),
         error = function(e) FALSE
       )) &&
       isTRUE(tryCatch(
@@ -501,20 +501,6 @@ backwards_compatibility <- function(
     )
   }
 
-  # The user's call on whether the ordering reference shares the sample's genus,
-  # which decides the linkage evidence on an exported assembly_gap.
-  if (!DBI::dbExistsTable(con, "gap_evidence")) {
-    message("added 'gap_evidence' table")
-    DBI::dbExecute(
-      con,
-      "CREATE TABLE gap_evidence (
-        ID TEXT NOT NULL,
-        genus_match TEXT,
-        time_stamp INTEGER,
-        PRIMARY KEY (ID)
-      );"
-    )
-  }
 
   # Circularization and mitogenome-search schema; user-assembly projects only,
   # the regular pipeline has neither step.
@@ -2180,9 +2166,9 @@ schema_gaps <- function(con) {
                   "find_mito_notes") %in% DBI::dbListFields(con, "assemble"))))) {
     gaps <- c(gaps, "the circularization and mitogenome-search tables are missing")
   }
-  if (!has(all(c("scaffold_junctions", "gap_evidence") %in% DBI::dbListTables(con))) ||
+  if (!has(DBI::dbExistsTable(con, "scaffold_junctions")) ||
       !has("gap_index" %in% DBI::dbListFields(con, "scaffold_junctions"))) {
-    gaps <- c(gaps, "the assembly-gap tables are missing or out of date ('scaffold_junctions', 'gap_evidence')")
+    gaps <- c(gaps, "the 'scaffold_junctions' table is missing or out of date")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%

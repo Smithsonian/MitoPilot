@@ -462,16 +462,6 @@ new_db <- function(
     );"
   )
 
-  DBI::dbExecute(
-    con,
-    "CREATE TABLE gap_evidence (
-      ID TEXT NOT NULL,
-      genus_match TEXT,
-      time_stamp INTEGER,
-      PRIMARY KEY (ID)
-    );"
-  )
-
   # Add Annotate table ----
   DBI::dbExecute(
     con,
