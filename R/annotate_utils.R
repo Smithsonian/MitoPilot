@@ -860,9 +860,9 @@ splice_join_cds <- function(members, seq, genetic_code) {
 
 #' Count bases that are not A, C, G or T
 #'
-#' Joined scaffolds carry the N spacers the join inserts, and a consensus built
-#' in iupac mode carries ambiguity codes, so a CDS can legitimately hold bases
-#' that do not translate to a single amino acid.
+#' A sequence can legitimately hold bases that do not translate to a single
+#' amino acid: a gap spacer, a consensus built in iupac mode, or an assembly
+#' that arrived with ambiguity codes already in it.
 #'
 #' @param seq a sequence (character or XString)
 #'

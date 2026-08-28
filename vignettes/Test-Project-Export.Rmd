@@ -244,6 +244,25 @@ During export, files are saved to `<project>/out/export/<group name>/`:
 The FASTA and the feature table are the two files you need for a
 [GenBank organelle submission](https://www.ncbi.nlm.nih.gov/genbank/organelle_submit/).
 
+### Sequences containing unknown bases
+
+An assembly may contain runs of `N`, whether from a gap between joined pieces, a
+consensus built with ambiguity codes, or a sequence that arrived that way. The
+bases are exported as they are, never quietly removed, and MitoPilot declares
+them so a submission does not carry undeclared gaps:
+
+- A run of **10 or more** `N` is written as an
+  [`assembly_gap`](https://www.ncbi.nlm.nih.gov/genbank/wgs_gapped/) feature
+  carrying its `estimated_length`, `gap_type`, and `linkage_evidence`. Shorter
+  runs count as ambiguous bases, which GenBank accepts without a gap feature.
+- Any coding feature containing unknown bases gets a note saying how many, for
+  example `contains 12 bases of unknown sequence`, and the affected codons
+  translate to `X`.
+
+Export prints a line per sample naming how many runs it declared. Treat those
+regions as unverified: the bases are unknown, and where a gap length was
+estimated rather than observed, the surrounding coordinates are estimates too.
+
 The HTML report is the file to read first.
 
 ![Exported HTML report listing flagged outliers and gene alignments](figures/get-started/export-aa-report.png)

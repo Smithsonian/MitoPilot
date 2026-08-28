@@ -255,7 +255,7 @@ batch.
 |---|---|
 | `low coverage region` | More than 5% of the region under this annotation has less than 10x coverage. |
 | `high error region` | More than 5% of the region has a raw read error rate above 5%, meaning more than 5% of aligned reads disagree on the base call. |
-| `<n> ambiguous bases in CDS` | The protein-coding gene contains bases that are not A, C, G or T, so those codons are translated as `X`. Usually a gene crossing a scaffold join, where the join inserts a spacer of Ns whose length is estimated from the reference. Check the affected region before submitting. |
+| `<n> ambiguous bases in CDS` | The protein-coding gene contains bases that are not A, C, G or T, so those codons are translated as `X`. The bases may come from a gap spacer, a consensus built with ambiguity codes, or an assembly that arrived that way. Check the affected region before submitting. |
 
 <div class="alert alert-note">
 <strong>Note.</strong> The coverage and error thresholds in this last group are

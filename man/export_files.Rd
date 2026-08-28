@@ -14,6 +14,7 @@ export_files(
     "[location=mitochondrion] {Taxon}"),
   out_dir = NULL,
   generateAAalignments = T,
+  gap_min = 10,
   gene_export = F,
   review = TRUE,
   start_aa = 10,
@@ -38,6 +39,11 @@ the export group will be exported}
 
 \item{generateAAalignments}{Generate group-level amino acid alignments
 (default: TRUE)}
+
+\item{gap_min}{Shortest run of unknown bases (N) reported as an `assembly_gap`
+feature, bp (default = 10, the INSDC convention). Shorter runs are treated
+as ambiguous bases, and still counted in the note on a coding feature that
+contains them.}
 
 \item{gene_export}{Export FASTAs and feature tables for individual genes?
 (default: FALSE)}

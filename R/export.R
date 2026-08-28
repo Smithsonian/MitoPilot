@@ -95,6 +95,71 @@ tbl_locations <- function(pos1, pos2, direction, wraps, asmb_len) {
   lapply(ivs, as.character)
 }
 
+#' Runs of unknown bases in a sequence
+#'
+#' Any run of N long enough to count as a gap under INSDC rules, whatever put it
+#' there: a reference-guided join, an assembler, or a sequence the user supplied
+#' that way.
+#'
+#' @param seq the assembly (XStringSet or character)
+#' @param min_len shortest run reported as a gap
+#'
+#' @return data.frame(start, end, length), empty when there is nothing to report
+#'
+#' @noRd
+find_sequence_gaps <- function(seq, min_len = 10L) {
+  empty <- data.frame(start = integer(0), end = integer(0), length = integer(0))
+  s <- toupper(as.character(seq)[1])
+  if (is.na(s) || !nzchar(s)) {
+    return(empty)
+  }
+  m <- gregexpr("N+", s)[[1]]
+  if (length(m) == 1L && m[1] == -1L) {
+    return(empty)
+  }
+  out <- data.frame(
+    start = as.integer(m),
+    length = as.integer(attr(m, "match.length"))
+  )
+  out$end <- out$start + out$length - 1L
+  out <- out[out$length >= min_len, c("start", "end", "length"), drop = FALSE]
+  out[order(out$start), , drop = FALSE]
+}
+
+#' Unknown bases inside one feature
+#'
+#' Counts across both intervals of a feature that spans the origin.
+#'
+#' @noRd
+count_unknown_bases <- function(seq_chr, pos1, pos2, wraps, asmb_len) {
+  ivs <- if (wraps) {
+    list(c(pos1, asmb_len), c(1L, pos2))
+  } else {
+    list(sort(c(pos1, pos2)))
+  }
+  sum(vapply(ivs, function(iv) {
+    sub <- substr(seq_chr, iv[1], iv[2])
+    nchar(gsub("[^N]", "", toupper(sub)))
+  }, integer(1)))
+}
+
+#' Write one assembly_gap feature block
+#'
+#' `estimated_length` is the run's own length: the bases are in the sequence, it
+#' is their identity that is unknown. INSDC requires linkage evidence for a gap
+#' within a scaffold, and "unspecified" is the honest value when the origin of
+#' the run is not recorded.
+#'
+#' @noRd
+write_tbl_gap <- function(gap, fn) {
+  paste(c(gap$start, gap$end, "assembly_gap"), collapse = "\t") |>
+    cat(file = fn, sep = "\n", append = TRUE)
+  paste0("\t\t\testimated_length\t", gap$length) |>
+    cat(file = fn, sep = "\n", append = TRUE)
+  cat("\t\t\tgap_type\twithin scaffold", file = fn, sep = "\n", append = TRUE)
+  cat("\t\t\tlinkage_evidence\tunspecified", file = fn, sep = "\n", append = TRUE)
+}
+
 #' Write one .tbl feature location block; only the first interval carries the key
 #'
 #' @noRd
@@ -162,6 +227,10 @@ mark_tbl_3p <- function(pos) {
 #' @param out_dir directory to save the exported files
 #' @param generateAAalignments Generate group-level amino acid alignments
 #'   (default: TRUE)
+#' @param gap_min Shortest run of unknown bases (N) reported as an `assembly_gap`
+#'   feature, bp (default = 10, the INSDC convention). Shorter runs are treated
+#'   as ambiguous bases, and still counted in the note on a coding feature that
+#'   contains them.
 #' @param gene_export Export FASTAs and feature tables for individual genes?
 #'   (default: FALSE)
 #' @param review Run the PCG annotation outlier review after writing files and
@@ -194,6 +263,7 @@ export_files <- function(
     ),
     out_dir = NULL,
     generateAAalignments = T,
+    gap_min = 10,
     gene_export = F,
     review = TRUE,
     start_aa = 10,
@@ -445,6 +515,29 @@ export_files <- function(
     paste(c(seq_name, "MitoPilot", "region", 1, asmb_len, ".", "+", ".", f9), collapse = "\t") |>
       cat(file = gff_fn, sep = "\n", append = TRUE)
 
+    # Runs of unknown bases, whatever put them there. Declared as assembly_gap
+    # features so a submission carries no undeclared gaps, and used to note any
+    # coding feature sitting across one.
+    seq_chr <- toupper(as.character(seq)[1])
+    gaps <- find_sequence_gaps(seq_chr, min_len = gap_min)
+    gap_state <- new.env(parent = emptyenv())
+    gap_state$i <- 1L
+    # Features are written in ascending order, so emit every gap that starts
+    # before the feature about to be written and keep the table sorted.
+    flush_gaps <- function(before = NULL) {
+      while (gap_state$i <= nrow(gaps) &&
+             (is.null(before) || gaps$start[gap_state$i] < before)) {
+        write_tbl_gap(gaps[gap_state$i, ], tbl_fn)
+        gap_state$i <- gap_state$i + 1L
+      }
+    }
+    if (nrow(gaps) > 0) {
+      message(
+        .seqid, ": ", nrow(gaps), " run(s) of unknown bases (",
+        sum(gaps$length), " bp total) declared as assembly_gap features."
+      )
+    }
+
     purrr::pwalk(annotations, function(...) {
       cur <- list(...)
       note <- NULL
@@ -453,6 +546,17 @@ export_files <- function(
       # error: the feature spans the origin and needs a two-interval location.
       wraps <- isTRUE(dat$topology == "circular") && isTRUE(cur$pos1 > cur$pos2)
       pos <- tbl_locations(cur$pos1, cur$pos2, cur$direction, wraps, asmb_len)
+      flush_gaps(before = min(cur$pos1, cur$pos2))
+
+      # Says what is true of the sequence without guessing why it is unknown.
+      n_unknown <- count_unknown_bases(seq_chr, cur$pos1, cur$pos2, wraps, asmb_len)
+      add_gap_note <- function(note) {
+        if (n_unknown == 0L) {
+          return(note)
+        }
+        paste(c(note, paste0("contains ", n_unknown, " bases of unknown sequence")),
+              collapse = "; ")
+      }
 
       if (cur$pos1 >= cur$pos2 && !wraps) {
         message(paste0("Warning: pos1 >= pos2 for ", dat$ID,": ", cur$gene, ", may be an annotation error"))
@@ -613,8 +717,9 @@ export_files <- function(
             }
             note <- paste(c(note, fs_note), collapse = "; ")
           }
-          if (length(note) > 0) {
-            paste0("\t\t\tnote\t", note) |>
+          note_out <- add_gap_note(note)
+          if (length(note_out) > 0) {
+            paste0("\t\t\tnote\t", note_out) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
 
@@ -629,8 +734,8 @@ export_files <- function(
           # ascending; the strand lives in column 7, so both strands share this.
           for (i in seq_len(nrow(exons))) {
             f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
-            if (length(note) > 0){
-              f9 = paste0(f9, ";Note=", note)
+            if (length(note_out) > 0){
+              f9 = paste0(f9, ";Note=", note_out)
             }
             e_wraps <- isTRUE(dat$topology == "circular") &&
               isTRUE(exons[i, ]$pos1 > exons[i, ]$pos2)
@@ -702,8 +807,9 @@ export_files <- function(
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (length(note) > 0) {
-              paste0("\t\t\tnote\t", note) |>
+            note_out <- add_gap_note(note)
+            if (length(note_out) > 0) {
+              paste0("\t\t\tnote\t", note_out) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
 
@@ -766,8 +872,9 @@ export_files <- function(
             paste("\t\t\tcodon_start\t", 1) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
-          if (length(note) > 0) {
-            paste0("\t\t\tnote\t", note) |>
+          note_out <- add_gap_note(note)
+          if (length(note_out) > 0) {
+            paste0("\t\t\tnote\t", note_out) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
 
@@ -780,8 +887,8 @@ export_files <- function(
 
           # CDS feature
           f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
-          if (length(note) > 0){
-            f9 = paste0(f9, ";Note=", note)
+          if (length(note_out) > 0){
+            f9 = paste0(f9, ";Note=", note_out)
           }
           # a feature spanning the origin is written start..(asmb_len + end)
           paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, gff_end(cur$pos2, wraps, asmb_len), ".", cur$direction, "0", f9), collapse = "\t") |>
@@ -856,8 +963,9 @@ export_files <- function(
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (length(note) > 0) {
-              paste0("\t\t\tnote\t", note) |>
+            note_out <- add_gap_note(note)
+            if (length(note_out) > 0) {
+              paste0("\t\t\tnote\t", note_out) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
 
@@ -1081,6 +1189,9 @@ export_files <- function(
         return()
       }
     })
+
+    # Any gap past the last annotated feature.
+    flush_gaps()
 
     if (length(group) == 1) {
       append_file(group_tbl, tbl_fn)

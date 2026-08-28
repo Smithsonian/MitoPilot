@@ -420,10 +420,10 @@ curate_mito_core <- function(
     }
     list2env(cur, envir = environment())
 
-    # A CDS crossing a scaffold join contains the N spacer the join inserted,
-    # and a consensus built in iupac mode carries ambiguity codes. Translation
-    # resolves those to X rather than failing, so flag the gene for review
-    # alongside every other warning.
+    # A CDS can hold bases that are not A/C/G/T for several reasons: a gap
+    # spacer, a consensus built in iupac mode, or an assembly supplied that way.
+    # Translation resolves them to X rather than failing, so flag the gene for
+    # review alongside every other warning.
     n_ambiguous <- ambiguous_base_count(ctg_seq(contig, pos1, pos2))
     if (n_ambiguous > 0L) {
       cur$warnings <- semicolon_paste(
