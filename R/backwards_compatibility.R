@@ -27,7 +27,8 @@
 #'   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
 #'     column as INTEGER so assembly does not crash).
 #'   \item New tables: "orf_opts", "blast_opts", "export_opts",
-#'     "scaffold_mappings", "assemblies", "assembly_blast", "circularize_opts",
+#'     "scaffold_mappings", "scaffold_junctions", "gap_evidence",
+#'     "assemblies", "assembly_blast", "circularize_opts",
 #'     "find_mito_opts", "mito_candidates", and the
 #'     "blast_ref_annotations"/"blast_ref_sequences"/"blast_ref_alignment" set.
 #' }
@@ -460,6 +461,41 @@ backwards_compatibility <- function(
         qstart INTEGER,
         mapped INTEGER,
         PRIMARY KEY (ID, ref_accession, scaffold)
+      );"
+    )
+  }
+
+  # What the scaffold join did at each junction. Export needs it to tell a gap
+  # sized from the reference from a placeholder for a junction it could not size.
+  if (!DBI::dbExistsTable(con, "scaffold_junctions")) {
+    message("added 'scaffold_junctions' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE scaffold_junctions (
+        ID TEXT NOT NULL,
+        junction INTEGER NOT NULL,
+        from_scaffold TEXT,
+        to_scaffold TEXT,
+        type TEXT,
+        gap_bases INTEGER,
+        size_known INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, junction)
+      );"
+    )
+  }
+
+  # The user's call on whether the ordering reference shares the sample's genus,
+  # which decides the linkage evidence on an exported assembly_gap.
+  if (!DBI::dbExistsTable(con, "gap_evidence")) {
+    message("added 'gap_evidence' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE gap_evidence (
+        ID TEXT NOT NULL,
+        genus_match TEXT,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID)
       );"
     )
   }
@@ -2127,6 +2163,9 @@ schema_gaps <- function(con) {
        !has(all(c("circularize_opts", "circularize_notes", "find_mito_opts",
                   "find_mito_notes") %in% DBI::dbListFields(con, "assemble"))))) {
     gaps <- c(gaps, "the circularization and mitogenome-search tables are missing")
+  }
+  if (!has(all(c("scaffold_junctions", "gap_evidence") %in% DBI::dbListTables(con)))) {
+    gaps <- c(gaps, "the assembly-gap tables are missing ('scaffold_junctions', 'gap_evidence')")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%

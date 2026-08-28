@@ -1036,6 +1036,11 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
       # alongside the prose `junctions` for the join-quality summary.
       jtype <- NA_character_; j_ov_len <- 0L; j_ident <- NA_real_
       ngap <- 0L
+      # TRUE when an N-gap's length came from the reference alignment, FALSE when
+      # it is the placeholder used for a junction the reference cannot size.
+      # Export needs the difference: a placeholder must not be submitted as a
+      # measured length.
+      gap_estimated <- NA
 
       # Probe the ACTUAL scaffold ends for an overlap at every adjacency, not just
       # when the reference predicts one. On divergent cross-species references
@@ -1097,14 +1102,17 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
           if (!is.null(ov) && !is.na(ov$identity)) sprintf(" (best %.0f%% identity)", 100 * ov$identity) else ""))
       } else if (is.na(gb)) {
         ngap <- gap_len_default; jtype <- "gap"   # unmapped/unknown junction
+        gap_estimated <- FALSE
       } else if (gb > 0) {
         ngap <- as.integer(round(gb)); jtype <- "gap"   # disjoint on reference
+        gap_estimated <- TRUE
       } else {
         jtype <- "butt"                            # gb == 0, no overlap found
       }
       junc_rec[[length(junc_rec) + 1L]] <- data.frame(
         from = prev_scaf, to = s, type = jtype,
         gap_bases = if (ngap > 0) as.integer(ngap) else 0L,
+        size_known = as.integer(isTRUE(gap_estimated)),
         overlap_len = as.integer(j_ov_len), identity = as.numeric(j_ident),
         stringsAsFactors = FALSE)
       if (ngap > 0) {
@@ -1153,8 +1161,9 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
 
   junction_info <- if (length(junc_rec) > 0) do.call(rbind, junc_rec) else
     data.frame(from = character(0), to = character(0), type = character(0),
-               gap_bases = integer(0), overlap_len = integer(0),
-               identity = numeric(0), stringsAsFactors = FALSE)
+               gap_bases = integer(0), size_known = integer(0),
+               overlap_len = integer(0), identity = numeric(0),
+               stringsAsFactors = FALSE)
   list(seq = paste0(pieces, collapse = ""),
        src_scaffold = src_scaffold, src_pos = src_pos, junctions = junctions,
        junction_info = junction_info)
@@ -1388,7 +1397,7 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
 
   list(seq = seq, depth = depth, gc = gc, errors = errors,
        layout = layout, note = note, topology = topology,
-       join_quality = join_quality)
+       join_quality = join_quality, junction_info = joined$junction_info)
 }
 
 #' Write the joined Path 0 FASTA + coverageStats CSV
@@ -1568,6 +1577,8 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   if (nrow(mappings) > 0) mappings <- cbind(ID = ID, mappings, stringsAsFactors = FALSE)
   readr::write_csv(mappings, file.path(out_dir, paste0(ID, "_scaffold_mappings.csv")),
                    quote = "none", na = "")
+  # Placeholder so the output exists on every path; replaced below if we join.
+  write_scaffold_junctions(out_dir, ID, NULL)
 
   # Gate the automatic Path 0: only when enabled AND the scaffolds' BLAST hits
   # agree. Otherwise emit mappings only and leave the sample fragmented.
@@ -1583,6 +1594,7 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   res <- build_joined_assembly(scaffolds_df, ref_seq, gap_len = gap_len,
                                circular = circular)
 
+  write_scaffold_junctions(out_dir, ID, res$junction_info)
   write_joined_files(out_dir, ID, res$seq, res$depth, res$gc, res$errors,
                      res$topology)
   row <- joined_assemblies_row(ID, res$seq, res$depth, res$gc, res$errors,
@@ -1594,6 +1606,44 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   write_join_outcome(out_dir, "joined")
   res$outcome <- "joined"
   invisible(res)
+}
+
+#' Write the junction CSV the pipeline loads into `scaffold_junctions`
+#'
+#' Always written, header included, so the Nextflow output path exists whether or
+#' not a join happened. Positions are deliberately absent: circularization
+#' trimming and rotation reindex the joined sequence afterwards, so a position
+#' recorded here could be stale. Export locates runs by scanning the sequence and
+#' uses these rows only to classify what it finds.
+#'
+#' @param out_dir output directory
+#' @param ID sample ID
+#' @param junction_info the `junction_info` data.frame from [join_scaffolds()],
+#'   or NULL when nothing was joined
+#'
+#' @noRd
+write_scaffold_junctions <- function(out_dir, ID, junction_info = NULL) {
+  cols <- c("ID", "junction", "from_scaffold", "to_scaffold", "type",
+            "gap_bases", "size_known")
+  out <- if (is.null(junction_info) || nrow(junction_info) == 0L) {
+    stats::setNames(
+      data.frame(matrix(character(0), nrow = 0, ncol = length(cols))), cols
+    )
+  } else {
+    data.frame(
+      ID = ID,
+      junction = seq_len(nrow(junction_info)),
+      from_scaffold = junction_info$from,
+      to_scaffold = junction_info$to,
+      type = junction_info$type,
+      gap_bases = as.integer(junction_info$gap_bases),
+      size_known = as.integer(junction_info$size_known),
+      stringsAsFactors = FALSE
+    )
+  }
+  readr::write_csv(out, file.path(out_dir, paste0(ID, "_scaffold_junctions.csv")),
+                   quote = "none", na = "")
+  invisible(out)
 }
 
 #' Plot scaffold placement against the reference mitogenome

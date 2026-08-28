@@ -102,7 +102,7 @@ process write_scaffold_mappings {
     tag "${id}"
 
     input:
-    tuple val(id), val(csv_fn)
+    tuple val(id), val(csv_fn), val(junc_fn)
 
     output:
     val(id)
@@ -149,6 +149,33 @@ process write_scaffold_mappings {
             ins.addBatch()
         }
         ins.executeBatch(); ins.close()
+
+        // Junctions ride the same transaction: both describe one join, and a
+        // half-written pair would let export mis-classify a sample's gaps.
+        def jdel = conn.prepareStatement("DELETE FROM scaffold_junctions WHERE ID = ?")
+        jdel.setString(1, id.toString()); jdel.executeUpdate(); jdel.close()
+
+        def jlines = new File(junc_fn.toString()).readLines()
+        if (jlines.size() > 1) {
+            def jhi = [:]; jlines[0].split(',', -1).eachWithIndex { h, i -> jhi[h.trim()] = i }
+            def jcols = ['ID', 'junction', 'from_scaffold', 'to_scaffold', 'type',
+                         'gap_bases', 'size_known']
+            def jins = conn.prepareStatement(
+                "INSERT OR REPLACE INTO scaffold_junctions (${jcols.join(', ')}, time_stamp) " +
+                "VALUES (${jcols.collect { '?' }.join(', ')}, ${params.ts})")
+            jlines.drop(1).each { line ->
+                if (line == null || line.length() == 0) return
+                def f = line.split(',', -1)
+                jcols.eachWithIndex { c, k ->
+                    def v = f[jhi[c]]
+                    if (v == null || v.length() == 0) jins.setNull(k + 1, java.sql.Types.VARCHAR)
+                    else jins.setString(k + 1, v)
+                }
+                jins.addBatch()
+            }
+            jins.executeBatch(); jins.close()
+        }
+
         conn.commit()
     } catch (Exception e) {
         try { conn.rollback() } catch (Exception ignored) {}
@@ -270,7 +297,9 @@ workflow SCAFFOLD_JOIN {
         // Always-present mappings: clear stale rows and insert the fresh set
         // in one driver-side transaction (see write_scaffold_mappings).
         write_scaffold_mappings(
-            scaffold_join.out.mappings.map { id, csv -> tuple(id, csv.toString()) }
+            scaffold_join.out.mappings
+                .join(scaffold_join.out.junctions)
+                .map { id, csv, junc -> tuple(id, csv.toString(), junc.toString()) }
         )
 
         // Joined Path 0 row is emitted only when auto-join built it; the channel

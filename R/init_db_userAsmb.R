@@ -615,6 +615,31 @@ new_db_userAsmb <- function(
     );"
   )
 
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE scaffold_junctions (
+      ID TEXT NOT NULL,
+      junction INTEGER NOT NULL,
+      from_scaffold TEXT,
+      to_scaffold TEXT,
+      type TEXT,
+      gap_bases INTEGER,
+      size_known INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, junction)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE gap_evidence (
+      ID TEXT NOT NULL,
+      genus_match TEXT,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID)
+    );"
+  )
+
   # Add Annotate table ----
   DBI::dbExecute(
     con,

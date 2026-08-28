@@ -252,16 +252,39 @@ bases are exported as they are, never quietly removed, and MitoPilot declares
 them so a submission does not carry undeclared gaps:
 
 - A run of **10 or more** `N` is written as an
-  [`assembly_gap`](https://www.ncbi.nlm.nih.gov/genbank/wgs_gapped/) feature
-  carrying its `estimated_length`, `gap_type`, and `linkage_evidence`. Shorter
-  runs count as ambiguous bases, which GenBank accepts without a gap feature.
+  [`assembly_gap`](https://www.ncbi.nlm.nih.gov/genbank/wgs_gapped/) feature.
+  Shorter runs count as ambiguous bases, which GenBank accepts without a gap
+  feature.
 - Any coding feature containing unknown bases gets a note saying how many, for
   example `contains 12 bases of unknown sequence`, and the affected codons
   translate to `X`.
 
-Export prints a line per sample naming how many runs it declared. Treat those
-regions as unverified: the bases are unknown, and where a gap length was
-estimated rather than observed, the surrounding coordinates are estimates too.
+Export prints a line per sample naming how many runs it declared.
+
+**How each gap is described.** `estimated_length` is the run's own length when
+MitoPilot knows the size, and `unknown` when the run is a placeholder for a
+junction it could not measure, which is the GenBank convention rather than
+claiming a measurement it does not have.
+
+`linkage_evidence` says why the pieces either side are believed to belong
+together:
+
+| Value | When |
+|---|---|
+| `align_genus` | MitoPilot ordered the pieces against a reference in the same genus as the sample |
+| `align_xgenus` | It ordered them against a reference in a different genus |
+| `unspecified` | The `N`s were already in the sequence you supplied, so the ordering is not ours to vouch for |
+
+MitoPilot cannot tell whether the reference shares your sample's genus, because
+the `Taxon` column is free text and the reference's lineage stops at family. If
+any sample in the group has gaps, export asks: a table of those samples with
+their reference, and a **same / different** toggle per row. The answer is saved
+against the sample, so it is remembered if you re-export or move the sample to
+another group.
+
+Treat gapped regions as unverified: the bases are unknown, and where a gap length
+was estimated rather than observed, the surrounding coordinates are estimates
+too.
 
 The HTML report is the file to read first.
 

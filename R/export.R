@@ -143,21 +143,68 @@ count_unknown_bases <- function(seq_chr, pos1, pos2, wraps, asmb_len) {
   }, integer(1)))
 }
 
-#' Write one assembly_gap feature block
+#' How a run of unknown bases should be described on export
 #'
-#' `estimated_length` is the run's own length: the bases are in the sequence, it
-#' is their identity that is unknown. INSDC requires linkage evidence for a gap
-#' within a scaffold, and "unspecified" is the honest value when the origin of
-#' the run is not recorded.
+#' Three things decide it:
+#'
+#' * Did MitoPilot build this unit by joining scaffolds? Only then can it claim
+#'   the alignment it used as linkage evidence. Ns already present in a sequence
+#'   somebody supplied carry no evidence we can vouch for.
+#' * Could the reference size this particular junction? An unmapped junction gets
+#'   a fixed placeholder, and submitting a placeholder as a measurement would be
+#'   a false claim, so it goes out as `estimated_length unknown`.
+#' * Does the ordering reference share the sample's genus? Only the user can say
+#'   (see the export gap-evidence modal), so with no answer on file we claim
+#'   nothing.
+#'
+#' @param run_length length of the run of Ns
+#' @param joined TRUE when this unit was built by the scaffold join
+#' @param placeholder_lengths gap sizes the join could not measure, from
+#'   `scaffold_junctions` rows with `size_known = 0`
+#' @param genus_match "same", "different", or NA when the user has not answered
+#'
+#' @return list(estimated_length, linkage_evidence)
 #'
 #' @noRd
-write_tbl_gap <- function(gap, fn) {
+gap_qualifiers <- function(run_length, joined, placeholder_lengths = integer(0),
+                           genus_match = NA_character_) {
+  est <- if (isTRUE(joined) && run_length %in% placeholder_lengths) {
+    "unknown"
+  } else {
+    as.character(run_length)
+  }
+  evidence <- if (!isTRUE(joined)) {
+    "unspecified"
+  } else if (identical(genus_match, "same")) {
+    "align_genus"
+  } else if (identical(genus_match, "different")) {
+    "align_xgenus"
+  } else {
+    "unspecified"
+  }
+  list(estimated_length = est, linkage_evidence = evidence)
+}
+
+#' Write one assembly_gap feature block
+#'
+#' The bases are present in the sequence; it is their identity that is unknown,
+#' so a measured run reports its own length. See [gap_qualifiers()] for how the
+#' qualifiers are chosen.
+#'
+#' @param gap one row of [find_sequence_gaps()]
+#' @param fn feature table to append to
+#' @param qual list(estimated_length, linkage_evidence) from [gap_qualifiers()]
+#'
+#' @noRd
+write_tbl_gap <- function(gap, fn, qual = NULL) {
+  qual <- qual %||% gap_qualifiers(gap$length, joined = FALSE)
   paste(c(gap$start, gap$end, "assembly_gap"), collapse = "\t") |>
     cat(file = fn, sep = "\n", append = TRUE)
-  paste0("\t\t\testimated_length\t", gap$length) |>
+  paste0("\t\t\testimated_length\t", qual$estimated_length) |>
     cat(file = fn, sep = "\n", append = TRUE)
   cat("\t\t\tgap_type\twithin scaffold", file = fn, sep = "\n", append = TRUE)
-  cat("\t\t\tlinkage_evidence\tunspecified", file = fn, sep = "\n", append = TRUE)
+  paste0("\t\t\tlinkage_evidence\t", qual$linkage_evidence) |>
+    cat(file = fn, sep = "\n", append = TRUE)
 }
 
 #' Write one .tbl feature location block; only the first interval carries the key
@@ -520,6 +567,31 @@ export_files <- function(
     # coding feature sitting across one.
     seq_chr <- toupper(as.character(seq)[1])
     gaps <- find_sequence_gaps(seq_chr, min_len = gap_min)
+
+    # Provenance for this unit's runs: was it joined, which junction lengths were
+    # placeholders rather than measurements, and has the user said whether the
+    # ordering reference shares the sample's genus.
+    # Tolerant of a project that predates these tables: no provenance on file
+    # means no claim is made, which is the same as a sequence we did not join.
+    empty_junctions <- data.frame(gap_bases = integer(0), size_known = integer(0))
+    junctions <- tryCatch(
+      DBI::dbGetQuery(
+        con, "SELECT gap_bases, size_known FROM scaffold_junctions WHERE ID = ?",
+        params = list(.x)
+      ),
+      error = function(e) empty_junctions
+    )
+    joined_unit <- nrow(junctions) > 0 && isTRUE(as.integer(.path) == 0L)
+    placeholder_lengths <- as.integer(
+      junctions$gap_bases[!is.na(junctions$size_known) & junctions$size_known == 0L]
+    )
+    genus_match <- tryCatch(
+      DBI::dbGetQuery(con, "SELECT genus_match FROM gap_evidence WHERE ID = ?",
+                      params = list(.x))$genus_match,
+      error = function(e) character(0)
+    )
+    genus_match <- if (length(genus_match)) genus_match[1] else NA_character_
+
     gap_state <- new.env(parent = emptyenv())
     gap_state$i <- 1L
     # Features are written in ascending order, so emit every gap that starts
@@ -527,7 +599,11 @@ export_files <- function(
     flush_gaps <- function(before = NULL) {
       while (gap_state$i <= nrow(gaps) &&
              (is.null(before) || gaps$start[gap_state$i] < before)) {
-        write_tbl_gap(gaps[gap_state$i, ], tbl_fn)
+        write_tbl_gap(
+          gaps[gap_state$i, ], tbl_fn,
+          gap_qualifiers(gaps$length[gap_state$i], joined_unit,
+                         placeholder_lengths, genus_match)
+        )
         gap_state$i <- gap_state$i + 1L
       }
     }
