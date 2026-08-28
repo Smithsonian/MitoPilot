@@ -381,3 +381,107 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::relocate(ORFCount, .after = rRNACount) |>
     dplyr::relocate(blast_ref_status, .after = blast_accession)
 }
+
+#' Leading binomial of a BLAST reference defline
+#'
+#' `blast_species` carries the whole source description
+#' ("Conger oceanicus voucher USNM:FISH:454713 mitochondrion, complete genome");
+#' only the leading "Genus species" is useful in the UI.
+#'
+#' @noRd
+species_binomial <- function(x) {
+  vapply(x, function(s) {
+    if (is.na(s) || !nzchar(trimws(s))) return(NA_character_)
+    toks <- strsplit(trimws(s), "[[:space:]]+")[[1]]
+    paste(utils::head(toks, 2), collapse = " ")
+  }, character(1), USE.NAMES = FALSE)
+}
+
+#' First whitespace token, when it looks like a genus name
+#'
+#' @noRd
+genus_token <- function(x) {
+  vapply(x, function(s) {
+    if (is.na(s)) return(NA_character_)
+    tok <- strsplit(trimws(s), "[[:space:]]+")[[1]][1]
+    if (is.na(tok) || !grepl("^[A-Za-z]+$", tok) || nchar(tok) <= 2) {
+      return(NA_character_)
+    }
+    tok
+  }, character(1), USE.NAMES = FALSE)
+}
+
+#' Samples in an export group whose exported sequence contains gaps
+#'
+#' One row per sample with at least one run of `N` of `min_len` bp or more in a
+#' non-ignored unit belonging to `group`. `genus_match` is the value stored in
+#' `gap_evidence` when there is one, otherwise a suggestion from comparing the
+#' first token of `Taxon` with the first token of `blast_species`.
+#'
+#' @param con database connection
+#' @param group export group name
+#' @param min_len minimum run of `N` to count as a gap
+#'
+#' @return data.frame(ID, Taxon, blast_accession, blast_species, n_gaps,
+#'   gap_bp, genus_match)
+#'
+#' @noRd
+gap_evidence_prompts <- function(con, group, min_len = 10L) {
+  empty <- data.frame(
+    ID = character(0), Taxon = character(0), blast_accession = character(0),
+    blast_species = character(0), n_gaps = integer(0), gap_bp = integer(0),
+    genus_match = character(0), stringsAsFactors = FALSE
+  )
+  if (is.null(group) || is.na(group) || !nzchar(group)) return(empty)
+  units <- DBI::dbGetQuery(
+    con,
+    "SELECT e.ID AS ID, a.sequence AS sequence
+       FROM export e
+       JOIN assemblies a
+         ON a.ID = e.ID AND a.path = e.path AND a.scaffold = e.scaffold
+      WHERE e.export_group = ? AND COALESCE(a.ignore, 0) != 1",
+    params = list(as.character(group))
+  )
+  if (nrow(units) == 0) return(empty)
+
+  gaps <- lapply(units$sequence, find_sequence_gaps, min_len = min_len)
+  units$n_gaps <- vapply(gaps, nrow, integer(1))
+  units$gap_bp <- vapply(gaps, function(g) sum(g$length), numeric(1))
+  units <- units[units$n_gaps > 0, , drop = FALSE]
+  if (nrow(units) == 0) return(empty)
+
+  out <- data.frame(
+    ID = names(split(units$n_gaps, units$ID)),
+    n_gaps = as.integer(vapply(split(units$n_gaps, units$ID), sum, numeric(1))),
+    gap_bp = as.integer(vapply(split(units$gap_bp, units$ID), sum, numeric(1))),
+    stringsAsFactors = FALSE
+  )
+
+  samples <- DBI::dbGetQuery(con, "SELECT ID, Taxon FROM samples")
+  asmb <- DBI::dbGetQuery(
+    con, "SELECT ID, blast_accession, blast_species FROM assemble"
+  )
+  stored <- tryCatch(
+    DBI::dbGetQuery(con, "SELECT ID, genus_match FROM gap_evidence"),
+    error = function(e) data.frame(ID = character(0), genus_match = character(0))
+  )
+
+  out$Taxon <- samples$Taxon[match(out$ID, samples$ID)]
+  out$blast_accession <- asmb$blast_accession[match(out$ID, asmb$ID)]
+  out$blast_species <- species_binomial(asmb$blast_species[match(out$ID, asmb$ID)])
+
+  sample_genus <- genus_token(out$Taxon)
+  ref_genus <- genus_token(out$blast_species)
+  suggested <- ifelse(
+    !is.na(sample_genus) & !is.na(ref_genus) &
+      tolower(sample_genus) == tolower(ref_genus),
+    "same", "different"
+  )
+  saved <- stored$genus_match[match(out$ID, stored$ID)]
+  out$genus_match <- ifelse(is.na(saved), suggested, saved)
+
+  out <- out[order(out$ID), c("ID", "Taxon", "blast_accession", "blast_species",
+                              "n_gaps", "gap_bp", "genus_match"), drop = FALSE]
+  rownames(out) <- NULL
+  out
+}

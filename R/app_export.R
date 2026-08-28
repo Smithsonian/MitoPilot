@@ -1185,6 +1185,86 @@ export_server <- function(id) {
       names(by_id)[vapply(by_id, function(p) length(unique(p)) > 1, logical(1))]
     }
 
+    # Pre-flight gate for samples whose sequence still contains runs of N. The
+    # same/different genus call is written to gap_evidence and decides the
+    # linkage_evidence qualifier on the exported assembly_gap features. Skipped
+    # entirely when no sample in the group has gaps.
+    gap_evidence_or_export <- function() {
+      rows <- gap_evidence_prompts(session$userData$con, input$export_group)
+      if (nrow(rows) == 0) {
+        check_overwrite_then_export()
+        return()
+      }
+      rv$gap_rows <- rows
+      hdr <- c("Sample ID", "Taxon", "Reference", "Gaps",
+               "Reference vs sample genus")
+      modalDialog(
+        title = "Assembly gaps found",
+        size = "l",
+        p(
+          style = "color: #666; font-size: 0.9em;",
+          "These samples contain runs of N, which export as assembly_gap ",
+          "features. Your choice sets each gap's linkage_evidence qualifier: ",
+          "'align_genus' when the reference shares the sample's genus, ",
+          "'align_xgenus' when it does not. The suggestion below compares the ",
+          "first word of the taxon with the first word of the reference species."
+        ),
+        div(
+          style = "max-height: 45vh; overflow-y: auto;",
+          tags$table(
+            class = "table table-condensed",
+            tags$thead(tags$tr(lapply(hdr, tags$th))),
+            tags$tbody(lapply(seq_len(nrow(rows)), function(i) {
+              tags$tr(
+                tags$td(rows$ID[i]),
+                tags$td(if (is.na(rows$Taxon[i])) "" else rows$Taxon[i]),
+                tags$td(paste(
+                  stats::na.omit(c(rows$blast_accession[i], rows$blast_species[i])),
+                  collapse = " "
+                )),
+                tags$td(sprintf("%d runs, %d bp", rows$n_gaps[i], rows$gap_bp[i])),
+                tags$td(shinyWidgets::radioGroupButtons(
+                  inputId = ns(paste0("gap_genus_", i)),
+                  label = NULL,
+                  choices = c("same", "different"),
+                  selected = rows$genus_match[i],
+                  size = "sm"
+                ))
+              )
+            }))
+          )
+        ),
+        footer = tagList(
+          actionButton(ns("gap_cancel"), "Cancel export", class = "btn-danger"),
+          actionButton(ns("gap_confirm"), "Continue", class = "btn-primary")
+        )
+      ) |> showModal()
+    }
+
+    observeEvent(input$gap_confirm, ignoreInit = TRUE, {
+      rows <- rv$gap_rows
+      req(!is.null(rows), nrow(rows) > 0)
+      ts <- as.integer(Sys.time())
+      for (i in seq_len(nrow(rows))) {
+        choice <- input[[paste0("gap_genus_", i)]] %||% rows$genus_match[i]
+        DBI::dbExecute(
+          session$userData$con,
+          "INSERT OR REPLACE INTO gap_evidence (ID, genus_match, time_stamp)
+             VALUES (?, ?, ?)",
+          params = list(rows$ID[i], as.character(choice), ts)
+        )
+      }
+      rv$gap_rows <- NULL
+      removeModal()
+      check_overwrite_then_export()
+    })
+
+    # Abort the export; nothing is written to gap_evidence.
+    observeEvent(input$gap_cancel, ignoreInit = TRUE, {
+      rv$gap_rows <- NULL
+      removeModal()
+    })
+
     check_overwrite_then_export <- function() {
       export_path <- file.path(session$userData$dir_out, "export", input$export_group)
       if (dir.exists(export_path)) {
@@ -1253,12 +1333,12 @@ export_server <- function(id) {
         )
         return()
       }
-      check_overwrite_then_export()
+      gap_evidence_or_export()
     })
 
     observeEvent(input$fragmented_confirm, ignoreInit = T, {
       req(input$fragmented_confirm)
-      check_overwrite_then_export()
+      gap_evidence_or_export()
     })
 
     observeEvent(input$overwrite_confirm, ignoreInit = T, {
