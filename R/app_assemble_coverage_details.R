@@ -1475,7 +1475,7 @@ assembly_coverage_details_server <- function(id, rv) {
     }
 
     persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note, blast_row = NULL,
-                              topology = "linear") {
+                              topology = "linear", gap_intervals = NULL) {
       ID <- rv$updating$ID
       dir <- file.path(session$userData$dir_out, ID, "assemble",
                        rv$updating$assemble_opts)
@@ -1494,6 +1494,9 @@ assembly_coverage_details_server <- function(id, rv) {
       dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::rows_upsert(a, by = c("ID", "path", "scaffold"), copy = T, in_place = T)
 
+      # Spacer intervals for the consensus we just wrote. Passing NULL clears
+      # the sample, which is what a consensus built without a join should do.
+      store_scaffold_junctions(session$userData$con, ID, gap_intervals)
       # Summary now describes the consensus, not the scaffolds it replaced.
       summ <- refresh_assemble_summary(session$userData$con, ID)
       update <- data.frame(
@@ -1929,7 +1932,8 @@ assembly_coverage_details_server <- function(id, rv) {
           if (is.null(join_acc)) join_acc <- input$join_reference
           blast_row <- join_reference_blast_row(join_acc, rows)
           persist_path0(res$seq, res$depth, res$gc, res$errors, res$note,
-                        blast_row, res$topology)
+                        blast_row, res$topology,
+                        gap_intervals = res$gap_intervals)
         }, finally = waiter::waiter_hide())
       })
     })
@@ -1987,6 +1991,8 @@ assembly_coverage_details_server <- function(id, rv) {
         stringr::str_remove_all("\\[Assembly edited:[^\\]]*\\]\\s*") |>
         stringr::str_trim()
 
+      # The consensus those intervals described is gone.
+      store_scaffold_junctions(session$userData$con, ID, NULL)
       summ <- refresh_assemble_summary(session$userData$con, ID)
       update <- data.frame(
         ID = ID,

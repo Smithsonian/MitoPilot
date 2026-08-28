@@ -222,3 +222,61 @@ test_that("no linkage_evidence line is written when none may be claimed", {
   expect_equal(out[3], "\t\t\tgap_type\tunknown")
   expect_length(out, 3L)
 })
+
+# --- the app writes its own provenance ---------------------------------------
+
+junction_db <- function() {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  DBI::dbExecute(con, "CREATE TABLE scaffold_junctions (ID TEXT NOT NULL,
+    junction INTEGER NOT NULL, gap_index INTEGER NOT NULL, start INTEGER,
+    end INTEGER, gap_bases INTEGER, size_known INTEGER, time_stamp INTEGER,
+    PRIMARY KEY (ID, gap_index))")
+  con
+}
+
+test_that("a hand-built join records its gaps", {
+  con <- junction_db()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  iv <- data.frame(junction = c(1L, 2L), start = c(11L, 50L), end = c(22L, 149L),
+                   length = c(12L, 100L), size_known = c(1L, 0L))
+
+  expect_equal(store_scaffold_junctions(con, "S1", iv), 2L)
+  got <- DBI::dbGetQuery(con, "SELECT * FROM scaffold_junctions ORDER BY gap_index")
+  expect_equal(got$start, c(11L, 50L))
+  expect_equal(got$size_known, c(1L, 0L))
+  expect_equal(got$gap_index, c(1L, 2L))
+})
+
+test_that("rebuilding replaces rather than accumulates", {
+  con <- junction_db()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  iv1 <- data.frame(junction = 1L, start = 11L, end = 22L, length = 12L,
+                    size_known = 1L)
+  iv2 <- data.frame(junction = 1L, start = 90L, end = 99L, length = 10L,
+                    size_known = 0L)
+  store_scaffold_junctions(con, "S1", iv1)
+  store_scaffold_junctions(con, "S1", iv2)
+
+  got <- DBI::dbGetQuery(con, "SELECT * FROM scaffold_junctions")
+  expect_equal(nrow(got), 1L)
+  expect_equal(got$start, 90L)
+})
+
+test_that("deleting the consensus clears its intervals", {
+  con <- junction_db()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  store_scaffold_junctions(con, "S1", data.frame(
+    junction = 1L, start = 11L, end = 22L, length = 12L, size_known = 1L))
+  store_scaffold_junctions(con, "S2", data.frame(
+    junction = 1L, start = 5L, end = 14L, length = 10L, size_known = 1L))
+
+  store_scaffold_junctions(con, "S1", NULL)
+  got <- DBI::dbGetQuery(con, "SELECT ID FROM scaffold_junctions")
+  expect_equal(got$ID, "S2")   # only the sample asked for is cleared
+})
+
+test_that("a project without the table is tolerated", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_equal(store_scaffold_junctions(con, "S1", NULL), 0L)
+})

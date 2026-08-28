@@ -1694,6 +1694,46 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   invisible(res)
 }
 
+#' Replace a sample's recorded gap intervals in the database
+#'
+#' The app builds a Path 0 in-process, so it writes these rows itself rather
+#' than through the pipeline's CSV loader. Always a delete followed by an
+#' insert: a rebuilt (or deleted) consensus must not leave intervals behind
+#' pointing into a sequence that no longer exists.
+#'
+#' @param con database connection
+#' @param ID sample ID
+#' @param gap_intervals `gap_intervals` from [assemble_from_layout()], or NULL
+#'   to simply clear the sample
+#'
+#' @return (invisibly) the number of rows written
+#'
+#' @noRd
+store_scaffold_junctions <- function(con, ID, gap_intervals = NULL) {
+  ok <- tryCatch(DBI::dbExistsTable(con, "scaffold_junctions"),
+                 error = function(e) FALSE)
+  if (!isTRUE(ok)) {
+    return(invisible(0L))
+  }
+  DBI::dbExecute(con, "DELETE FROM scaffold_junctions WHERE ID = ?",
+                 params = list(ID))
+  if (is.null(gap_intervals) || nrow(gap_intervals) == 0L) {
+    return(invisible(0L))
+  }
+  rows <- data.frame(
+    ID = ID,
+    junction = as.integer(gap_intervals$junction),
+    gap_index = seq_len(nrow(gap_intervals)),
+    start = as.integer(gap_intervals$start),
+    end = as.integer(gap_intervals$end),
+    gap_bases = as.integer(gap_intervals$length),
+    size_known = as.integer(gap_intervals$size_known),
+    time_stamp = as.numeric(Sys.time())
+  )
+  DBI::dbAppendTable(con, "scaffold_junctions", rows)
+  invisible(nrow(rows))
+}
+
 #' Write the gap CSV the pipeline loads into `scaffold_junctions`
 #'
 #' Always written, header included, so the Nextflow output path exists whether or
