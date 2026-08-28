@@ -164,8 +164,8 @@ gap_is_ours <- function(run, spacers = NULL) {
 
 #' Write one gap feature
 #'
-#' NCBI (S. Storz, 2026-08-28): "You really don't need to use assembly_gap
-#' features. A regular gap feature is fine." The plain feature takes only
+#' NCBI advised (GenBank support, 2026-08-28) that a plain `gap` feature is
+#' sufficient here and `assembly_gap` is not needed. The plain feature takes only
 #' `estimated_length`, so none of the assembly vocabulary applies. The join
 #' refuses any junction it cannot size, so a length written here is always an
 #' estimate from the reference.
@@ -995,10 +995,10 @@ export_files <- function(
             note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
 
-          # NCBI (S. Storz, 2026-08-28): "If it is an estimated length the
-          # feature should be continuous." Every gap we declare is an estimate,
-          # because the join refuses a junction it cannot size, so a gene
-          # spanning one stays a single feature.
+          # NCBI advised (GenBank support, 2026-08-28) that a feature spanning a
+          # gap of ESTIMATED length should stay continuous. Every gap we declare
+          # is an estimate, because the join refuses a junction it cannot size,
+          # so a gene spanning one stays a single feature.
           note_out <- add_gap_note(note)
 
           # write to .tbl

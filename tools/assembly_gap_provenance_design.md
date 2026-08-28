@@ -5,16 +5,18 @@ Status: approved for implementation
 
 ## What NCBI told us
 
-Susan Schafer Storz (NCBI/NLM), 2026-08-28, in reply to a direct question about
-submitting reference-scaffolded mitogenomes:
+NCBI advised us directly (correspondence with GenBank support, 2026-08-28) in
+reply to a question about submitting reference-scaffolded mitogenomes. In
+summary:
 
-1. "We do accept gapped genomes. The number of n's should be the estimated
-   length and the correct gene order is expected."
-2. "BioSamples can be on more than one sequence so it is not an issue to submit
-   multiple fragments."
-3. "You really don't need to use assembly_gap features. A regular gap feature is
-   fine. Or send with the n's."
-4. "If it is an estimated length the feature should be continuous."
+1. Gapped genomes are accepted. The number of Ns should be the estimated gap
+   length, and the gene order is expected to be correct.
+2. A BioSample may cover more than one sequence, so submitting several
+   fragments is not a problem.
+3. `assembly_gap` features are not needed; a plain `gap` feature is fine, as is
+   simply submitting the sequence with its Ns.
+4. Where the gap length is an estimate, a feature spanning it should stay
+   continuous.
 
 This supersedes the earlier design, which was built from the public
 documentation alone and reached for `assembly_gap` and its linkage-evidence
