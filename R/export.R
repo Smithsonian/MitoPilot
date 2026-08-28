@@ -285,6 +285,180 @@ mark_tbl_3p <- function(pos) {
   pos
 }
 
+#' Break a CDS at every gap of unknown size it crosses
+#'
+#' NCBI, https://www.ncbi.nlm.nih.gov/genbank/wgs_gapped/:
+#'
+#' "The exon(s) of a CDS may not cross the gap if the gap size is unknown.
+#' Instead, you could have two partial CDS features (and mRNAs in eukaryoties)
+#' that abut the gap, with a single gene over the whole locus."
+#'
+#' Works on the feature's own 5'->3' line rather than on assembly coordinates,
+#' so a feature spanning the origin and a minus-strand feature are the same
+#' problem. `n` gaps inside the CDS give `n + 1` pieces.
+#'
+#' @param pos1,pos2 feature coordinates (`pos1 > pos2` indicates wrap-around)
+#' @param direction "+" or "-"
+#' @param wraps TRUE when the feature spans the origin of a circular contig
+#' @param asmb_len contig length
+#' @param gaps data.frame(start, end) of the gaps that must not be crossed,
+#'   in assembly coordinates; NULL or empty leaves the feature whole
+#'
+#' @return list of pieces in 5'->3' order, each `list(loc, cut5, cut3)`. `loc`
+#'   is a location block in the shape [tbl_locations()] returns; `cut5`/`cut3`
+#'   say whether that end of the piece was made by a gap (and so is partial)
+#'   rather than being a real end of the CDS. A single piece with both flags
+#'   FALSE means nothing was split. An empty list means the gaps swallowed the
+#'   whole feature.
+#'
+#' @noRd
+split_cds_at_gaps <- function(pos1, pos2, direction, wraps, asmb_len,
+                              gaps = NULL) {
+  pos1 <- as.integer(pos1)
+  pos2 <- as.integer(pos2)
+  asmb_len <- as.integer(asmb_len)
+  # the feature as ascending assembly intervals, in plus-strand reading order
+  ivs <- if (wraps) {
+    list(c(pos1, asmb_len), c(1L, pos2))
+  } else {
+    list(sort(c(pos1, pos2)))
+  }
+  lens <- vapply(ivs, function(iv) iv[2] - iv[1] + 1L, integer(1))
+  off <- cumsum(c(0L, lens))
+  total <- sum(lens)
+
+  whole <- list(list(
+    loc = tbl_locations(pos1, pos2, direction, wraps, asmb_len),
+    cut5 = FALSE, cut3 = FALSE
+  ))
+  if (is.null(gaps) || nrow(gaps) == 0L) {
+    return(whole)
+  }
+
+  # each gap, projected onto that reading order
+  cut <- do.call(rbind, lapply(seq_len(nrow(gaps)), function(g) {
+    do.call(rbind, lapply(seq_along(ivs), function(k) {
+      lo <- max(ivs[[k]][1], as.integer(gaps$start[g]))
+      hi <- min(ivs[[k]][2], as.integer(gaps$end[g]))
+      if (lo > hi) {
+        return(NULL)
+      }
+      data.frame(start = off[k] + lo - ivs[[k]][1] + 1L,
+                 end = off[k] + hi - ivs[[k]][1] + 1L)
+    }))
+  }))
+  if (is.null(cut) || nrow(cut) == 0L) {
+    return(whole)
+  }
+  cut <- cut[order(cut$start), , drop = FALSE]
+
+  # what is left of the CDS once the gaps are removed
+  keep <- list()
+  p <- 1L
+  for (i in seq_len(nrow(cut))) {
+    if (cut$start[i] > p) {
+      keep[[length(keep) + 1L]] <- c(p, cut$start[i] - 1L)
+    }
+    p <- max(p, cut$end[i] + 1L)
+  }
+  if (p <= total) {
+    keep[[length(keep) + 1L]] <- c(p, total)
+  }
+  if (length(keep) == 0L) {
+    return(list())
+  }
+
+  to_genomic <- function(lo, hi) {
+    out <- list()
+    for (k in seq_along(ivs)) {
+      a <- max(lo, off[k] + 1L)
+      b <- min(hi, off[k] + lens[k])
+      if (a <= b) {
+        out[[length(out) + 1L]] <-
+          c(ivs[[k]][1] + a - off[k] - 1L, ivs[[k]][1] + b - off[k] - 1L)
+      }
+    }
+    out
+  }
+  pieces <- lapply(keep, function(kp) {
+    g <- to_genomic(kp[1], kp[2])
+    cut5 <- kp[1] > 1L
+    cut3 <- kp[2] < total
+    if (direction == "-") {
+      # minus strand reads the same bases backwards: the intervals reverse, and
+      # so do the roles of the two ends
+      g <- lapply(rev(g), function(iv) c(iv[2], iv[1]))
+      swap <- cut5
+      cut5 <- cut3
+      cut3 <- swap
+    }
+    list(loc = lapply(g, as.character), cut5 = cut5, cut3 = cut3)
+  })
+  if (direction == "-") pieces <- rev(pieces)
+  pieces
+}
+
+#' Write the CDS features for a gene broken by one or more unknown-size gaps
+#'
+#' One partial CDS per piece, each abutting the gap. Every piece carries the
+#' qualifiers the single feature would have carried, plus the two notes NCBI
+#' asks for: a pointer to the other piece(s) and "gap found within coding
+#' sequence".
+#'
+#' `codon_start` is deliberately NOT emitted for anything but the first piece.
+#' The gap length is unknown, so the reading frame on the far side of it cannot
+#' be worked out; writing a frame there would be a guess presented as a fact.
+#'
+#' @param pieces list from [split_cds_at_gaps()]
+#' @param partial5,partial3 partiality the whole CDS already had, applied to the
+#'   first and last piece respectively
+#'
+#' @noRd
+write_tbl_cds_pieces <- function(pieces, gene, product, genetic_code, fn,
+                                 note = NULL, transl_except = NULL,
+                                 codon_start = FALSE,
+                                 partial5 = FALSE, partial3 = FALSE) {
+  n <- length(pieces)
+  coords <- vapply(pieces, function(p) {
+    paste(vapply(p$loc, function(iv) paste0(iv[1], "..", iv[2]), character(1)),
+          collapse = ",")
+  }, character(1))
+
+  for (i in seq_len(n)) {
+    loc <- pieces[[i]]$loc
+    if (isTRUE(pieces[[i]]$cut5) || (i == 1L && partial5)) {
+      loc[[1]][1] <- paste0("<", loc[[1]][1])
+    }
+    if (isTRUE(pieces[[i]]$cut3) || (i == n && partial3)) {
+      loc <- mark_tbl_3p(loc)
+    }
+    write_tbl_loc(loc, "CDS", fn)
+    paste("\t\t\tproduct\t", product) |>
+      cat(file = fn, sep = "\n", append = TRUE)
+    paste("\t\t\ttransl_table\t", genetic_code) |>
+      cat(file = fn, sep = "\n", append = TRUE)
+    # the 3' end of the gene, and so its poly-A stop, lives on the last piece
+    if (i == n && length(transl_except) > 0) {
+      paste0("\t\t\ttransl_except\t", transl_except) |>
+        cat(file = fn, sep = "\n", append = TRUE)
+    }
+    if (i == 1L && isTRUE(codon_start)) {
+      paste("\t\t\tcodon_start\t", 1) |>
+        cat(file = fn, sep = "\n", append = TRUE)
+    }
+    if (length(note) > 0) {
+      paste0("\t\t\tnote\t", note) |>
+        cat(file = fn, sep = "\n", append = TRUE)
+    }
+    paste0("\t\t\tnote\tthis is part ", i, " of ", n, " of the coding sequence ",
+           "of ", gene, "; the rest is annotated at ",
+           paste(coords[-i], collapse = ", ")) |>
+      cat(file = fn, sep = "\n", append = TRUE)
+    cat("\t\t\tnote\tgap found within coding sequence",
+        file = fn, sep = "\n", append = TRUE)
+  }
+}
+
 #' Generate export NCBI files
 #'
 #' @param group (optional) export group names
@@ -623,6 +797,15 @@ export_files <- function(
     )
     genus_match <- if (length(genus_match)) genus_match[1] else NA_character_
 
+    # Gaps a coding sequence may not cross: the ones whose length we cannot
+    # report, which is exactly what gap_qualifiers() calls "unknown".
+    unknown_gaps <- gaps[
+      vapply(seq_len(nrow(gaps)), function(i) {
+        identical(gap_qualifiers(gaps[i, ], spacers, genus_match)$estimated_length,
+                  "unknown")
+      }, logical(1)), , drop = FALSE
+    ]
+
     gap_state <- new.env(parent = emptyenv())
     gap_state$i <- 1L
     # Features are written in ascending order, so emit every gap that starts
@@ -803,6 +986,24 @@ export_files <- function(
             note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
 
+          # A spliced CDS is not split here: the pieces would have to be
+          # regrouped exon by exon and the joined translation redone. Say so
+          # rather than write a feature GenBank will reject.
+          if (nrow(unknown_gaps) > 0 && any(vapply(seq_len(nrow(exons)), function(i) {
+            e_wraps <- isTRUE(dat$topology == "circular") &&
+              isTRUE(exons[i, ]$pos1 > exons[i, ]$pos2)
+            length(split_cds_at_gaps(
+              exons[i, ]$pos1, exons[i, ]$pos2, exons[i, ]$direction,
+              e_wraps, asmb_len, unknown_gaps
+            )) != 1L
+          }, logical(1)))) {
+            message(
+              .seqid, ": WARNING an exon of ", cur$gene, " crosses a gap of ",
+              "unknown size. GenBank does not allow this; the CDS was written ",
+              "whole and will need splitting by hand."
+            )
+          }
+
           # write to .tbl
           write_tbl_loc(pos, "gene", tbl_fn)
           paste0("\t\t\tgene\t", cur$gene) |>
@@ -960,6 +1161,8 @@ export_files <- function(
           }
 
         } else { # normal processing, no introns
+          partial5 <- FALSE
+          partial3 <- FALSE
           if (stringr::str_detect(cur$translation, "\\*")) {
             message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
           }
@@ -970,6 +1173,7 @@ export_files <- function(
             message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
             # 5' partial: '<' prepends the start coordinate (first column, both strands)
             pos[[1]][1] <- paste0("<", pos[[1]][1])
+            partial5 <- TRUE
             note <- "start codon not determined"
           }
           if (nchar(cur$stop_codon) < 3) {
@@ -983,33 +1187,56 @@ export_files <- function(
             # 3' partial (undetermined), not poly-A: '>' prepends the stop
             # coordinate (last interval, both strands)
             pos <- mark_tbl_3p(pos)
+            partial3 <- TRUE
             note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
+
+          # https://www.ncbi.nlm.nih.gov/genbank/wgs_gapped/ : "The exon(s) of a
+          # CDS may not cross the gap if the gap size is unknown. Instead, you
+          # could have two partial CDS features (and mRNAs in eukaryoties) that
+          # abut the gap, with a single gene over the whole locus."
+          cds_pieces <- split_cds_at_gaps(
+            cur$pos1, cur$pos2, cur$direction, wraps, asmb_len, unknown_gaps
+          )
+          split_cds <- length(cds_pieces) > 1
+          note_out <- add_gap_note(note)
 
           # write to .tbl
           write_tbl_loc(pos, "gene", tbl_fn)
           paste0("\t\t\tgene\t", cur$gene) |>
             cat(file = tbl_fn, sep = "\n", append = TRUE)
-          write_tbl_loc(pos, "CDS", tbl_fn)
-          paste("\t\t\tproduct\t", cur$product) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          paste("\t\t\ttransl_table\t", dat$genetic_code) |>
-            cat(file = tbl_fn, sep = "\n", append = TRUE)
-          if (length(transl_except) > 0) {
-            paste0("\t\t\ttransl_except\t", transl_except) |>
+          if (split_cds) {
+            cat("\t\t\tnote\tgap found within coding sequence",
+                file = tbl_fn, sep = "\n", append = TRUE)
+            write_tbl_cds_pieces(
+              cds_pieces, cur$gene, cur$product, dat$genetic_code, tbl_fn,
+              note = note_out, transl_except = transl_except,
+              codon_start = !cur$start_codon %in% start_codons,
+              partial5 = partial5, partial3 = partial3
+            )
+          } else {
+            write_tbl_loc(pos, "CDS", tbl_fn)
+            paste("\t\t\tproduct\t", cur$product) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
-          }
-          if (!cur$start_codon %in% start_codons) {
-            paste("\t\t\tcodon_start\t", 1) |>
+            paste("\t\t\ttransl_table\t", dat$genetic_code) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
-          }
-          note_out <- add_gap_note(note)
-          if (length(note_out) > 0) {
-            paste0("\t\t\tnote\t", note_out) |>
-              cat(file = tbl_fn, sep = "\n", append = TRUE)
+            if (length(transl_except) > 0) {
+              paste0("\t\t\ttransl_except\t", transl_except) |>
+                cat(file = tbl_fn, sep = "\n", append = TRUE)
+            }
+            if (!cur$start_codon %in% start_codons) {
+              paste("\t\t\tcodon_start\t", 1) |>
+                cat(file = tbl_fn, sep = "\n", append = TRUE)
+            }
+            if (length(note_out) > 0) {
+              paste0("\t\t\tnote\t", note_out) |>
+                cat(file = tbl_fn, sep = "\n", append = TRUE)
+            }
           }
 
-          # write to GFF
+          # write to GFF. Left as one CDS line on purpose: GFF3 has no partial
+          # coordinate convention, and two lines sharing a CDS ID would say the
+          # two pieces are joined, which is what the split exists to avoid.
           # gene feature
           f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
           # a feature spanning the origin is written start..(asmb_len + end)

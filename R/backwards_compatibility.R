@@ -261,6 +261,14 @@ backwards_compatibility <- function(
         "scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"),
         error = function(e) FALSE
       )) &&
+      isTRUE(tryCatch(
+        all(c("scaffold_junctions", "gap_evidence") %in% DBI::dbListTables(con)),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "gap_index" %in% DBI::dbListFields(con, "scaffold_junctions"),
+        error = function(e) FALSE
+      )) &&
       export_default_current)
   {
     message("nothing to update")
