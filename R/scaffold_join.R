@@ -1694,6 +1694,69 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   invisible(res)
 }
 
+#' Whether one sample can have its scaffold join re-run by the pipeline
+#'
+#' The toolbar button used to answer this for a whole selection and report
+#' refusals in an alert. Per sample the reason can be shown next to the control
+#' instead, so the same four guards return a message rather than a bare refusal.
+#'
+#' @param con database connection
+#' @param dir_out project output directory
+#' @param ID sample ID
+#'
+#' @return list(state, message) where state is "ready", "queued",
+#'   "not_eligible", "missing_output", "join_off" or "no_ref"
+#'
+#' @noRd
+redo_join_status <- function(con, dir_out, ID) {
+  out <- function(state, message = NULL) list(state = state, message = message)
+  q <- function(expr, otherwise = NULL) tryCatch(expr, error = function(e) otherwise)
+
+  asmb <- q(DBI::dbGetQuery(
+    con, "SELECT ID, path, scaffold FROM assemblies WHERE ID = ? AND path > 0",
+    params = list(ID)
+  ), data.frame())
+  if (length(redo_join_eligible_ids(ID, asmb)) == 0L) {
+    return(out("not_eligible", paste(
+      "This sample is not join-eligible: a join needs more than one scaffold on",
+      "a single assembly path."
+    )))
+  }
+
+  row <- q(DBI::dbGetQuery(
+    con,
+    "SELECT a.join_switch, a.blast_accession, o.join_scaffolds
+       FROM assemble a
+       JOIN assemble_opts o ON o.assemble_opts = a.assemble_opts
+      WHERE a.ID = ?",
+    params = list(ID)
+  ), data.frame())
+
+  stale <- q(stale_assemble_dirs(con, dir_out, ids = ID, pending_only = FALSE), NULL)
+  if (!is.null(stale) && ID %in% stale$ID) {
+    return(out("missing_output", paste(
+      "This sample\'s published assembly output is not on disk, so there is",
+      "nothing to join from. Re-run the assembly instead."
+    )))
+  }
+  if (nrow(row) > 0 && !isTRUE(as.integer(row$join_scaffolds[1]) == 1L)) {
+    return(out("join_off", paste(
+      "Scaffold joining is switched off in this sample\'s assembly options, so",
+      "the pipeline would skip it. Turn it on first."
+    )))
+  }
+  if (length(redo_join_no_ref_ids(ID, row)) > 0L) {
+    return(out("no_ref", paste(
+      "This sample has no BLAST reference recorded, and the join orders its",
+      "scaffolds against one."
+    )))
+  }
+  if (nrow(row) > 0 && isTRUE(as.integer(row$join_switch[1]) == 1L)) {
+    return(out("queued", "A join is queued; it runs on the next pipeline update."))
+  }
+  out("ready")
+}
+
 #' Replace a sample's recorded gap intervals in the database
 #'
 #' The app builds a Path 0 in-process, so it writes these rows itself rather

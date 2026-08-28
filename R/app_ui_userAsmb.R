@@ -41,12 +41,6 @@ app_ui_userAsmb <- function(request) {
               size = "sm"
             ),
             shinyWidgets::actionBttn(
-              "redo_join",
-              label = "Redo Scaffold Join",
-              style = "material-flat",
-              size = "sm"
-            ),
-            shinyWidgets::actionBttn(
               "run_modal",
               label = "Update",
               style = "material-flat",

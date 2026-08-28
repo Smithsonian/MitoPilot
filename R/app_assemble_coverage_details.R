@@ -1633,8 +1633,63 @@ assembly_coverage_details_server <- function(id, rv) {
         uiOutput(ns("join_map_div")),
         div(style = "margin-top: 8px;",
             actionButton(ns("join_build"), "Build joined assembly (Path 0)",
-                         icon = icon("compress"), class = "btn-primary"))
+                         icon = icon("compress"), class = "btn-primary")),
+        uiOutput(ns("join_redo_ui"))
       )
+    })
+
+    # Hand the join back to the pipeline instead of building it here. Lives beside
+    # the manual build because this is where a fragmented sample is actually being
+    # looked at; it only QUEUES the join, which then runs on the next update.
+    output$join_redo_ui <- renderUI({
+      req(isTRUE(rv$asmb_join_eligible))
+      rv$join_redo_tick
+      st <- redo_join_status(session$userData$con, session$userData$dir_out,
+                             rv$updating$ID)
+      note <- function(txt, colour = "#888") {
+        div(style = paste0("font-size: 11px; color: ", colour, "; margin-top: 4px;"),
+            txt)
+      }
+      if (st$state == "queued") {
+        return(div(
+          style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
+          actionButton(ns("join_redo"), "Cancel queued pipeline join",
+                       icon = icon("xmark")),
+          note(paste("Queued. The pipeline re-runs this sample's join from its",
+                     "published assembly output on the next update."), "#0056b3")
+        ))
+      }
+      btn <- actionButton(ns("join_redo"), "Redo join in pipeline",
+                          icon = icon("rotate"))
+      div(
+        style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
+        if (st$state == "ready") btn else shinyjs::disabled(btn),
+        if (st$state == "ready") {
+          note(paste("Queues the join. It runs on the next pipeline update, using",
+                     "the reference and options on record rather than the layout",
+                     "above."))
+        } else {
+          note(st$message, "#a0241c")
+        }
+      )
+    })
+
+    observeEvent(input$join_redo, {
+      ID <- rv$updating$ID
+      st <- redo_join_status(session$userData$con, session$userData$dir_out, ID)
+      # Toggle: a queued sample is unqueued, so a mis-click is undoable here
+      # rather than surviving until the next run.
+      queued <- identical(st$state, "queued")
+      if (!queued && !identical(st$state, "ready")) return()
+      upd <- data.frame(ID = ID,
+                        join_switch = if (queued) NA_integer_ else 1L,
+                        stringsAsFactors = FALSE)
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(upd, unmatched = "ignore", in_place = TRUE,
+                           copy = TRUE, by = "ID")
+      rv$data <- rv$data |> dplyr::rows_update(upd, by = "ID")
+      rv$join_redo_tick <- (rv$join_redo_tick %||% 0L) + 1L
+      trigger("update_assemble_table")
     })
 
     # Reference-mapping visualization (shown once Auto-layout has run).
