@@ -1,140 +1,90 @@
-# Assembly gap provenance and linkage evidence
+# Assembly gaps in a scaffolded mitogenome
 
-Date: 2026-08-28
+Date: 2026-08-28 (revised)
 Status: approved for implementation
 
-## Problem
+## What NCBI told us
 
-Export declares runs of `N` as `assembly_gap` features, but it cannot tell where
-a run came from, so every gap is written with the same qualifiers:
+Susan Schafer Storz (NCBI/NLM), 2026-08-28, in reply to a direct question about
+submitting reference-scaffolded mitogenomes:
 
-```
-estimated_length  <run length>
-gap_type          within scaffold
-linkage_evidence  unspecified
-```
+1. "We do accept gapped genomes. The number of n's should be the estimated
+   length and the correct gene order is expected."
+2. "BioSamples can be on more than one sequence so it is not an issue to submit
+   multiple fragments."
+3. "You really don't need to use assembly_gap features. A regular gap feature is
+   fine. Or send with the n's."
+4. "If it is an estimated length the feature should be continuous."
 
-Two of those are wrong in some cases.
+This supersedes the earlier design, which was built from the public
+documentation alone and reached for `assembly_gap` and its linkage-evidence
+vocabulary.
 
-1. **`estimated_length`.** `join_scaffolds()` sizes a junction two different
-   ways. When the reference places the neighbouring scaffolds apart by *n* bp it
-   inserts *n* Ns, which is a genuine estimate. When the junction is unmapped it
-   inserts `gap_len_default` (100) Ns, which is a placeholder and matches the
-   GenBank/EMBL/DDBJ convention for a gap of unknown size. Export reports both as
-   a measured length, so a placeholder is submitted as a 100 bp measurement.
+## Consequences
 
-2. **`linkage_evidence`.** The AGP specification reserves `unspecified` for
-   contamination gaps and for converting old AGPs that lack the field. A gap we
-   created by ordering scaffolds against a reference mitogenome has real
-   evidence: `align-genus` or `align-xgenus`, depending on whether that reference
-   shares the sample's genus. Ns that were already present in a sequence the user
-   supplied have no evidence we can vouch for, and are the one case where
-   `unspecified` is defensible.
+**Every N we insert must be an estimate.** (1) rules out the fixed placeholder
+the join used for a junction the reference could not size. A fabricated 100 bp
+spacer states a gap length we do not have.
 
-Deciding `align_genus` vs `align_xgenus` needs the sample's genus, which
-MitoPilot does not hold in controlled form: `samples.Taxon` is free text, and
-`assemble.blast_lineage` stops at family (e.g. `Chordata; Anguilliformes;
-Congridae`). Only the user can settle it.
+**A sample we cannot honestly join has somewhere to go.** (2) makes leaving it
+fragmented a sanctioned outcome rather than a failure.
+
+**The linkage-evidence apparatus is unnecessary.** (3) means a plain `gap`
+feature carrying only `/estimated_length`. No `gap_type`, no
+`linkage_evidence`, and therefore no need to know whether the ordering
+reference shares the sample's genus.
+
+**Genes spanning a gap stay whole.** (4). Splitting a CDS into two partial
+features is correct only for a gap of unknown size, and once every gap is an
+estimate that case cannot arise from a join.
 
 ## Design
 
-### 1. Persist what the join did
+### 1. The join refuses a junction it cannot size
 
-`join_scaffolds()` already builds a per-junction record (`junc_rec`) carrying
-`from`, `to`, `type`, `gap_bases`, `overlap_len` and `identity`, then discards
-it. Persist it.
+`join_scaffolds()` records `size_known` per junction. When any junction in a
+sample yields an unsized spacer, the join is **declined**: no Path 0 is built and
+the sample stays fragmented, with a note saying which junctions could not be
+sized and that its contigs can be submitted as separate sequences.
 
-New table, written by the scaffold-join workflow alongside `scaffold_mappings`:
+The same refusal applies to the manual join editor in the app, which reports it
+in the dialog rather than silently building a sequence that cannot be submitted.
 
-```sql
-CREATE TABLE scaffold_junctions (
-  ID           TEXT NOT NULL,
-  junction     INTEGER NOT NULL,   -- junction that inserted this spacer
-  gap_index    INTEGER NOT NULL,   -- 1-based, in final coordinate order
-  start        INTEGER,            -- final coordinates, post trim and rotation
-  end          INTEGER,
-  gap_bases    INTEGER,
-  size_known   INTEGER,            -- 1 = reference estimate, 0 = placeholder
-  time_stamp   INTEGER,
-  PRIMARY KEY (ID, gap_index)
-)
+`gap_len_default` therefore no longer reaches the output. It stays as the
+internal marker that produced the unsized junction we refuse on.
+
+### 2. Export writes a plain gap feature
+
+For each run of Ns at or above `gap_min` that overlaps a spacer this pipeline
+inserted:
+
+```
+<start>	<end>	gap
+			estimated_length	<run length>
 ```
 
-`size_known` is the distinction export needs: 1 when the length came from the
-reference alignment, 0 when the junction was unmapped and took
-`gap_len_default`.
+Nothing else. Runs of Ns that the sequence arrived with are **not** declared:
+they may be ambiguous base calls rather than gaps, and we have nothing to say
+about them. They still contribute the note on any coding feature that contains
+them.
 
-**Positions are stored in final coordinates.** `src_scaffold` is NA at exactly
-the bases the join inserted, which gives a per-base spacer map. That map is
-reindexed by the circularization trim and the rotation alongside the coverage
-vectors, so the recorded intervals describe the sequence as exported. Export
-shifts them again by its own linear-end trim, then matches a run of Ns by
-overlap.
+### 3. Removed
 
-### 2. Record the user's genus call
+- The `gap_evidence` table, the export gap-evidence modal, and the genus
+  question. They existed only to choose `linkage_evidence`.
+- `assembly_gap`, `gap_type`, `linkage_evidence`.
+- The CDS split into partial features, per (4).
 
-```sql
-CREATE TABLE gap_evidence (
-  ID          TEXT NOT NULL,
-  genus_match TEXT,          -- 'same' | 'different'
-  time_stamp  INTEGER,
-  PRIMARY KEY (ID)
-)
-```
+### 4. Kept
 
-Keyed by sample, not by export unit, so the choice survives regrouping,
-re-export, and changes to which units exist.
-
-### 3. Ask for it in the app
-
-A new pre-flight gate in the export flow, after the existing invalid-header,
-multi-path and fragmented-sample checks and before `run_export()`. It appears
-only when samples in the group actually contain gaps.
-
-One row per sample: **Sample ID**, **Taxon**, **reference accession and
-species**, **gaps found** (count and total bp), and a **same / different**
-toggle for "reference vs sample genus". The toggle is pre-filled by comparing the
-first whitespace token of `Taxon` with the first token of `blast_species`, both
-of which are the genus when the values are conventional binomials; the user is
-correcting a suggestion rather than filling a blank form. Confirming writes every
-row to `gap_evidence` and continues the export.
-
-### 4. Classify each run on export
-
-For every run of `N` at or above `gap_min` in a unit being exported:
-
-| Run overlaps a spacer | That spacer was sized | `gap_type` | `estimated_length` | `linkage_evidence` |
-|---|---|---|---|---|
-| yes | yes | `within scaffold` | run length | `align-genus` / `align-xgenus` |
-| yes | no | `within scaffold` | `unknown` | `align-genus` / `align-xgenus` |
-| no | n/a | `unknown` | run length | none |
-
-`align-genus` when the sample's `gap_evidence.genus_match` is `same`,
-`align-xgenus` when `different`. The hyphenated spelling is the feature table's;
-the underscore form belongs to AGP, a different file format.
-
-With no stored answer, which is what a headless `export_files()` call gets, no
-evidence is claimed. INSDC makes `linkage_evidence` mandatory for `within
-scaffold` and invalid otherwise, so a gap we cannot vouch for is emitted as
-`gap_type unknown` with the qualifier omitted entirely. `unspecified` is not used:
-AGP reserves it for contamination gaps and legacy conversions.
-
-Matching is by POSITION, not by length. Length matching cannot tell a spacer from
-a run a scaffold arrived with, and fails outright when a scaffold's terminal Ns
-fuse with an adjacent spacer or when its internal assembler gap happens to be the
-same size as the placeholder.
-
-## Out of scope
-
-- Changing how the join sizes gaps. The reference estimate is real information
-  and preserving reading frame across a gap depends on it.
-- Controlled taxonomy for `samples.Taxon`.
+`scaffold_junctions` stays: it is how the join records which bases it inserted
+and whether each was sized, which is what the refusal in (1) and the run
+classification in (2) both rest on.
 
 ## Testing
 
-Unit tests over simulated joined assemblies rather than pipeline runs: build
-scaffold sets with known gaps, join them, and assert the persisted junctions, the
-classification of each run, and the emitted qualifier blocks. Cover a
-reference-estimated gap, an unmapped placeholder gap, a butt join, a
-user-supplied sequence with internal Ns, both genus answers, and the no-choice
-fallback.
+Unit tests over simulated joins: a sample with only sizable junctions joins and
+its gaps export as `gap` features with the estimated length; a sample with an
+unsizable junction is declined with a note and no Path 0; a run of Ns the
+sequence arrived with is not declared but is still noted on a CDS that contains
+it; a gene spanning an estimated gap stays a single continuous feature.
