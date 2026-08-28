@@ -47,7 +47,8 @@ others:
   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
     column as INTEGER so assembly does not crash).
   \item New tables: "orf_opts", "blast_opts", "export_opts",
-    "scaffold_mappings", "assemblies", "assembly_blast", "circularize_opts",
+    "scaffold_mappings", "scaffold_junctions", "gap_evidence",
+    "assemblies", "assembly_blast", "circularize_opts",
     "find_mito_opts", "mito_candidates", and the
     "blast_ref_annotations"/"blast_ref_sequences"/"blast_ref_alignment" set.
 }
