@@ -158,7 +158,7 @@ process write_scaffold_mappings {
         def jlines = new File(junc_fn.toString()).readLines()
         if (jlines.size() > 1) {
             def jhi = [:]; jlines[0].split(',', -1).eachWithIndex { h, i -> jhi[h.trim()] = i }
-            def jcols = ['ID', 'junction', 'from_scaffold', 'to_scaffold', 'type',
+            def jcols = ['ID', 'junction', 'gap_index', 'start', 'end',
                          'gap_bases', 'size_known']
             def jins = conn.prepareStatement(
                 "INSERT OR REPLACE INTO scaffold_junctions (${jcols.join(', ')}, time_stamp) " +

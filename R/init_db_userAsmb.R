@@ -620,13 +620,13 @@ new_db_userAsmb <- function(
     "CREATE TABLE scaffold_junctions (
       ID TEXT NOT NULL,
       junction INTEGER NOT NULL,
-      from_scaffold TEXT,
-      to_scaffold TEXT,
-      type TEXT,
+      gap_index INTEGER NOT NULL,
+      start INTEGER,
+      end INTEGER,
       gap_bases INTEGER,
       size_known INTEGER,
       time_stamp INTEGER,
-      PRIMARY KEY (ID, junction)
+      PRIMARY KEY (ID, gap_index)
     );"
   )
 

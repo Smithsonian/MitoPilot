@@ -271,9 +271,9 @@ together:
 
 | Value | When |
 |---|---|
-| `align_genus` | MitoPilot ordered the pieces against a reference in the same genus as the sample |
-| `align_xgenus` | It ordered them against a reference in a different genus |
-| `unspecified` | The `N`s were already in the sequence you supplied, so the ordering is not ours to vouch for |
+| `align-genus` | MitoPilot ordered the pieces against a reference in the same genus as the sample |
+| `align-xgenus` | It ordered them against a reference in a different genus |
+| *(omitted)* | The `N`s were already in the sequence you supplied, so the ordering is not ours to vouch for. The gap is written as `gap_type unknown`, which is the only honest form: INSDC requires linkage evidence for a gap "within scaffold" and forbids it otherwise. |
 
 MitoPilot cannot tell whether the reference shares your sample's genus, because
 the `Taxon` column is free text and the reference's lineage stops at family. If

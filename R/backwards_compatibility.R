@@ -467,6 +467,14 @@ backwards_compatibility <- function(
 
   # What the scaffold join did at each junction. Export needs it to tell a gap
   # sized from the reference from a placeholder for a junction it could not size.
+  # Derived from the last join, so an out-of-date shape is rebuilt rather than
+  # migrated; the next join repopulates it.
+  if (DBI::dbExistsTable(con, "scaffold_junctions") &&
+      !all(c("gap_index", "start", "end") %in%
+           DBI::dbListFields(con, "scaffold_junctions"))) {
+    message("rebuilt 'scaffold_junctions' table")
+    DBI::dbExecute(con, "DROP TABLE scaffold_junctions")
+  }
   if (!DBI::dbExistsTable(con, "scaffold_junctions")) {
     message("added 'scaffold_junctions' table")
     DBI::dbExecute(
@@ -474,13 +482,13 @@ backwards_compatibility <- function(
       "CREATE TABLE scaffold_junctions (
         ID TEXT NOT NULL,
         junction INTEGER NOT NULL,
-        from_scaffold TEXT,
-        to_scaffold TEXT,
-        type TEXT,
+        gap_index INTEGER NOT NULL,
+        start INTEGER,
+        end INTEGER,
         gap_bases INTEGER,
         size_known INTEGER,
         time_stamp INTEGER,
-        PRIMARY KEY (ID, junction)
+        PRIMARY KEY (ID, gap_index)
       );"
     )
   }
@@ -2164,8 +2172,9 @@ schema_gaps <- function(con) {
                   "find_mito_notes") %in% DBI::dbListFields(con, "assemble"))))) {
     gaps <- c(gaps, "the circularization and mitogenome-search tables are missing")
   }
-  if (!has(all(c("scaffold_junctions", "gap_evidence") %in% DBI::dbListTables(con)))) {
-    gaps <- c(gaps, "the assembly-gap tables are missing ('scaffold_junctions', 'gap_evidence')")
+  if (!has(all(c("scaffold_junctions", "gap_evidence") %in% DBI::dbListTables(con))) ||
+      !has("gap_index" %in% DBI::dbListFields(con, "scaffold_junctions"))) {
+    gaps <- c(gaps, "the assembly-gap tables are missing or out of date ('scaffold_junctions', 'gap_evidence')")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%

@@ -147,64 +147,87 @@ count_unknown_bases <- function(seq_chr, pos1, pos2, wraps, asmb_len) {
 #'
 #' Three things decide it:
 #'
-#' * Did MitoPilot build this unit by joining scaffolds? Only then can it claim
-#'   the alignment it used as linkage evidence. Ns already present in a sequence
-#'   somebody supplied carry no evidence we can vouch for.
-#' * Could the reference size this particular junction? An unmapped junction gets
-#'   a fixed placeholder, and submitting a placeholder as a measurement would be
-#'   a false claim, so it goes out as `estimated_length unknown`.
+#' * Does this run overlap a spacer the scaffold join inserted? Only then can we
+#'   claim the alignment that ordered the pieces as linkage evidence. Ns a
+#'   sequence arrived with are not ours to vouch for, and a run that merely
+#'   happens to be the same length as a spacer is not a spacer.
+#' * Could the reference size that junction? An unmapped junction gets a fixed
+#'   placeholder, and submitting a placeholder as a measurement would be a false
+#'   claim, so it goes out as `estimated_length unknown`.
 #' * Does the ordering reference share the sample's genus? Only the user can say
 #'   (see the export gap-evidence modal), so with no answer on file we claim
 #'   nothing.
 #'
-#' @param run_length length of the run of Ns
-#' @param joined TRUE when this unit was built by the scaffold join
-#' @param placeholder_lengths gap sizes the join could not measure, from
-#'   `scaffold_junctions` rows with `size_known = 0`
+#' @param run one row of [find_sequence_gaps()] (start, end, length)
+#' @param spacers gap intervals for this unit in the SAME coordinates as `run`,
+#'   a data.frame of start/end/size_known, or NULL/empty for a unit we did not
+#'   join
 #' @param genus_match "same", "different", or NA when the user has not answered
 #'
-#' @return list(estimated_length, linkage_evidence)
+#' @return list(estimated_length, linkage_evidence, gap_type, ours)
 #'
 #' @noRd
-gap_qualifiers <- function(run_length, joined, placeholder_lengths = integer(0),
-                           genus_match = NA_character_) {
-  est <- if (isTRUE(joined) && run_length %in% placeholder_lengths) {
-    "unknown"
+gap_qualifiers <- function(run, spacers = NULL, genus_match = NA_character_) {
+  hit <- if (is.null(spacers) || nrow(spacers) == 0L) {
+    spacers[0, , drop = FALSE]
   } else {
-    as.character(run_length)
+    spacers[spacers$start <= run$end & spacers$end >= run$start, , drop = FALSE]
   }
-  evidence <- if (!isTRUE(joined)) {
-    "unspecified"
-  } else if (identical(genus_match, "same")) {
-    "align_genus"
+  ours <- !is.null(hit) && nrow(hit) > 0
+
+  if (!ours) {
+    # Not ours to explain. `unknown` drops the claim that this record is a
+    # scaffold in an assembly, and INSDC then forbids linkage_evidence entirely.
+    return(list(estimated_length = as.character(run$length),
+                linkage_evidence = NA_character_, gap_type = "unknown",
+                ours = FALSE))
+  }
+
+  # A run overlapping any unsized spacer cannot be reported as a measurement,
+  # even if the rest of the run is real sequence.
+  est <- if (any(hit$size_known == 0L)) "unknown" else as.character(run$length)
+  evidence <- if (identical(genus_match, "same")) {
+    "align-genus"
   } else if (identical(genus_match, "different")) {
-    "align_xgenus"
+    "align-xgenus"
   } else {
-    "unspecified"
+    NA_character_
   }
-  list(estimated_length = est, linkage_evidence = evidence)
+  # No answer on file: claim nothing rather than assert evidence we lack, which
+  # means dropping the scaffold claim too (linkage_evidence is mandatory for
+  # gap_type "within scaffold").
+  if (is.na(evidence)) {
+    return(list(estimated_length = est, linkage_evidence = NA_character_,
+                gap_type = "unknown", ours = TRUE))
+  }
+  list(estimated_length = est, linkage_evidence = evidence,
+       gap_type = "within scaffold", ours = TRUE)
 }
 
 #' Write one assembly_gap feature block
 #'
 #' The bases are present in the sequence; it is their identity that is unknown,
-#' so a measured run reports its own length. See [gap_qualifiers()] for how the
-#' qualifiers are chosen.
+#' so a measured run reports its own length. `linkage_evidence` is emitted only
+#' for a gap_type that permits it: INSDC makes it mandatory for "within
+#' scaffold" and invalid for everything else.
 #'
 #' @param gap one row of [find_sequence_gaps()]
 #' @param fn feature table to append to
-#' @param qual list(estimated_length, linkage_evidence) from [gap_qualifiers()]
+#' @param qual list from [gap_qualifiers()]
 #'
 #' @noRd
 write_tbl_gap <- function(gap, fn, qual = NULL) {
-  qual <- qual %||% gap_qualifiers(gap$length, joined = FALSE)
+  qual <- qual %||% gap_qualifiers(gap, NULL)
   paste(c(gap$start, gap$end, "assembly_gap"), collapse = "\t") |>
     cat(file = fn, sep = "\n", append = TRUE)
   paste0("\t\t\testimated_length\t", qual$estimated_length) |>
     cat(file = fn, sep = "\n", append = TRUE)
-  cat("\t\t\tgap_type\twithin scaffold", file = fn, sep = "\n", append = TRUE)
-  paste0("\t\t\tlinkage_evidence\t", qual$linkage_evidence) |>
+  paste0("\t\t\tgap_type\t", qual$gap_type) |>
     cat(file = fn, sep = "\n", append = TRUE)
+  if (!is.na(qual$linkage_evidence)) {
+    paste0("\t\t\tlinkage_evidence\t", qual$linkage_evidence) |>
+      cat(file = fn, sep = "\n", append = TRUE)
+  }
 }
 
 #' Write one .tbl feature location block; only the first interval carries the key
@@ -507,6 +530,7 @@ export_files <- function(
     # sequence name, to be used as first column in GFF
     seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)
 
+    trim_offset <- 0L
     # Trim un-annotated ends of linear assemblies. A pos1 > pos2 row is a
     # wrap-around, which MIN/MAX cannot describe and the constant shift below
     # would drive negative, so leave the assembly untrimmed instead.
@@ -518,6 +542,8 @@ export_files <- function(
     } else if (dat$topology == "linear") {
       start <- min(annotations$pos1)
       if (start > 1) {
+        # Every coordinate downstream shifts by this much, spacers included.
+        trim_offset <- as.integer(start - 1L)
         seq <- Biostrings::subseq(seq, start, seq@ranges@width)
         annotations <- annotations |>
           dplyr::mutate(
@@ -573,18 +599,23 @@ export_files <- function(
     # ordering reference shares the sample's genus.
     # Tolerant of a project that predates these tables: no provenance on file
     # means no claim is made, which is the same as a sequence we did not join.
-    empty_junctions <- data.frame(gap_bases = integer(0), size_known = integer(0))
-    junctions <- tryCatch(
+    empty_spacers <- data.frame(start = integer(0), end = integer(0),
+                                size_known = integer(0))
+    spacers <- tryCatch(
       DBI::dbGetQuery(
-        con, "SELECT gap_bases, size_known FROM scaffold_junctions WHERE ID = ?",
+        con, "SELECT start, end, size_known FROM scaffold_junctions WHERE ID = ?",
         params = list(.x)
       ),
-      error = function(e) empty_junctions
+      error = function(e) empty_spacers
     )
-    joined_unit <- nrow(junctions) > 0 && isTRUE(as.integer(.path) == 0L)
-    placeholder_lengths <- as.integer(
-      junctions$gap_bases[!is.na(junctions$size_known) & junctions$size_known == 0L]
-    )
+    # Spacers are recorded against the joined Path 0, and only that unit.
+    if (!isTRUE(as.integer(.path) == 0L)) spacers <- empty_spacers
+    # Trimming the un-annotated ends of a linear assembly shifts every
+    # coordinate; move the spacers by the same offset so they still line up.
+    if (nrow(spacers) > 0 && trim_offset > 0L) {
+      spacers$start <- spacers$start - trim_offset
+      spacers$end <- spacers$end - trim_offset
+    }
     genus_match <- tryCatch(
       DBI::dbGetQuery(con, "SELECT genus_match FROM gap_evidence WHERE ID = ?",
                       params = list(.x))$genus_match,
@@ -601,8 +632,7 @@ export_files <- function(
              (is.null(before) || gaps$start[gap_state$i] < before)) {
         write_tbl_gap(
           gaps[gap_state$i, ], tbl_fn,
-          gap_qualifiers(gaps$length[gap_state$i], joined_unit,
-                         placeholder_lengths, genus_match)
+          gap_qualifiers(gaps[gap_state$i, ], spacers, genus_match)
         )
         gap_state$i <- gap_state$i + 1L
       }
@@ -612,6 +642,31 @@ export_files <- function(
         .seqid, ": ", nrow(gaps), " run(s) of unknown bases (",
         sum(gaps$length), " bp total) declared as assembly_gap features."
       )
+      # INSDC caps a declared gap span at 1000 bp. Nothing can be done about it
+      # here, so say so plainly rather than emit a feature that will bounce.
+      too_long <- gaps[gaps$length > 1000L, , drop = FALSE]
+      if (nrow(too_long) > 0) {
+        message(
+          .seqid, ": WARNING ", nrow(too_long),
+          " gap(s) exceed the 1000 bp INSDC limit for a declared assembly_gap (",
+          paste(sprintf("%d-%d", too_long$start, too_long$end), collapse = ", "),
+          "). GenBank will query these."
+        )
+      }
+      # A feature may not begin or end inside a gap; it has to abut the gap and
+      # be partial (SEQ_FEAT.FeatureBeginsOrEndsInGap).
+      in_gap <- function(p) any(gaps$start <= p & gaps$end >= p)
+      bad <- vapply(seq_len(nrow(annotations)), function(i) {
+        in_gap(annotations$pos1[i]) || in_gap(annotations$pos2[i])
+      }, logical(1))
+      if (any(bad)) {
+        message(
+          .seqid, ": WARNING ", sum(bad),
+          " feature(s) begin or end inside a gap (",
+          paste(unique(annotations$gene[bad]), collapse = ", "),
+          "). GenBank rejects these; adjust the boundary to abut the gap."
+        )
+      }
     }
 
     purrr::pwalk(annotations, function(...) {

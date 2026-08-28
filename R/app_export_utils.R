@@ -392,6 +392,9 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
 species_binomial <- function(x) {
   vapply(x, function(s) {
     if (is.na(s) || !nzchar(trimws(s))) return(NA_character_)
+    # Drop any leading annotation prefix ("UNVERIFIED: Conger oceanicus ...")
+    s <- sub("^([[:alpha:]]+:[[:space:]]*)+", "", trimws(s))
+    if (!nzchar(s)) return(NA_character_)
     toks <- strsplit(trimws(s), "[[:space:]]+")[[1]]
     paste(utils::head(toks, 2), collapse = " ")
   }, character(1), USE.NAMES = FALSE)
@@ -414,7 +417,9 @@ genus_token <- function(x) {
 #' Samples in an export group whose exported sequence contains gaps
 #'
 #' One row per sample with at least one run of `N` of `min_len` bp or more in a
-#' non-ignored unit belonging to `group`. `genus_match` is the value stored in
+#' non-ignored path-0 unit belonging to `group`, restricted to samples that have
+#' `scaffold_junctions` rows (the only ones whose genus call is used by the
+#' export). `genus_match` is the value stored in
 #' `gap_evidence` when there is one, otherwise a suggestion from comparing the
 #' first token of `Taxon` with the first token of `blast_species`.
 #'
@@ -433,15 +438,24 @@ gap_evidence_prompts <- function(con, group, min_len = 10L) {
     genus_match = character(0), stringsAsFactors = FALSE
   )
   if (is.null(group) || is.na(group) || !nzchar(group)) return(empty)
+  # Only units the scaffold join actually built carry a genus call in export
+  # (export.R only uses genus_match when the sample has scaffold_junctions rows
+  # and the unit is path 0), so anything else must not be prompted for.
+  joined_ids <- tryCatch(
+    DBI::dbGetQuery(con, "SELECT DISTINCT ID FROM scaffold_junctions")$ID,
+    error = function(e) character(0)
+  )
+  if (length(joined_ids) == 0) return(empty)
   units <- DBI::dbGetQuery(
     con,
     "SELECT e.ID AS ID, a.sequence AS sequence
        FROM export e
        JOIN assemblies a
          ON a.ID = e.ID AND a.path = e.path AND a.scaffold = e.scaffold
-      WHERE e.export_group = ? AND COALESCE(a.ignore, 0) != 1",
+      WHERE e.export_group = ? AND a.ignore = 0 AND e.path = 0",
     params = list(as.character(group))
   )
+  units <- units[units$ID %in% joined_ids, , drop = FALSE]
   if (nrow(units) == 0) return(empty)
 
   gaps <- lapply(units$sequence, find_sequence_gaps, min_len = min_len)

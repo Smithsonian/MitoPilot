@@ -26,7 +26,7 @@ Two of those are wrong in some cases.
 2. **`linkage_evidence`.** The AGP specification reserves `unspecified` for
    contamination gaps and for converting old AGPs that lack the field. A gap we
    created by ordering scaffolds against a reference mitogenome has real
-   evidence: `align_genus` or `align_xgenus`, depending on whether that reference
+   evidence: `align-genus` or `align-xgenus`, depending on whether that reference
    shares the sample's genus. Ns that were already present in a sequence the user
    supplied have no evidence we can vouch for, and are the one case where
    `unspecified` is defensible.
@@ -49,14 +49,14 @@ New table, written by the scaffold-join workflow alongside `scaffold_mappings`:
 ```sql
 CREATE TABLE scaffold_junctions (
   ID           TEXT NOT NULL,
-  junction     INTEGER NOT NULL,   -- 1-based order along the joined sequence
-  from_scaffold TEXT,
-  to_scaffold   TEXT,
-  type         TEXT,               -- 'gap' | 'butt' | 'overlap'
-  gap_bases    INTEGER,            -- Ns inserted, 0 for butt/overlap
+  junction     INTEGER NOT NULL,   -- junction that inserted this spacer
+  gap_index    INTEGER NOT NULL,   -- 1-based, in final coordinate order
+  start        INTEGER,            -- final coordinates, post trim and rotation
+  end          INTEGER,
+  gap_bases    INTEGER,
   size_known   INTEGER,            -- 1 = reference estimate, 0 = placeholder
   time_stamp   INTEGER,
-  PRIMARY KEY (ID, junction)
+  PRIMARY KEY (ID, gap_index)
 )
 ```
 
@@ -64,11 +64,12 @@ CREATE TABLE scaffold_junctions (
 reference alignment, 0 when the junction was unmapped and took
 `gap_len_default`.
 
-**Positions are deliberately not stored.** Circularization trimming and
-`rotate_to_reference()` both reindex the joined sequence after the join and carry
-only the coverage vectors, so any position recorded at join time can be stale.
-Export therefore locates runs by scanning the final sequence, which is always
-correct, and uses the table only to classify what it finds.
+**Positions are stored in final coordinates.** `src_scaffold` is NA at exactly
+the bases the join inserted, which gives a per-base spacer map. That map is
+reindexed by the circularization trim and the rotation alongside the coverage
+vectors, so the recorded intervals describe the sequence as exported. Export
+shifts them again by its own linear-end trim, then matches a run of Ns by
+overlap.
 
 ### 2. Record the user's genus call
 
@@ -102,21 +103,26 @@ row to `gap_evidence` and continues the export.
 
 For every run of `N` at or above `gap_min` in a unit being exported:
 
-| Unit | Run matches an unmapped junction's length | `estimated_length` | `linkage_evidence` |
-|---|---|---|---|
-| joined | yes | `unknown` | `align_genus` / `align_xgenus` |
-| joined | no | run length | `align_genus` / `align_xgenus` |
-| not joined | n/a | run length | `unspecified` |
+| Run overlaps a spacer | That spacer was sized | `gap_type` | `estimated_length` | `linkage_evidence` |
+|---|---|---|---|---|
+| yes | yes | `within scaffold` | run length | `align-genus` / `align-xgenus` |
+| yes | no | `within scaffold` | `unknown` | `align-genus` / `align-xgenus` |
+| no | n/a | `unknown` | run length | none |
 
-`align_genus` when the sample's `gap_evidence.genus_match` is `same`,
-`align_xgenus` when `different`. With no stored choice, which is what a headless
-`export_files()` call gets, evidence falls back to `unspecified` and this is
-documented.
+`align-genus` when the sample's `gap_evidence.genus_match` is `same`,
+`align-xgenus` when `different`. The hyphenated spelling is the feature table's;
+the underscore form belongs to AGP, a different file format.
 
-A unit counts as joined when it has rows in `scaffold_junctions`. Matching an
-unmapped junction by length is exact except when a reference estimate happens to
-equal `gap_len_default` (100) to the base, where an estimated gap is reported as
-unknown-size. That is the conservative direction and is documented.
+With no stored answer, which is what a headless `export_files()` call gets, no
+evidence is claimed. INSDC makes `linkage_evidence` mandatory for `within
+scaffold` and invalid otherwise, so a gap we cannot vouch for is emitted as
+`gap_type unknown` with the qualifier omitted entirely. `unspecified` is not used:
+AGP reserves it for contamination gaps and legacy conversions.
+
+Matching is by POSITION, not by length. Length matching cannot tell a spacer from
+a run a scaffold arrived with, and fails outright when a scaffold's terminal Ns
+fuse with an adjacent spacer or when its internal assembler gap happens to be the
+same size as the placeholder.
 
 ## Out of scope
 

@@ -1001,6 +1001,11 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
   src_scaffold <- character(0)
   src_pos <- integer(0)
   junctions <- character(0)
+  # Junction index behind each inserted spacer, in the order the spacers appear.
+  # src_scaffold is NA exactly at inserted bases, so the k-th NA run is this
+  # vector's k-th junction. Bases a scaffold brought with it are never NA, so a
+  # scaffold's own Ns can never be mistaken for a spacer.
+  gap_junction <- integer(0)
   junc_rec <- list()                         # one structured record per junction
   prev_oriented <- NULL
   prev_scaf <- NULL
@@ -1119,6 +1124,7 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
         pieces <- c(pieces, strrep("N", ngap))
         src_scaffold <- c(src_scaffold, rep(NA_character_, ngap))
         src_pos <- c(src_pos, rep(NA_integer_, ngap))
+        gap_junction <- c(gap_junction, length(junc_rec))
       }
     }
 
@@ -1166,7 +1172,7 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
                stringsAsFactors = FALSE)
   list(seq = paste0(pieces, collapse = ""),
        src_scaffold = src_scaffold, src_pos = src_pos, junctions = junctions,
-       junction_info = junction_info)
+       junction_info = junction_info, gap_junction = gap_junction)
 }
 
 #' Stitch per-scaffold coverage vectors to match a joined sequence
@@ -1320,6 +1326,78 @@ rotate_to_reference <- function(seq, depth, gc, errors, ref_seq,
   out
 }
 
+#' Per-base map of which junction inserted each spacer base
+#'
+#' `src_scaffold` is NA exactly at bases the join inserted, so its NA runs are
+#' the spacers in order, and `gap_junction` names the junction behind each one.
+#' Bases a scaffold brought with it are never NA, so a scaffold's own Ns can
+#' never be taken for a spacer.
+#'
+#' @param joined the list returned by [join_scaffolds()]
+#'
+#' @return integer vector, one element per base: junction index, or 0
+#'
+#' @noRd
+spacer_track <- function(joined) {
+  src <- joined$src_scaffold
+  out <- integer(length(src))
+  if (length(src) == 0L) {
+    return(out)
+  }
+  gj <- joined$gap_junction %||% integer(0)
+  r <- rle(is.na(src))
+  ends <- cumsum(r$lengths)
+  starts <- ends - r$lengths + 1L
+  k <- 0L
+  for (i in seq_along(r$values)) {
+    if (!isTRUE(r$values[i])) next
+    k <- k + 1L
+    out[starts[i]:ends[i]] <- if (k <= length(gj)) gj[k] else NA_integer_
+  }
+  out
+}
+
+#' Spacer intervals in final coordinates
+#'
+#' Rotation can split one spacer across the origin, so a junction may yield more
+#' than one interval; each is reported separately against the same junction.
+#'
+#' @param spacer per-base junction map, after every reindexing
+#' @param junction_info junction table from [join_scaffolds()]
+#'
+#' @return data.frame(junction, start, end, length, size_known)
+#'
+#' @noRd
+spacer_intervals <- function(spacer, junction_info = NULL) {
+  empty <- data.frame(junction = integer(0), start = integer(0), end = integer(0),
+                      length = integer(0), size_known = integer(0))
+  if (length(spacer) == 0L || all(spacer == 0L, na.rm = TRUE)) {
+    return(empty)
+  }
+  v <- ifelse(is.na(spacer), 0L, spacer)
+  r <- rle(v)
+  ends <- cumsum(r$lengths)
+  starts <- ends - r$lengths + 1L
+  keep <- r$values != 0L
+  if (!any(keep)) {
+    return(empty)
+  }
+  out <- data.frame(
+    junction = as.integer(r$values[keep]),
+    start = as.integer(starts[keep]),
+    end = as.integer(ends[keep]),
+    length = as.integer(r$lengths[keep])
+  )
+  sk <- if (!is.null(junction_info) && nrow(junction_info) > 0) {
+    junction_info$size_known[out$junction]
+  } else {
+    rep(NA_integer_, nrow(out))
+  }
+  sk[is.na(sk)] <- 0L
+  out$size_known <- as.integer(sk)
+  out
+}
+
 #' Join + stitch from an explicit (possibly hand-edited) layout
 #'
 #' The part of [build_joined_assembly()] after reference mapping: used by the
@@ -1351,6 +1429,10 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
 
   seq <- joined$seq
   depth <- stitched$depth; gc <- stitched$gc; errors <- stitched$errors
+  # Junction index at each inserted base, 0 at real bases. Reindexed below by
+  # exactly the same operations as the coverage vectors, so it still points at
+  # the spacers once the sequence has been trimmed and rotated.
+  spacer <- spacer_track(joined)
   circ_note <- character(0)
 
   # Circularize when the caller asserts circular or a reference is present (the
@@ -1371,6 +1453,7 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
   is_circular <- (isTRUE(cz$circular) && may_trim) || isTRUE(circular)
   if (isTRUE(cz$circular) && may_trim) {
     seq <- cz$seq; depth <- cz$depth; gc <- cz$gc; errors <- cz$errors
+    spacer <- utils::head(spacer, length(spacer) - cz$overlap_len)
     circ_note <- c(circ_note, sprintf(
       "circular: trimmed %d bp redundant end overlap (%.0f%% identity)",
       cz$overlap_len, 100 * cz$identity))
@@ -1384,6 +1467,8 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
     rt <- rotate_to_reference(seq, depth, gc, errors, ref_seq, minimap2)
     if (rt$rotated > 0) {
       seq <- rt$seq; depth <- rt$depth; gc <- rt$gc; errors <- rt$errors
+      rp <- rt$rotated
+      spacer <- spacer[c(seq.int(rp + 1L, length(spacer)), seq_len(rp))]
       circ_note <- c(circ_note, sprintf("rotated %d bp to reference origin", rt$rotated))
     }
   }
@@ -1397,7 +1482,8 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
 
   list(seq = seq, depth = depth, gc = gc, errors = errors,
        layout = layout, note = note, topology = topology,
-       join_quality = join_quality, junction_info = joined$junction_info)
+       join_quality = join_quality, junction_info = joined$junction_info,
+       gap_intervals = spacer_intervals(spacer, joined$junction_info))
 }
 
 #' Write the joined Path 0 FASTA + coverageStats CSV
@@ -1594,7 +1680,7 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   res <- build_joined_assembly(scaffolds_df, ref_seq, gap_len = gap_len,
                                circular = circular)
 
-  write_scaffold_junctions(out_dir, ID, res$junction_info)
+  write_scaffold_junctions(out_dir, ID, res$gap_intervals)
   write_joined_files(out_dir, ID, res$seq, res$depth, res$gc, res$errors,
                      res$topology)
   row <- joined_assemblies_row(ID, res$seq, res$depth, res$gc, res$errors,
@@ -1608,36 +1694,37 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   invisible(res)
 }
 
-#' Write the junction CSV the pipeline loads into `scaffold_junctions`
+#' Write the gap CSV the pipeline loads into `scaffold_junctions`
 #'
 #' Always written, header included, so the Nextflow output path exists whether or
-#' not a join happened. Positions are deliberately absent: circularization
-#' trimming and rotation reindex the joined sequence afterwards, so a position
-#' recorded here could be stale. Export locates runs by scanning the sequence and
-#' uses these rows only to classify what it finds.
+#' not a join happened. Positions are in FINAL coordinates: the spacer map is
+#' reindexed alongside the coverage vectors by the circularization trim and the
+#' rotation, so these survive both. Export matches a run of Ns by overlap with
+#' these intervals rather than by length, which cannot tell a spacer from a run a
+#' scaffold brought with it.
 #'
 #' @param out_dir output directory
 #' @param ID sample ID
-#' @param junction_info the `junction_info` data.frame from [join_scaffolds()],
-#'   or NULL when nothing was joined
+#' @param gap_intervals the `gap_intervals` data.frame from
+#'   [assemble_from_layout()], or NULL when nothing was joined
 #'
 #' @noRd
-write_scaffold_junctions <- function(out_dir, ID, junction_info = NULL) {
-  cols <- c("ID", "junction", "from_scaffold", "to_scaffold", "type",
-            "gap_bases", "size_known")
-  out <- if (is.null(junction_info) || nrow(junction_info) == 0L) {
+write_scaffold_junctions <- function(out_dir, ID, gap_intervals = NULL) {
+  cols <- c("ID", "junction", "gap_index", "start", "end", "gap_bases",
+            "size_known")
+  out <- if (is.null(gap_intervals) || nrow(gap_intervals) == 0L) {
     stats::setNames(
       data.frame(matrix(character(0), nrow = 0, ncol = length(cols))), cols
     )
   } else {
     data.frame(
       ID = ID,
-      junction = seq_len(nrow(junction_info)),
-      from_scaffold = junction_info$from,
-      to_scaffold = junction_info$to,
-      type = junction_info$type,
-      gap_bases = as.integer(junction_info$gap_bases),
-      size_known = as.integer(junction_info$size_known),
+      junction = as.integer(gap_intervals$junction),
+      gap_index = seq_len(nrow(gap_intervals)),
+      start = as.integer(gap_intervals$start),
+      end = as.integer(gap_intervals$end),
+      gap_bases = as.integer(gap_intervals$length),
+      size_known = as.integer(gap_intervals$size_known),
       stringsAsFactors = FALSE
     )
   }

@@ -798,35 +798,48 @@ export_server <- function(id) {
       TRUE
     }
 
+    # Export option value: from the stash when the gap modal has replaced the
+    # export modal (its inputs are gone from the DOM), otherwise live.
+    exp_val <- function(name) {
+      if (!is.null(rv$export_stash)) rv$export_stash[[name]] else input[[name]]
+    }
+
     run_export <- function() {
-      group <- input$export_group
+      # TRUE while the export options modal (and its buttons) is still on screen
+      on_screen <- is.null(rv$export_stash)
+      group <- exp_val("export_group")
       # PCG review needs a multi-sample group; flag_PCG_outliers/export_files
       # only review when length(IDs) > 1.
       # Units, not samples: one sample can contribute several records, and the
       # outlier review needs >1 record to compare.
       n_units <- sum(rv$data$export_group == group, na.rm = TRUE)
-      do_review <- isTRUE(input$review_outliers) && n_units > 1
+      do_review <- isTRUE(exp_val("review_outliers")) && n_units > 1
 
       # Remember params so "Back to Review" can recompute against fresh edits and
       # the deferred write (after review) uses the same options. Stashed because
       # the export modal (and its inputs) is removed once the review modal opens.
       rv$review_group <- group
-      rv$review_start <- input$start_aa %||% 10
-      rv$review_stop <- input$stop_aa %||% 10
-      rv$review_ident <- input$ident_pct %||% 60
+      rv$review_start <- exp_val("start_aa") %||% 10
+      rv$review_stop <- exp_val("stop_aa") %||% 10
+      rv$review_ident <- exp_val("ident_pct") %||% 60
       rv$export_params <- list(
-        fasta_header = input$fasta_header,
-        fasta_header_gene = input$fasta_header_gene,
-        generateAAalignments = input$include_alignments,
-        gene_export = input$export_genes
+        fasta_header = exp_val("fasta_header"),
+        fasta_header_gene = exp_val("fasta_header_gene"),
+        generateAAalignments = exp_val("include_alignments"),
+        gene_export = exp_val("export_genes")
       )
+      # Options are captured; the stash has done its job.
+      rv$export_stash <- NULL
       # Where the files will land; surfaced via a popup once the user is done.
       rv$export_done_path <- file.path(
         session$userData$dir_out, "export", group
       )
 
-      shinyjs::removeClass("gears", "paused")
-      shinyjs::disable("export_data")
+      # Only touch the export modal's own elements while it is still on screen
+      if (on_screen) {
+        shinyjs::removeClass("gears", "paused")
+        shinyjs::disable("export_data")
+      }
 
       if (do_review) {
         # Review BEFORE writing files: edits made during review must land in the
@@ -839,14 +852,18 @@ export_server <- function(id) {
           stop_aa = rv$review_stop,
           ident_pct = rv$review_ident
         )
-        shinyjs::addClass("gears", "paused")
-        shinyjs::enable("export_data")
+        if (on_screen) {
+          shinyjs::addClass("gears", "paused")
+          shinyjs::enable("export_data")
+        }
         present_review(review_res)
       } else {
         # No review: write files immediately, then announce.
         write_export_files()
-        shinyjs::addClass("gears", "paused")
-        shinyjs::enable("export_data")
+        if (on_screen) {
+          shinyjs::addClass("gears", "paused")
+          shinyjs::enable("export_data")
+        }
         show_export_done_alert()
       }
     }
@@ -1196,6 +1213,19 @@ export_server <- function(id) {
         return()
       }
       rv$gap_rows <- rows
+      # This modal REPLACES the export options modal, taking its inputs out of
+      # the DOM, so stash everything the export still needs (see exp_val()).
+      rv$export_stash <- list(
+        export_group = input$export_group,
+        fasta_header = input$fasta_header,
+        fasta_header_gene = input$fasta_header_gene,
+        include_alignments = input$include_alignments,
+        export_genes = input$export_genes,
+        review_outliers = input$review_outliers,
+        start_aa = input$start_aa,
+        stop_aa = input$stop_aa,
+        ident_pct = input$ident_pct
+      )
       hdr <- c("Sample ID", "Taxon", "Reference", "Gaps",
                "Reference vs sample genus")
       modalDialog(
@@ -1205,8 +1235,8 @@ export_server <- function(id) {
           style = "color: #666; font-size: 0.9em;",
           "These samples contain runs of N, which export as assembly_gap ",
           "features. Your choice sets each gap's linkage_evidence qualifier: ",
-          "'align_genus' when the reference shares the sample's genus, ",
-          "'align_xgenus' when it does not. The suggestion below compares the ",
+          "'align-genus' when the reference shares the sample's genus, ",
+          "'align-xgenus' when it does not. The suggestion below compares the ",
           "first word of the taxon with the first word of the reference species."
         ),
         div(
@@ -1247,11 +1277,15 @@ export_server <- function(id) {
       ts <- as.integer(Sys.time())
       for (i in seq_len(nrow(rows))) {
         choice <- input[[paste0("gap_genus_", i)]] %||% rows$genus_match[i]
-        DBI::dbExecute(
-          session$userData$con,
-          "INSERT OR REPLACE INTO gap_evidence (ID, genus_match, time_stamp)
-             VALUES (?, ?, ?)",
-          params = list(rows$ID[i], as.character(choice), ts)
+        # Tolerant of a project that predates the table, like the read side.
+        tryCatch(
+          DBI::dbExecute(
+            session$userData$con,
+            "INSERT OR REPLACE INTO gap_evidence (ID, genus_match, time_stamp)
+               VALUES (?, ?, ?)",
+            params = list(rows$ID[i], as.character(choice), ts)
+          ),
+          error = function(e) NULL
         )
       }
       rv$gap_rows <- NULL
@@ -1259,21 +1293,25 @@ export_server <- function(id) {
       check_overwrite_then_export()
     })
 
-    # Abort the export; nothing is written to gap_evidence.
+    # Abort the export; nothing is written to gap_evidence. Reopen the export
+    # options modal this one replaced, so Cancel does not dump the user out.
     observeEvent(input$gap_cancel, ignoreInit = TRUE, {
       rv$gap_rows <- NULL
+      rv$export_stash <- NULL
       removeModal()
+      trigger("export")
     })
 
     check_overwrite_then_export <- function() {
-      export_path <- file.path(session$userData$dir_out, "export", input$export_group)
+      group <- exp_val("export_group")
+      export_path <- file.path(session$userData$dir_out, "export", group)
       if (dir.exists(export_path)) {
         shinyWidgets::confirmSweetAlert(
           session = session,
           inputId = ns("overwrite_confirm"),
           title = "Export already exists",
           text = stringr::str_glue(
-            "Export files for group '{input$export_group}' already exist. Overwrite them?"
+            "Export files for group '{group}' already exist. Overwrite them?"
           ),
           type = "warning",
           btn_labels = c("Cancel", "Overwrite"),
