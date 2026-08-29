@@ -8,7 +8,7 @@
 #' The vote runs in rounds. Each round scores only the contigs that hit that
 #' round's winning reference, then drops all of them from the pool, pass or
 #' fail, so every contig is judged against exactly one reference. Rounds keep
-#' the anti-splitting behaviour within a mitogenome while letting a second,
+#' the anti-splitting behavior within a mitogenome while letting a second,
 #' unrelated mitogenome (a contaminant, or a mixed sample) win its own round.
 #' The search stops at the first round that selects nothing: references are
 #' visited strongest first, so a reference carrying only NUMT-grade hits means
@@ -302,10 +302,11 @@ find_mito_note <- function(n_screened, evidence, confirmed, accession) {
 
 #' Find the mitochondrial contigs in a user-supplied assembly
 #'
-#' Driver for the WF1 `find_mito_pick` process: merges the BLAST screen output,
-#' selects candidate contigs, extracts them from the assembly with
+#' Finds the mitochondrial contigs in a whole assembly: merges the BLAST screen
+#' output, selects candidate contigs, extracts them from the assembly with
 #' `samtools faidx`, confirms them with MitoFinder, and writes the files the
-#' pipeline consumes.
+#' pipeline consumes. Called by the Assemble workflow; not intended for direct
+#' use.
 #'
 #' @param assembly_fn Path to the sample's full assembly (fasta)
 #' @param hits_fn Chunk hit files written by the screen

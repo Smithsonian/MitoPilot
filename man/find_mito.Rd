@@ -43,8 +43,9 @@ find_mito(
 (invisibly) a list with `confirmed`, `note` and `evidence`
 }
 \description{
-Driver for the WF1 `find_mito_pick` process: merges the BLAST screen output,
-selects candidate contigs, extracts them from the assembly with
+Finds the mitochondrial contigs in a whole assembly: merges the BLAST screen
+output, selects candidate contigs, extracts them from the assembly with
 `samtools faidx`, confirms them with MitoFinder, and writes the files the
-pipeline consumes.
+pipeline consumes. Called by the Assemble workflow; not intended for direct
+use.
 }

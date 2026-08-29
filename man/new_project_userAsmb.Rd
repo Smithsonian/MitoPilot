@@ -60,7 +60,8 @@ auto-selects from each sample's curation ruleset; a number sets a
 project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{find_mitogenome}{(logical) Search each supplied assembly for its
-mitochondrial contigs before the rest of WF1 runs (default = FALSE). Use
+mitochondrial contigs before the rest of the Assemble module runs
+(default = FALSE). Use
 this when your FASTA files hold whole assemblies rather than a mitogenome:
 contigs are BLASTed against the bundled metazoan mitogenome database, the
 survivors confirmed with MitoFinder, and only those carried forward. See
@@ -70,19 +71,24 @@ survivors confirmed with MitoFinder, and only those carried forward. See
 [custom_assembly_db()] (`db_type = "mitofinder"`). Required when
 `find_mitogenome = TRUE`.}
 
-\item{attempt_circularization}{(logical) Attempt to circularize linear,
-single-contig user assemblies during WF1 (default = FALSE). Redundant
-overlap between the contig ends is trimmed, and when raw reads are
-available the new junction must be supported by reads before the assembly
-is called circular. Settings are editable later in the app's
-circularization options modal. See [circularize_asmb()].}
+\item{attempt_circularization}{(logical) Attempt to circularize user
+assemblies during the Assemble module (default = FALSE). Every assembly is
+tried except a single-contig one already declared circular, and each contig
+is attempted on its own, so a fragmented assembly is eligible. Redundant
+overlap between a contig's ends is trimmed, and when raw reads are
+available the new junction must be supported by reads before that contig is
+called circular. Assemblies holding more than 100 contigs are left alone.
+Settings are editable later in the app's circularization options modal.
+See [circularize_asmb()].}
 
-\item{join_scaffolds}{(logical) Order a fragmented single-path assembly
-against its BLAST reference into one joined sequence during WF1 (default =
+\item{join_scaffolds}{(logical) Order a fragmented assembly against its BLAST
+reference into one joined sequence during the Assemble module (default =
 FALSE). Samples whose contigs match different reference mitogenomes are
-left alone. Because eligibility here is any multi-contig assembly rather
-than just mitogenome scaffolds, use this alongside `find_mitogenome = TRUE`
-so the join sees only confirmed mitochondrial contigs.}
+left alone. So is a sample with a junction the reference cannot size, since
+NCBI expects the number of Ns to be the estimated gap length. Because
+eligibility here is any multi-contig assembly rather than just mitogenome
+scaffolds, use this alongside `find_mitogenome = TRUE` so the join sees
+only confirmed mitochondrial contigs.}
 
 \item{executor}{The executor to use for running the nextflow pipeline. May be
 a built-in template ("local" (default), "awsbatch", "slurm", "sge", "pbs",
@@ -111,7 +117,8 @@ interactively in RStudio.}
 config files (default = FALSE).}
 
 \item{...}{Additional arguments passed as default processing parameters to
-`new_db()`}
+[new_db_userAsmb()]. Assembly parameters accepted by [new_db()] do not
+apply to a user-assembly project.}
 }
 \description{
 Initialize new MitoPilot Project with user-provided mitogenome assemblies

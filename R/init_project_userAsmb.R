@@ -22,7 +22,8 @@
 #' @param assembly_path Path to the directory where the mitogenome assemblies are located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
 #' @param find_mitogenome (logical) Search each supplied assembly for its
-#'   mitochondrial contigs before the rest of WF1 runs (default = FALSE). Use
+#'   mitochondrial contigs before the rest of the Assemble module runs
+#'   (default = FALSE). Use
 #'   this when your FASTA files hold whole assemblies rather than a mitogenome:
 #'   contigs are BLASTed against the bundled metazoan mitogenome database, the
 #'   survivors confirmed with MitoFinder, and only those carried forward. See
@@ -30,18 +31,23 @@
 #' @param mitofinder_db Path to a MitoFinder GenBank database, built with
 #'   [custom_assembly_db()] (`db_type = "mitofinder"`). Required when
 #'   `find_mitogenome = TRUE`.
-#' @param attempt_circularization (logical) Attempt to circularize linear,
-#'   single-contig user assemblies during WF1 (default = FALSE). Redundant
-#'   overlap between the contig ends is trimmed, and when raw reads are
-#'   available the new junction must be supported by reads before the assembly
-#'   is called circular. Settings are editable later in the app's
-#'   circularization options modal. See [circularize_asmb()].
-#' @param join_scaffolds (logical) Order a fragmented single-path assembly
-#'   against its BLAST reference into one joined sequence during WF1 (default =
+#' @param attempt_circularization (logical) Attempt to circularize user
+#'   assemblies during the Assemble module (default = FALSE). Every assembly is
+#'   tried except a single-contig one already declared circular, and each contig
+#'   is attempted on its own, so a fragmented assembly is eligible. Redundant
+#'   overlap between a contig's ends is trimmed, and when raw reads are
+#'   available the new junction must be supported by reads before that contig is
+#'   called circular. Assemblies holding more than 100 contigs are left alone.
+#'   Settings are editable later in the app's circularization options modal.
+#'   See [circularize_asmb()].
+#' @param join_scaffolds (logical) Order a fragmented assembly against its BLAST
+#'   reference into one joined sequence during the Assemble module (default =
 #'   FALSE). Samples whose contigs match different reference mitogenomes are
-#'   left alone. Because eligibility here is any multi-contig assembly rather
-#'   than just mitogenome scaffolds, use this alongside `find_mitogenome = TRUE`
-#'   so the join sees only confirmed mitochondrial contigs.
+#'   left alone. So is a sample with a junction the reference cannot size, since
+#'   NCBI expects the number of Ns to be the estimated gap length. Because
+#'   eligibility here is any multi-contig assembly rather than just mitogenome
+#'   scaffolds, use this alongside `find_mitogenome = TRUE` so the join sees
+#'   only confirmed mitochondrial contigs.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from each sample's curation ruleset; a number sets a
 #'   project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
@@ -65,7 +71,8 @@
 #'   <https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/>. May be left
 #'   empty and edited later in `.config` (`params.ncbi_api_key`).
 #' @param ... Additional arguments passed as default processing parameters to
-#'   `new_db()`
+#'   [new_db_userAsmb()]. Assembly parameters accepted by [new_db()] do not
+#'   apply to a user-assembly project.
 #'
 #' @export
 #'

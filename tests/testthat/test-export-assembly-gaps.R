@@ -1,4 +1,4 @@
-# Runs of unknown bases must be declared as assembly_gap features, and a coding
+# Runs of unknown bases must be declared as gap features, and a coding
 # feature sitting across one has to say so. Nothing here assumes what produced
 # the Ns.
 

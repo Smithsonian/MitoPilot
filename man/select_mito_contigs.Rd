@@ -47,7 +47,7 @@ it convincingly.
 The vote runs in rounds. Each round scores only the contigs that hit that
 round's winning reference, then drops all of them from the pool, pass or
 fail, so every contig is judged against exactly one reference. Rounds keep
-the anti-splitting behaviour within a mitogenome while letting a second,
+the anti-splitting behavior within a mitogenome while letting a second,
 unrelated mitogenome (a contaminant, or a mixed sample) win its own round.
 The search stops at the first round that selects nothing: references are
 visited strongest first, so a reference carrying only NUMT-grade hits means

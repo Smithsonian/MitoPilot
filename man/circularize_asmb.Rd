@@ -42,8 +42,8 @@ circularize_asmb(
 skipped altogether (default = 100). Guards a draft genome that reached this
 step without a mitogenome search to trim it down first.}
 
-\item{out_fn}{Path for the output fasta. Defaults to overwriting nothing and
-returning the result only.}
+\item{out_fn}{Path for the output fasta. When `NULL` (the default) nothing is
+written and the result is returned only.}
 
 \item{log_fn}{Optional path for a plain-text log}
 
@@ -70,5 +70,6 @@ Every contig of a fragmented assembly is attempted independently; a fragment
 can be a circular molecule reported linearly just as a whole assembly can.
 
 The overlap detection follows the approach used by MitoHiFi's
-`circularizationCheck` (MIT licensed, Genome Research Ltd).
+`circularizationCheck` (MIT licensed, Genome Research Ltd):
+\url{https://github.com/marcelauliano/MitoHiFi}
 }

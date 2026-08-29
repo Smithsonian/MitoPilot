@@ -1560,14 +1560,19 @@ joined_assemblies_row <- function(ID, seq, depth_vec, gc_vec, err_vec,
 #' @param ref_fasta path to the reference mitogenome FASTA.
 #' @param ID sample id.
 #' @param out_dir directory to write outputs into.
+#' @param gap_len length of the placeholder N-run used at a junction the
+#'   reference cannot size. It only acts as a trigger: any such junction
+#'   declines the join, so these Ns are never written and the sample is left
+#'   fragmented.
 #' @param gap_len default N-gap length for unknown junctions.
 #' @param circular whether to mark the joined molecule circular.
 #' @param db optional DBI connection; unused for file-only outputs (DB writes
 #'   are done in Groovy) and kept for call-site compatibility.
 #' @param auto_join when TRUE (and the scaffolds' BLAST hits agree) build + write
-#'   the joined Path 0. When FALSE (toggle off) or the hits disagree, only the
-#'   precomputed scaffold->reference mappings are written, leaving the sample
-#'   fragmented for manual review in the app.
+#'   the joined Path 0. When FALSE (toggle off), when the hits disagree, or when
+#'   a junction cannot be sized from the reference, only the precomputed
+#'   scaffold->reference mappings are written, leaving the sample fragmented for
+#'   manual review in the app.
 #' @param scaffold_hits optional ';'-separated string of per-scaffold BLAST hits
 #'   ("scaffold|accession|pident") passed from the workflow. Preferred over a DB
 #'   read of `assemblies.blast_accession`, which is written by an async UPDATE

@@ -147,5 +147,8 @@ reference:
   - orf_finder
   - rotate_asmb
   - run_scaffold_join
+  - find_mito
+  - select_mito_contigs
+  - circularize_asmb
   - get_assembly
   - get_assembly_userAsmb

@@ -299,12 +299,10 @@ If your mitogenomes were assembled elsewhere, for example by mapping to a refere
 in Geneious, use `new_project_userAsmb()` instead. MitoPilot will skip assembly
 and let you perform annotation, curation, and export.
 
-That route has its own page, covering the extra mapping columns, projects with
-no raw reads, and the optional steps for whole-genome assemblies: finding the
-mitochondrial contigs, circularizing linear ones, and joining a mitogenome that
-arrived in several pieces.
-
-See [Using Your Own Assemblies](Your-Own-Assemblies.html).
+[Using Your Own Assemblies](Your-Own-Assemblies.html) covers the extra mapping
+columns, projects with no raw reads, and the optional steps for whole-genome
+assemblies: finding the mitochondrial contigs, circularizing linear ones, and
+joining a mitogenome that arrived in several pieces.
 
 <hr class="part-break" />
 

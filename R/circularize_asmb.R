@@ -173,7 +173,8 @@ circularize_contig <- function(seq,
 #' can be a circular molecule reported linearly just as a whole assembly can.
 #'
 #' The overlap detection follows the approach used by MitoHiFi's
-#' `circularizationCheck` (MIT licensed, Genome Research Ltd).
+#' `circularizationCheck` (MIT licensed, Genome Research Ltd):
+#' \url{https://github.com/marcelauliano/MitoHiFi}
 #'
 #' @param assembly_fn Path to the input assembly (fasta)
 #' @param paired_reads_1 Path to forward reads (fastq), or "NA" for none
@@ -187,8 +188,8 @@ circularize_contig <- function(seq,
 #' @param max_contigs Most contigs an assembly may hold before the attempt is
 #'   skipped altogether (default = 100). Guards a draft genome that reached this
 #'   step without a mitogenome search to trim it down first.
-#' @param out_fn Path for the output fasta. Defaults to overwriting nothing and
-#'   returning the result only.
+#' @param out_fn Path for the output fasta. When `NULL` (the default) nothing is
+#'   written and the result is returned only.
 #' @param log_fn Optional path for a plain-text log
 #' @param id Sample ID, recorded in the evidence CSVs (default = "sample")
 #' @param evidence_dir Optional directory to write `circularize_overlap.csv`

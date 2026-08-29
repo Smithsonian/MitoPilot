@@ -653,7 +653,7 @@ export_files <- function(
     if (nrow(gaps) > 0) {
       message(
         .seqid, ": ", nrow(gaps), " run(s) of unknown bases (",
-        sum(gaps$length), " bp total) declared as assembly_gap features."
+        sum(gaps$length), " bp total) declared as gap features."
       )
       # INSDC caps a declared gap span at 1000 bp. Nothing can be done about it
       # here, so say so plainly rather than emit a feature that will bounce.
@@ -661,7 +661,7 @@ export_files <- function(
       if (nrow(too_long) > 0) {
         message(
           .seqid, ": WARNING ", nrow(too_long),
-          " gap(s) exceed the 1000 bp INSDC limit for a declared assembly_gap (",
+          " gap(s) exceed the 1000 bp INSDC limit for a declared gap (",
           paste(sprintf("%d-%d", too_long$start, too_long$end), collapse = ", "),
           "). GenBank will query these."
         )

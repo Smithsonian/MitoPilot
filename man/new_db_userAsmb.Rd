@@ -58,8 +58,10 @@ new_db_userAsmb(
 \item{db_path}{Path to the new database file}
 
 \item{mapping_fn}{Path to the mapping CSV file. Must contain columns "ID",
-"Taxon, "R1", "R2", and "Assembly". An optional "Topology" column may
-declare "circular" or "linear" for a single-contig assembly.}
+"Taxon", and "Assembly", plus "R1" and "R2" unless `no_raw_data = TRUE`.
+An optional "Topology" column may declare "circular" or "linear" for a
+single-contig assembly; blank or missing is treated as linear, and a
+multi-contig assembly is always recorded as "multi".}
 
 \item{mapping_id}{Column name of the mapping file to use as the primary key}
 
@@ -122,10 +124,11 @@ of the ORF length, before an ORF is discarded (default = 0.1)}
 
 \item{min_assembly_length}{Minimum scaffold length to include in analysis (default = 500)}
 
-\item{join_scaffolds}{(logical) Order a fragmented single-path assembly
-against its BLAST reference into one joined sequence during WF1 (default =
-FALSE). Samples whose contigs match different reference mitogenomes are
-left alone.}
+\item{join_scaffolds}{(logical) Order a fragmented assembly against its BLAST
+reference into one joined sequence during WF1 (default = FALSE). Samples
+whose contigs match different reference mitogenomes are left alone. So is a
+sample with a junction the reference cannot size, since NCBI expects the
+number of Ns to be the estimated gap length.}
 
 \item{find_mitogenome}{Search each user-supplied assembly for its
 mitochondrial contigs before the rest of WF1 runs (default = FALSE). See
@@ -156,8 +159,10 @@ cover (default = 0.5). The NUMT filter.}
 
 \item{find_memory}{Default memory (GB) for the search steps (default = 8)}
 
-\item{attempt_circularization}{Try to circularize linear single-contig
-assemblies in WF1 (default = FALSE). See [circularize_asmb()].}
+\item{attempt_circularization}{Try to circularize user assemblies in WF1
+(default = FALSE). Each contig is attempted on its own, so a fragmented
+assembly is eligible; a single-contig assembly declared "circular" is
+skipped. See [circularize_asmb()].}
 
 \item{circularize_min_overlap}{Shortest accepted self-overlap, bp (default = 220)}
 

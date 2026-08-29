@@ -47,11 +47,15 @@ config files (default = FALSE).}
 Sets up a test project for the user-assembly workflow, with nine samples
 that between them cover the shapes an assembly can arrive in: a linear
 mitogenome, a circular one, one that is circular but reported as linear, and
-six multi-contig assemblies holding one, two, none, or one split across
-three contigs. The assemblies ship with the package; the raw reads are the
-same fish data used by [new_test_project()].
+six multi-contig assemblies: one holding a single mitogenome, one holding
+none, one holding two from different species, one holding a mitogenome that
+needs circularizing, one holding two mitogenomes of which one needs
+circularizing, and one holding a mitogenome split across three contigs. The
+assemblies ship with the package; the raw reads are the same fish data used
+by [new_test_project()].
 }
 \details{
-The project is created with the mitogenome search and the circularization
-attempt both switched on, since that is what these samples are for.
+The project is created with the mitogenome search, the circularization
+attempt, and scaffold joining all switched on, since that is what these
+samples are for.
 }
