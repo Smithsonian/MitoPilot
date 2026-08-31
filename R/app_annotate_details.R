@@ -2294,6 +2294,31 @@ annotations_details_server <- function(id, rv) {
       new_alignment$render_nonce <- isolate(rv$alignment$render_nonce %||% 0L) + 1L
       rv$alignment <- new_alignment
     })
+    # Bases in the displayed feature that are not A/C/G/T. Consensus assemblies
+    # and join spacers carry them, and a codon holding one may not translate to a
+    # single amino acid, so the curator is told before editing. Reads the current
+    # positions, so a +/- edit refreshes the count.
+    ambiguity_note <- function(sel) {
+      if (length(sel) != 1) return("")
+      if (rv$annotations$type[sel] %nin% c("PCG", "ORF", "rRNA")) return("")
+      asm <- rv$editing$assembly %||% tryCatch(get_assembly(
+        ID = rv$annotations$ID[sel], path = rv$annotations$path[sel],
+        scaffold = rv$annotations$scaffold[sel], con = session$userData$con
+      ), error = function(e) NULL)
+      if (is.null(asm)) return("")
+      n <- tryCatch(
+        ambiguous_base_count(extract_circ_region(
+          asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel]
+        )),
+        error = function(e) 0L
+      )
+      if (n == 0L) return("")
+      paste0(
+        "<span style=\"color:#c00; font-weight:bold;\">",
+        as.character(icon("triangle-exclamation")), " ", n,
+        " ambiguous base", if (n > 1L) "s" else "", "</span>"
+      )
+    }
     output$msa_header <- renderUI({
       div(
         style = "display: flex; gap: 25px;",
@@ -2301,7 +2326,8 @@ annotations_details_server <- function(id, rv) {
         p(HTML(rv$alignment$start)),
         p(HTML(rv$alignment$stop)),
         p(HTML(rv$alignment$partial)),
-        p(HTML(rv$alignment$internal_stop))
+        p(HTML(rv$alignment$internal_stop)),
+        p(HTML(ambiguity_note(selected())))
       )
     })
 
@@ -3467,6 +3493,24 @@ annotations_details_server <- function(id, rv) {
         color = "rgba(40,40,40,0.85)"
       )
     }
+    # A codon-edit or re-align observer that errors would otherwise tear the
+    # session down behind the "hold tight" overlay, leaving a spinner that never
+    # clears. Clear it and report the error instead. req() aborts are normal
+    # flow control, so let them pass silently.
+    edit_guard <- function(expr) {
+      tryCatch(
+        expr,
+        shiny.silent.error = function(e) NULL,
+        error = function(e) {
+          waiter::waiter_hide()
+          showNotification(
+            paste("Edit failed:", conditionMessage(e)),
+            type = "error",
+            duration = 10
+          )
+        }
+      )
+    }
     # Keep the displayed box value inside [1, 50] when the user types directly.
     for (.id in c("start_step_size", "stop_step_size")) {
       local({
@@ -3482,7 +3526,7 @@ annotations_details_server <- function(id, rv) {
       })
     }
     init("start-add-simple")
-    on("start-add-simple", {
+    on("start-add-simple", edit_guard({
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
       n_steps <- edit_step_size("start_step_size")
@@ -3504,7 +3548,7 @@ annotations_details_server <- function(id, rv) {
           }
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = rv$gcode)
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve")
       }
       if (rv$annotations$direction[selected()] == "-") {
         for (counter in seq_len(n_steps)) {
@@ -3524,14 +3568,14 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$start_codon[selected()] <- unname(codon)
-    })
+    }))
     observeEvent(input$`start-add`, {
       show_edit_waiter()
       trigger("start-add-simple")
@@ -3542,7 +3586,7 @@ annotations_details_server <- function(id, rv) {
 
     ## Edit start-minus ----
     init("start-minus-simple")
-    on("start-minus-simple", {
+    on("start-minus-simple", edit_guard({
       rv$editing$stop_aln <- FALSE
       codon <- "INIT"
       n_steps <- edit_step_size("start_step_size")
@@ -3564,7 +3608,7 @@ annotations_details_server <- function(id, rv) {
           }
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(rv$annotations$stop_codon[selected()])) |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -3585,14 +3629,14 @@ annotations_details_server <- function(id, rv) {
         }
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(rv$annotations$stop_codon[selected()]), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$start_codon[selected()] <- unname(codon)
-    })
+    }))
     observeEvent(input$`start-minus`, {
       show_edit_waiter()
       trigger("start-minus-simple")
@@ -3603,7 +3647,7 @@ annotations_details_server <- function(id, rv) {
 
     ## Edit stop-add ----
     init("stop-add-simple")
-    on("stop-add-simple" , {
+    on("stop-add-simple" , edit_guard({
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
       n_steps <- edit_step_size("stop_step_size")
@@ -3636,7 +3680,7 @@ annotations_details_server <- function(id, rv) {
         }
         pos2 <- circ_edit_pos(pos2 - (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -3669,14 +3713,14 @@ annotations_details_server <- function(id, rv) {
         pos1 <- circ_edit_pos(pos1 + (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
+    }))
     observeEvent(input$`stop-add`, {
       show_edit_waiter()
       trigger("stop-add-simple")
@@ -3687,7 +3731,7 @@ annotations_details_server <- function(id, rv) {
 
     ## Edit stop-minus ----
     init("stop-minus-simple")
-    on("stop-minus-simple", {
+    on("stop-minus-simple", edit_guard({
       rv$editing$stop_aln <- TRUE
       codon <- "INIT"
       n_steps <- edit_step_size("stop_step_size")
@@ -3722,7 +3766,7 @@ annotations_details_server <- function(id, rv) {
         }
         pos2 <- circ_edit_pos(pos2 - (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1, pos2 - nchar(codon)) |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       if (rv$annotations$direction[selected()] == "-") {
@@ -3757,14 +3801,14 @@ annotations_details_server <- function(id, rv) {
         pos1 <- circ_edit_pos(pos1 + (3 - nchar(codon)), rv$editing$assembly)
         rv$annotations$translation[selected()] <- circ_edit_seq(rv$editing$assembly, pos1 + nchar(codon), pos2) |>
           Biostrings::reverseComplement() |>
-          Biostrings::translate(genetic.code = rv$gcode) |>
+          Biostrings::translate(genetic.code = rv$gcode, if.fuzzy.codon = "solve") |>
           as.character()
       }
       rv$annotations$pos1[selected()] <- pos1
       rv$annotations$pos2[selected()] <- pos2
       rv$annotations$length[selected()] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
       rv$annotations$stop_codon[selected()] <- unname(codon)
-    })
+    }))
     observeEvent(input$`stop-minus`, {
       show_edit_waiter()
       trigger("stop-minus-simple")
@@ -4032,7 +4076,7 @@ annotations_details_server <- function(id, rv) {
 
     ## RE-align after edit ----
     init("re_align")
-    on("re_align", {
+    on("re_align", edit_guard({
       # rRNA has no protein hit stats to recompute; just rebuild the nt alignment.
       if (!identical(rv$annotations$type[selected()], "rRNA")) {
         ### Calculate new stats (on the full hit set; align_now slices for display)
@@ -4061,7 +4105,7 @@ annotations_details_server <- function(id, rv) {
       }
       # Keep rv$alignment around (incl. cached ref_msa); align_now rebuilds it.
       trigger("align_now")
-    })
+    }))
 
     # Discard edits ----
     observeEvent(input$discard_edits, {
@@ -4380,7 +4424,7 @@ annotations_details_server <- function(id, rv) {
             as.character()
           merged$translation <- extract_circ_region(assembly, new_pos1, new_pos2 - nchar(merged$stop_codon)) |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         } else {
@@ -4393,7 +4437,7 @@ annotations_details_server <- function(id, rv) {
           merged$translation <- extract_circ_region(assembly, new_pos1 + nchar(merged$stop_codon), new_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         }
@@ -4883,7 +4927,7 @@ annotations_details_server <- function(id, rv) {
             as.character()
           reverted$translation <- extract_circ_region(assembly, merged_orig_pos1, merged_orig_pos2 - nchar(reverted$stop_codon)) |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         } else {
@@ -4896,7 +4940,7 @@ annotations_details_server <- function(id, rv) {
           reverted$translation <- extract_circ_region(assembly, merged_orig_pos1 + nchar(reverted$stop_codon), merged_orig_pos2) |>
             Biostrings::reverseComplement() |>
             Biostrings::translate(
-              genetic.code = rv$gcode
+              genetic.code = rv$gcode, if.fuzzy.codon = "solve"
             ) |>
             as.character()
         }

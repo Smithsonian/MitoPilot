@@ -237,6 +237,11 @@ and projects cannot be run from
 <code>/store</code>.
 </div>
 
+You can also bring your own assemblies to MitoPilot for annotation, curation,
+and export. `new_test_project_userAsmb()` sets up the equivalent test project,
+covering the common cases. See
+[Using Your Own Assemblies](Your-Own-Assemblies.html).
+
 <hr class="part-break" />
 
 # Open the app

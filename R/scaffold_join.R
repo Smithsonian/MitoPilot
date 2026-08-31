@@ -33,6 +33,82 @@ scaffold_join_eligible <- function(assemblies_df) {
   n_paths == 1 && max_scaf > 1
 }
 
+#' Which of a set of sample IDs are join-eligible
+#'
+#' Applies [scaffold_join_eligible()] per sample. Backs the app's "Redo
+#' scaffold join" action.
+#'
+#' @param ids Character vector of sample IDs to check.
+#' @param assemblies_df data.frame with `ID`, `path`, `scaffold` for those IDs.
+#' @return The subset of `ids` that are join-eligible.
+#' @noRd
+redo_join_eligible_ids <- function(ids, assemblies_df) {
+  eligible <- vapply(ids, function(id) {
+    scaffold_join_eligible(assemblies_df[assemblies_df$ID == id, , drop = FALSE])
+  }, logical(1))
+  ids[eligible]
+}
+
+#' Classify sample IDs for a scaffold-join redo request
+#'
+#' Combines join-eligibility with a check for missing published assembly
+#' output, so both preconditions of the "Redo scaffold join" action are
+#' testable without Shiny. Callers get `missing_ids` from
+#' [stale_assemble_dirs()] (`$ID` column).
+#'
+#' @param ids Character vector of requested sample IDs.
+#' @param assemblies_df data.frame with `ID`, `path`, `scaffold` for those IDs.
+#' @param missing_ids Character vector of IDs known to be missing published
+#'   assembly output.
+#' @param join_off_ids Character vector of IDs whose assembly parameter set has
+#'   the scaffold-join toggle off. Queueing a redo for one of those is refused:
+#'   the join would run, report "skipped", and finalise the sample as done,
+#'   which on a sample sitting at state 3 would launder a real failure into a
+#'   success.
+#' @param no_ref_ids Character vector of IDs with no BLAST reference accession.
+#'   The join has nothing to align scaffolds against, so a redo would report the
+#'   sample as missing an input. A fragmented sample with BLAST switched off is
+#'   legitimately at state 2, and the redo must not demote it.
+#' @return list with five character vectors partitioning `ids`: `ready`
+#'   (safe to set `join_switch = 1`), `not_eligible`, `missing_output`,
+#'   `join_off`, `no_ref`.
+#' @noRd
+redo_join_plan <- function(ids, assemblies_df, missing_ids = character(0),
+                           join_off_ids = character(0),
+                           no_ref_ids = character(0)) {
+  eligible <- redo_join_eligible_ids(ids, assemblies_df)
+  not_eligible <- setdiff(ids, eligible)
+  missing_output <- intersect(eligible, missing_ids)
+  join_off <- setdiff(intersect(eligible, join_off_ids), missing_output)
+  no_ref <- setdiff(intersect(eligible, no_ref_ids), c(missing_output, join_off))
+  ready <- setdiff(eligible, c(missing_output, join_off, no_ref))
+  list(ready = ready, not_eligible = not_eligible,
+       missing_output = missing_output, join_off = join_off,
+       no_ref = no_ref)
+}
+
+#' IDs with no BLAST reference accession recorded
+#'
+#' Must be fed the `assemble` table as stored, NOT the Assemble app table:
+#' the app blanks `blast_accession` for display whenever a sample keeps more
+#' than one scaffold, and every join-eligible sample keeps more than one, so
+#' the display value would refuse a redo for exactly the samples the redo
+#' exists for.
+#'
+#' @param ids Character vector of sample IDs.
+#' @param assemble_df data.frame with `ID` and `blast_accession` columns,
+#'   collected from the `assemble` table.
+#' @return Character vector, the subset of `ids` with no usable accession.
+#' @noRd
+redo_join_no_ref_ids <- function(ids, assemble_df) {
+  if (is.null(assemble_df) || nrow(assemble_df) == 0L ||
+      !"blast_accession" %in% names(assemble_df)) {
+    return(character(0))
+  }
+  acc <- assemble_df$blast_accession[match(ids, assemble_df$ID)]
+  ids[is.na(acc) | !nzchar(as.character(acc))]
+}
+
 #' Choose a single reference accession for a multi-scaffold sample
 #'
 #' Scaffolds can carry different BLAST hits, but all must map to ONE reference or
@@ -108,6 +184,38 @@ scaffold_hits_disagree <- function(scaffolds_df) {
   # the real accession and silently cancels the automatic join.
   acc <- acc[!is.na(acc) & nzchar(acc) & acc != "NO HIT"]
   length(unique(acc)) > 1
+}
+
+#' Record the join's outcome next to its other outputs
+#'
+#' Mirrors the `status.txt` / `note.txt` pair [find_mito()] writes: the workflow
+#' declares these files and turns them into sample state. Written on every exit
+#' of [run_scaffold_join()], so a missing file means the task died.
+#'
+#' @param out_dir directory the join writes its outputs to.
+#' @param outcome "joined" (a joined scaffold was built), "declined" (ran and
+#'   deliberately did not join) or "skipped" (the join is toggled off).
+#' @param note human-readable reason, shown in the app's Assemble table. Only
+#'   "declined" carries one; the other outcomes write a truly empty file (zero
+#'   bytes, no trailing newline) so a size or nzchar test is enough downstream.
+#' @noRd
+write_join_outcome <- function(out_dir, outcome, note = "") {
+  writeLines(outcome, file.path(out_dir, "join_status.txt"))
+  note_fn <- file.path(out_dir, "join_note.txt")
+  if (nzchar(note)) writeLines(note, note_fn) else file.create(note_fn)
+}
+
+#' Why the join declined to build a joined scaffold
+#'
+#' @param sc per-scaffold BLAST hits.
+#' @return single human-readable string.
+#' @noRd
+join_declined_note <- function(sc) {
+  acc <- sc$blast_accession
+  acc <- unique(acc[!is.na(acc) & nzchar(acc) & acc != "NO HIT"])
+  paste0("the scaffolds matched different reference mitogenomes (",
+         paste(acc, collapse = ", "),
+         "), so they were left separate for review")
 }
 
 #' Locate the minimap2 binary
@@ -893,6 +1001,11 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
   src_scaffold <- character(0)
   src_pos <- integer(0)
   junctions <- character(0)
+  # Junction index behind each inserted spacer, in the order the spacers appear.
+  # src_scaffold is NA exactly at inserted bases, so the k-th NA run is this
+  # vector's k-th junction. Bases a scaffold brought with it are never NA, so a
+  # scaffold's own Ns can never be mistaken for a spacer.
+  gap_junction <- integer(0)
   junc_rec <- list()                         # one structured record per junction
   prev_oriented <- NULL
   prev_scaf <- NULL
@@ -928,6 +1041,11 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
       # alongside the prose `junctions` for the join-quality summary.
       jtype <- NA_character_; j_ov_len <- 0L; j_ident <- NA_real_
       ngap <- 0L
+      # TRUE when an N-gap's length came from the reference alignment, FALSE when
+      # it is the placeholder used for a junction the reference cannot size.
+      # Export needs the difference: a placeholder must not be submitted as a
+      # measured length.
+      gap_estimated <- NA
 
       # Probe the ACTUAL scaffold ends for an overlap at every adjacency, not just
       # when the reference predicts one. On divergent cross-species references
@@ -989,20 +1107,24 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
           if (!is.null(ov) && !is.na(ov$identity)) sprintf(" (best %.0f%% identity)", 100 * ov$identity) else ""))
       } else if (is.na(gb)) {
         ngap <- gap_len_default; jtype <- "gap"   # unmapped/unknown junction
+        gap_estimated <- FALSE
       } else if (gb > 0) {
         ngap <- as.integer(round(gb)); jtype <- "gap"   # disjoint on reference
+        gap_estimated <- TRUE
       } else {
         jtype <- "butt"                            # gb == 0, no overlap found
       }
       junc_rec[[length(junc_rec) + 1L]] <- data.frame(
         from = prev_scaf, to = s, type = jtype,
         gap_bases = if (ngap > 0) as.integer(ngap) else 0L,
+        size_known = as.integer(isTRUE(gap_estimated)),
         overlap_len = as.integer(j_ov_len), identity = as.numeric(j_ident),
         stringsAsFactors = FALSE)
       if (ngap > 0) {
         pieces <- c(pieces, strrep("N", ngap))
         src_scaffold <- c(src_scaffold, rep(NA_character_, ngap))
         src_pos <- c(src_pos, rep(NA_integer_, ngap))
+        gap_junction <- c(gap_junction, length(junc_rec))
       }
     }
 
@@ -1045,11 +1167,12 @@ join_scaffolds <- function(scaffold_seqs, layout, gap_len_default = 100L,
 
   junction_info <- if (length(junc_rec) > 0) do.call(rbind, junc_rec) else
     data.frame(from = character(0), to = character(0), type = character(0),
-               gap_bases = integer(0), overlap_len = integer(0),
-               identity = numeric(0), stringsAsFactors = FALSE)
+               gap_bases = integer(0), size_known = integer(0),
+               overlap_len = integer(0), identity = numeric(0),
+               stringsAsFactors = FALSE)
   list(seq = paste0(pieces, collapse = ""),
        src_scaffold = src_scaffold, src_pos = src_pos, junctions = junctions,
-       junction_info = junction_info)
+       junction_info = junction_info, gap_junction = gap_junction)
 }
 
 #' Stitch per-scaffold coverage vectors to match a joined sequence
@@ -1203,6 +1326,78 @@ rotate_to_reference <- function(seq, depth, gc, errors, ref_seq,
   out
 }
 
+#' Per-base map of which junction inserted each spacer base
+#'
+#' `src_scaffold` is NA exactly at bases the join inserted, so its NA runs are
+#' the spacers in order, and `gap_junction` names the junction behind each one.
+#' Bases a scaffold brought with it are never NA, so a scaffold's own Ns can
+#' never be taken for a spacer.
+#'
+#' @param joined the list returned by [join_scaffolds()]
+#'
+#' @return integer vector, one element per base: junction index, or 0
+#'
+#' @noRd
+spacer_track <- function(joined) {
+  src <- joined$src_scaffold
+  out <- integer(length(src))
+  if (length(src) == 0L) {
+    return(out)
+  }
+  gj <- joined$gap_junction %||% integer(0)
+  r <- rle(is.na(src))
+  ends <- cumsum(r$lengths)
+  starts <- ends - r$lengths + 1L
+  k <- 0L
+  for (i in seq_along(r$values)) {
+    if (!isTRUE(r$values[i])) next
+    k <- k + 1L
+    out[starts[i]:ends[i]] <- if (k <= length(gj)) gj[k] else NA_integer_
+  }
+  out
+}
+
+#' Spacer intervals in final coordinates
+#'
+#' Rotation can split one spacer across the origin, so a junction may yield more
+#' than one interval; each is reported separately against the same junction.
+#'
+#' @param spacer per-base junction map, after every reindexing
+#' @param junction_info junction table from [join_scaffolds()]
+#'
+#' @return data.frame(junction, start, end, length, size_known)
+#'
+#' @noRd
+spacer_intervals <- function(spacer, junction_info = NULL) {
+  empty <- data.frame(junction = integer(0), start = integer(0), end = integer(0),
+                      length = integer(0), size_known = integer(0))
+  if (length(spacer) == 0L || all(spacer == 0L, na.rm = TRUE)) {
+    return(empty)
+  }
+  v <- ifelse(is.na(spacer), 0L, spacer)
+  r <- rle(v)
+  ends <- cumsum(r$lengths)
+  starts <- ends - r$lengths + 1L
+  keep <- r$values != 0L
+  if (!any(keep)) {
+    return(empty)
+  }
+  out <- data.frame(
+    junction = as.integer(r$values[keep]),
+    start = as.integer(starts[keep]),
+    end = as.integer(ends[keep]),
+    length = as.integer(r$lengths[keep])
+  )
+  sk <- if (!is.null(junction_info) && nrow(junction_info) > 0) {
+    junction_info$size_known[out$junction]
+  } else {
+    rep(NA_integer_, nrow(out))
+  }
+  sk[is.na(sk)] <- 0L
+  out$size_known <- as.integer(sk)
+  out
+}
+
 #' Join + stitch from an explicit (possibly hand-edited) layout
 #'
 #' The part of [build_joined_assembly()] after reference mapping: used by the
@@ -1234,6 +1429,10 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
 
   seq <- joined$seq
   depth <- stitched$depth; gc <- stitched$gc; errors <- stitched$errors
+  # Junction index at each inserted base, 0 at real bases. Reindexed below by
+  # exactly the same operations as the coverage vectors, so it still points at
+  # the spacers once the sequence has been trimmed and rotated.
+  spacer <- spacer_track(joined)
   circ_note <- character(0)
 
   # Circularize when the caller asserts circular or a reference is present (the
@@ -1254,6 +1453,7 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
   is_circular <- (isTRUE(cz$circular) && may_trim) || isTRUE(circular)
   if (isTRUE(cz$circular) && may_trim) {
     seq <- cz$seq; depth <- cz$depth; gc <- cz$gc; errors <- cz$errors
+    spacer <- utils::head(spacer, length(spacer) - cz$overlap_len)
     circ_note <- c(circ_note, sprintf(
       "circular: trimmed %d bp redundant end overlap (%.0f%% identity)",
       cz$overlap_len, 100 * cz$identity))
@@ -1267,6 +1467,8 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
     rt <- rotate_to_reference(seq, depth, gc, errors, ref_seq, minimap2)
     if (rt$rotated > 0) {
       seq <- rt$seq; depth <- rt$depth; gc <- rt$gc; errors <- rt$errors
+      rp <- rt$rotated
+      spacer <- spacer[c(seq.int(rp + 1L, length(spacer)), seq_len(rp))]
       circ_note <- c(circ_note, sprintf("rotated %d bp to reference origin", rt$rotated))
     }
   }
@@ -1280,7 +1482,8 @@ assemble_from_layout <- function(scaffolds_df, layout, gap_len = 100L,
 
   list(seq = seq, depth = depth, gc = gc, errors = errors,
        layout = layout, note = note, topology = topology,
-       join_quality = join_quality)
+       join_quality = join_quality, junction_info = joined$junction_info,
+       gap_intervals = spacer_intervals(spacer, joined$junction_info))
 }
 
 #' Write the joined Path 0 FASTA + coverageStats CSV
@@ -1346,20 +1549,30 @@ joined_assemblies_row <- function(ID, seq, depth_vec, gc_vec, err_vec,
 #' `assemblies` columns) for the workflow to `sqlInsert`. No DB connection is
 #' opened here; DB writes are done in Groovy (see scaffold_join_workflow.nf).
 #'
+#' Every exit also writes `join_status.txt` ("joined", "declined" when the join
+#' ran and refused, or "skipped" when it is toggled off) and `join_note.txt` (a
+#' reason for "declined", empty otherwise), so the workflow can tell each of
+#' those apart from a crashed task, which writes neither file.
+#'
 #' @param assembly_fasta path to the multi-scaffold assembly FASTA (headers
 #'   `ID.path.scaffold [topology]`).
 #' @param coverage_csvs character vector of per-scaffold coverageStats CSV paths.
 #' @param ref_fasta path to the reference mitogenome FASTA.
 #' @param ID sample id.
 #' @param out_dir directory to write outputs into.
+#' @param gap_len length of the placeholder N-run used at a junction the
+#'   reference cannot size. It only acts as a trigger: any such junction
+#'   declines the join, so these Ns are never written and the sample is left
+#'   fragmented.
 #' @param gap_len default N-gap length for unknown junctions.
 #' @param circular whether to mark the joined molecule circular.
 #' @param db optional DBI connection; unused for file-only outputs (DB writes
 #'   are done in Groovy) and kept for call-site compatibility.
 #' @param auto_join when TRUE (and the scaffolds' BLAST hits agree) build + write
-#'   the joined Path 0. When FALSE (toggle off) or the hits disagree, only the
-#'   precomputed scaffold->reference mappings are written, leaving the sample
-#'   fragmented for manual review in the app.
+#'   the joined Path 0. When FALSE (toggle off), when the hits disagree, or when
+#'   a junction cannot be sized from the reference, only the precomputed
+#'   scaffold->reference mappings are written, leaving the sample fragmented for
+#'   manual review in the app.
 #' @param scaffold_hits optional ';'-separated string of per-scaffold BLAST hits
 #'   ("scaffold|accession|pident") passed from the workflow. Preferred over a DB
 #'   read of `assemblies.blast_accession`, which is written by an async UPDATE
@@ -1455,16 +1668,36 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   if (nrow(mappings) > 0) mappings <- cbind(ID = ID, mappings, stringsAsFactors = FALSE)
   readr::write_csv(mappings, file.path(out_dir, paste0(ID, "_scaffold_mappings.csv")),
                    quote = "none", na = "")
+  # Placeholder so the output exists on every path; replaced below if we join.
+  write_scaffold_junctions(out_dir, ID, NULL)
 
   # Gate the automatic Path 0: only when enabled AND the scaffolds' BLAST hits
   # agree. Otherwise emit mappings only and leave the sample fragmented.
   if (!isTRUE(auto_join) || (!is.null(sc) && scaffold_hits_disagree(sc))) {
-    return(invisible(list(skipped = TRUE, mappings = mappings)))
+    # Toggled off is a user choice, not a finding, so it carries no note.
+    outcome <- if (!isTRUE(auto_join)) "skipped" else "declined"
+    note <- if (outcome == "declined") join_declined_note(sc) else ""
+    write_join_outcome(out_dir, outcome, note)
+    return(invisible(list(skipped = TRUE, mappings = mappings,
+                          outcome = outcome, note = note)))
   }
 
   res <- build_joined_assembly(scaffolds_df, ref_seq, gap_len = gap_len,
                                circular = circular)
 
+  # A junction the reference could not size would need a fabricated spacer, so
+  # the sample is left fragmented rather than joined into something that cannot
+  # be submitted.
+  unsized <- unsized_gaps(res$gap_intervals)
+  if (nrow(unsized) > 0) {
+    note <- unsized_join_note(unsized)
+    write_scaffold_junctions(out_dir, ID, NULL)
+    write_join_outcome(out_dir, "declined", note)
+    return(invisible(list(skipped = TRUE, mappings = mappings,
+                          outcome = "declined", note = note)))
+  }
+
+  write_scaffold_junctions(out_dir, ID, res$gap_intervals)
   write_joined_files(out_dir, ID, res$seq, res$depth, res$gc, res$errors,
                      res$topology)
   row <- joined_assemblies_row(ID, res$seq, res$depth, res$gc, res$errors,
@@ -1473,7 +1706,183 @@ run_scaffold_join <- function(assembly_fasta, coverage_csvs, ref_fasta, ID,
   # (write.csv would quote the header -> '"ID"' and break the sqlInsert keys).
   readr::write_csv(row, file.path(out_dir, paste0(ID, "_joined_row.csv")),
                    quote = "none", na = "")
+  write_join_outcome(out_dir, "joined")
+  res$outcome <- "joined"
   invisible(res)
+}
+
+#' Junctions whose gap length the reference could not estimate
+#'
+#' GenBank expects the number of Ns to BE the estimated gap length, so a spacer
+#' of fabricated length cannot be submitted. A sample with one of these is left
+#' fragmented instead; NCBI accepts several sequences per BioSample.
+#'
+#' @param gap_intervals `gap_intervals` from [assemble_from_layout()]
+#'
+#' @return the unsized rows, empty when every gap was estimated
+#'
+#' @noRd
+unsized_gaps <- function(gap_intervals) {
+  if (is.null(gap_intervals) || nrow(gap_intervals) == 0L) {
+    return(gap_intervals)
+  }
+  gap_intervals[!is.na(gap_intervals$size_known) & gap_intervals$size_known == 0L,
+                , drop = FALSE]
+}
+
+#' Note explaining a join declined for unsized junctions
+#' @noRd
+unsized_join_note <- function(unsized) {
+  n <- nrow(unsized)
+  paste0(
+    "Not joined: ", n, " junction", if (n == 1L) "" else "s",
+    " could not be sized from the reference. GenBank expects the number of Ns ",
+    "to be the estimated gap length, so a fabricated spacer cannot be ",
+    "submitted. The contigs are left separate; they can be submitted as ",
+    "multiple sequences under one BioSample."
+  )
+}
+
+#' Whether one sample can have its scaffold join re-run by the pipeline
+#'
+#' The toolbar button used to answer this for a whole selection and report
+#' refusals in an alert. Per sample the reason can be shown next to the control
+#' instead, so the same four guards return a message rather than a bare refusal.
+#'
+#' @param con database connection
+#' @param dir_out project output directory
+#' @param ID sample ID
+#'
+#' @return list(state, message) where state is "ready", "queued",
+#'   "not_eligible", "missing_output", "join_off" or "no_ref"
+#'
+#' @noRd
+redo_join_status <- function(con, dir_out, ID) {
+  out <- function(state, message = NULL) list(state = state, message = message)
+  q <- function(expr, otherwise = NULL) tryCatch(expr, error = function(e) otherwise)
+
+  asmb <- q(DBI::dbGetQuery(
+    con, "SELECT ID, path, scaffold FROM assemblies WHERE ID = ? AND path > 0",
+    params = list(ID)
+  ), data.frame())
+  if (length(redo_join_eligible_ids(ID, asmb)) == 0L) {
+    return(out("not_eligible", paste(
+      "This sample is not join-eligible: a join needs more than one scaffold on",
+      "a single assembly path."
+    )))
+  }
+
+  row <- q(DBI::dbGetQuery(
+    con,
+    "SELECT a.ID, a.join_switch, a.blast_accession, o.join_scaffolds
+       FROM assemble a
+       JOIN assemble_opts o ON o.assemble_opts = a.assemble_opts
+      WHERE a.ID = ?",
+    params = list(ID)
+  ), data.frame())
+
+  stale <- q(stale_assemble_dirs(con, dir_out, ids = ID, pending_only = FALSE), NULL)
+  if (!is.null(stale) && ID %in% stale$ID) {
+    return(out("missing_output", paste(
+      "This sample\'s published assembly output is not on disk, so there is",
+      "nothing to join from. Re-run the assembly instead."
+    )))
+  }
+  if (nrow(row) > 0 && !isTRUE(as.integer(row$join_scaffolds[1]) == 1L)) {
+    return(out("join_off", paste(
+      "Scaffold joining is switched off in this sample\'s assembly options, so",
+      "the pipeline would skip it. Turn it on first."
+    )))
+  }
+  if (length(redo_join_no_ref_ids(ID, row)) > 0L) {
+    return(out("no_ref", paste(
+      "This sample has no BLAST reference recorded, and the join orders its",
+      "scaffolds against one."
+    )))
+  }
+  if (nrow(row) > 0 && isTRUE(as.integer(row$join_switch[1]) == 1L)) {
+    return(out("queued", "A join is queued; it runs on the next pipeline update."))
+  }
+  out("ready")
+}
+
+#' Replace a sample's recorded gap intervals in the database
+#'
+#' The app builds a Path 0 in-process, so it writes these rows itself rather
+#' than through the pipeline's CSV loader. Always a delete followed by an
+#' insert: a rebuilt (or deleted) consensus must not leave intervals behind
+#' pointing into a sequence that no longer exists.
+#'
+#' @param con database connection
+#' @param ID sample ID
+#' @param gap_intervals `gap_intervals` from [assemble_from_layout()], or NULL
+#'   to simply clear the sample
+#'
+#' @return (invisibly) the number of rows written
+#'
+#' @noRd
+store_scaffold_junctions <- function(con, ID, gap_intervals = NULL) {
+  ok <- tryCatch(DBI::dbExistsTable(con, "scaffold_junctions"),
+                 error = function(e) FALSE)
+  if (!isTRUE(ok)) {
+    return(invisible(0L))
+  }
+  DBI::dbExecute(con, "DELETE FROM scaffold_junctions WHERE ID = ?",
+                 params = list(ID))
+  if (is.null(gap_intervals) || nrow(gap_intervals) == 0L) {
+    return(invisible(0L))
+  }
+  rows <- data.frame(
+    ID = ID,
+    junction = as.integer(gap_intervals$junction),
+    gap_index = seq_len(nrow(gap_intervals)),
+    start = as.integer(gap_intervals$start),
+    end = as.integer(gap_intervals$end),
+    gap_bases = as.integer(gap_intervals$length),
+    size_known = as.integer(gap_intervals$size_known),
+    time_stamp = as.numeric(Sys.time())
+  )
+  DBI::dbAppendTable(con, "scaffold_junctions", rows)
+  invisible(nrow(rows))
+}
+
+#' Write the gap CSV the pipeline loads into `scaffold_junctions`
+#'
+#' Always written, header included, so the Nextflow output path exists whether or
+#' not a join happened. Positions are in FINAL coordinates: the spacer map is
+#' reindexed alongside the coverage vectors by the circularization trim and the
+#' rotation, so these survive both. Export matches a run of Ns by overlap with
+#' these intervals rather than by length, which cannot tell a spacer from a run a
+#' scaffold brought with it.
+#'
+#' @param out_dir output directory
+#' @param ID sample ID
+#' @param gap_intervals the `gap_intervals` data.frame from
+#'   [assemble_from_layout()], or NULL when nothing was joined
+#'
+#' @noRd
+write_scaffold_junctions <- function(out_dir, ID, gap_intervals = NULL) {
+  cols <- c("ID", "junction", "gap_index", "start", "end", "gap_bases",
+            "size_known")
+  out <- if (is.null(gap_intervals) || nrow(gap_intervals) == 0L) {
+    stats::setNames(
+      data.frame(matrix(character(0), nrow = 0, ncol = length(cols))), cols
+    )
+  } else {
+    data.frame(
+      ID = ID,
+      junction = as.integer(gap_intervals$junction),
+      gap_index = seq_len(nrow(gap_intervals)),
+      start = as.integer(gap_intervals$start),
+      end = as.integer(gap_intervals$end),
+      gap_bases = as.integer(gap_intervals$length),
+      size_known = as.integer(gap_intervals$size_known),
+      stringsAsFactors = FALSE
+    )
+  }
+  readr::write_csv(out, file.path(out_dir, paste0(ID, "_scaffold_junctions.csv")),
+                   quote = "none", na = "")
+  invisible(out)
 }
 
 #' Plot scaffold placement against the reference mitogenome

@@ -420,6 +420,18 @@ curate_mito_core <- function(
     }
     list2env(cur, envir = environment())
 
+    # A CDS can hold bases that are not A/C/G/T for several reasons: a gap
+    # spacer, a consensus built in iupac mode, or an assembly supplied that way.
+    # Translation resolves them to X rather than failing, so flag the gene for
+    # review alongside every other warning.
+    n_ambiguous <- ambiguous_base_count(ctg_seq(contig, pos1, pos2))
+    if (n_ambiguous > 0L) {
+      cur$warnings <- semicolon_paste(
+        cur$warnings,
+        stringr::str_glue("{n_ambiguous} ambiguous bases in CDS")
+      )
+    }
+
     # Stop if no hits above threshold
     refHits <- json_parse(refHits[[1]], TRUE)
     if (nrow(refHits) == 0L || !any(refHits$similarity >= hit_threshold, na.rm = TRUE)) {
@@ -459,7 +471,7 @@ curate_mito_core <- function(
             pos1,
             pos2 - .codon_len(stop_codon)
           ) |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           refHits <- get_top_hits(
             gene_dbs(gene),
@@ -493,7 +505,7 @@ curate_mito_core <- function(
             pos2
           ) |>
             Biostrings::reverseComplement() |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           refHits <- get_top_hits(
             gene_dbs(gene),
@@ -535,7 +547,7 @@ curate_mito_core <- function(
             pos1,
             pos2_new - nchar(new_stop_codon)
           ) |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           if (grepl("\\*", translation)) {
             gaps_target <- gaps_target - 1
@@ -589,7 +601,7 @@ curate_mito_core <- function(
             pos2
           ) |>
             Biostrings::reverseComplement() |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           if (grepl("\\*", translation)) {
             gaps_target <- gaps_target - 1
@@ -637,7 +649,7 @@ curate_mito_core <- function(
           }
           pos1_new <- pos1 + (3 * alt_idx)
           translation_new <- ctg_seq(contig, pos1_new, pos2 - .codon_len(stop_codon)) |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           refHits_new <- get_top_hits(
             gene_dbs(gene),
@@ -683,7 +695,7 @@ curate_mito_core <- function(
           pos2_new <- pos2 - (3 * alt_idx)
           translation_new <- ctg_seq(contig, pos1 + .codon_len(stop_codon), pos2_new) |>
             Biostrings::reverseComplement() |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           refHits_new <- get_top_hits(
             gene_dbs(gene),
@@ -737,7 +749,7 @@ curate_mito_core <- function(
             pos1,
             pos2_new - nchar(alt_stops[[alt_idx]])
           ) |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           refHits_new <- get_top_hits(
             gene_dbs(gene),
@@ -789,7 +801,7 @@ curate_mito_core <- function(
             pos2
           ) |>
             Biostrings::reverseComplement() |>
-            Biostrings::translate(genetic.code = genetic_code) |>
+            Biostrings::translate(genetic.code = genetic_code, if.fuzzy.codon = "solve") |>
             as.character()
           refHits_new <- get_top_hits(
             gene_dbs(gene),

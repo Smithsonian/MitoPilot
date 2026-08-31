@@ -36,6 +36,150 @@ check_mitos_ref_db <- function(ref_db, refdir = ".") {
   invisible(TRUE)
 }
 
+# Parse the result.fas files MITOS2 wrote into `dir`. Pulled out of
+# annotate_mitos2() so the empty case (a contig MITOS2 found no genes on) can be
+# tested without running MITOS2.
+parse_mitos_dir <- function(dir, assembly, contig_lens, genetic_code) {
+    list.files(dir,
+               recursive = T,
+               full.names = T,
+               pattern = "result.fas") |>
+    purrr::map_dfr( ~ {
+      annotations <- Biostrings::readDNAStringSet(.x) |>
+        {
+          \(x)
+          data.frame(
+            contig = stringr::str_extract(names(x), "^(.*?)(?=;)"),
+            gene = stringr::str_extract(stringr::str_extract(names(x), "\\S+$"), "^[a-zA-Z0-9]+"),
+            geneId = stringr::str_extract(names(x), "\\S+$"),
+            # str_split_fixed, not str_split(simplify): MITOS2 writes an empty
+            # result.fas for a contig it finds no genes on, and indexing a
+            # column of a zero-row split is an error.
+            pos1 = stringr::str_split_fixed(names(x), " *; *", 4)[, 2] |>
+              stringr::str_extract("^[0-9]+") |> as.numeric(),
+            pos2 = stringr::str_split_fixed(names(x), " *; *", 4)[, 2] |>
+              stringr::str_extract("[0-9]+$") |> as.numeric(),
+            direction = stringr::str_split_fixed(names(x), " *; *", 4)[, 3],
+            row.names = NULL
+          ) |>
+            dplyr::mutate(
+              type = dplyr::case_when(
+                stringr::str_detect(gene, "^rrn[LS]") ~ "rRNA",
+                stringr::str_detect(gene, "^trn") ~ "tRNA",
+                stringr::str_detect(gene, "^Intron") ~ "intron",
+                stringr::str_detect(gene, "^OL") ~ "OL",
+                stringr::str_detect(gene, "^OH") ~ "ctrl",
+                .default = "PCG"
+              ),
+              .before = "gene"
+            ) |>
+            dplyr::mutate(
+              product = dplyr::case_when(
+                stringr::str_detect(gene, "rrnL") ~ "16S ribosomal RNA",
+                stringr::str_detect(gene, "rrnS") ~ "12S ribosomal RNA",
+                stringr::str_detect(gene, "OH") ~ "d-loop",
+                type == "tRNA" ~ paste0("tRNA-", trnA_key_MITOS[gene]),
+                type == "PCG" ~ CDS_key[gene],
+                .default = NA_character_
+              ),
+              .after = "gene"
+            ) |>
+            dplyr::mutate(
+              anticodon = dplyr::case_when(
+                type == "tRNA" ~ stringr::str_replace(
+                  toupper(
+                    stringr::str_extract(
+                      stringr::str_extract(names(x), "\\S+$"),
+                      "(?<=\\()[^\\^\\)]+"
+                    )
+                  ),
+                  "^---$", "NNN"  # replace "---" with "NNN", to make mitos results compatible with tRNAscan results
+                                  # this is caused by failure to detect the anticodon region
+                                  # e.g. https://github.com/UCSC-LoweLab/tRNAscan-SE/issues/33
+                ),
+                .default = NA_character_
+              ),
+              .after = "direction"
+            ) |>
+            dplyr::mutate(
+              tRNA_ID = dplyr::case_when(
+                type == "tRNA" ~ paste0(product, "-", anticodon), # create temporary ID to compare with tRNAscan-SE results
+                .default = NA_character_
+              ),
+              .after = "direction"
+            ) |>
+            # pos1 > pos2 means the feature spans the origin of a circular
+            # contig, so its length is the arc around the origin (circ_len),
+            # measured against THIS contig's length.
+            dplyr::mutate(
+              length = as.numeric(dplyr::case_when(
+                pos1 < pos2 ~ pos2 - pos1 + 1,
+                pos1 > pos2 ~ unname(contig_lens[contig]) - pos1 + pos2 + 1,
+                .default = NA_real_
+              )),
+              .before = "direction"
+            ) |>
+            dplyr::filter(
+              gene != "OH" |
+                stringr::str_detect(geneId, "OH_0") |
+                stringr::str_detect(geneId, "OH$")
+            ) |>
+            # dplyr evaluates a rowwise expression once on an empty frame to
+            # infer its type, and `if (type == "PCG")` on a zero-length value is
+            # an error. A contig MITOS2 found nothing on gets there.
+            (\(d) if (nrow(d) == 0L) {
+              dplyr::mutate(d, start_codon = NA_character_,
+                            stop_codon = NA_character_, translation = NA_character_)
+            } else {
+              d |>
+            dplyr::rowwise() |>
+            dplyr::mutate(
+              # Coding-strand sequence for this feature. extract_circ_region()
+              # reads across the origin, so a feature stored pos1 > pos2 (it wraps
+              # the origin of a circular contig) needs no special case, and the
+              # contig length is taken from the contig itself rather than from a
+              # shared scalar that only ever described the first one.
+              .cds = if (type == "PCG") {
+                suppressWarnings({
+                  s <- extract_circ_region(assembly[contig], pos1, pos2)
+                  if (direction == "-") s <- Biostrings::reverseComplement(s)
+                  unname(as.character(s))
+                })
+              } else NA_character_,
+              start_codon = if (type == "PCG" && !is.na(.cds)) {
+                substr(.cds, 1L, 3L)
+              } else NA_character_,
+              stop_codon = if (type == "PCG" && !is.na(.cds)) {
+                n <- nchar(.cds)
+                len <- if (n %% 3L == 0L) 3L else n %% 3L
+                substr(.cds, n - len + 1L, n)
+              } else NA_character_,
+              translation = if (type == "PCG" && !is.na(.cds)) {
+                suppressWarnings(
+                  Biostrings::DNAString(substr(.cds, 1L, nchar(.cds) - nchar(stop_codon))) |>
+                    Biostrings::translate(
+                      genetic.code = Biostrings::getGeneticCode(genetic_code),
+                      if.fuzzy.codon = "solve"
+                    ) |>
+                    as.character()
+                )
+              } else NA_character_
+            ) |>
+            dplyr::ungroup() |>
+            dplyr::select(-.cds)
+            })()
+        }()
+
+      annotations <- annotations |>
+        dplyr::select(-dplyr::any_of('geneId'))
+
+      ###################
+      return(annotations)
+      ###################
+
+    })
+}
+
 #' Annotate mitochondrial genomes using MITOS2
 #'
 #' @param assembly a DNAString object
@@ -112,136 +256,7 @@ annotate_mitos2 <- function(
   contig_lens <- setNames(Biostrings::width(assembly), names(assembly))
 
   # Format Mitos Output ----
-  parse_mitos_dir <- function(dir) {
-    list.files(dir,
-               recursive = T,
-               full.names = T,
-               pattern = "result.fas") |>
-    purrr::map_dfr( ~ {
-      annotations <- Biostrings::readDNAStringSet(.x) |>
-        {
-          \(x)
-          data.frame(
-            contig = stringr::str_extract(names(x), "^(.*?)(?=;)"),
-            gene = stringr::str_extract(stringr::str_extract(names(x), "\\S+$"), "^[a-zA-Z0-9]+"),
-            geneId = stringr::str_extract(names(x), "\\S+$"),
-            pos1 = stringr::str_split(names(x), " *; *", simplify = T)[, 2] |>
-              stringr::str_extract("^[0-9]+") |> as.numeric(),
-            pos2 = stringr::str_split(names(x), " *; *", simplify = T)[, 2] |>
-              stringr::str_extract("[0-9]+$") |> as.numeric(),
-            direction = stringr::str_split(names(x), " *; *", simplify = T)[, 3],
-            row.names = NULL
-          ) |>
-            dplyr::mutate(
-              type = dplyr::case_when(
-                stringr::str_detect(gene, "^rrn[LS]") ~ "rRNA",
-                stringr::str_detect(gene, "^trn") ~ "tRNA",
-                stringr::str_detect(gene, "^Intron") ~ "intron",
-                stringr::str_detect(gene, "^OL") ~ "OL",
-                stringr::str_detect(gene, "^OH") ~ "ctrl",
-                .default = "PCG"
-              ),
-              .before = "gene"
-            ) |>
-            dplyr::mutate(
-              product = dplyr::case_when(
-                stringr::str_detect(gene, "rrnL") ~ "16S ribosomal RNA",
-                stringr::str_detect(gene, "rrnS") ~ "12S ribosomal RNA",
-                stringr::str_detect(gene, "OH") ~ "d-loop",
-                type == "tRNA" ~ paste0("tRNA-", trnA_key_MITOS[gene]),
-                type == "PCG" ~ CDS_key[gene],
-                .default = NA_character_
-              ),
-              .after = "gene"
-            ) |>
-            dplyr::mutate(
-              anticodon = dplyr::case_when(
-                type == "tRNA" ~ stringr::str_replace(
-                  toupper(
-                    stringr::str_extract(
-                      stringr::str_extract(names(x), "\\S+$"),
-                      "(?<=\\()[^\\^\\)]+"
-                    )
-                  ),
-                  "^---$", "NNN"  # replace "---" with "NNN", to make mitos results compatible with tRNAscan results
-                                  # this is caused by failure to detect the anticodon region
-                                  # e.g. https://github.com/UCSC-LoweLab/tRNAscan-SE/issues/33
-                ),
-                .default = NA_character_
-              ),
-              .after = "direction"
-            ) |>
-            dplyr::mutate(
-              tRNA_ID = dplyr::case_when(
-                type == "tRNA" ~ paste0(product, "-", anticodon), # create temporary ID to compare with tRNAscan-SE results
-                .default = NA_character_
-              ),
-              .after = "direction"
-            ) |>
-            # pos1 > pos2 means the feature spans the origin of a circular
-            # contig, so its length is the arc around the origin (circ_len),
-            # measured against THIS contig's length.
-            dplyr::mutate(
-              length = as.numeric(dplyr::case_when(
-                pos1 < pos2 ~ pos2 - pos1 + 1,
-                pos1 > pos2 ~ unname(contig_lens[contig]) - pos1 + pos2 + 1,
-                .default = NA_real_
-              )),
-              .before = "direction"
-            ) |>
-            dplyr::filter(
-              gene != "OH" |
-                stringr::str_detect(geneId, "OH_0") |
-                stringr::str_detect(geneId, "OH$")
-            ) |>
-            dplyr::rowwise() |>
-            dplyr::mutate(
-              # Coding-strand sequence for this feature. extract_circ_region()
-              # reads across the origin, so a feature stored pos1 > pos2 (it wraps
-              # the origin of a circular contig) needs no special case, and the
-              # contig length is taken from the contig itself rather than from a
-              # shared scalar that only ever described the first one.
-              .cds = if (type == "PCG") {
-                suppressWarnings({
-                  s <- extract_circ_region(assembly[contig], pos1, pos2)
-                  if (direction == "-") s <- Biostrings::reverseComplement(s)
-                  unname(as.character(s))
-                })
-              } else NA_character_,
-              start_codon = if (type == "PCG" && !is.na(.cds)) {
-                substr(.cds, 1L, 3L)
-              } else NA_character_,
-              stop_codon = if (type == "PCG" && !is.na(.cds)) {
-                n <- nchar(.cds)
-                len <- if (n %% 3L == 0L) 3L else n %% 3L
-                substr(.cds, n - len + 1L, n)
-              } else NA_character_,
-              translation = if (type == "PCG" && !is.na(.cds)) {
-                suppressWarnings(
-                  Biostrings::DNAString(substr(.cds, 1L, nchar(.cds) - nchar(stop_codon))) |>
-                    Biostrings::translate(
-                      genetic.code = Biostrings::getGeneticCode(genetic_code),
-                      if.fuzzy.codon = "solve"
-                    ) |>
-                    as.character()
-                )
-              } else NA_character_
-            ) |>
-            dplyr::ungroup() |>
-            dplyr::select(-.cds)
-        }()
-
-      annotations <- annotations |>
-        dplyr::select(-dplyr::any_of('geneId'))
-
-      ###################
-      return(annotations)
-      ###################
-
-    })
-  }
-
-  annotations_mitos <- parse_mitos_dir(out)
+  annotations_mitos <- parse_mitos_dir(out, assembly, contig_lens, genetic_code)
 
   # Optional rescue run: MITOS2 discards rRNAs/PCGs whose locus overlaps a
   # predicted tRNA (e.g. a scyphozoan rrnS wedged against nad5 with a tRNA in its
@@ -253,7 +268,7 @@ annotate_mitos2 <- function(
     message("starting MITOS2 rescue run (--trna 0)")
     run_mitos(out_nt, extra_opts = "--trna 0")
     message("finished MITOS2 rescue run")
-    rescue_extra <- parse_mitos_dir(out_nt) |>
+    rescue_extra <- parse_mitos_dir(out_nt, assembly, contig_lens, genetic_code) |>
       dplyr::filter(type %in% c("PCG", "rRNA") & !(gene %in% annotations_mitos$gene))
     if (nrow(rescue_extra) > 0) {
       message(sprintf("MITOS2 rescue run recovered: %s",

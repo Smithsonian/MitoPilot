@@ -1,10 +1,17 @@
 #' Initialize a new project database
 #'
 #' @param db_path Path to the new database file
-#' @param mapping_fn Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", "R2", "Assembly", and "Topology"
+#' @param mapping_fn Path to the mapping CSV file. Must contain columns "ID",
+#'   "Taxon", and "Assembly", plus "R1" and "R2" unless `no_raw_data = TRUE`.
+#'   An optional "Topology" column may declare "circular" or "linear" for a
+#'   single-contig assembly; blank or missing is treated as linear, and a
+#'   multi-contig assembly is always recorded as "multi".
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
+#' @param assembly_path Directory holding the user-supplied assembly files. Used
+#'   to count each assembly's contigs so a multi-contig assembly is recorded with
+#'   topology "multi".
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset; a number sets an override on the
 #'   default curate_opts set. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
@@ -35,6 +42,45 @@
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
 #' @param min_assembly_length Minimum scaffold length to include in analysis (default = 500)
+#' @param join_scaffolds (logical) Order a fragmented assembly against its BLAST
+#'   reference into one joined sequence during WF1 (default = FALSE). Samples
+#'   whose contigs match different reference mitogenomes are left alone. So is a
+#'   sample with a junction the reference cannot size, since NCBI expects the
+#'   number of Ns to be the estimated gap length.
+#' @param find_mitogenome Search each user-supplied assembly for its
+#'   mitochondrial contigs before the rest of WF1 runs (default = FALSE). See
+#'   [find_mito()].
+#' @param mitofinder_db Path to a MitoFinder GenBank database, built with
+#'   [custom_assembly_db()] (`db_type = "mitofinder"`). Required when
+#'   `find_mitogenome = TRUE`.
+#' @param find_min_contig_length Contigs shorter than this are never searched,
+#'   bp (default = 500)
+#' @param find_min_identity Percent identity required against the reference
+#'   (default = 70)
+#' @param find_min_aligned_length Aligned bases required (default = 300)
+#' @param find_min_aligned_fraction Fraction of the contig the alignment must
+#'   cover (default = 0.5). The NUMT filter.
+#' @param find_max_candidates Most contigs carried into MitoFinder confirmation
+#'   (default = 20)
+#' @param find_min_genes Mitochondrial genes a contig must carry to be confirmed
+#'   (default = 3)
+#' @param find_cpus Default # cpus for the search steps (default = 4)
+#' @param find_memory Default memory (GB) for the search steps (default = 8)
+#' @param attempt_circularization Try to circularize user assemblies in WF1
+#'   (default = FALSE). Each contig is attempted on its own, so a fragmented
+#'   assembly is eligible; a single-contig assembly declared "circular" is
+#'   skipped. See [circularize_asmb()].
+#' @param circularize_min_overlap Shortest accepted self-overlap, bp (default = 220)
+#' @param circularize_min_identity Percent identity required for the self-overlap
+#'   (default = 99)
+#' @param circularize_min_junction_reads Reads that must span the new junction
+#'   before an assembly is called circular (default = 5). Ignored when the
+#'   project has no raw data.
+#' @param circularize_min_overhang Bases a read must extend past the junction on
+#'   each side to count (default = 30)
+#' @param circularize_cpus Default # cpus for the circularization step (default = 4)
+#' @param circularize_memory Default memory (GB) for the circularization step
+#'   (default = 8)
 #' @param no_raw_data (logical) Initialize a project with no raw reads (default =
 #'   FALSE). When TRUE, annotation coverage trimming (`coverage_trim`) is disabled
 #'   since no read-depth information is available.
@@ -45,6 +91,7 @@ new_db_userAsmb <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    assembly_path = NULL,
     genetic_code = NULL,
     # Default annotation options
     annotate_cpus = 6,
@@ -72,6 +119,28 @@ new_db_userAsmb <- function(
     # Default assembly QC threshold (used by COVERAGE_userAsmb + BLAST_GENBANK to
     # set per-scaffold ignore flags; matches the regular pipeline default)
     min_assembly_length = 500,
+    # Scaffold joining: order a fragmented single-path assembly against its BLAST
+    # reference into one Path 0. Off by default, as in the regular pipeline.
+    join_scaffolds = FALSE,
+    # Default mitogenome-search options (see find_mito())
+    find_mitogenome = FALSE,
+    mitofinder_db = NULL,
+    find_min_contig_length = 500,
+    find_min_identity = 70,
+    find_min_aligned_length = 300,
+    find_min_aligned_fraction = 0.5,
+    find_max_candidates = 20,
+    find_min_genes = 3,
+    find_cpus = 4,
+    find_memory = 8,
+    # Default circularization options (see circularize_asmb())
+    attempt_circularization = FALSE,
+    circularize_min_overlap = 220,
+    circularize_min_identity = 99,
+    circularize_min_junction_reads = 5,
+    circularize_min_overhang = 30,
+    circularize_cpus = 4,
+    circularize_memory = 8,
     # Skip read-mapping coverage (no raw data). Disables annotate coverage trim.
     no_raw_data = FALSE) {
   # Read mapping file
@@ -110,21 +179,11 @@ new_db_userAsmb <- function(
     stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
   }
 
-  # check for assembly and topology columns
+  # check for the assembly column; Topology is optional
   if ("Assembly" %nin% colnames(mapping)) {
     stop("Mapping file missing Assembly column")
   }
-  if ("Topology" %nin% colnames(mapping)) {
-    stop("Mapping file missing Topology column")
-  }
-
-  # Confirm topology field contains only lowercase "linear" or "circular"
-  if (any(mapping$Topology %nin% c("circular", "linear"))) {
-    bad_IDs <- mapping[[mapping_id]][mapping$Topology %nin% c("circular", "linear")]
-    message("problematic samples:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("Values in the Topology column must be either lowercase \"circular\" or \"linear\"")
-  }
+  validate_declared_topology(mapping, mapping_id = mapping_id)
 
   # No raw reads: R1/R2 are not needed, so tolerate their absence in the mapping.
   # Added here (before samples/preprocess are built) so both tables carry the
@@ -149,15 +208,18 @@ new_db_userAsmb <- function(
   on.exit(DBI::dbDisconnect(con))
 
   # Metadata table ----
+  # Resolved outside the mutate so a warning reaches the user as itself, not
+  # wrapped in dplyr's "there was 1 warning in mutate()" report.
+  sample_topology <- resolve_sample_topology(mapping, assembly_path, mapping_id)
   mapping <- mapping |>
     dplyr::mutate(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code,
-      topology = .data[["Topology"]],
+      topology = sample_topology,
       assembly = .data[["Assembly"]]
     ) |>
-    dplyr::select(-Topology, -Assembly)
+    dplyr::select(-dplyr::any_of("Topology"), -Assembly)
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},
@@ -244,6 +306,10 @@ new_db_userAsmb <- function(
       assemble_lock INTEGER,
       hide_switch INTEGER,
       assemble_opts TEXT,
+      circularize_opts TEXT,
+      circularize_notes TEXT,
+      find_mito_opts TEXT,
+      find_mito_notes TEXT,
       blast_opts TEXT,
       blast_accession TEXT,
       blast_accession_auto TEXT,
@@ -254,6 +320,8 @@ new_db_userAsmb <- function(
       blast_lineage TEXT,
       synteny_accession TEXT,
       poor_blast_ref TEXT,
+      join_notes TEXT,
+      join_switch INTEGER,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
@@ -272,8 +340,14 @@ new_db_userAsmb <- function(
           assemble_lock = 0,
           hide_switch = 0,
           assemble_opts = "user",
+          circularize_opts = "default",
+          circularize_notes = NA_character_,
+          find_mito_opts = "default",
+          find_mito_notes = NA_character_,
           blast_opts = "default",
           poor_blast_ref = NA_character_,
+          join_notes = NA_character_,
+          join_switch = NA_integer_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -291,6 +365,7 @@ new_db_userAsmb <- function(
     "CREATE TABLE assemble_opts (
       assemble_opts TEXT NOT NULL,
       min_assembly_length INTEGER,
+      join_scaffolds INTEGER,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -298,12 +373,156 @@ new_db_userAsmb <- function(
     dplyr::rows_upsert(
       data.frame(
         assemble_opts = "user",
-        min_assembly_length = min_assembly_length
+        min_assembly_length = min_assembly_length,
+        join_scaffolds = as.integer(isTRUE(join_scaffolds))
       ),
       in_place = TRUE,
       copy = TRUE,
       by = "assemble_opts"
     )
+
+  ## Circularization options ----
+  # Named settings profile for the optional WF1 circularization step
+  # (see circularize_asmb()). `attempt` is the master on/off switch.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE circularize_opts (
+      circularize_opts TEXT NOT NULL,
+      attempt INTEGER,
+      min_overlap INTEGER,
+      min_identity REAL,
+      min_junction_reads INTEGER,
+      min_overhang INTEGER,
+      cpus INTEGER,
+      memory INTEGER,
+      PRIMARY KEY (circularize_opts)
+    );"
+  )
+  dplyr::tbl(con, "circularize_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        circularize_opts = "default",
+        attempt = as.integer(attempt_circularization),
+        min_overlap = circularize_min_overlap,
+        min_identity = circularize_min_identity,
+        min_junction_reads = circularize_min_junction_reads,
+        min_overhang = circularize_min_overhang,
+        cpus = circularize_cpus,
+        memory = circularize_memory
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "circularize_opts"
+    )
+
+  ## Circularization evidence ----
+  # What the overlap search found for each sample, and the read depth across
+  # the junction it produced. Read by the circularization details modal.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE circularize_overlap (
+      ID TEXT NOT NULL,
+      contig TEXT NOT NULL,
+      qstart INTEGER,
+      qend INTEGER,
+      sstart INTEGER,
+      send INTEGER,
+      length INTEGER,
+      pident REAL,
+      mismatches INTEGER,
+      aln_query TEXT,
+      aln_subject TEXT,
+      q_ctx_left TEXT,
+      q_ctx_right TEXT,
+      s_ctx_left TEXT,
+      s_ctx_right TEXT,
+      accepted INTEGER,
+      reason TEXT,
+      contig_length INTEGER,
+      trimmed INTEGER,
+      junction_reads INTEGER,
+      min_junction_reads INTEGER,
+      window_bp INTEGER,
+      min_overhang INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, contig)
+    );"
+  )
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE circularize_depth (
+      ID TEXT NOT NULL,
+      contig TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      rel_position INTEGER,
+      depth INTEGER,
+      depth_spanning INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, contig, position)
+    );"
+  )
+
+  ## Mitogenome search options ----
+  # Settings for the optional WF1 step that locates mitochondrial contigs in a
+  # large user-supplied assembly (see find_mito()).
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE find_mito_opts (
+      find_mito_opts TEXT NOT NULL,
+      attempt INTEGER,
+      mitofinder_db TEXT,
+      min_contig_length INTEGER,
+      min_identity REAL,
+      min_aligned_length INTEGER,
+      min_aligned_fraction REAL,
+      max_candidates INTEGER,
+      min_genes INTEGER,
+      cpus INTEGER,
+      memory INTEGER,
+      PRIMARY KEY (find_mito_opts)
+    );"
+  )
+  dplyr::tbl(con, "find_mito_opts") |>
+    dplyr::rows_upsert(
+      data.frame(
+        find_mito_opts = "default",
+        attempt = as.integer(find_mitogenome),
+        mitofinder_db = mitofinder_db %||% NA_character_,
+        min_contig_length = find_min_contig_length,
+        min_identity = find_min_identity,
+        min_aligned_length = find_min_aligned_length,
+        min_aligned_fraction = find_min_aligned_fraction,
+        max_candidates = find_max_candidates,
+        min_genes = find_min_genes,
+        cpus = find_cpus,
+        memory = find_memory
+      ),
+      in_place = TRUE,
+      copy = TRUE,
+      by = "find_mito_opts"
+    )
+
+  ## Mitogenome search evidence ----
+  # One row per screened candidate contig: what the search saw and why each
+  # contig was kept or dropped.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE mito_candidates (
+      ID TEXT NOT NULL,
+      contig TEXT NOT NULL,
+      length INTEGER,
+      accession TEXT,
+      pident REAL,
+      aligned_length INTEGER,
+      aligned_fraction REAL,
+      genes INTEGER,
+      rank INTEGER,
+      selected INTEGER,
+      reason TEXT,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, contig)
+    );"
+  )
 
   ## BLAST options ----
   DBI::dbExecute(
@@ -398,6 +617,21 @@ new_db_userAsmb <- function(
       qstart INTEGER,
       mapped INTEGER,
       PRIMARY KEY (ID, ref_accession, scaffold)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE scaffold_junctions (
+      ID TEXT NOT NULL,
+      junction INTEGER NOT NULL,
+      gap_index INTEGER NOT NULL,
+      start INTEGER,
+      end INTEGER,
+      gap_bases INTEGER,
+      size_known INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, gap_index)
     );"
   )
 

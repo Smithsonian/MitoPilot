@@ -47,13 +47,19 @@ pipeline_server_userAsmb <- function(id) {
       nf_cmd(nextflow_cmd(session$userData$mode, userAsmbs = TRUE))
       message(nf_cmd())
 
-      # Count samples to update ----
+      # Count what the run will update: samples in Assemble, one row per
+      # sequence (path/scaffold unit) in Annotate.
+      unit_label <- "samples"
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
-          dplyr::filter(assemble_switch == 1) |>
+          # join_switch = 1 is a join-only redo: WF1 admits it on its own
+          # regardless of assemble_switch, so it counts as work to be done.
+          dplyr::filter(assemble_switch == 1 |
+                          (join_switch == 1 & assemble_lock == 0)) |>
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
+        unit_label <- "sequences"
         samples <- dplyr::left_join(
           dplyr::tbl(session$userData$con, "assemble"),
           dplyr::tbl(session$userData$con, "annotate"),
@@ -112,7 +118,7 @@ pipeline_server_userAsmb <- function(id) {
       modalDialog(
         title = div(
           style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-          span(stringr::str_glue("{session$userData$mode}: updating {length(samples)} samples")),
+          span(stringr::str_glue("{session$userData$mode}: updating {length(samples)} {unit_label}")),
           span(id = ns("gears"), class = "gears paused")
         ),
         div(

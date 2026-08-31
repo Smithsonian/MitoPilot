@@ -6,7 +6,7 @@ ASSEMBLE_COL_GROUPS <- list(
                "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes")
+  Metadata = c("time_stamp", "assemble_notes", "join_notes")
 )
 # Reverse lookup col -> group, used to tag colDefs with a CSS class so the
 # column-group picker can show/hide columns via CSS without re-rendering
@@ -436,6 +436,14 @@ assemble_server <- function(id) {
               minWidth = 150,
               cell = rt_longtext()
             ),
+            join_notes = colDef(
+              show = TRUE, class = .grp("join_notes"), headerClass = .grp("join_notes"),
+              name = "Scaffold Join Notes",
+              html = TRUE,
+              align = "left",
+              minWidth = 150,
+              cell = rt_longtext()
+            ),
             view = colDef(
               show = TRUE,
               sticky = "right",
@@ -626,6 +634,11 @@ assemble_server <- function(id) {
           )
           req(nrow(upd) > 0L)
         }
+        # A locked sample is never admitted by WF1 (its query requires
+        # assemble_lock = 0), so a pending join redo could never run and the
+        # flag would sit at 1 forever, keeping the Update modal reporting work
+        # that cannot be done. Locking resolves it.
+        upd$join_switch <- NA_integer_
       }
       upd$assemble_lock <- as.numeric(!lock_current)
       rv$updating <- upd
@@ -643,6 +656,7 @@ assemble_server <- function(id) {
       trigger("refresh_annotate")
       trigger("refresh_export")
     })
+
 
     # Set Pre-process Opts ----
     observeEvent(input$set_pre_opts, {

@@ -6,28 +6,18 @@ include {prepare_ref_db} from './prepare_ref_db.nf'
 // (its own MITOS/tRNAscan run + its own output files ID_annotations_<path>_<scaffold>.csv).
 // annotate() processes only this unit's scaffold by ignoring every OTHER scaffold
 // of the path (ignore_scaffolds subquery). annotate_opts is the unit's own set;
-// the unit is gated on annotate_switch=1 AND annotate_lock=0.
-// userAsmb projects are the exception: a user-supplied assembly is ONE genome, so
-// all of its contigs are annotated together as the single seeded unit (scaffold
-// literal 1), ignoring only the scaffolds actually flagged ignore = 1. Mirrors
-// VALIDATE's userAsmb branch, which already documents the same contract. Without
-// it the per-scaffold ignore_scaffolds drops every contig but the target, and the
-// seeded (ID, 1, 1) row does not even join when the FASTA's first passing contig
-// is not scaffold 1 (contigs are numbered by FASTA order).
-def scafSel   = params.userAsmb ? '1 AS scaffold' : 'a.scaffold'
-def scafJoin  = params.userAsmb ? 'an.scaffold = 1' : 'an.scaffold = a.scaffold'
-def ignoreSub = params.userAsmb ?
-                  "(SELECT GROUP_CONCAT(a2.scaffold, ',') FROM assemblies a2 WHERE a2.ID = a.ID AND a2.path = a.path AND a2.ignore = 1)" :
-                  "(SELECT GROUP_CONCAT(a2.scaffold, ',') FROM assemblies a2 WHERE a2.ID = a.ID AND a2.path = a.path AND a2.scaffold != a.scaffold)"
+// the unit is gated on annotate_switch=1 AND annotate_lock=0. User-supplied
+// assemblies follow the same contract: each contig is its own unit, seeded by
+// COVERAGE_userAsmb_WRITE.
 
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' + scafSel + ', b.assemble_opts, ' +
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, a.scaffold, b.assemble_opts, ' +
                         'd.cpus, d.memory, d.ref_db, d.ref_dir, d.mitos_opts, d.use_mitos_best, d.trnaScan_opts, d.start_gene, d.arwen_opts, d.use_arwen, d.aragorn_opts, d.use_aragorn, ' +
                         'd.use_mitofinder, d.mitofinder_db, d.mitofinder_new_genes, d.mitofinder_allow_introns, d.mitofinder_opts, ' +
-                        ignoreSub + ' AS ignore_scaffolds, ' +
+                        "(SELECT GROUP_CONCAT(a2.scaffold, ',') FROM assemblies a2 WHERE a2.ID = a.ID AND a2.path = a.path AND a2.scaffold != a.scaffold) AS ignore_scaffolds, " +
                         'd.coverage_trim, d.retain_low_conf_trna, d.use_mitos, d.use_trnaScan, f.genetic_code, d.rescue_no_trna ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND ' + scafJoin + ' ' +
+                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold ' +
                     'JOIN annotate_opts d ON d.annotate_opts = an.annotate_opts ' +
                     'JOIN samples f ON a.ID = f.ID ' +
                     'WHERE b.assemble_lock = 1 ' +

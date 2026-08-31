@@ -798,35 +798,43 @@ export_server <- function(id) {
       TRUE
     }
 
+    exp_val <- function(name) input[[name]]
+
     run_export <- function() {
-      group <- input$export_group
+      # The export options modal is still on screen at this point.
+      on_screen <- TRUE
+      group <- exp_val("export_group")
       # PCG review needs a multi-sample group; flag_PCG_outliers/export_files
       # only review when length(IDs) > 1.
       # Units, not samples: one sample can contribute several records, and the
       # outlier review needs >1 record to compare.
       n_units <- sum(rv$data$export_group == group, na.rm = TRUE)
-      do_review <- isTRUE(input$review_outliers) && n_units > 1
+      do_review <- isTRUE(exp_val("review_outliers")) && n_units > 1
 
       # Remember params so "Back to Review" can recompute against fresh edits and
       # the deferred write (after review) uses the same options. Stashed because
       # the export modal (and its inputs) is removed once the review modal opens.
       rv$review_group <- group
-      rv$review_start <- input$start_aa %||% 10
-      rv$review_stop <- input$stop_aa %||% 10
-      rv$review_ident <- input$ident_pct %||% 60
+      rv$review_start <- exp_val("start_aa") %||% 10
+      rv$review_stop <- exp_val("stop_aa") %||% 10
+      rv$review_ident <- exp_val("ident_pct") %||% 60
       rv$export_params <- list(
-        fasta_header = input$fasta_header,
-        fasta_header_gene = input$fasta_header_gene,
-        generateAAalignments = input$include_alignments,
-        gene_export = input$export_genes
+        fasta_header = exp_val("fasta_header"),
+        fasta_header_gene = exp_val("fasta_header_gene"),
+        generateAAalignments = exp_val("include_alignments"),
+        gene_export = exp_val("export_genes")
       )
+      # Options are captured; the stash has done its job.
       # Where the files will land; surfaced via a popup once the user is done.
       rv$export_done_path <- file.path(
         session$userData$dir_out, "export", group
       )
 
-      shinyjs::removeClass("gears", "paused")
-      shinyjs::disable("export_data")
+      # Only touch the export modal's own elements while it is still on screen
+      if (on_screen) {
+        shinyjs::removeClass("gears", "paused")
+        shinyjs::disable("export_data")
+      }
 
       if (do_review) {
         # Review BEFORE writing files: edits made during review must land in the
@@ -839,14 +847,18 @@ export_server <- function(id) {
           stop_aa = rv$review_stop,
           ident_pct = rv$review_ident
         )
-        shinyjs::addClass("gears", "paused")
-        shinyjs::enable("export_data")
+        if (on_screen) {
+          shinyjs::addClass("gears", "paused")
+          shinyjs::enable("export_data")
+        }
         present_review(review_res)
       } else {
         # No review: write files immediately, then announce.
         write_export_files()
-        shinyjs::addClass("gears", "paused")
-        shinyjs::enable("export_data")
+        if (on_screen) {
+          shinyjs::addClass("gears", "paused")
+          shinyjs::enable("export_data")
+        }
         show_export_done_alert()
       }
     }
@@ -1185,15 +1197,17 @@ export_server <- function(id) {
       names(by_id)[vapply(by_id, function(p) length(unique(p)) > 1, logical(1))]
     }
 
+
     check_overwrite_then_export <- function() {
-      export_path <- file.path(session$userData$dir_out, "export", input$export_group)
+      group <- exp_val("export_group")
+      export_path <- file.path(session$userData$dir_out, "export", group)
       if (dir.exists(export_path)) {
         shinyWidgets::confirmSweetAlert(
           session = session,
           inputId = ns("overwrite_confirm"),
           title = "Export already exists",
           text = stringr::str_glue(
-            "Export files for group '{input$export_group}' already exist. Overwrite them?"
+            "Export files for group '{group}' already exist. Overwrite them?"
           ),
           type = "warning",
           btn_labels = c("Cancel", "Overwrite"),

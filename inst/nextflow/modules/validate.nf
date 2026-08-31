@@ -24,16 +24,15 @@ process validate {
 
     shell:
     dir = "${id}/annotate"
-    scafArg = params.userAsmb ? 'all' : "${scaffold}"
-    outCsv  = params.userAsmb ? "${id}_annotations_${path}.csv" : "${id}_annotations_${path}.${scaffold}.csv"
+    scafArg = "${scaffold}"
+    outCsv  = "${id}_annotations_${path}.${scaffold}.csv"
     '''
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{dir}
-    # Subset the per-path curated annotations to this unit. The standard flow keeps
-    # only this scaffold so gene-count validation never pools separate genomes;
-    # userAsmb keeps every contig (one genome per sample). The output filename
-    # propagates to the validate outputs (annotations tsv + summary csv).
-    Rscript -e "ann <- utils::read.csv('!{annotations}'); sc <- '!{scafArg}'; keep <- if (identical(sc, 'all')) rep(TRUE, nrow(ann)) else sub('^.*[.]', '', as.character(ann[['contig']])) == sc; utils::write.csv(ann[keep, , drop = FALSE], '!{outCsv}', row.names = FALSE)"
+    # Subset the per-path curated annotations to this unit, so gene-count
+    # validation never pools separate genomes. The output filename propagates to
+    # the validate outputs (annotations tsv + summary csv).
+    Rscript -e "ann <- utils::read.csv('!{annotations}'); sc <- '!{scafArg}'; keep <- sub('^.*[.]', '', as.character(ann[['contig']])) == sc; utils::write.csv(ann[keep, , drop = FALSE], '!{outCsv}', row.names = FALSE)"
     Rscript -e "MitoPilot::validate_!{opts.target}( \
         annotations_fn = '!{outCsv}', \
         coverage_fn = '!{coverage}', \
@@ -97,6 +96,10 @@ process write_curated_result {
         else st.setString(idx, v.toString())
     }
 
+    // Auto note for a unit no reads mapped to; regenerated on every run, never
+    // user-typed.
+    def NO_COVERAGE_NOTE = 'no read coverage: trim skipped'
+
     try {
         conn.autoCommit = false
         def pragma = conn.prepareStatement("PRAGMA busy_timeout=30000"); pragma.execute(); pragma.close()
@@ -113,11 +116,15 @@ process write_curated_result {
         // This writer runs per (id, path, scaffold); the curate coverage is
         // per-path, so update only this unit's scaffold row.
         def targetSid = "${id}.${path}.${scaffold}".toString()
+        // No coverage rows means no reads mapped to this contig: the coverage
+        // trim was skipped and the assemblies row keeps its WF1 sequence. Say so
+        // on the unit rather than letting it look like a normal result.
+        def noCoverage = !groups.containsKey(targetSid)
         def updAsm = conn.prepareStatement(
             "UPDATE assemblies SET sequence = ?, length = ?, depth = ?, gc = ?, errors = ?, " +
             "time_stamp = ? WHERE ID = ? AND path = ? AND scaffold = ?")
         groups.each { sid, rows ->
-            if (!params.userAsmb && sid != targetSid) return  // standard: only this unit; userAsmb: all contigs
+            if (sid != targetSid) return  // only this unit's row
             rows.sort { a, b -> (a[ci['Position']] as int) <=> (b[ci['Position']] as int) }
             def seq    = rows.collect { it[ci['Call']] }.join('')
             def depth  = rows.collect { it[ci['MeanDepth']] }.join(' ')
@@ -134,17 +141,11 @@ process write_curated_result {
         updAsm.close()
 
         // ---- annotations: clear stale rows, insert validated coordinates ----
-        // Standard: scoped to this scaffold unit so a sibling unit of the same
-        // path is not wiped (the validated TSV holds only this scaffold's rows).
-        // userAsmb: whole path (all contigs validated together).
-        def del
-        if (params.userAsmb) {
-            del = conn.prepareStatement("DELETE FROM annotations WHERE ID = ? AND path = ? AND time_stamp != ?")
-            del.setString(1, id.toString()); del.setInt(2, path as int); del.setString(3, ts)
-        } else {
-            del = conn.prepareStatement("DELETE FROM annotations WHERE ID = ? AND path = ? AND scaffold = ? AND time_stamp != ?")
-            del.setString(1, id.toString()); del.setInt(2, path as int); del.setInt(3, scaffold as int); del.setString(4, ts)
-        }
+        // Scoped to this scaffold unit so a sibling unit of the same path is not
+        // wiped (the validated TSV holds only this scaffold's rows).
+        def del = conn.prepareStatement(
+            "DELETE FROM annotations WHERE ID = ? AND path = ? AND scaffold = ? AND time_stamp != ?")
+        del.setString(1, id.toString()); del.setInt(2, path as int); del.setInt(3, scaffold as int); del.setString(4, ts)
         del.executeUpdate(); del.close()
 
         def annLines = new File(annotations_fn.toString()).readLines()
@@ -181,12 +182,17 @@ process write_curated_result {
             } else { cur.append(l.trim()) }
         }
         if (started) lengths << cur.length()
-        // Restrict the summary to this scaffold unit (assembly FASTA is per-path);
-        // userAsmb summarizes all contigs of the path together.
-        def selIdx = params.userAsmb ? (0..<descs.size()).toList() : (0..<descs.size()).findAll { descs[it].split(/\s+/, 2)[0] == targetSid }
+        // Restrict the summary to this scaffold unit (assembly FASTA is per-path).
+        def selIdx = (0..<descs.size()).findAll { descs[it].split(/\s+/, 2)[0] == targetSid }
         def scaffolds = selIdx.size()
         def totLen = (selIdx.collect { lengths[it] }.sum() ?: 0) as int
-        def topology = selIdx.collect { def p = descs[it].split(/\s+/, 2); p.length > 1 ? p[1] : '' }.join(';')
+        // A unit is normally one record with one topology. If it ever spans
+        // several with mixed topologies, collapse to the 'fragmented' sentinel
+        // rather than joining values with ';': the joined string reads as a
+        // topology downstream and would reach a submission defline.
+        def topoVals = selIdx.collect { def p = descs[it].split(/\s+/, 2); p.length > 1 ? p[1] : '' }
+                             .findAll { it.length() > 0 }.unique()
+        def topology = topoVals.size() == 1 ? topoVals[0] : (topoVals.size() > 1 ? 'fragmented' : '')
 
         // summary is CSV; its fields never contain commas (structure joins with
         // '|', missing/extra with ';', the rest are integers)
@@ -223,13 +229,22 @@ process write_curated_result {
             if (nrs.next()) {
                 def raw = nrs.getString(1)
                 if (raw != null) {
-                    def kept = raw.split('; ', -1).findAll { !it.trim().startsWith('EDITED:') }
+                    def kept = raw.split('; ', -1).findAll {
+                        !it.trim().startsWith('EDITED:') && it.trim() != NO_COVERAGE_NOTE
+                    }
                     cleanedNotes = kept.join('; ')
                     if (cleanedNotes.trim().length() == 0) cleanedNotes = null
                 }
             }
             nrs.close(); nq.close()
         } catch (Exception ignored) {}
+
+        // Re-derived every run (and stripped above), so it clears itself once the
+        // unit has coverage.
+        if (noCoverage) {
+            def keptNotes = (cleanedNotes ?: '').split('; ', -1).findAll { it.trim().length() > 0 }
+            cleanedNotes = (keptNotes + [NO_COVERAGE_NOTE]).join('; ')
+        }
 
         // Per-unit summary write; keyed by (ID, path, scaffold) so sibling units
         // of the same path are not clobbered (path/scaffold are the key, not SET).

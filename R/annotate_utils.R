@@ -795,7 +795,8 @@ splice_join_cds <- function(members, seq, genetic_code) {
   merged <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = ""))
   if (direction == "-") merged <- Biostrings::reverseComplement(merged)
 
-  translation <- Biostrings::translate(merged, genetic.code = genetic_code) |>
+  translation <- Biostrings::translate(merged, genetic.code = genetic_code,
+                                       if.fuzzy.codon = "solve") |>
     as.character()
   translation <- sub("\\*$", "", translation)
   aa_len <- nchar(translation)
@@ -855,4 +856,23 @@ splice_join_cds <- function(members, seq, genetic_code) {
     direction = direction,
     segments = segments
   )
+}
+
+#' Count bases that are not A, C, G or T
+#'
+#' A sequence can legitimately hold bases that do not translate to a single
+#' amino acid: a gap spacer, a consensus built in iupac mode, or an assembly
+#' that arrived with ambiguity codes already in it.
+#'
+#' @param seq a sequence (character or XString)
+#'
+#' @return integer count, 0 for an empty or missing sequence
+#'
+#' @noRd
+ambiguous_base_count <- function(seq) {
+  s <- toupper(as.character(seq))
+  if (length(s) != 1L || is.na(s) || !nzchar(s)) {
+    return(0L)
+  }
+  nchar(gsub("[ACGT]", "", s))
 }

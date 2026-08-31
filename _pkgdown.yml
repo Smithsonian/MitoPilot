@@ -47,6 +47,7 @@ articles:
   navbar: Usage
   contents:
   - 'Your-Own-Project'
+  - 'Your-Own-Assemblies'
   - 'Difficult-Assemblies'
   - 'Ruleset-Browser'
   - 'Curation-and-Validation'
@@ -74,6 +75,7 @@ reference:
   - new_project
   - new_project_userAsmb
   - new_test_project
+  - new_test_project_userAsmb
 
 - title: "Project database"
   desc: >
@@ -145,5 +147,8 @@ reference:
   - orf_finder
   - rotate_asmb
   - run_scaffold_join
+  - find_mito
+  - select_mito_contigs
+  - circularize_asmb
   - get_assembly
   - get_assembly_userAsmb

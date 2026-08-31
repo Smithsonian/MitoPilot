@@ -145,9 +145,12 @@ rt_blast_ref_status <- function() {
 rt_link <- function(InputId) {
   sprintf(
     "function(cellInfo) {
+                // An empty cell is not a link: nothing to click through to.
+                if (cellInfo.value === null || cellInfo.value === undefined ||
+                    cellInfo.value === '') { return ''; }
                 var clickid = '%s';
                 var sampid = cellInfo.index+1;
-                return `<a href='#' id=${sampid} class='grow'` +
+                return `<a href='#' id=${sampid} class='grow' title='${cellInfo.value}'` +
                 `onclick='event.stopPropagation(); Shiny.onInputChange(&#39;${clickid}&#39;, this.id, {priority: &#39;event&#39;})'>` +
                 cellInfo.value +
                 `</a>`;

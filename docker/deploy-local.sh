@@ -1,7 +1,7 @@
 #!/bin/bash
 
 tag="${1:-latest}"
-repo="${1:-mitopilot}"
+repo="${2:-mitopilot}"
 
 if [ -z "$tag" ]
 then
@@ -30,6 +30,6 @@ if [ $? -ne 0 ]; then
   echo "Failed to build the Docker image"
   exit 1
 fi
-docker tag ${repo}:${tag} ${repo}:${tag}
+docker tag ${repo}:${tag} macguigand/mitopilot:${tag}
 
 echo "Local image build successfull!"

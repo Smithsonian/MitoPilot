@@ -290,6 +290,15 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(ID, path, scaffold, blast_accession, blast_accession_auto,
                   blast_species, blast_lineage)
 
+  # Topology is per scaffold. assemblies carries this contig's own value, while
+  # annotate.topology can summarise a whole sample ("fragmented", or a legacy
+  # joined string), and only a per-scaffold value belongs in the Export table or
+  # the summary CSV. Matches what export_files() writes to the defline.
+  unit_topology <- dplyr::tbl(db, "assemblies") |>
+    dplyr::filter(ignore != 1) |>
+    dplyr::select(ID, path, scaffold, scaffold_topology = topology) |>
+    dplyr::collect()
+
   out <- dplyr::tbl(db, "assemble") |>
     dplyr::filter(assemble_lock == 1) |>
     dplyr::select(ID, dplyr::any_of("poor_blast_ref")) |>
@@ -317,7 +326,8 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::relocate(blast_accession, blast_accession_auto, blast_species,
                     blast_lineage, .after = Taxon) |>
     dplyr::left_join(orf_counts, by = unit_key) |>
-    dplyr::left_join(orf_enabled, by = unit_key)
+    dplyr::left_join(orf_enabled, by = unit_key) |>
+    dplyr::left_join(unit_topology, by = unit_key)
 
   # these columns are absent on un-migrated DBs
   if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_
@@ -325,6 +335,17 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
 
   out |>
     dplyr::mutate(
+      # Per-scaffold topology wins, and anything not usable as a topology is
+      # coerced to "linear". Same rule and same order as export_files(), so the
+      # table can never disagree with the defline it is previewing.
+      topology = dplyr::if_else(
+        !is.na(scaffold_topology) & scaffold_topology != "",
+        scaffold_topology, topology
+      ),
+      topology = dplyr::if_else(
+        !is.na(topology) & topology %in% c("circular", "linear"),
+        topology, "linear"
+      ),
       # Ref-align status is only meaningful when this unit has a real BLAST hit
       # (mirrors the Annotate table).
       blast_ref_status = dplyr::if_else(
@@ -347,7 +368,8 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
         as.integer(ORFCount)
       )
     ) |>
-    dplyr::select(-use_orffinder, -dplyr::any_of("linear_complete")) |>
+    dplyr::select(-use_orffinder, -scaffold_topology,
+                  -dplyr::any_of("linear_complete")) |>
     # The SeqID this unit will export under. Counted within (ID, export_group) to
     # mirror export_files(): a sample is only suffixed when it contributes more than
     # one record to the same submission. Also what {seqid} resolves to when the

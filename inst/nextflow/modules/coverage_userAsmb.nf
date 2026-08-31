@@ -19,7 +19,7 @@ process coverage_userAsmb {
     tag "${id}"
 
     input:
-        tuple val(id), path(reads), file(assembly), val(topology), val(assembler)
+        tuple val(id), path(reads), file(assembly), val(topology_map), val(assembler)
 
     output:
         tuple path("${outDir}/*"),     // output files
@@ -35,8 +35,25 @@ process coverage_userAsmb {
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{outDir}
 
-    # rename assembly file and contig(s)
-    awk -v topo="!{topology}" '/^>/ {print ">!{id}.1." ++count[">"] " " topo} !/^>/ {print}' !{assembly} > !{outDir}/!{id}_assembly_1.fasta
+    # Materialize the per-contig topology map in this task's own directory. A
+    # quoted heredoc means its newlines never pass through shell quoting.
+    cat > topology_map.txt <<'TOPOLOGY_MAP_EOF'
+!{topology_map}
+TOPOLOGY_MAP_EOF
+
+    # Rename assembly file and contig(s), stamping each record with its OWN
+    # topology. The map branch is keyed on FILENAME, not the NR==FNR idiom,
+    # which would swallow the assembly's first header if the map were empty.
+    # Records are renamed to id.1.N as we go, so the lookup uses the incoming
+    # contig name; "*" is the default for a sample that was never circularized
+    # and so has no contig names of its own.
+    awk -v mapf=topology_map.txt 'FILENAME == mapf {topo[$1] = $2; next}
+         /^>/ {key = substr($1, 2)
+               t = (key in topo) ? topo[key] : topo["*"]
+               if (t == "") {t = "linear"}
+               print ">!{id}.1." ++count[">"] " " t
+               next}
+         {print}' topology_map.txt !{assembly} > !{outDir}/!{id}_assembly_1.fasta
 
     # calculate coverage
     Rscript -e "MitoPilot::coverage('!{outDir}/!{id}_assembly_1.fasta', '!{reads[0]}', '!{reads[1]}', 'NA', !{task.cpus}, '!{outDir}')"
@@ -75,7 +92,7 @@ process coverage_userAsmb_noReads {
     tag "${id}"
 
     input:
-        tuple val(id), file(assembly), val(topology), val(assembler)
+        tuple val(id), file(assembly), val(topology_map), val(assembler)
 
     output:
         tuple path("${outDir}/*"),     // output files
@@ -91,8 +108,25 @@ process coverage_userAsmb_noReads {
     export OMP_NUM_THREADS=1 # fix for OpenBLAS blas_thread_init error
     mkdir -p !{outDir}
 
-    # rename assembly file and contig(s)
-    awk -v topo="!{topology}" '/^>/ {print ">!{id}.1." ++count[">"] " " topo} !/^>/ {print}' !{assembly} > !{outDir}/!{id}_assembly_1.fasta
+    # Materialize the per-contig topology map in this task's own directory. A
+    # quoted heredoc means its newlines never pass through shell quoting.
+    cat > topology_map.txt <<'TOPOLOGY_MAP_EOF'
+!{topology_map}
+TOPOLOGY_MAP_EOF
+
+    # Rename assembly file and contig(s), stamping each record with its OWN
+    # topology. The map branch is keyed on FILENAME, not the NR==FNR idiom,
+    # which would swallow the assembly's first header if the map were empty.
+    # Records are renamed to id.1.N as we go, so the lookup uses the incoming
+    # contig name; "*" is the default for a sample that was never circularized
+    # and so has no contig names of its own.
+    awk -v mapf=topology_map.txt 'FILENAME == mapf {topo[$1] = $2; next}
+         /^>/ {key = substr($1, 2)
+               t = (key in topo) ? topo[key] : topo["*"]
+               if (t == "") {t = "linear"}
+               print ">!{id}.1." ++count[">"] " " t
+               next}
+         {print}' topology_map.txt !{assembly} > !{outDir}/!{id}_assembly_1.fasta
 
     # derive coverage stats from the assembly (no reads)
     Rscript -e "MitoPilot::coverage('!{outDir}/!{id}_assembly_1.fasta', 'NA', 'NA', 'NA', !{task.cpus}, '!{outDir}')"

@@ -44,7 +44,7 @@
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
 #' @param assembler Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
-#'   Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)
+#'   Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
 #' @param mitofinder Default MitoFinder command line options
 #' @param max_paths Maximum number of assembly paths allowed for a sample to
 #'   continue past the Assemble step (default = 10). Samples exceeding this are
@@ -77,7 +77,7 @@ new_db <- function(
       "--expected-max-size 20000",
       "--target-genome-size 16500"
     ),
-    mitofinder_db = "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
+    mitofinder_db = "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
     mitofinder = paste(
       "--megahit"
     ),
@@ -276,6 +276,8 @@ new_db <- function(
       blast_lineage TEXT,
       synteny_accession TEXT,
       poor_blast_ref TEXT,
+      join_notes TEXT,
+      join_switch INTEGER,
       time_stamp INTEGER,
       PRIMARY KEY (ID)
     );"
@@ -296,6 +298,8 @@ new_db <- function(
           assemble_opts = "default",
           blast_opts = "default",
           poor_blast_ref = NA_character_,
+          join_notes = NA_character_,
+          join_switch = NA_integer_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -440,6 +444,21 @@ new_db <- function(
       qstart INTEGER,
       mapped INTEGER,
       PRIMARY KEY (ID, ref_accession, scaffold)
+    );"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE scaffold_junctions (
+      ID TEXT NOT NULL,
+      junction INTEGER NOT NULL,
+      gap_index INTEGER NOT NULL,
+      start INTEGER,
+      end INTEGER,
+      gap_bases INTEGER,
+      size_known INTEGER,
+      time_stamp INTEGER,
+      PRIMARY KEY (ID, gap_index)
     );"
   )
 

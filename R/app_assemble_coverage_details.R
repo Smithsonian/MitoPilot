@@ -195,7 +195,15 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # Render table ----
     output$table <- renderReactable({
-      rv$focal_assembly |>
+      # Bases that are not A/C/G/T, per contig: join spacers, or ambiguity codes
+      # that came in with a user-supplied or consensus assembly. Column hides
+      # itself when every contig is clean.
+      tbl <- rv$focal_assembly |>
+        dplyr::mutate(
+          ambiguous_bases = vapply(sequence, ambiguous_base_count, integer(1)),
+          .after = "length"
+        )
+      tbl |>
         reactable(
           compact = TRUE,
           wrap = FALSE,
@@ -233,6 +241,10 @@ assembly_coverage_details_server <- function(id, rv) {
             ),
             length = colDef(
               name = "Length (trimmed)", width = 130, align = "center"
+            ),
+            ambiguous_bases = colDef(
+              name = "Ambig. Bases", width = 110, align = "center",
+              show = any(tbl$ambiguous_bases > 0)
             ),
             sequence = colDef(show = FALSE),
             depth = colDef(show = FALSE),
@@ -346,6 +358,14 @@ assembly_coverage_details_server <- function(id, rv) {
         rv$focal_assembly$scaffold[row],
         rv$focal_assembly$ignore[row]
       )
+      # Length/scaffolds track the active contigs, so an un-ignored scaffold
+      # reappears in the Assemble table instead of leaving a stale summary.
+      summ <- refresh_assemble_summary(session$userData$con, rv$updating$ID)
+      summ_update <- data.frame(ID = rv$updating$ID, length = summ$length,
+                                scaffolds = summ$scaffolds)
+      rv$updating$length <- summ$length
+      rv$updating$scaffolds <- summ$scaffolds
+      rv$data <- rv$data |> dplyr::rows_update(summ_update, by = "ID")
       reactable::updateReactable(
         "table",
         data = rv$focal_assembly,
@@ -1467,7 +1487,7 @@ assembly_coverage_details_server <- function(id, rv) {
     }
 
     persist_path0 <- function(seq_str, depth_vec, gc_vec, err_vec, note, blast_row = NULL,
-                              topology = "linear") {
+                              topology = "linear", gap_intervals = NULL) {
       ID <- rv$updating$ID
       dir <- file.path(session$userData$dir_out, ID, "assemble",
                        rv$updating$assemble_opts)
@@ -1486,9 +1506,15 @@ assembly_coverage_details_server <- function(id, rv) {
       dplyr::tbl(session$userData$con, "assemblies") |>
         dplyr::rows_upsert(a, by = c("ID", "path", "scaffold"), copy = T, in_place = T)
 
+      # Spacer intervals for the consensus we just wrote. Passing NULL clears
+      # the sample, which is what a consensus built without a join should do.
+      store_scaffold_junctions(session$userData$con, ID, gap_intervals)
+      # Summary now describes the consensus, not the scaffolds it replaced.
+      summ <- refresh_assemble_summary(session$userData$con, ID)
       update <- data.frame(
         ID = ID, paths = -abs(rv$updating$paths), assemble_lock = 1,
         topology = topology,
+        length = summ$length, scaffolds = summ$scaffolds,
         assemble_notes = compose_edit_notes(note)
       )
       if (!is.null(bl)) update <- cbind(update, bl)
@@ -1619,8 +1645,63 @@ assembly_coverage_details_server <- function(id, rv) {
         uiOutput(ns("join_map_div")),
         div(style = "margin-top: 8px;",
             actionButton(ns("join_build"), "Build joined assembly (Path 0)",
-                         icon = icon("compress"), class = "btn-primary"))
+                         icon = icon("compress"), class = "btn-primary")),
+        uiOutput(ns("join_redo_ui"))
       )
+    })
+
+    # Hand the join back to the pipeline instead of building it here. Lives beside
+    # the manual build because this is where a fragmented sample is actually being
+    # looked at; it only QUEUES the join, which then runs on the next update.
+    output$join_redo_ui <- renderUI({
+      req(isTRUE(rv$asmb_join_eligible))
+      rv$join_redo_tick
+      st <- redo_join_status(session$userData$con, session$userData$dir_out,
+                             rv$updating$ID)
+      note <- function(txt, colour = "#888") {
+        div(style = paste0("font-size: 11px; color: ", colour, "; margin-top: 4px;"),
+            txt)
+      }
+      if (st$state == "queued") {
+        return(div(
+          style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
+          actionButton(ns("join_redo"), "Cancel queued pipeline join",
+                       icon = icon("xmark")),
+          note(paste("Queued. The pipeline re-runs this sample's join from its",
+                     "published assembly output on the next update."), "#0056b3")
+        ))
+      }
+      btn <- actionButton(ns("join_redo"), "Redo join in pipeline",
+                          icon = icon("rotate"))
+      div(
+        style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
+        if (st$state == "ready") btn else shinyjs::disabled(btn),
+        if (st$state == "ready") {
+          note(paste("Queues the join. It runs on the next pipeline update, using",
+                     "the reference and options on record rather than the layout",
+                     "above."))
+        } else {
+          note(st$message, "#a0241c")
+        }
+      )
+    })
+
+    observeEvent(input$join_redo, {
+      ID <- rv$updating$ID
+      st <- redo_join_status(session$userData$con, session$userData$dir_out, ID)
+      # Toggle: a queued sample is unqueued, so a mis-click is undoable here
+      # rather than surviving until the next run.
+      queued <- identical(st$state, "queued")
+      if (!queued && !identical(st$state, "ready")) return()
+      upd <- data.frame(ID = ID,
+                        join_switch = if (queued) NA_integer_ else 1L,
+                        stringsAsFactors = FALSE)
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(upd, unmatched = "ignore", in_place = TRUE,
+                           copy = TRUE, by = "ID")
+      rv$data <- rv$data |> dplyr::rows_update(upd, by = "ID")
+      rv$join_redo_tick <- (rv$join_redo_tick %||% 0L) + 1L
+      trigger("update_assemble_table")
     })
 
     # Reference-mapping visualization (shown once Auto-layout has run).
@@ -1914,11 +1995,24 @@ assembly_coverage_details_server <- function(id, rv) {
           # described a single scaffold's hit and are meaningless for the joined
           # assembly. Use the stored accession, not the raw dropdown, so a reference
           # whose recompute failed cannot mislabel Path 0.
+          # Same refusal as the pipeline: a spacer of invented length cannot be
+          # submitted, so the sample stays fragmented instead.
+          unsized <- unsized_gaps(res$gap_intervals)
+          if (nrow(unsized) > 0) {
+            shinyWidgets::sendSweetAlert(
+              session = session,
+              title = "Cannot join: gap length unknown",
+              text = unsized_join_note(unsized),
+              type = "error"
+            )
+            req(FALSE)
+          }
           join_acc <- rv$join_ref_accession
           if (is.null(join_acc)) join_acc <- input$join_reference
           blast_row <- join_reference_blast_row(join_acc, rows)
           persist_path0(res$seq, res$depth, res$gc, res$errors, res$note,
-                        blast_row, res$topology)
+                        blast_row, res$topology,
+                        gap_intervals = res$gap_intervals)
         }, finally = waiter::waiter_hide())
       })
     })
@@ -1976,11 +2070,15 @@ assembly_coverage_details_server <- function(id, rv) {
         stringr::str_remove_all("\\[Assembly edited:[^\\]]*\\]\\s*") |>
         stringr::str_trim()
 
+      # The consensus those intervals described is gone.
+      store_scaffold_junctions(session$userData$con, ID, NULL)
+      summ <- refresh_assemble_summary(session$userData$con, ID)
       update <- data.frame(
         ID = ID,
         paths = abs(rv$updating$paths),
         assemble_lock = 0L,
         assemble_switch = if (n_remaining > 1L) 3L else 2L,
+        length = summ$length, scaffolds = summ$scaffolds,
         assemble_notes = new_notes
       )
       rv$data <- rv$data |> dplyr::rows_update(update, by = "ID")

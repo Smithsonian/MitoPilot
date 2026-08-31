@@ -3,12 +3,13 @@
 # always visible. Mirrors ASSEMBLE_COL_GROUPS but drops assemble_opts (no
 # assembler step in user-assemble mode).
 ASSEMBLE_COL_GROUPS_USERASMB <- list(
-  Options  = c("pre_opts", "blast_opts"),
+  Options  = c("pre_opts", "find_mito_opts", "circularize_opts", "blast_opts"),
   Stats    = c("trimmed_reads", "mean_length", "topology", "length",
-               "paths", "scaffolds"),
+               "ambiguous_bases", "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes")
+  Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
+               "find_mito_notes", "join_notes")
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -107,6 +108,10 @@ assemble_server_userAsmb <- function(id) {
       pre_opts = dplyr::tbl(session$userData$con, "pre_opts") |>
         dplyr::collect(),
       blast_opts = dplyr::tbl(session$userData$con, "blast_opts") |>
+        dplyr::collect(),
+      circularize_opts = dplyr::tbl(session$userData$con, "circularize_opts") |>
+        dplyr::collect(),
+      find_mito_opts = dplyr::tbl(session$userData$con, "find_mito_opts") |>
         dplyr::collect(),
       data = fetch_assemble_data_userAsmb(),
       updating = NULL
@@ -267,7 +272,7 @@ assemble_server_userAsmb <- function(id) {
             ),
             topology = colDef(
               show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
-              width = 100,
+              minWidth = 140,
               name = "Topology"
             ),
             assembly = colDef(
@@ -283,6 +288,44 @@ assemble_server_userAsmb <- function(id) {
               html = T,
               width = 130,
               cell = rt_link(ns("set_pre_opts"))
+            ),
+            find_mito_opts = colDef(
+              show = TRUE, class = .grp("find_mito_opts"), headerClass = .grp("find_mito_opts"),
+              name = "Find Mito Opts.",
+              html = T,
+              width = 140,
+              cell = rt_link(ns("set_find_mito_opts"))
+            ),
+            # The note doubles as the link to the search evidence.
+            find_mito_notes = colDef(
+              show = TRUE, class = .grp("find_mito_notes"), headerClass = .grp("find_mito_notes"),
+              name = "Mito Search",
+              minWidth = 180,
+              html = T,
+              cell = rt_link(ns("show_mito_candidates"))
+            ),
+            circularize_opts = colDef(
+              show = TRUE, class = .grp("circularize_opts"), headerClass = .grp("circularize_opts"),
+              name = "Circularize Opts.",
+              html = T,
+              width = 140,
+              cell = rt_link(ns("set_circularize_opts"))
+            ),
+            # The note doubles as the link to the circularization evidence.
+            circularize_notes = colDef(
+              show = TRUE, class = .grp("circularize_notes"), headerClass = .grp("circularize_notes"),
+              name = "Circularization",
+              minWidth = 160,
+              html = T,
+              cell = rt_link(ns("show_circularize_details"))
+            ),
+            join_notes = colDef(
+              show = TRUE, class = .grp("join_notes"), headerClass = .grp("join_notes"),
+              name = "Scaffold Join Notes",
+              html = TRUE,
+              align = "left",
+              minWidth = 150,
+              cell = rt_longtext()
             ),
             blast_opts = colDef(
               show = T, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
@@ -310,6 +353,11 @@ assemble_server_userAsmb <- function(id) {
               filterable = FALSE,
               html = TRUE,
               cell = rt_longtext()
+            ),
+            ambiguous_bases = colDef(
+              show = TRUE, class = .grp("ambiguous_bases"), headerClass = .grp("ambiguous_bases"),
+              width = 110, name = "Ambig. Bases", align = "center",
+              filterable = FALSE
             ),
             paths = colDef(
               show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
@@ -542,21 +590,18 @@ assemble_server_userAsmb <- function(id) {
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_lock) |>
         dplyr::slice(selected())
-      ## Ensure single assemble ---
-      # TODO - could relax this constraint
-      assemblies <- dplyr::tbl(session$userData$con, "assemblies") |>
-        dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
-        dplyr::pull(ID)
-      if (any(duplicated(assemblies))) {
-        shinyWidgets::sendSweetAlert(
-          title = "Multiple assemblies detected.",
-          text = "Only one assembly 'path' for each sample can be locked for annotation. Please open the assembly details and 'ignore' all but one assembly or use the consensus trimming feature.",
-          type = "warning"
-        )
-        req(F)
-      }
+      # Locking advances every non-ignored contig of the sample. Each contig is
+      # its own annotation unit and was seeded its own annotate row by WF1, so a
+      # fragmented user assembly no longer has to be reduced to one contig.
       lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
       rv$updating$assemble_lock <- as.numeric(!lock_current)
+      if (lock_current == 0) {
+        # A locked sample is never admitted by WF1 (its query requires
+        # assemble_lock = 0), so a pending join redo could never run and the
+        # flag would sit at 1 forever, keeping the Update modal reporting work
+        # that cannot be done. Locking resolves it.
+        rv$updating$join_switch <- NA_integer_
+      }
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
           rv$updating,
@@ -567,10 +612,29 @@ assemble_server_userAsmb <- function(id) {
         )
       rv$data <- rv$data |>
         dplyr::rows_update(rv$updating, by = "ID")
+      # One click can now hand several contigs to annotation, so say how many.
+      # The lock itself is still per sample; the units are what WF2 will run.
+      if (lock_current == 0) {
+        n_units <- dplyr::tbl(session$userData$con, "assemblies") |>
+          dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
+          dplyr::count() |>
+          dplyr::pull(n)
+        shiny::showNotification(
+          paste0(
+            "Locked ", nrow(rv$updating),
+            ngettext(nrow(rv$updating), " sample", " samples"),
+            ": ", n_units, ngettext(n_units, " contig", " contigs"),
+            " will be annotated."
+          ),
+          type = "message",
+          duration = 5
+        )
+      }
       trigger("update_assemble_table")
       trigger("refresh_annotate")
       trigger("refresh_export")
     })
+
 
     # Set Pre-process Opts ----
     observeEvent(input$set_pre_opts, {
@@ -712,19 +776,245 @@ assemble_server_userAsmb <- function(id) {
       trigger("update_assemble_table")
     })
 
-    # Set BLAST Opts ----
-    observeEvent(input$set_blast_opts, {
-      row <- as.numeric(input$set_blast_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
-      rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      blast_opts_modal(rv)
+    # Set Mitogenome Search Opts ----
+    opts_modal_server(
+      rv, "find_mito_opts",
+      fields = c("find_mitogenome", "find_mitofinder_db", "find_min_contig_length",
+                 "find_min_identity", "find_min_aligned_length",
+                 "find_min_aligned_fraction", "find_max_candidates",
+                 "find_min_genes", "find_opts_cpus", "find_opts_memory"),
+      label = "mitogenome search options",
+      modal = find_mito_opts_modal,
+      save = function() {
+        # A search with no reference database can never confirm anything, so
+        # refuse to save that combination rather than fail mid-run.
+        db_path <- trimws(input$find_mitofinder_db %||% "")
+        if (isTRUE(input$find_mitogenome) && (!nzchar(db_path) || !file.exists(db_path))) {
+          shinyWidgets::sendSweetAlert(
+            title = "MitoFinder database not found",
+            text = paste0(
+              "The mitogenome search confirms candidates with MitoFinder, which needs ",
+              "a GenBank reference database. Build one for your clade with ",
+              "custom_assembly_db(db_type = \"mitofinder\") and enter the path to its ",
+              ".gb file."
+            ),
+            type = "error"
+          )
+          req(F)
+        }
+        dplyr::tbl(session$userData$con, "find_mito_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              find_mito_opts       = req(input$find_mito_opts),
+              attempt              = as.integer(isTRUE(input$find_mitogenome)),
+              mitofinder_db        = db_path,
+              min_contig_length    = as.integer(input$find_min_contig_length %||% 500L),
+              min_identity         = as.numeric(input$find_min_identity %||% 70),
+              min_aligned_length   = as.integer(input$find_min_aligned_length %||% 300L),
+              min_aligned_fraction = as.numeric(input$find_min_aligned_fraction %||% 0.5),
+              max_candidates       = as.integer(input$find_max_candidates %||% 20L),
+              min_genes            = as.integer(input$find_min_genes %||% 3L),
+              cpus                 = as.integer(input$find_opts_cpus %||% 4L),
+              memory               = as.integer(input$find_opts_memory %||% 8L)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "find_mito_opts"
+          )
+        rv$find_mito_opts <- dplyr::tbl(session$userData$con, "find_mito_opts") |>
+          dplyr::collect()
+      },
+      input = input, session = session, selected = selected
+    )
+    observeEvent(input$show_mito_candidates, {
+      mito_candidates_modal(rv$data$ID[as.numeric(input$show_mito_candidates)])
     })
+    observeEvent(input$show_circularize_details, {
+      circularize_details_modal(
+        rv, rv$data$ID[as.numeric(input$show_circularize_details)]
+      )
+    })
+
+    # Paging between contigs: the selection lives in rv, so the body and both
+    # plots follow it.
+    observeEvent(input$circ_contig, {
+      req(input$circ_contig %in% as.character(rv$circ_overlaps$contig))
+      rv$circ_contig <- input$circ_contig
+      circularize_load_evidence(rv, session = session)
+    })
+
+    output$circ_body <- renderUI({
+      ev <- req(rv$circ_evidence)
+      circularize_details_body(ev$overlap, ev$depth, session$ns)
+    })
+
+    output$circ_schematic <- renderPlot({
+      ev <- req(rv$circ_evidence)$overlap
+      blocks <- data.frame(
+        xmin = c(ev$qstart, ev$sstart), xmax = c(ev$qend, ev$send),
+        label = factor(c("5' end", "3' end"), levels = c("5' end", "3' end"))
+      )
+      ggplot2::ggplot() +
+        ggplot2::geom_rect(
+          ggplot2::aes(xmin = 1, xmax = ev$send, ymin = 0.45, ymax = 0.55),
+          fill = "grey85"
+        ) +
+        ggplot2::geom_rect(
+          data = blocks,
+          ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0.3, ymax = 0.7,
+                       fill = label)
+        ) +
+        ggplot2::scale_fill_manual(values = c("5' end" = "#0056b3",
+                                              "3' end" = "#FF6670"),
+                                   name = NULL) +
+        ggplot2::scale_y_continuous(limits = c(0, 1), breaks = NULL) +
+        ggplot2::labs(x = "contig position (bp)", y = NULL) +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(legend.position = "bottom",
+                       panel.grid.major.y = ggplot2::element_blank())
+    })
+
+    output$circ_depth <- renderPlot({
+      ev <- req(rv$circ_evidence)
+      d <- ev$depth
+      req(nrow(d) > 0)
+      long <- rbind(
+        data.frame(rel_position = d$rel_position, depth = d$depth,
+                   track = "assembly depth"),
+        data.frame(rel_position = d$rel_position, depth = d$depth_spanning,
+                   track = "crosses the seam")
+      )
+      ggplot2::ggplot(long, ggplot2::aes(x = rel_position, y = depth,
+                                         color = track)) +
+        ggplot2::annotate("rect",
+                          xmin = -ev$overlap$min_overhang,
+                          xmax = ev$overlap$min_overhang,
+                          ymin = 0, ymax = Inf, alpha = 0.12, fill = "#0056b3") +
+        ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
+                            color = "grey40") +
+        ggplot2::geom_line() +
+        ggplot2::scale_color_manual(values = c("assembly depth" = "grey50",
+                                               "crosses the seam" = "#0056b3"),
+                                    name = NULL) +
+        ggplot2::labs(
+          x = "bases from the seam (negative = 3' end, positive = 5' end)",
+          y = "depth"
+        ) +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(legend.position = "bottom")
+    })
+
+    observeEvent(input$find_mito_opts, ignoreInit = T, {
+      exists <- input$find_mito_opts %in% rv$find_mito_opts$find_mito_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_find_mito_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$find_mito_opts[
+          rv$find_mito_opts$find_mito_opts == input$find_mito_opts,
+        ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "find_mitogenome",
+          value = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+        updateTextInput(inputId = "find_mitofinder_db", value = cur$mitofinder_db %||% "")
+        updateNumericInput(inputId = "find_min_contig_length", value = cur$min_contig_length)
+        updateNumericInput(inputId = "find_min_identity", value = cur$min_identity)
+        updateNumericInput(inputId = "find_min_aligned_length", value = cur$min_aligned_length)
+        updateNumericInput(inputId = "find_min_aligned_fraction", value = cur$min_aligned_fraction)
+        updateNumericInput(inputId = "find_max_candidates", value = cur$max_candidates)
+        updateNumericInput(inputId = "find_min_genes", value = cur$min_genes)
+        updateNumericInput(inputId = "find_opts_cpus", value = cur$cpus)
+        updateNumericInput(inputId = "find_opts_memory", value = cur$memory)
+        shinyjs::toggle(
+          id = "find_mito_params_group",
+          condition = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+      }
+    })
+    # Parameters are meaningless with the search switched off
+    observeEvent(input$find_mitogenome, ignoreInit = T, {
+      shinyjs::toggle(
+        id = "find_mito_params_group",
+        condition = isTRUE(input$find_mitogenome)
+      )
+    })
+
+    # Set Circularization Opts ----
+    opts_modal_server(
+      rv, "circularize_opts",
+      fields = c("attempt_circularization", "circ_min_overlap", "circ_min_identity",
+                 "circ_min_junction_reads", "circ_min_overhang",
+                 "circ_opts_cpus", "circ_opts_memory"),
+      label = "circularization options",
+      modal = circularize_opts_modal,
+      save = function() {
+        # The read-based fields are absent from the modal in a no-raw-data
+        # project, so fall back to the stored values rather than writing NULL.
+        cur <- rv$circularize_opts[
+          rv$circularize_opts$circularize_opts == input$circularize_opts,
+        ]
+        dplyr::tbl(session$userData$con, "circularize_opts") |>
+          dplyr::rows_upsert(
+            data.frame(
+              circularize_opts   = req(input$circularize_opts),
+              attempt            = as.integer(isTRUE(input$attempt_circularization)),
+              min_overlap        = as.integer(input$circ_min_overlap %||% 220L),
+              min_identity       = as.numeric(input$circ_min_identity %||% 99),
+              min_junction_reads = as.integer(
+                input$circ_min_junction_reads %||% cur$min_junction_reads %||% 5L
+              ),
+              min_overhang       = as.integer(
+                input$circ_min_overhang %||% cur$min_overhang %||% 30L
+              ),
+              cpus               = as.integer(input$circ_opts_cpus %||% 4L),
+              memory             = as.integer(input$circ_opts_memory %||% 8L)
+            ),
+            in_place = TRUE,
+            copy = TRUE,
+            by = "circularize_opts"
+          )
+        rv$circularize_opts <- dplyr::tbl(session$userData$con, "circularize_opts") |>
+          dplyr::collect()
+      },
+      input = input, session = session, selected = selected
+    )
+    observeEvent(input$circularize_opts, ignoreInit = T, {
+      exists <- input$circularize_opts %in% rv$circularize_opts$circularize_opts
+      shinyWidgets::updatePrettyCheckbox(
+        inputId = "edit_circularize_opts",
+        value = !exists
+      )
+      if (exists) {
+        cur <- rv$circularize_opts[
+          rv$circularize_opts$circularize_opts == input$circularize_opts,
+        ]
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "attempt_circularization",
+          value = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+        updateNumericInput(inputId = "circ_min_overlap", value = cur$min_overlap)
+        updateNumericInput(inputId = "circ_min_identity", value = cur$min_identity)
+        updateNumericInput(inputId = "circ_min_junction_reads", value = cur$min_junction_reads)
+        updateNumericInput(inputId = "circ_min_overhang", value = cur$min_overhang)
+        updateNumericInput(inputId = "circ_opts_cpus", value = cur$cpus)
+        updateNumericInput(inputId = "circ_opts_memory", value = cur$memory)
+        shinyjs::toggle(
+          id = "circ_params_group",
+          condition = isTRUE(as.logical(cur$attempt %||% 0L))
+        )
+      }
+    })
+    # Thresholds and resources are meaningless with the step switched off
+    observeEvent(input$attempt_circularization, ignoreInit = T, {
+      shinyjs::toggle(
+        id = "circ_params_group",
+        condition = isTRUE(input$attempt_circularization)
+      )
+    })
+
+    # Set BLAST Opts ----
     observeEvent(input$blast_opts, ignoreInit = T, {
       exists <- input$blast_opts %in% rv$blast_opts$blast_opts
       shinyWidgets::updatePrettyCheckbox(
@@ -773,45 +1063,6 @@ assemble_server_userAsmb <- function(id) {
         }
       }
     })
-    observeEvent(input$edit_blast_opts, ignoreInit = T, {
-      shinyjs::toggleState("run_blast",       condition = input$edit_blast_opts)
-      shinyjs::toggleState("taxids",          condition = input$edit_blast_opts)
-      shinyjs::toggleState("remote_blast",    condition = input$edit_blast_opts)
-      shinyjs::toggleState("remote_fallback", condition = input$edit_blast_opts)
-      shinyjs::toggleState("entrez_query",    condition = input$edit_blast_opts)
-      shinyjs::toggleState("max_target_seqs", condition = input$edit_blast_opts)
-      shinyjs::toggleState("extra_opts",      condition = input$edit_blast_opts)
-      if (input$edit_blast_opts && input$blast_opts %in% rv$data$blast_opts) {
-        rv$updating_indirect <- rv$data |>
-          dplyr::filter(blast_opts == input$blast_opts) |>
-          dplyr::anti_join(rv$updating, by = "ID")
-        if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
-            type = "warning"
-          )
-          shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
-          req(F)
-        }
-        if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_blast_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit BLAST options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
-          )
-        }
-      } else {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-      }
-    })
-    observeEvent(input$editing_blast_opts_indirect, ignoreInit = T, {
-      if (!input$editing_blast_opts_indirect) {
-        rv$updating_indirect <- rv$updating |> dplyr::slice(0)
-        shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
-      }
-    })
     observeEvent(input$run_blast, ignoreInit = T, {
       if (isTRUE(input$run_blast)) {
         shinyjs::show(id = "blast_taxids_group")
@@ -834,8 +1085,13 @@ assemble_server_userAsmb <- function(id) {
         condition = isTRUE(input$run_blast) && isTRUE(input$remote_blast)
       )
     })
-    observeEvent(input$update_blast_opts, ignoreInit = T, {
-      if (input$edit_blast_opts) {
+    opts_modal_server(
+      rv, "blast_opts",
+      fields = c("run_blast", "taxids", "remote_blast", "remote_fallback",
+                 "entrez_query", "max_target_seqs", "extra_opts"),
+      label = "BLAST options",
+      modal = blast_opts_modal,
+      save = function() {
         # Numeric NCBI taxon IDs only; validated here, with no network lookup, so
         # the save path keeps working offline.
         taxids <- paste(
@@ -886,26 +1142,9 @@ assemble_server_userAsmb <- function(id) {
           )
         rv$blast_opts <- dplyr::tbl(session$userData$con, "blast_opts") |>
           dplyr::collect()
-      }
-      update <- data.frame(
-        ID = c(rv$updating$ID, rv$updating_indirect$ID),
-        blast_opts = input$blast_opts,
-        assemble_switch = 1L
-      )
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(
-          update,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = "ID"
-        )
-      rv$data <- rv$data |>
-        dplyr::rows_update(update, by = "ID")
-      rv$updating <- rv$updating_indirect <- NULL
-      removeModal()
-      trigger("update_assemble_table")
-    })
+      },
+      input = input, session = session, selected = selected
+    )
 
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {

@@ -17,7 +17,9 @@
 #'     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
 #'     to the GitHub-hosted reference db).
 #'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
-#'     normalized to TEXT), BLAST result columns, "blast_opts".
+#'     normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
+#'     "join_switch", "circularize_opts"/"circularize_notes",
+#'     "find_mito_opts"/"find_mito_notes".
 #'   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
 #'     "remote_fallback" (any parameter set carrying a non-default Entrez query is
 #'     switched to the remote search, with a warning, since the local database
@@ -25,7 +27,9 @@
 #'   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
 #'     column as INTEGER so assembly does not crash).
 #'   \item New tables: "orf_opts", "blast_opts", "export_opts",
-#'     "scaffold_mappings", "assemblies", "assembly_blast", and the
+#'     "scaffold_mappings", "scaffold_junctions",
+#'     "assemblies", "assembly_blast", "circularize_opts",
+#'     "find_mito_opts", "mito_candidates", and the
 #'     "blast_ref_annotations"/"blast_ref_sequences"/"blast_ref_alignment" set.
 #' }
 #'
@@ -82,6 +86,24 @@ backwards_compatibility <- function(
   curate_opts_table <- DBI::dbReadTable(con, "curate_opts") # read in curate opts table
 
   assemble_table <- DBI::dbReadTable(con, "assemble")
+
+  # The circularization and mitogenome-search schema only belongs to
+  # user-assembly projects, whose mapping file carries an "assembly" column.
+  user_asmb <- is_user_asmb(con)
+  user_asmb_current <- !user_asmb || (
+    all(c("circularize_opts", "find_mito_opts", "mito_candidates",
+          "circularize_overlap", "circularize_depth") %in%
+          DBI::dbListTables(con)) &&
+      all(c("circularize_opts", "circularize_notes", "find_mito_opts",
+            "find_mito_notes") %in% names(assemble_table)) &&
+      isTRUE(tryCatch(
+        all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right",
+              "contig_length", "contig") %in%
+              DBI::dbListFields(con, "circularize_overlap")) &&
+          "contig" %in% DBI::dbListFields(con, "circularize_depth"),
+        error = function(e) FALSE
+      ))
+  )
 
   # read .config; the .config is regenerated wholesale from the current built-in
   # template (see migrate_config()) rather than patched line by line. Container
@@ -161,6 +183,8 @@ backwards_compatibility <- function(
       "blast_ref_override" %in% DBI::dbListTables(con) &&
       !any(c("export_group", "export_time_stamp") %in% names(samples_table)) &&
       "poor_blast_ref" %in% names(assemble_table) &&
+      "join_notes" %in% names(assemble_table) &&
+      "join_switch" %in% names(assemble_table) &&
       "ID_verified" %in% names(annotate_table) &&
       "reviewed" %in% names(annotate_table) &&
       "blast_accession" %in% names(assemble_table) &&
@@ -217,6 +241,7 @@ backwards_compatibility <- function(
       )) &&
       !stale_ref_branch &&
       "export_opts" %in% DBI::dbListTables(con) &&
+      user_asmb_current &&
       "synteny_accession" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
@@ -234,6 +259,14 @@ backwards_compatibility <- function(
       )) &&
       isTRUE(tryCatch(
         "scaffold" %in% DBI::dbListFields(con, "blast_ref_alignment"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        DBI::dbExistsTable(con, "scaffold_junctions"),
+        error = function(e) FALSE
+      )) &&
+      isTRUE(tryCatch(
+        "gap_index" %in% DBI::dbListFields(con, "scaffold_junctions"),
         error = function(e) FALSE
       )) &&
       export_default_current)
@@ -406,6 +439,19 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "UPDATE assemble_opts SET join_scaffolds = 0 WHERE join_scaffolds IS NULL")
   }
 
+  # join_notes/join_switch: regular-pipeline scaffold-join state and redo
+  # trigger, kept off assemble_notes/assemble_switch which the coverage
+  # workflow and assembly redo already own.
+  assemble_fields_early <- DBI::dbListFields(con, "assemble")
+  if (!("join_notes" %in% assemble_fields_early)) {
+    message("added 'join_notes' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN join_notes TEXT")
+  }
+  if (!("join_switch" %in% assemble_fields_early)) {
+    message("added 'join_switch' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN join_switch INTEGER")
+  }
+
   # precomputed scaffold->reference mappings table (for the in-app join editor)
   if (!DBI::dbExistsTable(con, "scaffold_mappings")) {
     message("added 'scaffold_mappings' table")
@@ -425,6 +471,188 @@ backwards_compatibility <- function(
         PRIMARY KEY (ID, ref_accession, scaffold)
       );"
     )
+  }
+
+  # What the scaffold join did at each junction. Export needs it to tell a gap
+  # sized from the reference from a placeholder for a junction it could not size.
+  # Derived from the last join, so an out-of-date shape is rebuilt rather than
+  # migrated; the next join repopulates it.
+  if (DBI::dbExistsTable(con, "scaffold_junctions") &&
+      !all(c("gap_index", "start", "end") %in%
+           DBI::dbListFields(con, "scaffold_junctions"))) {
+    message("rebuilt 'scaffold_junctions' table")
+    DBI::dbExecute(con, "DROP TABLE scaffold_junctions")
+  }
+  if (!DBI::dbExistsTable(con, "scaffold_junctions")) {
+    message("added 'scaffold_junctions' table")
+    DBI::dbExecute(
+      con,
+      "CREATE TABLE scaffold_junctions (
+        ID TEXT NOT NULL,
+        junction INTEGER NOT NULL,
+        gap_index INTEGER NOT NULL,
+        start INTEGER,
+        end INTEGER,
+        gap_bases INTEGER,
+        size_known INTEGER,
+        time_stamp INTEGER,
+        PRIMARY KEY (ID, gap_index)
+      );"
+    )
+  }
+
+
+  # Circularization and mitogenome-search schema; user-assembly projects only,
+  # the regular pipeline has neither step.
+  if (user_asmb) {
+    # circularization options for user-supplied assemblies (WF1 circularize step)
+    if (!DBI::dbExistsTable(con, "circularize_opts")) {
+      message("added 'circularize_opts' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE circularize_opts (
+          circularize_opts TEXT NOT NULL,
+          attempt INTEGER,
+          min_overlap INTEGER,
+          min_identity REAL,
+          min_junction_reads INTEGER,
+          min_overhang INTEGER,
+          cpus INTEGER,
+          memory INTEGER,
+          PRIMARY KEY (circularize_opts)
+        );"
+      )
+      DBI::dbExecute(
+        con,
+        "INSERT INTO circularize_opts VALUES ('default', 0, 220, 99, 5, 30, 4, 8)"
+      )
+    }
+    assemble_fields <- DBI::dbListFields(con, "assemble")
+    if (!("circularize_opts" %in% assemble_fields)) {
+      message("added 'circularize_opts' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_opts TEXT")
+      DBI::dbExecute(con, "UPDATE assemble SET circularize_opts = 'default'")
+    }
+    if (!("circularize_notes" %in% assemble_fields)) {
+      message("added 'circularize_notes' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN circularize_notes TEXT")
+    }
+
+    # mitogenome-search options for user-supplied assemblies (WF1 find_mito step)
+    if (!DBI::dbExistsTable(con, "find_mito_opts")) {
+      message("added 'find_mito_opts' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE find_mito_opts (
+          find_mito_opts TEXT NOT NULL,
+          attempt INTEGER,
+          mitofinder_db TEXT,
+          min_contig_length INTEGER,
+          min_identity REAL,
+          min_aligned_length INTEGER,
+          min_aligned_fraction REAL,
+          max_candidates INTEGER,
+          min_genes INTEGER,
+          cpus INTEGER,
+          memory INTEGER,
+          PRIMARY KEY (find_mito_opts)
+        );"
+      )
+      DBI::dbExecute(
+        con,
+        "INSERT INTO find_mito_opts VALUES ('default', 0, NULL, 500, 70, 300, 0.5, 20, 3, 4, 8)"
+      )
+    }
+    if (!DBI::dbExistsTable(con, "mito_candidates")) {
+      message("added 'mito_candidates' table")
+      DBI::dbExecute(
+        con,
+        "CREATE TABLE mito_candidates (
+          ID TEXT NOT NULL,
+          contig TEXT NOT NULL,
+          length INTEGER,
+          accession TEXT,
+          pident REAL,
+          aligned_length INTEGER,
+          aligned_fraction REAL,
+          genes INTEGER,
+          rank INTEGER,
+          selected INTEGER,
+          reason TEXT,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, contig)
+        );"
+      )
+    }
+    create_overlap <- "CREATE TABLE circularize_overlap (
+          ID TEXT NOT NULL,
+          contig TEXT NOT NULL,
+          qstart INTEGER,
+          qend INTEGER,
+          sstart INTEGER,
+          send INTEGER,
+          length INTEGER,
+          pident REAL,
+          mismatches INTEGER,
+          aln_query TEXT,
+          aln_subject TEXT,
+          q_ctx_left TEXT,
+          q_ctx_right TEXT,
+          s_ctx_left TEXT,
+          s_ctx_right TEXT,
+          accepted INTEGER,
+          reason TEXT,
+          contig_length INTEGER,
+          trimmed INTEGER,
+          junction_reads INTEGER,
+          min_junction_reads INTEGER,
+          window_bp INTEGER,
+          min_overhang INTEGER,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, contig)
+        );"
+    create_depth <- "CREATE TABLE circularize_depth (
+          ID TEXT NOT NULL,
+          contig TEXT NOT NULL,
+          position INTEGER NOT NULL,
+          rel_position INTEGER,
+          depth INTEGER,
+          depth_spanning INTEGER,
+          time_stamp INTEGER,
+          PRIMARY KEY (ID, contig, position)
+        );"
+    if (!DBI::dbExistsTable(con, "circularize_overlap")) {
+      message("added 'circularize_overlap' table")
+      DBI::dbExecute(con, create_overlap)
+    } else if (!("contig" %in% DBI::dbListFields(con, "circularize_overlap"))) {
+      # The primary key widens to (ID, contig), which SQLite cannot alter in
+      # place. Safe to recreate: this evidence is regenerated by the next
+      # circularization run and holds no user decisions.
+      message("rebuilt 'circularize_overlap' table with a per-contig key; ",
+              "existing overlap evidence was discarded and will be rebuilt ",
+              "on the next circularization run")
+      DBI::dbExecute(con, "DROP TABLE circularize_overlap")
+      DBI::dbExecute(con, create_overlap)
+    }
+    if (!DBI::dbExistsTable(con, "circularize_depth")) {
+      message("added 'circularize_depth' table")
+      DBI::dbExecute(con, create_depth)
+    } else if (!("contig" %in% DBI::dbListFields(con, "circularize_depth"))) {
+      message("rebuilt 'circularize_depth' table with a per-contig key; ",
+              "existing junction depth evidence was discarded and will be ",
+              "rebuilt on the next circularization run")
+      DBI::dbExecute(con, "DROP TABLE circularize_depth")
+      DBI::dbExecute(con, create_depth)
+    }
+    if (!("find_mito_opts" %in% assemble_fields)) {
+      message("added 'find_mito_opts' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_opts TEXT")
+      DBI::dbExecute(con, "UPDATE assemble SET find_mito_opts = 'default'")
+    }
+    if (!("find_mito_notes" %in% assemble_fields)) {
+      message("added 'find_mito_notes' column to assemble table")
+      DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN find_mito_notes TEXT")
+    }
   }
 
   # if reviewed column doesn't exist, add it
@@ -1045,7 +1273,7 @@ backwards_compatibility <- function(
   # if mitofinder_db column doesn't exist, add it
   if(!("mitofinder_db" %in% names(assemble_opts_table))){
     message("added 'mitofinder_db' column to assemble_opts table")
-    assemble_opts_table$mitofinder_db <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/devel-DJM/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
+    assemble_opts_table$mitofinder_db <- rep("https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
                                              nrow(assemble_opts_table))
     # add new columns to database
     glue::glue_sql(
@@ -1883,6 +2111,22 @@ backwards_compatibility <- function(
 #'
 #' @param con An open connection to a project database.
 #' @noRd
+#' Is this a user-assembly project?
+#'
+#' User-assembly projects take a FASTA per sample, so their mapping file (and
+#' therefore the samples table) carries an "assembly" column that the regular
+#' read-based pipeline never has.
+#'
+#' @param con database connection
+#'
+#' @noRd
+is_user_asmb <- function(con) {
+  isTRUE(tryCatch(
+    "assembly" %in% DBI::dbListFields(con, "samples"),
+    error = function(e) FALSE
+  ))
+}
+
 schema_gaps <- function(con) {
   has <- function(expr) isTRUE(tryCatch(expr, error = function(e) FALSE))
   gaps <- character(0)
@@ -1911,6 +2155,29 @@ schema_gaps <- function(con) {
   if (has(any(c("text", "real") %in%
               DBI::dbGetQuery(con, "SELECT DISTINCT typeof(genetic_code) AS t FROM samples")$t))) {
     gaps <- c(gaps, "the samples.genetic_code column is not stored as an integer")
+  }
+  if (!has(all(c("join_notes", "join_switch") %in% DBI::dbListFields(con, "assemble")))) {
+    gaps <- c(gaps, "the assemble table lacks the scaffold-join columns ('join_notes', 'join_switch')")
+  }
+  if (is_user_asmb(con) &&
+      (!has(all(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+                DBI::dbListTables(con))) ||
+       !has(all(c("circularize_opts", "circularize_notes", "find_mito_opts",
+                  "find_mito_notes") %in% DBI::dbListFields(con, "assemble"))))) {
+    gaps <- c(gaps, "the circularization and mitogenome-search tables are missing")
+  }
+  if (!has(DBI::dbExistsTable(con, "scaffold_junctions")) ||
+      !has("gap_index" %in% DBI::dbListFields(con, "scaffold_junctions"))) {
+    gaps <- c(gaps, "the 'scaffold_junctions' table is missing or out of date")
+  }
+  if (is_user_asmb(con) &&
+      (!has(all(c("circularize_overlap", "circularize_depth") %in%
+                DBI::dbListTables(con))) ||
+       !has(all(c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right",
+                  "contig_length", "contig") %in%
+                DBI::dbListFields(con, "circularize_overlap"))) ||
+       !has("contig" %in% DBI::dbListFields(con, "circularize_depth")))) {
+    gaps <- c(gaps, "the circularization evidence tables are missing or out of date")
   }
   gaps
 }

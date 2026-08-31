@@ -251,6 +251,42 @@ The HTML report is the file to read first.
 It opens with every flagged outlier in one table, then shows the alignment for
 each protein-coding gene across the group. Poor annotations tend to be obvious here.
 
+### Sequences containing unknown bases
+
+Where MitoPilot joins a fragmented assembly, it inserts `N`s between the pieces
+to represent the gap. NCBI accepts gapped mitogenome submissions, on one
+condition: **the number of `N`s must be the estimated gap length**. MitoPilot
+therefore only joins across a junction whose size it can estimate from the
+reference. A sample with a junction it cannot size is left fragmented, with a
+note saying so; its contigs can be submitted as several sequences under one
+BioSample, which NCBI also accepts.
+
+On export, every run of `N`s that MitoPilot inserted is written as a `gap`
+feature carrying its estimated length, however short the run:
+
+```
+6009	6020	gap
+			estimated_length	12
+```
+
+That is all NCBI needs. The fuller `assembly_gap` feature belongs to
+whole-genome assembly submissions and is not used here.
+
+A feature spanning such a gap stays a **single continuous feature**, since the
+gap length is an estimate rather than unknown. A protein-coding gene also
+carries a note saying how many bases are unknown, for example `contains 12 bases
+of unknown sequence`, and codons the gap leaves unreadable translate to `X`.
+
+Runs of `N`s that were already in a sequence you supplied are exported as they
+are but are **not** declared as gaps: they may be ambiguous base calls rather
+than a gap, and MitoPilot has nothing to say about them. They still contribute
+the note on any coding feature that contains them.
+
+Watch the export messages for two things. A declared gap longer than 1000 bp is
+over the INSDC limit, and GenBank will query it. A feature whose start or end
+falls inside a gap is rejected outright: move the boundary in the annotation
+editor so it stops at the edge of the gap.
+
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
 <strong>Getting files off the cluster.</strong> Export runs inside the app rather

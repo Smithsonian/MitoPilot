@@ -744,3 +744,35 @@ get_assembly <- function(ID, path, scaffold = NULL, con) {
     dplyr::pull(sequence, name = "seq_name") |>
     Biostrings::DNAStringSet()
 }
+
+#' Rewrite a sample's assemble summary from its active contigs
+#'
+#' `assemble.length` and `assemble.scaffolds` describe what is currently active,
+#' so every action that changes which contigs are ignored has to refresh them.
+#' Lengths are listed in full, longest first: three equal fragments read as
+#' "6008;6008;6008" rather than collapsing to a single value that looks like a
+#' total.
+#'
+#' @param con database connection
+#' @param id sample ID
+#'
+#' @return (invisibly) list(length, scaffolds) as written
+#'
+#' @noRd
+refresh_assemble_summary <- function(con, id) {
+  lens <- DBI::dbGetQuery(
+    con, "SELECT length FROM assemblies WHERE ID = ? AND ignore = 0",
+    params = list(id)
+  )$length
+  lens <- sort(as.integer(lens), decreasing = TRUE)
+
+  out <- list(
+    length = if (length(lens)) paste(lens, collapse = ";") else NA_character_,
+    scaffolds = length(lens)
+  )
+  DBI::dbExecute(
+    con, "UPDATE assemble SET length = ?, scaffolds = ? WHERE ID = ?",
+    params = list(out$length, out$scaffolds, id)
+  )
+  invisible(out)
+}

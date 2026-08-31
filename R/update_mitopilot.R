@@ -20,32 +20,24 @@ nextflow_cmd <- function(
     stop("Invalid workflow.")
   }
 
-  if(userAsmbs){
-    cmd <- c(
-      "-log", "{file.path(path, '.logs', 'nextflow.log')}",
-      "run", "{source}",
-      #"-ansi-log", "false",
-      "-c", "{file.path(path, '.config')}",
-      "-entry", "{ifelse(workflow == 'assemble', 'WF1_userAsmb', 'WF2')}",
-      # userAsmb assemblies are a single user-provided genome: WF2 validates all
-      # their contigs together as one unit (no per-scaffold split).
-      "--userAsmb", "true",
-      "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
-    ) |> purrr::map_chr(~ stringr::str_glue(.x))
-
-    return(invisible(cmd))
+  # WF2 is shared: user-supplied assemblies run the same per-unit annotate /
+  # curate / validate flow as read-based projects, so only the WF1 entry differs.
+  entry <- if (workflow == "assemble") {
+    if (userAsmbs) "WF1_userAsmb" else "WF1"
   } else {
-    cmd <- c(
-      "-log", "{file.path(path, '.logs', 'nextflow.log')}",
-      "run", "{source}",
-      #"-ansi-log", "false",
-      "-c", "{file.path(path, '.config')}",
-      "-entry", "{ifelse(workflow == 'assemble', 'WF1', 'WF2')}",
-      "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
-    ) |> purrr::map_chr(~ stringr::str_glue(.x))
-
-    return(invisible(cmd))
+    "WF2"
   }
+
+  cmd <- c(
+    "-log", "{file.path(path, '.logs', 'nextflow.log')}",
+    "run", "{source}",
+    #"-ansi-log", "false",
+    "-c", "{file.path(path, '.config')}",
+    "-entry", "{entry}",
+    "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
+  ) |> purrr::map_chr(~ stringr::str_glue(.x))
+
+  return(invisible(cmd))
 
 }
 

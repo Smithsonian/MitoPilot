@@ -5,10 +5,11 @@
 #' @param mapping_fn Path to a mapping file. Should be a csv that minimally
 #'   includes an `ID` column with a unique identifier for each sample, a `Taxon`
 #'   column containing taxonomic information for each sample, and columns
-#'   `R1` and `R2` specifying the names of the raw paired read inputs, an `Assembly` column
-#'   containing names of mitogenome assembly fasta files (one contig/scaffold sequence per sample),
-#'   and a `Topology` column containing information about the assembly topology
-#'   ("circular" or "linear") May include additional columns with other sample metadata.
+#'   `R1` and `R2` specifying the names of the raw paired read inputs, and an `Assembly`
+#'   column containing names of assembly fasta files. An optional `Topology` column
+#'   ("circular" or "linear") declares the topology of a single-contig assembly; an
+#'   assembly holding more than one contig is recorded as "multi" and any declaration
+#'   is ignored. May include additional columns with other sample metadata.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param data_path Path to the directory where the raw data is located. Can be
@@ -20,6 +21,33 @@
 #'   trimming is disabled. Use this to annotate an assembly you already have.
 #' @param assembly_path Path to the directory where the mitogenome assemblies are located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution.
+#' @param find_mitogenome (logical) Search each supplied assembly for its
+#'   mitochondrial contigs before the rest of the Assemble module runs
+#'   (default = FALSE). Use
+#'   this when your FASTA files hold whole assemblies rather than a mitogenome:
+#'   contigs are BLASTed against the bundled metazoan mitogenome database, the
+#'   survivors confirmed with MitoFinder, and only those carried forward. See
+#'   [find_mito()].
+#' @param mitofinder_db Path to a MitoFinder GenBank database, built with
+#'   [custom_assembly_db()] (`db_type = "mitofinder"`). Required when
+#'   `find_mitogenome = TRUE`.
+#' @param attempt_circularization (logical) Attempt to circularize user
+#'   assemblies during the Assemble module (default = FALSE). Every assembly is
+#'   tried except a single-contig one already declared circular, and each contig
+#'   is attempted on its own, so a fragmented assembly is eligible. Redundant
+#'   overlap between a contig's ends is trimmed, and when raw reads are
+#'   available the new junction must be supported by reads before that contig is
+#'   called circular. Assemblies holding more than 100 contigs are left alone.
+#'   Settings are editable later in the app's circularization options modal.
+#'   See [circularize_asmb()].
+#' @param join_scaffolds (logical) Order a fragmented assembly against its BLAST
+#'   reference into one joined sequence during the Assemble module (default =
+#'   FALSE). Samples whose contigs match different reference mitogenomes are
+#'   left alone. So is a sample with a junction the reference cannot size, since
+#'   NCBI expects the number of Ns to be the estimated gap length. Because
+#'   eligibility here is any multi-contig assembly rather than just mitogenome
+#'   scaffolds, use this alongside `find_mitogenome = TRUE` so the join sees
+#'   only confirmed mitochondrial contigs.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from each sample's curation ruleset; a number sets a
 #'   project-wide override. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
@@ -43,7 +71,8 @@
 #'   <https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/>. May be left
 #'   empty and edited later in `.config` (`params.ncbi_api_key`).
 #' @param ... Additional arguments passed as default processing parameters to
-#'   `new_db()`
+#'   [new_db_userAsmb()]. Assembly parameters accepted by [new_db()] do not
+#'   apply to a user-assembly project.
 #'
 #' @export
 #'
@@ -55,6 +84,10 @@ new_project_userAsmb <- function(
     no_raw_data = FALSE,
     assembly_path = "NA",
     genetic_code = NULL,
+    find_mitogenome = FALSE,
+    mitofinder_db = NULL,
+    attempt_circularization = FALSE,
+    join_scaffolds = FALSE,
     executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra", "NOAA_SEDNA"),
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     config = NULL,
@@ -89,6 +122,21 @@ new_project_userAsmb <- function(
   # Normalize assembly path (if provided)----
   if(length(assembly_path)==1){
     assembly_path <- normalizePath(assembly_path)
+  }
+
+  # The mitogenome search cannot confirm anything without a MitoFinder
+  # reference, so refuse at project creation rather than at the end of a run.
+  if (isTRUE(find_mitogenome)) {
+    if (is.null(mitofinder_db) || !nzchar(mitofinder_db) || !file.exists(mitofinder_db)) {
+      stop(
+        "find_mitogenome = TRUE requires a MitoFinder reference database.\n",
+        "Build one for your clade with:\n",
+        "  custom_assembly_db(clade = \"<your clade>\", db_type = \"mitofinder\")\n",
+        "then pass its .gb file as mitofinder_db.",
+        call. = FALSE
+      )
+    }
+    mitofinder_db <- normalizePath(mitofinder_db)
   }
 
   # Read mapping file ----
@@ -143,7 +191,12 @@ new_project_userAsmb <- function(
     genetic_code = genetic_code,
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
+    assembly_path = assembly_path,
     no_raw_data = no_raw_data,
+    attempt_circularization = attempt_circularization,
+    join_scaffolds = join_scaffolds,
+    find_mitogenome = find_mitogenome,
+    mitofinder_db = mitofinder_db,
     ...
   )
 

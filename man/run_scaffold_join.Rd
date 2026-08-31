@@ -37,9 +37,10 @@ run_scaffold_join(
 are done in Groovy) and kept for call-site compatibility.}
 
 \item{auto_join}{when TRUE (and the scaffolds' BLAST hits agree) build + write
-the joined Path 0. When FALSE (toggle off) or the hits disagree, only the
-precomputed scaffold->reference mappings are written, leaving the sample
-fragmented for manual review in the app.}
+the joined Path 0. When FALSE (toggle off), when the hits disagree, or when
+a junction cannot be sized from the reference, only the precomputed
+scaffold->reference mappings are written, leaving the sample fragmented for
+manual review in the app.}
 
 \item{scaffold_hits}{optional ';'-separated string of per-scaffold BLAST hits
 ("scaffold|accession|pident") passed from the workflow. Preferred over a DB
@@ -52,4 +53,10 @@ joins, and writes the joined `{ID}_assembly_0.fasta`,
 `{ID}_assembly_0_coverageStats.csv`, and a `{ID}_joined_row.csv` (one row of
 `assemblies` columns) for the workflow to `sqlInsert`. No DB connection is
 opened here; DB writes are done in Groovy (see scaffold_join_workflow.nf).
+}
+\details{
+Every exit also writes `join_status.txt` ("joined", "declined" when the join
+ran and refused, or "skipped" when it is toggled off) and `join_note.txt` (a
+reason for "declined", empty otherwise), so the workflow can tell each of
+those apart from a crashed task, which writes neither file.
 }

@@ -13,6 +13,71 @@ test_that("scaffold_join_eligible: single scaffold is not eligible", {
   expect_false(scaffold_join_eligible(df))
 })
 
+test_that("redo_join_eligible_ids keeps only join-eligible samples", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s3", "s3", "s3", "s3"),
+    path = c(1, 1, 1, 1, 1, 2, 2),
+    scaffold = c(1, 2, 1, 1, 2, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # s1: single path, 2 scaffolds -> eligible
+  # s2: single path, 1 scaffold -> not eligible
+  # s3: two paths -> not eligible
+  expect_equal(redo_join_eligible_ids(c("s1", "s2", "s3"), asmb), "s1")
+})
+
+test_that("redo_join_plan partitions ids into ready/not_eligible/missing_output", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s3", "s3"),
+    path = c(1, 1, 1, 1, 1),
+    scaffold = c(1, 2, 1, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # s1, s3 eligible; s2 is single-scaffold. s3's output is reported missing.
+  plan <- redo_join_plan(c("s1", "s2", "s3"), asmb, missing_ids = "s3")
+  expect_equal(plan$ready, "s1")
+  expect_equal(plan$not_eligible, "s2")
+  expect_equal(plan$missing_output, "s3")
+  expect_equal(plan$join_off, character(0))
+})
+
+test_that("redo_join_plan refuses samples whose scaffold join is toggled off", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s2"),
+    path = c(1, 1, 1, 1),
+    scaffold = c(1, 2, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # A redo on a toggled-off sample returns "skipped", which would finalise it as
+  # done and, at state 3, erase the note explaining the failure.
+  plan <- redo_join_plan(c("s1", "s2"), asmb, join_off_ids = "s2")
+  expect_equal(plan$ready, "s1")
+  expect_equal(plan$join_off, "s2")
+  expect_equal(plan$missing_output, character(0))
+})
+
+test_that("redo_join_plan reports missing output ahead of a toggled-off join", {
+  asmb <- data.frame(
+    ID = c("s1", "s1"),
+    path = c(1, 1),
+    scaffold = c(1, 2),
+    stringsAsFactors = FALSE
+  )
+  # Both faults at once must land in exactly one bucket, never two.
+  plan <- redo_join_plan("s1", asmb, missing_ids = "s1", join_off_ids = "s1")
+  expect_equal(plan$missing_output, "s1")
+  expect_equal(plan$join_off, character(0))
+  expect_equal(plan$ready, character(0))
+})
+
+test_that("redo_join_plan: nothing ready when all requested ids fail a check", {
+  asmb <- data.frame(ID = "s1", path = 1, scaffold = 1, stringsAsFactors = FALSE)
+  plan <- redo_join_plan("s1", asmb, missing_ids = character(0))
+  expect_equal(plan$ready, character(0))
+  expect_equal(plan$not_eligible, "s1")
+  expect_equal(plan$missing_output, character(0))
+})
+
 test_that("choose_reference weights by length * pident", {
   df <- data.frame(
     blast_accession = c("A", "B", "B"),
@@ -1180,4 +1245,217 @@ test_that("zoom base map works with no colinear offset and refuses a false one",
   # an unrelated sequence must not be rendered at all
   junk <- paste(sample(c("A", "C", "G", "T"), 3000, TRUE), collapse = "")
   expect_length(zoom_window_base_maps(ref, lay, list("1" = junk), 2001L, 2060L), 0L)
+})
+
+# --- outcome reporting -------------------------------------------------------
+
+# The join now refuses any junction the reference cannot size, so these outcome
+# tests need a real mapping. minimap2 is not installed on CI, so stand in for it
+# with the placement the two halves genuinely have.
+mock_join_mapping <- function() {
+  testthat::local_mocked_bindings(
+    run_minimap2_paf = function(query_seqs, ...) {
+      nm <- names(query_seqs)
+      data.frame(
+        scaffold = nm,
+        qlen = 1500L,
+        qstart = 0L,
+        qend = 1500L,
+        strand = "+",
+        ref_start = ifelse(nm == "X.1.1", 0L, 1500L),
+        ref_end = ifelse(nm == "X.1.1", 1500L, 3000L),
+        nmatch = 1500L,
+        cigar = NA_character_,
+        stringsAsFactors = FALSE
+      )
+    },
+    .env = parent.frame()
+  )
+}
+
+join_fixture <- function(dir, hits) {
+  set.seed(7)
+  ref <- paste(sample(c("A", "C", "G", "T"), 3000, TRUE), collapse = "")
+  a <- substring(ref, 1, 1500)
+  b <- substring(ref, 1501, 3000)
+  asm <- file.path(dir, "asm.fasta")
+  writeLines(c(">X.1.1", a, ">X.1.2", b), asm)
+  reff <- file.path(dir, "ref.fa")
+  writeLines(c(">ref", ref), reff)
+  cov <- file.path(dir, "cov.csv")
+  utils::write.csv(data.frame(
+    SeqId = c("X.1.1", "X.1.2"), MeanDepth = c(30, 30),
+    GC = c(0.4, 0.4), ErrorRate = c(0.01, 0.01)), cov, row.names = FALSE)
+  list(asm = asm, ref = reff, cov = cov, hits = hits)
+}
+
+read_outcome <- function(dir) {
+  list(status = readLines(file.path(dir, "join_status.txt")),
+       note = paste(readLines(file.path(dir, "join_note.txt")), collapse = ""))
+}
+
+test_that("join reports 'skipped' with no note when the toggle is off", {
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = FALSE,
+                           scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+  expect_equal(out$status, "skipped")
+  expect_equal(res$outcome, "skipped")
+  # a toggled-off sample must not put anything in the Assemble table
+  expect_equal(out$note, "")
+  expect_equal(file.size(file.path(dir, "join_note.txt")), 0)
+  expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
+})
+
+test_that("join reports 'declined' when the scaffold hits disagree", {
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_2|99")
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
+                           scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+  expect_equal(out$status, "declined")
+  expect_match(out$note, "different reference mitogenomes")
+  expect_match(out$note, "NC_1")
+  expect_equal(res$outcome, "declined")
+  expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
+})
+
+test_that("a successful join reports 'joined' with no reason", {
+  skip_if_not_installed("pwalign")
+  mock_join_mapping()
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
+                           scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+  expect_equal(out$status, "joined")
+  expect_equal(out$note, "")
+  expect_equal(file.size(file.path(dir, "join_note.txt")), 0)
+  expect_equal(res$outcome, "joined")
+  expect_true(file.exists(file.path(dir, "X_joined_row.csv")))
+})
+
+test_that("redo_join_plan refuses samples with no BLAST reference", {
+  asmb <- data.frame(
+    ID = c("s1", "s1", "s2", "s2"),
+    path = c(1, 1, 1, 1),
+    scaffold = c(1, 2, 1, 2),
+    stringsAsFactors = FALSE
+  )
+  # s2 is fragmented but has no accession, so it sits legitimately at state 2.
+  # A redo would report a missing input and demote it.
+  plan <- redo_join_plan(c("s1", "s2"), asmb, no_ref_ids = "s2")
+  expect_equal(plan$ready, "s1")
+  expect_equal(plan$no_ref, "s2")
+  expect_equal(plan$join_off, character(0))
+  expect_equal(plan$missing_output, character(0))
+})
+
+test_that("redo_join_plan puts a doubly faulted id in exactly one bucket", {
+  asmb <- data.frame(
+    ID = c("s1", "s1"),
+    path = c(1, 1),
+    scaffold = c(1, 2),
+    stringsAsFactors = FALSE
+  )
+  plan <- redo_join_plan("s1", asmb, join_off_ids = "s1", no_ref_ids = "s1")
+  expect_equal(plan$join_off, "s1")
+  expect_equal(plan$no_ref, character(0))
+  expect_equal(plan$ready, character(0))
+})
+
+test_that("redo_join_no_ref_ids reads the stored accession, not the blanked display value", {
+  skip_if_not_installed("RSQLite")
+  # The Assemble table blanks blast_accession whenever a sample keeps more than
+  # one scaffold, which is every join-eligible sample. Sourcing the refusal from
+  # that value refused a redo for exactly the samples it exists for.
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbWriteTable(con, "assemble", data.frame(
+    ID = "frag", assemble_lock = 0L, assemble_switch = 2L,
+    assemble_opts = "d", blast_opts = "d", topology = NA_character_,
+    length = "1000;900", paths = 1L, scaffolds = 2L,
+    blast_accession = "NC_000001", blast_species = "sp", blast_pident = 99,
+    blast_qcovs = 99, blast_evalue = 0, blast_lineage = "x",
+    poor_blast_ref = "ok", time_stamp = "2026-01-01", assemble_notes = "",
+    join_notes = NA_character_, join_switch = NA_integer_,
+    stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "preprocess", data.frame(
+    ID = "frag", R1 = "a", R2 = "b", pre_opts = "d", reads = 100,
+    trimmed_reads = 90, mean_length = 150, time_stamp = "2026-01-01",
+    stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "samples", data.frame(
+    ID = "frag", Taxon = "T", stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "assemble_opts", data.frame(
+    assemble_opts = "d", min_assembly_length = 10, join_scaffolds = 1L,
+    stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "assemblies", data.frame(
+    ID = c("frag", "frag"), path = c(1L, 1L), scaffold = c(1L, 2L),
+    length = c(1000, 900), ignore = c(0L, 0L),
+    blast_accession = c("NC_000001", "NC_000001"), blast_species = "sp",
+    blast_pident = 99, blast_qcovs = 99, blast_evalue = 0,
+    blast_lineage = "x", stringsAsFactors = FALSE))
+
+  display <- fetch_assemble_data(session = list(userData = list(con = con)))
+  stored <- DBI::dbGetQuery(con, "SELECT ID, blast_accession FROM assemble")
+  asmb <- DBI::dbGetQuery(con, "SELECT ID, path, scaffold FROM assemblies")
+
+  # The display value really is blanked while the stored one is not.
+  expect_true(is.na(display$blast_accession))
+  expect_equal(stored$blast_accession, "NC_000001")
+
+  expect_equal(redo_join_no_ref_ids("frag", stored), character(0))
+  expect_equal(redo_join_no_ref_ids("frag", display), "frag")
+
+  plan <- redo_join_plan("frag", asmb,
+                         no_ref_ids = redo_join_no_ref_ids("frag", stored))
+  expect_equal(plan$ready, "frag")
+  expect_equal(plan$no_ref, character(0))
+})
+
+test_that("join declines when a junction cannot be sized", {
+  # No mapping means no estimate, and GenBank expects the number of Ns to BE the
+  # estimated length, so the sample is left fragmented rather than padded.
+  dir <- withr::local_tempdir()
+  f <- join_fixture(dir, "X.1.1|NC_1|99;X.1.2|NC_1|99")
+  testthat::local_mocked_bindings(
+    run_minimap2_paf = function(...) {
+      data.frame(scaffold = character(0), qlen = integer(0), qstart = integer(0),
+                 qend = integer(0), strand = character(0), ref_start = integer(0),
+                 ref_end = integer(0), nmatch = integer(0), cigar = character(0),
+                 stringsAsFactors = FALSE)
+    }
+  )
+  res <- run_scaffold_join(f$asm, f$cov, f$ref, "X", dir, auto_join = TRUE,
+                           scaffold_hits = f$hits)
+  out <- read_outcome(dir)
+
+  expect_equal(out$status, "declined")
+  expect_match(out$note, "could not be sized")
+  expect_equal(res$outcome, "declined")
+  expect_false(file.exists(file.path(dir, "X_joined_row.csv")))
+  # and no stale intervals left describing a Path 0 that was never written
+  j <- utils::read.csv(file.path(dir, "X_scaffold_junctions.csv"))
+  expect_equal(nrow(j), 0L)
+})
+
+test_that("redo_join_status sees a recorded BLAST reference", {
+  db <- withr::local_tempfile(fileext = ".sqlite")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  withr::defer(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "assemblies", data.frame(
+    ID = "s1", path = c(1, 1), scaffold = c(1, 2), ignore = 0
+  ))
+  DBI::dbWriteTable(con, "assemble", data.frame(
+    ID = "s1", join_switch = NA_integer_, blast_accession = "NC_000001.1",
+    assemble_opts = "user", assemble_lock = 1
+  ))
+  DBI::dbWriteTable(con, "assemble_opts", data.frame(
+    assemble_opts = "user", join_scaffolds = 1
+  ))
+
+  # dir_out does not exist, so the missing-output check is skipped.
+  st <- redo_join_status(con, file.path(tempdir(), "no-such-out"), "s1")
+  expect_equal(st$state, "ready")
 })

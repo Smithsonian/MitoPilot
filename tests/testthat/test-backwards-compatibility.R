@@ -132,7 +132,7 @@ create_v1310_db <- function(path) {
   )")
   DBI::dbExecute(con, "INSERT INTO assemble_opts VALUES (
     'default', '{}', 'GetOrganelle',
-    'https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/devel-DJM/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb',
+    'https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb',
     '--megahit'
   )")
 
@@ -512,6 +512,31 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
 })
 
 
+test_that("backwards_compatibility adds join_notes/join_switch to assemble and is idempotent", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10")
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_false(all(c("join_notes", "join_switch") %in% DBI::dbListFields(con, "assemble")))
+  DBI::dbDisconnect(con)
+
+  suppressMessages(MitoPilot::backwards_compatibility(path = td, update_config = FALSE))
+
+  con2 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con2), add = TRUE)
+  expect_cols(con2, "assemble", c("join_notes", "join_switch"))
+  expect_equal(schema_gaps(con2), character(0))
+
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    regexp = "nothing to update"
+  )
+})
+
 test_that("backwards_compatibility migrates an unmodified default export template to {completeness}", {
   td <- tempfile()
   dir.create(td)
@@ -877,4 +902,185 @@ test_that("export_seqid suffixes only samples with more than one exported unit",
     c("S1_p1_s1", "S1_p1_s2", "S1_p1_s3")
   )
   expect_identical(export_seqid("S1", 1, 1, 1L), "S1")
+})
+
+
+test_that("a user-assembly project gains the circularization and search schema", {
+  # Regression: the new tables sat behind the "nothing to update" early exit, so
+  # a project current on everything else never received them and the app then
+  # failed reading columns that were never added.
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10", has_asmb_dir = TRUE)
+
+  # Mark it as a user-assembly project: its mapping carries an assembly column
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN assembly TEXT")
+  DBI::dbExecute(con, "UPDATE samples SET assembly = 's1.fasta'")
+  DBI::dbDisconnect(con)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  expect_true(all(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+                    DBI::dbListTables(con)))
+  expect_cols(con, "assemble", c("circularize_opts", "circularize_notes",
+                                 "find_mito_opts", "find_mito_notes"))
+  # every sample points at the default parameter sets
+  got <- DBI::dbGetQuery(con, "SELECT circularize_opts, find_mito_opts FROM assemble")
+  expect_true(all(got$circularize_opts == "default"))
+  expect_true(all(got$find_mito_opts == "default"))
+  # both steps are off by default
+  expect_equal(DBI::dbGetQuery(con, "SELECT attempt FROM circularize_opts")$attempt, 0L)
+  expect_equal(DBI::dbGetQuery(con, "SELECT attempt FROM find_mito_opts")$attempt, 0L)
+
+  # the app gate is satisfied, and a re-run is a no-op
+  expect_false(any(grepl("mitogenome-search", schema_gaps(con))))
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
+})
+
+test_that("a read-based project is not given the user-assembly schema", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10")
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  expect_false(any(c("circularize_opts", "find_mito_opts", "mito_candidates") %in%
+                     DBI::dbListTables(con)))
+  expect_false(any(grepl("mitogenome-search", schema_gaps(con))))
+})
+
+test_that("a user-assembly project gains the circularization evidence tables", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10", has_asmb_dir = TRUE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN assembly TEXT")
+  DBI::dbExecute(con, "UPDATE samples SET assembly = 's1.fasta'")
+  DBI::dbDisconnect(con)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  expect_true(all(c("circularize_overlap", "circularize_depth") %in%
+                    DBI::dbListTables(con)))
+  expect_false(any(grepl("circularization", schema_gaps(con))))
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
+})
+
+
+test_that("single-key circularization evidence tables are rebuilt per contig", {
+  # The primary key widens to include the contig, which SQLite cannot alter in
+  # place, so the tables are dropped and recreated.
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10", has_asmb_dir = TRUE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN assembly TEXT")
+  DBI::dbExecute(con, "UPDATE samples SET assembly = 's1.fasta'")
+  # The per-sample version of both tables
+  DBI::dbExecute(con, "CREATE TABLE circularize_overlap (
+    ID TEXT NOT NULL, qstart INTEGER, qend INTEGER, sstart INTEGER,
+    send INTEGER, length INTEGER, pident REAL, mismatches INTEGER,
+    aln_query TEXT, aln_subject TEXT, q_ctx_left TEXT, q_ctx_right TEXT,
+    s_ctx_left TEXT, s_ctx_right TEXT, accepted INTEGER, reason TEXT,
+    contig_length INTEGER, trimmed INTEGER, junction_reads INTEGER,
+    min_junction_reads INTEGER, window_bp INTEGER, min_overhang INTEGER,
+    time_stamp INTEGER, PRIMARY KEY (ID))")
+  DBI::dbExecute(con, "INSERT INTO circularize_overlap (ID, accepted) VALUES ('s1', 1)")
+  DBI::dbExecute(con, "CREATE TABLE circularize_depth (
+    ID TEXT NOT NULL, position INTEGER NOT NULL, rel_position INTEGER,
+    depth INTEGER, depth_spanning INTEGER, time_stamp INTEGER,
+    PRIMARY KEY (ID, position))")
+  DBI::dbExecute(con, "INSERT INTO circularize_depth (ID, position) VALUES ('s1', 1)")
+  DBI::dbDisconnect(con)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_true(any(grepl("circularization", schema_gaps(con))))
+  DBI::dbDisconnect(con)
+
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "discarded and will be rebuilt"
+  )
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_cols(con, "circularize_overlap", c("contig", "q_ctx_left"))
+  expect_cols(con, "circularize_depth", c("contig", "position"))
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM circularize_overlap")$n, 0L)
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM circularize_depth")$n, 0L)
+  # The widened key is not visible in dbListFields, so check it directly
+  ov_pk <- DBI::dbGetQuery(con, "PRAGMA table_info(circularize_overlap)")
+  expect_equal(ov_pk$name[ov_pk$pk > 0], c("ID", "contig"))
+  dp_pk <- DBI::dbGetQuery(con, "PRAGMA table_info(circularize_depth)")
+  expect_equal(dp_pk$name[dp_pk$pk > 0], c("ID", "contig", "position"))
+  expect_false(any(grepl("circularization", schema_gaps(con))))
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
+})
+
+test_that("a pre-context circularize_overlap table is brought up to date", {
+  # Regression: the modal's contig-context view was added after the table
+  # shipped, so a project migrated at the earlier version has the table but not
+  # the columns, and must not be told it is up to date.
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_v1310_db(td)
+  make_config(td, version = "1.3.10", has_asmb_dir = TRUE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  DBI::dbExecute(con, "ALTER TABLE samples ADD COLUMN assembly TEXT")
+  DBI::dbExecute(con, "UPDATE samples SET assembly = 's1.fasta'")
+  # The pre-context version of the table
+  DBI::dbExecute(con, "CREATE TABLE circularize_overlap (
+    ID TEXT NOT NULL, aln_query TEXT, aln_subject TEXT, PRIMARY KEY (ID))")
+  DBI::dbDisconnect(con)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_true(any(grepl("circularization", schema_gaps(con))))
+  DBI::dbDisconnect(con)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_cols(con, "circularize_overlap",
+              c("q_ctx_left", "q_ctx_right", "s_ctx_left", "s_ctx_right"))
+  expect_false(any(grepl("circularization", schema_gaps(con))))
+  expect_message(
+    MitoPilot::backwards_compatibility(path = td, update_config = FALSE),
+    "nothing to update"
+  )
 })

@@ -37,7 +37,9 @@ others:
     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
     to the GitHub-hosted reference db).
   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
-    normalized to TEXT), BLAST result columns, "blast_opts".
+    normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
+    "join_switch", "circularize_opts"/"circularize_notes",
+    "find_mito_opts"/"find_mito_notes".
   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
     "remote_fallback" (any parameter set carrying a non-default Entrez query is
     switched to the remote search, with a warning, since the local database
@@ -45,7 +47,9 @@ others:
   \item \code{samples}: numeric "genetic_code" (rebuilding any legacy TEXT
     column as INTEGER so assembly does not crash).
   \item New tables: "orf_opts", "blast_opts", "export_opts",
-    "scaffold_mappings", "assemblies", "assembly_blast", and the
+    "scaffold_mappings", "scaffold_junctions",
+    "assemblies", "assembly_blast", "circularize_opts",
+    "find_mito_opts", "mito_candidates", and the
     "blast_ref_annotations"/"blast_ref_sequences"/"blast_ref_alignment" set.
 }
 }

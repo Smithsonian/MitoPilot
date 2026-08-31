@@ -27,6 +27,39 @@ check_single_path <- function(units) {
   invisible(TRUE)
 }
 
+#' Curation-options profile for one export unit
+#'
+#' A user-supplied assembly is annotated as one genome, so a single `annotate`
+#' row covers every contig of the sample and a sibling contig has no row of its
+#' own. Falling back to the sample's row keeps the caller from querying
+#' `curate_opts` with no value, which builds `WHERE curate_opts IN ()`.
+#'
+#' @param con An open SQLite connection to the project database.
+#' @param ID,path,scaffold The export unit.
+#'
+#' @return A single profile name; "default" when the sample has no annotate row.
+#'
+#' @noRd
+# Append src onto dest, creating dest if needed. Replaces shell `cat >>`, which
+# does not exist on Windows and broke on paths with spaces.
+append_file <- function(dest, src) {
+  if (!file.exists(dest)) file.create(dest)
+  file.append(dest, src)
+}
+
+unit_curate_opts <- function(con, ID, path, scaffold) {
+  opts <- dplyr::tbl(con, "annotate") |>
+    dplyr::filter(ID == !!ID & path == !!path & scaffold == !!scaffold) |>
+    dplyr::pull("curate_opts")
+  if (length(opts) == 0) {
+    opts <- dplyr::tbl(con, "annotate") |>
+      dplyr::filter(ID == !!ID) |>
+      dplyr::arrange(path, scaffold) |>
+      dplyr::pull("curate_opts")
+  }
+  opts[1] %|NA|% "default"
+}
+
 # Map internal rRNA gene names to their export convention (rrnS -> rrn12,
 # rrnL -> rrn16). Operates on the prefix so make.unique suffixes are preserved
 # (rrnS.1 -> rrn12.1); non-rRNA names pass through unchanged.
@@ -60,6 +93,167 @@ tbl_locations <- function(pos1, pos2, direction, wraps, asmb_len) {
     list(c(pos1, asmb_len), c(1L, pos2))
   }
   lapply(ivs, as.character)
+}
+
+#' Runs of unknown bases in a sequence
+#'
+#' Any run of N long enough to count as a gap under INSDC rules, whatever put it
+#' there: a reference-guided join, an assembler, or a sequence the user supplied
+#' that way.
+#'
+#' @param seq the assembly (XStringSet or character)
+#' @param min_len shortest run reported as a gap
+#'
+#' @return data.frame(start, end, length), empty when there is nothing to report
+#'
+#' @noRd
+find_sequence_gaps <- function(seq, min_len = 10L) {
+  empty <- data.frame(start = integer(0), end = integer(0), length = integer(0))
+  s <- toupper(as.character(seq)[1])
+  if (is.na(s) || !nzchar(s)) {
+    return(empty)
+  }
+  m <- gregexpr("N+", s)[[1]]
+  if (length(m) == 1L && m[1] == -1L) {
+    return(empty)
+  }
+  out <- data.frame(
+    start = as.integer(m),
+    length = as.integer(attr(m, "match.length"))
+  )
+  out$end <- out$start + out$length - 1L
+  out <- out[out$length >= min_len, c("start", "end", "length"), drop = FALSE]
+  out[order(out$start), , drop = FALSE]
+}
+
+#' Unknown bases inside one feature
+#'
+#' Counts across both intervals of a feature that spans the origin.
+#'
+#' @noRd
+count_unknown_bases <- function(seq_chr, pos1, pos2, wraps, asmb_len) {
+  ivs <- if (wraps) {
+    list(c(pos1, asmb_len), c(1L, pos2))
+  } else {
+    list(sort(c(pos1, pos2)))
+  }
+  sum(vapply(ivs, function(iv) {
+    sub <- substr(seq_chr, iv[1], iv[2])
+    nchar(gsub("[^N]", "", toupper(sub)))
+  }, integer(1)))
+}
+
+#' Whether a run of unknown bases is one this pipeline created
+#'
+#' Only a run overlapping a spacer the scaffold join inserted can be described
+#' as a gap of estimated length. Ns a sequence arrived with may be ambiguous base
+#' calls rather than a gap, and we have nothing to say about them.
+#'
+#' @param run one row of [find_sequence_gaps()] (start, end, length)
+#' @param spacers gap intervals for this unit in the SAME coordinates as `run`
+#'
+#' @return TRUE when the run overlaps a recorded spacer
+#'
+#' @noRd
+gap_is_ours <- function(run, spacers = NULL) {
+  if (is.null(spacers) || nrow(spacers) == 0L) {
+    return(FALSE)
+  }
+  any(spacers$start <= run$end & spacers$end >= run$start)
+}
+
+#' Runs of unknown bases this pipeline is willing to declare
+#'
+#' No length floor: the join sizes every junction it makes, so even a very short
+#' spacer is a gap of estimated length. Runs a supplied sequence arrived with are
+#' dropped by provenance, not by length.
+#'
+#' @param seq_chr the unit's sequence, upper case
+#' @param spacers recorded gap intervals for this unit, same coordinates
+#'
+#' @noRd
+declared_gaps <- function(seq_chr, spacers = NULL) {
+  gaps <- find_sequence_gaps(seq_chr, min_len = 1L)
+  if (nrow(gaps) == 0L) {
+    return(gaps)
+  }
+  keep <- vapply(seq_len(nrow(gaps)),
+                 function(i) gap_is_ours(gaps[i, ], spacers), logical(1))
+  gaps[keep, , drop = FALSE]
+}
+
+#' Write one gap feature
+#'
+#' NCBI advised (GenBank support, 2026-08-28) that a plain `gap` feature is
+#' sufficient here and `assembly_gap` is not needed. The plain feature takes only
+#' `estimated_length`, so none of the assembly vocabulary applies. The join
+#' refuses any junction it cannot size, so a length written here is always an
+#' estimate from the reference.
+#'
+#' @param gap one row of [find_sequence_gaps()]
+#' @param fn feature table to append to
+#'
+#' @noRd
+write_tbl_gap <- function(gap, fn) {
+  paste(c(gap$start, gap$end, "gap"), collapse = "\t") |>
+    cat(file = fn, sep = "\n", append = TRUE)
+  paste0("\t\t\testimated_length\t", gap$length) |>
+    cat(file = fn, sep = "\n", append = TRUE)
+}
+
+#' Write one .tbl feature location block; only the first interval carries the key
+#'
+#' @noRd
+write_tbl_loc <- function(pos, key, fn) {
+  for (i in seq_along(pos)) {
+    paste(c(pos[[i]], if (i == 1L) key), collapse = "\t") |>
+      cat(file = fn, sep = "\n", append = TRUE)
+  }
+}
+
+#' `transl_except` qualifier for a partial (poly-A completed) stop codon
+#'
+#' The codon sits at the 3' end of the CDS, which is `pos2` on the plus strand
+#' and `pos1` on the minus strand - not `max()`/`min()`, which pick the wrong end
+#' once the feature spans the origin.
+#'
+#' @noRd
+.transl_except_pos <- function(pos1, pos2, direction, n_stop, wraps, asmb_len) {
+  on_circle <- function(p) if (wraps) wrap_pos(p, asmb_len) else p
+  if (direction == "+") {
+    te_end <- pos2
+    te_start <- on_circle(te_end - n_stop + 1L)
+  } else {
+    te_end <- pos1
+    te_start <- on_circle(te_end + n_stop - 1L)
+  }
+  if (n_stop == 1) {
+    paste0("(pos:", te_end, ",aa:TERM)")
+  } else {
+    paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
+  }
+}
+
+#' GFF3 end coordinate for a feature that may span the origin
+#'
+#' GFF3 has no join() syntax, so an origin-spanning feature is written as
+#' `pos1 .. (asmb_len + pos2)`, i.e. running past the end of the sequence.
+#'
+#' @noRd
+gff_end <- function(pos2, wraps, asmb_len) {
+  if (wraps) asmb_len + pos2 else pos2
+}
+
+#' Mark the 3' end of a .tbl location block as partial (">")
+#'
+#' The 3' coordinate is the second element of the LAST interval, which is not
+#' `pos[[1]][2]` once a feature spans the origin.
+#'
+#' @noRd
+mark_tbl_3p <- function(pos) {
+  last <- length(pos)
+  pos[[last]][2] <- paste0(">", pos[[last]][2])
+  pos
 }
 
 #' Write one .tbl feature location block; only the first interval carries the key
@@ -251,9 +445,7 @@ export_files <- function(
       dplyr::filter(pos1 > 0) |>
       dplyr::collect()
 
-    curation_opts <-  dplyr::tbl(con, "annotate") |>
-      dplyr::filter(ID == !!.x & path == !!.path & scaffold == !!.scaffold) |>
-      dplyr::pull("curate_opts")
+    curation_opts <- unit_curate_opts(con, .x, .path, .scaffold)
 
     curate_rules <- dplyr::tbl(con, "curate_opts") |>
       dplyr::filter(curate_opts == !!curation_opts) |>
@@ -310,9 +502,20 @@ export_files <- function(
       scaffold = .scaffold,
       con = con
     )
-    # Override fragmented topology with the kept scaffold's per-scaffold topology
-    if (isTRUE(dat$topology == "fragmented") && !is.na(kept$topology[1])) {
+    # Topology is per record. Each export unit is one scaffold and assemblies
+    # carries that scaffold's own value, while annotate.topology summarizes the
+    # whole unit ("fragmented") and, for user assemblies, covers every contig of
+    # the sample from a single row. Only a per-scaffold value may reach a defline.
+    if (!is.na(kept$topology[1]) && nzchar(kept$topology[1])) {
       dat$topology <- kept$topology[1]
+    }
+    unit_topology <- as.character(dat$topology)[1]
+    if (!isTRUE(unit_topology %in% c("circular", "linear"))) {
+      warning(
+        .seqid, ": no per-scaffold topology found (found '",
+        unit_topology %|NA|% "NA", "'). Exporting as linear."
+      )
+      dat$topology <- "linear"
     }
     # Reference for the note, resolved per unit via the same helper the synteny view
     # and both tables use, so the note always names the reference the user was shown.
@@ -348,6 +551,7 @@ export_files <- function(
     # sequence name, to be used as first column in GFF
     seq_name <- sapply(strsplit(names(seq)," "), `[`, 1)
 
+    trim_offset <- 0L
     # Trim un-annotated ends of linear assemblies. A pos1 > pos2 row is a
     # wrap-around, which MIN/MAX cannot describe and the constant shift below
     # would drive negative, so leave the assembly untrimmed instead.
@@ -359,6 +563,8 @@ export_files <- function(
     } else if (dat$topology == "linear") {
       start <- min(annotations$pos1)
       if (start > 1) {
+        # Every coordinate downstream shifts by this much, spacers included.
+        trim_offset <- as.integer(start - 1L)
         seq <- Biostrings::subseq(seq, start, seq@ranges@width)
         annotations <- annotations |>
           dplyr::mutate(
@@ -403,6 +609,79 @@ export_files <- function(
     paste(c(seq_name, "MitoPilot", "region", 1, asmb_len, ".", "+", ".", f9), collapse = "\t") |>
       cat(file = gff_fn, sep = "\n", append = TRUE)
 
+    # Runs of unknown bases. Declared as gap features so a submission carries no
+    # undeclared gaps, and used to note any coding feature sitting across one.
+    seq_chr <- toupper(as.character(seq)[1])
+
+    # Provenance for this unit's runs: was it joined, which junction lengths were
+    # placeholders rather than measurements, and has the user said whether the
+    # ordering reference shares the sample's genus.
+    # Tolerant of a project that predates these tables: no provenance on file
+    # means no claim is made, which is the same as a sequence we did not join.
+    empty_spacers <- data.frame(start = integer(0), end = integer(0),
+                                size_known = integer(0))
+    spacers <- tryCatch(
+      DBI::dbGetQuery(
+        con, "SELECT start, end, size_known FROM scaffold_junctions WHERE ID = ?",
+        params = list(.x)
+      ),
+      error = function(e) empty_spacers
+    )
+    # Spacers are recorded against the joined Path 0, and only that unit.
+    if (!isTRUE(as.integer(.path) == 0L)) spacers <- empty_spacers
+    # Trimming the un-annotated ends of a linear assembly shifts every
+    # coordinate; move the spacers by the same offset so they still line up.
+    if (nrow(spacers) > 0 && trim_offset > 0L) {
+      spacers$start <- spacers$start - trim_offset
+      spacers$end <- spacers$end - trim_offset
+    }
+    # Only runs this pipeline inserted are declared. A run the sequence arrived
+    # with may be ambiguous base calls rather than a gap.
+    gaps <- declared_gaps(seq_chr, spacers)
+
+    gap_state <- new.env(parent = emptyenv())
+    gap_state$i <- 1L
+    # Features are written in ascending order, so emit every gap that starts
+    # before the feature about to be written and keep the table sorted.
+    flush_gaps <- function(before = NULL) {
+      while (gap_state$i <= nrow(gaps) &&
+             (is.null(before) || gaps$start[gap_state$i] < before)) {
+        write_tbl_gap(gaps[gap_state$i, ], tbl_fn)
+        gap_state$i <- gap_state$i + 1L
+      }
+    }
+    if (nrow(gaps) > 0) {
+      message(
+        .seqid, ": ", nrow(gaps), " run(s) of unknown bases (",
+        sum(gaps$length), " bp total) declared as gap features."
+      )
+      # INSDC caps a declared gap span at 1000 bp. Nothing can be done about it
+      # here, so say so plainly rather than emit a feature that will bounce.
+      too_long <- gaps[gaps$length > 1000L, , drop = FALSE]
+      if (nrow(too_long) > 0) {
+        message(
+          .seqid, ": WARNING ", nrow(too_long),
+          " gap(s) exceed the 1000 bp INSDC limit for a declared gap (",
+          paste(sprintf("%d-%d", too_long$start, too_long$end), collapse = ", "),
+          "). GenBank will query these."
+        )
+      }
+      # A feature may not begin or end inside a gap; it has to abut the gap and
+      # be partial (SEQ_FEAT.FeatureBeginsOrEndsInGap).
+      in_gap <- function(p) any(gaps$start <= p & gaps$end >= p)
+      bad <- vapply(seq_len(nrow(annotations)), function(i) {
+        in_gap(annotations$pos1[i]) || in_gap(annotations$pos2[i])
+      }, logical(1))
+      if (any(bad)) {
+        message(
+          .seqid, ": WARNING ", sum(bad),
+          " feature(s) begin or end inside a gap (",
+          paste(unique(annotations$gene[bad]), collapse = ", "),
+          "). GenBank rejects these; adjust the boundary to abut the gap."
+        )
+      }
+    }
+
     purrr::pwalk(annotations, function(...) {
       cur <- list(...)
       note <- NULL
@@ -411,6 +690,17 @@ export_files <- function(
       # error: the feature spans the origin and needs a two-interval location.
       wraps <- isTRUE(dat$topology == "circular") && isTRUE(cur$pos1 > cur$pos2)
       pos <- tbl_locations(cur$pos1, cur$pos2, cur$direction, wraps, asmb_len)
+      flush_gaps(before = min(cur$pos1, cur$pos2))
+
+      # Says what is true of the sequence without guessing why it is unknown.
+      n_unknown <- count_unknown_bases(seq_chr, cur$pos1, cur$pos2, wraps, asmb_len)
+      add_gap_note <- function(note) {
+        if (n_unknown == 0L) {
+          return(note)
+        }
+        paste(c(note, paste0("contains ", n_unknown, " bases of unknown sequence")),
+              collapse = "; ")
+      }
 
       if (cur$pos1 >= cur$pos2 && !wraps) {
         message(paste0("Warning: pos1 >= pos2 for ", dat$ID,": ", cur$gene, ", may be an annotation error"))
@@ -526,6 +816,7 @@ export_files <- function(
             note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
 
+
           # write to .tbl
           write_tbl_loc(pos, "gene", tbl_fn)
           paste0("\t\t\tgene\t", cur$gene) |>
@@ -571,8 +862,9 @@ export_files <- function(
             }
             note <- paste(c(note, fs_note), collapse = "; ")
           }
-          if (length(note) > 0) {
-            paste0("\t\t\tnote\t", note) |>
+          note_out <- add_gap_note(note)
+          if (length(note_out) > 0) {
+            paste0("\t\t\tnote\t", note_out) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
 
@@ -587,8 +879,8 @@ export_files <- function(
           # ascending; the strand lives in column 7, so both strands share this.
           for (i in seq_len(nrow(exons))) {
             f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
-            if (length(note) > 0){
-              f9 = paste0(f9, ";Note=", note)
+            if (length(note_out) > 0){
+              f9 = paste0(f9, ";Note=", note_out)
             }
             e_wraps <- isTRUE(dat$topology == "circular") &&
               isTRUE(exons[i, ]$pos1 > exons[i, ]$pos2)
@@ -660,35 +952,30 @@ export_files <- function(
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (length(note) > 0) {
-              paste0("\t\t\tnote\t", note) |>
+            note_out <- add_gap_note(note)
+            if (length(note_out) > 0) {
+              paste0("\t\t\tnote\t", note_out) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
 
             # concatenate sequences and tables by gene
             if (length(group) == 1) {
               group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_gene_tbl}"
-              ) |> system()
+              append_file(group_gene_tbl, gene_tbl_fn)
               group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_gene_fasta}"
-              ) |> system()
+              append_file(group_gene_fasta, gene_fn)
             }
 
             # concatenate all sequences and tables
             if (length(group) == 1) {
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-              ) |> system()
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_allgene_fasta}"
-              ) |> system()
+              append_file(group_allgene_tbl_fn, gene_tbl_fn)
+              append_file(group_allgene_fasta, gene_fn)
             }
           }
 
         } else { # normal processing, no introns
+          partial5 <- FALSE
+          partial3 <- FALSE
           if (stringr::str_detect(cur$translation, "\\*")) {
             message(crayon::red(paste("##### Internal stop codon", cur$gene, crayon::bgBlue(cur$stop_codon), "#####")))
           }
@@ -699,6 +986,7 @@ export_files <- function(
             message(crayon::red(paste("Non-standard start codon:", cur$gene, crayon::bgBlue(cur$start_codon))))
             # 5' partial: '<' prepends the start coordinate (first column, both strands)
             pos[[1]][1] <- paste0("<", pos[[1]][1])
+            partial5 <- TRUE
             note <- "start codon not determined"
           }
           if (nchar(cur$stop_codon) < 3) {
@@ -712,8 +1000,15 @@ export_files <- function(
             # 3' partial (undetermined), not poly-A: '>' prepends the stop
             # coordinate (last interval, both strands)
             pos <- mark_tbl_3p(pos)
+            partial3 <- TRUE
             note <- paste(c(note, "stop codon not determined"), collapse = "; ")
           }
+
+          # NCBI advised (GenBank support, 2026-08-28) that a feature spanning a
+          # gap of ESTIMATED length should stay continuous. Every gap we declare
+          # is an estimate, because the join refuses a junction it cannot size,
+          # so a gene spanning one stays a single feature.
+          note_out <- add_gap_note(note)
 
           # write to .tbl
           write_tbl_loc(pos, "gene", tbl_fn)
@@ -732,12 +1027,14 @@ export_files <- function(
             paste("\t\t\tcodon_start\t", 1) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
-          if (length(note) > 0) {
-            paste0("\t\t\tnote\t", note) |>
+          if (length(note_out) > 0) {
+            paste0("\t\t\tnote\t", note_out) |>
               cat(file = tbl_fn, sep = "\n", append = TRUE)
           }
 
-          # write to GFF
+          # write to GFF. Left as one CDS line on purpose: GFF3 has no partial
+          # coordinate convention, and two lines sharing a CDS ID would say the
+          # two pieces are joined, which is what the split exists to avoid.
           # gene feature
           f9 = paste0("ID=gene-",cur$gene,";Name=",cur$gene,";gbkey=Gene;gene=",cur$gene,";gene_biotype=protein_coding")
           # a feature spanning the origin is written start..(asmb_len + end)
@@ -746,8 +1043,8 @@ export_files <- function(
 
           # CDS feature
           f9 = paste0("ID=cds-",cur$gene,";Parent=gene-",cur$gene,";Name=",cur$gene,";gbkey=CDS;gene=",cur$gene,";product=",cur$product,";transl_table=",dat$genetic_code)
-          if (length(note) > 0){
-            f9 = paste0(f9, ";Note=", note)
+          if (length(note_out) > 0){
+            f9 = paste0(f9, ";Note=", note_out)
           }
           # a feature spanning the origin is written start..(asmb_len + end)
           paste(c(seq_name, "MitoPilot", "CDS", cur$pos1, gff_end(cur$pos2, wraps, asmb_len), ".", cur$direction, "0", f9), collapse = "\t") |>
@@ -822,31 +1119,24 @@ export_files <- function(
               paste("\t\t\tcodon_start\t", 1) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
-            if (length(note) > 0) {
-              paste0("\t\t\tnote\t", note) |>
+            note_out <- add_gap_note(note)
+            if (length(note_out) > 0) {
+              paste0("\t\t\tnote\t", note_out) |>
                 cat(file = gene_tbl_fn, sep = "\n", append = TRUE)
             }
 
             # concatenate sequences and tables by gene
             if (length(group) == 1) {
               group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".tbl"))
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_gene_tbl}"
-              ) |> system()
+              append_file(group_gene_tbl, gene_tbl_fn)
               group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", cur$gene, ".fasta"))
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_gene_fasta}"
-              ) |> system()
+              append_file(group_gene_fasta, gene_fn)
             }
 
             # concatenate all sequences and tables
             if (length(group) == 1) {
-              stringr::str_glue(
-                "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-              ) |> system()
-              stringr::str_glue(
-                "cat {gene_fn} >> {group_allgene_fasta}"
-              ) |> system()
+              append_file(group_allgene_tbl_fn, gene_tbl_fn)
+              append_file(group_allgene_fasta, gene_fn)
             }
           }
         }
@@ -978,23 +1268,15 @@ export_files <- function(
           # concatenate sequences and tables by gene
           if (length(group) == 1) {
             group_gene_tbl <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".tbl"))
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_gene_tbl}"
-            ) |> system()
+            append_file(group_gene_tbl, gene_tbl_fn)
             group_gene_fasta <- file.path(group_geneName_pth, paste0(group, "_", rrna_gene, ".fasta"))
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_gene_fasta}"
-            ) |> system()
+            append_file(group_gene_fasta, gene_fn)
           }
 
           # concatenate all sequences and tables
           if (length(group) == 1) {
-            stringr::str_glue(
-              "cat {gene_tbl_fn} >> {group_allgene_tbl_fn}"
-            ) |> system()
-            stringr::str_glue(
-              "cat {gene_fn} >> {group_allgene_fasta}"
-            ) |> system()
+            append_file(group_allgene_tbl_fn, gene_tbl_fn)
+            append_file(group_allgene_fasta, gene_fn)
           }
         }
 
@@ -1064,16 +1346,13 @@ export_files <- function(
       }
     })
 
+    # Any gap past the last annotated feature.
+    flush_gaps()
+
     if (length(group) == 1) {
-      stringr::str_glue(
-        "cat {tbl_fn} >> {group_tbl}"
-      ) |> system()
-      stringr::str_glue(
-        "cp {gff_fn} {group_gff_pth}"
-      ) |> system()
-      stringr::str_glue(
-        "cat {fasta_fn} >> {group_fasta}"
-      ) |> system()
+      append_file(group_tbl, tbl_fn)
+      file.copy(gff_fn, group_gff_pth, overwrite = TRUE)
+      append_file(group_fasta, fasta_fn)
     }
   })
 
@@ -1247,9 +1526,7 @@ get_export_PCG_annotations <- function(con, group) {
   for (.i in seq_len(nrow(loop_units))) {
     u <- loop_units[.i, ]
     # Curation rules for the current unit
-    curation_opts <- dplyr::tbl(con, "annotate") |>
-      dplyr::filter(ID == !!u$ID & path == !!u$path & scaffold == !!u$scaffold) |>
-      dplyr::pull("curate_opts")
+    curation_opts <- unit_curate_opts(con, u$ID, u$path, u$scaffold)
 
     curate_rules <- dplyr::tbl(con, "curate_opts") |>
       dplyr::filter(curate_opts == !!curation_opts) |>
@@ -1308,7 +1585,8 @@ get_export_PCG_annotations <- function(con, group) {
 
         translation <- Biostrings::translate(
           merged_sequence,
-          genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code))
+          genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code)),
+          if.fuzzy.codon = "solve"
         ) |> as.character()
         translation <- sub("\\*$", "", translation) # remove terminal stop codon
 

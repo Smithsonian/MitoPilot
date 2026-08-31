@@ -8,19 +8,15 @@ include {prepare_ref_db} from './prepare_ref_db.nf'
 // ORF runs per (ID, path, scaffold): each unit's ORF search sees only its own
 // validated annotations and its own assembly. Option sets come from the unit's
 // annotate row; the unit is gated on annotate_switch=1 AND annotate_lock=0.
-// userAsmb projects treat the whole path as one unit (scaffold literal 1) and take
-// the sample-level reference; see the matching branch in curate_workflow.nf.
-def scafSel  = params.userAsmb ? '1 AS scaffold' : 'a.scaffold'
-def scafJoin = params.userAsmb ? 'an.scaffold = 1' : 'an.scaffold = a.scaffold'
-def blastAcc = params.userAsmb ? 'b.blast_accession' : 'a.blast_accession'
+// User-supplied assemblies follow the same contract; see curate_workflow.nf.
 
-params.sqlRead =    'SELECT DISTINCT a.ID, a.path, ' + scafSel + ', ' +
+params.sqlRead =    'SELECT DISTINCT a.ID, a.path, a.scaffold, ' +
                     'd.use_orffinder, ' +
                     'd.cpus, d.memory, d.orffinder_opts, d.orf_min_len, d.orf_max_overlap, d.orf_nested, e.max_blast_hits, ' +
-                    'e.ref_dir, e.ref_db, b.assemble_opts, ' + blastAcc + ', f.genetic_code ' +
+                    'e.ref_dir, e.ref_db, b.assemble_opts, a.blast_accession, f.genetic_code ' +
                     'FROM assemblies a ' +
                     'JOIN assemble b ON a.ID = b.ID ' +
-                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND ' + scafJoin + ' ' +
+                    'JOIN annotate an ON an.ID = a.ID AND an.path = a.path AND an.scaffold = a.scaffold ' +
                     'JOIN orf_opts d ON d.orf_opts = an.orf_opts ' +
                     'JOIN curate_opts e ON e.curate_opts = an.curate_opts ' +
                     'JOIN samples f ON a.ID = f.ID ' +
