@@ -273,6 +273,23 @@ by base. When reads were mapped across the new junction, you also get the read
 depth across the seam. A contig whose overlap was found but rejected shows the
 threshold it missed.
 
+## Assemblies containing ambiguous bases
+
+Sequences called against a reference often carry IUPAC ambiguity codes
+(`N`, `R`, `Y`, and the rest) where the evidence was mixed or coverage dropped
+out. MitoPilot accepts them.
+
+A codon holding an ambiguous base is translated to the one amino acid it can be,
+or to `X` when more than one is possible, and the gene is flagged with an
+`<n> ambiguous bases in CDS` warning for review. The **Ambig. Bases** column of
+the Assemble table counts them per sample, and a sample's assembly details
+window counts them per contig. When you open a gene in the annotation editor,
+the alignment says how many of its bases are ambiguous.
+
+Runs of `N`s that arrive with your own sequence are left as they are: MitoPilot
+does not treat them as gaps, since they may be ambiguous base calls rather than
+missing sequence.
+
 ## Joining fragmented assemblies
 
 Some assemblers leave the mitogenome split into more than one contig.

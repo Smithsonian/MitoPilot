@@ -80,6 +80,19 @@ review and adjust the join in the sample's assembly details window, where
 ["Joining fragmented assemblies"](Your-Own-Assemblies.html#joining-fragmented-assemblies)
 for details.
 
+## What happens if my assembly contains ambiguous bases?
+
+Nothing breaks. Ambiguity codes (`N`, `R`, `Y`, and the rest) are common in
+consensus sequences called against a reference, and MitoPilot annotates and
+exports those assemblies normally.
+
+A codon holding an ambiguous base becomes the one amino acid it can be, or `X`
+when more than one is possible, and the gene carries an
+`<n> ambiguous bases in CDS` warning so you can review it. Counts are shown per
+sample in the **Ambig. Bases** column of the Assemble table, per contig in the
+assembly details window, and per gene at the top of the annotation alignment.
+See ["Assemblies containing ambiguous bases"](Your-Own-Assemblies.html#assemblies-containing-ambiguous-bases).
+
 ## How do I skip processing certain samples?
 
 There are two ways to make MitoPilot skip a set of samples when running the Assembly or Annotate modules.
