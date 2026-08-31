@@ -18,6 +18,8 @@
 
 - [Starting Your Own
   Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.md):
+- [Using Your Own
+  Assemblies](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Assemblies.md):
 - [Difficult
   Assemblies](https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.md):
 - [Curation Ruleset

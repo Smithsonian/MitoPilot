@@ -13,6 +13,8 @@ Create a project and launch the app.
   assemblies
 - [`new_test_project()`](https://smithsonian.github.io/MitoPilot/reference/new_test_project.md)
   : Initialize a test project
+- [`new_test_project_userAsmb()`](https://smithsonian.github.io/MitoPilot/reference/new_test_project_userAsmb.md)
+  : Initialize a test project for user-supplied assemblies
 
 ## Project database
 
@@ -344,6 +346,12 @@ Called by the Nextflow workflows. Not intended for direct use.
 - [`run_scaffold_join()`](https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.md)
   : Nextflow entry point: build + persist a joined assembly (file
   outputs only)
+- [`find_mito()`](https://smithsonian.github.io/MitoPilot/reference/find_mito.md)
+  : Find the mitochondrial contigs in a user-supplied assembly
+- [`select_mito_contigs()`](https://smithsonian.github.io/MitoPilot/reference/select_mito_contigs.md)
+  : Select mitochondrial contigs from a BLAST screen
+- [`circularize_asmb()`](https://smithsonian.github.io/MitoPilot/reference/circularize_asmb.md)
+  : Attempt to circularize a linear mitogenome assembly
 - [`get_assembly()`](https://smithsonian.github.io/MitoPilot/reference/get_assembly.md)
   : Get assembly from database
 - [`get_assembly_userAsmb()`](https://smithsonian.github.io/MitoPilot/reference/get_assembly_userAsmb.md)

@@ -1,0 +1,103 @@
+# Attempt to circularize a linear mitogenome assembly
+
+Many assemblers emit a circular molecule as a linear contig whose end
+duplicates its start. This function detects that redundant overlap by
+BLASTing the contig against itself, trims the duplicated copy, and (when
+raw reads are supplied) requires reads spanning the resulting junction
+before calling the assembly circular.
+
+## Usage
+
+``` r
+circularize_asmb(
+  assembly_fn = NULL,
+  paired_reads_1 = "NA",
+  paired_reads_2 = "NA",
+  min_overlap = 220,
+  min_identity = 99,
+  min_junction_reads = 5,
+  min_overhang = 30,
+  cpus = 4,
+  max_contigs = 100,
+  out_fn = NULL,
+  log_fn = NULL,
+  id = "sample",
+  evidence_dir = NULL
+)
+```
+
+## Arguments
+
+- assembly_fn:
+
+  Path to the input assembly (fasta)
+
+- paired_reads_1:
+
+  Path to forward reads (fastq), or "NA" for none
+
+- paired_reads_2:
+
+  Path to reverse reads (fastq), or "NA" for none
+
+- min_overlap:
+
+  Shortest accepted self-overlap (bp, default = 220)
+
+- min_identity:
+
+  Percent identity required for the overlap (default = 99)
+
+- min_junction_reads:
+
+  Reads that must span the junction (default = 5)
+
+- min_overhang:
+
+  Bases a read must extend past the junction on each side (default = 30)
+
+- cpus:
+
+  Number of CPUs for read mapping (default = 4)
+
+- max_contigs:
+
+  Most contigs an assembly may hold before the attempt is skipped
+  altogether (default = 100). Guards a draft genome that reached this
+  step without a mitogenome search to trim it down first.
+
+- out_fn:
+
+  Path for the output fasta. When \`NULL\` (the default) nothing is
+  written and the result is returned only.
+
+- log_fn:
+
+  Optional path for a plain-text log
+
+- id:
+
+  Sample ID, recorded in the evidence CSVs (default = "sample")
+
+- evidence_dir:
+
+  Optional directory to write \`circularize_overlap.csv\` and
+  \`circularize_depth.csv\` into
+
+## Value
+
+(invisibly) a list with \`circular\` (logical, TRUE when every contig is
+circular), \`sequence\` (DNAStringSet), \`trimmed\` (bp removed across
+all contigs), \`note\` (human-readable summary) and \`contigs\`, a list
+of per-contig results each carrying \`contig\`, \`circular\`,
+\`trimmed\` and \`note\`
+
+## Details
+
+Every contig of a fragmented assembly is attempted independently; a
+fragment can be a circular molecule reported linearly just as a whole
+assembly can.
+
+The overlap detection follows the approach used by MitoHiFi's
+\`circularizationCheck\` (MIT licensed, Genome Research Ltd):
+<https://github.com/marcelauliano/MitoHiFi>

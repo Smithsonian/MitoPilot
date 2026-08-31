@@ -63,7 +63,8 @@ run_scaffold_join(
 - auto_join:
 
   when TRUE (and the scaffolds' BLAST hits agree) build + write the
-  joined Path 0. When FALSE (toggle off) or the hits disagree, only the
+  joined Path 0. When FALSE (toggle off), when the hits disagree, or
+  when a junction cannot be sized from the reference, only the
   precomputed scaffold-\>reference mappings are written, leaving the
   sample fragmented for manual review in the app.
 
@@ -74,3 +75,11 @@ run_scaffold_join(
   over a DB read of \`assemblies.blast_accession\`, which is written by
   an async UPDATE with no happens-before relative to this step (so it
   can still be NULL here).
+
+## Details
+
+Every exit also writes \`join_status.txt\` ("joined", "declined" when
+the join ran and refused, or "skipped" when it is toggled off) and
+\`join_note.txt\` (a reason for "declined", empty otherwise), so the
+workflow can tell each of those apart from a crashed task, which writes
+neither file.

@@ -219,10 +219,13 @@ work through them as a batch.
 |----|----|
 | `low coverage region` | More than 5% of the region under this annotation has less than 10x coverage. |
 | `high error region` | More than 5% of the region has a raw read error rate above 5%, meaning more than 5% of aligned reads disagree on the base call. |
+| `<n> ambiguous bases in CDS` | The protein-coding gene contains bases that are not A, C, G, or T. Translation still resolves a codon when the ambiguous base does not change the amino acid, and writes `X` only where it cannot, so the protein may show no `X` at all. The bases may be `N`s MitoPilot inserted when joining fragments, ambiguity codes from a consensus, or bases the assembly arrived with. Check the affected region before submitting. |
 
 **Note.** The coverage and error thresholds in this last group are fixed
 at 5% / 10x and 5% / 5%. Unlike everything else on this page they are
-not configurable through the curation parameters.
+not configurable through the curation parameters. The ambiguous-bases
+warning appears in the same **Warnings** column and filters with the
+rest.
 
 **Warning.** Warnings do not clear themselves after you edit an
 annotation by hand. They are written when validation runs, so re-run

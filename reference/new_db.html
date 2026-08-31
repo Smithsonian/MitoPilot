@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,6 +30,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -81,7 +82,7 @@
 <span>  getOrganelle <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"-F 'anonym'"</span>, <span class="st">"-R 10 -k '21,45,65,85,105,115'"</span>,</span>
 <span>    <span class="st">"--larger-auto-ws"</span>, <span class="st">"--expected-max-size 20000"</span>, <span class="st">"--target-genome-size 16500"</span><span class="op">)</span>,</span>
 <span>  mitofinder_db <span class="op">=</span></span>
-<span>    <span class="st">"https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb"</span>,</span>
+<span>    <span class="st">"https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb"</span>,</span>
 <span>  mitofinder <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"--megahit"</span><span class="op">)</span>,</span>
 <span>  max_paths <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  max_scaffolds <span class="op">=</span> <span class="fl">10</span>,</span>
@@ -166,7 +167,7 @@ Default is a fish database built from RefSeq. https://raw.githubusercontent.com/
 
 <dt id="arg-mitofinder-db">mitofinder_db<a class="anchor" aria-label="anchor" href="#arg-mitofinder-db"></a></dt>
 <dd><p>Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
-Default is the Danio rerio mitogenome (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)</p></dd>
+Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)</p></dd>
 
 
 <dt id="arg-mitofinder">mitofinder<a class="anchor" aria-label="anchor" href="#arg-mitofinder"></a></dt>

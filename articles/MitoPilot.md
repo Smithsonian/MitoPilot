@@ -108,6 +108,13 @@ dispatched to compute nodes instead of running on the login or RStudio
 node. Put projects under `/pool` or `/scratch`. Home directories are far
 too small and projects cannot be run from `/store`.
 
+You can also bring your own assemblies to MitoPilot for annotation,
+curation, and export.
+[`new_test_project_userAsmb()`](https://smithsonian.github.io/MitoPilot/reference/new_test_project_userAsmb.md)
+sets up the equivalent test project, covering the common cases. See
+[Using Your Own
+Assemblies](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Assemblies.md).
+
 ------------------------------------------------------------------------
 
 ## Open the app

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,6 +30,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -94,6 +95,13 @@
 
         </dt>
         <dd>Initialize a test project</dd>
+
+        <dt>
+
+          <code><a href="new_test_project_userAsmb.html">new_test_project_userAsmb()</a></code>
+
+        </dt>
+        <dd>Initialize a test project for user-supplied assemblies</dd>
       </dl></div><div class="section level2">
       <h2 id="project-database">Project database<a class="anchor" aria-label="anchor" href="#project-database"></a></h2>
 
@@ -1072,6 +1080,27 @@
 
         </dt>
         <dd>Nextflow entry point: build + persist a joined assembly (file outputs only)</dd>
+
+        <dt>
+
+          <code><a href="find_mito.html">find_mito()</a></code>
+
+        </dt>
+        <dd>Find the mitochondrial contigs in a user-supplied assembly</dd>
+
+        <dt>
+
+          <code><a href="select_mito_contigs.html">select_mito_contigs()</a></code>
+
+        </dt>
+        <dd>Select mitochondrial contigs from a BLAST screen</dd>
+
+        <dt>
+
+          <code><a href="circularize_asmb.html">circularize_asmb()</a></code>
+
+        </dt>
+        <dd>Attempt to circularize a linear mitogenome assembly</dd>
 
         <dt>
 

@@ -21,7 +21,7 @@ new_db(
   getOrganelle = paste("-F 'anonym'", "-R 10 -k '21,45,65,85,105,115'",
     "--larger-auto-ws", "--expected-max-size 20000", "--target-genome-size 16500"),
   mitofinder_db =
-    "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb",
+    "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
   mitofinder = paste("--megahit"),
   max_paths = 10,
   max_scaffolds = 10,
@@ -110,8 +110,8 @@ new_db(
 - mitofinder_db:
 
   Path to MitoFinder reference db, must be GenBank format (.gb), can be
-  a URL. Default is the Danio rerio mitogenome
-  (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/NC_002333_Danio_rerio.gb)
+  a URL. Default is a ten-species fish mitogenome sampler
+  (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
 
 - mitofinder:
 

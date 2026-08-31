@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,6 +30,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -58,6 +59,149 @@
       <small>Source: <a href="https://github.com/Smithsonian/MitoPilot/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.5.4" id="mitopilot-154">MitoPilot 1.5.4<a class="anchor" aria-label="anchor" href="#mitopilot-154"></a></h2>
+<p>Released 2026-08-31. Container: <code>macguigand/mitopilot:1.5.4</code></p>
+<div class="section level3">
+<h3 id="new-features-1-5-4">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5-4"></a></h3>
+<p>This release is about <strong>user-supplied assemblies</strong>. MitoPilot can now take a whole draft genome rather than a finished mitogenome, find the mitochondrial contig(s) in it, and circularize them if evidence is present.</p>
+<div class="section level4">
+<h4 id="finding-the-mitogenome-in-a-whole-assembly-1-5-4">Finding the mitogenome in a whole assembly<a class="anchor" aria-label="anchor" href="#finding-the-mitogenome-in-a-whole-assembly-1-5-4"></a></h4>
+<ul><li>Point MitoPilot at a FASTA holding a whole assembly, thousands or millions of contigs, and it will <strong>locate the mitochondrial contigs before anything else runs</strong>. Off by default; enable with <code>new_project_userAsmb(find_mitogenome = TRUE)</code>. You must also supply a MitoFinder database for your clade.</li>
+<li>Contigs are screened against a bundled metazoan mitogenome database, the best candidates are confirmed by annotating them, and only confirmed contigs continue through the pipeline. A sample with no confirmed mitochondrial contig is flagged and stops there; the rest of the batch carries on.</li>
+<li>
+<strong>Nuclear insertions (NUMTs) are filtered out</strong> by requiring the match to cover a large fraction of the contig.</li>
+<li>A sample carrying <strong>more than one species’ mitogenome</strong> can return each mitogenome it finds, so you can review them and decide which to drop.</li>
+<li>A new <strong>Mito Search</strong> column reports the outcome, and the evidence behind each contig it kept or dropped.</li>
+<li>The search is built for large inputs: a full genome assembly of 1.4 million contigs reduces to its single mitochondrial contig in under four minutes.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="circularizing-user-supplied-assemblies-1-5-4">Circularizing user-supplied assemblies<a class="anchor" aria-label="anchor" href="#circularizing-user-supplied-assemblies-1-5-4"></a></h4>
+<ul><li>Assemblers often report a circular mitogenome as a linear contig whose end repeats its start. MitoPilot can now <strong>trim that redundant overlap and circularize the sequence</strong> during the Assemble module. Off by default; enable with <code>new_project_userAsmb(attempt_circularization = TRUE)</code>.</li>
+<li>When raw reads are available, <strong>reads must span the new junction</strong> before the assembly is called circular, so a repeat is not mistaken for a real circle.</li>
+<li>Circularization is attempted for each contig when a sample has multiple mitochondrial contigs.</li>
+<li>A new <strong>Circularization</strong> column reports the outcome. Clicking it shows the overlap alignment alongside the read depth across the seam.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="scaffold-joining-for-user-supplied-assemblies-1-5-4">Scaffold joining for user-supplied assemblies<a class="anchor" aria-label="anchor" href="#scaffold-joining-for-user-supplied-assemblies-1-5-4"></a></h4>
+<ul><li>A fragmented single-path assembly can now be <strong>ordered against its BLAST reference into one joined sequence</strong>, the same step the regular pipeline already had. Off by default; enable with <code>new_project_userAsmb(join_scaffolds = TRUE)</code>.</li>
+<li>Samples whose contigs match <strong>different</strong> reference mitogenomes are left separate for review, so a contaminated sample is never spliced together.</li>
+<li>A new <strong>Scaffold Join Notes</strong> column reports what the join did, or why it was refused.</li>
+<li>
+<strong>Redo join in pipeline</strong>, a button in a sample’s assembly details window, queues a fresh join for the next pipeline update. It becomes <strong>Cancel queued pipeline join</strong> while one is waiting, and says why if a sample cannot be queued.</li>
+<li>Both the column and the button appear in every project, not just user-assembly ones.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="fragmented-assemblies-are-annotated-contig-by-contig-1-5-4">Fragmented assemblies are annotated contig by contig<a class="anchor" aria-label="anchor" href="#fragmented-assemblies-are-annotated-contig-by-contig-1-5-4"></a></h4>
+<ul><li>A user assembly split across several contigs could not be locked for annotation until you ignored all but one contig, and only that contig was ever annotated. <strong>Every contig is now its own annotation unit</strong> and is annotated, curated, and exported like any other sequence.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="ambiguous-bases-are-counted-and-shown-1-5-4">Ambiguous bases are counted and shown<a class="anchor" aria-label="anchor" href="#ambiguous-bases-are-counted-and-shown-1-5-4"></a></h4>
+<ul><li>The Assemble table of a user-assembly project has a new <strong>Ambig. Bases</strong> column, right after the assembly length, counting the bases that are not A, C, G, or T. It is filled in for samples with a single active contig; a sample with several contigs shows the count per contig in the assembly details window instead.</li>
+<li>The annotation alignment viewer warns when the gene on screen contains ambiguous bases, for protein-coding genes and rRNAs alike. The count updates as you nudge the gene ends with the +/- buttons.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="topology-is-now-optional-1-5-4">Topology is now optional<a class="anchor" aria-label="anchor" href="#topology-is-now-optional-1-5-4"></a></h4>
+<ul><li>The <code>Topology</code> column in the mapping file is <strong>optional</strong>. Leave it out, or leave a cell blank, and a single-contig assembly is treated as linear. An earlier release refused to build the project without the column.</li>
+<li>It applies only to single-contig assemblies. An assembly holding more than one contig is recorded as <strong><code>multi</code></strong> and whatever you declared is ignored; declaring such a sample <code>circular</code> prints a warning. Each contig then carries its own topology, which stays <code>unknown</code> unless circularization is switched on, and an <code>unknown</code> contig is handled as linear.</li>
+<li>The same rules apply to samples you add to an existing project.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="test-project-for-user-assemblies-1-5-4">Test project for user assemblies<a class="anchor" aria-label="anchor" href="#test-project-for-user-assemblies-1-5-4"></a></h4>
+<ul><li>
+<strong><code><a href="../reference/new_test_project_userAsmb.html">new_test_project_userAsmb()</a></code></strong> builds a ready-to-run project from nine user-supplied assemblies cut from real data, with examples of linear, circular, not-yet-circularized, and multi-contig assemblies.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="default-mitofinder-reference-database-1-5-4">Default MitoFinder reference database<a class="anchor" aria-label="anchor" href="#default-mitofinder-reference-database-1-5-4"></a></h4>
+<ul><li>New projects now assemble against a <strong>ten-species fish mitogenome sampler</strong> rather than a single zebrafish record. This applies to every new project, regular and user-assembly alike. Existing projects keep the database they were created with. Pass <code>mitofinder_db</code> to use a database for your own clade.</li>
+</ul></div>
+</div>
+<div class="section level3">
+<h3 id="bug-fixes-1-5-4">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-5-4"></a></h3>
+<ul><li>
+<strong>A gene containing ambiguous bases no longer kills the sample or the app.</strong> A protein-coding gene holding bases that are not A, C, G, or T was refused outright by translation, so curation died partway through with an unreadable error, and clicking the +/- START or STOP codon buttons in the annotation editor hung the app behind a spinner that never cleared. Ambiguous bases arrive both from the <code>N</code> spacers MitoPilot inserts when joining scaffolds and from consensus assemblies called against a reference, which carry IUPAC codes at uncertain sites. Those codons are now translated to an amino acid where only one is possible and to <code>X</code> otherwise, and the gene is flagged with an <code>ambiguous bases in CDS</code> warning for review.</li>
+<li>
+<strong>An error while editing codons no longer freezes the annotation window.</strong> Anything that went wrong while walking the START or STOP codon left the “Updating alignment, hold tight…” overlay on screen forever and no other sample would open. The overlay now clears and the problem is reported.</li>
+<li>
+<strong>The Assemble table reports the lengths of the contigs that are actually active.</strong> The length and scaffold counts were a snapshot taken before any join, so a joined sample kept describing the fragments it replaced, and ignoring or restoring a contig afterwards changed nothing. They are now refreshed whenever a join, an edit, or an ignore toggle changes what is active, and equal-length fragments are listed individually rather than collapsed into one value that looks like a total.</li>
+<li>
+<strong>Gaps in a joined assembly are declared on export.</strong> Every run of <code>N</code>s that MitoPilot inserted when joining fragments is written as a <code>gap</code> feature carrying its estimated length, however short the run. Runs of <code>N</code>s that arrived with your own sequence are left alone, since they may be ambiguous base calls rather than gaps. Any coding feature containing unknown bases carries a note saying how many.</li>
+<li>
+<strong>A junction that cannot be sized is no longer padded.</strong> MitoPilot used to insert a fixed 100 <code>N</code>s where the reference could not estimate a gap. NCBI expects the number of <code>N</code>s to be the estimated length, so such a sample is now left fragmented with a note; its contigs can be submitted as several sequences under one BioSample. This applies to regular projects too, so a sample that joined under an earlier release may now be left in pieces, with the reason given in the <strong>Scaffold Join Notes</strong> column. If you joined a fragmented assembly under an earlier release, redo the join before exporting: MitoPilot cannot recognize the old fixed padding and will not declare those gaps.</li>
+<li>
+<strong>A contig with no read coverage no longer stops annotation.</strong> Every base of an uncovered contig looked masked, so coverage trimming cut the contig down to 50 bp and annotation then failed with an unreadable error that ended the run. Such contigs are now kept whole and carry a <code>no read coverage: trim skipped</code> note.</li>
+<li>
+<strong>A contig with no genes no longer stops the run.</strong> MITOS2 writes an empty result file for a contig it finds nothing on, and reading that file failed. Now that every contig is annotated on its own, a contig with no genes is normal and simply returns no annotations.</li>
+<li>
+<strong>The combined export files are written by R rather than shell commands.</strong> <code>cat</code> and <code>cp</code> are not available everywhere and broke on paths containing a space, so a submission group’s combined FASTA and feature table could go missing with no error.</li>
+<li>
+<strong>The redo scaffold join button is no longer blocked on every sample.</strong> The check for a recorded BLAST reference was looking the sample up by an ID it never read, so it found nothing and reported that no sample had a reference.</li>
+<li>
+<strong>Export reads each record’s own topology</strong> rather than applying one value across a mixed unit.</li>
+<li>
+<strong>The Annotate update dialog counts sequences, not samples</strong>, which is what it has always queued.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-1-5-4">Documentation<a class="anchor" aria-label="anchor" href="#documentation-1-5-4"></a></h3>
+<ul><li>User-assembly material now has its <strong>own article</strong>, covering the mitogenome search, circularization, and scaffold joining, with the FAQ and reference index updated to match.</li>
+</ul><p><strong>Note</strong> Projects created with an earlier release should be updated with <a href="https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html"><code>MitoPilot::backwards_compatibility()</code></a>. Give it your executor, for example <code>backwards_compatibility(executor = "slurm")</code>. It adds the new database fields and rebuilds your project <code>.config</code> from that executor’s template, so re-apply any hand edits afterwards. The rebuild matters on a cluster: the new mitogenome-search and circularization steps have their own memory and scheduler settings, and a <code>.config</code> written by an earlier release does not have them. A project pinned to a custom container image is left alone by the update; run <code><a href="../reference/backwards_compatibility.html">backwards_compatibility()</a></code> first, then edit the <code>container</code> line in the project <code>.config</code> by hand. The new Assemble steps will not run until you do.</p>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/Smithsonian/MitoPilot/compare/1.5.3" class="external-link uri">https://github.com/Smithsonian/MitoPilot/compare/1.5.3</a>…1.5.4</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.5.3" id="mitopilot-153">MitoPilot 1.5.3<a class="anchor" aria-label="anchor" href="#mitopilot-153"></a></h2>
+<p>Released 2026-08-21. Container: <code>macguigand/mitopilot:1.5.3</code></p>
+<div class="section level3">
+<h3 id="bug-fixes-1-5-3">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-5-3"></a></h3>
+<div class="section level4">
+<h4 id="origin-spanning-features-on-circular-assemblies-1-5-3">Origin-spanning features on circular assemblies<a class="anchor" aria-label="anchor" href="#origin-spanning-features-on-circular-assemblies-1-5-3"></a></h4>
+<p>A feature that runs across the origin of a circular assembly is stored with its start position after its end position. Nothing downstream expected that, so a single wrapping feature could stop a project outright.</p>
+<ul><li>
+<strong>Curation no longer crashes on a wrapping feature.</strong> Every boundary adjustment handed those coordinates straight to a sequence-extraction call that refuses a start after an end, so the whole curation step exited with an error and the run stopped. Sequence extraction and length are now wrap-aware, and extension or trimming may cross the origin on a circular contig. Linear assemblies behave exactly as before.</li>
+<li>
+<strong>Export writes a wrapping feature as two intervals</strong> in the submission table. A single line spanning the origin does not mean “wraps” to table2asn, it means “minus strand”, so the feature was being submitted backwards. Also fixed in export: the 3’ end of a <code>transl_except</code>, minus-strand exon coordinates in the GFF, and a crash in the PCG outlier review when an exon wrapped.</li>
+<li>
+<strong>Validation checks are circular-aware.</strong> Overlap, containment, and length tests measured a wrapping feature as if it ran the long way around the genome, so genuine overlaps went unreported and non-overlapping features were flagged.</li>
+<li>
+<strong>The control region keeps its extension when a neighbour wraps.</strong> An origin-adjacent OH call is now bounded by the wrapping feature rather than by the contig edge. Three test samples were finishing with a stunted control region and a spurious “below minimum length” warning.</li>
+<li>
+<strong>The annotation editor handles wrapping throughout</strong>: nudging boundaries, copy FASTA, rRNA alignment, the boundary viewer, the zoom track, the linearize guard, and merge / un-merge.</li>
+<li>
+<strong>Rotating an assembly now warns</strong> when the requested start gene is not present, and when the new origin would cut through a feature.</li>
+<li>
+<strong>MITOS2 annotations use the right contig length.</strong> On a multi-contig unit the first contig’s length was applied to every contig, which mis-placed wrap calculations on all the others.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="database-writes-1-5-3">Database writes<a class="anchor" aria-label="anchor" href="#database-writes-1-5-3"></a></h4>
+<ul><li>
+<strong>Scaffold mappings could be wiped.</strong> The delete and insert halves of a scaffold-mapping update were sent as two independent database operators with no guaranteed ordering, so the delete could land last and leave the table empty. Both now run inside a single transaction from the pipeline driver.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="hpc-1-5-3">HPC<a class="anchor" aria-label="anchor" href="#hpc-1-5-3"></a></h4>
+<ul><li>
+<strong>NOAA SEDNA memory now scales with the retry attempt</strong>, matching every other cluster profile. A retry was re-requesting the same memory that had just failed, so a step that ran out of memory would fail again identically.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="container-builds-1-5-3">Container builds<a class="anchor" aria-label="anchor" href="#container-builds-1-5-3"></a></h4>
+<ul><li>
+<strong>A stale package archive can no longer be shipped in the image.</strong> The Dockerfile picks up the package archive by name order, so a leftover build of an older version won out over the new one and the container quietly shipped the wrong MitoPilot. All three deploy scripts now clear old archives first.</li>
+</ul></div>
+</div>
+<div class="section level3">
+<h3 id="documentation-1-5-3">Documentation<a class="anchor" aria-label="anchor" href="#documentation-1-5-3"></a></h3>
+<ul><li>The website has been rewritten and reorganized: <strong>Get Started is now a full tutorial</strong> built around the bundled test project, the README is a landing page with installation moved to its own article, and the curation documentation is clade-neutral with the ruleset chosen in the app rather than hand-written.</li>
+<li>The article on handling difficult assemblies replaces the old multiple-assemblies page, the reference index is grouped by topic, screenshots are regenerated for the current app, and a citation file is included with the package.</li>
+<li>A maintainer guide for building the container was added, and the legacy GenBank download script was retired.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-1-5-3">Internal<a class="anchor" aria-label="anchor" href="#internal-1-5-3"></a></h3>
+<ul><li>
+<code>run_app()</code> is no longer exported. <code><a href="../reference/MitoPilot.html">MitoPilot()</a></code> is the documented way to start the app and passes everything through, so nothing changes for users.</li>
+<li>The documentation build is capped at 20 minutes so a stalled runner fails fast instead of hanging for over an hour.</li>
+</ul><p><strong>Note</strong> To update older MitoPilot projects, please run <a href="https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html"><code>MitoPilot::backwards_compatibility()</code></a>. This will add any missing fields to the SQL database and attempt to update the Docker/Singularity container version in your project <code>.config</code> file.</p>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/Smithsonian/MitoPilot/compare/1.5.2" class="external-link uri">https://github.com/Smithsonian/MitoPilot/compare/1.5.2</a>…1.5.3</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.5.2" id="mitopilot-152">MitoPilot 1.5.2<a class="anchor" aria-label="anchor" href="#mitopilot-152"></a></h2>
 <p>Released 2026-08-14. Container: <code>macguigand/mitopilot:1.5.2</code></p>

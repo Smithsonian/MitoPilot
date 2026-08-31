@@ -16,8 +16,9 @@ articles:
   Test-Project-Assemble: Test-Project-Assemble.html
   Test-Project-Export: Test-Project-Export.html
   Troubleshooting: Troubleshooting.html
+  Your-Own-Assemblies: Your-Own-Assemblies.html
   Your-Own-Project: Your-Own-Project.html
-last_built: 2026-08-20T17:01Z
+last_built: 2026-08-31T14:20Z
 urls:
   reference: https://smithsonian.github.io/MitoPilot/reference
   article: https://smithsonian.github.io/MitoPilot/articles

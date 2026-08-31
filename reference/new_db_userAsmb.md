@@ -10,6 +10,7 @@ new_db_userAsmb(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  assembly_path = NULL,
   genetic_code = NULL,
   annotate_cpus = 6,
   annotate_memory = 36,
@@ -33,6 +34,24 @@ new_db_userAsmb(
   orf_min_len = 300,
   orf_max_overlap = 0.1,
   min_assembly_length = 500,
+  join_scaffolds = FALSE,
+  find_mitogenome = FALSE,
+  mitofinder_db = NULL,
+  find_min_contig_length = 500,
+  find_min_identity = 70,
+  find_min_aligned_length = 300,
+  find_min_aligned_fraction = 0.5,
+  find_max_candidates = 20,
+  find_min_genes = 3,
+  find_cpus = 4,
+  find_memory = 8,
+  attempt_circularization = FALSE,
+  circularize_min_overlap = 220,
+  circularize_min_identity = 99,
+  circularize_min_junction_reads = 5,
+  circularize_min_overhang = 30,
+  circularize_cpus = 4,
+  circularize_memory = 8,
   no_raw_data = FALSE
 )
 ```
@@ -45,8 +64,11 @@ new_db_userAsmb(
 
 - mapping_fn:
 
-  Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1",
-  "R2", "Assembly", and "Topology"
+  Path to the mapping CSV file. Must contain columns "ID", "Taxon", and
+  "Assembly", plus "R1" and "R2" unless \`no_raw_data = TRUE\`. An
+  optional "Topology" column may declare "circular" or "linear" for a
+  single-contig assembly; blank or missing is treated as linear, and a
+  multi-contig assembly is always recorded as "multi".
 
 - mapping_id:
 
@@ -56,6 +78,12 @@ new_db_userAsmb(
 
   Column name of the mapping file containing a Taxonomic identifier (eg,
   species name)
+
+- assembly_path:
+
+  Directory holding the user-supplied assembly files. Used to count each
+  assembly's contigs so a multi-contig assembly is recorded with
+  topology "multi".
 
 - genetic_code:
 
@@ -153,6 +181,91 @@ new_db_userAsmb(
 - min_assembly_length:
 
   Minimum scaffold length to include in analysis (default = 500)
+
+- join_scaffolds:
+
+  (logical) Order a fragmented assembly against its BLAST reference into
+  one joined sequence during WF1 (default = FALSE). Samples whose
+  contigs match different reference mitogenomes are left alone. So is a
+  sample with a junction the reference cannot size, since NCBI expects
+  the number of Ns to be the estimated gap length.
+
+- find_mitogenome:
+
+  Search each user-supplied assembly for its mitochondrial contigs
+  before the rest of WF1 runs (default = FALSE). See \[find_mito()\].
+
+- mitofinder_db:
+
+  Path to a MitoFinder GenBank database, built with
+  \[custom_assembly_db()\] (\`db_type = "mitofinder"\`). Required when
+  \`find_mitogenome = TRUE\`.
+
+- find_min_contig_length:
+
+  Contigs shorter than this are never searched, bp (default = 500)
+
+- find_min_identity:
+
+  Percent identity required against the reference (default = 70)
+
+- find_min_aligned_length:
+
+  Aligned bases required (default = 300)
+
+- find_min_aligned_fraction:
+
+  Fraction of the contig the alignment must cover (default = 0.5). The
+  NUMT filter.
+
+- find_max_candidates:
+
+  Most contigs carried into MitoFinder confirmation (default = 20)
+
+- find_min_genes:
+
+  Mitochondrial genes a contig must carry to be confirmed (default = 3)
+
+- find_cpus:
+
+  Default \# cpus for the search steps (default = 4)
+
+- find_memory:
+
+  Default memory (GB) for the search steps (default = 8)
+
+- attempt_circularization:
+
+  Try to circularize user assemblies in WF1 (default = FALSE). Each
+  contig is attempted on its own, so a fragmented assembly is eligible;
+  a single-contig assembly declared "circular" is skipped. See
+  \[circularize_asmb()\].
+
+- circularize_min_overlap:
+
+  Shortest accepted self-overlap, bp (default = 220)
+
+- circularize_min_identity:
+
+  Percent identity required for the self-overlap (default = 99)
+
+- circularize_min_junction_reads:
+
+  Reads that must span the new junction before an assembly is called
+  circular (default = 5). Ignored when the project has no raw data.
+
+- circularize_min_overhang:
+
+  Bases a read must extend past the junction on each side to count
+  (default = 30)
+
+- circularize_cpus:
+
+  Default \# cpus for the circularization step (default = 4)
+
+- circularize_memory:
+
+  Default memory (GB) for the circularization step (default = 8)
 
 - no_raw_data:
 

@@ -15,7 +15,7 @@ opened here; DB writes are done in Groovy (see scaffold_join_workflow.nf)."><met
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,7 @@ opened here; DB writes are done in Groovy (see scaffold_join_workflow.nf)."><met
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -131,9 +132,10 @@ are done in Groovy) and kept for call-site compatibility.</p></dd>
 
 <dt id="arg-auto-join">auto_join<a class="anchor" aria-label="anchor" href="#arg-auto-join"></a></dt>
 <dd><p>when TRUE (and the scaffolds' BLAST hits agree) build + write
-the joined Path 0. When FALSE (toggle off) or the hits disagree, only the
-precomputed scaffold-&gt;reference mappings are written, leaving the sample
-fragmented for manual review in the app.</p></dd>
+the joined Path 0. When FALSE (toggle off), when the hits disagree, or when
+a junction cannot be sized from the reference, only the precomputed
+scaffold-&gt;reference mappings are written, leaving the sample fragmented for
+manual review in the app.</p></dd>
 
 
 <dt id="arg-scaffold-hits">scaffold_hits<a class="anchor" aria-label="anchor" href="#arg-scaffold-hits"></a></dt>
@@ -143,6 +145,13 @@ read of `assemblies.blast_accession`, which is written by an async UPDATE
 with no happens-before relative to this step (so it can still be NULL here).</p></dd>
 
 </dl></div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Every exit also writes `join_status.txt` ("joined", "declined" when the join
+ran and refused, or "skipped" when it is toggled off) and `join_note.txt` (a
+reason for "declined", empty otherwise), so the workflow can tell each of
+those apart from a crashed task, which writes neither file.</p>
+    </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

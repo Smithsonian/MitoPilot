@@ -14,6 +14,10 @@ new_project_userAsmb(
   no_raw_data = FALSE,
   assembly_path = "NA",
   genetic_code = NULL,
+  find_mitogenome = FALSE,
+  mitofinder_db = NULL,
+  attempt_circularization = FALSE,
+  join_scaffolds = FALSE,
   executor = c("local", "awsbatch", "slurm", "sge", "pbs", "lsf", "NMNH_Hydra",
     "NOAA_SEDNA"),
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
@@ -38,11 +42,11 @@ new_project_userAsmb(
   \`ID\` column with a unique identifier for each sample, a \`Taxon\`
   column containing taxonomic information for each sample, and columns
   \`R1\` and \`R2\` specifying the names of the raw paired read inputs,
-  an \`Assembly\` column containing names of mitogenome assembly fasta
-  files (one contig/scaffold sequence per sample), and a \`Topology\`
-  column containing information about the assembly topology ("circular"
-  or "linear") May include additional columns with other sample
-  metadata.
+  and an \`Assembly\` column containing names of assembly fasta files.
+  An optional \`Topology\` column ("circular" or "linear") declares the
+  topology of a single-contig assembly; an assembly holding more than
+  one contig is recorded as "multi" and any declaration is ignored. May
+  include additional columns with other sample metadata.
 
 - mapping_id:
 
@@ -74,6 +78,44 @@ new_project_userAsmb(
   auto-selects from each sample's curation ruleset; a number sets a
   project-wide override.
   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+
+- find_mitogenome:
+
+  (logical) Search each supplied assembly for its mitochondrial contigs
+  before the rest of the Assemble module runs (default = FALSE). Use
+  this when your FASTA files hold whole assemblies rather than a
+  mitogenome: contigs are BLASTed against the bundled metazoan
+  mitogenome database, the survivors confirmed with MitoFinder, and only
+  those carried forward. See \[find_mito()\].
+
+- mitofinder_db:
+
+  Path to a MitoFinder GenBank database, built with
+  \[custom_assembly_db()\] (\`db_type = "mitofinder"\`). Required when
+  \`find_mitogenome = TRUE\`.
+
+- attempt_circularization:
+
+  (logical) Attempt to circularize user assemblies during the Assemble
+  module (default = FALSE). Every assembly is tried except a
+  single-contig one already declared circular, and each contig is
+  attempted on its own, so a fragmented assembly is eligible. Redundant
+  overlap between a contig's ends is trimmed, and when raw reads are
+  available the new junction must be supported by reads before that
+  contig is called circular. Assemblies holding more than 100 contigs
+  are left alone. Settings are editable later in the app's
+  circularization options modal. See \[circularize_asmb()\].
+
+- join_scaffolds:
+
+  (logical) Order a fragmented assembly against its BLAST reference into
+  one joined sequence during the Assemble module (default = FALSE).
+  Samples whose contigs match different reference mitogenomes are left
+  alone. So is a sample with a junction the reference cannot size, since
+  NCBI expects the number of Ns to be the estimated gap length. Because
+  eligibility here is any multi-contig assembly rather than just
+  mitogenome scaffolds, use this alongside \`find_mitogenome = TRUE\` so
+  the join sees only confirmed mitochondrial contigs.
 
 - executor:
 
@@ -120,4 +162,5 @@ new_project_userAsmb(
 - ...:
 
   Additional arguments passed as default processing parameters to
-  \`new_db()\`
+  \[new_db_userAsmb()\]. Assembly parameters accepted by \[new_db()\] do
+  not apply to a user-assembly project.

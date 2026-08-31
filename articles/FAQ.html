@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,6 +51,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -102,8 +103,91 @@ page.</p>
 <div class="section level2">
 <h2 id="can-i-annotate-my-own-mitogenome-assemblies-with-mitopilot">Can I annotate my own mitogenome assemblies with MitoPilot?<a class="anchor" aria-label="anchor" href="#can-i-annotate-my-own-mitogenome-assemblies-with-mitopilot"></a>
 </h2>
-<p>Yes! See the <a href="https://smithsonian.github.io/MitoPilot/#initializing-a-project-with-user-assemblies">“Initializing
-a Project with User Assemblies”</a> section of the main page.</p>
+<p>Yes! See <a href="Your-Own-Assemblies.html">Using Your Own
+Assemblies</a>.</p>
+</div>
+<div class="section level2">
+<h2 id="can-mitopilot-find-the-mitogenome-in-my-whole-genome-assembly">Can MitoPilot find the mitogenome in my whole-genome assembly?<a class="anchor" aria-label="anchor" href="#can-mitopilot-find-the-mitogenome-in-my-whole-genome-assembly"></a>
+</h2>
+<p>Yes. Create the project with
+<code>new_project_userAsmb(find_mitogenome = TRUE)</code> and supply a
+MitoFinder database for your clade via <code>mitofinder_db</code>. Each
+sample’s contigs are BLASTed against the metazoan mitogenome database
+bundled with MitoPilot, the best candidates are confirmed by annotating
+them with MitoFinder, and only confirmed contigs continue through the
+pipeline.</p>
+<p>The search is built for large inputs: MitoPilot drops contigs shorter
+than 500 bp, then splits the rest of the FASTA into chunks and searches
+them in parallel. The largest assembly tested held 1.4 million
+contigs.</p>
+<p>MitoPilot filters out nuclear mitochondrial insertions (NUMTs) by
+requiring the BLAST hit to cover at least half the contig’s own length.
+A nuclear scaffold carrying a mitochondrial insertion matches only a
+sliver of itself, so it is rejected.</p>
+<p>See <a href="Your-Own-Assemblies.html#finding-the-mitogenome-in-a-whole-assembly">“Finding
+the mitogenome in a whole assembly”</a> for details.</p>
+</div>
+<div class="section level2">
+<h2 id="can-mitopilot-circularize-my-mitogenome-assemblies">Can MitoPilot circularize my mitogenome assemblies?<a class="anchor" aria-label="anchor" href="#can-mitopilot-circularize-my-mitogenome-assemblies"></a>
+</h2>
+<p>Yes, if the ends of a contig overlap by at least 220 bp and the two
+copies are at least 99% identical. Both thresholds are adjustable.</p>
+<p>Create the project with
+<code>new_project_userAsmb(attempt_circularization = TRUE)</code>.
+During the Assemble module MitoPilot BLASTs each contig against itself,
+trims the redundant overlap, and relabels that contig
+<code>circular</code>. If you supplied raw reads, it also maps them
+across the new junction and keeps the assembly linear unless enough
+reads span it, so a repeat is not mistaken for a real circle.</p>
+<p>It cannot invent sequence that is missing. A contig with a genuine
+gap between its ends stays linear no matter how the thresholds are
+set.</p>
+<p>Every sample is considered except a single-contig assembly you
+declared <code>circular</code> in the mapping file; a declaration on a
+multi-contig assembly is ignored, so those contigs are attempted too.
+Results appear in the <strong>Circularization</strong> column of the
+Assemble table, and the thresholds live in the <strong>Circularize
+Opts.</strong> modal. See <a href="Your-Own-Assemblies.html#circularizing-linear-assemblies">“Circularizing
+linear assemblies”</a> for details.</p>
+</div>
+<div class="section level2">
+<h2 id="can-mitopilot-join-a-fragmented-assembly-into-one-sequence">Can MitoPilot join a fragmented assembly into one sequence?<a class="anchor" aria-label="anchor" href="#can-mitopilot-join-a-fragmented-assembly-into-one-sequence"></a>
+</h2>
+<p>Yes, if the contigs match the same reference mitogenome and that
+reference can estimate the size of every gap between them.</p>
+<p>Create the project with
+<code>new_project_userAsmb(join_scaffolds = TRUE)</code>. During the
+Assemble module MitoPilot orders the sample’s contigs against its BLAST
+reference and joins them into one sequence. If the contigs instead match
+different reference mitogenomes, MitoPilot leaves them separate for
+review rather than joining them, so a contaminated sample is never
+spliced into a chimera. It also leaves a sample fragmented when the
+reference cannot size a junction between two contigs, rather than
+padding it with a made-up number of <code>N</code>s. Either way it says
+why in the <strong>Scaffold Join Notes</strong> column.</p>
+<p>On whole-genome assemblies, pair it with
+<code>find_mitogenome = TRUE</code>. Otherwise any multi-contig assembly
+is eligible, not just mitochondrial contigs. You can review and adjust
+the join in the sample’s assembly details window, where <strong>Redo
+join in pipeline</strong> queues a fresh join for the next pipeline
+update. See <a href="Your-Own-Assemblies.html#joining-fragmented-assemblies">“Joining
+fragmented assemblies”</a> for details.</p>
+</div>
+<div class="section level2">
+<h2 id="what-happens-if-my-assembly-contains-ambiguous-bases">What happens if my assembly contains ambiguous bases?<a class="anchor" aria-label="anchor" href="#what-happens-if-my-assembly-contains-ambiguous-bases"></a>
+</h2>
+<p>Nothing breaks. Ambiguity codes (<code>N</code>, <code>R</code>,
+<code>Y</code>, and the rest) are common in consensus sequences called
+against a reference, and MitoPilot annotates and exports those
+assemblies normally.</p>
+<p>A codon holding an ambiguous base becomes the one amino acid it can
+be, or <code>X</code> when more than one is possible, and the gene
+carries an <code>&lt;n&gt; ambiguous bases in CDS</code> warning so you
+can review it. Counts are shown per sample in the <strong>Ambig.
+Bases</strong> column of the Assemble table, per contig in the assembly
+details window, and per gene at the top of the annotation alignment. See
+<a href="Your-Own-Assemblies.html#assemblies-containing-ambiguous-bases">“Assemblies
+containing ambiguous bases”</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="how-do-i-skip-processing-certain-samples">How do I skip processing certain samples?<a class="anchor" aria-label="anchor" href="#how-do-i-skip-processing-certain-samples"></a>

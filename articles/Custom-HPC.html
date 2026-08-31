@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,6 +51,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -137,7 +138,7 @@ copy of the image. You build it once, then reuse it.</li>
 or compute node (not the login node):</p>
 <p>The image tag must match your installed MitoPilot version. Get it
 with <code>packageVersion("MitoPilot")</code>, which for this build of
-the documentation is 1.5.2.</p>
+the documentation is 1.5.4.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">singularity</span> pull mitopilot.sif docker://macguigand/mitopilot:<span class="op">&lt;</span>version<span class="op">&gt;</span></span></code></pre></div>
 <p><strong>2. Start an R session.</strong> By default a Singularity
 container can only see your <strong>home directory</strong>. Bind any
@@ -286,6 +287,12 @@ BLAST search against the mitogenome database packaged in the container,
 so it asks for CPUs rather than just waiting on the network. Memory and
 CPU for all other steps in the workflow are pulled dynamically from the
 project database and can be set directly in the MitoPilot app.</p>
+<p>One other setting lives only in the <code>.config</code> file:
+<code>find_mito.chunk_size</code>, the number of contigs sent to each
+parallel BLAST job during the mitogenome search (default 50000).
+Nextflow fixes this when the pipeline is built, so it cannot be changed
+from the app. Lower it to spread a very large assembly across more,
+shorter jobs.</p>
 </div>
 <div class="section level3">
 <h3 id="validate-before-running">Validate before running<a class="anchor" aria-label="anchor" href="#validate-before-running"></a>

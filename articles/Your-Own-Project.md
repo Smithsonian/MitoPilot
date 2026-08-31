@@ -220,33 +220,12 @@ a reference in Geneious, use
 instead. MitoPilot will skip assembly and let you perform annotation,
 curation, and export.
 
-It needs two extra columns in the mapping file:
-
-| Column | Contents |
-|----|----|
-| `Assembly` | File name of the assembly FASTA for the sample (one file per sample) |
-| `Topology` | `circular` or `linear` |
-
-``` r
-
-new_project_userAsmb(
-  path = "~/my_assemblies/run_01",
-  mapping_fn = "~/my_assemblies/mapping.csv",
-  data_path = "~/my_assemblies/raw_data",
-  assembly_path = "~/my_assemblies/assemblies",
-  executor = "local"
-)
-```
-
-You still run the Assemble module, but it only maps reads to your
-assemblies to compute coverage and error rates.
-
-If you have no reads at all, set `no_raw_data = TRUE` and omit
-`data_path`. MitoPilot will skip read mapping entirely and hide the
-coverage columns that depend on it.
-
-**Warning.** A project holds either MitoPilot assemblies or externally
-supplied ones, never both. Use separate projects if you have a mix.
+[Using Your Own
+Assemblies](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Assemblies.md)
+covers the extra mapping columns, projects with no raw reads, and the
+optional steps for whole-genome assemblies: finding the mitochondrial
+contigs, circularizing linear ones, and joining a mitogenome that
+arrived in several pieces.
 
 ------------------------------------------------------------------------
 

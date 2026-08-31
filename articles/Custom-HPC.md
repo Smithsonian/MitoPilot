@@ -43,7 +43,7 @@ A quick vocabulary primer if containers are new to you:
 
 The image tag must match your installed MitoPilot version. Get it with
 `packageVersion("MitoPilot")`, which for this build of the documentation
-is 1.5.2.
+is 1.5.4.
 
 ``` bash
 singularity pull mitopilot.sif docker://macguigand/mitopilot:<version>
@@ -183,6 +183,12 @@ the container, so it asks for CPUs rather than just waiting on the
 network. Memory and CPU for all other steps in the workflow are pulled
 dynamically from the project database and can be set directly in the
 MitoPilot app.
+
+One other setting lives only in the `.config` file:
+`find_mito.chunk_size`, the number of contigs sent to each parallel
+BLAST job during the mitogenome search (default 50000). Nextflow fixes
+this when the pipeline is built, so it cannot be changed from the app.
+Lower it to spread a very large assembly across more, shorter jobs.
 
 ### Validate before running
 

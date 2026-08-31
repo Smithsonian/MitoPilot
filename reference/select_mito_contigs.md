@@ -1,0 +1,71 @@
+# Select mitochondrial contigs from a BLAST screen
+
+Given the merged per-contig hits from the WF1 screen (all contigs of one
+sample BLASTed against the bundled metazoan mitogenome database), pick
+the reference the sample as a whole matches best and keep the contigs
+that match it convincingly.
+
+## Usage
+
+``` r
+select_mito_contigs(
+  hits,
+  min_identity = 70,
+  min_aligned_length = 300,
+  min_aligned_fraction = 0.5,
+  max_candidates = 20,
+  max_references = 5
+)
+```
+
+## Arguments
+
+- hits:
+
+  data frame of BLAST hits with columns \`qseqid\`, \`saccver\`,
+  \`pident\`, \`length\` (aligned bases), \`bitscore\` and \`qlen\`.
+
+- min_identity:
+
+  Percent identity required against the winning reference (default = 70)
+
+- min_aligned_length:
+
+  Aligned bases required (default = 300)
+
+- min_aligned_fraction:
+
+  Fraction of the contig the alignment must cover (default = 0.5)
+
+- max_candidates:
+
+  Most contigs carried into confirmation, counted across all references
+  (default = 20)
+
+- max_references:
+
+  Most references the vote may award, a safety net on very messy
+  assemblies (default = 5)
+
+## Value
+
+a list with \`accession\` (the winning references in the order they won,
+NA when there are no hits), \`candidates\` (character vector of contig
+names, best first) and \`evidence\` (one row per contig scored, with the
+numbers behind the call and a \`reason\` for anything dropped)
+
+## Details
+
+The vote runs in rounds. Each round scores only the contigs that hit
+that round's winning reference, then drops all of them from the pool,
+pass or fail, so every contig is judged against exactly one reference.
+Rounds keep the anti-splitting behavior within a mitogenome while
+letting a second, unrelated mitogenome (a contaminant, or a mixed
+sample) win its own round. The search stops at the first round that
+selects nothing: references are visited strongest first, so a reference
+carrying only NUMT-grade hits means the weaker ones behind it carry
+less.
+
+The fraction rule is the NUMT filter: a real mitochondrial contig is
+almost entirely mitochondrial, while a nuclear scaffold carrying a NUMT
+aligns over a tiny slice of itself.

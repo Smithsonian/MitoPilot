@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,6 +30,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -70,6 +71,7 @@
 <span>  mapping_fn <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mapping_id <span class="op">=</span> <span class="st">"ID"</span>,</span>
 <span>  mapping_taxon <span class="op">=</span> <span class="st">"Taxon"</span>,</span>
+<span>  assembly_path <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  genetic_code <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  annotate_cpus <span class="op">=</span> <span class="fl">6</span>,</span>
 <span>  annotate_memory <span class="op">=</span> <span class="fl">36</span>,</span>
@@ -93,6 +95,24 @@
 <span>  orf_min_len <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>  orf_max_overlap <span class="op">=</span> <span class="fl">0.1</span>,</span>
 <span>  min_assembly_length <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  join_scaffolds <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  find_mitogenome <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  mitofinder_db <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  find_min_contig_length <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  find_min_identity <span class="op">=</span> <span class="fl">70</span>,</span>
+<span>  find_min_aligned_length <span class="op">=</span> <span class="fl">300</span>,</span>
+<span>  find_min_aligned_fraction <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span>  find_max_candidates <span class="op">=</span> <span class="fl">20</span>,</span>
+<span>  find_min_genes <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  find_cpus <span class="op">=</span> <span class="fl">4</span>,</span>
+<span>  find_memory <span class="op">=</span> <span class="fl">8</span>,</span>
+<span>  attempt_circularization <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  circularize_min_overlap <span class="op">=</span> <span class="fl">220</span>,</span>
+<span>  circularize_min_identity <span class="op">=</span> <span class="fl">99</span>,</span>
+<span>  circularize_min_junction_reads <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  circularize_min_overhang <span class="op">=</span> <span class="fl">30</span>,</span>
+<span>  circularize_cpus <span class="op">=</span> <span class="fl">4</span>,</span>
+<span>  circularize_memory <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  no_raw_data <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -106,7 +126,11 @@
 
 
 <dt id="arg-mapping-fn">mapping_fn<a class="anchor" aria-label="anchor" href="#arg-mapping-fn"></a></dt>
-<dd><p>Path to the mapping CSV file. Must contain columns "ID", "Taxon, "R1", "R2", "Assembly", and "Topology"</p></dd>
+<dd><p>Path to the mapping CSV file. Must contain columns "ID",
+"Taxon", and "Assembly", plus "R1" and "R2" unless `no_raw_data = TRUE`.
+An optional "Topology" column may declare "circular" or "linear" for a
+single-contig assembly; blank or missing is treated as linear, and a
+multi-contig assembly is always recorded as "multi".</p></dd>
 
 
 <dt id="arg-mapping-id">mapping_id<a class="anchor" aria-label="anchor" href="#arg-mapping-id"></a></dt>
@@ -116,6 +140,12 @@
 <dt id="arg-mapping-taxon">mapping_taxon<a class="anchor" aria-label="anchor" href="#arg-mapping-taxon"></a></dt>
 <dd><p>Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)</p></dd>
+
+
+<dt id="arg-assembly-path">assembly_path<a class="anchor" aria-label="anchor" href="#arg-assembly-path"></a></dt>
+<dd><p>Directory holding the user-supplied assembly files. Used
+to count each assembly's contigs so a multi-contig assembly is recorded with
+topology "multi".</p></dd>
 
 
 <dt id="arg-genetic-code">genetic_code<a class="anchor" aria-label="anchor" href="#arg-genetic-code"></a></dt>
@@ -212,6 +242,99 @@ of the ORF length, before an ORF is discarded (default = 0.1)</p></dd>
 
 <dt id="arg-min-assembly-length">min_assembly_length<a class="anchor" aria-label="anchor" href="#arg-min-assembly-length"></a></dt>
 <dd><p>Minimum scaffold length to include in analysis (default = 500)</p></dd>
+
+
+<dt id="arg-join-scaffolds">join_scaffolds<a class="anchor" aria-label="anchor" href="#arg-join-scaffolds"></a></dt>
+<dd><p>(logical) Order a fragmented assembly against its BLAST
+reference into one joined sequence during WF1 (default = FALSE). Samples
+whose contigs match different reference mitogenomes are left alone. So is a
+sample with a junction the reference cannot size, since NCBI expects the
+number of Ns to be the estimated gap length.</p></dd>
+
+
+<dt id="arg-find-mitogenome">find_mitogenome<a class="anchor" aria-label="anchor" href="#arg-find-mitogenome"></a></dt>
+<dd><p>Search each user-supplied assembly for its
+mitochondrial contigs before the rest of WF1 runs (default = FALSE). See
+[find_mito()].</p></dd>
+
+
+<dt id="arg-mitofinder-db">mitofinder_db<a class="anchor" aria-label="anchor" href="#arg-mitofinder-db"></a></dt>
+<dd><p>Path to a MitoFinder GenBank database, built with
+[custom_assembly_db()] (`db_type = "mitofinder"`). Required when
+`find_mitogenome = TRUE`.</p></dd>
+
+
+<dt id="arg-find-min-contig-length">find_min_contig_length<a class="anchor" aria-label="anchor" href="#arg-find-min-contig-length"></a></dt>
+<dd><p>Contigs shorter than this are never searched,
+bp (default = 500)</p></dd>
+
+
+<dt id="arg-find-min-identity">find_min_identity<a class="anchor" aria-label="anchor" href="#arg-find-min-identity"></a></dt>
+<dd><p>Percent identity required against the reference
+(default = 70)</p></dd>
+
+
+<dt id="arg-find-min-aligned-length">find_min_aligned_length<a class="anchor" aria-label="anchor" href="#arg-find-min-aligned-length"></a></dt>
+<dd><p>Aligned bases required (default = 300)</p></dd>
+
+
+<dt id="arg-find-min-aligned-fraction">find_min_aligned_fraction<a class="anchor" aria-label="anchor" href="#arg-find-min-aligned-fraction"></a></dt>
+<dd><p>Fraction of the contig the alignment must
+cover (default = 0.5). The NUMT filter.</p></dd>
+
+
+<dt id="arg-find-max-candidates">find_max_candidates<a class="anchor" aria-label="anchor" href="#arg-find-max-candidates"></a></dt>
+<dd><p>Most contigs carried into MitoFinder confirmation
+(default = 20)</p></dd>
+
+
+<dt id="arg-find-min-genes">find_min_genes<a class="anchor" aria-label="anchor" href="#arg-find-min-genes"></a></dt>
+<dd><p>Mitochondrial genes a contig must carry to be confirmed
+(default = 3)</p></dd>
+
+
+<dt id="arg-find-cpus">find_cpus<a class="anchor" aria-label="anchor" href="#arg-find-cpus"></a></dt>
+<dd><p>Default # cpus for the search steps (default = 4)</p></dd>
+
+
+<dt id="arg-find-memory">find_memory<a class="anchor" aria-label="anchor" href="#arg-find-memory"></a></dt>
+<dd><p>Default memory (GB) for the search steps (default = 8)</p></dd>
+
+
+<dt id="arg-attempt-circularization">attempt_circularization<a class="anchor" aria-label="anchor" href="#arg-attempt-circularization"></a></dt>
+<dd><p>Try to circularize user assemblies in WF1
+(default = FALSE). Each contig is attempted on its own, so a fragmented
+assembly is eligible; a single-contig assembly declared "circular" is
+skipped. See [circularize_asmb()].</p></dd>
+
+
+<dt id="arg-circularize-min-overlap">circularize_min_overlap<a class="anchor" aria-label="anchor" href="#arg-circularize-min-overlap"></a></dt>
+<dd><p>Shortest accepted self-overlap, bp (default = 220)</p></dd>
+
+
+<dt id="arg-circularize-min-identity">circularize_min_identity<a class="anchor" aria-label="anchor" href="#arg-circularize-min-identity"></a></dt>
+<dd><p>Percent identity required for the self-overlap
+(default = 99)</p></dd>
+
+
+<dt id="arg-circularize-min-junction-reads">circularize_min_junction_reads<a class="anchor" aria-label="anchor" href="#arg-circularize-min-junction-reads"></a></dt>
+<dd><p>Reads that must span the new junction
+before an assembly is called circular (default = 5). Ignored when the
+project has no raw data.</p></dd>
+
+
+<dt id="arg-circularize-min-overhang">circularize_min_overhang<a class="anchor" aria-label="anchor" href="#arg-circularize-min-overhang"></a></dt>
+<dd><p>Bases a read must extend past the junction on
+each side to count (default = 30)</p></dd>
+
+
+<dt id="arg-circularize-cpus">circularize_cpus<a class="anchor" aria-label="anchor" href="#arg-circularize-cpus"></a></dt>
+<dd><p>Default # cpus for the circularization step (default = 4)</p></dd>
+
+
+<dt id="arg-circularize-memory">circularize_memory<a class="anchor" aria-label="anchor" href="#arg-circularize-memory"></a></dt>
+<dd><p>Default memory (GB) for the circularization step
+(default = 8)</p></dd>
 
 
 <dt id="arg-no-raw-data">no_raw_data<a class="anchor" aria-label="anchor" href="#arg-no-raw-data"></a></dt>
