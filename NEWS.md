@@ -1,6 +1,6 @@
 # MitoPilot 1.5.4
 
-Released 2026-08-28. Container: `macguigand/mitopilot:1.5.4`
+Released 2026-08-31. Container: `macguigand/mitopilot:1.5.4`
 
 ## New Features
 
@@ -55,7 +55,7 @@ This release is about **user-supplied assemblies**. MitoPilot can now take a who
 
 ## Bug Fixes
 
-- **A gene containing ambiguous bases no longer kills the sample or the app.** A protein-coding gene holding bases that are not A, C, G, or T was refused outright by translation, so curation died partway through with an unreadable error, and clicking the START or STOP codon arrows in the annotation editor hung the app behind a spinner that never cleared. Ambiguous bases arrive both from the `N` spacers MitoPilot inserts when joining scaffolds and from consensus assemblies called against a reference, which carry IUPAC codes at uncertain sites. Those codons are now translated to an amino acid where only one is possible and to `X` otherwise, and the gene is flagged with an `ambiguous bases in CDS` warning for review.
+- **A gene containing ambiguous bases no longer kills the sample or the app.** A protein-coding gene holding bases that are not A, C, G, or T was refused outright by translation, so curation died partway through with an unreadable error, and clicking the +/- START or STOP codon buttons in the annotation editor hung the app behind a spinner that never cleared. Ambiguous bases arrive both from the `N` spacers MitoPilot inserts when joining scaffolds and from consensus assemblies called against a reference, which carry IUPAC codes at uncertain sites. Those codons are now translated to an amino acid where only one is possible and to `X` otherwise, and the gene is flagged with an `ambiguous bases in CDS` warning for review.
 - **An error while editing codons no longer freezes the annotation window.** Anything that went wrong while walking the START or STOP codon left the "Updating alignment, hold tight..." overlay on screen forever and no other sample would open. The overlay now clears and the problem is reported.
 - **The Assemble table reports the lengths of the contigs that are actually active.** The length and scaffold counts were a snapshot taken before any join, so a joined sample kept describing the fragments it replaced, and ignoring or restoring a contig afterwards changed nothing. They are now refreshed whenever a join, an edit, or an ignore toggle changes what is active, and equal-length fragments are listed individually rather than collapsed into one value that looks like a total.
 - **Gaps in a joined assembly are declared on export.** Every run of `N`s that MitoPilot inserted when joining fragments is written as a `gap` feature carrying its estimated length, however short the run. Runs of `N`s that arrived with your own sequence are left alone, since they may be ambiguous base calls rather than gaps. Any coding feature containing unknown bases carries a note saying how many.
