@@ -5,7 +5,7 @@
 ASSEMBLE_COL_GROUPS_USERASMB <- list(
   Options  = c("pre_opts", "find_mito_opts", "circularize_opts", "blast_opts"),
   Stats    = c("trimmed_reads", "mean_length", "topology", "length",
-               "paths", "scaffolds"),
+               "ambiguous_bases", "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
@@ -353,6 +353,11 @@ assemble_server_userAsmb <- function(id) {
               filterable = FALSE,
               html = TRUE,
               cell = rt_longtext()
+            ),
+            ambiguous_bases = colDef(
+              show = TRUE, class = .grp("ambiguous_bases"), headerClass = .grp("ambiguous_bases"),
+              width = 110, name = "Ambig. Bases", align = "center",
+              filterable = FALSE
             ),
             paths = colDef(
               show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),

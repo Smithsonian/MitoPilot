@@ -195,7 +195,15 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # Render table ----
     output$table <- renderReactable({
-      rv$focal_assembly |>
+      # Bases that are not A/C/G/T, per contig: join spacers, or ambiguity codes
+      # that came in with a user-supplied or consensus assembly. Column hides
+      # itself when every contig is clean.
+      tbl <- rv$focal_assembly |>
+        dplyr::mutate(
+          ambiguous_bases = vapply(sequence, ambiguous_base_count, integer(1)),
+          .after = "length"
+        )
+      tbl |>
         reactable(
           compact = TRUE,
           wrap = FALSE,
@@ -233,6 +241,10 @@ assembly_coverage_details_server <- function(id, rv) {
             ),
             length = colDef(
               name = "Length (trimmed)", width = 130, align = "center"
+            ),
+            ambiguous_bases = colDef(
+              name = "Ambig. Bases", width = 110, align = "center",
+              show = any(tbl$ambiguous_bases > 0)
             ),
             sequence = colDef(show = FALSE),
             depth = colDef(show = FALSE),

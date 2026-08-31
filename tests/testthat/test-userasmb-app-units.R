@@ -60,6 +60,9 @@ test_that("a contig with no topology yet is counted, not dropped", {
 # --- 2. the Assemble table ---------------------------------------------------
 
 assemble_db <- function(assemblies) {
+  # Every real assemblies row carries its sequence; tests that do not care about
+  # it get a clean one so the ambiguous-base count is 0.
+  if (!"sequence" %in% names(assemblies)) assemblies$sequence <- rep("ACGT", nrow(assemblies))
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   DBI::dbWriteTable(con, "assemble", data.frame(
     ID = c("mixed", "circ", "fresh"), assemble_lock = 0L, assemble_switch = 2L,
@@ -102,6 +105,38 @@ test_that("the Assemble table summarises each sample's contig topologies", {
   # no assemblies rows yet: the declared value is an input, not a measurement,
   # and must not be shown as though WF1 had confirmed it
   expect_equal(topo[["fresh"]], "linear (declared)")
+})
+
+test_that("ambiguous bases are counted for single-contig samples only", {
+  con <- assemble_db(data.frame(
+    ID = c("mixed", "mixed", "circ"),
+    path = 1L, scaffold = c(1L, 2L, 1L),
+    topology = "linear", ignore = 0L,
+    sequence = c("ACGTNN", "ACGT", "ACRGTN"),
+    stringsAsFactors = FALSE
+  ))
+  withr::defer(DBI::dbDisconnect(con))
+
+  out <- fetch_assemble_data_userAsmb(list(userData = list(con = con)))
+  amb <- stats::setNames(out$ambiguous_bases, out$ID)
+
+  expect_equal(amb[["circ"]], 2L)
+  # more than one active contig: no single number to report in the samples table
+  expect_true(is.na(amb[["mixed"]]))
+  expect_true(is.na(amb[["fresh"]]))
+})
+
+test_that("an ignored contig is left out of the ambiguous-base count", {
+  con <- assemble_db(data.frame(
+    ID = "mixed", path = 1L, scaffold = c(1L, 2L),
+    topology = "linear", ignore = c(0L, 1L),
+    sequence = c("ACGTN", "NNNNN"),
+    stringsAsFactors = FALSE
+  ))
+  withr::defer(DBI::dbDisconnect(con))
+
+  out <- fetch_assemble_data_userAsmb(list(userData = list(con = con)))
+  expect_equal(out$ambiguous_bases[out$ID == "mixed"], 1L)
 })
 
 test_that("an ignored contig is left out of the summary", {

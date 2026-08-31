@@ -34,6 +34,11 @@ This release is about **user-supplied assemblies**. MitoPilot can now take a who
 
 - A user assembly split across several contigs could not be locked for annotation until you ignored all but one contig, and only that contig was ever annotated. **Every contig is now its own annotation unit** and is annotated, curated, and exported like any other sequence.
 
+### Ambiguous bases are counted and shown
+
+- The Assemble table of a user-assembly project has a new **Ambig. Bases** column, right after the assembly length, counting the bases that are not A, C, G, or T. It is filled in for samples with a single active contig; a sample with several contigs shows the count per contig in the assembly details window instead.
+- The annotation alignment viewer warns when the gene on screen contains ambiguous bases, for protein-coding genes and rRNAs alike. The count updates as you nudge the gene ends with the +/- buttons.
+
 ### Topology is now optional
 
 - The `Topology` column in the mapping file is **optional**. Leave it out, or leave a cell blank, and a single-contig assembly is treated as linear. An earlier release refused to build the project without the column.
@@ -50,7 +55,8 @@ This release is about **user-supplied assemblies**. MitoPilot can now take a who
 
 ## Bug Fixes
 
-- **A gene containing ambiguous bases no longer kills the sample.** A protein-coding gene holding bases that are not A, C, G, or T was refused outright by translation, so curation died partway through with an unreadable error. Those codons are now translated to an amino acid where only one is possible and to `X` otherwise, and the gene is flagged with an `ambiguous bases in CDS` warning for review.
+- **A gene containing ambiguous bases no longer kills the sample or the app.** A protein-coding gene holding bases that are not A, C, G, or T was refused outright by translation, so curation died partway through with an unreadable error, and clicking the START or STOP codon arrows in the annotation editor hung the app behind a spinner that never cleared. Ambiguous bases arrive both from the `N` spacers MitoPilot inserts when joining scaffolds and from consensus assemblies called against a reference, which carry IUPAC codes at uncertain sites. Those codons are now translated to an amino acid where only one is possible and to `X` otherwise, and the gene is flagged with an `ambiguous bases in CDS` warning for review.
+- **An error while editing codons no longer freezes the annotation window.** Anything that went wrong while walking the START or STOP codon left the "Updating alignment, hold tight..." overlay on screen forever and no other sample would open. The overlay now clears and the problem is reported.
 - **The Assemble table reports the lengths of the contigs that are actually active.** The length and scaffold counts were a snapshot taken before any join, so a joined sample kept describing the fragments it replaced, and ignoring or restoring a contig afterwards changed nothing. They are now refreshed whenever a join, an edit, or an ignore toggle changes what is active, and equal-length fragments are listed individually rather than collapsed into one value that looks like a total.
 - **Gaps in a joined assembly are declared on export.** Every run of `N`s that MitoPilot inserted when joining fragments is written as a `gap` feature carrying its estimated length, however short the run. Runs of `N`s that arrived with your own sequence are left alone, since they may be ambiguous base calls rather than gaps. Any coding feature containing unknown bases carries a note saying how many.
 - **A junction that cannot be sized is no longer padded.** MitoPilot used to insert a fixed 100 `N`s where the reference could not estimate a gap. NCBI expects the number of `N`s to be the estimated length, so such a sample is now left fragmented with a note; its contigs can be submitted as several sequences under one BioSample. This applies to regular projects too, so a sample that joined under an earlier release may now be left in pieces, with the reason given in the **Scaffold Join Notes** column. If you joined a fragmented assembly under an earlier release, redo the join before exporting: MitoPilot cannot recognize the old fixed padding and will not declare those gaps.

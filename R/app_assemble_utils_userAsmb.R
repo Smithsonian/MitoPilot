@@ -47,12 +47,19 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
   # A sample with none (never run, or every contig ignored) has no measured
   # topology at all, so it falls back to the value the user declared and says
   # so: the declared value is an input, not a result.
+  # Ambiguous bases are counted per contig at the same time. A sample with more
+  # than one active contig has no single number to show, so it is left blank
+  # here and reported per contig in the assembly details table.
   unit_topology <- dplyr::tbl(db, "assemblies") |>
-    dplyr::select(ID, topology, ignore) |>
+    dplyr::select(ID, topology, ignore, sequence) |>
     dplyr::collect() |>
     dplyr::group_by(ID) |>
     dplyr::summarise(
       unit_topology = summarize_topology(topology[ignore == 0]),
+      ambiguous_bases = {
+        active <- which(ignore %in% 0)
+        if (length(active) == 1L) ambiguous_base_count(sequence[active]) else NA_integer_
+      },
       .groups = "drop"
     )
 
@@ -90,6 +97,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       trimmed_reads,
       mean_length,
       length,
+      ambiguous_bases,
       paths,
       scaffolds,
       blast_accession,
