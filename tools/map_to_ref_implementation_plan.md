@@ -1668,7 +1668,7 @@ Facts (verified 2026-09-03):
 - `NO_FILE` placeholder: pass `file("${projectDir}/assets/NO_FILE")` when the set is not MapToRef, the same way an unused optional path input is staged elsewhere in this pipeline.
 - The eleven-argument `map_to_ref()` call in Step 4, passing `!{opts.cpus}`, is authoritative: the `assemble` process declares no `cpus` directive and both existing branches read `!{opts.cpus}`. Design 5.3's row has been updated to match it.
 
-Deviation from the design, deliberate: design section 5.3 says the `assemble.nf` output tuple is unchanged. The loop record (`iterations.tsv`, `subs_only.fasta`, the per-pass consensus files) that section 4.11 promises the user is only published if it is a declared output, so an 11th element `path("${id}/assemble/${opts_id}/maptoref", optional: true)` is APPENDED. It is optional because the other two assemblers never create that directory, and appended so no existing index moves.
+Deviation from the design, deliberate: design section 5.3 says the `assemble.nf` output tuple is unchanged. The loop record (`iterations.tsv`, `subs_only.fasta`, the per-pass consensus files) that section 4.11 promises the user is only published if it is a declared output, so a second output declaration `path("${id}/assemble/${opts_id}/maptoref", optional: true)` is added after the tuple. It is optional because the other two assemblers never create that directory, and it is a standalone `path` output because Nextflow does not honour `optional: true` on an element inside a tuple. The tuple itself is unchanged, so no existing index moves.
 
 **Files:**
 - Modify: `inst/nextflow/modules/assemble_workflow.nf:6-20`, `:99-117`, `:183-195`
@@ -1727,10 +1727,11 @@ In the `.map` at `:183-195`, append a tenth element after `it[1][7]`:
     tuple val(id), val(opts_id), path(reads), val(opts), path(dbs), path(mf_db), val(genetic_code), val(max_paths), val(max_scaffolds), path(ref)
 ```
 
-`assemble.nf:19` output, append the loop record:
+`assemble.nf:19` output, add the loop record as a second output declaration:
 
 ```groovy
-    tuple val("${id}"), path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"), path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"), path("${id}/assemble/${opts_id}/${id}_summary.txt"), val("${opts_id}"), path("${id}/assemble/${opts_id}/assembler.log.txt"), path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt"), val("${opts.assembler}"), val(max_paths), val(max_scaffolds), path("${id}/assemble/${opts_id}/maptoref", optional: true)
+    tuple val("${id}"), path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"), path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"), path("${id}/assemble/${opts_id}/${id}_summary.txt"), val("${opts_id}"), path("${id}/assemble/${opts_id}/assembler.log.txt"), path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt"), val("${opts.assembler}"), val(max_paths), val(max_scaffolds)
+    path("${id}/assemble/${opts_id}/maptoref", optional: true)
 ```
 
 Insert the third branch between `:101` and the closing `fi` at `:102`:
