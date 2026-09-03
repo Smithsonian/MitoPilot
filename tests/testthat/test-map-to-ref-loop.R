@@ -15,7 +15,7 @@ mtr_stub_bin <- function(dir) {
     "    ;;",
     "  view)",
     "    case \" $* \" in",
-    "      *\" -c \"*) echo 5000 ;;",
+    "      *\" -c \"*) echo ${MTR_STUB_COUNT:-5000} ;;",
     "      *)",
     "        if [ -n \"$MTR_STUB_VIEW_FAIL\" ]; then",
     "          case \" $* \" in *:*) exit 1 ;; esac",
@@ -69,8 +69,8 @@ mtr_write_wrapped <- function(fn, seq) {
   fn
 }
 
-mtr_setup <- function(dir, junction = TRUE, vary = FALSE) {
-  ref_seq <- paste(rep("ACGTACGTTG", 600L), collapse = "")   # 6000 bp
+mtr_setup <- function(dir, junction = TRUE, vary = FALSE, reps = 600L) {
+  ref_seq <- paste(rep("ACGTACGTTG", reps), collapse = "")   # 6000 bp by default
   len <- nchar(ref_seq)
   flank <- min(500L, len %/% 2L)
 
@@ -105,8 +105,10 @@ mtr_setup <- function(dir, junction = TRUE, vary = FALSE) {
       sam
     )
   } else {
+    # Overlaps the seam, which is all the region query ever returns, but with
+    # an overhang below min_overhang on both sides.
     writeLines(
-      paste("r1", "0", "ref", "10", "42", "100M", "*", "0", "0", "*", "*",
+      paste("r1", "0", "ref", len - 9L, "42", "20M", "*", "0", "0", "*", "*",
             sep = "\t"),
       sam
     )
@@ -172,6 +174,28 @@ test_that("map_to_ref publishes a circular consensus and the loop record", {
 
   expect_true(any(grepl("bowtie2-build",
                         readLines(file.path(out, "assembler.log.txt")))))
+
+  # The published base at the stub's injected substitution is the consensus
+  # base, not the reference base.
+  pub <- paste(fa[-1], collapse = "")
+  ref_seq <- paste(rep("ACGTACGTTG", 600L), collapse = "")
+  expect_equal(substr(pub, 3000L, 3000L), "T")
+  expect_false(identical(substr(ref_seq, 3000L, 3000L), "T"))
+})
+
+test_that("a warning-free run writes no note line", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  # An in-range reference length, so nothing warns.
+  s <- mtr_setup(d, reps = 1600L)
+  out <- file.path(d, "out")
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "circular", 2, 1, out)
+
+  expect_true(ok)
+  expect_false(any(grepl("^note=",
+                         readLines(file.path(out, "T1_summary.txt")))))
 })
 
 test_that("a circular reference with no junction reads is published as linear", {
@@ -210,7 +234,7 @@ test_that("a circular reference with no junction reads is published as linear", 
   expect_false(grepl("^N", pub))
   expect_false(grepl("N$", pub))
   expect_equal(nchar(pub), s$len - 750L)
-  expect_true(any(grepl("of the product is N", notes)))
+  expect_true(any(grepl("of the reference is N", notes)))
 
   # The iteration record carries the pre-fill N count, not the filled one.
   iters <- read.delim(file.path(out, "maptoref", "iterations.tsv"))
@@ -342,4 +366,97 @@ test_that("a failure inside the loop keeps the transients for debugging", {
   expect_true(file.exists(file.path(out, "T1_assembly_0.fasta")))
   expect_true(file.exists(file.path(out, "maptoref", "pass_1.bam")))
   expect_true(file.exists(file.path(out, "maptoref", "sub_R1.fq")))
+})
+
+test_that("a linear reference publishes without a seam query or an N trim", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+
+  # flank is 0 for a linear reference, so the consensus is exactly len.
+  lin <- paste(rep("ACGTACGTTG", 600L), collapse = "")
+  substr(lin, 3000L, 3000L) <- "T"
+  fn <- mtr_write_wrapped(file.path(d, "lin.fa"), lin)
+  withr::local_envvar(c(MTR_STUB_CONS = fn, MTR_STUB_CONS_INS = fn))
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "linear", 2, 1, out)
+
+  expect_true(ok)
+  fa <- readLines(file.path(out, "T1_assembly_1.fasta"))
+  expect_equal(fa[1], ">T1.1.1 linear")
+  expect_equal(nchar(paste(fa[-1], collapse = "")), s$len)
+
+  sm <- mtr_summary(out)
+  expect_equal(sm[["reference_topology"]], "linear")
+  expect_equal(sm[["published_topology"]], "linear")
+  expect_equal(sm[["junction_depth"]], "NA")
+  expect_equal(sm[["n_count"]], "0")
+  expect_false(any(grepl("samtools index",
+                         readLines(file.path(out, "assembler.log.txt")))))
+})
+
+test_that("N on one end only still reports the uncalled fraction", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+
+  partial <- paste(rep("ACGTACGTTG", 600L), collapse = "")
+  substr(partial, 1L, 500L) <- strrep("N", 500L)
+  fn <- mtr_write_wrapped(file.path(d, "partial.fa"), partial)
+  withr::local_envvar(c(MTR_STUB_CONS = fn, MTR_STUB_CONS_INS = fn))
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "linear", 2, 1, out)
+
+  expect_true(ok)
+  pub <- paste(readLines(file.path(out, "T1_assembly_1.fasta"))[-1],
+               collapse = "")
+  expect_equal(nchar(pub), s$len - 500L)
+  expect_false(grepl("N", pub, fixed = TRUE))
+
+  sm <- mtr_summary(out)
+  expect_equal(sm[["n_count"]], "500")
+  expect_equal(sm[["consensus_length"]], as.character(s$len))
+  expect_equal(sm[["published_length"]], as.character(s$len - 500L))
+  expect_true(any(grepl("could not be called",
+                        readLines(file.path(out, "T1_summary.txt")))))
+})
+
+test_that("a product with nothing called writes the sentinel", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+
+  fn <- mtr_write_wrapped(file.path(d, "alln.fa"), strrep("N", s$len))
+  withr::local_envvar(c(MTR_STUB_CONS = fn, MTR_STUB_CONS_INS = fn))
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "linear", 2, 1, out)
+
+  expect_false(ok)
+  expect_false(file.exists(file.path(out, "T1_assembly_1.fasta")))
+  expect_equal(readLines(file.path(out, "T1_assembly_0.fasta"))[1],
+               ">No assembly found")
+  expect_true(any(grepl("no bases were called",
+                        readLines(file.path(out, "assembler.log.txt")))))
+})
+
+test_that("too few reads in pass 1 writes the sentinel", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+  withr::local_envvar(c(MTR_STUB_COUNT = "50"))
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "circular", 2, 1, out)
+
+  expect_false(ok)
+  expect_false(file.exists(file.path(out, "T1_assembly_1.fasta")))
+  expect_true(any(grepl("use a closer reference",
+                        readLines(file.path(out, "assembler.log.txt")))))
 })

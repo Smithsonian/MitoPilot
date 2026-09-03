@@ -429,6 +429,11 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     "samtools", c("view", "-c", "-F", "0x904", shQuote(bam)),
     stdout = TRUE, stderr = FALSE
   ))
+  # A failed count must not read as "no reads mapped".
+  status <- attr(out, "status")
+  if (!is.null(status) && status != 0L) {
+    stop("samtools view -c failed (exit ", status, ") for ", bam)
+  }
   value <- suppressWarnings(as.integer(out[1]))
   if (is.na(value)) 0L else value
 }
@@ -496,6 +501,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     stop(check$error)
   }
   notes <- c(notes, check$notes)
+  for (msg in check$notes) .mtr_log(log_fn, msg)
   user_cons <- .mtr_opts(consensus_opts)
   fixed_cons <- paste("-a -A --no-use-MQ --show-del yes -@", cpus)
 
@@ -635,7 +641,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 
   tokens <- .mtr_splice(.mtr_parse_marked(.mtr_read_seq(final_raw)), len, flank)
   product <- .mtr_tokens_to_seq(tokens)
-  seq <- product$seq
+  full_seq <- product$seq
 
   published <- ref$topology
   if (circular && !is.na(junction_depth) && junction_depth == 0L) {
@@ -646,10 +652,6 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
       "use a closer reference, or edit the topology if you are confident the ",
       "molecule is circular."))
   }
-  # Gated on the published topology, so a downgraded assembly is trimmed too.
-  if (!identical(published, "circular")) {
-    seq <- .mtr_strip_ends(seq)
-  }
 
   subs <- paste(
     .mtr_splice(strsplit(.mtr_read_seq(final_subs), "", fixed = TRUE)[[1]],
@@ -659,15 +661,23 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   writeLines(c(paste0(">", id, ".1.1 subs_only"), subs),
              file.path(work, "subs_only.fasta"))
 
-  n_count <- nchar(gsub("[^N]", "", seq))
-  n_pct <- round(100 * n_count / nchar(seq), 1)
-  if (n_count > 0.50 * nchar(seq)) {
+  # Judged on the untrimmed product against the reference frame, so a product
+  # that is only partly recovered still reports its uncalled fraction.
+  n_count <- nchar(gsub("[^N]", "", full_seq))
+  n_pct <- round(100 * n_count / ref$length, 1)
+  if (n_count > 0.50 * ref$length) {
     notes <- c(notes, paste0(
-      n_pct, "% of the product is N; the reference may be too divergent for ",
+      n_pct, "% of the reference is N; the reference may be too divergent for ",
       "this sample."))
-  } else if (n_count > 0.02 * nchar(seq)) {
+  } else if (n_count > 0.02 * ref$length) {
     notes <- c(notes, paste0(
       n_pct, "% of the reference could not be called (N)."))
+  }
+
+  # Gated on the published topology, so a downgraded assembly is trimmed too.
+  seq <- if (identical(published, "circular")) full_seq else .mtr_strip_ends(full_seq)
+  if (!nzchar(seq)) {
+    stop("no bases were called")
   }
   if (identical(stop_reason, "cap")) {
     notes <- c(notes, paste0(
@@ -706,12 +716,13 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     paste0("reads_mapped_pass_1=", reads_pass_1),
     paste0("reads_mapped_final=", reads_final),
     paste0("junction_depth=", ifelse(is.na(junction_depth), "NA", junction_depth)),
-    paste0("consensus_length=", nchar(seq)),
+    paste0("consensus_length=", nchar(full_seq)),
+    paste0("published_length=", nchar(seq)),
     paste0("n_count=", n_count),
-    paste0("iupac_count=", nchar(gsub("[ACGTN]", "", seq))),
+    paste0("iupac_count=", nchar(gsub("[ACGTN]", "", full_seq))),
     paste0("half_deletions=", product$half_deletions),
     paste0("substitutions_vs_reference=", subs_diff),
-    paste0("note=", notes)
+    if (length(notes) > 0) paste0("note=", notes)
   ), file.path(out_dir, paste0(id, "_summary.txt")))
 
   # Reproducible transients, dropped so the published loop record stays the

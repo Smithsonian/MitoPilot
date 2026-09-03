@@ -1059,8 +1059,16 @@ assemble_server <- function(id) {
               min_assembly_length = as.integer(req(input$min_assembly_length)),
               join_scaffolds = as.integer(isTRUE(input$join_scaffolds)),
               maptoref_ref = if (nzchar(ref_value)) ref_value else NA_character_,
-              maptoref = input$maptoref %||% "--very-sensitive-local",
-              maptoref_consensus = input$maptoref_consensus %||% "-d 3 --min-BQ 20",
+              maptoref = if (nzchar(trimws(input$maptoref %||% ""))) {
+                input$maptoref
+              } else {
+                .mtr_default_bowtie2
+              },
+              maptoref_consensus = if (nzchar(trimws(input$maptoref_consensus %||% ""))) {
+                input$maptoref_consensus
+              } else {
+                .mtr_default_consensus
+              },
               maptoref_iter = as.integer(input$maptoref_iter %||% 5L) %|NA|% 5L,
               maptoref_topology = if (nzchar(topology_value)) topology_value else NA_character_
             ),

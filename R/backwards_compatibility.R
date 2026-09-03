@@ -2272,6 +2272,12 @@ schema_gaps <- function(con) {
       !has("gap_index" %in% DBI::dbListFields(con, "scaffold_junctions"))) {
     gaps <- c(gaps, "the 'scaffold_junctions' table is missing or out of date")
   }
+  if (!is_user_asmb(con) &&
+      !has(all(c("maptoref_ref", "maptoref", "maptoref_consensus",
+                 "maptoref_iter", "maptoref_topology") %in%
+               DBI::dbListFields(con, "assemble_opts")))) {
+    gaps <- c(gaps, "the assemble_opts table lacks the MapToRef option columns")
+  }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%
                 DBI::dbListTables(con))) ||

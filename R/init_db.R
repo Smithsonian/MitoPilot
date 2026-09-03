@@ -1,3 +1,7 @@
+# MapToRef option defaults, shared by new_db() and the assemble-options modal.
+.mtr_default_bowtie2 <- "--very-sensitive-local"
+.mtr_default_consensus <- "-d 3 --min-BQ 20"
+
 #' Initialize a new project database
 #'
 #' @param db_path Path to the new database file
@@ -54,7 +58,9 @@
 #'   single-record GenBank file (.gb) is preferred; a FASTA is accepted but then
 #'   \code{maptoref_topology} must be set. Required when assembler = "MapToRef".
 #' @param maptoref Default bowtie2 options for MapToRef
+#'   (default = "--very-sensitive-local")
 #' @param maptoref_consensus Default samtools consensus options for MapToRef
+#'   (default = "-d 3 --min-BQ 20")
 #' @param maptoref_iter Maximum MapToRef iteration passes (default = 5)
 #' @param maptoref_topology Topology of a FASTA MapToRef reference, "circular"
 #'   or "linear". Ignored for GenBank references, where the LOCUS line wins.
@@ -96,8 +102,8 @@ new_db <- function(
       "--megahit"
     ),
     maptoref_ref = NA_character_,
-    maptoref = "--very-sensitive-local",
-    maptoref_consensus = "-d 3 --min-BQ 20",
+    maptoref = .mtr_default_bowtie2,
+    maptoref_consensus = .mtr_default_consensus,
     maptoref_iter = 5L,
     maptoref_topology = NA_character_,
     max_paths = 10,
@@ -156,6 +162,15 @@ new_db <- function(
   if (!is.na(maptoref_topology) &&
       maptoref_topology %nin% c("circular", "linear")) {
     stop("maptoref_topology must be circular or linear")
+  }
+  if (assembler == "MapToRef" &&
+      !grepl("\\.(gb|gbk|gbff)$", trimws(maptoref_ref), ignore.case = TRUE) &&
+      (is.na(maptoref_topology) || !nzchar(trimws(maptoref_topology)))) {
+    stop("Set maptoref_topology (circular or linear) for a FASTA reference; ",
+         "a GenBank (.gb) reference takes its topology from the file")
+  }
+  if (grepl("['\"]", paste0(maptoref, maptoref_consensus))) {
+    stop("maptoref and maptoref_consensus must not contain quote characters")
   }
 
   # Validate ID length

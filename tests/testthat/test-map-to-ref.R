@@ -392,6 +392,28 @@ test_that("new_db refuses MapToRef without a reference and rejects a bad topolog
   )
 })
 
+test_that("new_db applies the modal's reference-topology and quote rules", {
+  d <- withr::local_tempdir()
+  expect_error(
+    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "ref/mito.fasta"),
+    "maptoref_topology"
+  )
+  expect_error(
+    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "x.gb",
+                maptoref = "--very-sensitive-local -N '1'"),
+    "quote characters"
+  )
+  expect_error(
+    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "x.gb",
+                maptoref_consensus = "-d 3 --min-BQ \"20\""),
+    "quote characters"
+  )
+  expect_no_error(
+    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "ref/mito.fasta",
+                maptoref_topology = "linear")
+  )
+})
+
 test_that("new_db still refuses an unknown assembler", {
   d <- withr::local_tempdir()
   expect_error(mtr_test_db(d, assembler = "Nonesuch"), "not supported")

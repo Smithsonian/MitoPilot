@@ -24,8 +24,8 @@ new_db(
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
   mitofinder = paste("--megahit"),
   maptoref_ref = NA_character_,
-  maptoref = "--very-sensitive-local",
-  maptoref_consensus = "-d 3 --min-BQ 20",
+  maptoref = .mtr_default_bowtie2,
+  maptoref_consensus = .mtr_default_consensus,
   maptoref_iter = 5L,
   maptoref_topology = NA_character_,
   max_paths = 10,
@@ -97,9 +97,11 @@ Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.
 single-record GenBank file (.gb) is preferred; a FASTA is accepted but then
 \code{maptoref_topology} must be set. Required when assembler = "MapToRef".}
 
-\item{maptoref}{Default bowtie2 options for MapToRef}
+\item{maptoref}{Default bowtie2 options for MapToRef
+(default = "--very-sensitive-local")}
 
-\item{maptoref_consensus}{Default samtools consensus options for MapToRef}
+\item{maptoref_consensus}{Default samtools consensus options for MapToRef
+(default = "-d 3 --min-BQ 20")}
 
 \item{maptoref_iter}{Maximum MapToRef iteration passes (default = 5)}
 
