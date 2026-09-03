@@ -182,6 +182,12 @@ maptoref_prepare_ref <- function(ref_file,
   if (length(x) != len + flank) {
     stop("expected ", len + flank, " positions, got ", length(x))
   }
+  if (flank %% 2L != 0L) {
+    stop("flank must be even, got ", flank)
+  }
+  if (flank %/% 2L > len) {
+    stop("flank ", flank, " exceeds reference length ", len)
+  }
   if (flank == 0L) {
     return(x[seq_len(len)])
   }
@@ -204,6 +210,9 @@ maptoref_prepare_ref <- function(ref_file,
       if (k == 0L) {
         stop("consensus begins with an insertion mark")
       }
+      if (i == n) {
+        stop("consensus ends with an incomplete insertion mark")
+      }
       tokens[k] <- paste0(tokens[k], ch[i], ch[i + 1L])
       i <- i + 2L
     } else {
@@ -219,7 +228,7 @@ maptoref_prepare_ref <- function(ref_file,
 .mtr_tokens_to_seq <- function(tokens) {
   flat <- strsplit(paste(tokens, collapse = ""), "", fixed = TRUE)[[1]]
   flat <- flat[!flat %in% c("*", "_")]
-  half <- flat %in% c("a", "c", "g", "t")
+  half <- grepl("^[a-z]$", flat)
   flat[half] <- "N"
   list(seq = toupper(paste(flat, collapse = "")), half_deletions = sum(half))
 }
@@ -231,7 +240,7 @@ maptoref_prepare_ref <- function(ref_file,
 
 #' @noRd
 .mtr_check_consensus_opts <- function(opts, circular) {
-  opts <- if (is.na(opts)) "" else trimws(opts)
+  opts <- if (is.null(opts) || length(opts) == 0L || is.na(opts)) "" else trimws(opts)
   notes <- character(0)
   error <- NA_character_
 
@@ -240,25 +249,61 @@ maptoref_prepare_ref <- function(ref_file,
                 error = "consensus options must not contain quote characters"))
   }
 
+  tokens <- strsplit(opts, "\\s+")[[1]]
+  tokens <- tokens[nzchar(tokens)]
+
+  # samtools uses getopt_long, so "--flag=value" and attached short values
+  # ("-ovalue") are both legal; normalize every token to a flag/value pair
+  # before matching, rather than matching raw tokens.
+  recs <- list()
+  i <- 1L
+  n <- length(tokens)
+  while (i <= n) {
+    tok <- tokens[i]
+    eq <- regexpr("=", tok, fixed = TRUE)
+    if (eq > 0L) {
+      flag <- substr(tok, 1L, eq - 1L)
+      value <- substr(tok, eq + 1L, nchar(tok))
+      i <- i + 1L
+    } else if (!grepl("^--", tok) && nchar(tok) > 2L) {
+      flag <- substr(tok, 1L, 2L)
+      value <- substr(tok, 3L, nchar(tok))
+      i <- i + 1L
+    } else {
+      flag <- tok
+      value <- NA_character_
+      if (i < n && !grepl("^-", tokens[i + 1L])) {
+        value <- tokens[i + 1L]
+        i <- i + 2L
+      } else {
+        i <- i + 1L
+      }
+    }
+    recs[[length(recs) + 1L]] <- list(flag = flag, value = value)
+  }
+  flags <- vapply(recs, function(r) r$flag, character(1))
+
   refused <- c("-a", "-A", "-T", "-o", "-f", "-r",
                "--show-del", "--show-ins", "--mark-ins", "--no-use-MQ")
-  tokens <- strsplit(opts, "\\s+")[[1]]
-  hit <- refused[refused %in% tokens]
+  hit <- refused[refused %in% flags]
   if (length(hit) > 0L) {
     error <- paste0("Consensus options set by MitoPilot cannot be given here: ",
                     paste(hit, collapse = " "))
   }
 
-  mode_only <- c("-c", "-H", "-q")[c("-c", "-H", "-q") %in% tokens]
-  if (length(mode_only) > 0L && !("simple" %in% tokens && "-m" %in% tokens)) {
+  mode_only <- c("-c", "-H", "-q")[c("-c", "-H", "-q") %in% flags]
+  has_m_simple <- any(vapply(recs, function(r) {
+    identical(r$flag, "-m") && identical(r$value, "simple")
+  }, logical(1)))
+  if (length(mode_only) > 0L && !has_m_simple) {
     notes <- c(notes, paste0(
       "Consensus options ", paste(mode_only, collapse = " "),
       " were ignored; they only apply with -m simple."))
   }
 
-  mq <- which(tokens == "--min-MQ")
-  if (length(mq) > 0L && length(tokens) > mq[1]) {
-    value <- suppressWarnings(as.numeric(tokens[mq[1] + 1L]))
+  mq <- Filter(function(r) identical(r$flag, "--min-MQ"), recs)
+  if (length(mq) > 0L) {
+    value <- suppressWarnings(as.numeric(mq[[1]]$value))
     if (!is.na(value) && value > 0) {
       if (isTRUE(circular)) {
         error <- paste0(
@@ -279,5 +324,6 @@ maptoref_prepare_ref <- function(ref_file,
 #' @noRd
 .mtr_stop <- function(bases_changed, reads_now, reads_prev) {
   denom <- max(as.numeric(reads_prev), 1)
-  bases_changed < 5L && abs(as.numeric(reads_now) - as.numeric(reads_prev)) / denom < 0.001
+  isTRUE(bases_changed < 5L &&
+           abs(as.numeric(reads_now) - as.numeric(reads_prev)) / denom < 0.001)
 }

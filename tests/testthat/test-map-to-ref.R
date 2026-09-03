@@ -239,6 +239,11 @@ test_that(".mtr_splice with no flank is a no-op on the reference extent", {
   expect_equal(.mtr_splice(x, len = 4L, flank = 0L), x)
 })
 
+test_that(".mtr_splice refuses a degenerate flank", {
+  expect_error(.mtr_splice(rep("A", 5L), len = 4L, flank = 1L), "even")
+  expect_error(.mtr_splice(rep("A", 60L), len = 10L, flank = 50L), "exceeds")
+})
+
 test_that(".mtr_parse_marked keys on the underscore, never on case", {
   # A: plain. C: followed by an inserted G. *: a called deletion.
   # t: a half-present (base versus gap) call, NOT an insertion.
@@ -251,10 +256,20 @@ test_that(".mtr_parse_marked keys on the underscore, never on case", {
   expect_error(.mtr_parse_marked("_AACGT"), "insertion")
 })
 
+test_that(".mtr_parse_marked refuses a dangling insertion mark", {
+  expect_error(.mtr_parse_marked("ACG_"), "incomplete")
+})
+
 test_that(".mtr_tokens_to_seq drops deletions and markers and calls half-present N", {
   res <- .mtr_tokens_to_seq(c("A", "C_G", "*", "t", "G_a"))
   expect_equal(res$seq, "ACGNGN")
   expect_equal(res$half_deletions, 2L)
+})
+
+test_that(".mtr_tokens_to_seq treats any lowercase call as half-present", {
+  res <- .mtr_tokens_to_seq(c("A", "r", "G"))
+  expect_equal(res$seq, "ANG")
+  expect_equal(res$half_deletions, 1L)
 })
 
 test_that(".mtr_strip_ends removes flanking N runs only", {
@@ -286,6 +301,21 @@ test_that(".mtr_check_consensus_opts refuses a MAPQ filter on a circular referen
   expect_true(res$ok)
 })
 
+test_that(".mtr_check_consensus_opts normalizes --flag=value and attached short flags", {
+  res <- .mtr_check_consensus_opts("--min-MQ=20", circular = TRUE)
+  expect_false(res$ok)
+  expect_match(res$error, "--min-MQ")
+
+  res <- .mtr_check_consensus_opts("--min-MQ=0", circular = TRUE)
+  expect_true(res$ok)
+
+  res <- .mtr_check_consensus_opts("--show-del=yes", circular = FALSE)
+  expect_false(res$ok)
+
+  res <- .mtr_check_consensus_opts("-oout.fa", circular = FALSE)
+  expect_false(res$ok)
+})
+
 test_that(".mtr_check_consensus_opts refuses flags the code sets itself", {
   for (flag in c("-a", "-A", "-T ref.fa", "--show-del yes", "--show-ins yes",
                  "--mark-ins", "--no-use-MQ", "-o out.fa", "-f fasta", "-r chr1")) {
@@ -305,9 +335,19 @@ test_that(".mtr_check_consensus_opts refuses quote characters", {
   expect_false(res$ok)
 })
 
+test_that(".mtr_check_consensus_opts treats NULL and empty input as no options", {
+  expect_true(.mtr_check_consensus_opts(NULL, circular = TRUE)$ok)
+  expect_true(.mtr_check_consensus_opts(character(0), circular = FALSE)$ok)
+})
+
 test_that(".mtr_stop needs both the base term and the read term", {
   expect_true(.mtr_stop(bases_changed = 4L, reads_now = 100000L, reads_prev = 100000L))
   expect_false(.mtr_stop(bases_changed = 40L, reads_now = 100000L, reads_prev = 100000L))
   expect_false(.mtr_stop(bases_changed = 0L, reads_now = 110000L, reads_prev = 100000L))
   expect_true(.mtr_stop(bases_changed = 0L, reads_now = 100050L, reads_prev = 100000L))
+})
+
+test_that(".mtr_stop never returns NA", {
+  expect_false(.mtr_stop(bases_changed = NA, reads_now = 100000L, reads_prev = 100000L))
+  expect_false(.mtr_stop(bases_changed = 4L, reads_now = 100000L, reads_prev = NA))
 })
