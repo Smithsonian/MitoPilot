@@ -13,10 +13,10 @@ process assemble {
     tag "${id}"
 
     input:
-    tuple val(id), val(opts_id), path(reads), val(opts), path(dbs), path(mf_db), val(genetic_code), val(max_paths), val(max_scaffolds)
+    tuple val(id), val(opts_id), path(reads), val(opts), path(dbs), path(mf_db), val(genetic_code), val(max_paths), val(max_scaffolds), path(ref)
 
     output:
-    tuple val("${id}"), path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"), path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"), path("${id}/assemble/${opts_id}/${id}_summary.txt"), val("${opts_id}"), path("${id}/assemble/${opts_id}/assembler.log.txt"), path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt"), val("${opts.assembler}"), val(max_paths), val(max_scaffolds)
+    tuple val("${id}"), path("${id}/assemble/${opts_id}/${id}_assembly_*.fasta"), path("${id}/assemble/${opts_id}/${id}_reads.tar.gz"), path("${id}/assemble/${opts_id}/${id}_summary.txt"), val("${opts_id}"), path("${id}/assemble/${opts_id}/assembler.log.txt"), path("${id}/assemble/${opts_id}/NF_work_dir_assemble.txt"), val("${opts.assembler}"), val(max_paths), val(max_scaffolds), path("${id}/assemble/${opts_id}/maptoref", optional: true)
 
     shell:
     workingDir = "${id}/assemble"
@@ -99,6 +99,15 @@ process assemble {
             export topology=$(awk '/Circularization:/ {print ($2 == "Yes" ? "circular" : "linear")}' !{workingDir}/!{id}/*_Final_Results/!{id}.infos)   
             parallel -j !{opts.cpus} 'awk -v topo=$topology "/^>/ {print \\">!{id}.{#}.\\" ++count[\\">\\"] \\" \\" topo} !/^>/ {print}" {} > !{outDir}/!{id}_assembly_{#}.fasta' ::: "${files[@]}"
         fi
+    elif [ "!{opts.assembler}" = "MapToRef" ]; then
+        mkdir -p !{outDir}
+        Rscript -e "MitoPilot::map_to_ref('!{id}', '!{ref}', '!{reads[0]}', '!{reads[1]}', '!{opts.maptoref}', '!{opts.maptoref_consensus}', !{opts.maptoref_iter}, '!{opts.maptoref_topology}', !{genetic_code.intValue()}, !{opts.cpus}, '!{outDir}')"
+        echo "!{opts.maptoref} | !{opts.maptoref_consensus} | iterate !{opts.maptoref_iter}" > !{outDir}/opts.txt
+        ### ARCHIVE READS ###
+        tar -czvf !{outDir}/!{id}_reads.tar.gz *.fastq.gz
+        ### work dir info for troubleshooting ####
+        echo "Nextflow assemble working directory:" > !{outDir}/NF_work_dir_assemble.txt
+        echo "$PWD" >> !{outDir}/NF_work_dir_assemble.txt
     fi
 
     '''

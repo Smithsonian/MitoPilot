@@ -8,7 +8,9 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
                   'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length, ' +
                   'b.run_blast, opts.join_scaffolds, ' +
-                  'a.join_switch, a.assemble_switch, a.blast_accession ' +
+                  'a.join_switch, a.assemble_switch, a.blast_accession, ' +
+                  'opts.maptoref_ref, opts.maptoref, opts.maptoref_consensus, ' +
+                  'opts.maptoref_iter, opts.maptoref_topology ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
@@ -104,7 +106,11 @@ workflow ASSEMBLE {
                         memory: it[3],                                          // memory
                         getOrganelle: it[6],                                    // getOrganelle options
                         mitofinder: it[9],                                      // mitofinder options
-                        assembler: it[7]                                        // assembler
+                        assembler: it[7],                                       // assembler
+                        maptoref: it[20],                                       // MapToRef bowtie2 options
+                        maptoref_consensus: it[21],                             // MapToRef samtools consensus options
+                        maptoref_iter: (it[22] == null ? 5 : (it[22] as Integer)),
+                        maptoref_topology: (it[23] ?: "")
                     ],
                     [
                         it[4],                                                  // getOrganelle seeds_db
@@ -113,7 +119,8 @@ workflow ASSEMBLE {
                     it[8],                                                      // mitofinder .gb reference database
                     it[10],                                                     // genetic code
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
-                    (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer))  // max_scaffolds
+                    (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer)), // max_scaffolds
+                    file((it[19] != null && it[19].toString().trim()) ? it[19] : "${projectDir}/assets/NO_FILE")  // MapToRef reference
                 )
                 min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
@@ -190,7 +197,8 @@ workflow ASSEMBLE {
                     it[1][4],                                                   // mitofinder .gb reference db
                     it[1][5],                                                   // genetic code
                     it[1][6],                                                   // max_paths
-                    it[1][7]                                                    // max_scaffolds
+                    it[1][7],                                                   // max_scaffolds
+                    it[1][8]                                                    // MapToRef reference
                 )
             }
             .set { assemble_in_full }
