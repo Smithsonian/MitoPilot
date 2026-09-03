@@ -175,6 +175,28 @@ skip read mapping entirely and hide the coverage columns that depend on it.
 externally supplied ones, never both. Use separate projects if you have a mix.
 </div>
 
+## Running the pipeline
+
+The Assemble module is not optional. Nothing you supply is used until it has run,
+even if your FASTA files are finished, circular mitogenomes. Assemble is where
+MitoPilot reads your sequences into the project, records their length, topology,
+and contig count, maps your reads for coverage, and runs any of the optional steps
+below. Samples are only released to Annotate once you lock them here.
+
+A run looks the same as any other MitoPilot project:
+
+1. Open the app for the project, `MitoPilot()` from the project directory. It
+   opens on the Assemble module.
+2. If needed, change any run options.
+3. Click UPDATE, then Run from App or Submit as Job.
+4. When the run finishes, check the results. You should see Length, Topology, 
+   and other columns filled in.
+5. Select the samples that came through cleanly and click LOCK. That releases
+   them to Annotate. Switch modules with the dropdown at the top left.
+
+Then continue with [Annotate](Test-Project-Annotate.html) and
+[Export](Test-Project-Export.html) as usual.
+
 ## Finding the mitogenome in a whole assembly
 
 If your FASTA files hold whole assemblies rather than mitogenomes, thousands or
