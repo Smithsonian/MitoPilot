@@ -5,8 +5,9 @@
 #' parser, no organelle qualifier is required.
 #'
 #' @param ref_file Path to the reference file.
-#' @param topology "circular" or "linear". Required for a FASTA reference,
-#'   ignored for GenBank, where the LOCUS line wins.
+#' @param topology "circular" or "linear". Required for a FASTA reference.
+#'   For GenBank, the LOCUS line wins when it states one; otherwise this
+#'   value is used and is required.
 #' @param genetic_code The sample's genetic code, used only to warn when the
 #'   reference disagrees.
 #' @param out_dir Directory to write the `maptoref/` working files into.
@@ -29,7 +30,7 @@ maptoref_prepare_ref <- function(ref_file,
   first <- lines[nonblank[1]]
 
   if (grepl("^LOCUS", first)) {
-    ref <- .mtr_read_gb(lines)
+    ref <- .mtr_read_gb(lines, topology)
     ext <- "gb"
   } else if (grepl("^>", first)) {
     ref <- .mtr_read_fasta(lines, topology)
@@ -61,11 +62,11 @@ maptoref_prepare_ref <- function(ref_file,
       "Reference has ", amb, " ambiguous bases (", round(100 * amb / ref$length, 1),
       "%); mapping is weaker there."))
   }
-  if (!is.na(genetic_code) && !is.na(ref$transl_table) &&
-      as.integer(genetic_code) != ref$transl_table) {
+  gc_int <- suppressWarnings(as.integer(genetic_code))
+  if (!is.na(gc_int) && !is.na(ref$transl_table) && gc_int != ref$transl_table) {
     notes <- c(notes, paste0(
       "Reference genetic code ", ref$transl_table, " differs from the sample's ",
-      genetic_code, "; annotation uses the sample's."))
+      gc_int, "; annotation uses the sample's."))
   }
   ref$notes <- notes
 
@@ -80,7 +81,7 @@ maptoref_prepare_ref <- function(ref_file,
 }
 
 #' @noRd
-.mtr_read_gb <- function(lines) {
+.mtr_read_gb <- function(lines, topology) {
   ends <- which(trimws(lines) == "//")
   if (length(ends) != 1L) {
     stop("Reference must contain exactly one record; this file has ",
@@ -90,7 +91,14 @@ maptoref_prepare_ref <- function(ref_file,
 
   locus <- grep("^LOCUS", block, value = TRUE)[1]
   tokens <- strsplit(trimws(locus), "\\s+")[[1]]
-  topology <- if (any(tolower(tokens) == "circular")) "circular" else "linear"
+  locus_topology <- if (any(tolower(tokens) == "circular")) {
+    "circular"
+  } else if (any(tolower(tokens) == "linear")) {
+    "linear"
+  } else {
+    NA_character_
+  }
+  topology <- if (!is.na(locus_topology)) locus_topology else .mtr_validate_topology(topology)
 
   accession <- .cadb_grab_version(block)
   if (is.na(accession)) {
@@ -106,11 +114,11 @@ maptoref_prepare_ref <- function(ref_file,
   }
 
   origin <- grep("^ORIGIN", block)
-  if (length(origin) == 0L || origin[1] >= length(block)) {
+  if (length(origin) == 0L || origin[1] >= length(block) - 1L) {
     stop("Reference GenBank record has no ORIGIN sequence")
   }
   seq_lines <- block[(origin[1] + 1L):(length(block) - 1L)]
-  seq <- toupper(gsub("[^A-Za-z]", "", paste(seq_lines, collapse = "")))
+  seq <- toupper(gsub("[^A-Za-z-]", "", paste(seq_lines, collapse = "")))
   if (!nzchar(seq)) {
     stop("Reference GenBank record has an empty ORIGIN sequence")
   }
@@ -120,12 +128,7 @@ maptoref_prepare_ref <- function(ref_file,
 }
 
 #' @noRd
-.mtr_read_fasta <- function(lines, topology) {
-  heads <- grep("^>", lines)
-  if (length(heads) != 1L) {
-    stop("Reference must contain exactly one record; this file has ",
-         length(heads), ".")
-  }
+.mtr_validate_topology <- function(topology) {
   if (is.na(topology) || !nzchar(trimws(topology))) {
     stop("Set the reference topology (circular or linear) for a FASTA reference.")
   }
@@ -133,10 +136,25 @@ maptoref_prepare_ref <- function(ref_file,
   if (!topology %in% c("circular", "linear")) {
     stop("Reference topology must be circular or linear, not: ", topology)
   }
+  topology
+}
+
+#' @noRd
+.mtr_read_fasta <- function(lines, topology) {
+  heads <- grep("^>", lines)
+  if (length(heads) != 1L) {
+    stop("Reference must contain exactly one record; this file has ",
+         length(heads), ".")
+  }
+  topology <- .mtr_validate_topology(topology)
   header <- sub("^>", "", lines[heads[1]])
   accession <- strsplit(trimws(header), "\\s+")[[1]][1]
-  seq <- toupper(gsub("[^A-Za-z-]", "",
-                      paste(lines[(heads[1] + 1L):length(lines)], collapse = "")))
+  seq <- if (heads[1] >= length(lines)) {
+    ""
+  } else {
+    toupper(gsub("[^A-Za-z-]", "",
+                 paste(lines[(heads[1] + 1L):length(lines)], collapse = "")))
+  }
   if (!nzchar(seq)) {
     stop("Reference FASTA record has no sequence")
   }

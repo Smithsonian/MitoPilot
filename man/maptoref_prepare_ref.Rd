@@ -14,8 +14,9 @@ maptoref_prepare_ref(
 \arguments{
 \item{ref_file}{Path to the reference file.}
 
-\item{topology}{"circular" or "linear". Required for a FASTA reference,
-ignored for GenBank, where the LOCUS line wins.}
+\item{topology}{"circular" or "linear". Required for a FASTA reference.
+For GenBank, the LOCUS line wins when it states one; otherwise this
+value is used and is required.}
 
 \item{genetic_code}{The sample's genetic code, used only to warn when the
 reference disagrees.}

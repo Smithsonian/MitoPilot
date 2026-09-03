@@ -4,6 +4,12 @@ mtr_fixture <- function() {
   p
 }
 
+mtr_sampler <- function() {
+  p <- system.file("test_data/fish_mito_sampler.gb", package = "MitoPilot")
+  if (!nzchar(p)) p <- testthat::test_path("../..", "inst/test_data/fish_mito_sampler.gb")
+  p
+}
+
 mtr_write <- function(dir, name, lines, eol = "\n") {
   fn <- file.path(dir, name)
   con <- file(fn, open = "wb")
@@ -68,13 +74,10 @@ test_that("maptoref_prepare_ref handles CRLF line endings", {
 })
 
 test_that("maptoref_prepare_ref rejects a multi-record GenBank file", {
-  skip_if_not(file.exists(testthat::test_path("../../inst/test_data/fish_mito_sampler.gb")))
+  skip_if_not(file.exists(mtr_sampler()))
   d <- withr::local_tempdir()
   expect_error(
-    maptoref_prepare_ref(
-      testthat::test_path("../../inst/test_data/fish_mito_sampler.gb"),
-      out_dir = d
-    ),
+    maptoref_prepare_ref(mtr_sampler(), out_dir = d),
     "exactly one record"
   )
 })
@@ -99,6 +102,64 @@ test_that("a GenBank LOCUS line beats the topology option", {
   d <- withr::local_tempdir()
   ref <- maptoref_prepare_ref(mtr_fixture(), topology = "linear", out_dir = d)
   expect_equal(ref$topology, "circular")
+})
+
+test_that("maptoref_prepare_ref falls back to the topology option when LOCUS has neither token", {
+  d <- withr::local_tempdir()
+  gb <- mtr_write(d, "notoken.gb", c(
+    "LOCUS       TEST0004               12000 bp    DNA     INV",
+    "DEFINITION  Testus testus mitochondrion, complete genome.",
+    "VERSION     TEST0004.1",
+    "ORIGIN",
+    rep(paste("        1", paste(rep("acgt", 15), collapse = " ")), 200),
+    "//"
+  ))
+  ref <- maptoref_prepare_ref(gb, topology = "circular", out_dir = d)
+  expect_equal(ref$topology, "circular")
+})
+
+test_that("maptoref_prepare_ref requires a topology when LOCUS has neither token and none is given", {
+  d <- withr::local_tempdir()
+  gb <- mtr_write(d, "notoken2.gb", c(
+    "LOCUS       TEST0005               12000 bp    DNA     INV",
+    "DEFINITION  Testus testus mitochondrion, complete genome.",
+    "VERSION     TEST0005.1",
+    "ORIGIN",
+    rep(paste("        1", paste(rep("acgt", 15), collapse = " ")), 200),
+    "//"
+  ))
+  expect_error(maptoref_prepare_ref(gb, out_dir = d), "topology")
+})
+
+test_that("maptoref_prepare_ref rejects a GenBank record with an empty ORIGIN block", {
+  d <- withr::local_tempdir()
+  gb <- mtr_write(d, "emptyorigin.gb", c(
+    "LOCUS       TEST0006               12000 bp    DNA     linear   INV",
+    "DEFINITION  Testus testus mitochondrion, complete genome.",
+    "VERSION     TEST0006.1",
+    "ORIGIN",
+    "//"
+  ))
+  expect_error(maptoref_prepare_ref(gb, out_dir = d), "ORIGIN sequence")
+})
+
+test_that("maptoref_prepare_ref rejects a header-only FASTA", {
+  d <- withr::local_tempdir()
+  fa <- mtr_write(d, "headeronly.fasta", c(">a"))
+  expect_error(maptoref_prepare_ref(fa, topology = "linear", out_dir = d), "no sequence")
+})
+
+test_that("maptoref_prepare_ref rejects gap characters in a GenBank reference", {
+  d <- withr::local_tempdir()
+  gb <- mtr_write(d, "gapgb.gb", c(
+    "LOCUS       TEST0007               12000 bp    DNA     linear   INV",
+    "DEFINITION  Testus testus mitochondrion, complete genome.",
+    "VERSION     TEST0007.1",
+    "ORIGIN",
+    rep(paste("        1", paste(rep("acg-", 15), collapse = " ")), 200),
+    "//"
+  ))
+  expect_error(maptoref_prepare_ref(gb, out_dir = d), "invalid character")
 })
 
 test_that("maptoref_prepare_ref rejects bad sequences, counts, and lengths", {
@@ -129,4 +190,11 @@ test_that("maptoref_prepare_ref warns when the genetic codes disagree", {
   d <- withr::local_tempdir()
   ref <- maptoref_prepare_ref(mtr_fixture(), genetic_code = 5L, out_dir = d)
   expect_true(any(grepl("genetic code", ref$notes)))
+})
+
+test_that("maptoref_prepare_ref tolerates a non-numeric genetic_code", {
+  skip_if_not(file.exists(mtr_fixture()))
+  d <- withr::local_tempdir()
+  ref <- maptoref_prepare_ref(mtr_fixture(), genetic_code = "not-a-code", out_dir = d)
+  expect_false(any(grepl("genetic code", ref$notes)))
 })
