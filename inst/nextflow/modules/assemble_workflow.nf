@@ -296,6 +296,19 @@ workflow ASSEMBLE {
                     status = '3'
                     notes  = "All scaffolds below min assembly length (${min_assembly_length} bp)"
                 }
+                // MapToRef writes its warnings as note= lines in the summary
+                // file, tagged [maptoref] per spec 5.3. Folded into the same
+                // notes string so there is only one write to assemble_notes.
+                def summary = raw[3]
+                if (summary && summary.exists()) {
+                    def mtr = summary.readLines()
+                        .findAll { it.startsWith('note=') && it.length() > 5 }
+                        .collect { "[maptoref] " + it.substring(5).trim() }
+                    if (mtr) {
+                        def msg = mtr.join('; ')
+                        notes = notes ? "${notes}; ${msg}" : msg
+                    }
+                }
                 // no_blast samples: if assembly succeeded (status '4') and BLAST is
                 // not requested, write state=2 directly here.
                 if (status == '4' && (run_blast as Integer) == 0) {
