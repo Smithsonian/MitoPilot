@@ -365,7 +365,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   # The option strings are interpolated into an Rscript -e call, so a quote
   # character breaks the R expression. consensus_opts is covered by
   # .mtr_check_consensus_opts().
-  if (!is.na(bowtie2_opts) && grepl("['\"]", bowtie2_opts)) {
+  bowtie2_opts <- .mtr_opts(bowtie2_opts)
+  if (grepl("['\"]", bowtie2_opts)) {
     .mtr_fail(id, out_dir, log_fn,
               "bowtie2 options must not contain quote characters")
     return(invisible(FALSE))
@@ -390,13 +391,18 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   cat(paste0(..., "\n"), file = log_fn, append = TRUE)
 }
 
+# An absent, empty, or NA option string is an empty option list.
+#' @noRd
+.mtr_opts <- function(x) {
+  if (is.null(x) || length(x) == 0L || is.na(x[1])) "" else as.character(x[1])
+}
+
 # bash -o pipefail so a failed bowtie2 stage is not masked by a later stage that
-# exits 0. Each bowtie2 call carries its own 2>> redirect; the trailing one here
-# covers the single-command calls.
+# exits 0. The whole command is grouped so every stage's stderr reaches the log.
 #' @noRd
 .mtr_run <- function(cmd, log_fn) {
   .mtr_log(log_fn, "+ ", cmd)
-  full <- paste0(cmd, " 2>> ", shQuote(log_fn))
+  full <- paste0("{ ", cmd, " ; } 2>> ", shQuote(log_fn))
   status <- system2("bash", c("-o", "pipefail", "-c", shQuote(full)))
   if (status != 0L) {
     stop("command failed (exit ", status, "): ", cmd)
@@ -428,10 +434,14 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 }
 
 # Primary alignments whose reference span crosses the seam at position len.
+# The region query keeps the whole BAM out of R; only alignments that overlap
+# the seam are returned.
 #' @noRd
-.mtr_junction_depth <- function(bam, len, min_overhang = 30L) {
+.mtr_junction_depth <- function(bam, len, refname = "mapping_ref",
+                                min_overhang = 30L) {
   sam <- suppressWarnings(system2(
-    "samtools", c("view", "-F", "0x904", shQuote(bam)),
+    "samtools", c("view", "-F", "0x904", shQuote(bam),
+                  shQuote(paste0(refname, ":", len, "-", len))),
     stdout = TRUE, stderr = FALSE
   ))
   if (length(sam) == 0L) {
@@ -481,7 +491,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     stop(check$error)
   }
   notes <- c(notes, check$notes)
-  user_cons <- if (is.na(consensus_opts)) "" else consensus_opts
+  user_cons <- .mtr_opts(consensus_opts)
   fixed_cons <- paste("-a -A --no-use-MQ --show-del yes -@", cpus)
 
   ref_fa <- file.path(work, "ref_0.fa")
@@ -491,12 +501,15 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 
   idx <- file.path(work, "idx")
   bam <- file.path(work, "pass_1.bam")
-  .mtr_run(stringr::str_glue("bowtie2-build -q {ref_fa} {idx}"), log_fn)
+  .mtr_run(stringr::str_glue(
+    "bowtie2-build -q {shQuote(ref_fa)} {shQuote(idx)}"
+  ), log_fn)
   # No --no-unal: it would drop the unmapped mate of a half-mapped pair, and
   # recruitment below would then keep only fully mapped pairs.
   .mtr_run(stringr::str_glue(
-    "bowtie2 {bowtie2_opts} -x {idx} -1 {reads_1} -2 {reads_2} --threads {cpus} ",
-    "2>> {log_fn} | samtools view -b -G 12 - | samtools sort -@ {cpus} -o {bam} -"
+    "bowtie2 {bowtie2_opts} -x {shQuote(idx)} -1 {shQuote(reads_1)} ",
+    "-2 {shQuote(reads_2)} --threads {cpus} 2>> {shQuote(log_fn)} ",
+    "| samtools view -b -G 12 - | samtools sort -@ {cpus} -o {shQuote(bam)} -"
   ), log_fn)
 
   reads_pass_1 <- .mtr_count_primary(bam)
@@ -513,7 +526,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   sub_1 <- file.path(work, "sub_R1.fq")
   sub_2 <- file.path(work, "sub_R2.fq")
   .mtr_run(stringr::str_glue(
-    "samtools sort -n {bam} | samtools fastq -1 {sub_1} -2 {sub_2} ",
+    "samtools sort -n {shQuote(bam)} ",
+    "| samtools fastq -1 {shQuote(sub_1)} -2 {shQuote(sub_2)} ",
     "-0 /dev/null -s /dev/null -n"
   ), log_fn)
 
@@ -526,7 +540,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     passes <- k
     raw <- file.path(work, paste0("raw_", k, ".fa"))
     .mtr_run(stringr::str_glue(
-      "samtools consensus {fixed_cons} --show-ins no {user_cons} {bam} > {raw}"
+      "samtools consensus {fixed_cons} --show-ins no {user_cons} ",
+      "{shQuote(bam)} > {shQuote(raw)}"
     ), log_fn)
 
     filled <- .mtr_fill(.mtr_read_seq(raw), prev_ref)
@@ -566,10 +581,13 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     writeLines(c(">mapping_ref", prev_ref), ref_fa)
     idx <- file.path(work, paste0("idx_", k))
     bam <- file.path(work, paste0("pass_", k + 1L, ".bam"))
-    .mtr_run(stringr::str_glue("bowtie2-build -q {ref_fa} {idx}"), log_fn)
     .mtr_run(stringr::str_glue(
-      "bowtie2 {bowtie2_opts} --no-unal -x {idx} -1 {sub_1} -2 {sub_2} ",
-      "--threads {cpus} 2>> {log_fn} | samtools sort -@ {cpus} -o {bam} -"
+      "bowtie2-build -q {shQuote(ref_fa)} {shQuote(idx)}"
+    ), log_fn)
+    .mtr_run(stringr::str_glue(
+      "bowtie2 {bowtie2_opts} --no-unal -x {shQuote(idx)} -1 {shQuote(sub_1)} ",
+      "-2 {shQuote(sub_2)} --threads {cpus} 2>> {shQuote(log_fn)} ",
+      "| samtools sort -@ {cpus} -o {shQuote(bam)} -"
     ), log_fn)
   }
   utils::write.table(iters, file.path(work, "iterations.tsv"),
@@ -582,11 +600,15 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   writeLines(c(">mapping_ref", prev_ref), final_ref)
   final_idx <- file.path(work, "idx_final")
   final_bam <- file.path(work, "final.bam")
-  .mtr_run(stringr::str_glue("bowtie2-build -q {final_ref} {final_idx}"), log_fn)
   .mtr_run(stringr::str_glue(
-    "bowtie2 {bowtie2_opts} --no-unal -x {final_idx} -1 {reads_1} -2 {reads_2} ",
-    "--threads {cpus} 2>> {log_fn} | samtools sort -@ {cpus} -o {final_bam} -"
+    "bowtie2-build -q {shQuote(final_ref)} {shQuote(final_idx)}"
   ), log_fn)
+  .mtr_run(stringr::str_glue(
+    "bowtie2 {bowtie2_opts} --no-unal -x {shQuote(final_idx)} ",
+    "-1 {shQuote(reads_1)} -2 {shQuote(reads_2)} --threads {cpus} ",
+    "2>> {shQuote(log_fn)} | samtools sort -@ {cpus} -o {shQuote(final_bam)} -"
+  ), log_fn)
+  .mtr_run(stringr::str_glue("samtools index {shQuote(final_bam)}"), log_fn)
   reads_final <- .mtr_count_primary(final_bam)
   junction_depth <- if (circular) .mtr_junction_depth(final_bam, len) else NA_integer_
 
@@ -594,11 +616,11 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   final_subs <- file.path(work, "final_subs.fa")
   .mtr_run(stringr::str_glue(
     "samtools consensus {fixed_cons} --show-ins yes --mark-ins {user_cons} ",
-    "{final_bam} > {final_raw}"
+    "{shQuote(final_bam)} > {shQuote(final_raw)}"
   ), log_fn)
   .mtr_run(stringr::str_glue(
     "samtools consensus {fixed_cons} --show-ins no {user_cons} ",
-    "{final_bam} > {final_subs}"
+    "{shQuote(final_bam)} > {shQuote(final_subs)}"
   ), log_fn)
 
   tokens <- .mtr_splice(.mtr_parse_marked(.mtr_read_seq(final_raw)), len, flank)
@@ -638,14 +660,15 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
       "re-run."))
   }
   # Position-wise over the common length, with uncalled sites excluded, so an
-  # internal N run cannot shift the comparison frame.
+  # internal N run cannot shift the comparison frame. Lowercase is a
+  # base-versus-gap call, which is uncalled for this diagnostic.
   a <- strsplit(subs, "", fixed = TRUE)[[1]]
   b <- strsplit(ref$seq, "", fixed = TRUE)[[1]]
   n <- min(length(a), length(b))
   a <- a[seq_len(n)]
   b <- b[seq_len(n)]
-  keep <- !a %in% c("N", "*")
-  subs_diff <- sum(a[keep] != b[keep])
+  keep <- !(a %in% c("N", "*")) & !grepl("[a-z]", a)
+  subs_diff <- sum(toupper(a[keep]) != toupper(b[keep]))
   if (subs_diff > 0.10 * ref$length) {
     notes <- c(notes, paste0(
       "Reference is more than 10% divergent; expect reference bias and missing ",
