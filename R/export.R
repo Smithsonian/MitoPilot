@@ -1583,10 +1583,12 @@ get_export_PCG_annotations <- function(con, group) {
           next
         }
 
-        translation <- Biostrings::translate(
-          merged_sequence,
-          genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code)),
-          if.fuzzy.codon = "solve"
+        translation <- mute_partial_codon_warning(
+          Biostrings::translate(
+            merged_sequence,
+            genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code)),
+            if.fuzzy.codon = "solve"
+          )
         ) |> as.character()
         translation <- sub("\\*$", "", translation) # remove terminal stop codon
 
