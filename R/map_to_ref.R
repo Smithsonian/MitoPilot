@@ -439,11 +439,16 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 #' @noRd
 .mtr_junction_depth <- function(bam, len, refname = "mapping_ref",
                                 min_overhang = 30L) {
+  region <- paste0(refname, ":", len, "-", len)
   sam <- suppressWarnings(system2(
-    "samtools", c("view", "-F", "0x904", shQuote(bam),
-                  shQuote(paste0(refname, ":", len, "-", len))),
+    "samtools", c("view", "-F", "0x904", shQuote(bam), shQuote(region)),
     stdout = TRUE, stderr = FALSE
   ))
+  # A failed query must not read as "no reads span the seam".
+  status <- attr(sam, "status")
+  if (!is.null(status) && status != 0L) {
+    stop("samtools view failed (exit ", status, ") for region ", region)
+  }
   if (length(sam) == 0L) {
     return(0L)
   }
@@ -544,7 +549,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
       "{shQuote(bam)} > {shQuote(raw)}"
     ), log_fn)
 
-    filled <- .mtr_fill(.mtr_read_seq(raw), prev_ref)
+    raw_seq <- .mtr_read_seq(raw)
+    filled <- .mtr_fill(raw_seq, prev_ref)
     cons <- paste(
       .mtr_splice(strsplit(filled, "", fixed = TRUE)[[1]], len, flank),
       collapse = ""
@@ -566,7 +572,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
       pass = k,
       reads_mapped = reads_now,
       bases_changed = bases_changed,
-      n_count = nchar(gsub("[^N]", "", cons)),
+      n_count = nchar(gsub("[^N]", "", raw_seq)),
       stop_reason = if (done) stop_reason else NA_character_
     ))
 
@@ -608,9 +614,13 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     "-1 {shQuote(reads_1)} -2 {shQuote(reads_2)} --threads {cpus} ",
     "2>> {shQuote(log_fn)} | samtools sort -@ {cpus} -o {shQuote(final_bam)} -"
   ), log_fn)
-  .mtr_run(stringr::str_glue("samtools index {shQuote(final_bam)}"), log_fn)
   reads_final <- .mtr_count_primary(final_bam)
-  junction_depth <- if (circular) .mtr_junction_depth(final_bam, len) else NA_integer_
+  # The index exists only to serve the seam query.
+  junction_depth <- NA_integer_
+  if (circular) {
+    .mtr_run(stringr::str_glue("samtools index {shQuote(final_bam)}"), log_fn)
+    junction_depth <- .mtr_junction_depth(final_bam, len)
+  }
 
   final_raw <- file.path(work, "final_raw.fa")
   final_subs <- file.path(work, "final_subs.fa")
@@ -626,7 +636,18 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   tokens <- .mtr_splice(.mtr_parse_marked(.mtr_read_seq(final_raw)), len, flank)
   product <- .mtr_tokens_to_seq(tokens)
   seq <- product$seq
-  if (!circular) {
+
+  published <- ref$topology
+  if (circular && !is.na(junction_depth) && junction_depth == 0L) {
+    published <- "linear"
+    notes <- c(notes, paste0(
+      "No reads span the start and end of the sequence, so this assembly is ",
+      "published as linear even though the reference is circular. Add reads or ",
+      "use a closer reference, or edit the topology if you are confident the ",
+      "molecule is circular."))
+  }
+  # Gated on the published topology, so a downgraded assembly is trimmed too.
+  if (!identical(published, "circular")) {
     seq <- .mtr_strip_ends(seq)
   }
 
@@ -638,21 +659,15 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   writeLines(c(paste0(">", id, ".1.1 subs_only"), subs),
              file.path(work, "subs_only.fasta"))
 
-  published <- ref$topology
-  if (circular && !is.na(junction_depth) && junction_depth == 0L) {
-    published <- "linear"
-    notes <- c(notes, paste0(
-      "No reads span the start and end of the sequence, so this assembly is ",
-      "published as linear even though the reference is circular. Add reads or ",
-      "use a closer reference, or edit the topology if you are confident the ",
-      "molecule is circular."))
-  }
-
   n_count <- nchar(gsub("[^N]", "", seq))
-  if (n_count > 0.02 * nchar(seq)) {
+  n_pct <- round(100 * n_count / nchar(seq), 1)
+  if (n_count > 0.50 * nchar(seq)) {
     notes <- c(notes, paste0(
-      round(100 * n_count / nchar(seq), 1),
-      "% of the reference could not be called (N)."))
+      n_pct, "% of the product is N; the reference may be too divergent for ",
+      "this sample."))
+  } else if (n_count > 0.02 * nchar(seq)) {
+    notes <- c(notes, paste0(
+      n_pct, "% of the reference could not be called (N)."))
   }
   if (identical(stop_reason, "cap")) {
     notes <- c(notes, paste0(

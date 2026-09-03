@@ -16,7 +16,12 @@ mtr_stub_bin <- function(dir) {
     "  view)",
     "    case \" $* \" in",
     "      *\" -c \"*) echo 5000 ;;",
-    "      *) if [ -n \"$MTR_STUB_SAM\" ]; then cat \"$MTR_STUB_SAM\"; fi ;;",
+    "      *)",
+    "        if [ -n \"$MTR_STUB_VIEW_FAIL\" ]; then",
+    "          case \" $* \" in *:*) exit 1 ;; esac",
+    "        fi",
+    "        if [ -n \"$MTR_STUB_SAM\" ]; then cat \"$MTR_STUB_SAM\"; fi",
+    "        ;;",
     "    esac",
     "    ;;",
     "  sort)",
@@ -175,6 +180,18 @@ test_that("a circular reference with no junction reads is published as linear", 
   s <- mtr_setup(d, junction = FALSE)
   out <- file.path(d, "out")
 
+  # An N-heavy consensus with N at both ends of the spliced product.
+  ref_seq <- paste(rep("ACGTACGTTG", 600L), collapse = "")
+  nheavy <- paste0(ref_seq, substr(ref_seq, 1L, s$flank))
+  substr(nheavy, 6001L, 6250L) <- strrep("N", 250L)
+  substr(nheavy, 5501L, 6000L) <- strrep("N", 500L)
+  substr(nheavy, 1000L, 4500L) <- strrep("N", 3501L)
+  raw_n <- nchar(gsub("[^N]", "", nheavy))
+  withr::local_envvar(c(
+    MTR_STUB_CONS = mtr_write_wrapped(file.path(d, "nheavy.fa"), nheavy),
+    MTR_STUB_CONS_INS = file.path(d, "nheavy.fa")
+  ))
+
   map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
              "-d 3 --min-BQ 20", 5, "circular", 2, 1, out)
 
@@ -187,6 +204,37 @@ test_that("a circular reference with no junction reads is published as linear", 
   expect_equal(sm[["junction_depth"]], "0")
   notes <- readLines(file.path(out, "T1_summary.txt"))
   expect_true(any(grepl("published as linear", notes)))
+
+  # A downgraded assembly is trimmed like any other linear product.
+  pub <- paste(fa[-1], collapse = "")
+  expect_false(grepl("^N", pub))
+  expect_false(grepl("N$", pub))
+  expect_equal(nchar(pub), s$len - 750L)
+  expect_true(any(grepl("of the product is N", notes)))
+
+  # The iteration record carries the pre-fill N count, not the filled one.
+  iters <- read.delim(file.path(out, "maptoref", "iterations.tsv"))
+  expect_equal(iters$n_count[1], raw_n)
+  expect_true(raw_n > 0L)
+})
+
+test_that("a failed seam query is a per-sample failure, not a linear downgrade", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+  withr::local_envvar(c(MTR_STUB_VIEW_FAIL = "1"))
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "circular", 2, 1, out)
+
+  expect_false(ok)
+  expect_false(file.exists(file.path(out, "T1_assembly_1.fasta")))
+  expect_equal(readLines(file.path(out, "T1_assembly_0.fasta"))[1],
+               ">No assembly found")
+  expect_true(any(grepl("mapping_ref:6000-6000",
+                        readLines(file.path(out, "assembler.log.txt")),
+                        fixed = TRUE)))
 })
 
 test_that("a consensus that keeps moving runs to the cap", {
