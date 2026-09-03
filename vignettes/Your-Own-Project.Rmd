@@ -191,6 +191,29 @@ be a local path or a URL. The default is the zebrafish mitogenome, so supply
 your own for anything that is not a fish. Leave both alone to stay on
 GetOrganelle.
 
+**`assembler` and `maptoref_ref`** switch the assembler to `"MapToRef"`, which
+maps your reads onto a reference mitogenome instead of assembling de novo.
+`maptoref_ref` must be one complete mitogenome; GenBank (`.gb`) is preferred
+because it carries its own topology, so `maptoref_topology` is only needed for
+a FASTA reference:
+
+```r
+new_project(
+  assembler = "MapToRef",
+  maptoref_ref = "ref/NC_002333.gb"
+)
+
+# A FASTA reference needs its topology stated:
+new_project(
+  assembler = "MapToRef",
+  maptoref_ref = "ref/mito.fasta",
+  maptoref_topology = "circular"
+)
+```
+
+See [building custom databases](custom_dbs.html) for how to get a reference
+mitogenome.
+
 **`annotate_ref_db`** selects the MITOS2 reference database. The default is
 `"Chordata"`; `"Metazoa_RefSeq89"` is the general-purpose alternative and is the
 right choice for most invertebrates.

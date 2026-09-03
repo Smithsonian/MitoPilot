@@ -27,9 +27,8 @@ raw input and performs the following steps.
       - [fastp](https://github.com/OpenGene/fastp) for quality control
         and adapter trimming
       - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle)
-        (default) or
-        [MitoFinder](https://github.com/RemiAllio/MitoFinder) for
-        mitogenome assembly
+        (default), [MitoFinder](https://github.com/RemiAllio/MitoFinder),
+        or MapToRef for mitogenome assembly
       - [bowtie2](https://github.com/BenLangmead/bowtie2) for read
         mapping to calculate coverage and error rates.
       - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) against a
@@ -165,9 +164,11 @@ For groups other than fishes, make sure you build or pick the
 appropriate reference databases. There are three independent kinds of
 databases:
 
-  - **Assembly** references for GetOrganelle or MitoFinder.
-    `MitoPilot::custom_assembly_db()` builds these for a clade
-    automatically, with no external tools required. See [building custom
+  - **Assembly** references for GetOrganelle, MitoFinder, or MapToRef.
+    `MitoPilot::custom_assembly_db()` builds a clade-wide database for
+    GetOrganelle and MitoFinder automatically, with no external tools
+    required; MapToRef instead uses a single reference mitogenome you
+    supply yourself. See [building custom
     databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html).
   - **Annotation** references for MITOS2. MitoPilot includes Chordata
     and Metazoa databases, selectable in the `Annotate Opts.` window.

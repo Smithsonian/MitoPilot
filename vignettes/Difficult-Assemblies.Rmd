@@ -14,12 +14,19 @@ discarding them silently, and gives you tools to decide what each one represents
 before annotation and export.
 
 What you see depends partly on the assembler. MitoPilot can assemble with
-[GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (the default) or
-[MitoFinder](https://github.com/RemiAllio/MitoFinder), set by the `assembler`
-option at project setup. GetOrganelle explores an assembly graph and can return
-several alternative **paths** through it, each possibly split into scaffolds.
-MitoFinder returns a **single path**, but can still report several **scaffolds**
-when it recovers more than one mitochondrial contig. The strategies below apply the same way regardless of which assembler
+[GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (the default),
+[MitoFinder](https://github.com/RemiAllio/MitoFinder), or MapToRef, set by the
+`assembler` option at project setup. GetOrganelle explores an assembly graph
+and can return several alternative **paths** through it, each possibly split
+into scaffolds. MitoFinder returns a **single path**, but can still report
+several **scaffolds** when it recovers more than one mitochondrial contig.
+MapToRef, like MitoFinder, returns one path. N runs mark regions the reads did
+not cover. Against a reference from a different order, most of the product can
+be N (the test samples came out 60 to 75 percent N against a zebrafish
+reference) and a note says the reference may be too divergent; use a closer
+reference or a de novo assembler. Mapping cannot see rearrangements, so
+cross-check a MapToRef result against a de novo assembly before trusting gene
+order. The strategies below apply the same way regardless of which assembler
 produced the sequences.
 
 The right strategy depends on what the extra sequences actually are, and the two cases have different biological meanings:
@@ -42,8 +49,8 @@ be allowed to proceed to annotation.
 
 ## Resolving multiple paths
 
-Multiple paths come only from GetOrganelle; MitoFinder always returns a single
-path. When a GetOrganelle sample assembles into more than one path, it is flagged
+Multiple paths come only from GetOrganelle; MitoFinder and MapToRef always
+return a single path. When a GetOrganelle sample assembles into more than one path, it is flagged
 in the Assemble module ("Unable to resolve single assembly from reads"). Open the
 assembly details to see each path. Because the paths are alternative hypotheses
 about one genome, you should reduce them to a single assembly before continuing.

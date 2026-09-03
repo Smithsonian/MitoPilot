@@ -148,10 +148,13 @@ Nothing is editable until you tick **Edit**. The important controls:
 - **CPUs and Memory** per sample. Raise memory if samples fail with out-of-memory
   errors.
 - **Assembler.** [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) by
-  default, or [MitoFinder](https://github.com/RemiAllio/MitoFinder). GetOrganelle
-  only assembles reads it recognizes as mitochondrial, which makes it fast but
-  dependent on good reference databases. MitoFinder assembles everything, which
-  is much slower but can work better for groups with few reference mitogenomes.
+  default, [MitoFinder](https://github.com/RemiAllio/MitoFinder), or MapToRef.
+  GetOrganelle only assembles reads it recognizes as mitochondrial, which makes
+  it fast but dependent on good reference databases. MitoFinder assembles
+  everything, which is much slower but can work better for groups with few
+  reference mitogenomes. MapToRef maps your reads to a reference mitogenome you
+  supply and calls the consensus from the reads; the reference is used to place
+  reads, never to fill in the answer.
 - **Seeds and Labels databases.** The reference sequences GetOrganelle uses to
   recruit and extend mitochondrial reads. The defaults are fish; for other
   groups, build your own with `custom_assembly_db()` (see
@@ -161,11 +164,28 @@ Nothing is editable until you tick **Edit**. The important controls:
   MitoFinder uses to identify mitochondrial contigs. The default is the zebrafish
   mitogenome (NC_002333.2), so for anything other than a fish, supply a reference
   from your own group. `custom_assembly_db()` can build this file too.
-- **Max assembly paths / Max scaffolds.** Samples are marked failed instead 
+- **MapToRef reference.** One complete mitogenome, GenBank (`.gb`) preferred,
+  one record per file. Keep it inside the project folder so the container can
+  see it. A FASTA reference is accepted, but you must also set the topology.
+- **Reference topology.** `circular` or `linear`, required for a FASTA
+  reference and ignored for GenBank.
+- **Iterate up to (passes).** How many times the consensus is fed back in as
+  the mapping reference. Default 5; the loop stops early when the sequence
+  stops changing. Try 10 to 25 when the reference is from a distant relative.
+- **Max assembly paths / Max scaffolds.** Samples are marked failed instead
   of continuing in the pipeline if they exceed these thresholds.
 - **Automatically join multi-scaffold assemblies.** Off by default, and worth
   leaving off until you understand your data. See
   [handling difficult assemblies](Difficult-Assemblies.html).
+
+If your MapToRef reference is circular but no reads span the point where the
+sequence wraps around, the assembly is published as linear and a note says so.
+That is the data disagreeing with the reference, not an error.
+
+Duplicate reads are kept by default. To remove them, tick **Remove duplicate
+reads** in the Preprocess options (it runs fastp with `--dedup`). In the test
+data it dropped about a fifth of the reads and changed almost no calls, so
+treat it as a depth and runtime control rather than an accuracy fix.
 
 Options are saved as named, reusable sets. To make one, tick **Edit**, change
 what you want, type a new name in the **Parameter set name** box, and click

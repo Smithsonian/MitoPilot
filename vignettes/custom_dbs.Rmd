@@ -30,7 +30,7 @@ It may also be helpful to create a custom database for curation of the protein-c
 
 ## What parts of the MitoPilot pipeline use reference databases?
 
-- GetOrganelle or MitoFinder (Assemble module)
+- GetOrganelle, MitoFinder, or MapToRef (Assemble module)
 - Mitos2 (Annotate module)
 - Automatic and manual curation of protein-coding genes (Annotate module)
 
@@ -145,6 +145,32 @@ The MitoFinder reference database is simple: a GenBank formatted file (`.gb`) co
 You can provide the path to your MitoFinder database with the `mitofinder_db` argument of `MitoPilot::new_project` function when initializing a project. Alternatively, you can specify the MitoFinder database in the assembly options section of the MitoPilot GUI.
 
 Assembly of contigs with MitoFinder is completely de novo. The MitoFinder reference database is only used to "label" putative mitochondrial contigs. Thus, the species in your reference database can be fairly distant relatives of your samples.
+
+## Reference mitogenome for MapToRef
+
+MapToRef needs exactly one complete mitogenome record to map reads against, not
+a multi-record database. GenBank format (`.gb`) is preferred because the
+record's `LOCUS` line states its topology (circular or linear) for you; a
+FASTA reference works too, but then you must set the topology yourself in the
+assembly options.
+
+To get one:
+
+1. Search [NCBI Nucleotide](https://www.ncbi.nlm.nih.gov/nuccore) for a
+   complete mitogenome from your target species, or the closest relative you
+   can find.
+2. Open the record, then **Send to > File**, choosing **GenBank (full)**
+   format.
+3. Save the file inside your project folder.
+
+The MitoFinder sampler database built by `custom_assembly_db()` is not a
+MapToRef reference: it packages many mitogenome records together so MitoFinder
+can label contigs against any of them, while MapToRef expects a single
+sequence to map every read against.
+
+<div class="alert alert-warning">
+  <strong>Keep the reference inside the project folder.</strong> MitoPilot runs inside a container (Docker or Singularity/Apptainer), which only sees files under the paths it is told to mount. A reference kept outside your project tree, especially one reached through a symlink, may point somewhere the container cannot read, and the run will fail as if the file were missing. Keep the reference file under the project folder, or make sure its actual directory is bound into the container if you keep it elsewhere.
+</div>
 
 ## Build custom databases for protein-coding gene curation
 
