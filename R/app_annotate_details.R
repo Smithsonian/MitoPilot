@@ -2299,8 +2299,12 @@ annotations_details_server <- function(id, rv) {
     # single amino acid, so the curator is told before editing. Reads the current
     # positions, so a +/- edit refreshes the count.
     ambiguity_note <- function(sel) {
-      if (length(sel) != 1) return("")
-      if (rv$annotations$type[sel] %nin% c("PCG", "ORF", "rRNA")) return("")
+      if (length(sel) != 1 || is.na(sel)) return("")
+      # A stale table selection (or a not-yet-loaded table) can index nothing,
+      # so treat a missing type as "no note" instead of erroring the render.
+      type <- rv$annotations$type[sel]
+      if (length(type) != 1 || is.na(type) ||
+          type %nin% c("PCG", "ORF", "rRNA")) return("")
       asm <- rv$editing$assembly %||% tryCatch(get_assembly(
         ID = rv$annotations$ID[sel], path = rv$annotations$path[sel],
         scaffold = rv$annotations$scaffold[sel], con = session$userData$con
@@ -2312,7 +2316,7 @@ annotations_details_server <- function(id, rv) {
         )),
         error = function(e) 0L
       )
-      if (n == 0L) return("")
+      if (length(n) != 1 || is.na(n) || n == 0L) return("")
       paste0(
         "<span style=\"color:#c00; font-weight:bold;\">",
         as.character(icon("triangle-exclamation")), " ", n,
