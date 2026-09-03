@@ -320,3 +320,44 @@ test_that("internal stop codons are collected per record", {
   expect_equal(res$label, "s2")
   expect_equal(res$n_stops, 2L)
 })
+
+test_that("an internal stop codon is always flagged in the outlier review", {
+  d <- withr::local_tempdir()
+  db <- file.path(d, ".sqlite")
+  con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
+  ann <- rbind(
+    pcg_row(1L, "cox1", 100, 700),
+    pcg_row(1L, "cox1", 100, 700)
+  )
+  ann$ID <- c("s1", "s2")
+  # identical, well-aligned proteins: only the internal stop can flag s2
+  ann$translation <- c(strrep("MK", 30L), paste0(strrep("MK", 15L), "*", strrep("MK", 14L), "K"))
+  DBI::dbWriteTable(con, "annotations", ann)
+  DBI::dbWriteTable(con, "assemblies", data.frame(
+    ID = c("s1", "s2"), path = 1L, scaffold = 1L, ignore = 0L,
+    topology = "circular", sequence = topo_seq, stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "export", data.frame(
+    ID = c("s1", "s2"), path = 1L, scaffold = 1L, export_group = "g1",
+    export_time_stamp = NA_integer_, stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "annotate", data.frame(
+    ID = c("s1", "s2"), path = 1L, scaffold = 1L, topology = "circular",
+    partial = "no", curate_opts = "default", stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "curate_opts", data.frame(
+    curate_opts = "default", params = '{"default_rules":{"PCG":{"intron":false}}}',
+    linear_complete = 0L, stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "samples", data.frame(
+    ID = c("s1", "s2"), Taxon = "Testus testus", genetic_code = 2L,
+    stringsAsFactors = FALSE))
+  DBI::dbDisconnect(con)
+
+  res <- suppressMessages(flag_PCG_outliers(group = "g1", db = db))
+
+  expect_equal(nrow(res$flags), 1L)
+  expect_equal(res$flags$label, "s2")
+  expect_true(res$flags$internal_stop_flag)
+  expect_equal(res$flags$internal_stops, 1L)
+  expect_match(res$flags$issue, "internal stop")
+  # the other tests (offsets, identity) did not fire on this pair
+  expect_false(res$flags$start_flag)
+  expect_false(res$flags$stop_flag)
+})

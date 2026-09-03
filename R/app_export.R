@@ -1455,6 +1455,7 @@ export_server <- function(id) {
           `Start offset (aa)` = start_offset,
           `Stop offset (aa)` = stop_offset,
           `Identity (%)` = pct_identity,
+          `Internal stops` = internal_stops,
           resolved = keys %in% rv$resolved,
           edit = "edit"
         )
@@ -1494,6 +1495,14 @@ export_server <- function(id) {
             header = export_help_label(
               "Identity (%)",
               "Mean percent identity of this sample versus rest of samples in alignment group."
+            )
+          ),
+          `Internal stops` = reactable::colDef(
+            width = 110,
+            align = "center",
+            header = export_help_label(
+              "Internal stops",
+              "Number of stop codons inside this sample's translation. Any at all will fail NCBI validation."
             )
           ),
           resolved = reactable::colDef(

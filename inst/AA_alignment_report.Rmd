@@ -85,7 +85,8 @@ if (nrow(outliers) == 0) {
       Issue = issue,
       `Start offset (aa)` = start_offset,
       `Stop offset (aa)` = stop_offset,
-      `Identity (%)` = pct_identity
+      `Identity (%)` = pct_identity,
+      `Internal stops` = internal_stops
     ) |>
     knitr::kable()
 }
@@ -94,7 +95,8 @@ if (nrow(outliers) == 0) {
 Start/stop offset (aa) is the number of residues a sample's end extends past (+) or falls
 short of (-) the alignment's well-aligned core. Flags use a start-offset threshold of
 `r params$start_aa` aa, a stop-offset threshold of `r params$stop_aa` aa, and an identity
-threshold of `r params$ident_pct`%.
+threshold of `r params$ident_pct`%. Internal stop codons are always flagged, with
+no threshold.
 
 # Internal Stop Codons
 

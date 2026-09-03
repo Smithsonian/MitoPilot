@@ -1629,7 +1629,8 @@ internal_stop_records <- function(annotations) {
 #' the alignment's well-occupied core by more than a set number of residues
 #' (pointing at a start/stop codon placed too long or too short) and those that
 #' align poorly to the rest of the group (a low sequence-identity catch-all for
-#' badly annotated regions).
+#' badly annotated regions). Records whose translation carries an internal stop
+#' codon are always flagged as well, with no threshold.
 #'
 #' @param group Name of the export group.
 #' @param db Path to the project SQLite database.
@@ -1649,8 +1650,8 @@ internal_stop_records <- function(annotations) {
 #'   \describe{
 #'     \item{flags}{A tibble with one row per flagged (sample, gene):
 #'       `ID`, `label`, `path`, `scaffold`, `gene`, `pct_identity`,
-#'       `start_offset`, `stop_offset`, `start_flag`, `stop_flag`,
-#'       `identity_flag`, `issue`.}
+#'       `start_offset`, `stop_offset`, `internal_stops`, `start_flag`,
+#'       `stop_flag`, `identity_flag`, `internal_stop_flag`, `issue`.}
 #'     \item{alignments}{A named list (by gene) of clustering-ordered aligned
 #'       `AAStringSet` objects, for every gene that has a flagged sample (plus any
 #'       explicitly requested via `genes`, even if their last flag was cleared).}
@@ -1694,6 +1695,12 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
     # and duplicate names here would make the row lookups below silently resolve to
     # the first match, misattributing or dropping the siblings.
     seqs <- Biostrings::AAStringSet(stats::setNames(sub$translation, sub$seqid))
+    # Internal stops, counted on the unaligned translation (terminal stops are
+    # already stripped). Always checked: unlike the offset/identity tests this
+    # has no threshold, any "*" left is a defect.
+    n_istop <- stats::setNames(
+      stringr::str_count(sub$translation, "\\*"), sub$seqid
+    )
 
     aln <- DECIPHER::AlignSeqs(seqs, processors = NULL, verbose = FALSE)
     dst <- DECIPHER::DistanceMatrix(
@@ -1744,7 +1751,11 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
       ident <- unname(pct_identity[idx])
       identity_flag <- isTRUE(ident < ident_pct)
 
-      if (!start_flag && !stop_flag && !identity_flag) next
+      istop <- unname(n_istop[label])
+      if (length(istop) != 1 || is.na(istop)) istop <- 0L
+      internal_stop_flag <- istop > 0L
+
+      if (!start_flag && !stop_flag && !identity_flag && !internal_stop_flag) next
 
       # Signed per-end offset (aa) relative to the alignment core:
       # negative = end placed too short, positive = extends too long.
@@ -1755,6 +1766,7 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
       if (start_flag) issues <- c(issues, if (start_offset < 0) "start too short" else "start too long")
       if (stop_flag) issues <- c(issues, if (stop_offset < 0) "stop too short" else "stop too long")
       if (identity_flag) issues <- c(issues, "low identity")
+      if (internal_stop_flag) issues <- c(issues, "internal stop")
 
       srow <- sub[match(label, sub$seqid), ]
       flag_rows[[length(flag_rows) + 1L]] <- dplyr::tibble(
@@ -1766,9 +1778,11 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
         pct_identity = round(ident, 1),
         start_offset = start_offset,
         stop_offset = stop_offset,
+        internal_stops = as.integer(istop),
         start_flag = start_flag,
         stop_flag = stop_flag,
         identity_flag = identity_flag,
+        internal_stop_flag = internal_stop_flag,
         issue = paste(issues, collapse = ", ")
       )
     }
@@ -1801,9 +1815,11 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
     pct_identity = numeric(0),
     start_offset = integer(0),
     stop_offset = integer(0),
+    internal_stops = integer(0),
     start_flag = logical(0),
     stop_flag = logical(0),
     identity_flag = logical(0),
+    internal_stop_flag = logical(0),
     issue = character(0)
   )
 }
