@@ -290,7 +290,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             selectizeInput(
               ns("assembler"),
               label = NULL,
-              choices = c("GetOrganelle", "MitoFinder"),
+              choices = c("GetOrganelle", "MitoFinder", "MapToRef"),
               selected = current$assembler %||% character(0),
               width = "100%",
               options = list(
@@ -303,10 +303,11 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         opts_help("Tool used to assemble the mitogenome from reads: ",
                   tags$a(href = "https://github.com/Kinggerm/GetOrganelle",
                          target = "_blank", rel = "noopener", "GetOrganelle"),
-                  " or ",
+                  ", ",
                   tags$a(href = "https://github.com/RemiAllio/MitoFinder",
                          target = "_blank", rel = "noopener", "MitoFinder"),
-                  "; the relevant tool options appear below."),
+                  ", or MapToRef, which maps your reads to a reference ",
+                  "mitogenome you supply; the relevant tool options appear below."),
         # Each tool's help line is appended INSIDE its input's container (not as a
         # standalone <p>), so it shows/hides together with the field: shinyjs::hide
         # on the input hides its .shiny-input-container, and the help with it.
@@ -362,7 +363,68 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             "Label database: reference genes GetOrganelle uses to identify ",
             "and extend mitochondrial contigs.",
             href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-            id = ns("help_labels_db"), nested = TRUE))
+            id = ns("help_labels_db"), nested = TRUE)),
+        textInput(
+          ns("maptoref_ref"),
+          label = "MapToRef Reference (.gb or FASTA, one complete mitogenome):",
+          value = current$maptoref_ref %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Path or URL of one complete mitogenome to map against. A file ",
+            "ending .gb, .gbk, or .gbff is read as GenBank and takes its ",
+            "topology from the LOCUS line; anything else is read as FASTA and ",
+            "needs the topology set below.",
+            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
+            id = ns("help_maptoref_ref"), nested = TRUE)),
+        selectInput(
+          ns("maptoref_topology"),
+          label = "Reference topology (required for a FASTA reference):",
+          choices = c("", "circular", "linear"),
+          selected = current$maptoref_topology %||% "",
+          width = "100%"
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Ignored for a GenBank reference, where the LOCUS line wins. A ",
+            "FASTA header carries no topology, so it must be set here.",
+            id = ns("help_maptoref_topology"), nested = TRUE)),
+        textInput(
+          ns("maptoref"),
+          label = "MapToRef bowtie2 options",
+          value = current$maptoref %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Flags passed to bowtie2. Presets: --fast-local, ",
+            "--sensitive-local, --very-sensitive-local (default), ",
+            "--very-sensitive-local -N 1, and, for a distant reference, ",
+            "--very-sensitive-local -N 1 -L 15 --score-min G,10,6.",
+            href = "https://bowtie-bio.sourceforge.net/bowtie2/manual.shtml",
+            id = ns("help_maptoref"), nested = TRUE)),
+        textInput(
+          ns("maptoref_consensus"),
+          label = "MapToRef samtools consensus options",
+          value = current$maptoref_consensus %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Flags passed to samtools consensus. -d sets the depth below which ",
+            "a site is called N, --min-BQ the base-quality floor. Options ",
+            "MitoPilot sets itself are refused.",
+            href = "https://www.htslib.org/doc/samtools-consensus.html",
+            id = ns("help_maptoref_consensus"), nested = TRUE)),
+        numericInput(
+          ns("maptoref_iter"),
+          label = "Iterate up to",
+          value = current$maptoref_iter %||% 5,
+          min = 1, step = 1,
+          width = "100%"
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Maximum passes of consensus-back-into-reference. The loop stops ",
+            "early when the sequence stops changing. Try 10 to 25 for a ",
+            "distant reference.",
+            id = ns("help_maptoref_iter"), nested = TRUE))
         ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
@@ -438,13 +500,23 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
     # Hide the non-selected assembler's inputs. Each help line lives inside its
     # input's container, so hiding the input hides its help too - do NOT hide the
     # help_* ids separately, or showing the input later won't bring the help back.
+    maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref",
+                      "maptoref_consensus", "maptoref_iter")
     if(current$assembler == "GetOrganelle"){
       shinyjs::hide(id = "mitofinder")
       shinyjs::hide(id = "mf_db")
+      for (i in maptoref_ids) shinyjs::hide(id = i)
     } else if(current$assembler == "MitoFinder"){
       shinyjs::hide(id = "getOrganelle")
       shinyjs::hide(id = "seeds_db")
       shinyjs::hide(id = "labels_db")
+      for (i in maptoref_ids) shinyjs::hide(id = i)
+    } else if(current$assembler == "MapToRef"){
+      shinyjs::hide(id = "getOrganelle")
+      shinyjs::hide(id = "seeds_db")
+      shinyjs::hide(id = "labels_db")
+      shinyjs::hide(id = "mitofinder")
+      shinyjs::hide(id = "mf_db")
     }
   } else {
     shinyWidgets::show_alert(

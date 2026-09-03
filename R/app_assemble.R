@@ -864,10 +864,23 @@ assemble_server <- function(id) {
           inputId = "mitofinder",
           value = cur$mitofinder
         )
+        updateTextInput(
+          inputId = "maptoref_ref",
+          value = (cur$maptoref_ref %||% NA_character_) %|NA|% ""
+        )
+        updateSelectInput(
+          inputId = "maptoref_topology",
+          selected = (cur$maptoref_topology %||% NA_character_) %|NA|% ""
+        )
+        updateTextInput(inputId = "maptoref", value = cur$maptoref)
+        updateTextInput(inputId = "maptoref_consensus", value = cur$maptoref_consensus)
+        updateNumericInput(inputId = "maptoref_iter", value = cur$maptoref_iter)
         updateSelectizeInput(
           inputId = "assembler",
           selected = cur$assembler
         )
+        maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref",
+                          "maptoref_consensus", "maptoref_iter")
         # Each help line lives inside its input's container, so toggling the
         # input shows/hides its help too (no separate help_* toggles needed).
         if (cur$assembler == "GetOrganelle") {
@@ -876,12 +889,21 @@ assemble_server <- function(id) {
           shinyjs::show(id = "getOrganelle")
           shinyjs::show(id = "seeds_db")
           shinyjs::show(id = "labels_db")
+          for (i in maptoref_ids) shinyjs::hide(id = i)
         } else if (cur$assembler == "MitoFinder") {
           shinyjs::show(id = "mitofinder")
           shinyjs::show(id = "mf_db")
           shinyjs::hide(id = "getOrganelle")
           shinyjs::hide(id = "seeds_db")
           shinyjs::hide(id = "labels_db")
+          for (i in maptoref_ids) shinyjs::hide(id = i)
+        } else if (cur$assembler == "MapToRef") {
+          shinyjs::hide(id = "mitofinder")
+          shinyjs::hide(id = "mf_db")
+          shinyjs::hide(id = "getOrganelle")
+          shinyjs::hide(id = "seeds_db")
+          shinyjs::hide(id = "labels_db")
+          for (i in maptoref_ids) shinyjs::show(id = i)
         }
       }
     })
@@ -898,6 +920,10 @@ assemble_server <- function(id) {
       shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
       shinyjs::toggleState("min_assembly_length", condition = input$edit_assemble_opts)
       shinyjs::toggleState("join_scaffolds", condition = input$edit_assemble_opts)
+      for (i in c("maptoref_ref", "maptoref_topology", "maptoref",
+                  "maptoref_consensus", "maptoref_iter")) {
+        shinyjs::toggleState(i, condition = input$edit_assemble_opts)
+      }
       # Check if editing opts that apply beyond selection
       if (input$edit_assemble_opts && input$assemble_opts %in% rv$data$assemble_opts) {
         rv$updating_indirect <- rv$data |>
@@ -942,24 +968,74 @@ assemble_server <- function(id) {
     # toggle parameters depending on selected assembler. Each help line lives
     # inside its input's container, so toggling the input carries its help too.
     observeEvent(input$assembler, {
+      maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref",
+                        "maptoref_consensus", "maptoref_iter")
       if (input$assembler == "GetOrganelle") {
         shinyjs::hide(id = "mitofinder")
         shinyjs::hide(id = "mf_db")
         shinyjs::show(id = "getOrganelle")
         shinyjs::show(id = "seeds_db")
         shinyjs::show(id = "labels_db")
+        for (i in maptoref_ids) shinyjs::hide(id = i)
       } else if (input$assembler == "MitoFinder") {
         shinyjs::show(id = "mitofinder")
         shinyjs::show(id = "mf_db")
         shinyjs::hide(id = "getOrganelle")
         shinyjs::hide(id = "seeds_db")
         shinyjs::hide(id = "labels_db")
+        for (i in maptoref_ids) shinyjs::hide(id = i)
+      } else if (input$assembler == "MapToRef") {
+        shinyjs::hide(id = "mitofinder")
+        shinyjs::hide(id = "mf_db")
+        shinyjs::hide(id = "getOrganelle")
+        shinyjs::hide(id = "seeds_db")
+        shinyjs::hide(id = "labels_db")
+        for (i in maptoref_ids) shinyjs::show(id = i)
       }
     })
     ## Save Changes ----
     observeEvent(input$update_assemble_opts, ignoreInit = T, {
       ## Add to params table if new or editing ----
       if (input$edit_assemble_opts) {
+        ref_value <- trimws(input$maptoref_ref %||% "")
+        topology_value <- trimws(input$maptoref_topology %||% "")
+        if (identical(input$assembler, "MapToRef") && !nzchar(ref_value)) {
+          shinyWidgets::show_alert(
+            title = "Reference required",
+            text = paste("MapToRef needs a reference mitogenome. Give the path",
+                         "or URL of a single-record GenBank or FASTA file."),
+            type = "error",
+            closeOnClickOutside = FALSE
+          )
+          return()
+        }
+        needs_topology <- identical(input$assembler, "MapToRef") &&
+          nzchar(ref_value) &&
+          !grepl("\\.(gb|gbk|gbff)$", ref_value, ignore.case = TRUE) &&
+          !nzchar(topology_value)
+        if (needs_topology) {
+          shinyWidgets::show_alert(
+            title = "Reference topology required",
+            text = paste("Set the reference topology (circular or linear) for a",
+                         "FASTA reference. A GenBank (.gb) reference takes its",
+                         "topology from the file."),
+            type = "error",
+            closeOnClickOutside = FALSE
+          )
+          return()
+        }
+        if (grepl("['\"]", paste(input$maptoref %||% "",
+                                 input$maptoref_consensus %||% ""))) {
+          shinyWidgets::show_alert(
+            title = "Quote characters not allowed",
+            text = paste("The bowtie2 and samtools consensus option strings are",
+                         "passed through a shell call, so they cannot contain a",
+                         "single or double quote."),
+            type = "error",
+            closeOnClickOutside = FALSE
+          )
+          return()
+        }
         dplyr::tbl(session$userData$con, "assemble_opts") |>
           dplyr::rows_upsert(
             data.frame(
@@ -975,7 +1051,12 @@ assemble_server <- function(id) {
               max_paths = as.integer(req(input$max_paths)),
               max_scaffolds = as.integer(req(input$max_scaffolds)),
               min_assembly_length = as.integer(req(input$min_assembly_length)),
-              join_scaffolds = as.integer(isTRUE(input$join_scaffolds))
+              join_scaffolds = as.integer(isTRUE(input$join_scaffolds)),
+              maptoref_ref = if (nzchar(ref_value)) ref_value else NA_character_,
+              maptoref = input$maptoref %||% "--very-sensitive-local",
+              maptoref_consensus = input$maptoref_consensus %||% "-d 3 --min-BQ 20",
+              maptoref_iter = as.integer(input$maptoref_iter %||% 5L),
+              maptoref_topology = if (nzchar(topology_value)) topology_value else NA_character_
             ),
             in_place = TRUE,
             copy = TRUE,
