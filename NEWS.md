@@ -1,3 +1,21 @@
+# MitoPilot 1.5.5
+
+Released TBD. Container: `macguigand/mitopilot:1.5.5`
+
+## New Features
+
+### Map-to-reference assembly
+
+- A third assembler, **MapToRef**, maps your reads to a reference mitogenome you supply and calls the consensus from the reads alone. The reference is used to place reads, never to fill in the answer.
+- The consensus is fed back in as the mapping reference and re-mapped until it stops changing (default: up to 5 passes, editable), then every read is mapped once more against the settled reference to produce the published sequence.
+- Sites with fewer than 3 reads are called N. Mixed sites get IUPAC codes.
+- A circular reference is handled across its origin, and the published sequence is only labelled circular if reads actually span the junction; otherwise it is published as linear with a note saying so.
+- References can be GenBank (preferred, one record) or FASTA. A FASTA reference needs its topology set explicitly.
+
+### Container
+
+- **samtools upgraded from 1.21 to 1.24**, which gives the consensus step real multi-threading.
+
 # MitoPilot 1.5.4
 
 Released 2026-08-31. Container: `macguigand/mitopilot:1.5.4`
