@@ -394,8 +394,9 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           width = "100%"
         ) |> shinyjs::disabled() |>
           tagAppendChild(opts_help(
-            "Ignored for a GenBank reference, where the LOCUS line wins. A ",
-            "FASTA header carries no topology, so it must be set here.",
+            "Ignored when the GenBank LOCUS line names a topology, and used ",
+            "when the LOCUS line names neither. A FASTA header carries no ",
+            "topology, so it must be set here.",
             id = ns("help_maptoref_topology"), nested = TRUE)),
         textInput(
           ns("maptoref"),

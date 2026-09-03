@@ -139,6 +139,11 @@ will be cleaned.
 
 ![Preprocess options window](figures/get-started/preprocess-opts.png)
 
+Duplicate reads are kept by default. To remove them, tick **Remove duplicate
+reads** in the Preprocess options (it runs fastp with `--dedup`). In the test
+data it dropped about a fifth of the reads and changed almost no calls, so
+treat it as a depth and runtime control rather than an accuracy fix.
+
 The **Assembly Opts.** column works the same way, and controls the assembler.
 
 ![Assembly options window](figures/get-started/assemble-opts.png)
@@ -167,8 +172,9 @@ Nothing is editable until you tick **Edit**. The important controls:
 - **MapToRef Reference.** One complete mitogenome, GenBank (`.gb`) preferred,
   one record per file. Keep it inside the project folder so the container can
   see it. A FASTA reference is accepted, but you must also set the topology.
-- **Reference topology.** `circular` or `linear`, required for a FASTA
-  reference and ignored for GenBank.
+- **Reference topology.** `circular` or `linear`. Required for a FASTA
+  reference. Ignored when the GenBank LOCUS line names a topology, and used
+  when the LOCUS line names neither.
 - **MapToRef bowtie2 options.** Flags passed to bowtie2 when mapping the reads
   to the reference. Default `--very-sensitive-local`. Leave it unless you know
   bowtie2.
@@ -191,11 +197,6 @@ Nothing is editable until you tick **Edit**. The important controls:
 If your MapToRef reference is circular but no reads span the point where the
 sequence wraps around, the assembly is published as linear and a note says so.
 That is the data disagreeing with the reference, not an error.
-
-Duplicate reads are kept by default. To remove them, tick **Remove duplicate
-reads** in the Preprocess options (it runs fastp with `--dedup`). In the test
-data it dropped about a fifth of the reads and changed almost no calls, so
-treat it as a depth and runtime control rather than an accuracy fix.
 
 Options are saved as named, reusable sets. To make one, tick **Edit**, change
 what you want, type a new name in the **Parameter set name** box, and click
@@ -280,7 +281,8 @@ running from the app.
 </div>
 
 Assemble runs three steps per sample: read pre-processing with
-[fastp](https://github.com/OpenGene/fastp), assembly with GetOrganelle or MitoFinder, and
+[fastp](https://github.com/OpenGene/fastp), assembly with GetOrganelle,
+MitoFinder, or MapToRef, and
 read mapping with [bowtie2](https://github.com/BenLangmead/bowtie2) to compute
 depth and error rates. It then BLASTs each assembly to find its closest published
 relative, and fetches that reference's annotations from NCBI.

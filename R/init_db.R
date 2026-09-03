@@ -62,8 +62,9 @@
 #' @param maptoref_consensus Default samtools consensus options for MapToRef
 #'   (default = "-d 3 --min-BQ 20")
 #' @param maptoref_iter Maximum MapToRef iteration passes (default = 5)
-#' @param maptoref_topology Topology of a FASTA MapToRef reference, "circular"
-#'   or "linear". Ignored for GenBank references, where the LOCUS line wins.
+#' @param maptoref_topology Topology of a MapToRef reference, "circular" or
+#'   "linear". Ignored when the GenBank LOCUS line names a topology, and used
+#'   when the LOCUS line names neither. Required for a FASTA reference.
 #' @param max_paths Maximum number of assembly paths allowed for a sample to
 #'   continue past the Assemble step (default = 10). Samples exceeding this are
 #'   flagged as failed and skipped by downstream steps in WF1.

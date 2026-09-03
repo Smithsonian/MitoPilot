@@ -17,6 +17,9 @@ tracked in git (see `.gitignore` lines 19 and 22):
 
 Most releases only need part 2.
 
+The tool pins for the image (bowtie2, samtools, MITOS2, BLAST+, and the rest)
+live in `docker/Dockerfile`; samtools is 1.24 as of MitoPilot 1.5.5.
+
 ---
 
 ## 1. Rebuild the local BLAST database

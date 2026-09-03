@@ -105,8 +105,9 @@ single-record GenBank file (.gb) is preferred; a FASTA is accepted but then
 
 \item{maptoref_iter}{Maximum MapToRef iteration passes (default = 5)}
 
-\item{maptoref_topology}{Topology of a FASTA MapToRef reference, "circular"
-or "linear". Ignored for GenBank references, where the LOCUS line wins.}
+\item{maptoref_topology}{Topology of a MapToRef reference, "circular" or
+"linear". Ignored when the GenBank LOCUS line names a topology, and used
+when the LOCUS line names neither. Required for a FASTA reference.}
 
 \item{max_paths}{Maximum number of assembly paths allowed for a sample to
 continue past the Assemble step (default = 10). Samples exceeding this are
