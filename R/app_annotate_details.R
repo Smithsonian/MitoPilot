@@ -3974,6 +3974,7 @@ annotations_details_server <- function(id, rv) {
 
     # Move an rRNA boundary by the step size. `end` is "5"/"3"; `action` is
     # "extend"/"trim". Strand decides which physical coordinate each end maps to.
+    pending_seg_move <- NULL
     adjust_rrna <- function(end, action) {
       sel <- selected()
       req(rv$editing, length(sel) == 1)
@@ -4003,16 +4004,32 @@ annotations_details_server <- function(id, rv) {
       pos1 <- if (unit_is_circ()) circ_edit_pos(pos1, rv$editing$assembly) else max(1L, as.integer(pos1))
       pos2 <- if (unit_is_circ()) circ_edit_pos(pos2, rv$editing$assembly) else min(as.integer(width), as.integer(pos2))
       req(edit_shrink_ok(pos1, pos2, rv$editing$assembly))
-      # Block edits that would push this segment into a neighbouring segment of
-      # the same joined gene.
+      # Warn (but do not block) when the move would overlap a neighbouring
+      # segment of the same joined gene: already-overlapping segments can only be
+      # separated by moving through the overlap.
       if (seg_would_overlap(sel, pos1, pos2)) {
-        shinyWidgets::sendSweetAlert(
+        pending_seg_move <<- list(
+          sel = sel, end = end, pos1 = pos1, pos2 = pos2, is_rrna = is_rrna
+        )
+        shinyWidgets::confirmSweetAlert(
+          inputId = ns("seg_overlap_confirm"),
           title = "Segments would overlap",
-          text = "That move would overlap another segment of this gene. Adjust the other segment first.",
-          type = "warning"
+          text = paste(
+            "That move would overlap another segment of this gene.",
+            "You can continue if you are working the segments apart."
+          ),
+          type = "warning",
+          btn_labels = c("Cancel", "Move anyway"),
+          btn_colors = c("#6c757d", "#d9534f")
         )
         return(invisible(NULL))
       }
+      apply_seg_move(sel, end, pos1, pos2, is_rrna)
+    }
+
+    # Commit a boundary move (shared by the direct path and the overlap
+    # confirmation).
+    apply_seg_move <- function(sel, end, pos1, pos2, is_rrna) {
       rv$annotations$pos1[sel] <- pos1
       rv$annotations$pos2[sel] <- pos2
       rv$annotations$length[sel] <- circ_edit_len(pos1, pos2, rv$editing$assembly)
@@ -4031,6 +4048,12 @@ annotations_details_server <- function(id, rv) {
       show_edit_waiter()
       shinyjs::delay(50, trigger("re_align"))
     }
+    observeEvent(input$seg_overlap_confirm, ignoreNULL = TRUE, {
+      pend <- pending_seg_move
+      pending_seg_move <<- NULL
+      req(isTRUE(input$seg_overlap_confirm), !is.null(pend), rv$editing)
+      apply_seg_move(pend$sel, pend$end, pend$pos1, pend$pos2, pend$is_rrna)
+    })
     observeEvent(input$`rrna-5-out`, adjust_rrna("5", "extend"))
     observeEvent(input$`rrna-5-in`,  adjust_rrna("5", "trim"))
     observeEvent(input$`rrna-3-out`, adjust_rrna("3", "extend"))
