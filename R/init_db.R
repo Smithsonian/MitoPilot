@@ -9,6 +9,9 @@
 #'   auto-selects from the curation ruleset (`curate_target`); a number sets an
 #'   override on the default curate_opts set.
 #'   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+#' @param dedup Run fastp with `--dedup` to drop PCR and optical duplicates
+#'   before assembly? Default FALSE keeps `--dont_eval_duplication`, the shipped
+#'   fastp default. Editable later in the preprocess-options modal.
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
 #' @param seeds_db Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db.
@@ -73,6 +76,8 @@ new_db <- function(
     mapping_id = "ID",
     mapping_taxon = "Taxon",
     genetic_code = NULL,
+    # Default preprocessing options
+    dedup = FALSE,
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 24,
@@ -266,7 +271,10 @@ new_db <- function(
         pre_opts = "default",
         cpus = 4,
         memory = 16,
-        fastp = "--trim_poly_g --correction --detect_adapter_for_pe --dont_eval_duplication"
+        fastp = .fastp_set_dedup(
+          "--trim_poly_g --correction --detect_adapter_for_pe",
+          dedup
+        )
       ),
       in_place = TRUE,
       copy = TRUE,

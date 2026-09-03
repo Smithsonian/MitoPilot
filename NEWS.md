@@ -12,6 +12,10 @@ Released TBD. Container: `macguigand/mitopilot:1.5.5`
 - A circular reference is handled across its origin, and the published sequence is only labelled circular if reads actually span the junction; otherwise it is published as linear with a note saying so.
 - References can be GenBank (preferred, one record) or FASTA. A FASTA reference needs its topology set explicitly.
 
+### Preprocessing
+
+- **Remove duplicate reads** checkbox in the Preprocess options runs fastp with `--dedup` instead of `--dont_eval_duplication`. Off by default; it lowers depth and rarely changes calls.
+
 ### Container
 
 - **samtools upgraded from 1.21 to 1.24**, which gives the consensus step real multi-threading.

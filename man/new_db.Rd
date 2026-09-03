@@ -10,6 +10,7 @@ new_db(
   mapping_id = "ID",
   mapping_taxon = "Taxon",
   genetic_code = NULL,
+  dedup = FALSE,
   assemble_cpus = 6,
   assemble_memory = 24,
   assembler = "GetOrganelle",
@@ -67,6 +68,10 @@ identifier (eg, species name)}
 auto-selects from the curation ruleset (`curate_target`); a number sets an
 override on the default curate_opts set.
 https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
+
+\item{dedup}{Run fastp with `--dedup` to drop PCR and optical duplicates
+before assembly? Default FALSE keeps `--dont_eval_duplication`, the shipped
+fastp default. Editable later in the preprocess-options modal.}
 
 \item{assemble_cpus}{Default # cpus for assembly}
 

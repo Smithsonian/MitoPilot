@@ -691,12 +691,17 @@ assemble_server <- function(id) {
           inputId = "fastp",
           value = cur$fastp
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "dedup",
+          value = grepl("--dedup", cur$fastp %||% "", fixed = TRUE)
+        )
       }
     })
     observeEvent(input$edit_pre_opts, ignoreInit = T, {
       shinyjs::toggleState("pre_opts_cpus", condition = input$edit_pre_opts)
       shinyjs::toggleState("pre_opts_memory", condition = input$edit_pre_opts)
       shinyjs::toggleState("fastp", condition = input$edit_pre_opts)
+      shinyjs::toggleState("dedup", condition = input$edit_pre_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_pre_opts && input$pre_opts %in% rv$data$pre_opts) {
         rv$updating_indirect <- rv$data |>
@@ -747,7 +752,7 @@ assemble_server <- function(id) {
               pre_opts = req(input$pre_opts),
               cpus = req(input$pre_opts_cpus),
               memory = req(input$pre_opts_memory),
-              fastp = req(input$fastp)
+              fastp = .fastp_set_dedup(req(input$fastp), isTRUE(input$dedup))
             ),
             in_place = TRUE,
             copy = TRUE,

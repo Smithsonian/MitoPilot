@@ -220,6 +220,15 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         opts_help("Command-line flags passed to fastp, which trims adapters and ",
                   "filters low-quality reads.",
                   href = "https://github.com/OpenGene/fastp"),
+        shinyWidgets::prettyCheckbox(
+          ns("dedup"),
+          label = "Remove duplicate reads (fastp --dedup)",
+          value = grepl("--dedup", current$fastp %||% "", fixed = TRUE),
+          status = "primary"
+        ) |> shinyjs::disabled(),
+        opts_help("Drops PCR and optical duplicates before assembly. Lowers ",
+                  "depth; in the shipped test data it removed about a fifth of ",
+                  "the reads and changed almost no calls."),
         size = "m",
         footer = tagList(
           actionButton(ns("update_pre_opts"), "Update"),
