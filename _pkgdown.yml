@@ -152,3 +152,5 @@ reference:
   - circularize_asmb
   - get_assembly
   - get_assembly_userAsmb
+  - map_to_ref
+  - maptoref_prepare_ref
