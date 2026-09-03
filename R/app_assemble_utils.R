@@ -415,7 +415,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             id = ns("help_maptoref_consensus"), nested = TRUE)),
         numericInput(
           ns("maptoref_iter"),
-          label = "Iterate up to",
+          label = "Iterate up to (passes):",
           value = current$maptoref_iter %||% 5,
           min = 1, step = 1,
           width = "100%"

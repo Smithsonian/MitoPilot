@@ -1024,7 +1024,8 @@ assemble_server <- function(id) {
           )
           return()
         }
-        if (grepl("['\"]", paste(input$maptoref %||% "",
+        if (identical(input$assembler, "MapToRef") &&
+            grepl("['\"]", paste(input$maptoref %||% "",
                                  input$maptoref_consensus %||% ""))) {
           shinyWidgets::show_alert(
             title = "Quote characters not allowed",
@@ -1055,7 +1056,7 @@ assemble_server <- function(id) {
               maptoref_ref = if (nzchar(ref_value)) ref_value else NA_character_,
               maptoref = input$maptoref %||% "--very-sensitive-local",
               maptoref_consensus = input$maptoref_consensus %||% "-d 3 --min-BQ 20",
-              maptoref_iter = as.integer(input$maptoref_iter %||% 5L),
+              maptoref_iter = as.integer(input$maptoref_iter %||% 5L) %|NA|% 5L,
               maptoref_topology = if (nzchar(topology_value)) topology_value else NA_character_
             ),
             in_place = TRUE,
