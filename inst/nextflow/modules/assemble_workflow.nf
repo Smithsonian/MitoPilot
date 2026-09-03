@@ -107,10 +107,10 @@ workflow ASSEMBLE {
                         getOrganelle: it[6],                                    // getOrganelle options
                         mitofinder: it[9],                                      // mitofinder options
                         assembler: it[7],                                       // assembler
-                        maptoref: it[20],                                       // MapToRef bowtie2 options
-                        maptoref_consensus: it[21],                             // MapToRef samtools consensus options
-                        maptoref_iter: (it[22] == null ? 5 : (it[22] as Integer)),
-                        maptoref_topology: (it[23] ?: "")
+                        maptoref: (it[20] ?: ""),                               // MapToRef bowtie2 options
+                        maptoref_consensus: (it[21] ?: ""),                     // MapToRef samtools consensus options
+                        maptoref_iter: (it[22] == null ? 5 : (it[22] as Integer)), // MapToRef iteration cap
+                        maptoref_topology: (it[23] ?: "")                       // MapToRef reference topology
                     ],
                     [
                         it[4],                                                  // getOrganelle seeds_db
