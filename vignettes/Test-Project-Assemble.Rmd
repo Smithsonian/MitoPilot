@@ -164,11 +164,21 @@ Nothing is editable until you tick **Edit**. The important controls:
   MitoFinder uses to identify mitochondrial contigs. The default is the zebrafish
   mitogenome (NC_002333.2), so for anything other than a fish, supply a reference
   from your own group. `custom_assembly_db()` can build this file too.
-- **MapToRef reference.** One complete mitogenome, GenBank (`.gb`) preferred,
+- **MapToRef Reference.** One complete mitogenome, GenBank (`.gb`) preferred,
   one record per file. Keep it inside the project folder so the container can
   see it. A FASTA reference is accepted, but you must also set the topology.
 - **Reference topology.** `circular` or `linear`, required for a FASTA
   reference and ignored for GenBank.
+- **MapToRef bowtie2 options.** Flags passed to bowtie2 when mapping the reads
+  to the reference. Default `--very-sensitive-local`. Leave it unless you know
+  bowtie2.
+- **MapToRef samtools consensus options.** Flags passed to `samtools
+  consensus` when calling the sequence from the mapped reads. Default `-d 3
+  --min-BQ 20` (a site needs at least 3 reads, each base needs quality 20).
+  Mixed sites get IUPAC codes. Some flags are fixed by MitoPilot and are
+  refused if you add them; a refused string fails that sample with a message
+  naming the flag. As with resolved GetOrganelle paths, IUPAC ambiguity codes
+  in coding regions can trip annotation; check flagged sites before export.
 - **Iterate up to (passes).** How many times the consensus is fed back in as
   the mapping reference. Default 5; the loop stops early when the sequence
   stops changing. Try 10 to 25 when the reference is from a distant relative.
