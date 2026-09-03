@@ -1472,12 +1472,20 @@ export_server <- function(id) {
         sortable = TRUE,
         highlight = TRUE,
         rowStyle = resolved_row_style,
-        defaultColDef = reactable::colDef(html = TRUE),
+        # Headers carry a help icon, so keep every one on a single line and give
+        # the wider labels room; Issue takes what is left.
+        defaultColDef = reactable::colDef(
+          html = TRUE,
+          headerStyle = list(whiteSpace = "nowrap")
+        ),
         columns = list(
           Sample = reactable::colDef(
+            minWidth = 130,
             cell = rt_link(ns("review_pick"))
           ),
+          Issue = reactable::colDef(minWidth = 120),
           `Start offset (aa)` = reactable::colDef(
+            minWidth = 150,
             cell = signed_cell,
             header = export_help_label(
               "Start offset (aa)",
@@ -1485,6 +1493,7 @@ export_server <- function(id) {
             )
           ),
           `Stop offset (aa)` = reactable::colDef(
+            minWidth = 150,
             cell = signed_cell,
             header = export_help_label(
               "Stop offset (aa)",
@@ -1492,13 +1501,14 @@ export_server <- function(id) {
             )
           ),
           `Identity (%)` = reactable::colDef(
+            minWidth = 125,
             header = export_help_label(
               "Identity (%)",
               "Mean percent identity of this sample versus rest of samples in alignment group."
             )
           ),
           `Internal stops` = reactable::colDef(
-            width = 110,
+            minWidth = 135,
             align = "center",
             header = export_help_label(
               "Internal stops",
