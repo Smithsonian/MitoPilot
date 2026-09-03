@@ -12,7 +12,9 @@
 #'     tRNAscan / MITOS toggles and options, coverage/feature trimming, and
 #'     reference db columns.
 #'   \item \code{assemble_opts}: "assembler", "mitofinder_db"/"mitofinder",
-#'     "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds".
+#'     "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds",
+#'     and the MapToRef columns "maptoref_ref", "maptoref",
+#'     "maptoref_consensus", "maptoref_iter", "maptoref_topology".
 #'   \item \code{curate_opts}: "max_blast_hits", "ref_dir", "ref_db",
 #'     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
 #'     to the GitHub-hosted reference db).
@@ -176,6 +178,11 @@ backwards_compatibility <- function(
       "assembler" %in% names(assemble_opts_table) &&
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
+      "maptoref_ref" %in% names(assemble_opts_table) &&
+      "maptoref" %in% names(assemble_opts_table) &&
+      "maptoref_consensus" %in% names(assemble_opts_table) &&
+      "maptoref_iter" %in% names(assemble_opts_table) &&
+      "maptoref_topology" %in% names(assemble_opts_table) &&
       "problematic" %in% names(annotate_table) &&
       "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
@@ -1304,6 +1311,101 @@ backwards_compatibility <- function(
     ) |> DBI::dbExecute(con, statement = _)
 
     dplyr::tbl(con, "assemble_opts") |> # update SQL database
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_ref column doesn't exist, add it
+  if(!("maptoref_ref" %in% names(assemble_opts_table))){
+    message("added 'maptoref_ref' column to assemble_opts table")
+    assemble_opts_table$maptoref_ref <- rep(NA_character_, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_ref TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref column doesn't exist, add it
+  if(!("maptoref" %in% names(assemble_opts_table))){
+    message("added 'maptoref' column to assemble_opts table")
+    assemble_opts_table$maptoref <- rep("--very-sensitive-local", nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_consensus column doesn't exist, add it
+  if(!("maptoref_consensus" %in% names(assemble_opts_table))){
+    message("added 'maptoref_consensus' column to assemble_opts table")
+    assemble_opts_table$maptoref_consensus <- rep("-d 3 --min-BQ 20", nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_consensus TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_iter column doesn't exist, add it
+  if(!("maptoref_iter" %in% names(assemble_opts_table))){
+    message("added 'maptoref_iter' column to assemble_opts table")
+    assemble_opts_table$maptoref_iter <- rep(5L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_iter INTEGER",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_topology column doesn't exist, add it
+  if(!("maptoref_topology" %in% names(assemble_opts_table))){
+    message("added 'maptoref_topology' column to assemble_opts table")
+    assemble_opts_table$maptoref_topology <- rep(NA_character_, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_topology TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
       dplyr::rows_upsert(
         assemble_opts_table,
         in_place = TRUE,

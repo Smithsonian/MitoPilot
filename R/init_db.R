@@ -42,10 +42,19 @@
 #' @param orf_min_len Minimal ORF length in nucleotides (default = 300)
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
-#' @param assembler Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"
+#' @param assembler Assembler, choice of "GetOrganelle" (default), "MitoFinder",
+#'   or "MapToRef"
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
 #'   Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
 #' @param mitofinder Default MitoFinder command line options
+#' @param maptoref_ref Path or URL of the MapToRef reference mitogenome. A
+#'   single-record GenBank file (.gb) is preferred; a FASTA is accepted but then
+#'   \code{maptoref_topology} must be set. Required when assembler = "MapToRef".
+#' @param maptoref Default bowtie2 options for MapToRef
+#' @param maptoref_consensus Default samtools consensus options for MapToRef
+#' @param maptoref_iter Maximum MapToRef iteration passes (default = 5)
+#' @param maptoref_topology Topology of a FASTA MapToRef reference, "circular"
+#'   or "linear". Ignored for GenBank references, where the LOCUS line wins.
 #' @param max_paths Maximum number of assembly paths allowed for a sample to
 #'   continue past the Assemble step (default = 10). Samples exceeding this are
 #'   flagged as failed and skipped by downstream steps in WF1.
@@ -81,6 +90,11 @@ new_db <- function(
     mitofinder = paste(
       "--megahit"
     ),
+    maptoref_ref = NA_character_,
+    maptoref = "--very-sensitive-local",
+    maptoref_consensus = "-d 3 --min-BQ 20",
+    maptoref_iter = 5L,
+    maptoref_topology = NA_character_,
     max_paths = 10,
     max_scaffolds = 10,
     min_assembly_length = 500,
@@ -128,8 +142,15 @@ new_db <- function(
   }
 
   # Validate assembler choice
-  if (assembler %nin% c("GetOrganelle", "MitoFinder")) {
-    stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder]")
+  if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
+    stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder, MapToRef]")
+  }
+  if (assembler == "MapToRef" && (is.na(maptoref_ref) || !nzchar(trimws(maptoref_ref)))) {
+    stop("MapToRef requires a reference mitogenome; set maptoref_ref")
+  }
+  if (!is.na(maptoref_topology) &&
+      maptoref_topology %nin% c("circular", "linear")) {
+    stop("maptoref_topology must be circular or linear")
   }
 
   # Validate ID length
@@ -324,6 +345,11 @@ new_db <- function(
       max_scaffolds INTEGER,
       min_assembly_length INTEGER,
       join_scaffolds INTEGER,
+      maptoref_ref TEXT,
+      maptoref TEXT,
+      maptoref_consensus TEXT,
+      maptoref_iter INTEGER,
+      maptoref_topology TEXT,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -342,7 +368,12 @@ new_db <- function(
         max_paths = max_paths,
         max_scaffolds = max_scaffolds,
         min_assembly_length = min_assembly_length,
-        join_scaffolds = 0L
+        join_scaffolds = 0L,
+        maptoref_ref = maptoref_ref,
+        maptoref = maptoref,
+        maptoref_consensus = maptoref_consensus,
+        maptoref_iter = as.integer(maptoref_iter),
+        maptoref_topology = maptoref_topology
       ),
       in_place = TRUE,
       copy = TRUE,

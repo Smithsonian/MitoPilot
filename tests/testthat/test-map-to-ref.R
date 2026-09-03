@@ -351,3 +351,48 @@ test_that(".mtr_stop never returns NA", {
   expect_false(.mtr_stop(bases_changed = NA, reads_now = 100000L, reads_prev = 100000L))
   expect_false(.mtr_stop(bases_changed = 4L, reads_now = 100000L, reads_prev = NA))
 })
+
+mtr_test_db <- function(dir, ...) {
+  mapping <- file.path(dir, "mapping.csv")
+  utils::write.csv(
+    data.frame(ID = "S1", Taxon = "Danio rerio",
+               R1 = "S1_R1.fastq.gz", R2 = "S1_R2.fastq.gz"),
+    mapping, row.names = FALSE
+  )
+  db <- file.path(dir, ".sqlite")
+  new_db(db_path = db, mapping_fn = mapping, ...)
+  db
+}
+
+test_that("new_db stores the five MapToRef option columns", {
+  d <- withr::local_tempdir()
+  db <- mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "ref/NC_002333.gb",
+                    maptoref_topology = "circular")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  opts <- DBI::dbGetQuery(con, "SELECT * FROM assemble_opts")
+  expect_true(all(c("maptoref_ref", "maptoref", "maptoref_consensus",
+                    "maptoref_iter", "maptoref_topology") %in% names(opts)))
+  expect_equal(opts$assembler, "MapToRef")
+  expect_equal(opts$maptoref_ref, "ref/NC_002333.gb")
+  expect_equal(opts$maptoref, "--very-sensitive-local")
+  expect_equal(opts$maptoref_consensus, "-d 3 --min-BQ 20")
+  expect_equal(opts$maptoref_iter, 5L)
+  expect_equal(opts$maptoref_topology, "circular")
+})
+
+test_that("new_db refuses MapToRef without a reference and rejects a bad topology", {
+  d <- withr::local_tempdir()
+  expect_error(mtr_test_db(d, assembler = "MapToRef"), "maptoref_ref")
+  expect_error(
+    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "x.gb",
+                maptoref_topology = "round"),
+    "circular or linear"
+  )
+})
+
+test_that("new_db still refuses an unknown assembler", {
+  d <- withr::local_tempdir()
+  expect_error(mtr_test_db(d, assembler = "Nonesuch"), "not supported")
+})

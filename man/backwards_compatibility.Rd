@@ -32,7 +32,9 @@ others:
     tRNAscan / MITOS toggles and options, coverage/feature trimming, and
     reference db columns.
   \item \code{assemble_opts}: "assembler", "mitofinder_db"/"mitofinder",
-    "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds".
+    "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds",
+    and the MapToRef columns "maptoref_ref", "maptoref",
+    "maptoref_consensus", "maptoref_iter", "maptoref_topology".
   \item \code{curate_opts}: "max_blast_hits", "ref_dir", "ref_db",
     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
     to the GitHub-hosted reference db).

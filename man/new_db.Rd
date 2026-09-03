@@ -22,6 +22,11 @@ new_db(
   mitofinder_db =
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
   mitofinder = paste("--megahit"),
+  maptoref_ref = NA_character_,
+  maptoref = "--very-sensitive-local",
+  maptoref_consensus = "-d 3 --min-BQ 20",
+  maptoref_iter = 5L,
+  maptoref_topology = NA_character_,
   max_paths = 10,
   max_scaffolds = 10,
   min_assembly_length = 500,
@@ -67,7 +72,8 @@ https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi}
 
 \item{assemble_memory}{default memory (GB) for assembly}
 
-\item{assembler}{Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"}
+\item{assembler}{Assembler, choice of "GetOrganelle" (default), "MitoFinder",
+or "MapToRef"}
 
 \item{seeds_db}{Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db.
 Default is a fish database built from RefSeq. https://raw.githubusercontent.com/smithsonian/MitoPilot/main/ref_dbs/getOrganelle/seeds/fish_mito_seeds.fasta}
@@ -81,6 +87,19 @@ Default is a fish database built from RefSeq. https://raw.githubusercontent.com/
 Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)}
 
 \item{mitofinder}{Default MitoFinder command line options}
+
+\item{maptoref_ref}{Path or URL of the MapToRef reference mitogenome. A
+single-record GenBank file (.gb) is preferred; a FASTA is accepted but then
+\code{maptoref_topology} must be set. Required when assembler = "MapToRef".}
+
+\item{maptoref}{Default bowtie2 options for MapToRef}
+
+\item{maptoref_consensus}{Default samtools consensus options for MapToRef}
+
+\item{maptoref_iter}{Maximum MapToRef iteration passes (default = 5)}
+
+\item{maptoref_topology}{Topology of a FASTA MapToRef reference, "circular"
+or "linear". Ignored for GenBank references, where the LOCUS line wins.}
 
 \item{max_paths}{Maximum number of assembly paths allowed for a sample to
 continue past the Assemble step (default = 10). Samples exceeding this are
