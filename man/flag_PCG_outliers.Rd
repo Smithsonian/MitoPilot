@@ -46,6 +46,9 @@ A list with two elements:
     \item{samples}{A named list (by gene) of tibbles listing every unit in the
       gene's alignment (`ID`, `label`, `path`, `scaffold`), flagged or not, so
       the review UI can edit any sample of the gene.}
+    \item{internal_stops}{A tibble of records whose translation contains an
+      internal stop codon: `ID`, `label`, `path`, `scaffold`, `gene`,
+      `n_stops`.}
   }
 }
 \description{

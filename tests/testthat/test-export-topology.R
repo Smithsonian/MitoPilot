@@ -305,3 +305,18 @@ test_that("a note-joined gene reaches the review as one spliced record", {
   expect_equal(nchar(nad5$translation), 200L)
   expect_equal(ann$seqid[ann$gene == "cox1"], "s1")
 })
+
+test_that("internal stop codons are collected per record", {
+  ann <- data.frame(
+    ID = c("s1", "s2", "s3"),
+    seqid = c("s1", "s2", "s3"),
+    path = 1L, scaffold = 1L,
+    gene = c("cox1", "nad5", "cox1"),
+    translation = c("MKKL", "MK*LL*", NA_character_),
+    stringsAsFactors = FALSE
+  )
+  res <- MitoPilot:::internal_stop_records(ann)
+  expect_equal(nrow(res), 1L)
+  expect_equal(res$label, "s2")
+  expect_equal(res$n_stops, 2L)
+})

@@ -96,6 +96,27 @@ short of (-) the alignment's well-aligned core. Flags use a start-offset thresho
 `r params$start_aa` aa, a stop-offset threshold of `r params$stop_aa` aa, and an identity
 threshold of `r params$ident_pct`%.
 
+# Internal Stop Codons
+
+```{r internal_stops, echo=F, message=F, warning=F}
+istops <- MitoPilot:::internal_stop_records(annotations)
+
+if (nrow(istops) == 0) {
+  cat("_No internal stop codons were found._\n")
+} else {
+  istops |>
+    dplyr::transmute(
+      Sample = label,
+      Gene = toupper(gene),
+      `Internal stops` = n_stops
+    ) |>
+    knitr::kable()
+}
+```
+
+A protein-coding gene whose translation contains a stop codon before its end will
+fail NCBI validation. Multi-exon genes are checked on the spliced translation.
+
 # PCG Alignments
 
 \* merged exons

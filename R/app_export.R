@@ -57,6 +57,23 @@ sig_diff <- function(before, now) {
   genes[!(!is.na(b) & !is.na(n) & b == n)]
 }
 
+# Body of the pre-review internal-stop warning: one line per affected record.
+internal_stop_alert_text <- function(stops) {
+  lines <- paste0(
+    "<li>", stops$label, " - ", toupper(stops$gene),
+    ifelse(stops$n_stops > 1, paste0(" (", stops$n_stops, " stops)"), ""),
+    "</li>"
+  )
+  htmltools::HTML(paste0(
+    "<p>", nrow(stops), " record", if (nrow(stops) > 1) "s" else "",
+    " in this group still translate", if (nrow(stops) == 1) "s" else "",
+    " with an internal stop codon. These will fail NCBI validation.</p>",
+    "<ul style=\"text-align: left; max-height: 240px; overflow-y: auto;\">",
+    paste(lines, collapse = ""), "</ul>",
+    "<p>Continue to the outlier review, or cancel the export?</p>"
+  ))
+}
+
 #' export UI Function
 #'
 #' @description A shiny Module.
@@ -851,7 +868,22 @@ export_server <- function(id) {
           shinyjs::addClass("gears", "paused")
           shinyjs::enable("export_data")
         }
-        present_review(review_res)
+        # An internal stop means the record will fail NCBI validation, so warn
+        # before the outlier review rather than after the files are written.
+        if (nrow(review_res$internal_stops) > 0) {
+          pending_review <<- review_res
+          shinyWidgets::confirmSweetAlert(
+            inputId = ns("internal_stop_confirm"),
+            title = "Internal stop codons",
+            text = internal_stop_alert_text(review_res$internal_stops),
+            html = TRUE,
+            type = "warning",
+            btn_labels = c("Cancel export", "Continue"),
+            btn_colors = c("#6c757d", "#0056b3")
+          )
+        } else {
+          present_review(review_res)
+        }
       } else {
         # No review: write files immediately, then announce.
         write_export_files()
@@ -1025,6 +1057,21 @@ export_server <- function(id) {
     # focus_gene: optional gene name to navigate to (e.g. the gene just reviewed
     # via "Back to Review"); falls back to the first gene when absent or no longer
     # flagged.
+    # Review state held while the internal-stop warning is on screen. A plain
+    # variable, not rv$: writing it from its own observer would retrigger it.
+    pending_review <- NULL
+    observeEvent(input$internal_stop_confirm, ignoreNULL = TRUE, {
+      res <- pending_review
+      pending_review <<- NULL
+      req(!is.null(res))
+      if (isTRUE(input$internal_stop_confirm)) {
+        present_review(res)
+      } else {
+        # Cancelled: nothing has been written yet, so just drop the export.
+        removeModal()
+      }
+    })
+
     present_review <- function(res, focus_gene = NULL) {
       rv$outliers <- res$flags
       rv$review_samples <- res$samples

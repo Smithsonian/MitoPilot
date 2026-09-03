@@ -1604,6 +1604,23 @@ get_export_PCG_annotations <- function(con, group) {
 }
 
 
+# Records whose (spliced) translation still carries a "*", i.e. an internal stop
+# codon. Terminal stops are already stripped upstream, so any "*" left here is
+# internal. Shared by the pre-review pop-up and the HTML batch report.
+internal_stop_records <- function(annotations) {
+  hit <- !is.na(annotations$translation) &
+    stringr::str_detect(annotations$translation, "\\*")
+  dplyr::tibble(
+    ID = annotations$ID[hit],
+    label = annotations$seqid[hit],
+    path = annotations$path[hit],
+    scaffold = annotations$scaffold[hit],
+    gene = annotations$gene[hit],
+    n_stops = stringr::str_count(annotations$translation[hit], "\\*")
+  ) |>
+    dplyr::arrange(label, gene)
+}
+
 #' Flag outlier PCG annotations in an export group
 #'
 #' For each protein-coding gene in an export group, aligns the amino-acid
@@ -1640,6 +1657,9 @@ get_export_PCG_annotations <- function(con, group) {
 #'     \item{samples}{A named list (by gene) of tibbles listing every unit in the
 #'       gene's alignment (`ID`, `label`, `path`, `scaffold`), flagged or not, so
 #'       the review UI can edit any sample of the gene.}
+#'     \item{internal_stops}{A tibble of records whose translation contains an
+#'       internal stop codon: `ID`, `label`, `path`, `scaffold`, `gene`,
+#'       `n_stops`.}
 #'   }
 #'
 #' @export
@@ -1650,7 +1670,10 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
   annotations <- get_export_PCG_annotations(con, group)
   annotations <- annotations[!is.na(annotations$translation) & nzchar(annotations$translation), , drop = FALSE]
   if (nrow(annotations) == 0) {
-    return(list(flags = .empty_outlier_flags(), alignments = list()))
+    return(list(
+      flags = .empty_outlier_flags(), alignments = list(),
+      internal_stops = internal_stop_records(annotations)
+    ))
   }
 
   all_genes <- sort(unique(annotations$gene))
@@ -1761,7 +1784,10 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
   alignments <- alignments[names(alignments) %in% keep_genes]
   samples <- samples[names(samples) %in% keep_genes]
 
-  list(flags = flags, alignments = alignments, samples = samples)
+  list(
+    flags = flags, alignments = alignments, samples = samples,
+    internal_stops = internal_stop_records(annotations)
+  )
 }
 
 # Empty flags tibble with the canonical column types
