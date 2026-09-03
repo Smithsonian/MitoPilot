@@ -6,7 +6,9 @@ mis-positioned: those whose start or stop extends past, or falls short
 of, the alignment's well-occupied core by more than a set number of
 residues (pointing at a start/stop codon placed too long or too short)
 and those that align poorly to the rest of the group (a low
-sequence-identity catch-all for badly annotated regions).
+sequence-identity catch-all for badly annotated regions). Records whose
+translation carries an internal stop codon are always flagged as well,
+with no threshold.
 
 ## Usage
 
@@ -62,8 +64,8 @@ A list with two elements:
 
   A tibble with one row per flagged (sample, gene): \`ID\`, \`label\`,
   \`path\`, \`scaffold\`, \`gene\`, \`pct_identity\`, \`start_offset\`,
-  \`stop_offset\`, \`start_flag\`, \`stop_flag\`, \`identity_flag\`,
-  \`issue\`.
+  \`stop_offset\`, \`internal_stops\`, \`start_flag\`, \`stop_flag\`,
+  \`identity_flag\`, \`internal_stop_flag\`, \`issue\`.
 
 - alignments:
 
@@ -76,3 +78,8 @@ A list with two elements:
   A named list (by gene) of tibbles listing every unit in the gene's
   alignment (\`ID\`, \`label\`, \`path\`, \`scaffold\`), flagged or not,
   so the review UI can edit any sample of the gene.
+
+- internal_stops:
+
+  A tibble of records whose translation contains an internal stop codon:
+  \`ID\`, \`label\`, \`path\`, \`scaffold\`, \`gene\`, \`n_stops\`.

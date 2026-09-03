@@ -277,6 +277,30 @@ have a mix.</p>
 </div>
 </div>
 <div class="section level2">
+<h2 id="running-the-pipeline">Running the pipeline<a class="anchor" aria-label="anchor" href="#running-the-pipeline"></a>
+</h2>
+<p>The Assemble module is not optional. Nothing you supply is used until
+it has run, even if your FASTA files are finished, circular mitogenomes.
+Assemble is where MitoPilot reads your sequences into the project,
+records their length, topology, and contig count, maps your reads for
+coverage, and runs any of the optional steps below. Samples are only
+released to Annotate once you lock them here.</p>
+<p>A run looks the same as any other MitoPilot project:</p>
+<ol style="list-style-type: decimal">
+<li>Open the app for the project, <code><a href="../reference/MitoPilot.html">MitoPilot()</a></code> from the
+project directory. It opens on the Assemble module.</li>
+<li>If needed, change any run options.</li>
+<li>Click UPDATE, then Run from App or Submit as Job.</li>
+<li>When the run finishes, check the results. You should see Length,
+Topology, and other columns filled in.</li>
+<li>Select the samples that came through cleanly and click LOCK. That
+releases them to Annotate. Switch modules with the dropdown at the top
+left.</li>
+</ol>
+<p>Then continue with <a href="Test-Project-Annotate.html">Annotate</a>
+and <a href="Test-Project-Export.html">Export</a> as usual.</p>
+</div>
+<div class="section level2">
 <h2 id="finding-the-mitogenome-in-a-whole-assembly">Finding the mitogenome in a whole assembly<a class="anchor" aria-label="anchor" href="#finding-the-mitogenome-in-a-whole-assembly"></a>
 </h2>
 <p>If your FASTA files hold whole assemblies rather than mitogenomes,
