@@ -161,3 +161,123 @@ maptoref_prepare_ref <- function(ref_file,
   list(seq = seq, topology = topology, accession = accession,
        organism = trimws(header), transl_table = NA_integer_)
 }
+
+#' @noRd
+.mtr_fill <- function(raw, prev) {
+  a <- strsplit(raw, "", fixed = TRUE)[[1]]
+  b <- strsplit(prev, "", fixed = TRUE)[[1]]
+  if (length(a) != length(b)) {
+    stop("consensus and reference must be the same length: ",
+         length(a), " vs ", length(b))
+  }
+  hit <- a %in% c("N", "n", "*")
+  a[hit] <- b[hit]
+  paste(a, collapse = "")
+}
+
+# The first F/2 positions of the reference copy have structurally low depth,
+# so their calls are taken from the appended copy instead.
+#' @noRd
+.mtr_splice <- function(x, len, flank) {
+  if (length(x) != len + flank) {
+    stop("expected ", len + flank, " positions, got ", length(x))
+  }
+  if (flank == 0L) {
+    return(x[seq_len(len)])
+  }
+  half <- flank %/% 2L
+  c(x[(len + 1L):(len + half)], x[(half + 1L):len])
+}
+
+# samtools consensus --mark-ins prefixes an inserted base with "_". Lowercase
+# letters are base-versus-gap codes and appear at any position, so case must
+# not be used to detect insertions.
+#' @noRd
+.mtr_parse_marked <- function(s) {
+  ch <- strsplit(s, "", fixed = TRUE)[[1]]
+  n <- length(ch)
+  tokens <- character(n)
+  k <- 0L
+  i <- 1L
+  while (i <= n) {
+    if (ch[i] == "_") {
+      if (k == 0L) {
+        stop("consensus begins with an insertion mark")
+      }
+      tokens[k] <- paste0(tokens[k], ch[i], ch[i + 1L])
+      i <- i + 2L
+    } else {
+      k <- k + 1L
+      tokens[k] <- ch[i]
+      i <- i + 1L
+    }
+  }
+  tokens[seq_len(k)]
+}
+
+#' @noRd
+.mtr_tokens_to_seq <- function(tokens) {
+  flat <- strsplit(paste(tokens, collapse = ""), "", fixed = TRUE)[[1]]
+  flat <- flat[!flat %in% c("*", "_")]
+  half <- flat %in% c("a", "c", "g", "t")
+  flat[half] <- "N"
+  list(seq = toupper(paste(flat, collapse = "")), half_deletions = sum(half))
+}
+
+#' @noRd
+.mtr_strip_ends <- function(seq) {
+  sub("N+$", "", sub("^N+", "", seq))
+}
+
+#' @noRd
+.mtr_check_consensus_opts <- function(opts, circular) {
+  opts <- if (is.na(opts)) "" else trimws(opts)
+  notes <- character(0)
+  error <- NA_character_
+
+  if (grepl("['\"]", opts)) {
+    return(list(ok = FALSE, notes = notes,
+                error = "consensus options must not contain quote characters"))
+  }
+
+  refused <- c("-a", "-A", "-T", "-o", "-f", "-r",
+               "--show-del", "--show-ins", "--mark-ins", "--no-use-MQ")
+  tokens <- strsplit(opts, "\\s+")[[1]]
+  hit <- refused[refused %in% tokens]
+  if (length(hit) > 0L) {
+    error <- paste0("Consensus options set by MitoPilot cannot be given here: ",
+                    paste(hit, collapse = " "))
+  }
+
+  mode_only <- c("-c", "-H", "-q")[c("-c", "-H", "-q") %in% tokens]
+  if (length(mode_only) > 0L && !("simple" %in% tokens && "-m" %in% tokens)) {
+    notes <- c(notes, paste0(
+      "Consensus options ", paste(mode_only, collapse = " "),
+      " were ignored; they only apply with -m simple."))
+  }
+
+  mq <- which(tokens == "--min-MQ")
+  if (length(mq) > 0L && length(tokens) > mq[1]) {
+    value <- suppressWarnings(as.numeric(tokens[mq[1] + 1L]))
+    if (!is.na(value) && value > 0) {
+      if (isTRUE(circular)) {
+        error <- paste0(
+          "--min-MQ above 0 blanks the origin of a circular reference; ",
+          "reads inside the duplicated block carry mapping quality 1.")
+      } else {
+        notes <- c(notes, paste0(
+          "--min-MQ ", value, " discards multi-mapping reads; ",
+          "mapping quality carries little signal against a mitogenome reference."))
+      }
+    }
+  }
+
+  list(ok = is.na(error), notes = notes, error = error)
+}
+
+# Two terms: the sequence has settled AND reads have stopped being recruited.
+#' @noRd
+.mtr_stop <- function(bases_changed, reads_now, reads_prev) {
+  denom <- max(as.numeric(reads_prev), 1)
+  bases_changed < 5L && abs(as.numeric(reads_now) - as.numeric(reads_prev)) / denom < 0.001
+}

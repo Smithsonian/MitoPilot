@@ -198,3 +198,116 @@ test_that("maptoref_prepare_ref tolerates a non-numeric genetic_code", {
   ref <- maptoref_prepare_ref(mtr_fixture(), genetic_code = "not-a-code", out_dir = d)
   expect_false(any(grepl("genetic code", ref$notes)))
 })
+
+test_that(".mtr_fill takes N and * from the previous reference", {
+  expect_equal(.mtr_fill("ACNT*G", "ACGTAG"), "ACGTAG")
+  expect_equal(.mtr_fill("NNNN", "ACGT"), "ACGT")
+  expect_equal(.mtr_fill("ACGT", "TTTT"), "ACGT")
+  expect_error(.mtr_fill("ACGT", "ACG"), "same length")
+})
+
+test_that(".mtr_splice restores the origin and the length", {
+  # Truth: 1..200 as distinct three-character position labels.
+  truth <- sprintf("%03d", 1:200)
+  # The mapping construct is the reference plus its own first F bases.
+  flank <- 50L
+  construct <- c(truth, truth[1:flank])
+
+  spliced <- .mtr_splice(construct, len = 200L, flank = flank)
+
+  expect_length(spliced, 200L)
+  expect_equal(spliced[1], "001")
+  expect_equal(spliced[25], "025")
+  expect_equal(spliced[200], "200")
+  expect_equal(spliced, truth)
+})
+
+test_that(".mtr_splice takes the first F/2 positions from the appended copy", {
+  truth <- sprintf("%03d", 1:200)
+  construct <- c(truth, truth[1:50])
+  # Blank the low-depth head of the first copy the way samtools would.
+  construct[1:25] <- "NNN"
+
+  spliced <- .mtr_splice(construct, len = 200L, flank = 50L)
+
+  expect_equal(spliced[1:25], truth[1:25])
+  expect_false(any(spliced == "NNN"))
+})
+
+test_that(".mtr_splice with no flank is a no-op on the reference extent", {
+  x <- c("A", "C", "G", "T")
+  expect_equal(.mtr_splice(x, len = 4L, flank = 0L), x)
+})
+
+test_that(".mtr_parse_marked keys on the underscore, never on case", {
+  # A: plain. C: followed by an inserted G. *: a called deletion.
+  # t: a half-present (base versus gap) call, NOT an insertion.
+  # G: followed by a lowercase inserted base.
+  expect_equal(
+    .mtr_parse_marked("AC_G*tG_a"),
+    c("A", "C_G", "*", "t", "G_a")
+  )
+  expect_equal(.mtr_parse_marked("ACGT"), c("A", "C", "G", "T"))
+  expect_error(.mtr_parse_marked("_AACGT"), "insertion")
+})
+
+test_that(".mtr_tokens_to_seq drops deletions and markers and calls half-present N", {
+  res <- .mtr_tokens_to_seq(c("A", "C_G", "*", "t", "G_a"))
+  expect_equal(res$seq, "ACGNGN")
+  expect_equal(res$half_deletions, 2L)
+})
+
+test_that(".mtr_strip_ends removes flanking N runs only", {
+  expect_equal(.mtr_strip_ends("NNACNNGTNN"), "ACNNGT")
+  expect_equal(.mtr_strip_ends("ACGT"), "ACGT")
+  expect_equal(.mtr_strip_ends("NNNN"), "")
+})
+
+test_that(".mtr_check_consensus_opts warns about mode-specific flags", {
+  res <- .mtr_check_consensus_opts("-c 0.65 -H 0.3", circular = FALSE)
+  expect_true(res$ok)
+  expect_true(any(grepl("-m simple", res$notes)))
+
+  res <- .mtr_check_consensus_opts("-m simple -c 0.65", circular = FALSE)
+  expect_true(res$ok)
+  expect_length(res$notes, 0L)
+})
+
+test_that(".mtr_check_consensus_opts refuses a MAPQ filter on a circular reference", {
+  res <- .mtr_check_consensus_opts("--min-MQ 20", circular = TRUE)
+  expect_false(res$ok)
+  expect_match(res$error, "--min-MQ")
+
+  res <- .mtr_check_consensus_opts("--min-MQ 20", circular = FALSE)
+  expect_true(res$ok)
+  expect_true(any(grepl("--min-MQ", res$notes)))
+
+  res <- .mtr_check_consensus_opts("--min-MQ 0", circular = TRUE)
+  expect_true(res$ok)
+})
+
+test_that(".mtr_check_consensus_opts refuses flags the code sets itself", {
+  for (flag in c("-a", "-A", "-T ref.fa", "--show-del yes", "--show-ins yes",
+                 "--mark-ins", "--no-use-MQ", "-o out.fa", "-f fasta", "-r chr1")) {
+    res <- .mtr_check_consensus_opts(flag, circular = FALSE)
+    expect_false(res$ok, info = flag)
+  }
+  expect_true(.mtr_check_consensus_opts("-d 3 --min-BQ 20", circular = TRUE)$ok)
+  expect_true(.mtr_check_consensus_opts("", circular = TRUE)$ok)
+})
+
+test_that(".mtr_check_consensus_opts refuses quote characters", {
+  res <- .mtr_check_consensus_opts("-d 3 --min-BQ 20 --extra 'x'", circular = FALSE)
+  expect_false(res$ok)
+  expect_match(res$error, "quote characters")
+
+  res <- .mtr_check_consensus_opts("-d 3 --min-BQ \"20\"", circular = TRUE)
+  expect_false(res$ok)
+})
+
+test_that(".mtr_stop needs both the base term and the read term", {
+  expect_true(.mtr_stop(bases_changed = 4L, reads_now = 100000L, reads_prev = 100000L))
+  expect_false(.mtr_stop(bases_changed = 40L, reads_now = 100000L, reads_prev = 100000L))
+  expect_false(.mtr_stop(bases_changed = 0L, reads_now = 110000L, reads_prev = 100000L))
+  expect_true(.mtr_stop(bases_changed = 0L, reads_now = 100050L, reads_prev = 100000L))
+})
