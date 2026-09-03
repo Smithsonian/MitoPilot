@@ -1550,52 +1550,48 @@ get_export_PCG_annotations <- function(con, group) {
                          annotations$path == u$path &
                          annotations$scaffold == u$scaffold)
     genes_in_unit <- unique(annotations$gene[unit_rows])
+    gcode <- Biostrings::getGeneticCode(as.character(dat$genetic_code))
 
     for (current_gene in genes_in_unit) {
       exons_idx <- unit_rows[which(annotations$gene[unit_rows] == current_gene)]
       if (any(exons_idx %in% rows_to_remove)) next
-      if (length(exons_idx) <= 1) next
 
-      cur <- annotations[exons_idx[1], ] # Use the first exon as the reference
-      cur_rules <- curate_rules$rules[[cur$gene]]
+      cur_rules <- curate_rules$rules[[current_gene]]
       intron <- cur_rules$intron %||% curate_rules$default_rules$PCG$intron %||% FALSE
 
-      if (intron) {
-        exons <- annotations[exons_idx, ]
-        exon_seqs <- character(nrow(exons))
+      # Which rows splice together. A user-defined join group (set in the annotate
+      # modal, members share a "JOIN: mode=<..> group=<id>" note) takes precedence
+      # over the curation intron rule, matching the GenBank export path: without
+      # this, a joined gene reaches the alignment as one segment per row.
+      grp <- stringr::str_match(
+        dplyr::coalesce(annotations$notes[exons_idx], ""),
+        "^JOIN: mode=\\w+ group=(\\d+)"
+      )[, 2]
+      merge_sets <- if (any(!is.na(grp))) {
+        split(exons_idx, grp)            # split() drops the unjoined (NA) rows
+      } else if (intron && length(exons_idx) > 1) {
+        list(exons_idx)
+      } else {
+        list()
+      }
 
-        message(paste("Merged ", length(exon_seqs), " exons for gene ", cur$gene, " (", u$seqid, ")", sep = ""))
-
-        if (all(exons$direction %in% c("+", "-")) && length(unique(exons$direction)) == 1L) {
-          # extract_circ_region, not subseq: an exon spanning the origin is
-          # stored pos1 > pos2 and subseq() aborts on it
-          for (i in 1:nrow(exons)) {
-            exon_seqs[i] <- as.character(
-              extract_circ_region(seq, exons$pos1[i], exons$pos2[i])
-            )
-          }
-          merged_sequence <- Biostrings::DNAString(paste(exon_seqs, collapse = ""))
-          if (exons$direction[1] == "-") {
-            merged_sequence <- Biostrings::reverseComplement(merged_sequence)
-          }
-        } else {
-          message(crayon::red(paste("Warning: exons on opposite strands for gene", cur$gene)))
+      for (idx in merge_sets) {
+        if (length(idx) <= 1) next
+        exons <- annotations[idx, ]
+        if (length(unique(exons$direction)) != 1L ||
+            !all(exons$direction %in% c("+", "-"))) {
+          message(crayon::red(paste("Warning: exons on opposite strands for gene", current_gene)))
           next
         }
-
-        translation <- mute_partial_codon_warning(
-          Biostrings::translate(
-            merged_sequence,
-            genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code)),
-            if.fuzzy.codon = "solve"
-          )
-        ) |> as.character()
-        translation <- sub("\\*$", "", translation) # remove terminal stop codon
-
-        annotations[exons_idx[1], "translation"] <- translation
+        message(paste0("Merged ", length(idx), " exons for gene ", current_gene,
+                       " (", u$seqid, ")"))
+        # Shared splice helper (also used by the GenBank export and the annotate
+        # editor), so all three see the same spliced CDS.
+        spliced <- splice_join_cds(exons, seq, gcode)
+        annotations[idx[1], "translation"] <- spliced$translation
         # Mark the merge on the label the report keys by (seqid), not the raw ID.
-        annotations[exons_idx[1], "seqid"] <- paste0("*", annotations[exons_idx[1], "seqid"])
-        rows_to_remove <- c(rows_to_remove, exons_idx[-1])
+        annotations[idx[1], "seqid"] <- paste0("*", annotations[idx[1], "seqid"])
+        rows_to_remove <- c(rows_to_remove, idx[-1])
       }
     }
   }

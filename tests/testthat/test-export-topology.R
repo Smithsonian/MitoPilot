@@ -255,3 +255,53 @@ test_that("the outlier-review recompute survives a contig with no annotate row",
   # the single-exon gene on the annotated contig is untouched
   expect_equal(ann$seqid[ann$gene == "cox1"], "s1_p1_s1")
 })
+
+# ---- Joined (spliced) genes in the outlier review / AA report ---------------
+#
+# A join group set in the annotate modal makes several rows one CDS, even when
+# the gene has no curation intron rule. The review alignment must see the
+# spliced protein, not one segment per row.
+
+# same shape as userasmb_db(), but the two-segment gene is joined by note only
+join_db <- function() {
+  d <- withr::local_tempdir(.local_envir = parent.frame())
+  db <- file.path(d, ".sqlite")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  ann <- rbind(
+    pcg_row(1L, "cox1", 100, 700),
+    pcg_row(1L, "nad5", 100, 399),
+    pcg_row(1L, "nad5", 600, 899)
+  )
+  ann$notes[2:3] <- "JOIN: mode=exon group=1"
+  DBI::dbWriteTable(con, "annotations", ann)
+  DBI::dbWriteTable(con, "assemblies", data.frame(
+    ID = "s1", path = 1L, scaffold = 1L, ignore = 0L, topology = "circular",
+    sequence = topo_seq, stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "export", data.frame(
+    ID = "s1", path = 1L, scaffold = 1L, export_group = "g1",
+    export_time_stamp = NA_integer_, stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "annotate", data.frame(
+    ID = "s1", path = 1L, scaffold = 1L, topology = "circular",
+    partial = "no", curate_opts = "default", stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "curate_opts", data.frame(
+    curate_opts = "default",
+    params = '{"default_rules":{"PCG":{"intron":false}}}',
+    linear_complete = 0L, stringsAsFactors = FALSE))
+  DBI::dbWriteTable(con, "samples", data.frame(
+    ID = "s1", Taxon = "Testus testus", genetic_code = 2L, stringsAsFactors = FALSE))
+  con
+}
+
+test_that("a note-joined gene reaches the review as one spliced record", {
+  con <- join_db()
+  on.exit(DBI::dbDisconnect(con))
+
+  ann <- suppressWarnings(suppressMessages(get_export_PCG_annotations(con, "g1")))
+
+  nad5 <- ann[ann$gene == "nad5", ]
+  expect_equal(nrow(nad5), 1L)
+  expect_equal(nad5$seqid, "*s1")
+  # 300 + 300 nt spliced -> 200 residues
+  expect_equal(nchar(nad5$translation), 200L)
+  expect_equal(ann$seqid[ann$gene == "cox1"], "s1")
+})
