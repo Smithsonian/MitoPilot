@@ -11,6 +11,7 @@ Released TBD. Container: `macguigand/mitopilot:1.5.5`
 - Sites with fewer than 3 reads are called N. Mixed sites get IUPAC codes.
 - A circular reference is handled across its origin, and the published sequence is only labelled circular if reads actually span the junction; otherwise it is published as linear with a note saying so.
 - References can be GenBank (preferred, one record) or FASTA. A FASTA reference needs its topology set explicitly.
+- **MapToRef coverage viewer.** A new button on MapToRef samples opens an interactive plot of read depth across the reference, with a gene annotation track when the reference is a GenBank record, and a click-through read pileup showing reference bases, consensus bases, and individual reads with mismatches, insertions, deletions, and strand. MapToRef now keeps its final read alignment so the pileup can be drawn.
 
 ### Preprocessing
 

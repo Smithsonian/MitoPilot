@@ -464,6 +464,40 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   sum(ok & starts <= len - min_overhang & ends >= len + min_overhang)
 }
 
+#' Per-base depth in reference coordinates
+#'
+#' Reads `samtools depth -a` output and folds the circular flank back onto the
+#' positions it duplicates, the same operation `.coverage_reform_circular()`
+#' performs for the published-assembly frame.
+#'
+#' @param depth_txt path to samtools depth output
+#' @param len reference length
+#' @return data.frame with columns Position and Depth, one row per position
+#'
+#' @noRd
+.mtr_depth_table <- function(depth_txt, len) {
+  out <- data.frame(Position = seq_len(len), Depth = 0)
+  if (!file.exists(depth_txt) || file.info(depth_txt)$size == 0) {
+    return(out)
+  }
+  raw <- utils::read.delim(depth_txt, header = FALSE,
+                           col.names = c("SeqId", "Position", "Depth"))
+  if (nrow(raw) == 0L) {
+    return(out)
+  }
+  pos <- as.integer(raw$Position)
+  seam <- pos > len
+  pos[seam] <- pos[seam] - len
+  keep <- pos >= 1L & pos <= len
+  summed <- stats::aggregate(
+    list(Depth = as.numeric(raw$Depth)[keep]),
+    by = list(Position = pos[keep]),
+    FUN = sum
+  )
+  out$Depth[summed$Position] <- summed$Depth
+  out
+}
+
 #' @noRd
 .mtr_diff_count <- function(a, b) {
   x <- strsplit(a, "", fixed = TRUE)[[1]]
@@ -489,6 +523,18 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   ref <- maptoref_prepare_ref(ref_file, topology = topology,
                               genetic_code = genetic_code, out_dir = out_dir)
   work <- file.path(out_dir, "maptoref")
+
+  # Annotation track source. Absent when the reference was a FASTA, which is
+  # the local BLAST database and bare-FASTA paths.
+  ref_gb <- file.path(work, "reference.gb")
+  if (file.exists(ref_gb)) {
+    feats <- maptoref_parse_features(ref_gb)
+    if (nrow(feats) > 0L) {
+      utils::write.csv(feats, file.path(work, "maptoref_features.csv"),
+                       row.names = FALSE, quote = TRUE)
+    }
+  }
+
   notes <- ref$notes
   circular <- identical(ref$topology, "circular")
   len <- ref$length
@@ -621,12 +667,26 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     "2>> {shQuote(log_fn)} | samtools sort -@ {cpus} -o {shQuote(final_bam)} -"
   ), log_fn)
   reads_final <- .mtr_count_primary(final_bam)
-  # The index exists only to serve the seam query.
+  # Indexed for every reference, not just circular ones: the viewer's pileup
+  # panel queries windows out of this BAM.
+  .mtr_run(stringr::str_glue("samtools index {shQuote(final_bam)}"), log_fn)
   junction_depth <- NA_integer_
   if (circular) {
-    .mtr_run(stringr::str_glue("samtools index {shQuote(final_bam)}"), log_fn)
     junction_depth <- .mtr_junction_depth(final_bam, len)
   }
+
+  # Per-base depth in reference coordinates, so the viewer's coverage track
+  # never has to open the BAM.
+  depth_txt <- file.path(work, "final_depth.txt")
+  .mtr_run(stringr::str_glue(
+    "samtools depth -a -J {shQuote(final_bam)} > {shQuote(depth_txt)}"
+  ), log_fn)
+  utils::write.csv(
+    .mtr_depth_table(depth_txt, len),
+    file.path(work, "maptoref_depth.csv"),
+    row.names = FALSE, quote = FALSE
+  )
+  unlink(depth_txt)
 
   final_raw <- file.path(work, "final_raw.fa")
   final_subs <- file.path(work, "final_subs.fa")
@@ -725,9 +785,13 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     if (length(notes) > 0) paste0("note=", notes)
   ), file.path(out_dir, paste0(id, "_summary.txt")))
 
-  # Reproducible transients, dropped so the published loop record stays the
-  # small file set of design 4.11. A failed run keeps everything.
-  unlink(list.files(work, pattern = "\\.(bam|bai|bt2|bt2l|fq)$", full.names = TRUE))
+  # Reproducible transients, dropped so the published loop record stays small.
+  # final.bam and its index are kept: the viewer's pileup panel reads them.
+  # A failed run keeps everything.
+  transients <- list.files(work, pattern = "\\.(bam|bai|bt2|bt2l|fq)$",
+                           full.names = TRUE)
+  unlink(transients[basename(transients) %nin%
+                      c("final.bam", "final.bam.bai")])
 
   invisible(TRUE)
 }

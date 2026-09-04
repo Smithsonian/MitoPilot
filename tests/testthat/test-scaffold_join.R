@@ -1389,6 +1389,7 @@ test_that("redo_join_no_ref_ids reads the stored accession, not the blanked disp
     ID = "frag", Taxon = "T", stringsAsFactors = FALSE))
   DBI::dbWriteTable(con, "assemble_opts", data.frame(
     assemble_opts = "d", min_assembly_length = 10, join_scaffolds = 1L,
+    assembler = "GetOrganelle",
     stringsAsFactors = FALSE))
   DBI::dbWriteTable(con, "assemblies", data.frame(
     ID = c("frag", "frag"), path = c(1L, 1L), scaffold = c(1L, 2L),
@@ -1452,7 +1453,7 @@ test_that("redo_join_status sees a recorded BLAST reference", {
     assemble_opts = "user", assemble_lock = 1
   ))
   DBI::dbWriteTable(con, "assemble_opts", data.frame(
-    assemble_opts = "user", join_scaffolds = 1
+    assemble_opts = "user", join_scaffolds = 1, assembler = "GetOrganelle"
   ))
 
   # dir_out does not exist, so the missing-output check is skipped.

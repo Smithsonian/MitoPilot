@@ -2204,15 +2204,6 @@ backwards_compatibility <- function(
 
 }
 
-#' Landmarks of the current project schema that an older database will lack.
-#'
-#' Returns a character vector of plain-language gaps, empty when the database is
-#' current. Lives beside the migration so the two stay in sync. Used by the app to
-#' refuse to open a stale project with a readable message rather than failing deep
-#' inside dbplyr with "no such column: path".
-#'
-#' @param con An open connection to a project database.
-#' @noRd
 #' Is this a user-assembly project?
 #'
 #' User-assembly projects take a FASTA per sample, so their mapping file (and
@@ -2229,6 +2220,15 @@ is_user_asmb <- function(con) {
   ))
 }
 
+#' Landmarks of the current project schema that an older database will lack.
+#'
+#' Returns a character vector of plain-language gaps, empty when the database is
+#' current. Lives beside the migration so the two stay in sync. Used by the app to
+#' refuse to open a stale project with a readable message rather than failing deep
+#' inside dbplyr with "no such column: path".
+#'
+#' @param con An open connection to a project database.
+#' @noRd
 schema_gaps <- function(con) {
   has <- function(expr) isTRUE(tryCatch(expr, error = function(e) FALSE))
   gaps <- character(0)

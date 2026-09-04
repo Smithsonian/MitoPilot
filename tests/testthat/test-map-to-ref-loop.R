@@ -11,7 +11,7 @@ mtr_stub_bin <- function(dir) {
     "cmd=$1; shift",
     "case \"$cmd\" in",
     "  index)",
-    "    :",
+    "    touch \"$1.bai\"",
     "    ;;",
     "  view)",
     "    case \" $* \" in",
@@ -167,10 +167,11 @@ test_that("map_to_ref publishes a circular consensus and the loop record", {
                     "stop_reason") %in% names(iters)))
   expect_true(as.integer(sm[["passes_run"]]) < 5L)
 
-  # A successful run drops the transients and keeps the loop record.
+  # A successful run drops the transients, keeps the loop record, and keeps
+  # final.bam for the pileup viewer.
   expect_false(file.exists(file.path(out, "maptoref", "pass_1.bam")))
   expect_false(file.exists(file.path(out, "maptoref", "sub_R1.fq")))
-  expect_false(file.exists(file.path(out, "maptoref", "final.bam")))
+  expect_true(file.exists(file.path(out, "maptoref", "final.bam")))
 
   expect_true(any(grepl("bowtie2-build",
                         readLines(file.path(out, "assembler.log.txt")))))
@@ -393,8 +394,9 @@ test_that("a linear reference publishes without a seam query or an N trim", {
   expect_equal(sm[["published_topology"]], "linear")
   expect_equal(sm[["junction_depth"]], "NA")
   expect_equal(sm[["n_count"]], "0")
-  expect_false(any(grepl("samtools index",
-                         readLines(file.path(out, "assembler.log.txt")))))
+  # Indexed unconditionally now, so the viewer can query a linear BAM too.
+  expect_true(any(grepl("samtools index",
+                        readLines(file.path(out, "assembler.log.txt")))))
 })
 
 test_that("N on one end only still reports the uncalled fraction", {
@@ -459,4 +461,69 @@ test_that("too few reads in pass 1 writes the sentinel", {
   expect_false(file.exists(file.path(out, "T1_assembly_1.fasta")))
   expect_true(any(grepl("use a closer reference",
                         readLines(file.path(out, "assembler.log.txt")))))
+})
+test_that(".mtr_depth_table fills every reference position", {
+  d <- withr::local_tempdir()
+  fn <- file.path(d, "depth.txt")
+  writeLines(c(
+    "mapping_ref\t1\t5",
+    "mapping_ref\t2\t7",
+    "mapping_ref\t3\t0"
+  ), fn)
+  out <- .mtr_depth_table(fn, len = 5L)
+  expect_equal(out$Position, 1:5)
+  expect_equal(out$Depth, c(5, 7, 0, 0, 0))
+})
+
+test_that(".mtr_depth_table folds the circular seam back onto the start", {
+  d <- withr::local_tempdir()
+  fn <- file.path(d, "depth.txt")
+  # Reference length 4, with a 2 bp flank reported at positions 5 and 6.
+  writeLines(c(
+    "mapping_ref\t1\t10",
+    "mapping_ref\t2\t10",
+    "mapping_ref\t3\t10",
+    "mapping_ref\t4\t10",
+    "mapping_ref\t5\t3",
+    "mapping_ref\t6\t4"
+  ), fn)
+  out <- .mtr_depth_table(fn, len = 4L)
+  expect_equal(nrow(out), 4L)
+  expect_equal(out$Depth, c(13, 14, 10, 10))
+})
+
+test_that(".mtr_depth_table returns zero depth for an empty file", {
+  d <- withr::local_tempdir()
+  fn <- file.path(d, "depth.txt")
+  file.create(fn)
+  out <- .mtr_depth_table(fn, len = 3L)
+  expect_equal(out$Position, 1:3)
+  expect_equal(out$Depth, c(0, 0, 0))
+})
+
+test_that("a successful run keeps final.bam, its index, and the depth CSV", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2,
+                   bowtie2_opts = "--very-sensitive-local",
+                   consensus_opts = "-d 3 --min-BQ 20",
+                   iter_cap = 5, topology = "circular",
+                   genetic_code = 2, cpus = 1, out_dir = out)
+
+  expect_true(ok)
+  work <- file.path(out, "maptoref")
+  expect_true(file.exists(file.path(work, "final.bam")))
+  expect_true(file.exists(file.path(work, "final.bam.bai")))
+  expect_true(file.exists(file.path(work, "maptoref_depth.csv")))
+  depth <- utils::read.csv(file.path(work, "maptoref_depth.csv"))
+  expect_equal(names(depth), c("Position", "Depth"))
+  expect_false(any(is.na(depth$Depth)))
+  # No other BAM survives.
+  expect_equal(
+    sort(basename(list.files(work, pattern = "\\.bam$"))),
+    "final.bam"
+  )
 })
