@@ -122,13 +122,6 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       view = dplyr::case_when(
         assemble_switch > 1 ~ "details",
         .default = NA_character_
-      ),
-      # First-render source for the table (output$table renders rv$data
-      # directly), so this mutate has to exist here too, not only in the
-      # update_assemble_table handlers in app_assemble.R.
-      maptoref = dplyr::case_when(
-        assemble_switch > 1 & assembler == "MapToRef" ~ "Coverage",
-        .default = NA_character_
       )
     )
 }

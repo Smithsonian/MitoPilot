@@ -304,3 +304,21 @@ test_that("maptoref_window_reads returns an empty result for a missing BAM", {
   expect_equal(out$n_total, 0L)
   expect_equal(nrow(out$reads), 0L)
 })
+
+test_that(".mtr_cigar_walk handles a read folded back past position 1", {
+  # Circular fold-back puts part of the alignment left of the reference start.
+  w <- .mtr_cigar_walk(-2L, "10M", "ACGTACGTAC", mtr_viz_ref())
+  expect_equal(w$start, -2L)
+  expect_equal(w$end, 7L)
+  expect_true(is.null(w$mm) || all(w$mm$pos >= 1L))
+})
+
+test_that(".mtr_zero_runs merges adjacent gaps and pads short ones", {
+  expect_null(.mtr_zero_runs(integer(0)))
+  r <- .mtr_zero_runs(c(5:9, 20L))
+  expect_equal(nrow(r), 2L)
+  expect_equal(r$xmin, c(4.5, 19.5))
+  expect_equal(r$xmax, c(9.5, 20.5))
+  padded <- .mtr_zero_runs(20L, min_w = 11)
+  expect_equal(padded$xmax - padded$xmin, 11)
+})

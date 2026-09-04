@@ -170,6 +170,7 @@ assembly_coverage_details_server <- function(id, rv) {
         ),
         reactableOutput(ns("table"), width = "100%"),
         uiOutput(ns("consensus_admin")),
+        maptoref_viewer_ui(ns("maptoref_viewer")),
         uiOutput(ns("scaffold_join_div")),
         uiOutput(ns("msa_div")),
         div(
@@ -192,6 +193,9 @@ assembly_coverage_details_server <- function(id, rv) {
       ) |>
         showModal()
     })
+
+    # MapToRef coverage viewer (renders only for MapToRef samples) ----
+    maptoref_viewer_server("maptoref_viewer", rv)
 
     # Render table ----
     output$table <- renderReactable({

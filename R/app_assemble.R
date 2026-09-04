@@ -454,16 +454,6 @@ assemble_server <- function(id) {
               align = "center",
               cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
             ),
-            maptoref = colDef(
-              show = TRUE,
-              sticky = "right",
-              filterable = FALSE,
-              name = "",
-              html = TRUE,
-              width = 110,
-              align = "center",
-              cell = rt_icon_bttn_text(ns("maptoref_view"), "fas fa-chart-area fa-xs")
-            ),
             output = colDef(
               show = TRUE,
               sticky = "right",
@@ -491,13 +481,6 @@ assemble_server <- function(id) {
             ),
             view = dplyr::case_when(
               assemble_switch > 1 ~ "details",
-              .default = NA_character_
-            ),
-            maptoref = dplyr::case_when(
-              assemble_switch > 1 &
-                assemble_opts %in% rv$assemble_opts$assemble_opts[
-                  rv$assemble_opts$assembler == "MapToRef"
-                ] ~ "Coverage",
               .default = NA_character_
             ),
             blast_hits = dplyr::case_when(
@@ -814,13 +797,6 @@ assemble_server <- function(id) {
             assemble_switch > 1 ~ "details",
             .default = NA_character_
           ),
-          maptoref = dplyr::case_when(
-            assemble_switch > 1 &
-              assemble_opts %in% rv$assemble_opts$assemble_opts[
-                rv$assemble_opts$assembler == "MapToRef"
-              ] ~ "Coverage",
-            .default = NA_character_
-          )
         )
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
@@ -1379,15 +1355,6 @@ assemble_server <- function(id) {
       trigger("coverage_modal")
     })
     assembly_coverage_details_server(ns("coverage_details"), rv)
-
-    # Open MapToRef Coverage Viewer ----
-    # id is maptoref_view, not maptoref: assemble_opts_modal() already owns
-    # input$maptoref for the bowtie2 options textInput in this namespace.
-    observeEvent(input$maptoref_view, ignoreInit = T, {
-      rv$updating <- rv$data |> dplyr::slice(as.numeric(input$maptoref_view))
-      trigger("maptoref_modal")
-    })
-    maptoref_viewer_server(ns("maptoref_viewer"), rv)
 
     # Open All BLAST Hits ----
     observeEvent(input$all_blast_hits, ignoreInit = T, {

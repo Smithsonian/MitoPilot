@@ -151,7 +151,12 @@ maptoref_read_seq <- function(path) {
       idx <- seq_len(L)
       rpos <- rp + idx - 1L
       qb <- qv[qp + idx - 1L]
-      hit <- which(!is.na(qb) & rpos <= length(refv) & qb != refv[rpos])
+      # A circular fold-back can start an alignment left of position 1, so
+      # only positions inside the reference are compared.
+      inside <- rpos >= 1L & rpos <= length(refv)
+      rb <- rep(NA_character_, length(rpos))
+      rb[inside] <- refv[rpos[inside]]
+      hit <- which(!is.na(qb) & !is.na(rb) & qb != rb)
       if (length(hit) > 0L) {
         mm[[length(mm) + 1L]] <- data.frame(
           pos = rpos[hit], base = qb[hit], stringsAsFactors = FALSE
