@@ -479,6 +479,11 @@ test_that("no reference at all is a per-sample failure with a clear message", {
   expect_equal(readLines(file.path(out, "T1_assembly_0.fasta"))[1],
                ">No assembly found")
   expect_match(mtr_summary(out)[["failure"]], "no MapToRef reference")
+  # note= is the line the pipeline folds into assemble_notes, so the reason
+  # shows up in the app and not only in the container log.
+  expect_match(
+    grep("^note=", readLines(file.path(out, "T1_summary.txt")), value = TRUE),
+    "failed: no MapToRef reference")
 })
 
 test_that("an accession resolves from GenBank and is recorded", {

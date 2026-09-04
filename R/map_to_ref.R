@@ -521,7 +521,10 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   .mtr_log(log_fn, "FAILED: ", reason)
   writeLines(">No assembly found",
              file.path(out_dir, paste0(id, "_assembly_0.fasta")))
-  writeLines(c("assembler=MapToRef", paste0("failure=", reason)),
+  # note= is the line the pipeline folds into assemble_notes, so the reason a
+  # sample produced no assembly reaches the app instead of only the log.
+  writeLines(c("assembler=MapToRef", paste0("failure=", reason),
+               paste0("note=failed: ", reason)),
              file.path(out_dir, paste0(id, "_summary.txt")))
   invisible(FALSE)
 }

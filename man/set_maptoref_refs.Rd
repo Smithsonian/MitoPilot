@@ -22,9 +22,11 @@ Invisibly, the IDs that still have no reference from either source.
 }
 \description{
 Assigns a MapToRef reference mitogenome to individual samples in an existing
-project. The per-sample value overrides the reference on the sample's
-assemble parameter set; a blank value clears the override so the parameter
-set applies again.
+project. A sample that already has a parameter set of its own (one named for
+the sample, used by no other sample, and assembling with MapToRef) has the
+reference written onto that set. Any other sample gets a per-sample value
+that overrides the reference on its shared parameter set; a blank value
+clears the override so the parameter set applies again.
 }
 \details{
 Samples whose reference actually changes are queued for (re-)assembly, the

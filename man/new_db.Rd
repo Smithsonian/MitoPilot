@@ -98,7 +98,8 @@ set: an absolute file path, a URL, or an NCBI nucleotide accession (for
 example NC_002333). A single-record GenBank file (.gb) is preferred; a
 FASTA is accepted but then \code{maptoref_topology} must be set. Optional:
 samples may instead name their own reference in the mapping file's
-\code{Reference} column or through \code{\link{set_maptoref_refs}}.}
+\code{Reference} column, which gives each of those samples its own
+MapToRef parameter set, or through \code{\link{set_maptoref_refs}}.}
 
 \item{maptoref}{Default bowtie2 options for MapToRef
 (default = "--very-sensitive-local")}

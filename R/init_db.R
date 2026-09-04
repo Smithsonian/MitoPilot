@@ -59,7 +59,8 @@
 #'   example NC_002333). A single-record GenBank file (.gb) is preferred; a
 #'   FASTA is accepted but then \code{maptoref_topology} must be set. Optional:
 #'   samples may instead name their own reference in the mapping file's
-#'   \code{Reference} column or through \code{\link{set_maptoref_refs}}.
+#'   \code{Reference} column, which gives each of those samples its own
+#'   MapToRef parameter set, or through \code{\link{set_maptoref_refs}}.
 #' @param maptoref Default bowtie2 options for MapToRef
 #'   (default = "--very-sensitive-local")
 #' @param maptoref_consensus Default samtools consensus options for MapToRef
@@ -350,7 +351,6 @@ new_db <- function(
       PRIMARY KEY (ID)
     );"
   )
-  ref_col <- if (is.null(refs)) NA_character_ else unname(refs[mapping$ID])
   dplyr::tbl(con, "assemble") |>
     dplyr::rows_upsert(
       mapping |>
@@ -369,7 +369,7 @@ new_db <- function(
           poor_blast_ref = NA_character_,
           join_notes = NA_character_,
           join_switch = NA_integer_,
-          maptoref_ref = ref_col,
+          maptoref_ref = NA_character_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -428,6 +428,11 @@ new_db <- function(
       copy = TRUE,
       by = "assemble_opts"
     )
+
+  # A sample that brought its own reference gets its own MapToRef parameter set,
+  # so the app shows the assembler and the reference that sample will actually
+  # use. Must follow the assemble_opts insert above: the set is cloned from it.
+  .mtr_seed_per_sample_opts(con, refs)
 
   ## BLAST options ----
   DBI::dbExecute(

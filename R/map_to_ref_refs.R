@@ -229,6 +229,91 @@
   list(mapping = mapping[, keep, drop = FALSE], refs = refs)
 }
 
+# Per-sample MapToRef parameter sets.
+#
+# A mapping-file Reference means "assemble this sample by mapping to that
+# reference", so the sample gets a parameter set of its own, cloned from the
+# base set with assembler = MapToRef and the reference on it. The reference is
+# deliberately NOT also written to assemble.maptoref_ref: the pipeline
+# COALESCEs the column over the set, so a value in both would make the Assemble
+# options modal look editable while the column silently won.
+#' @noRd
+.mtr_opts_name <- function(id) paste0(id, "_maptoref")
+
+# refs is a named character vector (names are sample IDs), as built by new_db()
+# and add_samples(). Blank and NA references are left on the base set.
+#' @noRd
+.mtr_seed_per_sample_opts <- function(con, refs, base = "default") {
+  if (is.null(refs) || length(refs) == 0L) return(invisible(character(0)))
+  keep <- !is.na(refs) & nzchar(trimws(refs))
+  if (!any(keep)) return(invisible(character(0)))
+  refs <- refs[keep]
+  ids <- names(refs)
+  names <- .mtr_opts_name(ids)
+
+  base_row <- DBI::dbGetQuery(
+    con, "SELECT * FROM assemble_opts WHERE assemble_opts = ?",
+    params = list(base)
+  )
+  if (nrow(base_row) != 1L) {
+    stop("assemble options set ", shQuote(base), " not found", call. = FALSE)
+  }
+  # An upsert here would silently reconfigure a set the user built by hand.
+  taken <- intersect(
+    names,
+    DBI::dbGetQuery(con, "SELECT assemble_opts FROM assemble_opts")$assemble_opts
+  )
+  if (length(taken) > 0L) {
+    stop("assemble options set(s) ", paste(shQuote(taken), collapse = ", "),
+         " already exist; rename them before adding these samples",
+         call. = FALSE)
+  }
+
+  new_opts <- base_row[rep(1L, length(ids)), , drop = FALSE]
+  rownames(new_opts) <- NULL
+  new_opts$assemble_opts <- names
+  new_opts$assembler <- "MapToRef"
+  new_opts$maptoref_ref <- unname(refs)
+  dplyr::tbl(con, "assemble_opts") |>
+    dplyr::rows_insert(
+      new_opts,
+      in_place = TRUE,
+      copy = TRUE,
+      by = "assemble_opts",
+      conflict = "ignore"
+    )
+  dplyr::tbl(con, "assemble") |>
+    dplyr::rows_update(
+      data.frame(ID = ids, assemble_opts = names),
+      unmatched = "ignore",
+      in_place = TRUE,
+      copy = TRUE,
+      by = "ID"
+    )
+  invisible(names)
+}
+
+# The sample's own set, when it has one: named for the sample, used by nobody
+# else, and assembling with MapToRef. set_maptoref_refs() edits that set instead
+# of the column, so the reference keeps living in exactly one place.
+#' @noRd
+.mtr_dedicated_opts <- function(con, ids) {
+  q <- DBI::dbGetQuery(con, paste(
+    "SELECT a.ID, a.assemble_opts, o.assembler, o.maptoref_ref,",
+    "(SELECT COUNT(*) FROM assemble x",
+    "WHERE x.assemble_opts = a.assemble_opts) AS n_samples",
+    "FROM assemble a JOIN assemble_opts o",
+    "ON a.assemble_opts = o.assemble_opts"
+  ))
+  q <- q[match(ids, q$ID), , drop = FALSE]
+  own <- !is.na(q$ID) &
+    q$assemble_opts == .mtr_opts_name(q$ID) &
+    q$n_samples == 1L &
+    !is.na(q$assembler) & q$assembler == "MapToRef"
+  own[is.na(own)] <- FALSE
+  list(own = own, opts = q$assemble_opts, set_ref = q$maptoref_ref)
+}
+
 # R8's warning, answered from the database rather than from the mapping file, so
 # it sees both sources. The COALESCE is the same expression the pipeline uses in
 # inst/nextflow/modules/assemble_workflow.nf.
@@ -264,9 +349,11 @@
 #' Set per-sample MapToRef references
 #'
 #' Assigns a MapToRef reference mitogenome to individual samples in an existing
-#' project. The per-sample value overrides the reference on the sample's
-#' assemble parameter set; a blank value clears the override so the parameter
-#' set applies again.
+#' project. A sample that already has a parameter set of its own (one named for
+#' the sample, used by no other sample, and assembling with MapToRef) has the
+#' reference written onto that set. Any other sample gets a per-sample value
+#' that overrides the reference on its shared parameter set; a blank value
+#' clears the override so the parameter set applies again.
 #'
 #' Samples whose reference actually changes are queued for (re-)assembly, the
 #' same way changing a sample's parameter set does in the Assemble module.
@@ -327,7 +414,11 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
          " absent in the existing database")
   }
   new_vals <- .mtr_validate_refs(vals, ids = ids, context = "the reference list")
+  # A sample on its own MapToRef set keeps its reference on that set, so that is
+  # the value to compare against and the value to write.
+  ded <- .mtr_dedicated_opts(con, ids)
   old_vals <- cur$maptoref_ref[match(ids, cur$ID)]
+  old_vals[ded$own] <- ded$set_ref[ded$own]
   same <- (is.na(new_vals) & is.na(old_vals)) |
     (!is.na(new_vals) & !is.na(old_vals) & new_vals == old_vals)
   changed <- which(!same)
@@ -346,15 +437,38 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
     return(invisible(.mtr_warn_missing_refs(con)))
   }
 
-  # Same write the app makes when a sample's parameter set changes
-  # (R/app_assemble.R): value plus assemble_switch = 1, one statement.
+  # Samples on their own set: the reference lives on the set, so write it there.
+  on_set <- changed[ded$own[changed]]
+  if (length(on_set) > 0L) {
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_update(
+        data.frame(
+          assemble_opts = ded$opts[on_set],
+          maptoref_ref = new_vals[on_set]
+        ),
+        unmatched = "ignore",
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+  # Everyone else keeps the per-sample column, which overrides a shared set.
+  on_col <- changed[!ded$own[changed]]
+  if (length(on_col) > 0L) {
+    dplyr::tbl(con, "assemble") |>
+      dplyr::rows_update(
+        data.frame(ID = ids[on_col], maptoref_ref = new_vals[on_col]),
+        unmatched = "ignore",
+        in_place = TRUE,
+        copy = TRUE,
+        by = "ID"
+      )
+  }
+  # Same requeue the app makes when a sample's parameter set changes
+  # (R/app_assemble.R).
   dplyr::tbl(con, "assemble") |>
     dplyr::rows_update(
-      data.frame(
-        ID = ids[changed],
-        maptoref_ref = new_vals[changed],
-        assemble_switch = 1
-      ),
+      data.frame(ID = ids[changed], assemble_switch = 1),
       unmatched = "ignore",
       in_place = TRUE,
       copy = TRUE,

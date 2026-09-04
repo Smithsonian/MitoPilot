@@ -209,7 +209,7 @@ test_that("new_db warns instead of demanding a reference or a topology", {
                c(NA_character_, NA_character_))
 })
 
-test_that("new_db seeds assemble.maptoref_ref from the Reference column", {
+test_that("new_db puts a Reference on the sample\'s own MapToRef options set", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   mapping <- mtr_refs_mapping(d, refs = c(fa, ""))
@@ -221,9 +221,43 @@ test_that("new_db seeds assemble.maptoref_ref from the Reference column", {
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_false("Reference" %in% DBI::dbListFields(con, "samples"))
-  a <- DBI::dbGetQuery(con, "SELECT ID, maptoref_ref FROM assemble ORDER BY ID")
-  expect_equal(a$maptoref_ref,
-               c(normalizePath(fa, winslash = "/"), NA_character_))
+  a <- DBI::dbGetQuery(
+    con, "SELECT ID, assemble_opts, maptoref_ref FROM assemble ORDER BY ID")
+  expect_equal(a$assemble_opts, c("S1_maptoref", "default"))
+  # The reference has exactly one home, so the app modal is the one place it
+  # can be read and edited.
+  expect_equal(a$maptoref_ref, c(NA_character_, NA_character_))
+  o <- DBI::dbGetQuery(
+    con, "SELECT assembler, maptoref_ref FROM assemble_opts WHERE assemble_opts = \'S1_maptoref\'")
+  expect_equal(o$assembler, "MapToRef")
+  expect_equal(o$maptoref_ref, normalizePath(fa, winslash = "/"))
+})
+
+test_that("a per-sample set inherits the base set and leaves other samples alone", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  mapping <- mtr_refs_mapping(d, refs = c(fa, ""))
+  db <- file.path(d, ".sqlite")
+  new_db(db_path = db, mapping_fn = mapping, assemble_cpus = 12,
+         min_assembly_length = 900)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  o <- DBI::dbGetQuery(con, "SELECT * FROM assemble_opts ORDER BY assemble_opts")
+  expect_equal(o$assemble_opts, c("S1_maptoref", "default"))
+  expect_equal(o$cpus, c(12, 12))
+  expect_equal(o$min_assembly_length, c(900, 900))
+  # A Reference switches only that sample to MapToRef; the base set is untouched.
+  expect_equal(o$assembler, c("MapToRef", "GetOrganelle"))
+})
+
+test_that("no Reference column means no extra options sets", {
+  d <- withr::local_tempdir()
+  db <- file.path(d, ".sqlite")
+  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d))
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_equal(DBI::dbGetQuery(con, "SELECT assemble_opts FROM assemble_opts")$assemble_opts,
+               "default")
 })
 
 test_that("new_db does not warn when every sample has a reference", {
@@ -294,19 +328,43 @@ test_that("add_samples seeds the reference and never adds a samples column", {
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_false("Reference" %in% DBI::dbListFields(con, "samples"))
-  a <- DBI::dbGetQuery(con, "SELECT ID, maptoref_ref FROM assemble ORDER BY ID")
-  expect_equal(a$maptoref_ref[a$ID %in% c("S3", "S4")],
-               rep(normalizePath(fa, winslash = "/"), 2L))
+  a <- DBI::dbGetQuery(
+    con, "SELECT ID, assemble_opts, maptoref_ref FROM assemble ORDER BY ID")
+  expect_equal(a$assemble_opts,
+               c("default", "default", "S3_maptoref", "S4_maptoref"))
+  expect_true(all(is.na(a$maptoref_ref)))
+  o <- DBI::dbGetQuery(con, paste(
+    "SELECT assemble_opts, assembler, maptoref_ref FROM assemble_opts",
+    "WHERE assemble_opts IN (\'S3_maptoref\', \'S4_maptoref\') ORDER BY assemble_opts"))
+  expect_equal(o$assembler, rep("MapToRef", 2L))
+  expect_equal(o$maptoref_ref, rep(normalizePath(fa, winslash = "/"), 2L))
 })
 
-test_that("a Reference column is reserved for every assembler", {
-  # Stripped and validated whatever the assembler, so assemble.maptoref_ref can
-  # never hold garbage a later assembler switch would pick up.
+test_that("add_samples refuses to clobber an options set that already exists", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  new_db(db_path = file.path(d, ".sqlite"),
+         mapping_fn = mtr_refs_mapping(d, ids = c("S1", "S2")))
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
+  DBI::dbExecute(con, paste(
+    "INSERT INTO assemble_opts (assemble_opts, cpus) VALUES (\'S3_maptoref\', 4)"))
+  DBI::dbDisconnect(con)
+  expect_error(
+    add_samples(path = d,
+                update_mapping_fn = mtr_refs_mapping(d, refs = fa,
+                                                     ids = c("S3", "S4"))),
+    "already exist"
+  )
+})
+
+test_that("a Reference switches that sample to MapToRef whatever assembler says", {
+  # A reference is only meaningful to MapToRef, so supplying one is the request.
+  # The base set keeps the assembler the caller asked for.
   d <- withr::local_tempdir()
   testthat::local_mocked_bindings(
     .mtr_ncbi_known = function(accs, ...) list(ok = TRUE, found = "NC_002333")
   )
-  mapping <- mtr_refs_mapping(d, refs = c("NC_002333", "NC_002333"))
+  mapping <- mtr_refs_mapping(d, refs = c("NC_002333", ""))
   db <- file.path(d, ".sqlite")
   expect_no_warning(
     new_db(db_path = db, mapping_fn = mapping, assembler = "GetOrganelle")
@@ -314,8 +372,10 @@ test_that("a Reference column is reserved for every assembler", {
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_false("Reference" %in% DBI::dbListFields(con, "samples"))
-  expect_equal(DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble")$maptoref_ref,
-               c("NC_002333", "NC_002333"))
+  o <- DBI::dbGetQuery(
+    con, "SELECT assemble_opts, assembler, maptoref_ref FROM assemble_opts ORDER BY assemble_opts")
+  expect_equal(o$assembler, c("MapToRef", "GetOrganelle"))
+  expect_equal(o$maptoref_ref, c("NC_002333", NA_character_))
 })
 
 test_that("add_samples refuses a project that predates the reference column", {
@@ -402,6 +462,41 @@ test_that("set_maptoref_refs does not re-queue an unchanged row", {
 
   expect_message(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "No changes")
   expect_equal(DBI::dbGetQuery(con, "SELECT assemble_switch FROM assemble WHERE ID = 'S1'")$assemble_switch, 2)
+})
+
+test_that("set_maptoref_refs edits the sample\'s own set, not the column", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  fa2 <- mtr_ref_fasta(d, name = "ref2.fasta")
+  db <- file.path(d, ".sqlite")
+  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d, refs = c(fa, "")))
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
+
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa2))
+
+  expect_equal(
+    DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref,
+    normalizePath(fa2, winslash = "/"))
+  a <- DBI::dbGetQuery(con, "SELECT maptoref_ref, assemble_switch FROM assemble WHERE ID = 'S1'")
+  expect_true(is.na(a$maptoref_ref))
+  expect_equal(a$assemble_switch, 1)
+})
+
+test_that("set_maptoref_refs compares against the value on the sample\'s own set", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  db <- file.path(d, ".sqlite")
+  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d, refs = c(fa, "")))
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
+
+  expect_message(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "No changes")
+  expect_equal(
+    DBI::dbGetQuery(con, "SELECT assemble_switch FROM assemble WHERE ID = 'S1'")$assemble_switch,
+    2)
 })
 
 test_that("a blank value clears the per-sample reference", {

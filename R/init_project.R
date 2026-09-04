@@ -8,9 +8,12 @@
 #'   `R1` and `R2` specifying the names of the raw paired read inputs.
 #'   May include additional columns with other sample metadata, and an optional
 #'   \code{Reference} column naming a per-sample MapToRef reference (file path,
-#'   URL, or NCBI accession). \code{Reference} is a reserved column name: it is never
-#'   stored as sample metadata, and its values are checked whatever the
-#'   assembler, so rename the column if you use it for something else.
+#'   URL, or NCBI accession). A sample with a \code{Reference} is given its own
+#'   assembly parameter set, named \code{<ID>_maptoref}, cloned from the default
+#'   set but assembling with MapToRef against that reference; samples with a
+#'   blank \code{Reference} keep the default set. \code{Reference} is a reserved
+#'   column name: it is never stored as sample metadata, so rename the column if
+#'   you use it for something else.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param data_path Path to the directory where the raw data is located. Can be

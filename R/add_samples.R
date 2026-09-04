@@ -8,9 +8,12 @@
 #' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2".
 #'   May include additional columns with other sample metadata, and an optional
 #'   \code{Reference} column naming a per-sample MapToRef reference (file path,
-#'   URL, or NCBI accession). \code{Reference} is a reserved column name: it is never
-#'   stored as sample metadata, and its values are checked whatever the
-#'   assembler, so rename the column if you use it for something else.
+#'   URL, or NCBI accession). A sample with a \code{Reference} is given its own
+#'   assembly parameter set, named \code{<ID>_maptoref}, cloned from the default
+#'   set but assembling with MapToRef against that reference; samples with a
+#'   blank \code{Reference} keep the default set. \code{Reference} is a reserved
+#'   column name: it is never stored as sample metadata, so rename the column if
+#'   you use it for something else.
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
 #'
@@ -208,7 +211,7 @@ add_samples <- function(
           hide_switch = 0,
           assemble_opts = "default",
           blast_opts = "default",
-          maptoref_ref = if (is.null(refs)) NA_character_ else unname(refs[mapping$ID]),
+          maptoref_ref = NA_character_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -216,6 +219,10 @@ add_samples <- function(
       by = "ID",
       conflict = "ignore"
     )
+
+  # A sample that brought its own reference gets its own MapToRef parameter set,
+  # cloned from "default", instead of a value on assemble.maptoref_ref.
+  .mtr_seed_per_sample_opts(con, refs)
 
   # Annotate table ----
   ##############################################################################################################

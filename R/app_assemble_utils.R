@@ -392,8 +392,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             "downloaded from GenBank as a full record. A file ending .gb, ",
             ".gbk, or .gbff is read as GenBank and takes its topology from the ",
             "LOCUS line; anything else is read as FASTA and needs the topology ",
-            "set below. Leave this empty if every sample brings its own reference ",
-            "(mapping file 'Reference' column, or set_maptoref_refs()).",
+            "set below. A sample whose mapping file gave a 'Reference' has its ",
+            "own parameter set named <ID>_maptoref, holding that reference.",
             href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
             id = ns("help_maptoref_ref"), nested = TRUE)),
         selectInput(
