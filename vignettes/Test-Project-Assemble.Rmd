@@ -169,9 +169,12 @@ Nothing is editable until you tick **Edit**. The important controls:
   MitoFinder uses to identify mitochondrial contigs. The default is the zebrafish
   mitogenome (NC_002333.2), so for anything other than a fish, supply a reference
   from your own group. `custom_assembly_db()` can build this file too.
-- **MapToRef Reference.** One complete mitogenome, GenBank (`.gb`) preferred,
-  one record per file. Keep it inside the project folder so the container can
-  see it. A FASTA reference is accepted, but you must also set the topology.
+- **MapToRef Reference.** One complete mitogenome: a file path (GenBank `.gb`
+  preferred, one record per file), a URL, or an NCBI nucleotide accession such as
+  `NC_002333`. An accession is downloaded from GenBank as a full record. Keep a
+  reference file inside the project folder so the container can see it. A FASTA reference is accepted, but you must
+  also set the topology. Leave this empty if every sample brings its own reference
+  (the mapping file's `Reference` column, or `set_maptoref_refs()`).
 - **Reference topology.** `circular` or `linear`. Required for a FASTA
   reference. Ignored when the GenBank LOCUS line names a topology, and used
   when the LOCUS line names neither.

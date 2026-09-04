@@ -139,7 +139,10 @@ databases. There are three independent kinds of databases:
 - **Assembly** references for GetOrganelle, MitoFinder, or MapToRef.
   `MitoPilot::custom_assembly_db()` builds a clade-wide database for GetOrganelle
   and MitoFinder automatically, with no external tools required; MapToRef instead
-  uses a single reference mitogenome you supply yourself. See
+  uses a single reference mitogenome you supply yourself. Each sample can use a
+  different one: add a `Reference` column to your mapping CSV, or call
+  `MitoPilot::set_maptoref_refs()`. A reference may be a file path, a URL, or an
+  NCBI accession. See
   [building custom databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html).
 - **Annotation** references for MITOS2. MitoPilot includes
   Chordata and Metazoa databases, selectable in the `Annotate Opts.` window.

@@ -168,6 +168,20 @@ MapToRef reference: it packages many mitogenome records together so MitoFinder
 can label contigs against any of them, while MapToRef expects a single
 sequence to map every read against.
 
+You can skip the download entirely and give the accession instead (for example
+`NC_002333.1`). MitoPilot downloads the GenBank record from NCBI at run time, so
+the compute node needs network access. The record carries its own topology when
+its `LOCUS` line names one (mitogenome records normally do); otherwise set the
+reference topology in the Assemble options.
+
+If a sample's reference cannot be resolved at run time, only that sample fails:
+it is marked `failed assembly` in the Assemble table, and the reason is written
+to that sample's `assembler.log.txt`. One caveat: because a MapToRef failure
+is a normal per-sample outcome rather than a crashed task, Nextflow caches it.
+If you fix a transient network problem and re-run with the same reference, untick
+`-resume` so the sample is attempted again; changing the reference changes the
+task and re-runs on its own.
+
 <div class="alert alert-warning">
   <strong>Keep the reference inside the project folder.</strong> MitoPilot runs inside a container (Docker or Singularity/Apptainer), which only sees files under the paths it is told to mount. A reference kept outside your project tree, especially one reached through a symlink, may point somewhere the container cannot read, and the run will fail as if the file were missing. Keep the reference file under the project folder, or make sure its actual directory is bound into the container if you keep it elsewhere.
 </div>

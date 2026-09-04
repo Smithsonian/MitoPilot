@@ -1028,18 +1028,9 @@ assemble_server <- function(id) {
       if (input$edit_assemble_opts) {
         ref_value <- trimws(input$maptoref_ref %||% "")
         topology_value <- trimws(input$maptoref_topology %||% "")
-        if (identical(input$assembler, "MapToRef") && !nzchar(ref_value)) {
-          shinyWidgets::show_alert(
-            title = "Reference required",
-            text = paste("MapToRef needs a reference mitogenome. Give the path",
-                         "or URL of a single-record GenBank or FASTA file."),
-            type = "error",
-            closeOnClickOutside = FALSE
-          )
-          return()
-        }
         needs_topology <- identical(input$assembler, "MapToRef") &&
           nzchar(ref_value) &&
+          !identical(.mtr_ref_class(ref_value), "accession") &&
           !grepl("\\.(gb|gbk|gbff)$", ref_value, ignore.case = TRUE) &&
           !nzchar(topology_value)
         if (needs_topology) {
@@ -1054,13 +1045,14 @@ assemble_server <- function(id) {
           return()
         }
         if (identical(input$assembler, "MapToRef") &&
-            grepl("['\"]", paste(input$maptoref %||% "",
-                                 input$maptoref_consensus %||% ""))) {
+            grepl(.mtr_bad_chars_re, paste(ref_value,
+                                           input$maptoref %||% "",
+                                           input$maptoref_consensus %||% ""))) {
           shinyWidgets::show_alert(
-            title = "Quote characters not allowed",
-            text = paste("The bowtie2 and samtools consensus option strings are",
-                         "passed through a shell call, so they cannot contain a",
-                         "single or double quote."),
+            title = "Invalid characters in MapToRef options",
+            text = paste("The reference, bowtie2, and samtools consensus values",
+                         "are passed through a shell call, so they cannot",
+                         "contain a quote, dollar sign, backtick, or backslash."),
             type = "error",
             closeOnClickOutside = FALSE
           )

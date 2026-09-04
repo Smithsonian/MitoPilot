@@ -5,8 +5,12 @@
 #' @param mapping_fn Path to a mapping file. Should be a csv that minimally
 #'   includes an `ID` column with a unique identifier for each sample, a `Taxon`
 #'   column containing taxonomic information for each sample, and columns
-#'   `R1` and `R2` specifying the names of the raw paired read inputs. May include
-#'   additional columns with other sample metadata.
+#'   `R1` and `R2` specifying the names of the raw paired read inputs.
+#'   May include additional columns with other sample metadata, and an optional
+#'   \code{Reference} column naming a per-sample MapToRef reference (file path,
+#'   URL, or NCBI accession). \code{Reference} is a reserved column name: it is never
+#'   stored as sample metadata, and its values are checked whatever the
+#'   assembler, so rename the column if you use it for something else.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param data_path Path to the directory where the raw data is located. Can be

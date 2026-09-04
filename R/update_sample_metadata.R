@@ -70,6 +70,13 @@ update_sample_metadata <- function(
     message("These columns will not be updated in the database")
   }
 
+  # remove Reference column from updated mapping
+  if("Reference" %in% colnames(mapping)){
+    mapping = mapping[,-which(colnames(mapping) == "Reference"), drop = FALSE]
+    message("Update mapping file contains a MapToRef reference column (Reference)")
+    message("Use MitoPilot::set_maptoref_refs() to change per-sample references")
+  }
+
   # read existing sample table
   sample_table <- DBI::dbReadTable(con, "samples")
   # convert everything to characters

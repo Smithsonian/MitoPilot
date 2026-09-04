@@ -382,15 +382,18 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             id = ns("help_labels_db"), nested = TRUE)),
         textInput(
           ns("maptoref_ref"),
-          label = "MapToRef Reference (.gb or FASTA, one complete mitogenome):",
+          label = "MapToRef Reference (.gb, FASTA, URL, or NCBI accession):",
           value = current$maptoref_ref %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled() |>
           tagAppendChild(opts_help(
-            "Path or URL of one complete mitogenome to map against. A file ",
-            "ending .gb, .gbk, or .gbff is read as GenBank and takes its ",
-            "topology from the LOCUS line; anything else is read as FASTA and ",
-            "needs the topology set below.",
+            "Path, URL, or NCBI nucleotide accession (for example NC_002333) of ",
+            "one complete mitogenome to map against. An accession is ",
+            "downloaded from GenBank as a full record. A file ending .gb, ",
+            ".gbk, or .gbff is read as GenBank and takes its topology from the ",
+            "LOCUS line; anything else is read as FASTA and needs the topology ",
+            "set below. Leave this empty if every sample brings its own reference ",
+            "(mapping file 'Reference' column, or set_maptoref_refs()).",
             href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
             id = ns("help_maptoref_ref"), nested = TRUE)),
         selectInput(

@@ -15,7 +15,8 @@ map_to_ref(
   topology = NA_character_,
   genetic_code = NA_integer_,
   cpus = 4,
-  out_dir = "."
+  out_dir = ".",
+  ref_value = NA_character_
 )
 }
 \arguments{
@@ -39,6 +40,11 @@ ignored for GenBank.}
 \item{cpus}{Threads.}
 
 \item{out_dir}{Output directory.}
+
+\item{ref_value}{The reference exactly as the user configured it: an absolute
+file path, a URL, or an NCBI nucleotide accession. An accession is
+downloaded from GenBank here; anything else means \code{ref} is already
+the staged reference file.}
 }
 \value{
 invisibly TRUE on success, FALSE after writing the failure sentinel.

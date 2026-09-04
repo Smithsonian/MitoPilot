@@ -14,7 +14,12 @@ add_samples(
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
 
-\item{update_mapping_fn}{Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2"}
+\item{update_mapping_fn}{Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2".
+May include additional columns with other sample metadata, and an optional
+\code{Reference} column naming a per-sample MapToRef reference (file path,
+URL, or NCBI accession). \code{Reference} is a reserved column name: it is never
+stored as sample metadata, and its values are checked whatever the
+assembler, so rename the column if you use it for something else.}
 
 \item{mapping_id}{Column name of the update mapping file to use as the primary key}
 

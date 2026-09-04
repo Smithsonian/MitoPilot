@@ -54,9 +54,12 @@
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
 #'   Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
 #' @param mitofinder Default MitoFinder command line options
-#' @param maptoref_ref Path or URL of the MapToRef reference mitogenome. A
-#'   single-record GenBank file (.gb) is preferred; a FASTA is accepted but then
-#'   \code{maptoref_topology} must be set. Required when assembler = "MapToRef".
+#' @param maptoref_ref Default MapToRef reference mitogenome for the parameter
+#'   set: an absolute file path, a URL, or an NCBI nucleotide accession (for
+#'   example NC_002333). A single-record GenBank file (.gb) is preferred; a
+#'   FASTA is accepted but then \code{maptoref_topology} must be set. Optional:
+#'   samples may instead name their own reference in the mapping file's
+#'   \code{Reference} column or through \code{\link{set_maptoref_refs}}.
 #' @param maptoref Default bowtie2 options for MapToRef
 #'   (default = "--very-sensitive-local")
 #' @param maptoref_consensus Default samtools consensus options for MapToRef
@@ -157,14 +160,13 @@ new_db <- function(
   if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
     stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder, MapToRef]")
   }
-  if (assembler == "MapToRef" && (is.na(maptoref_ref) || !nzchar(trimws(maptoref_ref)))) {
-    stop("MapToRef requires a reference mitogenome; set maptoref_ref")
-  }
   if (!is.na(maptoref_topology) &&
       maptoref_topology %nin% c("circular", "linear")) {
     stop("maptoref_topology must be circular or linear")
   }
   if (assembler == "MapToRef" &&
+      !is.na(maptoref_ref) && nzchar(trimws(maptoref_ref)) &&
+      !identical(.mtr_ref_class(maptoref_ref), "accession") &&
       !grepl("\\.(gb|gbk|gbff)$", trimws(maptoref_ref), ignore.case = TRUE) &&
       (is.na(maptoref_topology) || !nzchar(trimws(maptoref_topology)))) {
     stop("Set maptoref_topology (circular or linear) for a FASTA reference; ",
@@ -188,6 +190,26 @@ new_db <- function(
     message("problematic IDs:")
     message(paste(bad_IDs, collapse = ", "))
     stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
+  }
+
+  # The optional Reference column seeds assemble.maptoref_ref. It must be taken
+  # out here, before CREATE TABLE samples ({cols*}) below, and before the DB
+  # connection is opened, so a bad reference leaves no half-built .sqlite.
+  # Reserved for every assembler: a value stored unchecked would go unguarded
+  # the moment the user switches a project to MapToRef in the app.
+  taken <- .mtr_take_ref_col(mapping, mapping_id = mapping_id)
+  mapping <- taken$mapping
+  # One validation pass over both sources, so every bad value is listed at once.
+  checked <- .mtr_validate_refs(
+    c(maptoref_ref %||% NA_character_, taken$refs),
+    ids = c("assemble options", names(taken$refs)),
+    context = "the assemble options and the mapping file 'Reference' column"
+  )
+  maptoref_ref <- checked[1]
+  refs <- NULL
+  if (!is.null(taken$refs)) {
+    refs <- checked[-1]
+    names(refs) <- names(taken$refs)
   }
 
   # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
@@ -320,6 +342,7 @@ new_db <- function(
       blast_evalue REAL,
       blast_lineage TEXT,
       synteny_accession TEXT,
+      maptoref_ref TEXT,
       poor_blast_ref TEXT,
       join_notes TEXT,
       join_switch INTEGER,
@@ -327,6 +350,7 @@ new_db <- function(
       PRIMARY KEY (ID)
     );"
   )
+  ref_col <- if (is.null(refs)) NA_character_ else unname(refs[mapping$ID])
   dplyr::tbl(con, "assemble") |>
     dplyr::rows_upsert(
       mapping |>
@@ -345,6 +369,7 @@ new_db <- function(
           poor_blast_ref = NA_character_,
           join_notes = NA_character_,
           join_switch = NA_integer_,
+          maptoref_ref = ref_col,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -856,6 +881,8 @@ new_db <- function(
       PRIMARY KEY (ID, path, scaffold)
     );"
   )
+
+  .mtr_warn_missing_refs(con)
 
   invisible(return())
 }

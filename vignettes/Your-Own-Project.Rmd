@@ -128,6 +128,13 @@ Any other columns you add are carried along and can be pulled into GenBank FASTA
 headers at export, so this is the place to put voucher numbers, BioSample
 accessions, collection data, and anything else your submission needs.
 
+`Reference` is the one reserved name: MitoPilot takes that column as a
+per-sample MapToRef reference (see below) instead of sample metadata, and checks
+its values whatever the assembler, so rename the column if you use it for
+something else. Set it when you create the project or when you run
+`add_samples()`; `update_sample_metadata()` ignores a `Reference` column, so use
+`set_maptoref_refs()` to change references later.
+
 ```
 ID,Taxon,R1,R2,Voucher,BioSample
 OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN00000001
@@ -210,6 +217,33 @@ new_project(
   maptoref_topology = "circular"
 )
 ```
+
+`maptoref_ref` may also be an NCBI nucleotide accession, whose GenBank record
+MitoPilot downloads from NCBI:
+
+```r
+new_project(assembler = "MapToRef", maptoref_ref = "NC_002333.1")
+```
+
+To give each sample its own reference, add a `Reference` column to your mapping
+CSV holding a file path, a URL, or an accession; blank cells fall back to
+`maptoref_ref`. The column never becomes sample metadata. If your reference list
+is not ready at project creation, leave `maptoref_ref` empty (MitoPilot warns
+which samples have no reference) and supply the list later:
+
+```r
+set_maptoref_refs(refs = "my_refs.csv")   # header row, then column 1: sample ID, column 2: reference
+```
+
+Every value is checked when it is set: a path must exist and be a readable
+single-record GenBank or FASTA mitogenome, a URL must be reachable, and an
+accession must exist at NCBI. Every bad value in the file is reported at once.
+Note that the existing examples above assume the reference file is really there;
+they now fail immediately if it is not. A per-sample FASTA reference still takes
+its topology from the parameter set's reference topology, so set that in the
+Assemble options; a GenBank file carries its own, and an accession downloaded
+from NCBI does too when its `LOCUS` line names one (mitogenome records normally
+do); otherwise set the reference topology in the Assemble options.
 
 See [building custom databases](custom_dbs.html) for how to get a reference
 mitogenome.

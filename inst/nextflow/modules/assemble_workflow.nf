@@ -1,5 +1,12 @@
 include {assemble} from './assemble.nf'
 
+// An NCBI nucleotide accession is downloaded from GenBank inside the task, so
+// it must not be staged as a file. Keep this pattern identical to .mtr_acc_re
+// in R/map_to_ref_refs.R.
+def isMaptorefAccession(v) {
+    (v ?: '').toString().trim() ==~ '(?i)^[A-Z]{1,2}_?[0-9]{5,9}(\\.[0-9]{1,3})?$'
+}
+
 // LEFT JOIN so a missing/NULL blast_opts still flows through (coalesced to
 // run_blast=1 below). ASSEMBLE uses run_blast to finalize state=2 directly
 // for run_blast=0 samples.
@@ -9,7 +16,12 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length, ' +
                   'b.run_blast, opts.join_scaffolds, ' +
                   'a.join_switch, a.assemble_switch, a.blast_accession, ' +
-                  'opts.maptoref_ref, opts.maptoref, opts.maptoref_consensus, ' +
+                  // Per-sample reference wins when it is set and non-blank; the
+                  // parameter set is the default. Position 19 is unchanged.
+                  // Same expression as .mtr_warn_missing_refs() in R/map_to_ref_refs.R.
+                  "COALESCE(NULLIF(TRIM(a.maptoref_ref), ''), " +
+                  "NULLIF(TRIM(opts.maptoref_ref), '')), " +
+                  'opts.maptoref, opts.maptoref_consensus, ' +
                   'opts.maptoref_iter, opts.maptoref_topology ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
@@ -110,7 +122,8 @@ workflow ASSEMBLE {
                         maptoref: (it[20] ?: ""),                               // MapToRef bowtie2 options
                         maptoref_consensus: (it[21] ?: ""),                     // MapToRef samtools consensus options
                         maptoref_iter: (it[22] == null ? 5 : (it[22] as Integer)), // MapToRef iteration cap
-                        maptoref_topology: (it[23] ?: "")                       // MapToRef reference topology
+                        maptoref_topology: (it[23] ?: ""),                      // MapToRef reference topology
+                        maptoref_value: ((it[19] ?: "").toString().trim())      // raw reference: path, URL, or accession
                     ],
                     [
                         it[4],                                                  // getOrganelle seeds_db
@@ -120,7 +133,7 @@ workflow ASSEMBLE {
                     it[10],                                                     // genetic code
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
                     (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer)), // max_scaffolds
-                    file((it[19] != null && it[19].toString().trim()) ? it[19] : "${projectDir}/assets/NO_FILE")  // MapToRef reference
+                    file((it[7] == 'MapToRef' && it[19] != null && it[19].toString().trim() && !isMaptorefAccession(it[19])) ? it[19].toString().trim() : "${projectDir}/assets/NO_FILE")  // MapToRef reference (accessions resolve in-task)
                 )
                 min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)

@@ -319,6 +319,7 @@ new_db_userAsmb <- function(
       blast_evalue REAL,
       blast_lineage TEXT,
       synteny_accession TEXT,
+      maptoref_ref TEXT,
       poor_blast_ref TEXT,
       join_notes TEXT,
       join_switch INTEGER,

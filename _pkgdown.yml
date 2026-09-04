@@ -86,6 +86,7 @@ reference:
   - add_samples
   - update_sample_metadata
   - update_sample_seqdata
+  - set_maptoref_refs
   - backwards_compatibility
   - export_db_to_csv
 
@@ -154,3 +155,4 @@ reference:
   - get_assembly_userAsmb
   - map_to_ref
   - maptoref_prepare_ref
+  - maptoref_fetch_accession

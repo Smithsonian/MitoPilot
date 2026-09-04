@@ -130,7 +130,7 @@ maptoref_prepare_ref <- function(ref_file,
 #' @noRd
 .mtr_validate_topology <- function(topology) {
   if (is.na(topology) || !nzchar(trimws(topology))) {
-    stop("Set the reference topology (circular or linear) for a FASTA reference.")
+    stop("Set the reference topology (circular or linear); this reference does not declare one.")
   }
   topology <- tolower(trimws(topology))
   if (!topology %in% c("circular", "linear")) {
@@ -346,6 +346,10 @@ maptoref_prepare_ref <- function(ref_file,
 #' @param genetic_code The sample's genetic code, used only for a warning.
 #' @param cpus Threads.
 #' @param out_dir Output directory.
+#' @param ref_value The reference exactly as the user configured it: an absolute
+#'   file path, a URL, or an NCBI nucleotide accession. An accession is
+#'   downloaded from GenBank here; anything else means \code{ref} is already
+#'   the staged reference file.
 #'
 #' @return invisibly TRUE on success, FALSE after writing the failure sentinel.
 #' @export
@@ -356,7 +360,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
                        topology = NA_character_,
                        genetic_code = NA_integer_,
                        cpus = 4,
-                       out_dir = ".") {
+                       out_dir = ".",
+                       ref_value = NA_character_) {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   log_fn <- file.path(out_dir, "assembler.log.txt")
   if (!file.exists(log_fn)) {
@@ -371,11 +376,16 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
               "bowtie2 options must not contain quote characters")
     return(invisible(FALSE))
   }
+  if (grepl(.mtr_bad_chars_re, .mtr_opts(ref_value))) {
+    .mtr_fail(id, out_dir, log_fn,
+              "reference value must not contain quote, dollar, backtick, or backslash characters")
+    return(invisible(FALSE))
+  }
   ok <- tryCatch(
     {
       .mtr_assemble(id, ref, reads_1, reads_2, bowtie2_opts, consensus_opts,
                     as.integer(iter_cap), topology, genetic_code,
-                    as.integer(cpus), out_dir, log_fn)
+                    as.integer(cpus), out_dir, log_fn, ref_value)
       TRUE
     },
     error = function(e) {
@@ -519,7 +529,25 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 #' @noRd
 .mtr_assemble <- function(id, ref_file, reads_1, reads_2, bowtie2_opts,
                           consensus_opts, iter_cap, topology, genetic_code,
-                          cpus, out_dir, log_fn) {
+                          cpus, out_dir, log_fn, ref_value) {
+  src <- .mtr_ref_class(ref_value)
+  if (identical(src, "none")) {
+    # Nextflow stages assets/NO_FILE (0 bytes) when no reference is set on the
+    # sample or the parameter set. A direct caller passes a real path and no
+    # ref_value, so an existing non-empty file still counts as a reference.
+    if (!file.exists(ref_file) || file.size(ref_file) == 0L) {
+      stop("no MapToRef reference for this sample (", ref_file, "); set one in ",
+           "the mapping file 'Reference' column, with ",
+           "MitoPilot::set_maptoref_refs(), or in the Assemble options")
+    }
+    src <- "file"
+  }
+  if (identical(src, "accession")) {
+    got <- maptoref_fetch_accession(ref_value, out_dir = out_dir,
+                                    log_fn = log_fn)
+    ref_file <- got$file
+    src <- got$source
+  }
   ref <- maptoref_prepare_ref(ref_file, topology = topology,
                               genetic_code = genetic_code, out_dir = out_dir)
   work <- file.path(out_dir, "maptoref")
@@ -540,7 +568,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   len <- ref$length
   flank <- if (circular) min(500L, len %/% 2L) else 0L
   .mtr_log(log_fn, "reference ", ref$accession, " ", ref$organism,
-           " (", len, " bp, ", ref$topology, ")")
+           " (", len, " bp, ", ref$topology, ", source=", src, ")")
 
   check <- .mtr_check_consensus_opts(consensus_opts, circular)
   if (!check$ok) {
@@ -766,6 +794,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   writeLines(c(
     "assembler=MapToRef",
     paste0("accession=", ref$accession),
+    paste0("reference_source=", src),
     paste0("organism=", ref$organism),
     paste0("reference_length=", len),
     paste0("reference_topology=", ref$topology),

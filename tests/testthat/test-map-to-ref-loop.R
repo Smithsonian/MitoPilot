@@ -462,6 +462,90 @@ test_that("too few reads in pass 1 writes the sentinel", {
   expect_true(any(grepl("use a closer reference",
                         readLines(file.path(out, "assembler.log.txt")))))
 })
+
+test_that("no reference at all is a per-sample failure with a clear message", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  no_file <- file.path(d, "NO_FILE")
+  file.create(no_file)
+  out <- file.path(d, "out")
+
+  ok <- map_to_ref("T1", no_file, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, NA_character_, 2, 1, out,
+                   ref_value = NA_character_)
+
+  expect_false(ok)
+  expect_equal(readLines(file.path(out, "T1_assembly_0.fasta"))[1],
+               ">No assembly found")
+  expect_match(mtr_summary(out)[["failure"]], "no MapToRef reference")
+})
+
+test_that("an accession resolves from GenBank and is recorded", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  no_file <- file.path(d, "NO_FILE")
+  file.create(no_file)
+  out <- file.path(d, "out")
+  gb <- paste(c(
+    "LOCUS       NC_002333               6000 bp    DNA     circular VRT",
+    "VERSION     NC_002333.1",
+    "ORIGIN",
+    paste("        1", readLines(s$ref)[2]),
+    "//"
+  ), collapse = "\n")
+  testthat::local_mocked_bindings(.mtr_efetch_gb = function(acc) gb)
+
+  # Positional, the call shape inst/nextflow/modules/assemble.nf uses.
+  ok <- map_to_ref("T1", no_file, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, NA_character_, 2, 1, out,
+                   "nc_002333.1")
+
+  expect_true(ok)
+  sm <- mtr_summary(out)
+  expect_equal(sm[["reference_source"]], "ncbi")
+  # Topology comes from the GenBank LOCUS line.
+  expect_equal(sm[["reference_topology"]], "circular")
+  expect_true(any(grepl("source=ncbi",
+                        readLines(file.path(out, "assembler.log.txt")))))
+})
+
+test_that("an unresolvable accession fails one sample, not the run", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  no_file <- file.path(d, "NO_FILE")
+  file.create(no_file)
+  out <- file.path(d, "out")
+  testthat::local_mocked_bindings(
+    .mtr_efetch_gb = function(acc) stop("network unreachable")
+  )
+
+  ok <- map_to_ref("T1", no_file, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, NA_character_, 2, 1, out,
+                   ref_value = "ZZ999999")
+
+  expect_false(ok)
+  expect_equal(readLines(file.path(out, "T1_assembly_0.fasta"))[1],
+               ">No assembly found")
+  expect_match(mtr_summary(out)[["failure"]], "ZZ999999")
+})
+
+test_that("a staged file reference is recorded as its class", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "circular", 2, 1, out,
+                   ref_value = "https://example.org/ref.fasta")
+
+  expect_true(ok)
+  expect_equal(mtr_summary(out)[["reference_source"]], "url")
+})
+
 test_that(".mtr_depth_table fills every reference position", {
   d <- withr::local_tempdir()
   fn <- file.path(d, "depth.txt")

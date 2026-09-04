@@ -21,7 +21,8 @@
 #'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
 #'     normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
 #'     "join_switch", "circularize_opts"/"circularize_notes",
-#'     "find_mito_opts"/"find_mito_notes".
+#'     "find_mito_opts"/"find_mito_notes", "maptoref_ref" (the per-sample
+#'     MapToRef reference).
 #'   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
 #'     "remote_fallback" (any parameter set carrying a non-default Entrez query is
 #'     switched to the remote search, with a warning, since the local database
@@ -250,6 +251,7 @@ backwards_compatibility <- function(
       "export_opts" %in% DBI::dbListTables(con) &&
       user_asmb_current &&
       "synteny_accession" %in% names(assemble_table) &&
+      "maptoref_ref" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
@@ -1502,6 +1504,12 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN synteny_accession TEXT")
   }
 
+  # per-sample MapToRef reference (NULL falls back to the option-set value)
+  if (!("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'maptoref_ref' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_ref TEXT")
+  }
+
   # if tool column doesn't exist in annotations table, add it
   annotations_cols <- DBI::dbListFields(con, "annotations")
   if (!("tool" %in% annotations_cols)) {
@@ -2277,6 +2285,9 @@ schema_gaps <- function(con) {
                  "maptoref_iter", "maptoref_topology") %in%
                DBI::dbListFields(con, "assemble_opts")))) {
     gaps <- c(gaps, "the assemble_opts table lacks the MapToRef option columns")
+  }
+  if (!has("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))) {
+    gaps <- c(gaps, "the assemble table lacks the per-sample MapToRef reference column")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%

@@ -102,7 +102,8 @@ process assemble {
         fi
     elif [ "!{opts.assembler}" = "MapToRef" ]; then
         mkdir -p !{outDir}
-        Rscript -e "MitoPilot::map_to_ref('!{id}', '!{ref}', '!{reads[0]}', '!{reads[1]}', '!{opts.maptoref}', '!{opts.maptoref_consensus}', !{opts.maptoref_iter}, '!{opts.maptoref_topology}', !{genetic_code.intValue()}, !{opts.cpus}, '!{outDir}')"
+        export NCBI_API_KEY='!{params.ncbi_api_key ?: ""}'
+        Rscript -e "MitoPilot::map_to_ref('!{id}', '!{ref}', '!{reads[0]}', '!{reads[1]}', '!{opts.maptoref}', '!{opts.maptoref_consensus}', !{opts.maptoref_iter}, '!{opts.maptoref_topology}', !{genetic_code.intValue()}, !{opts.cpus}, '!{outDir}', '!{opts.maptoref_value}')"
         echo "!{opts.maptoref} | !{opts.maptoref_consensus} | iterate !{opts.maptoref_iter}" > !{outDir}/opts.txt
         ### ARCHIVE READS ###
         tar -czvf !{outDir}/!{id}_reads.tar.gz *.fastq.gz

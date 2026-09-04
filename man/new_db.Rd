@@ -93,9 +93,12 @@ Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.
 
 \item{mitofinder}{Default MitoFinder command line options}
 
-\item{maptoref_ref}{Path or URL of the MapToRef reference mitogenome. A
-single-record GenBank file (.gb) is preferred; a FASTA is accepted but then
-\code{maptoref_topology} must be set. Required when assembler = "MapToRef".}
+\item{maptoref_ref}{Default MapToRef reference mitogenome for the parameter
+set: an absolute file path, a URL, or an NCBI nucleotide accession (for
+example NC_002333). A single-record GenBank file (.gb) is preferred; a
+FASTA is accepted but then \code{maptoref_topology} must be set. Optional:
+samples may instead name their own reference in the mapping file's
+\code{Reference} column or through \code{\link{set_maptoref_refs}}.}
 
 \item{maptoref}{Default bowtie2 options for MapToRef
 (default = "--very-sensitive-local")}

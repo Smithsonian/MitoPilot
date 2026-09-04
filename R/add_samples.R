@@ -5,7 +5,12 @@
 #' Creates a backup of the existing database prior to updating.
 #'
 #' @param path Path to the project directory (default = current working directory)
-#' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2"
+#' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2".
+#'   May include additional columns with other sample metadata, and an optional
+#'   \code{Reference} column naming a per-sample MapToRef reference (file path,
+#'   URL, or NCBI accession). \code{Reference} is a reserved column name: it is never
+#'   stored as sample metadata, and its values are checked whatever the
+#'   assembler, so rename the column if you use it for something else.
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
 #'
@@ -58,6 +63,20 @@ add_samples <- function(
 
   validate_declared_topology(mapping, mapping_id = mapping_id)
 
+  # Same rule as new_db(): the Reference column seeds assemble.maptoref_ref and
+  # must not become a samples column (this function ALTERs samples for every
+  # unseen mapping column below).
+  taken <- .mtr_take_ref_col(mapping, mapping_id = mapping_id)
+  mapping <- taken$mapping
+  refs <- if (is.null(taken$refs)) {
+    NULL
+  } else {
+    v <- .mtr_validate_refs(taken$refs, ids = names(taken$refs),
+                            context = "the mapping file 'Reference' column")
+    names(v) <- names(taken$refs)
+    v
+  }
+
   # genetic_code auto-selects from each sample's curation ruleset; it is filled
   # in below by .sync_sample_genetic_codes() after the annotate rows (which carry
   # the curate_opts assignment) are inserted. Use a placeholder for now.
@@ -66,6 +85,13 @@ add_samples <- function(
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
   on.exit(DBI::dbDisconnect(con))
+
+  # The assemble insert below writes maptoref_ref, so the column must exist
+  # before samples and preprocess are committed.
+  if ("maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
+    stop("This project predates the per-sample MapToRef reference column; run ",
+         "MitoPilot::backwards_compatibility() before adding samples")
+  }
 
   # Metadata table ----
   ##############################################################################################################
@@ -182,6 +208,7 @@ add_samples <- function(
           hide_switch = 0,
           assemble_opts = "default",
           blast_opts = "default",
+          maptoref_ref = if (is.null(refs)) NA_character_ else unname(refs[mapping$ID]),
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -217,5 +244,7 @@ add_samples <- function(
   # Fill samples.genetic_code for the new samples from their curation ruleset
   # (default curate_opts target + optional override).
   .sync_sample_genetic_codes(con, ids = mapping$ID)
+
+  .mtr_warn_missing_refs(con)
 
 }

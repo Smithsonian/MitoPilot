@@ -41,7 +41,8 @@ others:
   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
     normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
     "join_switch", "circularize_opts"/"circularize_notes",
-    "find_mito_opts"/"find_mito_notes".
+    "find_mito_opts"/"find_mito_notes", "maptoref_ref" (the per-sample
+    MapToRef reference).
   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
     "remote_fallback" (any parameter set carrying a non-default Entrez query is
     switched to the remote search, with a warning, since the local database
