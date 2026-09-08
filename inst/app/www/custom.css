@@ -516,20 +516,32 @@ a.mp-link:focus-visible {
 }
 
 /* Sample tables: hug the rows, grow to the window, never past it. A short
-   table stops leaving 300px of white space above the footer controls. */
+   table stops leaving 300px of white space above the footer controls. The
+   container is a flex column so the widget can shrink to the available height
+   and the .rt-table keeps scrolling internally (which is what keeps its header
+   sticky). */
 .mp-table-resize {
-  height: auto;
+  display: flex;
+  flex-direction: column;
   max-height: calc(100vh - 324px);
   min-height: 240px;
   resize: vertical;
-  overflow: auto;
+  overflow: hidden;
 }
 
-/* The widget asks for height: 100%, which against an auto-height parent
-   collapses the table; let it size to its own content instead. */
 .mp-table-resize > div,
 .mp-table-resize .html-widget,
 .mp-table-resize .Reactable,
 .mp-table-resize > div > .reactable {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   height: auto !important;
+}
+
+.mp-table-resize .rt-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
