@@ -6,7 +6,7 @@ rt_highlight_row <- function() {
     "
     function(rowInfo) {
       if ( typeof rowInfo === 'undefined') return
-      var col = rowInfo.selected ? '#D3BEC2' : '#FFFFFF'
+      var col = rowInfo.selected ? 'var(--mp-primary-soft)' : 'var(--mp-surface)'
       return { background: col }
     }
     "
