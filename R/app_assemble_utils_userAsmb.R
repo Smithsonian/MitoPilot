@@ -604,3 +604,15 @@ mito_candidates_modal <- function(id, session = getDefaultReactiveDomain()) {
     )
   )
 }
+
+#' Get assembly from database (user-supplied assemblies)
+#'
+#' Deprecated: identical to [get_assembly()], which serves both project types.
+#'
+#' @inheritParams get_assembly
+#' @export
+get_assembly_userAsmb <- function(ID, path, scaffold = NULL, con) {
+  .Deprecated("get_assembly")
+  get_assembly(ID = ID, path = path, scaffold = scaffold, con = con)
+}
+
