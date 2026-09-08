@@ -99,3 +99,13 @@ test_that("mp_alert refuses to render without a type", {
   expect_error(mp_alert("Export complete"))
   expect_error(mp_alert("Export complete", type = "done"))
 })
+
+test_that("lock vocabulary and flag toggle", {
+  expect_match(MP_LOCK_DEF("assemble"), "^Locked samples .* move on to Annotate")
+  expect_match(MP_LOCK_DEF("annotate"), "^Locked assemblies .* move on to Export")
+  expect_error(MP_LOCK_DEF("export"))
+  expect_equal(mp_flag_next(c("no", "yes")), "no")
+  expect_equal(mp_flag_next(c("no", NA)), "yes")
+  expect_equal(mp_flag_next(c(NA_character_, NA_character_), off = NA_character_), "yes")
+  expect_equal(mp_flag_next("yes", off = NA_character_), NA_character_)
+})

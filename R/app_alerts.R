@@ -39,3 +39,13 @@ mp_toast <- function(text, type = c("message", "warning", "error", "success"),
   if (type == "success") type <- "message"
   showNotification(text, type = type, duration = duration, session = session)
 }
+
+#' Next value for a review-flag toggle over a mixed selection.
+#'
+#' If any selected unit is already `on`, the toggle clears; otherwise it sets.
+#' Drives both the database write and the toolbar label (theme T02).
+#'
+#' @noRd
+mp_flag_next <- function(x, on = "yes", off = "no") {
+  if (any(x == on, na.rm = TRUE)) off else on
+}

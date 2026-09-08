@@ -270,3 +270,20 @@ MP_COL_TIPS <- c(
   find_mito_notes     = "What the mitogenome search step reported",
   circularize_notes   = "What the circularization step reported"
 )
+
+# Lock vocabulary shared by the toolbar tooltip, the Lock column header, the
+# details-window banner and the Lock & Close footer note (theme T02).
+MP_UNIT <- c(assemble = "sample", annotate = "assembly")
+MP_UNITS <- c(assemble = "samples", annotate = "assemblies")
+MP_NEXT <- c(assemble = "Annotate", annotate = "Export")
+MP_LOCK_DEF <- function(mod = c("assemble", "annotate")) {
+  mod <- match.arg(mod)
+  sprintf(
+    paste(
+      "Locked %s are finished with this step: their options cannot be changed,",
+      "the next update will not re-run them, and they move on to %s.",
+      "You can unlock at any time."
+    ),
+    MP_UNITS[[mod]], MP_NEXT[[mod]]
+  )
+}
