@@ -220,6 +220,21 @@ rt_link <- function(InputId, title = NULL) {
     htmlwidgets::JS()
 }
 
+#' Column header with a tooltip
+#'
+#' Pass to `colDef(header = )` alongside the usual `name`, so the header keeps
+#' its accessible name and gains a one-sentence explanation on hover.
+#'
+#' @param name header text
+#' @param tip one sentence explaining the column. NULL returns plain text.
+#' @noRd
+rt_header <- function(name, tip = NULL) {
+  if (is.null(tip) || !nzchar(tip)) {
+    return(name)
+  }
+  htmltools::tags$span(class = "mp-th-tip", title = tip, name)
+}
+
 #' Format unix timestamp as a date in UI
 #'
 #' @noRd

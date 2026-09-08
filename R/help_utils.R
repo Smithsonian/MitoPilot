@@ -33,6 +33,39 @@ opts_help <- function(..., href = NULL, link_text = "learn more", id = NULL,
   )
 }
 
+#' Small "?" icon that opens a help popover on click or keyboard focus
+#'
+#' The one help affordance: a grey `circle-question` always means "click for
+#' a popover". The popover itself is wired up once in `custom.js` for every
+#' `[data-toggle="mp-popover"]` on the page, so this works inside modals and
+#' inside dynamically rendered UI with no server code.
+#'
+#' @param text help text, one or two sentences (HTML allowed).
+#' @param label optional name of the thing being explained, used in the
+#'   accessible name.
+#' @return a focusable button carrying the popover content.
+#' @noRd
+mp_help_tip <- function(text, label = NULL) {
+  name <- if (is.null(label)) "Show help" else paste("Show help for", label)
+  shiny::tags$button(
+    type = "button",
+    class = "mp-help-icon",
+    `data-toggle` = "mp-popover",
+    `data-content` = as.character(text),
+    `aria-label` = name,
+    shiny::tags$i(class = "fa-solid fa-circle-question", `aria-hidden` = "true")
+  )
+}
+
+#' A field or column label with a help popover beside it
+#'
+#' @param label the visible label text.
+#' @param tip help text for the popover.
+#' @noRd
+mp_help_label <- function(label, tip) {
+  shiny::tagList(label, mp_help_tip(tip, label = label))
+}
+
 #' Read a bundled tool help text file
 #'
 #' @param tool short name (matches `inst/tool_help/<tool>.txt`)
@@ -41,11 +74,7 @@ opts_help <- function(..., href = NULL, link_text = "learn more", id = NULL,
 read_tool_help <- function(tool) {
   f <- system.file("tool_help", paste0(tool, ".txt"), package = "MitoPilot")
   if (!nzchar(f) || !file.exists(f)) {
-    return(paste0(
-      "No bundled help for '", tool, "' found.\n\n",
-      "Run tools/capture_tool_help.sh against the MitoPilot Docker image to ",
-      "generate inst/tool_help/", tool, ".txt"
-    ))
+    return("Help for this tool is not bundled in this build.")
   }
   paste(readLines(f, warn = FALSE), collapse = "\n")
 }

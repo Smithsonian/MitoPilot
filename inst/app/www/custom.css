@@ -78,6 +78,10 @@ p.mp-help-text {
 .mp-help-icon {
   color: var(--mp-text-muted);
   margin-left: var(--mp-space-1);
+  background: none;
+  border: none;
+  padding: 0;
+  line-height: 1;
 }
 .mp-help-icon:hover,
 .mp-help-icon:focus {
@@ -324,6 +328,12 @@ details summary:hover {
 /* Truncated cell text: a visible cue that there is more, reachable
    without a mouse. */
 .mp-abbr {
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+/* Column header carrying a tooltip. */
+.mp-th-tip {
   text-decoration: underline dotted;
   cursor: help;
 }

@@ -4,6 +4,21 @@
 window.MP_SAMPLE_TABLES =
   '#assemble-table, #annotate-table, #export-table, .mp-sample-table';
 
+// One help affordance: every [data-toggle="mp-popover"] on the page (modals
+// and dynamically rendered UI included) opens its data-content in a
+// Bootstrap 3 popover on click or keyboard focus. Delegated, so it needs no
+// per-widget initialisation.
+$( document ).ready(function(){
+  if (!$.fn.popover) return;
+  $(document.body).popover({
+    selector: '[data-toggle="mp-popover"]',
+    trigger: 'click focus',
+    placement: 'auto right',
+    container: 'body',
+    html: true
+  });
+});
+
 // Update horizontal scroll position
 $( document ).ready(function(){
   Shiny.addCustomMessageHandler('hScroll', function(params) {
