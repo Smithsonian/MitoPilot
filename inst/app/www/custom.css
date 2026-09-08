@@ -545,3 +545,20 @@ a.mp-link:focus-visible {
   min-height: 0;
   overflow: auto;
 }
+
+/* A locked row's options cell is text, not a link (T01). */
+.mp-locked-cell {
+  color: var(--mp-text-muted);
+  text-decoration: none;
+  cursor: inherit;
+}
+
+/* prettyCheckbox: a disabled box stays readable, and the parameter-set Edit
+   checkbox aligns with the input beside it without a magic margin (T18). */
+.pretty input[disabled] ~ * { opacity: 1; }
+.pretty input[disabled] ~ .state label:before {
+  border-color: var(--mp-border);
+  background: var(--mp-surface-alt);
+}
+.mp-opts-checkbox { align-self: flex-end; margin-bottom: 15px; }
+

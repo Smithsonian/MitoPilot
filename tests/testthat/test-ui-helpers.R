@@ -109,3 +109,26 @@ test_that("lock vocabulary and flag toggle", {
   expect_equal(mp_flag_next(c(NA_character_, NA_character_), off = NA_character_), "yes")
   expect_equal(mp_flag_next("yes", off = NA_character_), NA_character_)
 })
+
+test_that("guards pass through and shorten id lists", {
+  expect_true(need_selection(3))
+  expect_true(need_unlocked(character(0)))
+  expect_true(row_in_selection(2, integer(0), "X"))
+  expect_true(row_in_selection(2, c(1, 2), "X"))
+  expect_equal(mp_id_list(c("a", "b")), "a, b")
+  expect_equal(mp_id_list(letters[1:7]), "a, b, c, d, e, and 2 more")
+})
+
+test_that("mp_checkbox names its input and shows a tick", {
+  html <- as.character(mp_checkbox("x", "Edit set", TRUE))
+  expect_match(html, 'aria-label="Edit set"')
+  expect_match(html, "fa-check|icon")
+})
+
+test_that("rt_link renders locked cells as text", {
+  js <- as.character(rt_link("assemble-pre_opts", lock_col = "assemble_lock"))
+  expect_match(js, "mp-locked-cell")
+  expect_match(js, "\\['assemble_lock'\\]")
+  expect_false(grepl("mp-locked-cell", as.character(rt_link("x"))))
+})
+
