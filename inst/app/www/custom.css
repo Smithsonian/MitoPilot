@@ -233,6 +233,61 @@ details summary:hover {
   transform: translate(-50%, -50%);
 }
 
+/* ------------------------------------------------------------------ */
+/* Status pill. One component, four meanings: grey = not set / no,     */
+/* green = good, amber = needs attention, red = failed or missing.     */
+/* Colour encodes the judgement, never the raw boolean.                */
+/* ------------------------------------------------------------------ */
+.mp-pill {
+  display: inline-block;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: var(--mp-fs-meta);
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.mp-pill-success {
+  background-color: var(--mp-success-soft);
+  color: var(--mp-success);
+}
+
+.mp-pill-warning {
+  background-color: var(--mp-warning-soft);
+  color: var(--mp-warning);
+}
+
+.mp-pill-danger {
+  background-color: var(--mp-danger-soft);
+  color: var(--mp-danger);
+}
+
+.mp-pill-neutral {
+  background-color: var(--mp-neutral-soft);
+  color: var(--mp-neutral);
+}
+
+.mp-pill-info {
+  background-color: var(--mp-primary-soft);
+  color: var(--mp-link);
+}
+
+/* Same four meanings for a bare status glyph, so a state icon never needs
+   an inline hex. Append to the icon class string. */
+.mp-fg-success { color: var(--mp-success); }
+.mp-fg-warning { color: var(--mp-warning); }
+.mp-fg-danger  { color: var(--mp-danger); }
+.mp-fg-neutral { color: var(--mp-text-muted); }
+.mp-fg-info    { color: var(--mp-link); }
+
+/* "Reference set manually" marker beside an accession. */
+.mp-override {
+  color: var(--mp-warning);
+  font-weight: bold;
+  cursor: help;
+}
+
 /* The one in-table action pill. 24px is the hit-target floor. */
 .icon-bttn-text {
   display: inline-flex;

@@ -101,7 +101,7 @@ rt_ncbi_link <- function(auto_col = NULL) {
     sprintf(
       "var auto = cellInfo.row['%s'];
        if (auto && auto !== 'NO HIT' && auto !== text) {
-         out += `<span title='manually set; top BLAST hit was ${auto}' style='color:#c07a00; font-weight:bold; cursor:help;'> *</span>`
+         out += `<span class='mp-override' title='Reference set manually; top BLAST hit was ${auto}'> *</span>`
        }",
       auto_col
     )
@@ -119,49 +119,75 @@ rt_ncbi_link <- function(auto_col = NULL) {
   ))
 }
 
-#' Render a yes/no text column as a colored badge
+#' Render a cell value as a status pill
 #'
-#' @param invert if TRUE, "yes" is orange (bad) and "no" is green (good)
-#' @param hide_no if TRUE, render an empty cell for "no"/NA values (only
-#'   "yes" gets a badge). Useful for columns where "no" is the default
-#'   and noisy to display.
+#' The one pill component. Colour carries the judgement, so the caller maps
+#' each value to a meaning rather than to a colour.
+#'
+#' @param map named character vector, cell value -> one of "success",
+#'   "warning", "danger", "neutral", "info".
+#' @param labels optional named character vector, cell value -> display text.
+#'   Defaults to the value itself.
+#' @param empty text for a missing/blank value ("not set"). Use "" to render
+#'   nothing at all.
+#' @param hide character vector of values that render nothing.
 #' @noRd
-rt_bool_badge <- function(invert = FALSE, hide_no = FALSE) {
-  yes_bg <- if (invert) "#fde8d0" else "#d4edda"
-  yes_fg <- if (invert) "#7d4a1e" else "#2d6a4f"
-  no_bg  <- if (invert) "#d4edda" else "#fde8d0"
-  no_fg  <- if (invert) "#2d6a4f" else "#7d4a1e"
+rt_pill <- function(map, labels = NULL, empty = "not set", hide = NULL) {
+  hide_js <- if (length(hide) == 0) {
+    "[]"
+  } else {
+    paste0("[", paste(sprintf("'%s'", mp_js_attr(hide)), collapse = ", "), "]")
+  }
   sprintf(
     "function(cellInfo) {
-      var val = cellInfo.value ? cellInfo.value : 'no'
-      if (val !== 'yes' && %s) return ''
-      var bg  = val === 'yes' ? '%s' : '%s'
-      var fg  = val === 'yes' ? '%s' : '%s'
-      return '<span style=\"background:' + bg + '; color:' + fg + '; border-radius:3px; ' +
-             'padding:1px 6px; font-size:0.85em;\">' + val + '</span>'
+      var map = %s;
+      var labels = %s;
+      var hide = %s;
+      var empty = '%s';
+      var v = cellInfo.value;
+      var val = (v === null || v === undefined) ? '' : String(v);
+      if (hide.indexOf(val) >= 0) return '';
+      var tone, text;
+      if (val === '') {
+        if (empty === '') return '';
+        tone = 'neutral';
+        text = empty;
+      } else {
+        tone = map[val] || 'neutral';
+        text = labels[val] || val;
+      }
+      return `<span class='mp-pill mp-pill-${tone}'>${text}</span>`;
     }",
-    tolower(as.character(hide_no)), yes_bg, no_bg, yes_fg, no_fg
+    mp_js_obj(map), mp_js_obj(labels), hide_js, mp_js_attr(empty)
   ) |> htmlwidgets::JS()
 }
 
-#' Render BLAST reference alignment status as a colored badge
+#' Render a yes/no text column as a status pill
 #'
-#' States: good (green), poor (orange), failed (red), NULL/empty (none).
+#' "no" is grey in every column, never green; a blank value reads "not set".
+#'
+#' @param invert if TRUE, "yes" is the bad outcome and gets the red pill.
+#' @param hide_no if TRUE, render an empty cell for "no"/NA values (only
+#'   "yes" gets a pill). Useful for columns where "no" is the default
+#'   and noisy to display.
+#' @noRd
+rt_bool_badge <- function(invert = FALSE, hide_no = FALSE) {
+  rt_pill(
+    map = c(yes = if (invert) "danger" else "success", no = "neutral"),
+    empty = if (hide_no) "" else "not set",
+    hide = if (hide_no) "no" else NULL
+  )
+}
+
+#' Render BLAST reference alignment status as a status pill
+#'
+#' States: good (green), poor (amber), failed (red), NULL/empty (none).
 #'
 #' @noRd
 rt_blast_ref_status <- function() {
-  htmlwidgets::JS(
-    "function(cellInfo) {
-      var val = cellInfo.value
-      if (!val) return ''
-      var bg, fg
-      if (val === 'poor')   { bg = '#fde8d0'; fg = '#7d4a1e' }
-      else if (val === 'failed') { bg = '#f5c6cb'; fg = '#721c24' }
-      else if (val === 'good')   { bg = '#d4edda'; fg = '#2d6a4f' }
-      else return val
-      return '<span style=\"background:' + bg + '; color:' + fg + '; border-radius:3px; ' +
-             'padding:1px 6px; font-size:0.85em;\">' + val + '</span>'
-    }"
+  rt_pill(
+    c(good = "success", poor = "warning", failed = "danger"),
+    empty = ""
   )
 }
 
@@ -198,7 +224,7 @@ rt_ts_date <- function() {
     "
     function(cellInfo) {
       var options = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' };
-      var date = new Date(1000*cellInfo.value).toLocaleDateString('en-US', options);
+      var date = new Date(1000*cellInfo.value).toLocaleDateString(undefined, options);
       return date!=='Invalid Date' ? date : null;
     }
     "
