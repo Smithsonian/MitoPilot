@@ -256,61 +256,6 @@ mark_tbl_3p <- function(pos) {
   pos
 }
 
-#' Write one .tbl feature location block; only the first interval carries the key
-#'
-#' @noRd
-write_tbl_loc <- function(pos, key, fn) {
-  for (i in seq_along(pos)) {
-    paste(c(pos[[i]], if (i == 1L) key), collapse = "\t") |>
-      cat(file = fn, sep = "\n", append = TRUE)
-  }
-}
-
-#' `transl_except` qualifier for a partial (poly-A completed) stop codon
-#'
-#' The codon sits at the 3' end of the CDS, which is `pos2` on the plus strand
-#' and `pos1` on the minus strand - not `max()`/`min()`, which pick the wrong end
-#' once the feature spans the origin.
-#'
-#' @noRd
-.transl_except_pos <- function(pos1, pos2, direction, n_stop, wraps, asmb_len) {
-  on_circle <- function(p) if (wraps) wrap_pos(p, asmb_len) else p
-  if (direction == "+") {
-    te_end <- pos2
-    te_start <- on_circle(te_end - n_stop + 1L)
-  } else {
-    te_end <- pos1
-    te_start <- on_circle(te_end + n_stop - 1L)
-  }
-  if (n_stop == 1) {
-    paste0("(pos:", te_end, ",aa:TERM)")
-  } else {
-    paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
-  }
-}
-
-#' GFF3 end coordinate for a feature that may span the origin
-#'
-#' GFF3 has no join() syntax, so an origin-spanning feature is written as
-#' `pos1 .. (asmb_len + pos2)`, i.e. running past the end of the sequence.
-#'
-#' @noRd
-gff_end <- function(pos2, wraps, asmb_len) {
-  if (wraps) asmb_len + pos2 else pos2
-}
-
-#' Mark the 3' end of a .tbl location block as partial (">")
-#'
-#' The 3' coordinate is the second element of the LAST interval, which is not
-#' `pos[[1]][2]` once a feature spans the origin.
-#'
-#' @noRd
-mark_tbl_3p <- function(pos) {
-  last <- length(pos)
-  pos[[last]][2] <- paste0(">", pos[[last]][2])
-  pos
-}
-
 #' Generate export NCBI files
 #'
 #' @param group (optional) export group names

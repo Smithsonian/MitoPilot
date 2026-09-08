@@ -193,7 +193,7 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           width = "100%"
         ) |> shinyjs::disabled(),
         opts_help("Command-line flags passed to fastp, which trims adapters and ",
-                  "filters low-quality reads before assembly.",
+                  "filters low-quality reads.",
                   href = "https://github.com/OpenGene/fastp"),
         size = "m",
         footer = tagList(

@@ -86,3 +86,20 @@ list_to_li <- function(list, class = NULL) {
     tagList(res)
   }
 }
+
+#' Drop leading/trailing blank lines and collapse interior runs of blanks to one
+#'
+#' @noRd
+collapse_empty_lines <- function(x) {
+  is_empty <- grepl("^\\s*$", x)
+  if (all(is_empty)) {
+    return(character(0))
+  }
+  first_nonempty <- which(!is_empty)[1]
+  last_nonempty <- which(!is_empty)[length(which(!is_empty))]
+  x <- x[first_nonempty:last_nonempty]
+  is_empty <- is_empty[first_nonempty:last_nonempty]
+  keep <- !is_empty |
+    (is_empty & c(TRUE, !is_empty[-length(is_empty)]))
+  x[keep]
+}

@@ -7,7 +7,6 @@ pipeline_server_userAsmb <- function(id) {
 
     nf_cmd <- reactiveVal()
     process <- reactiveVal()
-    process_out <- reactiveVal()
     job_submitting <- reactiveVal(FALSE)
 
     # Headless submission state (set when the run modal opens in headless mode)
@@ -482,18 +481,6 @@ pipeline_server_userAsmb <- function(id) {
         prog_footer = prog_footer
       )
     }
-    collapse_empty_lines <- function(x) {
-      is_empty <- grepl("^\\s*$", x)
-      if (all(is_empty)) {
-        return(character(0))
-      }
-      first_nonempty <- which(!is_empty)[1]
-      last_nonempty <- which(!is_empty)[length(which(!is_empty))]
-      x <- x[first_nonempty:last_nonempty]
-      is_empty <- is_empty[first_nonempty:last_nonempty]
-      keep <- !is_empty | (is_empty & c(TRUE, !is_empty[-length(is_empty)]))
-      x[keep]
-    }
     apply_progress <- function(new_output) {
       if (length(new_output) == 0) return(invisible())
       update <- progress_update(new_output, prog_header(), prog_executor(), prog_pos(), prog_frame_open(), prog_board(), prog_footer())
@@ -553,7 +540,6 @@ pipeline_server_userAsmb <- function(id) {
         process()$kill()
       }
       process(NULL)
-      process_out("")
       removeModal()
     })
   })

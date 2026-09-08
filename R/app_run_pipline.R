@@ -47,7 +47,6 @@ pipeline_server <- function(id) {
 
     nf_cmd <- reactiveVal()
     process <- reactiveVal()
-    process_out <- reactiveVal()
     job_submitting <- reactiveVal(FALSE)
 
     # Headless submission state (set when the run modal opens in headless mode)
@@ -236,14 +235,8 @@ pipeline_server <- function(id) {
         is_sedna_cluster <- TRUE
       }
 
-      if (is_hydra_cluster) {
-        # If hydra is found, render a list containing both buttons
-        tagList(
-          actionButton(ns("start"), "Run from App"),
-          actionButton(ns("submit_job"), "Submit as Job", class = "btn-success")
-        )
-      } else if (is_sedna_cluster) {
-        # If hydra is found, render a list containing both buttons
+      if (is_hydra_cluster || is_sedna_cluster) {
+        # If hydra or sedna is found, render a list containing both buttons
         tagList(
           actionButton(ns("start"), "Run from App"),
           actionButton(ns("submit_job"), "Submit as Job", class = "btn-success")
@@ -643,19 +636,6 @@ pipeline_server <- function(id) {
         prog_footer = prog_footer
       )
     }
-    collapse_empty_lines <- function(x) {
-      is_empty <- grepl("^\\s*$", x)
-      if (all(is_empty)) {
-        return(character(0))
-      }
-      first_nonempty <- which(!is_empty)[1]
-      last_nonempty <- which(!is_empty)[length(which(!is_empty))]
-      x <- x[first_nonempty:last_nonempty]
-      is_empty <- is_empty[first_nonempty:last_nonempty]
-      keep <- !is_empty |
-        (is_empty & c(TRUE, !is_empty[-length(is_empty)]))
-      x[keep]
-    }
     apply_progress <- function(new_output) {
       if (length(new_output) == 0) return(invisible())
       update <- progress_update(
@@ -723,7 +703,6 @@ pipeline_server <- function(id) {
         process()$kill()
       }
       process(NULL)
-      process_out("")
       removeModal()
     })
   })
