@@ -80,8 +80,12 @@ rt_dynamicIcon <- function(icons = NULL, labels = NULL) {
 rt_longtext <- function() {
   htmlwidgets::JS(
     "function(cellInfo) {
-      var text = cellInfo.value ? cellInfo.value : ''
-      return `<abbr style='cursor: info; text-decoration: none;' ` +
+      var raw = (cellInfo.value === null || cellInfo.value === undefined) ?
+        '' : String(cellInfo.value)
+      if (raw === '') return ''
+      var text = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/'/g, '&#39;')
+      return `<abbr class='mp-abbr' tabindex='0' ` +
       `title='${text}'>${text}</abbr>`
     }"
   )

@@ -317,6 +317,72 @@ details summary:hover {
   color: var(--mp-primary-hover);
 }
 
+/* ------------------------------------------------------------------ */
+/* Nothing important is truncated or hidden off-screen.                */
+/* ------------------------------------------------------------------ */
+
+/* Truncated cell text: a visible cue that there is more, reachable
+   without a mouse. */
+.mp-abbr {
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+/* Note columns wrap to two lines instead of ellipsising, even though the
+   table is rendered with wrap = FALSE. */
+.mp-note-cell .rt-td-inner,
+.rt-nowrap .mp-note-cell .rt-td-inner,
+.rt-nowrap .mp-note-cell .rt-text-content {
+  white-space: normal;
+  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 15px;
+}
+
+/* Sticky right-hand action group: opaque, with a left edge shadow, so no
+   cell can render underneath it. */
+.mp-actions-sticky {
+  background-color: inherit;
+  box-shadow: -4px 0 6px -4px rgba(0, 0, 0, .15);
+}
+
+/* A permanently visible horizontal scrollbar, so "there is more to the
+   right" is never invisible. */
+.mp-table-resize .rt-table {
+  scrollbar-width: thin;
+}
+
+.mp-table-resize .rt-table::-webkit-scrollbar {
+  height: 10px;
+}
+
+.mp-table-resize .rt-table::-webkit-scrollbar-thumb {
+  background-color: var(--mp-border);
+  border-radius: 5px;
+}
+
+/* A file-system path, not Bootstrap's crimson-on-pink <code>. */
+.mp-path {
+  font-family: var(--mp-font-mono);
+  font-size: var(--mp-fs-meta);
+  background-color: var(--mp-surface-alt);
+  color: var(--mp-text);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  padding: 1px 5px;
+  word-break: break-all;
+}
+
+/* A control that looks live but is not. */
+.mp-disabled {
+  color: var(--mp-text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 /* Two-row modal footer (annotate details). Bootstrap gives adjacent footer
    buttons a left margin, which double-spaces them against the flex gap and
    also indents the first button of each row group. */
