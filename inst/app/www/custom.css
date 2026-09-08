@@ -426,9 +426,6 @@ details summary:hover {
 
 /* SweetAlert lays its buttons out confirm-first; the app's footer order is
    dismiss then action. */
-.swal2-actions {
-  flex-direction: row-reverse;
-}
 
 /* Toolbar and filter row: wrap instead of clipping at narrow widths. */
 .mp-toolbar {

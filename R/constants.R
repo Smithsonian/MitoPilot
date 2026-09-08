@@ -149,7 +149,8 @@ mp_state_field <- function(module, field, named = FALSE) {
 #' Hex colors that cannot live in CSS because SweetAlert takes them as values.
 #' Everything else is a CSS token in inst/app/www/custom.css.
 #' @noRd
-MP_COLORS <- c(primary = "#337ab7", danger = "#d9534f", grey = "#6c757d")
+# Mirrors --mp-primary / --mp-danger / --mp-text-muted-ish grey in custom.css.
+MP_COLORS <- c(primary = "#337ab7", danger = "#b02a37", grey = "#6c757d")
 
 #' Canonical table column headers, keyed by data-frame column name.
 #'
