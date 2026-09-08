@@ -157,26 +157,42 @@ details {
   margin-bottom: 1em;
 }
 
+/* A disclosure is a section header, not a button. Filled blue is reserved
+   for primary actions. Open/closed is carried by the triangle, not colour. */
 details summary {
-    display: inline-block; /* Allows adding padding and margins like a button */
-    background-color: var(--mp-primary);
-    color: var(--mp-surface);
-    border: none;
-    border-radius: var(--mp-radius);
-    padding: var(--mp-space-1) var(--mp-space-2);
-    font-size: var(--mp-fs-body);
-    font-weight: bold;
-    text-align: center;
-    cursor: pointer;
-    user-select: none;
-    outline: none;
-    margin: var(--mp-space-2) 0;
+  display: block;
+  list-style: none;
+  background: transparent;
+  color: var(--mp-text);
+  font-size: var(--mp-fs-head);
+  font-weight: 600;
+  padding: 6px 0;
+  border: none;
+  border-bottom: 1px solid var(--mp-border);
+  border-radius: 0;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  margin: var(--mp-space-2) 0;
 }
 
-details summary:hover,
-details summary:active,
-details[open] summary {
-    background-color: var(--mp-primary-hover);
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+details summary::before {
+  content: "\25B8";
+  display: inline-block;
+  width: 1em;
+  color: var(--mp-text-muted);
+}
+
+details[open] > summary::before {
+  content: "\25BE";
+}
+
+details summary:hover {
+  color: var(--mp-primary-hover);
 }
 
 .icon-circle {
