@@ -234,16 +234,109 @@ details summary:hover {
   margin-left: 0;
 }
 
-.modal-lg {
-  width: auto !important;
-  min-width: 800px !important;
-  max-width: 70% !important;
+/* Wider-than-Bootstrap dialogs only where there is room for them. Below
+   820px (and at 400% zoom) Bootstrap's fluid width takes over, so a dialog
+   never forces horizontal panning. */
+@media (min-width: 820px) {
+  .modal-lg {
+    width: auto !important;
+    min-width: 800px !important;
+    max-width: 70% !important;
+  }
+
+  .modal-dialog {
+    width: auto !important;
+    min-width: 600px;
+    max-width: 50%;
+  }
 }
 
-.modal-dialog {
-  width: auto !important;
-  min-width: 600px;
-  max-width: 50%;
+/* Form-shaped modals scroll their body so the footer is never below the
+   fold on a laptop. */
+.mp-modal-form .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* SweetAlert lays its buttons out confirm-first; the app's footer order is
+   dismiss then action. */
+.swal2-actions {
+  flex-direction: row-reverse;
+}
+
+/* Toolbar and filter row: wrap instead of clipping at narrow widths. */
+.mp-toolbar {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: var(--mp-space-2);
+  row-gap: var(--mp-space-2);
+}
+
+.mp-toolbar-btn {
+  height: var(--mp-control-h);
+  border-radius: var(--mp-radius);
+  text-transform: none;
+  font-size: var(--mp-fs-body);
+}
+
+.mp-filter-row {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: flex-end;
+  gap: var(--mp-space-2);
+  row-gap: var(--mp-space-2);
+  margin-bottom: var(--mp-space-2);
+}
+
+/* App / project / variant orientation line above the toolbar. */
+.mp-header {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: baseline;
+  gap: var(--mp-space-2);
+  font-size: var(--mp-fs-meta);
+  color: var(--mp-text-muted);
+  padding: var(--mp-space-1) 0;
+  border-bottom: 1px solid var(--mp-border);
+  margin-bottom: var(--mp-space-2);
+}
+
+.mp-header .mp-app-name {
+  font-size: var(--mp-fs-head);
+  font-weight: 600;
+  color: var(--mp-text);
+}
+
+/* Row-grain and count line, between the filter row and the table. */
+.mp-table-status {
+  font-size: var(--mp-fs-meta);
+  line-height: 18px;
+  color: var(--mp-text-muted);
+  margin: 0 0 var(--mp-space-1) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mp-table-status b {
+  font-weight: 600;
+  color: var(--mp-text);
+}
+
+.mp-table-status .mp-sep {
+  color: var(--mp-border);
+}
+
+a.mp-link {
+  color: var(--mp-link);
+  text-decoration: none;
+}
+
+a.mp-link:hover,
+a.mp-link:focus-visible {
+  text-decoration: underline;
 }
 
 /* One stripe value for every row, sticky columns included: a second,
@@ -259,17 +352,21 @@ details summary:hover {
   box-shadow: inset 3px 0 0 var(--mp-primary);
 }
 
-/* Sample tables: auto-fit window height, plus a drag handle to resize. */
+/* Sample tables: hug the rows, grow to the window, never past it. A short
+   table stops leaving 300px of white space above the footer controls. */
 .mp-table-resize {
-  height: calc(100vh - 300px);
+  height: auto;
+  max-height: calc(100vh - 324px);
   min-height: 240px;
   resize: vertical;
-  overflow: hidden;
+  overflow: auto;
 }
 
-/* Make the shiny output container and reactable widget fill the wrapper so
-   height: "100%" on the table resolves against the resizable box. */
+/* The widget asks for height: 100%, which against an auto-height parent
+   collapses the table; let it size to its own content instead. */
 .mp-table-resize > div,
+.mp-table-resize .html-widget,
+.mp-table-resize .Reactable,
 .mp-table-resize > div > .reactable {
-  height: 100% !important;
+  height: auto !important;
 }
