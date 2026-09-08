@@ -1,3 +1,9 @@
+// The Assemble / Annotate / Export sample tables, named once. The output id
+// is "table" namespaced by module, so the three ids below are what the app
+// mounts today; .mp-sample-table is the class the modules are moving to.
+window.MP_SAMPLE_TABLES =
+  '#assemble-table, #annotate-table, #export-table, .mp-sample-table';
+
 // Update horizontal scroll position
 $( document ).ready(function(){
   Shiny.addCustomMessageHandler('hScroll', function(params) {
@@ -91,7 +97,7 @@ $( document ).ready(function(){
 // (shows every filtered row). A MutationObserver re-adds it after reactable
 // re-renders the select.
 $( document ).ready(function(){
-  var GATED_ALL = '#assemble-table, #annotate-table, #export-table';
+  var GATED_ALL = window.MP_SAMPLE_TABLES;
   var ALL_PAGE_SIZE = 1000000;
 
   function addAllOption(select) {
@@ -120,9 +126,7 @@ $( document ).ready(function(){
 // every row between the anchor and the clicked row by programmatically
 // clicking their selection checkboxes. Additive only (never deselects).
 $( document ).ready(function(){
-  // Restrict to the Assemble / Annotate / Export sample tables (output id
-  // "table" namespaced by module: assemble_server("assemble"), etc.).
-  var GATED = '#assemble-table, #annotate-table, #export-table';
+  var GATED = window.MP_SAMPLE_TABLES;
   var anchors = {}; // per-table anchor index, keyed by table element id
 
   // Rows on the current page that carry a selection checkbox, in visual

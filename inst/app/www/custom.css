@@ -50,6 +50,13 @@
   --mp-space-5: 24px;
 }
 
+/* One visible focus ring, everywhere. Nothing in this app sets
+   outline: none. */
+:focus-visible {
+  outline: 2px solid var(--mp-primary);
+  outline-offset: 2px;
+}
+
 /* Toolbar buttons: shinyWidgets material-flat renders a 3.5:1 blue. */
 .bttn-material-flat.bttn-default {
   color: var(--mp-action);
@@ -88,6 +95,18 @@ p.mp-help-text {
 .grow:hover {
   transition: all .1s ease-in-out;
   transform: scale(1.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grow:hover {
+    transition: none;
+    transform: none;
+  }
+
+  .gears::before,
+  .gears::after {
+    animation: none;
+  }
 }
 
 .code-block {
@@ -214,17 +233,33 @@ details summary:hover {
   transform: translate(-50%, -50%);
 }
 
+/* The one in-table action pill. 24px is the hit-target floor. */
 .icon-bttn-text {
   display: inline-flex;
-  padding: 0;
   justify-content: center;
   align-items: center;
-  height: 18px;
-  width: 100%;
-  border-radius: 8px;
+  height: var(--mp-chip-h);
+  width: auto;
+  max-width: 100%;
+  padding: 0 10px;
+  border-radius: var(--mp-radius-pill);
   background-color: var(--mp-surface-alt);
   border: 1px solid var(--mp-border);
   color: var(--mp-text);
+  font-size: var(--mp-fs-meta);
+  line-height: 1;
+}
+
+.icon-bttn-text:hover {
+  background-color: var(--mp-primary-soft);
+  border-color: var(--mp-primary);
+}
+
+/* Two-state in-table toggle (Ignore, Resolved). */
+.mp-toggle[aria-pressed="true"] {
+  background-color: var(--mp-primary-soft);
+  border-color: var(--mp-primary);
+  color: var(--mp-primary-hover);
 }
 
 /* Two-row modal footer (annotate details). Bootstrap gives adjacent footer

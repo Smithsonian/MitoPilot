@@ -13,35 +13,62 @@ rt_highlight_row <- function() {
   )
 }
 
+#' Escape a label for interpolation into a single-quoted HTML attribute
+#'
+#' Every helper below builds HTML inside a JS template literal, so one
+#' apostrophe or angle bracket in a caller-supplied label silently breaks the
+#' cell.
+#'
+#' @noRd
+mp_js_attr <- function(x) {
+  htmltools::htmlEscape(as.character(x), attribute = TRUE)
+}
+
+#' Build a JS object literal from a named vector, values escaped
+#'
+#' @noRd
+mp_js_obj <- function(x) {
+  if (length(x) == 0) {
+    return("{}")
+  }
+  paste0(
+    "{ ",
+    paste(sprintf("'%s': '%s'", names(x), mp_js_attr(x)), collapse = ", "),
+    " }"
+  )
+}
+
 #' Dynamic Icon
 #'
 #' @param icons a named character vector list of icons to use.
+#' @param labels optional named character vector, keyed identically to
+#'   `icons`, giving the accessible name of each state. When supplied the
+#'   glyph gets `role="img"`, `aria-label` and `title`; without it the markup
+#'   is unchanged.
 #'
 #' @noRd
-rt_dynamicIcon <- function(icons = NULL) {
+rt_dynamicIcon <- function(icons = NULL, labels = NULL) {
   if (length(icons) == 0) {
     return({
       htmlwidgets::JS("function(cellInfo) {return cellInfo.value}")
     })
   }
 
-  key <- purrr::imap_chr(icons, ~ {
-    paste0(.y, ": '", .x, "'")
-  }) |>
-    unname() |>
-    paste(collapse = ", ")
-
   sprintf(
     "
     function(cellInfo){
       var { value } = cellInfo;
-      var icons = { %s };
+      var icons = %s;
+      var labels = %s;
       var icon = icons[value] || '';
-      return `<i class='${icon} reactable-btth' ` +
+      var label = labels[value];
+      var name = label ?
+        ` role='img' aria-label='${label}' title='${label}'` : '';
+      return `<i class='${icon}'${name} ` +
         `style='padding-left: 0.2em;'></i>`
     }
     ",
-    key
+    mp_js_obj(icons), mp_js_obj(labels)
   ) |> htmlwidgets::JS()
 }
 
@@ -141,8 +168,11 @@ rt_blast_ref_status <- function() {
 #' Add text click action to a cell
 #'
 #' @param InputId shiny input id to use
+#' @param title optional tooltip naming the action. Without it the tooltip
+#'   echoes the cell value, which is noise.
 #' @noRd
-rt_link <- function(InputId) {
+rt_link <- function(InputId, title = NULL) {
+  tip <- if (is.null(title)) "${cellInfo.value}" else mp_js_attr(title)
   sprintf(
     "function(cellInfo) {
                 // An empty cell is not a link: nothing to click through to.
@@ -150,12 +180,12 @@ rt_link <- function(InputId) {
                     cellInfo.value === '') { return ''; }
                 var clickid = '%s';
                 var sampid = cellInfo.index+1;
-                return `<a href='#' id=${sampid} class='grow' title='${cellInfo.value}'` +
+                return `<a href='#' id=${sampid} class='grow' title='%s' ` +
                 `onclick='event.stopPropagation(); Shiny.onInputChange(&#39;${clickid}&#39;, this.id, {priority: &#39;event&#39;})'>` +
                 cellInfo.value +
                 `</a>`;
                 }",
-    InputId
+    InputId, tip
   ) |>
     htmlwidgets::JS()
 }
@@ -175,75 +205,89 @@ rt_ts_date <- function() {
   )
 }
 
-#' Add reactable icon button
-#'
-#' @param inputId shiny input id to use
-#' @param icon font awesome icon name
-#'
-#' @noRd
-rt_icon_bttn <- function(inputId, icon) {
-  sprintf(
-    "
-    function(cellInfo) {
-      var { index } = cellInfo;
-      return `<i class='%s grow' ` +
-        `id='${index+1}' ` +
-        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})' ` +
-        `style='padding-left: 0.2em;'></i>`
-    }
-    ",
-    icon, inputId
-  ) |>
-    htmlwidgets::JS()
-}
-
 #' Add reactable icon button with text
 #'
 #' @param inputId shiny input id to use
 #' @param icon font awesome icon name
+#' @param text fallback label used when the cell value is empty. The cell
+#'   value is still the render gate: an empty cell renders no button.
+#' @param label optional explicit button text. When supplied it replaces the
+#'   cell value in the label only, so rows with nothing behind them still
+#'   render no button.
+#' @param title optional tooltip naming the action.
 #'
 #' @noRd
-rt_icon_bttn_text <- function(inputId, icon, text = "") {
-  stringr::str_glue(
+rt_icon_bttn_text <- function(inputId, icon, text = "", label = NULL,
+                              title = NULL) {
+  relabel <- if (is.null(label)) {
+    ""
+  } else {
+    sprintf("value = '%s';", mp_js_attr(label))
+  }
+  tip <- if (is.null(title)) {
+    ""
+  } else {
+    sprintf(" title='%s'", mp_js_attr(title))
+  }
+  sprintf(
     "
-    function(cellInfo) {{
-      var {{ index, value }} = cellInfo;
-      value = value ? value : '{text}';
-      if (value === undefined || value === null || value==='') {{
+    function(cellInfo) {
+      var { index, value } = cellInfo;
+      value = value ? value : '%s';
+      if (value === undefined || value === null || value==='') {
         return;
-      }}
-      return `<button ` +
+      }
+      %s
+      return `<button type='button' ` +
         `class='icon-bttn-text grow' ` +
-        `id='${{index+1}}' ` +
-        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;{inputId}&#39;, this.id, {{priority: &#39;event&#39;}})'>` +
-        `<i class='{icon}' ` +
+        `id='${index+1}'%s ` +
+        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})'>` +
+        `<i class='%s' aria-hidden='true' ` +
         `style='margin-right: 4px;'></i>` +
-        `<small>${{value}}</small>` +
+        `<small>${value}</small>` +
         `</button>`
-    }}
-    "
+    }
+    ",
+    mp_js_attr(text), relabel, tip, inputId, icon
   ) |>
     htmlwidgets::JS()
 }
 
-#' Add reactable icon button
+#' Two-state in-table toggle
+#'
+#' Renders a real focusable button carrying `aria-pressed`, so the toggle is
+#' reachable by keyboard and announces its state.
 #'
 #' @param inputId shiny input id to use
-#' @param icon font awesome icon name
+#' @param ticon font awesome icon shown when the value is true
+#' @param ficon font awesome icon shown when the value is false
+#' @param title_true,title_false tooltips for each state
 #'
 #' @noRd
-rt_bool_bttn <- function(inputId, ticon, ficon) {
-  stringr::str_glue(
+rt_bool_bttn <- function(inputId, ticon, ficon, title_true = NULL,
+                         title_false = NULL) {
+  tips <- mp_js_obj(c(
+    on = if (is.null(title_true)) "" else title_true,
+    off = if (is.null(title_false)) "" else title_false
+  ))
+  sprintf(
     "
-    function(cellInfo) {{
-      var {{ index }} = cellInfo;
-      var icon = cellInfo.value ? '{ticon}' : '{ficon}';
-      return `<i class='${{icon}} grow' ` +
-        `id='${{index+1}}' ` +
-        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;{inputId}&#39;, this.id, {{priority: &#39;event&#39;}})' ` +
-        `style='padding-left: 0.2em;'></i>`
-    }}
-    "
+    function(cellInfo) {
+      var { index } = cellInfo;
+      var on = cellInfo.value ? true : false;
+      var icon = on ? '%s' : '%s';
+      var tips = %s;
+      var tip = on ? tips.on : tips.off;
+      var t = tip ? ` title='${tip}'` : '';
+      return `<button type='button' ` +
+        `class='icon-bttn-text mp-toggle grow' ` +
+        `id='${index+1}' aria-pressed='${on}'${t} ` +
+        `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})'>` +
+        `<i class='${icon}' aria-hidden='true'></i>` +
+        `</button>`
+    }
+    ",
+    ticon, ficon, tips, inputId
   ) |>
     htmlwidgets::JS()
 }
