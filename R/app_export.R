@@ -252,7 +252,9 @@ export_server <- function(id) {
             html = TRUE, filterable = FALSE,
             cell = rt_dynamicIcon(mp_state_icons("annotate"), mp_state_labels("annotate"))
           ),
-          ID = .cd("ID", minWidth = 120, sticky = "left"),
+          # Wide enough for a 16-character ID; the tooltip covers longer ones.
+          ID = .cd("ID", minWidth = 160, sticky = "left", html = TRUE,
+                   cell = rt_longtext()),
           # One row per assembly unit; the classes let col_css hide these when every
           # unit shares value 1.
           path = .cd("path", extra_class = "mp-col-path", width = 90,
@@ -465,6 +467,7 @@ export_server <- function(id) {
           label = "Group name:",
           choices = c("", sort(unique(rv$data$export_group))),
           selected = character(0),
+          width = "320px",
           options = list(
             create = TRUE,
             maxItems = 1,
