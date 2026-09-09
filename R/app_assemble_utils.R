@@ -106,13 +106,13 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       blast_accession,
       blast_ref_status,
       blast_species,
+      blast_lineage,
       blast_pident,
       blast_qcovs,
       blast_evalue,
-      blast_lineage,
-      blast_hits,
       time_stamp,
-      assemble_notes
+      assemble_notes,
+      join_notes
     ) |>
     dplyr::mutate(
       output = dplyr::case_when(
@@ -123,7 +123,9 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
         assemble_switch > 1 ~ "details",
         .default = NA_character_
       )
-    )
+    ) |>
+    # The three action columns render last and adjacent (theme T19).
+    dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col())
 }
 
 #' Update the preprocessing options
@@ -1064,4 +1066,43 @@ assemble_opts_rows <- function(rv, row, sel, session = getDefaultReactiveDomain(
     return(NULL)
   }
   rows
+}
+
+#' Canonical header text for a table column
+#'
+#' @param field data-frame column name, or a semantic key from `MP_COL_NAMES`
+#'
+#' @noRd
+mp_col_name <- function(field) unname(MP_COL_NAMES[[field]])
+
+#' Canonical header, with its tooltip when the name needs one
+#'
+#' @param field see [mp_col_name()]
+#' @param tip override tooltip; defaults to the `MP_COL_TIPS` entry
+#'
+#' @noRd
+mp_col_header <- function(field, tip = NULL) {
+  if (is.null(tip)) {
+    tip <- unname(MP_COL_TIPS[field])
+    if (is.na(tip)) tip <- NULL
+  }
+  rt_header(mp_col_name(field), tip)
+}
+
+#' Column width that fits the longest value in `x`
+#'
+#' 8.5px per character is measured for the default Helvetica/Arial stack at
+#' 14px; 26px is the compact cell padding plus a safety margin (theme T09).
+#'
+#' @param x the column values
+#' @param floor,cap width bounds, so one pathological value cannot eat the
+#'   viewport
+#'
+#' @noRd
+mp_fit_width <- function(x, floor = 120, cap = 260) {
+  n <- suppressWarnings(max(nchar(as.character(x)), na.rm = TRUE))
+  if (!is.finite(n)) {
+    return(floor)
+  }
+  max(floor, min(cap, ceiling(8.5 * n) + 26))
 }

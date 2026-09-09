@@ -103,11 +103,10 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       blast_accession,
       blast_ref_status,
       blast_species,
+      blast_lineage,
       blast_pident,
       blast_qcovs,
       blast_evalue,
-      blast_lineage,
-      blast_hits,
       time_stamp,
       assemble_notes,
       circularize_notes,
@@ -123,7 +122,9 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
         assemble_switch > 1 ~ "details",
         .default = NA_character_
       )
-    )
+    ) |>
+    # The three action columns render last and adjacent (theme T19).
+    dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col())
 }
 
 #' Wire up the shared behaviour of an Assemble options modal

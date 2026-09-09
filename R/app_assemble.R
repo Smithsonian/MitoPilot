@@ -217,8 +217,11 @@ assemble_server <- function(id) {
     })
 
     # Render table ----
+    # Render order comes from the data frame, not this list. See
+    # fetch_assemble_data().
     output$table <- renderReactable({
-      isolate(req(filtered_data())) |>
+      tbl_data <- isolate(req(filtered_data()))
+      tbl_data |>
         reactable(
           resizable = TRUE,
           filterable = TRUE,
@@ -239,15 +242,19 @@ assemble_server <- function(id) {
             return 'mp-lock-' + rowInfo.values['assemble_lock'] +
                    ' mp-state-' + rowInfo.values['assemble_switch'];
           }"),
-          defaultColDef = colDef(align = "left", show = F),
+          theme = reactable::reactableTheme(
+            headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
+          ),
+          defaultColDef = colDef(show = FALSE),
           columns = list(
             `.selection` = colDef(show = T, sticky = "left", width = 28),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
-              name = "",
+              name = mp_col_name("assemble_lock"),
+              header = mp_col_header("assemble_lock", tip = MP_LOCK_DEF("assemble")),
               html = TRUE,
-              width = 32,
+              width = 52,
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
@@ -258,9 +265,10 @@ assemble_server <- function(id) {
             assemble_switch = colDef(
               show = TRUE,
               sticky = "left",
-              name = "",
+              name = mp_col_name("assemble_switch"),
+              header = mp_col_header("assemble_switch"),
               html = TRUE,
-              width = 30,
+              width = 62,
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
@@ -270,13 +278,15 @@ assemble_server <- function(id) {
             ),
             ID = colDef(
               show = T,
-              minWidth = 120,
+              name = mp_col_name("ID"),
+              minWidth = mp_fit_width(tbl_data$ID),
               sticky = "left",
               html = T,
               cell = rt_longtext()
             ),
             Taxon = colDef(
               show = T,
+              name = mp_col_name("Taxon"),
               minWidth = 140,
               sticky = "left",
               html = T,
@@ -284,7 +294,8 @@ assemble_server <- function(id) {
             ),
             pre_opts = colDef(
               show = TRUE, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
-              name = "Preprocess Opts.",
+              name = mp_col_name("pre_opts"),
+              header = mp_col_header("pre_opts"),
               html = T,
               width = 130,
               cell = rt_link(ns("set_pre_opts"), title = "Edit preprocessing options",
@@ -292,19 +303,22 @@ assemble_server <- function(id) {
             ),
             trimmed_reads = colDef(
               show = TRUE, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
-              name = "Reads",
+              name = mp_col_name("trimmed_reads"),
+              header = mp_col_header("trimmed_reads"),
               filterable = FALSE,
               minWidth = 100
             ),
             mean_length = colDef(
               show = TRUE, class = .grp("mean_length"), headerClass = .grp("mean_length"),
-              name = "Read Length",
+              name = mp_col_name("mean_length"),
+              header = mp_col_header("mean_length"),
               filterable = FALSE,
               minWidth = 100
             ),
             assemble_opts = colDef(
               show = TRUE, class = .grp("assemble_opts"), headerClass = .grp("assemble_opts"),
-              name = "Assembly Opts.",
+              name = mp_col_name("assemble_opts"),
+              header = mp_col_header("assemble_opts"),
               html = T,
               width = 130,
               cell = rt_link(ns("set_assemble_opts"), title = "Edit assembly options",
@@ -312,7 +326,8 @@ assemble_server <- function(id) {
             ),
             blast_opts = colDef(
               show = TRUE, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
-              name = "BLAST Opts.",
+              name = mp_col_name("blast_opts"),
+              header = mp_col_header("blast_opts"),
               html = T,
               width = 120,
               cell = rt_link(ns("set_blast_opts"), title = "Edit BLAST options",
@@ -320,14 +335,15 @@ assemble_server <- function(id) {
             ),
             topology = colDef(
               show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
-              width = 100,
-              name = "Topology"
+              minWidth = 120,
+              name = mp_col_name("topology"),
+              header = mp_col_header("topology")
             ),
             length = colDef(
               show = TRUE, class = .grp("length"), headerClass = .grp("length"),
               minWidth = 140,
-              name = "Asmb. Length (ignored)",
-              header = htmltools::HTML('Asmb. Length (<span style="color:#e74c3c;font-weight:bold">ignored</span>)'),
+              name = mp_col_name("length"),
+              header = mp_col_header("length"),
               filterable = FALSE,
               html = TRUE,
               cell = JS("function(cellInfo) {
@@ -336,29 +352,37 @@ assemble_server <- function(id) {
                 var flagsStr = cellInfo.row['ignore_flags'];
                 var flags = flagsStr ? String(flagsStr).split(';') : [];
                 var parts = String(val).split(';');
-                var colored = parts.map(function(p, i) {
-                  var ign = flags[i];
-                  if (ign === '1') {
-                    return '<span style=\"color:#e74c3c;font-weight:bold\">' + p.trim() + '</span>';
+                var marked = parts.map(function(p, i) {
+                  if (flags[i] === '1') {
+                    return `<span class='mp-pill mp-pill-danger' ` +
+                      `title='Ignored: left out of annotation and export'>` +
+                      p.trim() + '</span>';
                   }
                   return p.trim();
                 });
-                return colored.join('; ');
+                return marked.join('; ');
               }")
             ),
             min_assembly_length = colDef(show = FALSE),
             ignore_flags = colDef(show = FALSE),
             paths = colDef(
-              show = TRUE, width = 100, name = "# Paths", align = "center",
+              show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
+              width = 80,
+              name = mp_col_name("paths"),
+              header = mp_col_header("paths"),
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
             scaffolds = colDef(
-              show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"), width = 100, name = "# Scaffolds", align = "center"
+              show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
+              width = 80,
+              name = mp_col_name("scaffolds"),
+              header = mp_col_header("scaffolds")
             ),
             blast_accession = colDef(
               show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-              name = "BLAST Top Hit",
+              name = mp_col_name("blast_accession"),
+              header = mp_col_header("blast_accession"),
               html = TRUE,
               width = 120,
               cell = rt_ncbi_link()
@@ -366,7 +390,8 @@ assemble_server <- function(id) {
             poor_blast_ref = colDef(show = FALSE),
             blast_ref_status = colDef(
               show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
-              name = "BLAST Ref Align",
+              name = mp_col_name("blast_ref_status"),
+              header = mp_col_header("blast_ref_status"),
               html = TRUE,
               minWidth = 130,
               resizable = TRUE,
@@ -376,85 +401,107 @@ assemble_server <- function(id) {
             ),
             blast_species = colDef(
               show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
-              name = "BLAST Species",
+              name = mp_col_name("blast_species"),
+              header = mp_col_header("blast_species"),
               html = TRUE,
               minWidth = 160,
               cell = rt_longtext()
             ),
             blast_lineage = colDef(
               show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
-              name = "BLAST Lineage",
+              name = mp_col_name("blast_lineage"),
+              header = mp_col_header("blast_lineage"),
               html = TRUE,
               minWidth = 200,
               cell = rt_longtext()
             ),
-            blast_hits = colDef(
-              show = TRUE,
-              name = "",
-              filterable = FALSE,
-              sortable = FALSE,
-              html = TRUE,
-              width = 140,
-              align = "center",
-              cell = rt_icon_bttn_text(ns("all_blast_hits"), "fas fa-list", "All BLAST Hits")
-            ),
             blast_pident = colDef(
               show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
-              name = "BLAST % Ident",
+              name = mp_col_name("blast_pident"),
+              header = mp_col_header("blast_pident"),
               filterable = FALSE,
-              minWidth = 90,
-              align = "center"
+              width = 90
             ),
             blast_qcovs = colDef(
               show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
-              name = "BLAST % Cov",
+              name = mp_col_name("blast_qcovs"),
+              header = mp_col_header("blast_qcovs"),
               filterable = FALSE,
-              minWidth = 90,
-              align = "center"
+              width = 90
             ),
             time_stamp = colDef(
               show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
-              name = "Last Updated",
+              name = mp_col_name("time_stamp"),
+              header = mp_col_header("time_stamp"),
               filterable = FALSE,
               html = T,
               width = 150,
               cell = rt_ts_date()
             ),
             assemble_notes = colDef(
-              show = TRUE, class = .grp("assemble_notes"), headerClass = .grp("assemble_notes"),
-              name = "Notes",
+              show = TRUE, class = c(.grp("assemble_notes"), "mp-note-cell"),
+              headerClass = .grp("assemble_notes"),
+              name = mp_col_name("assemble_notes"),
+              header = mp_col_header("assemble_notes"),
               html = TRUE,
-              align = "left",
               minWidth = 150,
               cell = rt_longtext()
             ),
             join_notes = colDef(
-              show = TRUE, class = .grp("join_notes"), headerClass = .grp("join_notes"),
-              name = "Scaffold Join Notes",
+              show = TRUE, class = c(.grp("join_notes"), "mp-note-cell"),
+              headerClass = .grp("join_notes"),
+              name = mp_col_name("join_notes"),
+              header = mp_col_header("join_notes"),
               html = TRUE,
-              align = "left",
               minWidth = 150,
               cell = rt_longtext()
+            ),
+            blast_hits = colDef(
+              show = TRUE,
+              name = mp_col_name("blast_hits"),
+              filterable = FALSE,
+              sortable = FALSE,
+              html = TRUE,
+              width = 140,
+              align = "center",
+              cell = rt_icon_bttn_text(
+                ns("all_blast_hits"), "fas fa-list", "All BLAST Hits",
+                title = "Show every BLAST hit for this sample"
+              )
             ),
             view = colDef(
               show = TRUE,
               sticky = "right",
+              class = "mp-actions-sticky",
+              headerClass = "mp-actions-sticky",
               filterable = FALSE,
-              name = "",
+              sortable = FALSE,
+              name = mp_col_name("view"),
               html = TRUE,
-              width = 80,
+              width = 90,
               align = "center",
-              cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
+              cell = rt_icon_bttn_text(
+                ns("details"), "fas fa-square-arrow-up-right fa-xs",
+                label = "Details",
+                title = "Open the details window for this sample"
+              )
             ),
             output = colDef(
               show = TRUE,
               sticky = "right",
+              class = "mp-actions-sticky",
+              headerClass = "mp-actions-sticky",
               filterable = FALSE,
-              name = "",
+              sortable = FALSE,
+              name = mp_col_name("output"),
               html = TRUE,
-              width = 80,
+              width = 90,
               align = "center",
-              cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
+              cell = rt_icon_bttn_text(
+                ns("output"), "fas fa-folder-open fa-xs",
+                label = "Output",
+                title = "Open the output folder for this sample"
+              )
             )
           )
         )
