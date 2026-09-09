@@ -359,21 +359,27 @@ annotate_server <- function(id) {
             name = .nm("annotate_opts"), header = .hd("annotate_opts"),
             html = TRUE,
             width = 130,
-            cell = rt_link(ns("set_annotate_opts"))
+            cell = rt_link(ns("set_annotate_opts"),
+                           title = "Edit annotation options",
+                           lock_col = "annotate_lock")
           ),
           curate_opts = colDef(
             show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
             name = .nm("curate_opts"), header = .hd("curate_opts"),
             html = TRUE,
             width = 110,
-            cell = rt_link(ns("set_curate_opts"))
+            cell = rt_link(ns("set_curate_opts"),
+                           title = "Edit curation options",
+                           lock_col = "annotate_lock")
           ),
           orf_opts = colDef(
             show = TRUE, class = .grp("orf_opts"), headerClass = .grp("orf_opts"),
             name = .nm("orf_opts"), header = .hd("orf_opts"),
             html = TRUE,
             width = 110,
-            cell = rt_link(ns("set_orf_opts"))
+            cell = rt_link(ns("set_orf_opts"),
+                           title = "Edit ORF options",
+                           lock_col = "annotate_lock")
           ),
           length_raw = colDef(
             show = TRUE, class = .grp("length_raw"), headerClass = .grp("length_raw"),
@@ -599,6 +605,17 @@ annotate_server <- function(id) {
       intersect(sel, which(visible))
     })
 
+    # Toolbar buttons that act on the selection are dead without one (T01).
+    observe({
+      shinyjs::toggleState(
+        selector  = "#annot_ctrls .mp-needs-selection",
+        condition = length(selected()) > 0
+      )
+    })
+
+    # Row grain and counts, stated (T07). The first number counts the rows the
+    # pickers and the date filter leave visible; reactable's own search box is
+    # client-side only, so it is not reflected here.
     output$n_selected <- renderText({
       d <- filtered_data()
       exp_code <- ifelse(is.na(d$export_time_stamp), "0", "1")
@@ -639,11 +656,13 @@ annotate_server <- function(id) {
     init("state")
     on("state", {
       req(session$userData$mode == "Annotate")
-      req(selected())
-      req(all(filtered_data()$annotate_lock[req(selected())] == 0))
-      rv$updating <- filtered_data() |>
+      sel <- selected()
+      if (!need_selection(length(sel))) return()
+      d <- filtered_data()
+      if (!need_unlocked(d$ID[sel][d$annotate_lock[sel] == 1])) return()
+      rv$updating <- d |>
         dplyr::select(ID, path, scaffold, annotate_switch) |>
-        dplyr::slice(selected())
+        dplyr::slice(sel)
       current <- character(0)
       if (length(unique(rv$updating$annotate_switch)) == 1) {
         current <- as.character(rv$updating$annotate_switch[1])
@@ -684,6 +703,8 @@ annotate_server <- function(id) {
       )
     })
     observeEvent(input$update_state, {
+      req(input$new_state)
+      n <- nrow(rv$updating)
       rv$updating$annotate_switch <- as.numeric(input$new_state)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
@@ -700,13 +721,43 @@ annotate_server <- function(id) {
         )
       trigger("update_annotate_table")
       removeModal()
+      mp_toast(paste0(
+        mp_n(n, "assembly"), " set to ",
+        MP_STATE_META[[as.character(input$new_state)]]$label, "."
+      ))
     })
 
     # Toggle lock ----
+    # Locking reports; unlocking asks first, because it drops the units out of
+    # Export and lets the next update overwrite curated annotations (T02).
+    write_lock <- function(upd) {
+      n <- nrow(upd)
+      locking <- upd$annotate_lock[1] == 1
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          upd,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = c("ID", "path", "scaffold")
+        )
+      rv$data <- filtered_data() |>
+        dplyr::rows_update(upd, by = c("ID", "path", "scaffold"))
+      trigger("update_annotate_table")
+      trigger("refresh_export")
+      mp_toast(
+        if (locking) {
+          paste0(mp_n(n, "assembly"), " locked - ready to export.")
+        } else {
+          paste0(mp_n(n, "assembly"), " unlocked.")
+        }
+      )
+    }
+
     init("lock")
     on("lock", {
       req(session$userData$mode == "Annotate")
-      req(selected())
+      if (!need_selection(length(selected()))) return()
       rv$updating <- filtered_data() |>
         dplyr::select(ID, path, scaffold, annotate_lock) |>
         dplyr::slice(selected())
@@ -738,12 +789,11 @@ annotate_server <- function(id) {
           if (length(multi_path) > 8) {
             shown <- paste0(shown, ", and ", length(multi_path) - 8, " more")
           }
-          shinyWidgets::sendSweetAlert(
-            session = session,
+          mp_alert(
             title = "Only one assembly path can be locked per sample",
             text = stringr::str_glue(
-              "{length(multi_path)} sample(s) would have more than one assembly path ",
-              "locked, but a sample can export only one: {shown}.\n\n",
+              "{mp_n(length(multi_path), 'sample')} would have more than one ",
+              "assembly path locked, but a sample can export only one: {shown}.\n\n",
               "Assembly paths are alternative resolutions of the same genome. Lock ",
               "just the correct path (leave the others unlocked), or 'ignore' the ",
               "extra paths in the Assemble module."
@@ -755,143 +805,133 @@ annotate_server <- function(id) {
       }
 
       rv$updating$annotate_lock <- as.numeric(!lock_current)
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
-        )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
-      trigger("refresh_export")
-    })
-
-    # Toggle ID_verified
-    init("id_verified_top")
-    on("id_verified_top", {
-      req(session$userData$mode == "Annotate")
-      req(selected())
-      rv$updating <- filtered_data() |>
-        dplyr::select(ID, path, scaffold, ID_verified) |>
-        dplyr::slice(selected())
-      ID_current <- sort(unique(rv$updating$ID_verified))[1]
-      if (is.na(ID_current)) {
-        rv$updating$ID_verified <- "yes"
-      } else if (ID_current == "yes") {
-        rv$updating$ID_verified <- "no"
-      } else if (ID_current == "no") {
-        rv$updating$ID_verified <- "yes"
-      }
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
-        )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
-    })
-
-    # Toggle problematic
-    init("problematic_top")
-    on("problematic_top", {
-      req(session$userData$mode == "Annotate")
-      req(selected())
-      rv$updating <- filtered_data() |>
-        dplyr::select(ID, path, scaffold, problematic) |>
-        dplyr::slice(selected())
-      ID_current <- sort(unique(rv$updating$problematic))[1]
-      if (is.na(ID_current)) {
-        rv$updating$problematic <- "yes"
+      if (locking) {
+        write_lock(rv$updating)
       } else {
-        rv$updating$problematic <- NA_character_
-      }
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
+        rv$lock_pending <- rv$updating
+        mp_confirm(
+          "unlock_confirm",
+          title = paste("Unlock", mp_n(nrow(rv$updating), "assembly")),
+          text = paste(
+            "Unlocking removes these assemblies from Export. If their state is",
+            "Ready to run, the next update will re-annotate them and replace",
+            "your curated results."
+          ),
+          action_label = "Unlock",
+          danger = TRUE
         )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
+      }
+    })
+    observeEvent(input$unlock_confirm, ignoreInit = TRUE, {
+      upd <- rv$lock_pending
+      rv$lock_pending <- NULL
+      if (isTRUE(input$unlock_confirm) && !is.null(upd)) write_lock(upd)
     })
 
-    # Toggle partial
-    apply_partial_update <- function(upd) {
-      rv$updating <- upd |> dplyr::select(ID, path, scaffold, partial)
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
-        )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
+    # Review flags ----
+    # One predicate for all three: mp_flag_next() decides both what the click
+    # writes and what the toolbar button says it will do (T02).
+    REVIEW_FLAGS <- list(
+      id_verified_top = list(col = "ID_verified", off = "no",
+                             noun = "ID Verified", said = "ID verified"),
+      problematic_top = list(col = "problematic", off = NA_character_,
+                             noun = "Problematic", said = "problematic"),
+      partial_top     = list(col = "partial", off = "no",
+                             noun = "Partial", said = "partial")
+    )
+
+    flag_next <- function(key) {
+      f <- REVIEW_FLAGS[[key]]
+      sel <- selected()
+      vals <- if (length(sel) == 0) character(0) else filtered_data()[[f$col]][sel]
+      mp_flag_next(vals, on = "yes", off = f$off)
     }
-    init("partial_top")
-    on("partial_top", {
-      req(session$userData$mode == "Annotate")
-      req(selected())
-      upd <- filtered_data() |>
-        dplyr::select(ID, path, scaffold, partial, topology) |>
-        dplyr::slice(selected())
-      is_on <- any(upd$partial == "yes", na.rm = TRUE)
-      if (!is_on) {
-        # turning partial on: warn if any selected assembly is circular
-        if (any(upd$topology == "circular", na.rm = TRUE)) {
-          rv$partial_pending <- upd
-          shinyWidgets::confirmSweetAlert(
-            inputId = "partial_circular_confirm",
-            title = "Mark circular assembly as partial?",
-            text = paste(
-              "One or more selected assemblies is circular. A closed circle",
-              "represents the whole molecule, so flagging it 'partial' is",
-              "contradictory. Consider using the Linearize button (in the",
-              "annotation details view) to break the circle before submission."
-            ),
-            type = "warning",
-            btn_labels = c("Cancel", "Mark partial anyway"),
-            btn_colors = c("#6c757d", "#0056b3")
-          )
-          req(F)
-        }
-        upd$partial <- "yes"
-      } else {
-        upd$partial <- "no"
+
+    write_flag <- function(key, upd) {
+      f <- REVIEW_FLAGS[[key]]
+      rv$updating <- upd |> dplyr::select(ID, path, scaffold, dplyr::all_of(f$col))
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = c("ID", "path", "scaffold")
+        )
+      rv$data <- filtered_data() |>
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
+      trigger("update_annotate_table")
+      mp_toast(paste0(
+        mp_n(nrow(upd), "assembly"),
+        if (identical(upd[[f$col]][1], "yes")) " marked " else " cleared of ",
+        f$said, "."
+      ))
+    }
+
+    # The toolbar buttons live in the top-level UI, so their labels are updated
+    # through the root session, not this module's namespace.
+    observe({
+      root <- session$rootScope()
+      for (key in names(REVIEW_FLAGS)) {
+        f <- REVIEW_FLAGS[[key]]
+        verb <- if (identical(flag_next(key), "yes")) "Mark" else "Clear"
+        updateActionButton(root, key, label = paste(verb, f$noun))
       }
-      apply_partial_update(upd)
     })
-    observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
-      if (isTRUE(input$partial_circular_confirm) && !is.null(rv$partial_pending)) {
-        upd <- rv$partial_pending
+
+    toggle_flag <- function(key) {
+      f <- REVIEW_FLAGS[[key]]
+      req(session$userData$mode == "Annotate")
+      if (!need_selection(length(selected()))) return()
+      upd <- filtered_data() |>
+        dplyr::select(ID, path, scaffold, dplyr::all_of(f$col), topology) |>
+        dplyr::slice(selected())
+      nxt <- mp_flag_next(upd[[f$col]], on = "yes", off = f$off)
+      # Marking a closed circle "partial" contradicts itself: ask first.
+      if (key == "partial_top" && identical(nxt, "yes") &&
+          any(upd$topology == "circular", na.rm = TRUE)) {
         upd$partial <- "yes"
-        apply_partial_update(upd)
+        rv$partial_pending <- upd
+        mp_confirm(
+          "partial_circular_confirm",
+          title = "Mark a circular assembly as partial",
+          text = paste(
+            "One or more selected assemblies is circular. A closed circle",
+            "represents the whole molecule, so flagging it 'partial' is",
+            "contradictory. Consider using the Linearize button (in the",
+            "annotation details view) to break the circle before submission."
+          ),
+          action_label = "Mark partial anyway"
+        )
+        return()
       }
+      upd[[f$col]] <- nxt
+      write_flag(key, upd)
+    }
+
+    init("id_verified_top")
+    on("id_verified_top", toggle_flag("id_verified_top"))
+    init("problematic_top")
+    on("problematic_top", toggle_flag("problematic_top"))
+    init("partial_top")
+    on("partial_top", toggle_flag("partial_top"))
+
+    observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
+      upd <- rv$partial_pending
       rv$partial_pending <- NULL
+      if (isTRUE(input$partial_circular_confirm) && !is.null(upd)) {
+        write_flag("partial_top", upd)
+      }
     })
 
     # Set Annotate Options ----
     observeEvent(input$set_annotate_opts, {
       row <- as.numeric(input$set_annotate_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(filtered_data()$annotate_lock[selected] == 0))
-      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      d <- filtered_data()
+      if (!row_in_selection(row, selected(), d$ID[row])) return()
+      selected <- c(row, selected()) |> unique()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1])) return()
+      rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       annotate_opts_modal(rv)
     })
@@ -1052,9 +1092,14 @@ annotate_server <- function(id) {
           dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked assemblies use this parameter set",
+            text = paste0(
+              "This parameter set is also used by locked assemblies, so it ",
+              "cannot be edited: ",
+              mp_id_list(unique(rv$updating_indirect$ID[rv$updating_indirect$annotate_lock == 1])),
+              ". Unlock them, or type a new parameter set name to create a copy."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -1065,11 +1110,15 @@ annotate_server <- function(id) {
         }
         # Confirm editing opts that apply beyond selection
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_annotate_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_annotate_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste(
+              "These annotation options are also used by",
+              mp_n(nrow(rv$updating_indirect), "assembly"),
+              "outside the current selection. Editing them changes those too."
+            ),
+            action_label = "Edit anyway"
           )
         }
       } else {
@@ -1175,13 +1224,11 @@ annotate_server <- function(id) {
     # Set Curate Options ----
     observeEvent(input$set_curate_opts, {
       row <- as.numeric(input$set_curate_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(filtered_data()$annotate_lock[selected] == 0))
-      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      d <- filtered_data()
+      if (!row_in_selection(row, selected(), d$ID[row])) return()
+      selected <- c(row, selected()) |> unique()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1])) return()
+      rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       curate_opts_modal(rv)
     })
@@ -1271,9 +1318,14 @@ annotate_server <- function(id) {
           dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked assemblies use this parameter set",
+            text = paste0(
+              "This parameter set is also used by locked assemblies, so it ",
+              "cannot be edited: ",
+              mp_id_list(unique(rv$updating_indirect$ID[rv$updating_indirect$annotate_lock == 1])),
+              ". Unlock them, or type a new parameter set name to create a copy."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -1284,11 +1336,15 @@ annotate_server <- function(id) {
         }
         # Confirm editing opts that apply beyond selection
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_curate_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_curate_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste(
+              "These curation options are also used by",
+              mp_n(nrow(rv$updating_indirect), "assembly"),
+              "outside the current selection. Editing them changes those too."
+            ),
+            action_label = "Edit anyway"
           )
         }
       } else {
@@ -1343,9 +1399,9 @@ annotate_server <- function(id) {
         # Target must be a known ruleset (dispatches to params_<target>); block
         # save on a cleared/invalid selection rather than erroring.
         if (!isTRUE(input$target %in% names(RULESET_MAP))) {
-          shinyWidgets::show_alert(
-            title = "Invalid target",
-            text = "Please select a valid curation ruleset before saving.",
+          mp_alert(
+            title = "No curation ruleset chosen",
+            text = "Select a curation ruleset before saving these options.",
             type = "error"
           )
           return()
@@ -1416,13 +1472,11 @@ annotate_server <- function(id) {
     # Set ORF Options ----
     observeEvent(input$set_orf_opts, {
       row <- as.numeric(input$set_orf_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(filtered_data()$annotate_lock[selected] == 0))
-      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      d <- filtered_data()
+      if (!row_in_selection(row, selected(), d$ID[row])) return()
+      selected <- c(row, selected()) |> unique()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1])) return()
+      rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       orf_opts_modal(rv)
     })
@@ -1463,20 +1517,29 @@ annotate_server <- function(id) {
           dplyr::filter(orf_opts == input$orf_opts) |>
           dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked assemblies use this parameter set",
+            text = paste0(
+              "This parameter set is also used by locked assemblies, so it ",
+              "cannot be edited: ",
+              mp_id_list(unique(rv$updating_indirect$ID[rv$updating_indirect$annotate_lock == 1])),
+              ". Unlock them, or type a new parameter set name to create a copy."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
           req(F)
         }
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_orf_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_orf_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste(
+              "These ORF options are also used by",
+              mp_n(nrow(rv$updating_indirect), "assembly"),
+              "outside the current selection. Editing them changes those too."
+            ),
+            action_label = "Edit anyway"
           )
         }
       } else {
