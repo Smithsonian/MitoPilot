@@ -186,7 +186,13 @@ assemble_server_userAsmb <- function(id) {
                    ' mp-state-' + rowInfo.values['assemble_switch'];
           }"),
           theme = reactable::reactableTheme(
-            headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
+            headerStyle = list(
+              whiteSpace = "normal", lineHeight = "1.2",
+              # wrap = FALSE puts .rt-nowrap on the table, which sets nowrap on
+              # the inner div; the theme selector outranks it.
+              "& .rt-th-inner" = list(whiteSpace = "normal", textOverflow = "clip"),
+              "& .rt-text-content" = list(whiteSpace = "normal", textOverflow = "clip")
+            )
           ),
           defaultColDef = colDef(show = FALSE),
           columns = list(
@@ -269,7 +275,7 @@ assemble_server_userAsmb <- function(id) {
             ),
             # The note doubles as the link to the search evidence.
             find_mito_notes = colDef(
-              show = TRUE, class = c(.grp("find_mito_notes"), "mp-note-cell"),
+              show = TRUE, class = paste(c(.grp("find_mito_notes"), "mp-note-cell"), collapse = " "),
               headerClass = .grp("find_mito_notes"),
               name = mp_col_name("find_mito_notes"),
               header = mp_col_header("find_mito_notes"),
@@ -289,7 +295,7 @@ assemble_server_userAsmb <- function(id) {
             ),
             # The note doubles as the link to the circularization evidence.
             circularize_notes = colDef(
-              show = TRUE, class = c(.grp("circularize_notes"), "mp-note-cell"),
+              show = TRUE, class = paste(c(.grp("circularize_notes"), "mp-note-cell"), collapse = " "),
               headerClass = .grp("circularize_notes"),
               name = mp_col_name("circularize_notes"),
               header = mp_col_header("circularize_notes"),
@@ -299,7 +305,7 @@ assemble_server_userAsmb <- function(id) {
                              title = "Show the circularization evidence for this sample")
             ),
             join_notes = colDef(
-              show = TRUE, class = c(.grp("join_notes"), "mp-note-cell"),
+              show = TRUE, class = paste(c(.grp("join_notes"), "mp-note-cell"), collapse = " "),
               headerClass = .grp("join_notes"),
               name = mp_col_name("join_notes"),
               header = mp_col_header("join_notes"),
@@ -420,7 +426,7 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_ts_date()
             ),
             assemble_notes = colDef(
-              show = TRUE, class = c(.grp("assemble_notes"), "mp-note-cell"),
+              show = TRUE, class = paste(c(.grp("assemble_notes"), "mp-note-cell"), collapse = " "),
               headerClass = .grp("assemble_notes"),
               name = mp_col_name("assemble_notes"),
               header = mp_col_header("assemble_notes"),
