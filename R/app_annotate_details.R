@@ -657,7 +657,7 @@ annotations_details_server <- function(id, rv) {
               minWidth = 220,
               maxWidth = 1000,
               html = T,
-              style = list(whiteSpace = "normal"),
+              className = "mp-note-cell",
               align = "left",
               resizable = TRUE
             ),
@@ -667,7 +667,7 @@ annotations_details_server <- function(id, rv) {
               minWidth = 220,
               maxWidth = 1000,
               html = T,
-              style = list(whiteSpace = "normal"),
+              className = "mp-note-cell",
               align = "left",
               resizable = TRUE
             ),
