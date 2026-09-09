@@ -43,94 +43,35 @@ ANNOTATE_EXPORT_CHOICES <- c("Not Exported" = "0", "Exported" = "1")
 annotate_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    tagList(
-      uiOutput(ns("col_css")),
-      div(
-        style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
-        shinyWidgets::pickerInput(
-          inputId  = ns("lock_filter"),
-          width    = "140px",
-          label    = "Lock:",
-          choices  = ANNOTATE_LOCK_CHOICES,
-          selected = ANNOTATE_LOCK_CHOICES,
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "140px"
-          )
-        ),
-        shinyWidgets::pickerInput(
-          inputId  = ns("state_filter"),
-          width    = "140px",
-          label    = "State:",
-          choices  = ANNOTATE_STATE_CHOICES,
-          selected = ANNOTATE_STATE_CHOICES,
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "140px"
-          )
-        ),
-        shinyWidgets::pickerInput(
-          inputId  = ns("export_filter"),
-          width    = "140px",
-          label    = "Exported:",
-          choices  = ANNOTATE_EXPORT_CHOICES,
-          selected = ANNOTATE_EXPORT_CHOICES,
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "140px"
-          )
-        ),
-        shinyWidgets::pickerInput(
-          inputId  = ns("col_groups"),
-          width    = "150px",
-          label    = "Show columns:",
-          choices  = names(ANNOTATE_COL_GROUPS),
-          selected = names(ANNOTATE_COL_GROUPS),
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "150px"
-          )
-        ),
-        shinyWidgets::airDatepickerInput(
-          inputId    = ns("date_filter"),
-          label      = "Updated between:",
-          range      = TRUE,
-          clearButton = TRUE,
-          value      = NULL,
-          width      = "220px",
-          placeholder = "any time"
-        ),
-        uiOutput(ns("warnings_select"))
+    uiOutput(ns("col_css")),
+    # Row filters left to right, then the column picker last (T13).
+    div(
+      class = "mp-filter-row",
+      mp_filter_picker(ns("lock_filter"), "Lock:", ANNOTATE_LOCK_CHOICES,
+                       width = "140px"),
+      mp_filter_picker(ns("state_filter"), "State:", mp_state_choices("annotate"),
+                       width = "140px"),
+      mp_filter_picker(ns("export_filter"), "Exported:", ANNOTATE_EXPORT_CHOICES,
+                       width = "140px"),
+      uiOutput(ns("warnings_select")),
+      shinyWidgets::airDatepickerInput(
+        inputId    = ns("date_filter"),
+        label      = "Updated between:",
+        range      = TRUE,
+        clearButton = TRUE,
+        value      = NULL,
+        width      = "220px",
+        placeholder = "any time"
       ),
-      div(class = "mp-table-resize", reactable::reactableOutput(ns("table"))),
-      div(
-        style = "font-size: 0.85em; color: #555; margin-top: 4px;",
-        textOutput(ns("n_selected"), inline = TRUE)
-      ),
-      div(
-        style = "margin-top: 12px; display: flex; gap: 8px;",
-        downloadButton(ns("export_selected"), "Export Selected to CSV",
-                       class = "btn-sm btn-default"),
-        downloadButton(ns("export_all"), "Export All to CSV",
-                       class = "btn-sm btn-default")
-      )
-    )
+      mp_filter_picker(ns("col_groups"), "Columns:", names(ANNOTATE_COL_GROUPS),
+                       width = "150px")
+    ),
+    div(
+      class = "mp-table-status", role = "status", `aria-live` = "polite",
+      textOutput(ns("n_selected"), inline = TRUE)
+    ),
+    div(class = "mp-table-resize", reactable::reactableOutput(ns("table"))),
+    mp_csv_download_row(ns)
   )
 }
 
@@ -172,30 +113,28 @@ annotate_server <- function(id) {
       )
     })
 
-    # Render dynamic footer with checkboxes
+    # Warning choices, normalised. "12 ambiguous bases in CDS" and "3 ambiguous
+    # bases in CDS" are one warning type; only that warning carries a count.
+    # The cell keeps the full string, the picker matches the type (T13).
+    warn_type <- function(x) sub("^[0-9]+ ", "", trimws(x))
+
     output$warnings_select <- renderUI({
       req(rv$data)
 
-      # Extract and flatten warnings_details column contains values delimited by semicolon
+      # warnings_details holds semicolon-delimited warning strings.
       warn_vals <- rv$data$warnings_details |>
         na.omit() |>
         strsplit(split = ";\\s*") |>
         unlist() |>
+        warn_type() |>
         unique() |>
         sort()
 
-      # Use pickerInput to create a dropdown with checkboxes
-      shinyWidgets::pickerInput(
-        inputId = ns("warning_filters"),
-        width = "220px",
-        label = "Warnings column includes:",
+      mp_filter_picker(
+        ns("warning_filters"), "Warnings column includes:",
         choices = warn_vals,
-        selected = isolate(input$warning_filters) %||% warn_vals, # default to all selected
-        multiple = TRUE, # enable multi-select
-        options = list(
-          `actions-box` = TRUE, # Display checkboxes in dropdown
-          `selected-text-format` = "count > 0" # Show the number of selected items when more than 0 are selected
-        )
+        selected = isolate(input$warning_filters) %||% warn_vals,
+        width = "220px"
       )
     })
 
@@ -207,7 +146,7 @@ annotate_server <- function(id) {
         warnings = purrr::map_int(warnings_details, function(wd) {
           # if (is.na(wd) || length(selected) == 0) return(0)
           wd_list <- strsplit(as.character(wd), ";")[[1]] |>
-            trimws()
+            warn_type()
           sum(wd_list %in% selected)
         })
       )
@@ -310,7 +249,7 @@ annotate_server <- function(id) {
         compact = TRUE,
         striped = TRUE,
         language = reactable::reactableLang(
-          noData = "No Completed / Locked Assemblies Found"
+          noData = "No assemblies are locked yet. Lock a finished sample in Assemble to see it here."
         ),
         defaultPageSize = 100,
         resizable = TRUE,
@@ -658,7 +597,15 @@ annotate_server <- function(id) {
     })
 
     output$n_selected <- renderText({
-      paste0(length(selected()), " selected")
+      d <- filtered_data()
+      exp_code <- ifelse(is.na(d$export_time_stamp), "0", "1")
+      visible <- as.character(d$annotate_lock)   %in% lock_filter_rv() &
+                 as.character(d$annotate_switch) %in% state_filter_rv() &
+                 exp_code %in% export_filter_rv()
+      paste0(
+        "Showing ", sum(visible), " of ", mp_n(nrow(rv$data), "assembly"),
+        " - ", length(selected()), " selected"
+      )
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample
