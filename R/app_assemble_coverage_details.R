@@ -173,15 +173,14 @@ assembly_coverage_details_server <- function(id, rv) {
                       rv$asmb_dir)
           )
         },
-        div(
-          style = "margin-bottom: 8px; font-size: 0.9em; color: #555;",
-          "Multiple assembly paths? ",
-          actionLink(
-            ns("help_assembly_paths"),
-            label = "How do I choose?",
-            icon = icon("circle-question")
+        # The help panel is only useful when there is a choice to make.
+        if (length(unique(rv$focal_assembly$path)) > 1) {
+          div(
+            class = "mp-coverage-caption", style = "margin-bottom: 8px;",
+            "This sample has more than one assembly path. ",
+            tool_help_icon("assembly_paths", label = "choosing an assembly path")
           )
-        ),
+        },
         reactableOutput(ns("table"), width = "100%"),
         uiOutput(ns("consensus_admin")),
         uiOutput(ns("scaffold_join_div")),
@@ -475,14 +474,24 @@ assembly_coverage_details_server <- function(id, rv) {
                rv$focal_assembly$scaffold[row], "_coverage.pdf")
       )
       req(require_assemble_output(pdf_path))
-      # browseURL() errors when no browser is configured (headless/server).
-      tryCatch(browseURL(pdf_path), error = function(e) {
-        shiny::showNotification(
-          paste0("Cannot open a PDF viewer from this session. Path: ", pdf_path),
-          type = "warning",
-          duration = 10
+      # The PDF opens on the machine running the app, which is not the user's
+      # machine over RStudio Server or a remote session. Say so either way, so
+      # a click never looks like it did nothing (T01).
+      opened <- !isTRUE(getOption("MitoPilot.headless")) &&
+        isTRUE(tryCatch({
+          browseURL(pdf_path)
+          TRUE
+        }, error = function(e) FALSE))
+      if (opened) {
+        mp_toast(paste0("Opened on the machine running MitoPilot: ", pdf_path),
+                 type = "message", duration = 5)
+      } else {
+        mp_toast(
+          paste0("This session cannot open a PDF viewer. The coverage plot is at: ",
+                 pdf_path),
+          type = "warning", duration = 10
         )
-      })
+      }
     })
 
     # Copy as fasta ----
