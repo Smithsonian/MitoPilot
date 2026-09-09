@@ -253,7 +253,7 @@ assembly_coverage_details_server <- function(id, rv) {
           columns = list(
             ignore = colDef(
               name = "Ignore",
-              width = 50,
+              width = 62,
               html = TRUE, align = "center",
               sortable = FALSE, filterable = FALSE,
               cell = rt_bool_bttn(
@@ -268,14 +268,14 @@ assembly_coverage_details_server <- function(id, rv) {
               name = "Path", width = 45, align = "center"
             ),
             scaffold = colDef(
-              name = "Scaffold", width = 55, align = "center"
+              name = "Scaffold", width = 74, align = "center"
             ),
             path_flags = colDef(
               name = "Flags", minWidth = 100, resizable = TRUE, align = "left",
               html = TRUE, cell = rt_longtext()
             ),
             topology = colDef(
-              name = "Topology", width = 70, align = "center", html = TRUE,
+              name = "Topology", width = 82, align = "center", html = TRUE,
               cell = rt_pill(c(circular = "info", linear = "neutral"),
                              empty = "")
             ),
