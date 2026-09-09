@@ -84,7 +84,6 @@ pipeline_server <- function(id) {
       job_submitting(FALSE)
       # Generate Nextflow params ----
       nf_cmd(nextflow_cmd(session$userData$mode))
-      message(nf_cmd())
 
       # Count what the run will update: samples in Assemble, one row per
       # sequence (path/scaffold unit) in Annotate.
