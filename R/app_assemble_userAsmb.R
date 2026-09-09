@@ -759,6 +759,7 @@ assemble_server_userAsmb <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
+      mp_opts_saved_toast(nrow(update), input$pre_opts)
     })
 
     # Set Mitogenome Search Opts ----

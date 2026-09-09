@@ -232,6 +232,7 @@ opts_modal_server <- function(rv, name, fields, label, modal, save,
     rv$updating <- rv$updating_indirect <- NULL
     removeModal()
     trigger("update_assemble_table")
+    mp_opts_saved_toast(nrow(update), input[[name]], session = session)
   })
 }
 
@@ -289,7 +290,8 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
         )
       ),
       opts_help("Reusable named set of options applied to the selected samples; ",
-                "check Edit to change values or type a new name to create a set."),
+                "check Edit to change values or type a new name to create a set. ",
+                "Saving re-queues the selected samples: their state becomes Ready to run."),
       mp_checkbox(
         ns("attempt_circularization"),
         label = "Attempt to circularize linear assemblies",
@@ -372,7 +374,7 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
         )
       ),
       size = "m",
-      footer = mp_footer(primary = actionButton(ns("update_circularize_opts"), "Update"))
+      footer = mp_footer(primary = actionButton(ns("update_circularize_opts"), "Save"))
     )
   )
 
@@ -432,7 +434,8 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
         )
       ),
       opts_help("Reusable named set of options applied to the selected samples; ",
-                "check Edit to change values or type a new name to create a set."),
+                "check Edit to change values or type a new name to create a set. ",
+                "Saving re-queues the selected samples: their state becomes Ready to run."),
       mp_checkbox(
         ns("find_mitogenome"),
         label = "Search the assembly for mitochondrial contigs",
@@ -532,7 +535,7 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
         )
       ),
       size = "m",
-      footer = mp_footer(primary = actionButton(ns("update_find_mito_opts"), "Update"))
+      footer = mp_footer(primary = actionButton(ns("update_find_mito_opts"), "Save"))
     )
   )
 

@@ -164,7 +164,8 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected samples: their state becomes Ready to run."),
         textInput(
           ns("fastp"),
           label = tagList("fastp options:", tool_help_icon("fastp")),
@@ -194,7 +195,7 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         size = "m",
-        footer = mp_footer(primary = actionButton(ns("update_pre_opts"), "Update"))
+        footer = mp_footer(primary = actionButton(ns("update_pre_opts"), "Save"))
       )
     )
 
@@ -246,7 +247,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           )
         ),
         opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected samples: their state becomes Ready to run."),
         # Assembler choice + its tool-specific options, boxed off.
         div(
           style = paste(
@@ -412,7 +414,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           )
         ),
         size = "m",
-        footer = mp_footer(primary = actionButton(ns("update_assemble_opts"), "Update"))
+        footer = mp_footer(primary = actionButton(ns("update_assemble_opts"), "Save"))
       )
     )
 
@@ -474,7 +476,8 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected samples: their state becomes Ready to run."),
         mp_checkbox(
           ns("run_blast"),
           label = "Run BLAST reference search using assembly as query",
@@ -568,7 +571,7 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                     "-max_hsps, or -max_target_seqs.")
         ),
         size = "m",
-        footer = mp_footer(primary = actionButton(ns("update_blast_opts"), "Update"))
+        footer = mp_footer(primary = actionButton(ns("update_blast_opts"), "Save"))
       )
     )
 
@@ -790,7 +793,7 @@ assemble_state_modal <- function(ids, current = character(0),
       ),
       size = "m",
       easyClose = TRUE,
-      footer = mp_footer(primary = actionButton(ns("update_state"), "Update"))
+      footer = mp_footer(primary = actionButton(ns("update_state"), "Set state"))
     )
   )
 }
@@ -1037,6 +1040,22 @@ assemble_opts_rows <- function(rv, row, sel, session = getDefaultReactiveDomain(
     return(NULL)
   }
   rows
+}
+
+#' What an options save did: the set applied, and the re-queue that follows
+#'
+#' @param n rows written
+#' @param set name of the parameter set applied
+#' @param noun unit noun for those rows
+#' @param session current shiny session
+#'
+#' @noRd
+mp_opts_saved_toast <- function(n, set, noun = "sample",
+                                session = getDefaultReactiveDomain()) {
+  mp_toast(
+    paste0(mp_n(n, noun), " switched to ", set, " and set to Ready to run."),
+    session = session
+  )
 }
 
 #' Canonical header text for a table column

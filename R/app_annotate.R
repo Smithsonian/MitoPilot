@@ -695,7 +695,7 @@ annotate_server <- function(id) {
           ),
           size = "m",
           easyClose = TRUE,
-          footer = mp_footer(primary = actionButton(ns("update_state"), "Update"))
+          footer = mp_footer(primary = actionButton(ns("update_state"), "Set state"))
         )
       )
     })
@@ -1225,6 +1225,7 @@ annotate_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
+      mp_opts_saved_toast(nrow(update), input$annotate_opts, "assembly")
     })
 
     # Set Curate Options ----
@@ -1473,6 +1474,7 @@ annotate_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
+      mp_opts_saved_toast(nrow(update), input$curate_opts, "assembly")
     })
 
     # Set ORF Options ----
@@ -1599,6 +1601,7 @@ annotate_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
+      mp_opts_saved_toast(nrow(update), input$orf_opts, "assembly")
     })
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {

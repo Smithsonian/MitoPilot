@@ -268,7 +268,8 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           )
         ),
         opts_help("Reusable named set of options applied to the selected assemblies; ",
-                  "check Edit to change values or type a new name to create a set."),
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected assemblies: their state becomes Ready to run."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -518,7 +519,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ),
         size = "m",
         footer = mp_footer(
-          primary = actionButton(ns("update_annotate_opts"), "Update")
+          primary = actionButton(ns("update_annotate_opts"), "Save")
         )
       )
     )
@@ -577,7 +578,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         opts_help("Reusable named set of options applied to the selected assemblies; ",
-                  "check Edit to change values or type a new name to create a set."),
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected assemblies: their state becomes Ready to run."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -716,7 +718,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         ),
         size = "m",
         footer = mp_footer(
-          primary = actionButton(ns("update_curate_opts"), "Update")
+          primary = actionButton(ns("update_curate_opts"), "Save")
         )
       )
     )
@@ -848,7 +850,8 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           )
         ),
         opts_help("Reusable named set of options applied to the selected assemblies; ",
-                  "check Edit to change values or type a new name to create a set."),
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected assemblies: their state becomes Ready to run."),
         mp_checkbox(
           ns("use_orffinder"),
           label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
@@ -861,7 +864,7 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         orf_param_opts,
         size = "m",
         footer = mp_footer(
-          primary = actionButton(ns("update_orf_opts"), "Update")
+          primary = actionButton(ns("update_orf_opts"), "Save")
         )
       )
     )

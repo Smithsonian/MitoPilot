@@ -745,6 +745,7 @@ assemble_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
+      mp_opts_saved_toast(nrow(update), input$pre_opts)
     })
 
     # Set Assemble Opts ----
@@ -971,6 +972,7 @@ assemble_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
+      mp_opts_saved_toast(nrow(update), input$assemble_opts)
       if (nrow(unpublished) > 0L) {
         shown <- unpublished |> dplyr::slice(seq_len(min(nrow(unpublished), 10)))
         items <- lapply(seq_len(nrow(shown)), function(i) {
@@ -1202,6 +1204,7 @@ assemble_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
+      mp_opts_saved_toast(nrow(update), input$blast_opts)
     })
 
     # Open output folder ----
