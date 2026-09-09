@@ -145,6 +145,16 @@ annotations_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # A locked assembly is read-only in this window, the same rule the Annotate
+    # toolbar enforces (theme T02).
+    locked <- reactive(isTRUE(rv$updating[["annotate_lock"]] == 1))
+    lock_blocked <- function() {
+      if (!locked()) return(FALSE)
+      mp_toast(paste("This assembly is locked.", MP_LOCK_DEF("annotate")),
+               type = "warning")
+      TRUE
+    }
+
     # Circular-coordinate helpers ----
     # A feature spanning the origin of a circular unit is stored pos1 > pos2, and
     # a boundary nudge can push a coordinate off either end. These wrap onto the
@@ -512,13 +522,14 @@ annotations_details_server <- function(id, rv) {
     toggle_btn <- function(id, label, state, title, off = "no") {
       nxt <- mp_flag_next(state, off = off)
       set <- identical(nxt, "yes")
-      actionButton(
+      btn <- actionButton(
         id,
         paste(if (set) "Mark" else "Clear", label),
         icon = icon(if (set) "check" else "minus"),
         class = "btn-sm btn-default",
         title = title
       )
+      if (locked()) shinyjs::disabled(btn) else btn
     }
 
     output$status_toggles <- shiny::renderUI({
@@ -1306,12 +1317,12 @@ annotations_details_server <- function(id, rv) {
             if (nzchar(active_acc) && !identical(active_acc, cur_ref)) {
               div(
                 style = "margin-top: 2px;",
-                actionButton(
+                (\(b) if (locked()) shinyjs::disabled(b) else b)(actionButton(
                   ns("synteny_set_ref"),
                   label = paste0("Set ", active_acc, " as best reference"),
                   icon = shiny::icon("check"),
                   class = "btn-sm btn-default"
-                ),
+                )),
                 div(style = "font-size: 11px; color: #888; margin-top: 3px;",
                     "Overwrites the sample's best reference, shown in the Annotate/Export ",
                     "tables and used in the .tbl reference-comparison note.")
@@ -1333,17 +1344,20 @@ annotations_details_server <- function(id, rv) {
       tagList(
         div(
           style = "display: flex; justify-content: start; margin-bottom: 6px;",
-          shinyWidgets::prettyToggle(
-            ns("poor_blast_ref_toggle"),
-            label_on  = "Best reference flagged as poor",
-            label_off = "Flag best reference as poor",
-            icon_on   = shiny::icon("flag"),
-            icon_off  = shiny::icon("flag"),
-            status_on  = "warning",
-            status_off = "default",
-            value = is_poor,
-            inline = TRUE
-          )
+          local({
+            tg <- shinyWidgets::prettyToggle(
+              ns("poor_blast_ref_toggle"),
+              label_on  = "Best reference flagged as poor",
+              label_off = "Flag best reference as poor",
+              icon_on   = shiny::icon("flag"),
+              icon_off  = shiny::icon("flag"),
+              status_on  = "warning",
+              status_off = "default",
+              value = is_poor,
+              inline = TRUE
+            )
+            if (locked()) shinyjs::disabled(tg) else tg
+          })
         ),
         picker,
         no_ref_msg,
@@ -2664,6 +2678,7 @@ annotations_details_server <- function(id, rv) {
       # so clearing notes back to empty still persists.
       saved <- (rv$data$annotate_notes[rv$data$ID == rv$updating$ID])[1]
       req(cleaned != (saved %|NA|% ""))
+      if (lock_blocked()) req(F)
       # Persist without mutating rv$updating: writing notes into rv$updating would
       # invalidate every figure that reads it (coverage/synteny), reloading them on
       # each keystroke.
@@ -2684,6 +2699,7 @@ annotations_details_server <- function(id, rv) {
 
     # Delete Annotation ----
     observeEvent(input$delete, {
+      if (lock_blocked()) req(F)
       if (!need_selection(length(selected()))) {
         req(F)
       }
@@ -2729,6 +2745,7 @@ annotations_details_server <- function(id, rv) {
 
     # Linearize ----
     observeEvent(input$linearize, {
+      if (lock_blocked()) req(F)
       if (rv$updating$topology != "circular") {
         mp_toast("This assembly is already linear.", type = "warning")
         req(F)
@@ -2943,7 +2960,9 @@ annotations_details_server <- function(id, rv) {
     output$asmb_edit_controls <- renderUI({
       st <- asmb_state()
       e <- st$ends
-      reason <- if (is.null(e)) {
+      reason <- if (locked()) {
+        "This assembly is locked. Unlock it in the Annotate table to edit it."
+      } else if (is.null(e)) {
         "This assembly has no sequence on record."
       } else if (!isTRUE(e$topology == "linear")) {
         "Only linear assemblies can be trimmed. Linearize a circular assembly first."
@@ -2972,12 +2991,14 @@ annotations_details_server <- function(id, rv) {
           )
         },
         if (isTRUE(st$edited)) {
-          actionButton(ns("restore_asmb"), "Restore assembly", icon = icon("rotate-left"))
+          b <- actionButton(ns("restore_asmb"), "Restore assembly", icon = icon("rotate-left"))
+          if (locked()) shinyjs::disabled(b) else b
         }
       )
     })
 
     observeEvent(input$trim_ends, {
+      if (lock_blocked()) req(F)
       req(rv$updating$ID)
       e <- asmb_state()$ends
       if (is.null(e) || !isTRUE(e$topology == "linear") || is.na(e$from) ||
@@ -3043,6 +3064,7 @@ annotations_details_server <- function(id, rv) {
     })
 
     observeEvent(input$restore_asmb, {
+      if (lock_blocked()) req(F)
       ops <- assembly_backup_ops(
         session$userData$con, rv$updating$ID, rv$updating$path, rv$updating$scaffold
       )
@@ -3118,6 +3140,7 @@ annotations_details_server <- function(id, rv) {
     # One write path for all four flags: mp_flag_next() decides the value, the
     # same rows_update carries it, and every write says what it did (theme T02).
     write_flag <- function(field, label, value) {
+      if (lock_blocked()) return(invisible(NULL))
       rv$updating[[field]] <- value
       update_annotate_unit(field)
       rv$data <- rv$data |>
@@ -3125,18 +3148,19 @@ annotations_details_server <- function(id, rv) {
           rv$updating[, c("ID", "path", "scaffold", field)],
           by = c("ID", "path", "scaffold")
         )
+      # Same voice as the Annotate toolbar write, and the unit is an assembly.
       mp_toast(
-        if (identical(value, "yes")) {
-          paste0("Marked ", label, ".")
-        } else {
-          paste0("Cleared ", label, ".")
-        },
+        paste0(
+          mp_n(1L, "assembly"),
+          if (identical(value, "yes")) " marked " else " cleared of ",
+          label, "."
+        ),
         type = "message"
       )
     }
 
     observeEvent(input$ID_verified, {
-      write_flag("ID_verified", "species ID verified",
+      write_flag("ID_verified", "ID verified",
                  mp_flag_next(rv$updating$ID_verified))
     })
 
@@ -3177,6 +3201,7 @@ annotations_details_server <- function(id, rv) {
 
     # Poor BLAST reference toggle ----
     observeEvent(input$poor_blast_ref_toggle, ignoreInit = TRUE, {
+      req(!locked())
       val <- if (isTRUE(input$poor_blast_ref_toggle)) "poor" else "good"
       rv$updating$poor_blast_ref  <- val
       rv$updating$blast_ref_status <- val
@@ -3220,6 +3245,7 @@ annotations_details_server <- function(id, rv) {
     # accession. Drives the Annotate/Export tables, the export note and the synteny
     # default. Does not re-curate.
     observeEvent(input$synteny_set_ref, ignoreInit = TRUE, {
+      if (lock_blocked()) req(F)
       acc <- active_ref_acc()
       req(acc, !is.na(acc), nzchar(acc))
       cur <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
@@ -3403,6 +3429,7 @@ annotations_details_server <- function(id, rv) {
 
     # Edit Annotation ----
     observeEvent(input$edit_mode, {
+      if (lock_blocked()) req(F)
       shinyjs::show("edit_mode_ctrls")
       shinyjs::show("save_edits")
       shinyjs::show("discard_edits")
@@ -4154,6 +4181,7 @@ annotations_details_server <- function(id, rv) {
 
     # Save edits ----
     observeEvent(input$save_edits, {
+      if (lock_blocked()) req(F)
       # Show overlay first, then defer the (blocking) stat recompute + DB writes
       # one tick so the "hold tight" message paints before work starts.
       show_edit_waiter("Saving, hold tight...")
@@ -4267,6 +4295,7 @@ annotations_details_server <- function(id, rv) {
 
     # Merge Annotations ----
     observeEvent(input$merge, {
+      if (lock_blocked()) req(F)
       if (length(selected()) == 0) {
         mp_toast("Select an annotation in the table first.", type = "warning")
         req(F)
@@ -4546,6 +4575,7 @@ annotations_details_server <- function(id, rv) {
     })
 
     observeEvent(input$unjoin, {
+      if (lock_blocked()) req(F)
       req(length(selected()) > 0)
       sel_notes <- rv$annotations$notes[selected()] %|NA|% ""
       grp <- stringr::str_match(sel_notes, "^JOIN: mode=\\w+ group=(\\d+)")[, 2]
@@ -4679,6 +4709,7 @@ annotations_details_server <- function(id, rv) {
     # name, sets the corresponding feature type, flags it as edited, and records
     # a note. Does NOT re-run curation (start/stop trimming, refHit rules).
     observeEvent(input$assign_gene, {
+      if (lock_blocked()) req(F)
       req(length(selected()) > 0)
       sel_type <- rv$annotations$type[selected()]
       is_assigned <- isTRUE(rv$annotations$tool[selected()] == "ORFfinder") &&
@@ -4801,6 +4832,7 @@ annotations_details_server <- function(id, rv) {
     # Bulk auto-assign: confirm, then apply BLAST-based guesses to every
     # unassigned ORF whose top hit clears the similarity threshold.
     observeEvent(input$auto_assign_orfs, {
+      if (lock_blocked()) req(F)
       req(rv$annotations)
       orf_idx <- which(
         rv$annotations$type == "ORF" &
@@ -4809,7 +4841,7 @@ annotations_details_server <- function(id, rv) {
       if (length(orf_idx) == 0) {
         mp_alert(
           title = "No ORFs to assign",
-          text = "There are no unassigned ORF annotations in this sample.",
+          text = "There are no unassigned ORF annotations in this assembly.",
           type = "info"
         )
         return()
@@ -4855,6 +4887,7 @@ annotations_details_server <- function(id, rv) {
     })
 
     observeEvent(input$restore, {
+      if (lock_blocked()) req(F)
       req(length(selected()) > 0)
       sel_row <- rv$annotations[selected(), ]
       req(stringr::str_detect(sel_row$gene, "_DELETED_"))
@@ -5036,6 +5069,8 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     class = paste0("mp-pill mp-pill-", if (topo == "circular") "info" else "neutral"),
     paste(topo_icon, topo)
   )
+  is_locked <- isTRUE(rv$updating[["annotate_lock"]] == 1)
+  off <- function(x) if (is_locked) shinyjs::disabled(x) else x
 
   modalDialog(
     # The four review flags sit in the header beside the badges they mirror, so
@@ -5057,6 +5092,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ),
     size = "l",
     easyClose = F,
+    if (is_locked) {
+      div(
+        class = "alert alert-warning mp-lock-banner", role = "status",
+        icon("lock"), tags$b(" This assembly is locked."), " ",
+        MP_LOCK_DEF("annotate"), " Editing controls below are disabled.",
+        " Unlock this assembly in the Annotate table to edit it."
+      )
+    },
     uiOutput(ns("outlier_flag_banner")),
     tags$details(
       id = ns("annotation_table_details"),
@@ -5078,8 +5121,8 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         "gap: 24px; margin: 8px 0 4px 0;"
       ),
       div(
-        actionButton(ns("linearize"), "Linearize",
-                     icon = icon("arrows-left-right-to-line")),
+        off(actionButton(ns("linearize"), "Linearize",
+                         icon = icon("arrows-left-right-to-line"))),
         div(
           class = "mp-table-status", style = "margin: 2px 0 0 0;",
           "Breaks a circular assembly before or after the selected feature."
@@ -5097,12 +5140,12 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       id = ns("annotation_btns_wrapper"),
       div(
         style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
-        actionButton(
+        off(actionButton(
           ns("auto_assign_orfs"),
           "Auto-assign ORFs",
           icon = icon("wand-magic-sparkles")
-        ),
-        shinyjs::hidden(
+        )),
+        off(shinyjs::hidden(
           div(
             id = ns("annotation_action_btns"),
             style = "display: contents;",
@@ -5122,14 +5165,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               )
             )
           )
-        ),
-        shinyjs::hidden(
+        )),
+        off(shinyjs::hidden(
           div(
             id = ns("annotation_restore_btn"),
             style = "display: contents;",
             actionButton(ns("restore"), "Restore")
           )
-        )
+        ))
       ),
       shinyjs::hidden(
         div(
@@ -5254,13 +5297,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em; margin-top: 0.5em; height: 50px;",
           div(
             style = "gap: 0.5em;",
-            actionButton(
+            off(actionButton(
               ns("edit_mode"),
               label = "Edit",
               icon = icon("pen-to-square"),
               class = "btn-sm btn-default",
               title = "Edit the start and stop positions of the selected feature"
-            ),
+            )),
             actionButton(
               ns("save_edits"),
               label = "Save",
@@ -5441,7 +5484,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         value = rv$updating$annotate_notes %|NA|% "",
         width = "100%",
         placeholder = "Notes for this assembly, saved as you type."
-      ) |> mp_named_input("Notes for this assembly", sel = "textarea")
+      ) |> mp_named_input("Notes for this assembly", sel = "textarea") |> off()
     ),
     # One footer row: the two ways out plus the one recommended action. Anything
     # that does not end the dialog lives in the body beside what it acts on
@@ -5449,7 +5492,12 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     # writes the feature counts back before the modal is removed.
     footer = tagList(
       mp_footer(
-        primary = actionButton(ns("lock"), "Lock & Close", icon = icon("lock")),
+        # Already locked: there is nothing left to lock, so Close is the action.
+        primary = if (is_locked) {
+          actionButton(ns("close"), "Close")
+        } else {
+          actionButton(ns("lock"), "Lock & Close", icon = icon("lock"))
+        },
         dismiss = NULL,
         extra = tagList(
           if (isTRUE(session$userData$in_outlier_review)) {
@@ -5459,7 +5507,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               class = "btn-default"
             )
           },
-          actionButton(ns("close"), "Close")
+          if (is_locked) NULL else actionButton(ns("close"), "Close")
         )
       ),
       div(
