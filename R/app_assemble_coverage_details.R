@@ -247,9 +247,7 @@ assembly_coverage_details_server <- function(id, rv) {
                 title_false = "Included - click to ignore this scaffold"
               )
             ),
-            #ID = colDef(
-            #  align = "left", minWidth = 80, resizable = TRUE, html = T, cell = rt_longtext()
-            #),
+            ID = colDef(name = "ID", align = "left", minWidth = mp_fit_width(tbl$ID)),
             path = colDef(
               name = "Path", width = 60, align = "center"
             ),
