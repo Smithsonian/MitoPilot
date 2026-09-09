@@ -225,7 +225,7 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     if (length(col) > 0) {
       name <- sub("object '([^']+)' not found", "\\1", col)
       return(err(sprintf(
-        '{%s} is not one of the available fields. See "Available columns" below.',
+        '{%s} is not one of the available fields. See "Available columns" above.',
         name
       )))
     }

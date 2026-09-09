@@ -510,6 +510,12 @@ export_server <- function(id) {
         )
       trigger("update_export_table")
       removeModal()
+      n <- nrow(upd)
+      mp_toast(if (all(is.na(groups))) {
+        sprintf("%s removed from %s export group.", mp_n(n, "assembly"), if (n == 1) "its" else "their")
+      } else {
+        sprintf("%s assigned to group \"%s\".", mp_n(n, "assembly"), groups[1])
+      })
     }
 
     observeEvent(input$make_group, {
@@ -1071,7 +1077,7 @@ export_server <- function(id) {
             tags$div(
               style = paste(
                 "min-width: 0; background: #000; color: #fff;",
-                "font-family: monospace; font-size: 0.8em; padding: 0.5em 0.6em; border-radius: 4px;",
+                "font-family: monospace; font-size: var(--mp-fs-meta); padding: 0.5em 0.6em; border-radius: 4px;",
                 "white-space: normal; word-break: break-all; text-align: center;"
               ),
               path
