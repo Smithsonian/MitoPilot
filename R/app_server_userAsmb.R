@@ -164,6 +164,9 @@ app_server_userAsmb <- function(input, output, session) {
   # View mode ----
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
+    # Reload the destination tab's data so changes made in another tab (e.g. a
+    # newly locked consensus in Assemble) appear without a manual refresh.
+    trigger(paste0("refresh_", tolower(input$mode)))
   })
 
   # Reload Data
@@ -201,6 +204,9 @@ app_server_userAsmb <- function(input, output, session) {
   # Export
   observeEvent(input$group, {
     trigger("group")
+  })
+  observeEvent(input$clear_group, {
+    trigger("clear_group")
   })
   observeEvent(input$export, {
     trigger("export")

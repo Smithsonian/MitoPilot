@@ -51,7 +51,7 @@ app_ui_userAsmb <- function(request) {
               ),
               mp_toolbar_button(
                 "run_modal", "Update",
-                emphasis = "primary",
+                icon = mp_icon("circle-play"), emphasis = "primary",
                 title = "Review and launch the assembly pipeline"
               )
             ),
@@ -86,7 +86,7 @@ app_ui_userAsmb <- function(request) {
               ),
               mp_toolbar_button(
                 "run_modal", "Update",
-                emphasis = "primary",
+                icon = mp_icon("circle-play"), emphasis = "primary",
                 title = "Review and launch the annotation pipeline"
               )
             ),
@@ -95,8 +95,13 @@ app_ui_userAsmb <- function(request) {
               id = "export_ctrls",
               class = "mp-toolbar",
               mp_toolbar_button(
-                "group", "Group",
+                "group", "Assign Group",
                 title = "Assign the selected samples to an export group",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "clear_group", "Clear Group",
+                title = "Remove the selected samples from their export group",
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
