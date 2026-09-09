@@ -137,7 +137,9 @@ export_server <- function(id) {
       opt_review = TRUE,
       opt_start = 10,
       opt_stop = 10,
-      opt_ident = 60
+      opt_ident = 60,
+      # TRUE only while an export is writing, so the gears turn only then
+      exporting = FALSE
     )
 
     # Refresh ----
@@ -585,7 +587,17 @@ export_server <- function(id) {
     on("export", {
       req(nrow(rv$data) > 0)
       choices <- sort(unique(rv$data$export_group))
-      req(length(choices) > 0)
+      if (length(choices) == 0) {
+        mp_alert(
+          title = "No export group is assigned",
+          text = paste(
+            "Export writes one group at a time. Select rows in the Export",
+            "table, press Assign Group, then press Export Data."
+          ),
+          type = "info"
+        )
+        return()
+      }
       # Saved templates + the currently selected one's header strings, plus the
       # columns available to reference
       con <- session$userData$con
@@ -593,39 +605,63 @@ export_server <- function(id) {
       sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
       rv$export_template <- sel_tmpl
       opts <- get_export_opts(con, sel_tmpl)
-      avail_cols <- paste(sort(names(rv$data)), collapse = ", ")
-      cols_help <- p(
-        style = "color: #666; font-size: 0.8em; margin: 0.25em 0 0.75em;",
-        tags$b("Available columns: "), avail_cols
+      # One collapsed list of usable tokens, split by where the column came
+      # from. Bookkeeping fields are not offered (T23).
+      bookkeeping <- c("annotate_switch", "blast_accession_auto",
+                       "poor_blast_ref", "export_time_stamp")
+      sample_cols <- tryCatch(
+        colnames(dplyr::tbl(con, "samples")),
+        error = function(e) character(0)
       )
-      completeness_help <- p(
-        style = "color: #666; font-size: 0.8em; margin: 0.25em 0 0.75em;",
-        tags$b("{completeness}"),
-        " expands to \"complete genome\" or \"partial genome\", auto-derived from ",
-        "each assembly's topology (circular = complete, linear = partial), unless ",
-        "overridden by the per-sample Partial flag (forces partial) or the ",
-        "curation \"linear complete\" setting (forces linear assemblies to ",
-        "complete). For correct GenBank submission, place {completeness} at the ",
-        "end of the header."
+      avail <- setdiff(names(rv$data), bookkeeping)
+      yours <- sort(intersect(avail, sample_cols))
+      ours <- sort(setdiff(avail, yours))
+      cols_help <- tags$details(
+        tags$summary("Available columns"),
+        opts_help(
+          "Write a column name in braces to use its value, for example ",
+          tags$code("{Taxon}"), ". ", tags$code("{seqid}"), " is the record ",
+          "name MitoPilot gives this unit: the sample ID, or ",
+          tags$code("ID_p<path>_s<scaffold>"), " when one sample exports more ",
+          "than one record. Columns from your mapping file work here even ",
+          "when the table does not show them.",
+          nested = TRUE
+        ),
+        p(tags$b("Your columns: "), paste(yours, collapse = ", ")),
+        p(tags$b("MitoPilot columns: "), paste(ours, collapse = ", ")),
+        opts_help(
+          tags$code("{completeness}"),
+          " expands to \"complete genome\" or \"partial genome\", derived from ",
+          "each assembly's topology (circular = complete, linear = partial), ",
+          "unless the per-sample Partial flag (forces partial) or the curation ",
+          "\"linear complete\" setting (forces linear assemblies to complete) ",
+          "overrides it. For GenBank, put ", tags$code("{completeness}"),
+          " at the end of the header.",
+          nested = TRUE
+        )
       )
+      # The status line describes the box above it, so bind the two (WCAG 3.3.1).
+      hdr_box <- function(id, label, value) {
+        htmltools::tagQuery(
+          textAreaInput(ns(id), label, value, width = "100%")
+        )$find("textarea")$addAttrs(
+          `aria-describedby` = ns(paste0(id, "_status"))
+        )$allTags()
+      }
       modalDialog(
-        title = div(
-          style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-          span("Export Data"),
-          span(id = ns("gears"), class = "gears paused")
+        title = mp_modal_title(
+          tagList("Export data", uiOutput(ns("export_gears"), inline = TRUE))
         ),
         size = "l",
-        # Export group + header-template selector share one row at equal width.
-        # The template dropdown: pick a saved set to load, or type a new name to
-        # create one from the current header boxes (like the analysis-opts
-        # parameter-set dropdowns). Edits auto-save to the selected name.
+        class = "mp-modal-form",
+        # Export group + header-template selector + Save, one row.
         div(
           style = "display: flex; flex-flow: row nowrap; gap: 1em;",
           div(
             style = "flex: 1; min-width: 0;",
             shinyWidgets::pickerInput(
               ns("export_group"),
-              "Export Group:",
+              "Export group:",
               choices = choices,
               width = "100%"
             )
@@ -634,7 +670,7 @@ export_server <- function(id) {
             style = "flex: 1; min-width: 0;",
             selectizeInput(
               ns("template_select"),
-              "Header Template:",
+              "Header template:",
               choices = tmpl_choices,
               selected = sel_tmpl,
               width = "100%",
@@ -644,56 +680,56 @@ export_server <- function(id) {
                 placeholder = "select or type a new template name"
               )
             )
+          ),
+          div(
+            class = "mp-opts-checkbox",
+            actionButton(ns("save_template"), "Save template",
+                         title = "Store the header text below under this template name")
           )
         ),
-        opts_help("Export Group bundles samples into one output set; Header Template ",
-                  "is a reusable, named set of the FASTA header patterns below (type a ",
-                  "new name to save one)."),
-        tags$label(
-          class = "control-label",
-          "Mitogenome FASTA Header (reference columns from your sample data using '{}'):"
+        opts_help(
+          "Export group bundles assemblies into one output set. Header ",
+          "template is a reusable, named set of the FASTA header patterns ",
+          "below: export uses the text on screen, and Save template keeps it ",
+          "for next time."
         ),
-        cols_help,
-        completeness_help,
+        hdr_box("fasta_header", "Mitogenome FASTA header:", opts$fasta_header),
         uiOutput(ns("fasta_header_status")),
-        textAreaInput(
-          ns("fasta_header"),
-          NULL,
-          opts$fasta_header,
-          width = "100%"
-        ),
-        shinyWidgets::prettyCheckbox(
+        cols_help,
+        mp_checkbox(
           ns("include_alignments"),
-          "Generate Group-level PCG alignment summary",
-          value = T,
-          status = "primary"
+          "Generate group-level PCG alignment summary",
+          value = TRUE
         ),
-        shinyWidgets::prettyCheckbox(
+        opts_help(
+          "Writes one HTML page comparing the amino-acid alignment of every ",
+          "protein-coding gene in the group. Needs more than one record."
+        ),
+        mp_checkbox(
           ns("export_genes"),
           "Export individual protein-coding and rRNA genes",
-          value = F,
-          status = "primary"
+          value = FALSE
         ),
-        tags$label(
-          class = "control-label",
-          "Gene FASTA Header (reference columns from your sample data using '{}', gene names will be automatically added):"
+        opts_help(
+          "Writes one FASTA and one feature table per gene, into a genes ",
+          "folder beside the group files."
         ),
-        cols_help,
-        uiOutput(ns("fasta_header_gene_status")),
-        textAreaInput(
-          ns("fasta_header_gene"),
-          NULL,
-          opts$fasta_header_gene,
-          width = "100%"
+        # The gene header only matters when the genes are being written.
+        conditionalPanel(
+          condition = "input.export_genes == true",
+          ns = ns,
+          hdr_box("fasta_header_gene", "Gene FASTA header:",
+                  opts$fasta_header_gene),
+          uiOutput(ns("fasta_header_gene_status")),
+          opts_help("The gene name is added to this header automatically.")
         ),
         # PCG outlier review options, separated from the export options above
-        tags$hr(style = "border-top: 1px solid #ccc; margin: 1em 0 0.75em;"),
-        h4("PCG Annotation Outlier Review", style = "margin-top: 0;"),
-        shinyWidgets::prettyCheckbox(
+        tags$hr(style = "border-top: 1px solid var(--mp-border); margin: 1em 0 0.75em;"),
+        h4("PCG annotation outlier review", style = "margin-top: 0;"),
+        mp_checkbox(
           ns("review_outliers"),
           "Review PCG annotations for outliers",
-          value = rv$opt_review,
-          status = "primary"
+          value = rv$opt_review
         ),
         conditionalPanel(
           condition = "input.review_outliers == true",
@@ -735,9 +771,11 @@ export_server <- function(id) {
             )
           )
         ),
-        footer = tagList(
-          actionButton(ns("export_data"), "Export"),
-          modalButton("Close")
+        # What pressing Export will do, in the group currently chosen.
+        uiOutput(ns("export_summary")),
+        footer = mp_footer(
+          primary = actionButton(ns("export_data"), "Export"),
+          dismiss = "Cancel"
         )
       ) |> showModal()
     })
@@ -769,6 +807,45 @@ export_server <- function(id) {
       render_hdr_status(validate_fasta_header(hdr_gene(), rv$data))
     })
 
+    # Gears turn only while an export is actually running (T22).
+    output$export_gears <- renderUI({
+      if (isTRUE(rv$exporting)) span(class = "gears")
+    })
+
+    # What Export will write, for the group currently chosen. Recomputed as the
+    # group and the two output switches change.
+    output$export_summary <- renderUI({
+      group <- input$export_group
+      req(group)
+      n <- sum(rv$data$export_group == group, na.rm = TRUE)
+      path <- file.path(session$userData$dir_out, "export", group)
+      files <- c(
+        paste0(group, ".fasta"), paste0(group, ".tbl"), "GFFs/",
+        paste0(group, "_sample_info.csv")
+      )
+      if (isTRUE(input$export_genes)) files <- c(files, "genes/")
+      if (isTRUE(input$include_alignments) && n > 1) {
+        files <- c(files, paste0("AA_alignments_", group, ".html"))
+      }
+      div(
+        style = paste(
+          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin-top: 12px;",
+          "background: var(--mp-surface-alt);",
+          "border-left: 3px solid var(--mp-primary);"
+        ),
+        div(sprintf("%s in group \"%s\".", mp_n(n, "record"), group)),
+        div("Written to ", tags$code(class = "mp-path", path), " as: ",
+            paste(files, collapse = ", ")),
+        if (dir.exists(path)) {
+          div(
+            class = "mp-fg-warning",
+            icon("triangle-exclamation"), " ",
+            "This folder already exists. Export deletes it and writes it again."
+          )
+        }
+      )
+    })
+
     # Template selector ----------------------------------------------------
     # Like the analysis-opts parameter-set dropdowns: picking an existing name
     # loads its header strings; typing a new name creates a template from the
@@ -782,32 +859,40 @@ export_server <- function(id) {
         o <- get_export_opts(con, name)
         updateTextAreaInput(session, "fasta_header", value = o$fasta_header)
         updateTextAreaInput(session, "fasta_header_gene", value = o$fasta_header_gene)
-      } else if (isTRUE(validate_fasta_header(input$fasta_header, rv$data)$ok) &&
-                 isTRUE(validate_fasta_header(input$fasta_header_gene, rv$data)$ok)) {
-        # New name typed: seed the template from the current (valid) boxes.
-        set_export_opts(con, input$fasta_header, input$fasta_header_gene, name = name)
-        updateSelectizeInput(
-          session, "template_select",
-          choices = list_export_templates(con), selected = name,
-          options = list(create = TRUE, maxItems = 1)
-        )
       }
     }, ignoreInit = TRUE)
 
-    # Auto-save header edits to the currently selected template (when both are
-    # valid). Reacts only to box edits, not selection, so loading a template
-    # never clobbers it. Invalid templates are never persisted.
-    observeEvent(list(hdr_main(), hdr_gene()), {
+    # Nothing is written until Save template is pressed: editing the boxes
+    # while "default" is selected used to rewrite the project default (T18).
+    observe({
+      shinyjs::toggleState(
+        "save_template",
+        condition = isTRUE(validate_fasta_header(hdr_main(), rv$data)$ok) &&
+          isTRUE(validate_fasta_header(hdr_gene(), rv$data)$ok)
+      )
+    })
+
+    observeEvent(input$save_template, {
       name <- input$template_select
-      req(name, name %in% list_export_templates(session$userData$con))
-      if (isTRUE(validate_fasta_header(input$fasta_header, rv$data)$ok) &&
-          isTRUE(validate_fasta_header(input$fasta_header_gene, rv$data)$ok)) {
-        set_export_opts(
-          session$userData$con, input$fasta_header, input$fasta_header_gene,
-          name = name
+      if (is.null(name) || !nzchar(name)) {
+        mp_alert(
+          title = "Name the template first",
+          text = "Pick a template name, or type a new one, then press Save template.",
+          type = "info"
         )
+        return()
       }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+      if (!valid_headers_or_alert()) return()
+      con <- session$userData$con
+      set_export_opts(con, input$fasta_header, input$fasta_header_gene, name = name)
+      updateSelectizeInput(
+        session, "template_select",
+        choices = list_export_templates(con), selected = name,
+        options = list(create = TRUE, maxItems = 1)
+      )
+      rv$export_template <- name
+      mp_toast(sprintf("Saved header template \"%s\".", name))
+    })
 
     # Validate both header boxes; show an error alert and return FALSE if either
     # is invalid (so a bad template can never reach export).
@@ -862,7 +947,7 @@ export_server <- function(id) {
 
       # Only touch the export modal's own elements while it is still on screen
       if (on_screen) {
-        shinyjs::removeClass("gears", "paused")
+        rv$exporting <- TRUE
         shinyjs::disable("export_data")
       }
 
@@ -878,7 +963,7 @@ export_server <- function(id) {
           ident_pct = rv$review_ident
         )
         if (on_screen) {
-          shinyjs::addClass("gears", "paused")
+          rv$exporting <- FALSE
           shinyjs::enable("export_data")
         }
         # An internal stop means the record will fail NCBI validation, so warn
@@ -901,7 +986,7 @@ export_server <- function(id) {
         # No review: write files immediately, then announce.
         write_export_files()
         if (on_screen) {
-          shinyjs::addClass("gears", "paused")
+          rv$exporting <- FALSE
           shinyjs::enable("export_data")
         }
         show_export_done_alert()
