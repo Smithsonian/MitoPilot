@@ -142,6 +142,25 @@ app_server_userAsmb <- function(input, output, session) {
   # Cache the genetic code lookup table once; called ~30x during codon edits.
   session$userData$gcode <- Biostrings::getGeneticCode(session$userData$genetic_code)
 
+  # Orientation line: app, version, project (full path on hover), workflow, Help.
+  output$app_header <- renderUI({
+    proj <- normalizePath(session$userData$dir, mustWork = FALSE)
+    div(
+      class = "mp-header",
+      tags$span(class = "mp-app-name", "MitoPilot"),
+      tags$span(class = "mp-app-ver", paste0("v", utils::packageVersion("MitoPilot"))),
+      tags$span(class = "mp-proj", title = proj, basename(proj)),
+      tags$span(
+        class = "mp-badge",
+        if (isTRUE(session$userData$no_raw_data)) "User assemblies, no reads" else "User assemblies"
+      ),
+      tags$a(
+        class = "mp-help", href = "https://smithsonian.github.io/MitoPilot/",
+        target = "_blank", rel = "noopener", "Help"
+      )
+    )
+  })
+
   # View mode ----
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
@@ -192,11 +211,11 @@ app_server_userAsmb <- function(input, output, session) {
   # app_annotate_details exist after the flag is created.
   init("goto_annotate")
   on("goto_annotate", {
-    shinyWidgets::updatePickerInput(session, "mode", selected = "Annotate")
+    shinyWidgets::updateRadioGroupButtons(session, "mode", selected = "Annotate")
   })
   init("reopen_outlier_review")
   on("reopen_outlier_review", {
-    shinyWidgets::updatePickerInput(session, "mode", selected = "Export")
+    shinyWidgets::updateRadioGroupButtons(session, "mode", selected = "Export")
   })
 
   # Sub-modules ----

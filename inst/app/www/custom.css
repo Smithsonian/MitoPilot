@@ -577,3 +577,59 @@ a.mp-link:focus-visible {
 }
 .mp-opts-checkbox { align-self: flex-end; margin-bottom: 15px; }
 
+
+/* ------------------------------------------------------------------ */
+/* Shell: orientation header, step control, module heading (T14, T22). */
+/* Only R/app_ui*.R and R/app_workdir_browser.R use these rules.       */
+/* ------------------------------------------------------------------ */
+
+/* The app/project line reuses .mp-header from the token block above;
+   these fill in the fields it carries. */
+.mp-header .mp-app-name {
+  padding-left: var(--mp-space-2);
+}
+
+.mp-header .mp-proj {
+  font-weight: 600;
+  color: var(--mp-text);
+}
+
+.mp-header .mp-badge {
+  background-color: var(--mp-surface-alt);
+  color: var(--mp-text);
+  border-radius: var(--mp-radius);
+  padding: 1px 6px;
+}
+
+/* Help sits at the far end of the line, not in the reading path. */
+.mp-header .mp-help {
+  margin-left: auto;
+  color: var(--mp-action);
+}
+
+/* Step control: the current step is filled, and weight backs the colour
+   up so it does not depend on hue alone. */
+.radio-group-buttons .radiobtn.active {
+  background-color: var(--mp-primary);
+  color: var(--mp-surface);
+  font-weight: 600;
+}
+
+.mp-step-n {
+  opacity: .7;
+  margin-right: 2px;
+}
+
+/* One visible module heading, sized into the existing scale so it costs
+   the table as little height as possible. */
+.mp-module-h1 {
+  font-size: var(--mp-fs-title);
+  font-weight: 600;
+  margin: 0 0 var(--mp-space-2);
+}
+
+/* The wrapper that carries the "select rows first" tooltip for a
+   disabled toolbar button, which fires no pointer events of its own. */
+.mp-needs-selection-wrap {
+  display: inline-flex;
+}
