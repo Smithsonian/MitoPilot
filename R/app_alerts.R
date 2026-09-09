@@ -32,6 +32,23 @@ mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FAL
   )
 }
 
+#' Two-way choice: both buttons are answers, dismissing is neither.
+#'
+#' `labels[1]` is the cancel slot, so it sets `input[[id]]` to FALSE, and
+#' `labels[2]` sets it to TRUE. `cancelOnDismiss = FALSE` keeps a closed
+#' dialog from writing an answer the user did not pick.
+#' @noRd
+mp_choice <- function(id, title, text, labels,
+                      session = getDefaultReactiveDomain()) {
+  shinyWidgets::confirmSweetAlert(
+    session = session, inputId = id, title = title, text = text,
+    type = "question",
+    btn_labels = labels,
+    btn_colors = unname(MP_COLORS[c("primary", "primary")]),
+    cancelOnDismiss = FALSE, showCloseButton = TRUE
+  )
+}
+
 #' Non-blocking toast. One duration for the whole app.
 #' @noRd
 mp_toast <- function(text, type = c("message", "warning", "error", "success"),

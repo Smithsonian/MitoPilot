@@ -2740,19 +2740,14 @@ annotations_details_server <- function(id, rv) {
         )
         req(F)
       }
-      # Not an mp_confirm: this is a two-way choice (before / after), not an
-      # accept-or-cancel, and dismissing it must write neither answer.
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("linearize_loc"),
+      # mp_choice, not mp_confirm: both buttons are answers, not accept-or-cancel.
+      mp_choice(
+        ns("linearize_loc"),
         title = "Linearize assembly",
         text = stringr::str_glue(
           "Set the break point before or after {rv$annotations$gene[selected()]}?"
         ),
-        type = "question",
-        btn_labels = c("After", "Before"),
-        btn_colors = unname(MP_COLORS[c("primary", "primary")]),
-        cancelOnDismiss = FALSE,
-        showCloseButton = TRUE
+        labels = c("After", "Before")
       )
     })
     ## Confirm linearize cut ----
