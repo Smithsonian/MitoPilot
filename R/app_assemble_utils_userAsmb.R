@@ -261,7 +261,9 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
 
   showModal(
     modalDialog(
-      title = stringr::str_glue("Setting Circularization Options for {nrow(rv$updating)} Samples"),
+      title = mp_modal_title(
+        paste("Circularization options for", mp_n(nrow(rv$updating), "sample"))
+      ),
       div(
         style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
         selectizeInput(
@@ -275,29 +277,23 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
           )
         ),
         div(
-          class = "form-group shiny-input-container",
-          style = "margin-top: 39px;",
-          shinyWidgets::prettyCheckbox(
-            ns("edit_circularize_opts"),
-            label = "Edit",
-            value = FALSE,
-            status = "primary"
-          )
+          class = "form-group shiny-input-container mp-opts-checkbox",
+          mp_checkbox(ns("edit_circularize_opts"), label = "Edit", value = FALSE)
         )
       ),
       opts_help("Reusable named set of options applied to the selected samples; ",
                 "check Edit to change values or type a new name to create a set."),
-      shinyWidgets::prettyCheckbox(
+      mp_checkbox(
         ns("attempt_circularization"),
         label = "Attempt to circularize linear assemblies",
-        value = isTRUE(as.logical(current$attempt %||% 0L)),
-        status = "primary"
+        value = isTRUE(as.logical(current$attempt %||% 0L))
       ) |> shinyjs::disabled(),
       opts_help("Assemblers often report a circular mitogenome as a linear contig ",
                 "whose end repeats its start. When switched on, the contig is ",
                 "BLASTed against itself, any redundant overlap is trimmed, and the ",
-                "assembly is relabeled circular. Only linear, single-contig ",
-                "assemblies are considered; everything else is left untouched."),
+                "assembly is relabeled circular. Every contig in the assembly is ",
+                "tried, up to 100 contigs; assemblies above that limit are skipped ",
+                "and reported in the Circularization note."),
       div(
         id = ns("circ_params_group"),
         div(
@@ -369,10 +365,7 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
         )
       ),
       size = "m",
-      footer = tagList(
-        actionButton(ns("update_circularize_opts"), "Update"),
-        modalButton("Cancel")
-      )
+      footer = mp_footer(primary = actionButton(ns("update_circularize_opts"), "Update"))
     )
   )
 
@@ -409,7 +402,9 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
 
   showModal(
     modalDialog(
-      title = stringr::str_glue("Setting Mitogenome Search Options for {nrow(rv$updating)} Samples"),
+      title = mp_modal_title(
+        paste("Mitogenome search options for", mp_n(nrow(rv$updating), "sample"))
+      ),
       div(
         style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
         selectizeInput(
@@ -423,23 +418,16 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
           )
         ),
         div(
-          class = "form-group shiny-input-container",
-          style = "margin-top: 39px;",
-          shinyWidgets::prettyCheckbox(
-            ns("edit_find_mito_opts"),
-            label = "Edit",
-            value = FALSE,
-            status = "primary"
-          )
+          class = "form-group shiny-input-container mp-opts-checkbox",
+          mp_checkbox(ns("edit_find_mito_opts"), label = "Edit", value = FALSE)
         )
       ),
       opts_help("Reusable named set of options applied to the selected samples; ",
                 "check Edit to change values or type a new name to create a set."),
-      shinyWidgets::prettyCheckbox(
+      mp_checkbox(
         ns("find_mitogenome"),
         label = "Search the assembly for mitochondrial contigs",
-        value = isTRUE(as.logical(current$attempt %||% 0L)),
-        status = "primary"
+        value = isTRUE(as.logical(current$attempt %||% 0L))
       ) |> shinyjs::disabled(),
       opts_help("Use this when your FASTA holds a whole assembly rather than a ",
                 "mitogenome. Contigs are BLASTed against the bundled metazoan ",
@@ -488,7 +476,7 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
           div(
             style = "flex: 1",
             numericInput(
-              ns("find_min_aligned_fraction"), "Min. aligned fraction:",
+              ns("find_min_aligned_fraction"), "Min. aligned fraction (0-1):",
               width = "100%", min = 0, max = 1, step = 0.05,
               value = current$min_aligned_fraction %||% numeric(0)
             ) |> shinyjs::disabled()
@@ -535,10 +523,7 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
         )
       ),
       size = "m",
-      footer = tagList(
-        actionButton(ns("update_find_mito_opts"), "Update"),
-        modalButton("Cancel")
-      )
+      footer = mp_footer(primary = actionButton(ns("update_find_mito_opts"), "Update"))
     )
   )
 
