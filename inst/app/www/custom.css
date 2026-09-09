@@ -691,6 +691,45 @@ a.mp-link:focus-visible {
   margin-bottom: var(--mp-space-3);
 }
 
+/* Multi-scaffold-blocked note: automatic tools do not apply here (T21). */
+.mp-panel-warning {
+  margin-bottom: var(--mp-space-3);
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-warning);
+  border-radius: var(--mp-radius);
+  background: var(--mp-warning-soft);
+  font-size: 0.9em;
+}
+
+/* Resolve-conflicts panel: a neutral grouping box, no particular tone. */
+.mp-panel-neutral {
+  margin-top: var(--mp-space-4);
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  background: var(--mp-surface-alt);
+}
+
+/* Join-scaffolds panel: informational tone. */
+.mp-panel-info {
+  margin: var(--mp-space-2) 0;
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  background: var(--mp-primary-soft);
+  font-size: 0.9em;
+}
+
+/* Scaffolds map to different references: needs explicit confirmation. */
+.mp-panel-danger {
+  margin-top: var(--mp-space-2);
+  padding: var(--mp-space-2);
+  border: 1px solid var(--mp-danger);
+  border-radius: var(--mp-radius);
+  background: var(--mp-danger-soft);
+  color: var(--mp-danger);
+}
+
 /* Scaffold table (T09): reactable already scrolls its columns internally
    when they need more room than the modal, but the default scrollbar is
    invisible until hovered. Force a permanent one, same treatment as

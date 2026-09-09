@@ -157,8 +157,7 @@ assembly_coverage_details_server <- function(id, rv) {
         },
         if (isTRUE(rv$asmb_multiscaffold_blocked)) {
           div(
-            style = paste("margin-bottom: 12px; padding: 10px; border: 1px solid #E55330;",
-                          "border-radius: 4px; background: #fdf3f0; font-size: 0.9em;"),
+            class = "mp-panel-warning",
             tags$b("This assembly has multiple competing paths, each fragmented into multiple scaffolds."),
             div(style = "margin-top: 6px;",
                 paste("Automatic scaffold joining is only supported for a single fragmented",
@@ -1358,12 +1357,9 @@ assembly_coverage_details_server <- function(id, rv) {
       n_set <- sum(vapply(made, function(d) !is.null(d), logical(1)))
 
       div(
-        style = paste(
-          "margin-top: 14px; padding: 10px; border: 1px solid #cdd;",
-          "border-radius: 4px; background: #fbfcfd;"
-        ),
+        class = "mp-panel-neutral",
         tags$b("Resolve conflicts into a single assembly (Path 0)"),
-        div(style = "font-size: 11px; color: #777; margin: 2px 0 8px 0;",
+        div(class = "mp-coverage-caption", style = "margin: 2px 0 8px 0;",
             "Set how to resolve the current block, navigate to others, then build. ",
             "Blocks left unset are N-masked."),
         radioButtons(
@@ -1382,10 +1378,10 @@ assembly_coverage_details_server <- function(id, rv) {
                     choices = labs,
                     selected = rv$base_label %||% labs[1],
                     width = "320px"),
-        div(style = "font-size: 11px; color: #777; margin: -4px 0 8px 0;",
+        div(class = "mp-coverage-caption", style = "margin: -4px 0 8px 0;",
             paste("Provides the sequence for the non-conflicting (agreed) regions.",
                   "Conflict blocks you don't resolve above are filled with N.")),
-        div(style = "font-size: 11px; color: #777; margin-bottom: 8px;",
+        div(class = "mp-coverage-caption", style = "margin-bottom: 8px;",
             sprintf("%d of %d conflict block(s) resolved; the rest will be N-masked.",
                     n_set, nrow(rv$alignment$conflicts)))
       )
@@ -1697,16 +1693,14 @@ assembly_coverage_details_server <- function(id, rv) {
       lock_title <- if (locked()) MP_LOCK_DEF("assemble")
       off <- function(x) if (locked()) shinyjs::disabled(x) else x
       div(
-        style = paste("margin: 8px 0; padding: 10px; border: 1px solid #b9c6d6;",
-                      "border-radius: 4px; background: #f4f8fc; font-size: 0.9em;"),
+        class = "mp-panel-info",
         tags$b("Join scaffolds into one assembly"),
-        div(style = "margin-top: 4px; color: #555;",
+        div(class = "mp-coverage-caption",
             paste("This path is fragmented into multiple scaffolds. Reference-guided",
                   "layout orders and orients them; you can override order/orientation",
                   "below, then build the joined Path 0.")),
         if (disagree) div(
-          style = paste("margin-top: 8px; padding: 8px; border: 1px solid #d9534f;",
-                        "border-radius: 4px; background: #fdf3f2; color: #a0241c;"),
+          class = "mp-panel-danger",
           tags$b("Warning: scaffolds map to different references."),
           div(style = "margin-top: 4px;",
               paste("These scaffolds carry different BLAST hits, so joining them may",
