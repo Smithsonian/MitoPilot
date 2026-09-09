@@ -103,11 +103,10 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
       blast_accession,
       blast_ref_status,
       blast_species,
+      blast_lineage,
       blast_pident,
       blast_qcovs,
       blast_evalue,
-      blast_lineage,
-      blast_hits,
       time_stamp,
       assemble_notes,
       circularize_notes,
@@ -123,299 +122,10 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
         assemble_switch > 1 ~ "details",
         .default = NA_character_
       )
-    )
+    ) |>
+    # The three action columns render last and adjacent (theme T19).
+    dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col())
 }
-
-
-#' Get assembly from database
-#'
-#' @param ID sample ID
-#' @param path assembly getOrganelle path
-#' @param scaffold scaffold name(s) to get (NULL for all, default)
-#' @param con database connection
-#'
-#' @export
-get_assembly_userAsmb <- function(ID, path, scaffold = NULL, con) {
-  qry <- dplyr::tbl(con, "assemblies") |>
-    dplyr::filter(ID == !!ID & path == !!path) |>
-    dplyr::select(ID, path, scaffold, topology, sequence) |>
-    dplyr::arrange(scaffold) |>
-    dplyr::collect()
-  if (!is.null(scaffold)) {
-    qry <- dplyr::filter(qry, scaffold %in% !!scaffold)
-  }
-  qry |>
-    tidyr::unite("scaffold_name", c(ID, path, scaffold), sep = ".") |>
-    tidyr::unite("seq_name", c(scaffold_name, topology), sep = " ") |>
-    dplyr::pull(sequence, name = "seq_name") |>
-    Biostrings::DNAStringSet()
-}
-
-#' Update the preprocessing options
-#'
-#' @param rv the local reactive vals object
-#' @param session current shiny session
-#'
-#' @noRd
-pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
-  ns <- session$ns
-
-  current <- list()
-  if (length(unique(rv$updating$pre_opts)) == 1) {
-    current <- rv$pre_opts[rv$pre_opts$pre_opts == rv$updating$pre_opts[1], ]
-
-    showModal(
-      modalDialog(
-        title = stringr::str_glue("Setting Pre-processing Options for {nrow(rv$updating)} Samples"),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          selectizeInput(
-            ns("pre_opts"),
-            label = "Parameter set name:",
-            choices = rv$pre_opts$pre_opts,
-            selected = current$pre_opts,
-            options = list(
-              create = TRUE,
-              maxItems = 1
-            )
-          ),
-          div(
-            class = "form-group shiny-input-container",
-            style = "margin-top: 39px;",
-            shinyWidgets::prettyCheckbox(
-              ns("edit_pre_opts"),
-              label = "Edit",
-              value = FALSE,
-              status = "primary"
-            )
-          )
-        ),
-        opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("pre_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("pre_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        ),
-        textInput(
-          ns("fastp"),
-          label = tagList("fastp options", tool_help_icon("fastp")),
-          value =  current$fastp %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Command-line flags passed to fastp, which trims adapters and ",
-                  "filters low-quality reads.",
-                  href = "https://github.com/OpenGene/fastp"),
-        shinyWidgets::prettyCheckbox(
-          ns("dedup"),
-          label = "Remove duplicate reads (fastp --dedup)",
-          value = grepl("--dedup", current$fastp %||% "", fixed = TRUE),
-          status = "primary"
-        ) |> shinyjs::disabled(),
-        opts_help("Drops PCR and optical duplicates before assembly. Lowers ",
-                  "depth; in the shipped test data it removed about a fifth of ",
-                  "the reads and changed almost no calls."),
-        size = "m",
-        footer = tagList(
-          actionButton(ns("update_pre_opts"), "Update"),
-          modalButton("Cancel")
-        )
-      )
-    )
-
-  } else {
-    shinyWidgets::show_alert(
-      title = "Multiple preprocess parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
-    )
-  }
-}
-
-#' Update the BLAST options
-#'
-#' @param rv the local reactive vals object
-#' @param session current shiny session
-#'
-#' @noRd
-blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
-  ns <- session$ns
-
-  if (length(unique(rv$updating$blast_opts)) == 1) {
-    current <- rv$blast_opts[rv$blast_opts$blast_opts == rv$updating$blast_opts[1], ]
-
-    showModal(
-      modalDialog(
-        title = stringr::str_glue("Setting BLAST Options for {nrow(rv$updating)} Samples"),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          selectizeInput(
-            ns("blast_opts"),
-            label = "Parameter set name:",
-            choices = rv$blast_opts$blast_opts,
-            selected = current$blast_opts,
-            options = list(
-              create = TRUE,
-              maxItems = 1
-            )
-          ),
-          div(
-            class = "form-group shiny-input-container",
-            style = "margin-top: 39px;",
-            shinyWidgets::prettyCheckbox(
-              ns("edit_blast_opts"),
-              label = "Edit",
-              value = FALSE,
-              status = "primary"
-            )
-          )
-        ),
-        opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
-        shinyWidgets::prettyCheckbox(
-          ns("run_blast"),
-          label = "Run BLAST reference search using assembly as query",
-          value = as.logical(current$run_blast %||% 1L),
-          status = "primary"
-        ) |> shinyjs::disabled(),
-        opts_help("BLAST each assembly against the bundled local database of ",
-                  "metazoan mitogenomes to find the closest reference (used for ",
-                  "orientation and curation). Annotations for the winning ",
-                  "reference are still fetched from NCBI."),
-        local_blast_db_note(session$userData$dir_out),
-        div(
-          id = ns("blast_taxids_group"),
-          tags$label(
-            "Restrict search to taxon IDs (optional) -",
-            tags$a("NCBI Taxonomy Browser",
-              href = "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi",
-              target = "_blank"
-            )
-          ),
-          textInput(
-            ns("taxids"),
-            label = NULL,
-            value = current$taxids %||% "",
-            placeholder = "e.g. 7711 for Chordata, or 7711,6656",
-            width = "100%"
-          ) |> shinyjs::disabled(),
-          opts_help("Comma-separated NUMERIC NCBI taxon IDs; taxon names are not ",
-                    "accepted. Leave blank to search the whole database. Applies to ",
-                    "both the local and the remote search.")
-        ),
-        div(
-          id = ns("blast_remote_group"),
-          shinyWidgets::prettyCheckbox(
-            ns("remote_blast"),
-            label = "Remote BLAST",
-            value = as.logical(current$remote_blast %||% 0L),
-            status = "primary"
-          ) |> shinyjs::disabled(),
-          opts_help("Search NCBI over the network instead of the bundled local ",
-                    "database. Much slower, rate limited, and requires internet ",
-                    "access; use it only to reach sequences the local database ",
-                    "does not contain."),
-          shinyWidgets::prettyCheckbox(
-            ns("remote_fallback"),
-            label = "Fall back to remote BLAST when no local hit",
-            value = as.logical(current$remote_fallback %||% 1L),
-            status = "primary"
-          ) |> shinyjs::disabled(),
-          opts_help("If the local search finds no significant hit, retry the search ",
-                    "once against NCBI.")
-        ),
-        div(
-          id = ns("blast_entrez_group"),
-          # Remote-only setting: hidden unless the remote toggle is on
-          style = if (isTRUE(as.logical(current$remote_blast %||% 0L))) NULL else "display: none;",
-          tags$label(
-            "Entrez query (remote BLAST only) -",
-            tags$a("Entrez help documentation",
-              href = "https://www.ncbi.nlm.nih.gov/books/NBK3837/",
-              target = "_blank"
-            )
-          ),
-          textInput(
-            ns("entrez_query"),
-            label = NULL,
-            value = current$entrez_query %||% "mitochondrion[Location]",
-            width = "100%"
-          ) |> shinyjs::disabled(),
-          opts_help("Restricts a REMOTE BLAST search to GenBank records matching ",
-                    "this Entrez filter (default limits hits to mitochondrial ",
-                    "sequences). The local database search cannot apply it; use ",
-                    "taxon IDs above instead. Leave anything other than the default ",
-                    "here and the local search will refuse to run.")
-        ),
-        div(
-          id = ns("blast_mts_group"),
-          tags$label("Candidate reference mitogenomes to retain"),
-          numericInput(
-            ns("max_target_seqs"),
-            label = NULL,
-            value = as.integer(current$max_target_seqs %||% 5L),
-            min = 1, max = 50, step = 1, width = "120px"
-          ) |> shinyjs::disabled(),
-          opts_help("Number of top BLAST hits kept per sample (-max_target_seqs).")
-        ),
-        div(
-          id = ns("blast_extra_group"),
-          tags$label(tagList("Additional blastn options", tool_help_icon("blastn"))),
-          tags$p(
-            class = "text-muted",
-            style = "margin-bottom: 4px; font-size: 0.85em;",
-            "Extra flags passed to blastn. Cannot override: -outfmt, -max_hsps, or ",
-            "-max_target_seqs."
-          ),
-          textAreaInput(
-            ns("extra_opts"),
-            label = NULL,
-            value = current$extra_opts %||% "",
-            width = "100%",
-            rows = 2
-          ) |> shinyjs::disabled()
-        ),
-        size = "m",
-        footer = tagList(
-          actionButton(ns("update_blast_opts"), "Update"),
-          modalButton("Cancel")
-        )
-      )
-    )
-
-    if (!as.logical(current$run_blast %||% 1L)) {
-      shinyjs::hide(id = "blast_taxids_group")
-      shinyjs::hide(id = "blast_remote_group")
-      shinyjs::hide(id = "blast_entrez_group")
-      shinyjs::hide(id = "blast_mts_group")
-      shinyjs::hide(id = "blast_extra_group")
-    }
-
-  } else {
-    shinyWidgets::show_alert(
-      title = "Multiple BLAST parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE
-    )
-  }
-}
-
 
 #' Wire up the shared behaviour of an Assemble options modal
 #'
@@ -444,12 +154,10 @@ opts_modal_server <- function(rv, name, fields, label, modal, save,
   indirect_id <- paste0("editing_", name, "_indirect")
 
   observeEvent(input[[paste0("set_", name)]], {
-    row <- as.numeric(input[[paste0("set_", name)]])
-    if (length(selected()) > 0 && !row %in% selected()) {
-      req(F)
-    }
-    rows <- c(row, selected()) |> unique()
-    req(all(rv$data$assemble_lock[rows] == 0))
+    rows <- assemble_opts_rows(
+      rv, as.numeric(input[[paste0("set_", name)]]), selected(), session = session
+    )
+    if (is.null(rows)) return()
     rv$updating <- rv$data |> dplyr::slice(rows)
     rv$updating_indirect <- rv$updating |> dplyr::slice(0)
     modal(rv)
@@ -466,23 +174,28 @@ opts_modal_server <- function(rv, name, fields, label, modal, save,
         dplyr::filter(.data[[name]] == set_name) |>
         dplyr::anti_join(rv$updating, by = "ID")
       if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-        shinyWidgets::sendSweetAlert(
-          title = "Attempting to edit locked samples",
-          text = "Processing parameters associated with locked samples can not be edited.",
+        mp_alert(
+          title = "Locked samples cannot be edited",
+          text = paste(
+            "This parameter set is also used by locked samples, so its",
+            "values cannot be changed. Unlock those samples first."
+          ),
           type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(inputId = edit_id, value = FALSE)
         req(F)
       }
       if (nrow(rv$updating_indirect) > 0L) {
-        shinyWidgets::confirmSweetAlert(
-          inputId = indirect_id,
-          title = "Editing beyond selection",
+        mp_confirm(
+          indirect_id,
+          title = "Edit beyond the selection",
           text = paste0(
-            "You are attempting to edit ", label, " that apply to samples beyond ",
-            "the current selection. Are you sure you want to proceed?"
+            "These ", label, " also apply to ",
+            mp_n(nrow(rv$updating_indirect), "sample"),
+            " outside the current selection, which this edit will change too."
           ),
-          btn_colors = c("#0056b3", "#0056b3")
+          action_label = "Continue",
+          session = session
         )
       }
     } else {
@@ -519,6 +232,7 @@ opts_modal_server <- function(rv, name, fields, label, modal, save,
     rv$updating <- rv$updating_indirect <- NULL
     removeModal()
     trigger("update_assemble_table")
+    mp_opts_saved_toast(nrow(update), input[[name]], session = session)
   })
 }
 
@@ -535,11 +249,13 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
   ns <- session$ns
 
   if (length(unique(rv$updating$circularize_opts)) != 1) {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "Multiple circularization parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+      text = paste(
+        "One modal edits one parameter set. Select samples that share a set,",
+        "or edit them one set at a time."
+      ),
+      type = "warning"
     )
     return(invisible(NULL))
   }
@@ -553,7 +269,9 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
 
   showModal(
     modalDialog(
-      title = stringr::str_glue("Setting Circularization Options for {nrow(rv$updating)} Samples"),
+      title = mp_modal_title(
+        paste("Circularization options for", mp_n(nrow(rv$updating), "sample"))
+      ),
       div(
         style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
         selectizeInput(
@@ -567,29 +285,24 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
           )
         ),
         div(
-          class = "form-group shiny-input-container",
-          style = "margin-top: 39px;",
-          shinyWidgets::prettyCheckbox(
-            ns("edit_circularize_opts"),
-            label = "Edit",
-            value = FALSE,
-            status = "primary"
-          )
+          class = "form-group shiny-input-container mp-opts-checkbox",
+          mp_checkbox(ns("edit_circularize_opts"), label = "Edit", value = FALSE)
         )
       ),
       opts_help("Reusable named set of options applied to the selected samples; ",
-                "check Edit to change values or type a new name to create a set."),
-      shinyWidgets::prettyCheckbox(
+                "check Edit to change values or type a new name to create a set. ",
+                "Saving re-queues the selected samples: their state becomes Ready to run."),
+      mp_checkbox(
         ns("attempt_circularization"),
         label = "Attempt to circularize linear assemblies",
-        value = isTRUE(as.logical(current$attempt %||% 0L)),
-        status = "primary"
+        value = isTRUE(as.logical(current$attempt %||% 0L))
       ) |> shinyjs::disabled(),
       opts_help("Assemblers often report a circular mitogenome as a linear contig ",
                 "whose end repeats its start. When switched on, the contig is ",
                 "BLASTed against itself, any redundant overlap is trimmed, and the ",
-                "assembly is relabeled circular. Only linear, single-contig ",
-                "assemblies are considered; everything else is left untouched."),
+                "assembly is relabeled circular. Every contig in the assembly is ",
+                "tried, up to 100 contigs; assemblies above that limit are skipped ",
+                "and reported in the Circularization note."),
       div(
         id = ns("circ_params_group"),
         div(
@@ -661,10 +374,7 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
         )
       ),
       size = "m",
-      footer = tagList(
-        actionButton(ns("update_circularize_opts"), "Update"),
-        modalButton("Cancel")
-      )
+      footer = mp_footer(primary = actionButton(ns("update_circularize_opts"), "Save"))
     )
   )
 
@@ -686,11 +396,13 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
   ns <- session$ns
 
   if (length(unique(rv$updating$find_mito_opts)) != 1) {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "Multiple mitogenome search parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+      text = paste(
+        "One modal edits one parameter set. Select samples that share a set,",
+        "or edit them one set at a time."
+      ),
+      type = "warning"
     )
     return(invisible(NULL))
   }
@@ -701,7 +413,9 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
 
   showModal(
     modalDialog(
-      title = stringr::str_glue("Setting Mitogenome Search Options for {nrow(rv$updating)} Samples"),
+      title = mp_modal_title(
+        paste("Mitogenome search options for", mp_n(nrow(rv$updating), "sample"))
+      ),
       div(
         style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
         selectizeInput(
@@ -715,23 +429,17 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
           )
         ),
         div(
-          class = "form-group shiny-input-container",
-          style = "margin-top: 39px;",
-          shinyWidgets::prettyCheckbox(
-            ns("edit_find_mito_opts"),
-            label = "Edit",
-            value = FALSE,
-            status = "primary"
-          )
+          class = "form-group shiny-input-container mp-opts-checkbox",
+          mp_checkbox(ns("edit_find_mito_opts"), label = "Edit", value = FALSE)
         )
       ),
       opts_help("Reusable named set of options applied to the selected samples; ",
-                "check Edit to change values or type a new name to create a set."),
-      shinyWidgets::prettyCheckbox(
+                "check Edit to change values or type a new name to create a set. ",
+                "Saving re-queues the selected samples: their state becomes Ready to run."),
+      mp_checkbox(
         ns("find_mitogenome"),
         label = "Search the assembly for mitochondrial contigs",
-        value = isTRUE(as.logical(current$attempt %||% 0L)),
-        status = "primary"
+        value = isTRUE(as.logical(current$attempt %||% 0L))
       ) |> shinyjs::disabled(),
       opts_help("Use this when your FASTA holds a whole assembly rather than a ",
                 "mitogenome. Contigs are BLASTed against the bundled metazoan ",
@@ -780,7 +488,7 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
           div(
             style = "flex: 1",
             numericInput(
-              ns("find_min_aligned_fraction"), "Min. aligned fraction:",
+              ns("find_min_aligned_fraction"), "Min. aligned fraction (0-1):",
               width = "100%", min = 0, max = 1, step = 0.05,
               value = current$min_aligned_fraction %||% numeric(0)
             ) |> shinyjs::disabled()
@@ -827,10 +535,7 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
         )
       ),
       size = "m",
-      footer = tagList(
-        actionButton(ns("update_find_mito_opts"), "Update"),
-        modalButton("Cancel")
-      )
+      footer = mp_footer(primary = actionButton(ns("update_find_mito_opts"), "Save"))
     )
   )
 
@@ -852,7 +557,7 @@ mito_candidates_modal <- function(id, session = getDefaultReactiveDomain()) {
     dplyr::arrange(dplyr::desc(selected), rank, dplyr::desc(aligned_length))
 
   if (nrow(rows) == 0L) {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "No search results",
       text = "This sample has no mitogenome search records yet.",
       type = "info"
@@ -862,7 +567,7 @@ mito_candidates_modal <- function(id, session = getDefaultReactiveDomain()) {
 
   showModal(
     modalDialog(
-      title = stringr::str_glue("Mitogenome Search Candidates: {id}"),
+      title = mp_modal_title(paste("Mitogenome search candidates for", id)),
       size = "l",
       easyClose = TRUE,
       opts_help("Every contig the search considered, best first. 'Kept' contigs ",
@@ -895,3 +600,15 @@ mito_candidates_modal <- function(id, session = getDefaultReactiveDomain()) {
     )
   )
 }
+
+#' Get assembly from database (user-supplied assemblies)
+#'
+#' Deprecated: identical to [get_assembly()], which serves both project types.
+#'
+#' @inheritParams get_assembly
+#' @export
+get_assembly_userAsmb <- function(ID, path, scaffold = NULL, con) {
+  .Deprecated("get_assembly")
+  get_assembly(ID = ID, path = path, scaffold = scaffold, con = con)
+}
+

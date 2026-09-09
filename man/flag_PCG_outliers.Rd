@@ -38,14 +38,17 @@ A list with two elements:
   \describe{
     \item{flags}{A tibble with one row per flagged (sample, gene):
       `ID`, `label`, `path`, `scaffold`, `gene`, `pct_identity`,
-      `start_offset`, `stop_offset`, `start_flag`, `stop_flag`,
-      `identity_flag`, `issue`.}
+      `start_offset`, `stop_offset`, `internal_stops`, `start_flag`,
+      `stop_flag`, `identity_flag`, `internal_stop_flag`, `issue`.}
     \item{alignments}{A named list (by gene) of clustering-ordered aligned
       `AAStringSet` objects, for every gene that has a flagged sample (plus any
       explicitly requested via `genes`, even if their last flag was cleared).}
     \item{samples}{A named list (by gene) of tibbles listing every unit in the
       gene's alignment (`ID`, `label`, `path`, `scaffold`), flagged or not, so
       the review UI can edit any sample of the gene.}
+    \item{internal_stops}{A tibble of records whose translation contains an
+      internal stop codon: `ID`, `label`, `path`, `scaffold`, `gene`,
+      `n_stops`.}
   }
 }
 \description{
@@ -55,5 +58,6 @@ mis-positioned: those whose start or stop extends past, or falls short of,
 the alignment's well-occupied core by more than a set number of residues
 (pointing at a start/stop codon placed too long or too short) and those that
 align poorly to the rest of the group (a low sequence-identity catch-all for
-badly annotated regions).
+badly annotated regions). Records whose translation carries an internal stop
+codon are always flagged as well, with no threshold.
 }

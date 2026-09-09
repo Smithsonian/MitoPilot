@@ -745,6 +745,17 @@ next_join_group <- function(notes) {
   if (all(is.na(grps))) 1L else max(grps, na.rm = TRUE) + 1L
 }
 
+# Biostrings::translate() warns "last base(s) was ignored" whenever a CDS length
+# is not a multiple of 3, which is expected for partial genes and poly-A stops.
+# Mute only that message; any other warning still surfaces.
+mute_partial_codon_warning <- function(expr) {
+  withCallingHandlers(expr, warning = function(w) {
+    if (grepl("last (\\d+ )?bases? (was|were) ignored", conditionMessage(w))) {
+      invokeRestart("muffleWarning")
+    }
+  })
+}
+
 #' Splice a joined gene's segments into one CDS
 #'
 #' Concatenates a join group's segment (exon) sequences in 5'->3' order and
@@ -795,8 +806,10 @@ splice_join_cds <- function(members, seq, genetic_code) {
   merged <- Biostrings::DNAStringSet(paste(exon_seqs, collapse = ""))
   if (direction == "-") merged <- Biostrings::reverseComplement(merged)
 
-  translation <- Biostrings::translate(merged, genetic.code = genetic_code,
-                                       if.fuzzy.codon = "solve") |>
+  translation <- mute_partial_codon_warning(
+    Biostrings::translate(merged, genetic.code = genetic_code,
+                          if.fuzzy.codon = "solve")
+  ) |>
     as.character()
   translation <- sub("\\*$", "", translation)
   aa_len <- nchar(translation)

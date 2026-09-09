@@ -243,7 +243,9 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
 
     showModal(
       modalDialog(
-        title = stringr::str_glue("Setting Annotation Options for {nrow(rv$updating)} Samples"),
+        title = mp_modal_title(
+          paste("Set annotation options for", mp_n(nrow(rv$updating), "assembly"))
+        ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           selectizeInput(
@@ -257,44 +259,24 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             )
           ),
           div(
-            class = "form-group shiny-input-container",
-            style = "margin-top: 39px;",
-            shinyWidgets::prettyCheckbox(
+            class = "form-group shiny-input-container mp-opts-checkbox",
+            mp_checkbox(
               ns("edit_annotate_opts"),
               label = "Edit",
-              value = FALSE,
-              status = "primary"
+              value = FALSE
             )
           )
         ),
-        opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("annotate_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("annotate_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        ),
+        opts_help("Reusable named set of options applied to the selected assemblies; ",
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected assemblies: their state becomes Ready to run."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
             style = "flex: 1",
             selectizeInput(
               ns("start_gene"),
-              label = "starting gene for circular assemblies",
+              label = "Starting gene for circular assemblies:",
               choices = MITO_GENE_CHOICES,
               selected = current$start_gene %||% character(0),
               width = "100%",
@@ -320,11 +302,10 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         opts_help("When merging results from multiple annotators, higher-priority ",
                   "tools win and lower-priority tools only fill gaps. Genes and rRNAs: ",
                   "MITOS2 > MitoFinder. tRNAs: tRNAscan-SE > ARWEN > ARAGORN > MITOS2."),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("use_mitos"),
           label = "Use MITOS2",
-          value = isTRUE(as.logical(current$use_mitos %||% 1L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$use_mitos %||% 1L))
         ) |> shinyjs::disabled(),
         div(
           id = ns("mitos_opts_box"),
@@ -338,11 +319,10 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         div(
           id = ns("mitos_best_box"),
           style = "display: flex; flex-flow: row nowrap; align-items: center; margin-bottom: 8px;",
-          shinyWidgets::prettyCheckbox(
+          mp_checkbox(
             ns("use_mitos_best"),
             label = "Keep only best of overlapping predictions (--best)",
-            value = isTRUE(as.logical(current$use_mitos_best %||% 1L)),
-            status = "primary"
+            value = isTRUE(as.logical(current$use_mitos_best %||% 1L))
           ) |> shinyjs::disabled()
         ),
         opts_help("MITOS2 is the primary annotator (genes, tRNAs, rRNAs). The ",
@@ -352,11 +332,10 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         div(
           id = ns("rescue_no_trna_box"),
           style = "display: flex; flex-flow: row nowrap; align-items: center; margin-bottom: 8px;",
-          shinyWidgets::prettyCheckbox(
+          mp_checkbox(
             ns("rescue_no_trna"),
             label = "Rescue rRNAs/PCGs lost to tRNA overlap",
-            value = isTRUE(as.logical(current$rescue_no_trna %||% 1L)),
-            status = "primary"
+            value = isTRUE(as.logical(current$rescue_no_trna %||% 1L))
           ) |> shinyjs::disabled()
         ),
         opts_help("Runs MITOS2 a second time without tRNA prediction to recover ",
@@ -370,7 +349,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
               selectizeInput(
                 ns("mitos_ref_dir"),
-                label = "ref_dir",
+                label = "MITOS2 reference folder:",
                 choices = unique(rv$annotate_opts$ref_dir),
                 selected = current$ref_dir %||% character(0),
                 width = "100%",
@@ -384,7 +363,7 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               style = "flex: 1",
               selectizeInput(
                 ns("mitos_ref_db"),
-                label = "ref_db",
+                label = "MITOS2 reference database:",
                 # choices = unique(rv$annotate_opts$ref_db),
                 choices = c("Metazoa_RefSeq89", "Chordata"),
                 selected = current$ref_db %||% character(0),
@@ -396,36 +375,34 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
               ) |> shinyjs::disabled()
             )
           ),
-          opts_help("Location (ref_dir) and name (ref_db) of the MITOS2 reference ",
-                    "database used for annotation; pick a clade closest to your samples.",
+          opts_help("Folder holding the MITOS2 reference databases, and the database ",
+                    "to annotate against; pick the clade closest to your samples.",
                     href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html")
         ),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("use_trnaScan"),
           label = "Use tRNAscan-SE",
-          value = isTRUE(as.logical(current$use_trnaScan %||% 1L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$use_trnaScan %||% 1L))
         ) |> shinyjs::disabled(),
         div(
           id = ns("trnascan_opts_box"),
           textInput(
             ns("trnaScan_opts"),
-            label = tagList("trnAScan-SE options:", tool_help_icon("trnaScan-SE")),
+            label = tagList("tRNAscan-SE options:", tool_help_icon("trnaScan-SE")),
             value = current$trnaScan_opts %||% character(0),
             width = "100%"
           ) |> shinyjs::disabled()
         ),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("use_mitofinder"),
           label = "Also use MitoFinder for annotation",
-          value = isTRUE(as.logical(current$use_mitofinder %||% 0L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$use_mitofinder %||% 0L))
         ) |> shinyjs::disabled(),
         div(
           id = ns("mitofinder_box"),
           textInput(
             ns("mitofinder_db"),
-            label = "MitoFinder reference database (.gb format)",
+            label = "MitoFinder reference database (.gb format):",
             value = current$mitofinder_db %||% character(0),
             width = "100%"
           ) |> shinyjs::disabled(),
@@ -446,29 +423,26 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             ),
             div(
               style = "margin-top: 24px;",
-              shinyWidgets::prettyCheckbox(
+              mp_checkbox(
                 ns("mitofinder_new_genes"),
                 label = "Annotate non-standard genes (--new-genes)",
-                value = isTRUE(as.logical(current$mitofinder_new_genes %||% 0L)),
-                status = "primary"
+                value = isTRUE(as.logical(current$mitofinder_new_genes %||% 0L))
               ) |> shinyjs::disabled()
             ),
             div(
               style = "margin-top: 24px;",
-              shinyWidgets::prettyCheckbox(
+              mp_checkbox(
                 ns("mitofinder_allow_introns"),
                 label = "Search for genes with introns (--allow-intron)",
-                value = isTRUE(as.logical(current$mitofinder_allow_introns %||% 0L)),
-                status = "primary"
+                value = isTRUE(as.logical(current$mitofinder_allow_introns %||% 0L))
               ) |> shinyjs::disabled()
             )
           )
         ),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("use_arwen"),
           label = "Also use ARWEN for tRNA prediction",
-          value = isTRUE(as.logical(current$use_arwen)),
-          status = "primary"
+          value = isTRUE(as.logical(current$use_arwen))
         ) |> shinyjs::disabled(),
         div(
           id = ns("arwen_box"),
@@ -479,11 +453,10 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             width = "100%"
           ) |> shinyjs::disabled()
         ),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("use_aragorn"),
           label = "Also use ARAGORN for tRNA prediction",
-          value = isTRUE(as.logical(current$use_aragorn)),
-          status = "primary"
+          value = isTRUE(as.logical(current$use_aragorn))
         ) |> shinyjs::disabled(),
         div(
           id = ns("aragorn_box"),
@@ -495,53 +468,66 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           ) |> shinyjs::disabled()
         )
         ),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("coverage_trim"),
           label = "Trim low-coverage ends of linear assemblies",
-          value = isTRUE(as.logical(current$coverage_trim %||% 1L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$coverage_trim %||% 1L))
         ) |> shinyjs::disabled(),
         opts_help("Remove poorly supported bases at the ends of linear contigs based ",
                   "on read depth."),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("feature_trim"),
           label = "Trim un-annotated ends of linear contigs (by gene features)",
-          value = isTRUE(as.logical(current$feature_trim %||% 1L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$feature_trim %||% 1L))
         ) |> shinyjs::disabled(),
         opts_help("Trim linear contig ends that extend past the outermost annotated ",
                   "gene features."),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("ref_based_rc"),
           label = "Reverse-complement assembly to match reference orientation",
-          value = isTRUE(as.logical(current$ref_based_rc %||% 0L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$ref_based_rc %||% 0L))
         ) |> shinyjs::disabled(),
         opts_help("Reverse-complement each contig when it aligns better to the top ",
                   "BLAST reference reversed. Off by default; the rRNA and start-gene ",
                   "heuristics usually orient correctly. Enable for taxa they cannot ",
                   "resolve, e.g. scyphozoan jellyfish with rRNAs on opposite strands."),
-        shinyWidgets::prettyCheckbox(
+        mp_checkbox(
           ns("retain_low_conf_trna"),
           label = "Retain low-confidence (NNN anticodon) tRNAs",
-          value = isTRUE(as.logical(current$retain_low_conf_trna %||% 0L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$retain_low_conf_trna %||% 0L))
         ) |> shinyjs::disabled(),
         opts_help("Keep predicted tRNAs whose anticodon could not be confidently ",
                   "determined (reported with an NNN anticodon)."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("annotate_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("annotate_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
         size = "m",
-        footer = tagList(
-          actionButton(ns("update_annotate_opts"), "Update"),
-          modalButton("Cancel")
+        footer = mp_footer(
+          primary = actionButton(ns("update_annotate_opts"), "Save")
         )
       )
     )
   } else {
-    shinyWidgets::show_alert(
-      title = "Multiple annotation parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+    mp_alert(
+      title = "The selection uses more than one annotation parameter set",
+      text = "Select rows that share one parameter set, then open this window again.",
+      type = "warning"
     )
   }
 }
@@ -567,7 +553,9 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
 
     showModal(
       modalDialog(
-        title = stringr::str_glue("Setting Curation Options for {nrow(rv$updating)} Samples"),
+        title = mp_modal_title(
+          paste("Set curation options for", mp_n(nrow(rv$updating), "assembly"))
+        ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           selectizeInput(
@@ -581,37 +569,17 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           ),
           div(
-            class = "form-group shiny-input-container",
-            style = "margin-top: 39px;",
-            shinyWidgets::prettyCheckbox(
+            class = "form-group shiny-input-container mp-opts-checkbox",
+            mp_checkbox(
               ns("edit_curate_opts"),
               label = "Edit",
-              value = FALSE,
-              status = "primary"
+              value = FALSE
             )
           )
         ),
-        opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("curate_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("curate_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        ),
+        opts_help("Reusable named set of options applied to the selected assemblies; ",
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected assemblies: their state becomes Ready to run."),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -634,7 +602,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             style = "flex: 1; min-width: 0; word-wrap : break-word; word-break: break-word;",
             selectizeInput(
               ns("curate_ref_dir"),
-              label = "ref_dir",
+              label = "Curation reference folder:",
               choices = unique(rv$curate_opts$ref_dir),
               selected = current$ref_dir %||% character(0),
               width = "100%",
@@ -648,7 +616,7 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             style = "flex: 1",
             selectizeInput(
               ns("curate_ref_db"),
-              label = "ref_db",
+              label = "Curation reference database:",
               # choices = unique(rv$annotate_opts$ref_db),
               choices = c("Metazoa_RefSeq235", "Metazoa_RefSeq235_custom", "Metazoa_RefSeq231", "Metazoa_RefSeq231_custom", "Metazoa_RefSeq89", "Chordata", "Chordata_custom"),
               selected = current$ref_db %||% character(0),
@@ -660,8 +628,8 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             ) |> shinyjs::disabled()
           )
         ),
-        opts_help("Location (ref_dir) and name (ref_db) of the reference database ",
-                  "used to validate gene boundaries during curation. rRNA reference ",
+        opts_help("Folder holding the curation reference databases, and the database ",
+                  "used to validate gene boundaries. rRNA reference ",
                   "data is only included in Metazoa_RefSeq235 (and custom databases ",
                   "built from it); with other databases the annotation editor's rRNA ",
                   "alignment falls back to the per-sample BLAST reference genome.",
@@ -713,33 +681,52 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                   href = "https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi"),
         div(
           class = "form-group shiny-input-container",
-          shinyWidgets::prettyCheckbox(
+          mp_checkbox(
             ns("linear_complete"),
             label = "Complete mitogenomes are linear (label linear assemblies as 'complete genome' on export)",
-            value = isTRUE(as.integer(current$linear_complete %||% 0L) == 1L),
-            status = "primary"
+            value = isTRUE(as.integer(current$linear_complete %||% 0L) == 1L)
           ) |> shinyjs::disabled()
         ),
-        div(
-          style = "margin-bottom: 14px; height: 300px; overflow: auto;",
-          listviewer::reactjsonOutput(ns("params"))
+        tags$details(
+          tags$summary("Curation rules for this ruleset"),
+          div(
+            style = "margin-bottom: 14px; height: 300px; overflow: auto;",
+            listviewer::reactjsonOutput(ns("params"))
+          ),
+          opts_help("Per-gene curation rules (expected length, start and stop ",
+                    "codons, and so on) for the selected ruleset.",
+                    href = "https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.html")
         ),
-        opts_help("Per-gene curation rules (expected length, start/stop codons, etc.) ",
-                  "for the selected target.",
-                  href = "https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.html"),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("curate_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("curate_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
         size = "m",
-        footer = tagList(
-          actionButton(ns("update_curate_opts"), "Update"),
-          modalButton("Cancel")
+        footer = mp_footer(
+          primary = actionButton(ns("update_curate_opts"), "Save")
         )
       )
     )
   } else {
-    shinyWidgets::show_alert(
-      title = "Multiple curation parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+    mp_alert(
+      title = "The selection uses more than one curation parameter set",
+      text = "Select rows that share one parameter set, then open this window again.",
+      type = "warning"
     )
   }
 }
@@ -777,25 +764,6 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         div(
           style = "flex: 1",
           numericInput(
-            ns("orf_opts_cpus"), "CPUs:",
-            width = "100%",
-            value = current$cpus %||% numeric(0)
-          ) |> shinyjs::disabled()
-        ),
-        div(
-          style = "flex: 1",
-          numericInput(
-            ns("orf_opts_memory"), "Memory (GB):",
-            width = "100%",
-            value = current$memory %||% numeric(0)
-          ) |> shinyjs::disabled()
-        )
-      ),
-      div(
-        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-        div(
-          style = "flex: 1",
-          numericInput(
             ns("orf_min_len"),
             label = "Min ORF length (nt):",
             value = current$orf_min_len %||% character(0),
@@ -816,11 +784,10 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
           ) |> shinyjs::disabled()
         )
       ),
-      shinyWidgets::prettyCheckbox(
+      mp_checkbox(
         ns("orf_nested"),
         label = "Include nested/overlapping ORFs",
-        value = isTRUE(as.logical(current$orf_nested %||% 0L)),
-        status = "primary"
+        value = isTRUE(as.logical(current$orf_nested %||% 0L))
       ) |> shinyjs::disabled(),
       opts_help("Also report ORFs that fall inside or overlap another ORF, rather ",
                 "than only the longest one per region."),
@@ -830,22 +797,36 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         value = current$orffinder_opts %||% character(0),
         width = "100%"
       ) |> shinyjs::disabled(),
-      opts_help("Extra command-line flags passed to NCBI ORFfinder.",
+      opts_help("Extra command-line flags passed to NCBI ORFfinder. The genetic ",
+                "code (-g) and minimum length (-ml) are set for you, from the ",
+                "sample's curation ruleset and the minimum ORF length above.",
                 href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
-      helpText(
-        "The genetic code (-g) and minimum length (-ml) are set automatically",
-        "from the sample's curation ruleset (genetic code) and the Min ORF length",
-        "above; do not set them here."
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_opts_cpus"), "CPUs:",
+            width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("orf_opts_memory"), "Memory (GB):",
+            width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
       )
     )
     if (!orf_on) orf_param_opts <- shinyjs::hidden(orf_param_opts)
 
     showModal(
       modalDialog(
-        title = stringr::str_glue("Setting ORF-finder Options for {nrow(rv$updating)} Samples"),
-        helpText(
-          "When running the ORF step, consider disabling un-annotated end trimming",
-          "in the annotation options"
+        title = mp_modal_title(
+          paste("Set ORF finder options for", mp_n(nrow(rv$updating), "assembly"))
         ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
@@ -860,41 +841,38 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             )
           ),
           div(
-            class = "form-group shiny-input-container",
-            style = "margin-top: 39px;",
-            shinyWidgets::prettyCheckbox(
+            class = "form-group shiny-input-container mp-opts-checkbox",
+            mp_checkbox(
               ns("edit_orf_opts"),
               label = "Edit",
-              value = FALSE,
-              status = "primary"
+              value = FALSE
             )
           )
         ),
-        opts_help("Reusable named set of options applied to the selected samples; ",
-                  "check Edit to change values or type a new name to create a set."),
-        shinyWidgets::prettyCheckbox(
+        opts_help("Reusable named set of options applied to the selected assemblies; ",
+                  "check Edit to change values or type a new name to create a set. ",
+                  "Saving re-queues the selected assemblies: their state becomes Ready to run."),
+        mp_checkbox(
           ns("use_orffinder"),
           label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",
-          value = isTRUE(as.logical(current$use_orffinder %||% 0L)),
-          status = "primary"
+          value = isTRUE(as.logical(current$use_orffinder %||% 0L))
         ) |> shinyjs::disabled(),
         opts_help("Optional step that scans unannotated regions for open ",
-                  "reading frames using NCBI ORFfinder.",
+                  "reading frames using NCBI ORFfinder. When it is on, consider ",
+                  "turning off un-annotated end trimming in the annotation options.",
                   href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
         orf_param_opts,
         size = "m",
-        footer = tagList(
-          actionButton(ns("update_orf_opts"), "Update"),
-          modalButton("Cancel")
+        footer = mp_footer(
+          primary = actionButton(ns("update_orf_opts"), "Save")
         )
       )
     )
   } else {
-    shinyWidgets::show_alert(
-      title = "Multiple ORF parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+    mp_alert(
+      title = "The selection uses more than one ORF parameter set",
+      text = "Select rows that share one parameter set, then open this window again.",
+      type = "warning"
     )
   }
 }

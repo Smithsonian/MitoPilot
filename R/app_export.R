@@ -14,21 +14,6 @@ EXPORT_COL_GROUP_LOOKUP <- {
   out
 }
 
-# Inline grey "?" help icon matching the tool-help icons (tool_help_icon),
-# but as a plain hover tooltip (native title) rather than a help modal.
-export_help_icon <- function(tip) {
-  shiny::icon(
-    "circle-question",
-    title = tip,
-    style = "color: #888; margin-left: 4px; cursor: help;"
-  )
-}
-
-# Label text followed by the help icon, for input labels and table headers.
-export_help_label <- function(label, tip) {
-  htmltools::tagList(label, export_help_icon(tip))
-}
-
 # Per-gene signature of one unit's PCG annotations, read straight from the db.
 # Covers exactly the fields flag_PCG_outliers aligns on (see
 # get_export_PCG_annotations), so two equal signatures mean the alignment for
@@ -57,6 +42,23 @@ sig_diff <- function(before, now) {
   genes[!(!is.na(b) & !is.na(n) & b == n)]
 }
 
+# Body of the pre-review internal-stop warning: one line per affected record.
+internal_stop_alert_text <- function(stops) {
+  lines <- paste0(
+    "<li>", stops$label, " - ", toupper(stops$gene),
+    ifelse(stops$n_stops > 1, paste0(" (", stops$n_stops, " stops)"), ""),
+    "</li>"
+  )
+  htmltools::HTML(paste0(
+    "<p>", mp_n(nrow(stops), "record"),
+    " in this group still translate", if (nrow(stops) == 1) "s" else "",
+    " with an internal stop codon. These will fail NCBI validation.</p>",
+    "<ul style=\"text-align: left; max-height: 240px; overflow-y: auto;\">",
+    paste(lines, collapse = ""), "</ul>",
+    "<p>Continue to the outlier review, or cancel the export?</p>"
+  ))
+}
+
 #' export UI Function
 #'
 #' @description A shiny Module.
@@ -70,49 +72,34 @@ export_ui <- function(id) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("col_css")),
+    # Row filters first, column visibility last and set off by a rule (T13).
     div(
-      style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
-      shinyWidgets::pickerInput(
-        inputId  = ns("col_groups"),
-        width    = "150px",
-        label    = "Show columns:",
-        choices  = names(EXPORT_COL_GROUPS),
-        selected = names(EXPORT_COL_GROUPS),
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "150px"
-        )
+      class = "mp-filter-row",
+      mp_filter_picker(
+        ns("export_filter"), "Exported:", ANNOTATE_EXPORT_CHOICES,
+        width = "140px"
       ),
-      shinyWidgets::pickerInput(
-        inputId  = ns("export_filter"),
-        width    = "140px",
-        label    = "Exported:",
-        choices  = ANNOTATE_EXPORT_CHOICES,
-        selected = ANNOTATE_EXPORT_CHOICES,
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "140px"
+      div(
+        style = paste(
+          "margin-left: 24px; padding-left: 24px;",
+          "border-left: 1px solid var(--mp-border);"
+        ),
+        mp_filter_picker(
+          ns("col_groups"), "Columns:", names(EXPORT_COL_GROUPS),
+          width = "150px"
         )
       )
     ),
+    uiOutput(ns("n_selected")),
     div(class = "mp-table-resize", reactableOutput(ns("table"))),
+    # mp_csv_download_row() shape with the labels T13 settled on: reactable
+    # 0.4.5 cannot report its filtered row set, so neither button claims to.
     div(
-      style = "font-size: 0.85em; color: #555; margin-top: 4px;",
-      textOutput(ns("n_selected"), inline = TRUE)
-    ),
-    div(
+      class = "mp-csv-row",
       style = "margin-top: 12px; display: flex; gap: 8px;",
-      downloadButton(ns("export_selected"), "Export Selected to CSV",
+      downloadButton(ns("export_selected"), "Download selected rows",
                      class = "btn-sm btn-default"),
-      downloadButton(ns("export_all"), "Export All to CSV",
+      downloadButton(ns("export_all"), "Download all rows",
                      class = "btn-sm btn-default")
     )
   )
@@ -150,7 +137,9 @@ export_server <- function(id) {
       opt_review = TRUE,
       opt_start = 10,
       opt_stop = 10,
-      opt_ident = 60
+      opt_ident = 60,
+      # TRUE only while an export is writing, so the gears turn only then
+      exporting = FALSE
     )
 
     # Refresh ----
@@ -176,6 +165,18 @@ export_server <- function(id) {
     .grp <- function(col) {
       g <- EXPORT_COL_GROUP_LOOKUP[col]
       if (is.na(g)) NULL else paste0("mp-grp-", g)
+    }
+
+    # One colDef per data column, with the shared header name and tooltip
+    # (T10). `extra_class` adds the col_css hide hooks on top of the group
+    # class. `name`/`tip` override the registry where Export means something
+    # the other tables do not.
+    .cd <- function(col, extra_class = NULL, name = NULL, tip = NULL, ...) {
+      nm <- name %||% unname(MP_COL_NAMES[[col]])
+      tp <- tip %||% (if (col %in% names(MP_COL_TIPS)) unname(MP_COL_TIPS[[col]]) else NULL)
+      cls <- c(.grp(col), extra_class)
+      colDef(show = TRUE, name = nm, header = rt_header(nm, tp),
+             class = cls, headerClass = cls, ...)
     }
 
     # CSS hide for unselected groups / exported states; keeps DOM intact so
@@ -211,7 +212,7 @@ export_server <- function(id) {
         isolate(rv$data),
         compact = TRUE,
         language = reactable::reactableLang(
-          noData = "No Completed / Locked Annotations Found"
+          noData = "No annotations are locked yet. Lock an annotation in Annotate to see it here."
         ),
         defaultPageSize = 100,
         showPageSizeOptions = TRUE,
@@ -232,88 +233,69 @@ export_server <- function(id) {
           var ets = rowInfo.values['export_time_stamp'];
           return 'mp-exp-' + ((ets != null && ets !== '') ? '1' : '0');
         }"),
-        defaultColDef = colDef(align = "left"),
+        # Alphabetical by ID: Export is a checklist over a fixed set, and the
+        # only date column (export_time_stamp) is NA for exactly the rows that
+        # still need work.
+        defaultSorted = list(ID = "asc"),
+        theme = reactable::reactableTheme(
+          headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
+        ),
+        # A column shows only if it is declared below, so nothing a user put in
+        # their mapping file leaks into the table (T08).
+        defaultColDef = colDef(show = FALSE),
+        # Render order comes from the data frame, not this list. See
+        # fetch_export_data().
         columns = list(
-          ID = colDef(show = T, minWidth = 120, sticky = "left"),
+          `.selection` = colDef(show = TRUE, sticky = "left", width = 28),
+          # Wide enough for a 16-character ID; the tooltip covers longer ones.
+          ID = .cd("ID", minWidth = 160, sticky = "left", html = TRUE,
+                   cell = rt_longtext()),
           # One row per assembly unit; the classes let col_css hide these when every
           # unit shares value 1.
-          path = colDef(
-            show = TRUE, name = "Path", class = "mp-col-path",
-            headerClass = "mp-col-path", width = 55, align = "center"
-          ),
-          scaffold = colDef(
-            show = TRUE, name = "Scaffold", class = "mp-col-scaffold",
-            headerClass = "mp-col-scaffold", width = 75, align = "center"
-          ),
+          path = .cd("path", extra_class = "mp-col-path", width = 90,
+                     align = "center", filterable = FALSE),
+          scaffold = .cd("scaffold", extra_class = "mp-col-scaffold", width = 90,
+                         align = "center", filterable = FALSE),
           # The GenBank record name this unit exports under; hidden when it is just
           # the ID (no fragmented sample in the project).
-          seqid = colDef(
-            show = TRUE, name = "SeqID", class = "mp-col-seqid",
-            headerClass = "mp-col-seqid", minWidth = 130
-          ),
-          Taxon = colDef(show = T, name = "Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
-          curate_opts = colDef(
-            show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
-            name = "Curate Opts.",
-            width = 110
-          ),
-          genetic_code = colDef(show = T, name = "Genetic Code", align = "center", width = 110),
-          poor_blast_ref = colDef(show = FALSE),
-          partial = colDef(show = FALSE),
-          completeness = colDef(show = FALSE),
-          length = colDef(show = FALSE),
-          blast_ref_status = colDef(
-            show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
-            name = "BLAST Ref Align",
-            html = TRUE,
-            minWidth = 130,
-            resizable = TRUE,
-            align = "center",
-            filterable = TRUE,
+          seqid = .cd("seqid", extra_class = "mp-col-seqid", minWidth = 130),
+          Taxon = .cd("Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
+          curate_opts = .cd("curate_opts", width = 110),
+          genetic_code = .cd("genetic_code", width = 110),
+          blast_ref_status = .cd(
+            "blast_ref_status", html = TRUE, minWidth = 130, align = "center",
             cell = rt_blast_ref_status()
           ),
-          blast_accession = colDef(
-            show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Hit",
-            html = TRUE,
-            width = 120,
+          blast_accession = .cd(
+            "blast_accession", html = TRUE, width = 130,
             cell = rt_ncbi_link(auto_col = "blast_accession_auto")
           ),
           blast_accession_auto = colDef(show = FALSE),
-          blast_species = colDef(
-            show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
-            name = "BLAST Species",
-            html = TRUE,
-            minWidth = 160,
-            cell = rt_longtext()
+          blast_species = .cd("blast_species", html = TRUE, minWidth = 160,
+                              cell = rt_longtext()),
+          blast_lineage = .cd("blast_lineage", html = TRUE, minWidth = 200,
+                              cell = rt_longtext()),
+          topology = .cd("topology", width = 100),
+          structure = .cd("structure", html = TRUE, minWidth = 200,
+                          cell = rt_longtext()),
+          PCGCount = .cd("PCGCount", width = 90),
+          tRNACount = .cd("tRNACount", width = 90),
+          rRNACount = .cd("rRNACount", width = 90),
+          ORFCount = .cd("ORFCount", width = 90),
+          missing = .cd("missing", html = TRUE, minWidth = 130, cell = rt_longtext()),
+          extra = .cd("extra", html = TRUE, minWidth = 130, cell = rt_longtext()),
+          # Stored, not recomputed: annotate.warnings counts warning events at
+          # curation time, while the Annotate table recounts them per feature.
+          warnings = .cd(
+            "warnings", width = 110, na = "0", name = "Stored Warnings",
+            tip = paste(
+              "Counted when the assembly was curated; the Annotate table",
+              "recounts per feature, so its number can be higher"
+            )
           ),
-          blast_lineage = colDef(
-            show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
-            name = "BLAST Lineage",
-            html = TRUE,
-            minWidth = 200,
-            cell = rt_longtext()
-          ),
-          topology = colDef(
-            show = T, class = .grp("topology"), headerClass = .grp("topology"),
-            name = "Topology", width = 100
-          ),
-          structure = colDef(
-            show = T, class = .grp("structure"), headerClass = .grp("structure"),
-            name = "Structure"
-          ),
-          PCGCount = colDef(show = T, name = "# PCGs", align = "center"),
-          tRNACount = colDef(show = T, name = "# tRNAs", align = "center"),
-          rRNACount = colDef(show = T, name = "# rRNAs", align = "center"),
-          ORFCount = colDef(show = T, name = "# ORFs", align = "center"),
-          missing = colDef(show = T, name = "Missing", align = "left", html = TRUE, cell = rt_longtext()),
-          extra = colDef(show = T, name = "Extra", align = "left", html = TRUE, cell = rt_longtext()),
-          warnings = colDef(show = T, name = "Warnings", align = "left", html = TRUE, cell = rt_longtext()),
-          export_time_stamp = colDef(
-            show = T, name = "Exported", html = TRUE, width = 150,
-            filterable = FALSE, cell = rt_ts_date()
-          ),
-          export_group = colDef(show = T, name = "Export Group", sticky = "right")
+          export_time_stamp = .cd("export_time_stamp", html = TRUE, width = 150,
+                                  filterable = FALSE, cell = rt_ts_date()),
+          export_group = .cd("export_group", sticky = "right", minWidth = 140)
         )
       )
     })
@@ -340,8 +322,26 @@ export_server <- function(id) {
       intersect(sel, which(visible))
     })
 
-    output$n_selected <- renderText({
-      paste0(length(selected()), " selected")
+    # Rows the Exported picker leaves on screen. reactable's own search and
+    # column filters are a browser-side layer R cannot see, so this is the
+    # server-visible count, not a live DOM count.
+    visible_n <- reactive({
+      d <- rv$data
+      if (is.null(d) || nrow(d) == 0) return(0L)
+      sum(ifelse(is.na(d$export_time_stamp), "0", "1") %in% export_filter_rv())
+    })
+
+    output$n_selected <- renderUI({
+      assemble_table_status(visible_n(), nrow(rv$data), length(selected()), noun = "assembly")
+    })
+
+    # Toolbar buttons that act on the selection are dead without one (T01).
+    # A class selector, not an id: these buttons live in the top-level UI.
+    observe({
+      shinyjs::toggleState(
+        selector = "#export_ctrls .mp-needs-selection",
+        condition = length(selected()) > 0
+      )
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample
@@ -350,7 +350,8 @@ export_server <- function(id) {
     })
 
     # CSV Export ----
-    .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto")
+    .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto",
+                           "annotate_switch")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
@@ -377,44 +378,49 @@ export_server <- function(id) {
     )
 
     # Group ----
+    # The "already in a group" warning is shown inside the modal, next to the
+    # group name, rather than as a confirm before the modal opens (T24).
     init("group")
     on("group", {
       req(session$userData$mode == "Export")
-      req(selected())
-      if (any(!is.na(rv$data$export_group[selected()]))) {
-        shinyWidgets::confirmSweetAlert(
-          title = "Re-assign group?",
-          text = "Some selected samples are already assigned to an export group. Assigning them to a new group will not automatically remove them from previously generated export files. Do you want to continue?",
-          inputId = ns("group_confirm"),
-          btn_labels = c("No", "Yes"),
-          btn_colors = c("#0056b3", "#0056b3")
-        )
-        req(F)
-      }
-      trigger("group_modal")
-    })
-    observeEvent(input$group_confirm, {
-      req(input$group_confirm)
+      if (!need_selection(length(selected()))) return()
       trigger("group_modal")
     })
 
     # Clear Group ----
     # Remove the export_group assignment from any selected samples that currently
-    # have one. Always-visible button; a no-group selection is a silent no-op.
+    # have one.
     init("clear_group")
     on("clear_group", {
       req(session$userData$mode == "Export")
-      req(selected())
+      if (!need_selection(length(selected()))) return()
       rv$updating <- rv$data |> dplyr::slice(selected())
       if (!any(!is.na(rv$updating$export_group))) {
-        req(FALSE)
+        mp_toast(
+          if (nrow(rv$updating) == 1) {
+            "The selected assembly is not in an export group."
+          } else {
+            sprintf(
+              "None of the %s selected assemblies are in an export group.",
+              nrow(rv$updating)
+            )
+          },
+          type = "warning"
+        )
+        return()
       }
-      shinyWidgets::confirmSweetAlert(
-        title = "Clear group?",
-        text = "Remove the selected samples from their export group? This will not automatically remove them from previously generated export files.",
-        inputId = ns("clear_group_confirm"),
-        btn_labels = c("No", "Yes"),
-        btn_colors = c("#0056b3", "#0056b3")
+      mp_confirm(
+        ns("clear_group_confirm"),
+        title = "Clear export group",
+        text = sprintf(
+          paste(
+            "%s %s export group. Files already written for that group",
+            "are not removed."
+          ),
+          mp_n(nrow(rv$updating), "assembly", "assemblies"),
+          if (nrow(rv$updating) == 1) "leaves its" else "leave their"
+        ),
+        action_label = "Clear group"
       )
     })
     observeEvent(input$clear_group_confirm, {
@@ -434,32 +440,50 @@ export_server <- function(id) {
       group_current <- rv$updating |>
         dplyr::pull(export_group) |>
         unique()
+      already <- sort(group_current[!is.na(group_current)])
       modalDialog(
-        title = "Submission Group",
+        title = mp_modal_title(
+          "Assign export group",
+          subtitle = sprintf(
+            "%s selected", mp_n(nrow(rv$updating), "assembly", "assemblies")
+          )
+        ),
         size = "l",
         easyClose = FALSE,
-        stringr::str_glue(
-          "<b># Selected:</b> {nrow(rv$updating)}"
-        ) |> HTML() |> p(),
-        stringr::str_glue(
-          "<b># Topology:</b> {paste(topologies, collapse=', ')}"
-        ) |> HTML() |> p(),
-        HTML("<b>Structure:") |> p(),
+        p(tags$b("Topology: "), paste(topologies, collapse = ", ")),
+        p(tags$b("Gene Order:")),
         list_to_li(structures),
         hr(),
         selectizeInput(
           ns("group_name"),
-          label = "Group Name:",
+          label = "Group name:",
           choices = c("", sort(unique(rv$data$export_group))),
           selected = character(0),
+          width = "320px",
           options = list(
             create = TRUE,
-            maxItems = 1
+            maxItems = 1,
+            # Refuses to create a name the export path cannot use, at the
+            # keystroke rather than after Create (T18).
+            createFilter = "^[A-Za-z0-9._-]+$",
+            placeholder = "letters, numbers, dot, hyphen, underscore"
           )
         ),
-        footer = tagList(
-          actionButton(ns("make_group"), "Create"),
-          modalButton("Close")
+        if (length(already) > 0) {
+          p(
+            class = "mp-fg-warning",
+            icon("triangle-exclamation"), " ",
+            sprintf(
+              "%s already in %s. A new group does not remove %s from export files already written.",
+              if (nrow(rv$updating) == 1) "This assembly is" else "Some of these are",
+              paste(sprintf("\"%s\"", already), collapse = ", "),
+              if (nrow(rv$updating) == 1) "it" else "them"
+            )
+          )
+        },
+        footer = mp_footer(
+          primary = actionButton(ns("make_group"), "Create"),
+          dismiss = "Cancel"
         )
       ) |> showModal()
     })
@@ -486,14 +510,21 @@ export_server <- function(id) {
         )
       trigger("update_export_table")
       removeModal()
+      n <- nrow(upd)
+      mp_toast(if (all(is.na(groups))) {
+        sprintf("%s removed from %s export group.", mp_n(n, "assembly"), if (n == 1) "its" else "their")
+      } else {
+        sprintf("%s assigned to group \"%s\".", mp_n(n, "assembly"), groups[1])
+      })
     }
 
     observeEvent(input$make_group, {
       name <- req(input$group_name)
-      if (any(!(grepl("^[a-zA-Z0-9_-]+$", name)))) {
-        shinyWidgets::sendSweetAlert(
+      # Backstop: the selectize createFilter already refuses these keystrokes.
+      if (any(!(grepl("^[A-Za-z0-9._-]+$", name)))) {
+        mp_alert(
           title = "Invalid group name",
-          text = "Group names must contain only alphanumeric characters, dashes, or underscores",
+          text = "Use only letters, numbers, dots, hyphens, and underscores.",
           type = "error"
         )
         return()
@@ -506,7 +537,7 @@ export_server <- function(id) {
       if (n_complete > 0 && n_partial > 0) {
         rv$pending_group_name <- name
         modalDialog(
-          title = "Mixed complete and partial mitogenomes",
+          title = mp_modal_title("Mixed complete and partial mitogenomes"),
           size = "m",
           easyClose = FALSE,
           HTML(stringr::str_glue(
@@ -515,10 +546,14 @@ export_server <- function(id) {
             "complete and {n_partial} partial. Split into two groups, ",
             "'{name}-complete' and '{name}-partial', or keep them as one group?"
           )),
-          footer = tagList(
-            actionButton(ns("group_split"), "Split into two groups", class = "btn-primary"),
-            actionButton(ns("group_keep_one"), "Keep as one mixed group"),
-            actionButton(ns("group_back"), "Cancel")
+          # Cancel returns to the group modal, so the typed name is not lost.
+          footer = mp_footer(
+            primary = actionButton(ns("group_split"), "Split into two groups"),
+            dismiss = NULL,
+            extra = tagList(
+              actionButton(ns("group_back"), "Cancel"),
+              actionButton(ns("group_keep_one"), "Keep as one mixed group")
+            )
           )
         ) |> showModal()
         return()
@@ -555,7 +590,17 @@ export_server <- function(id) {
     on("export", {
       req(nrow(rv$data) > 0)
       choices <- sort(unique(rv$data$export_group))
-      req(length(choices) > 0)
+      if (length(choices) == 0) {
+        mp_alert(
+          title = "No export group is assigned",
+          text = paste(
+            "Export writes one group at a time. Select rows in the Export",
+            "table, press Assign Group, then press Export Data."
+          ),
+          type = "info"
+        )
+        return()
+      }
       # Saved templates + the currently selected one's header strings, plus the
       # columns available to reference
       con <- session$userData$con
@@ -563,39 +608,63 @@ export_server <- function(id) {
       sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
       rv$export_template <- sel_tmpl
       opts <- get_export_opts(con, sel_tmpl)
-      avail_cols <- paste(sort(names(rv$data)), collapse = ", ")
-      cols_help <- p(
-        style = "color: #666; font-size: 0.8em; margin: 0.25em 0 0.75em;",
-        tags$b("Available columns: "), avail_cols
+      # One collapsed list of usable tokens, split by where the column came
+      # from. Bookkeeping fields are not offered (T23).
+      bookkeeping <- c("annotate_switch", "blast_accession_auto",
+                       "poor_blast_ref", "export_time_stamp")
+      sample_cols <- tryCatch(
+        colnames(dplyr::tbl(con, "samples")),
+        error = function(e) character(0)
       )
-      completeness_help <- p(
-        style = "color: #666; font-size: 0.8em; margin: 0.25em 0 0.75em;",
-        tags$b("{completeness}"),
-        " expands to \"complete genome\" or \"partial genome\", auto-derived from ",
-        "each assembly's topology (circular = complete, linear = partial), unless ",
-        "overridden by the per-sample Partial flag (forces partial) or the ",
-        "curation \"linear complete\" setting (forces linear assemblies to ",
-        "complete). For correct GenBank submission, place {completeness} at the ",
-        "end of the header."
+      avail <- setdiff(names(rv$data), bookkeeping)
+      yours <- sort(intersect(avail, sample_cols))
+      ours <- sort(setdiff(avail, yours))
+      cols_help <- tags$details(
+        tags$summary("Available columns"),
+        opts_help(
+          "Write a column name in braces to use its value, for example ",
+          tags$code("{Taxon}"), ". ", tags$code("{seqid}"), " is the record ",
+          "name MitoPilot gives this assembly: the sample ID, or ",
+          tags$code("ID_p<path>_s<scaffold>"), " when one sample exports more ",
+          "than one record. Columns from your mapping file work here even ",
+          "when the table does not show them.",
+          nested = TRUE
+        ),
+        p(tags$b("Your columns: "), paste(yours, collapse = ", ")),
+        p(tags$b("MitoPilot columns: "), paste(ours, collapse = ", ")),
+        opts_help(
+          tags$code("{completeness}"),
+          " expands to \"complete genome\" or \"partial genome\", derived from ",
+          "each assembly's topology (circular = complete, linear = partial), ",
+          "unless the per-sample Partial flag (forces partial) or the curation ",
+          "\"linear complete\" setting (forces linear assemblies to complete) ",
+          "overrides it. For GenBank, put ", tags$code("{completeness}"),
+          " at the end of the header.",
+          nested = TRUE
+        )
       )
+      # The status line describes the box above it, so bind the two (WCAG 3.3.1).
+      hdr_box <- function(id, label, value) {
+        htmltools::tagQuery(
+          textAreaInput(ns(id), label, value, width = "100%")
+        )$find("textarea")$addAttrs(
+          `aria-describedby` = ns(paste0(id, "_status"))
+        )$allTags()
+      }
       modalDialog(
-        title = div(
-          style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-          span("Export Data"),
-          span(id = ns("gears"), class = "gears paused")
+        title = mp_modal_title(
+          tagList("Export data", uiOutput(ns("export_gears"), inline = TRUE))
         ),
         size = "l",
-        # Export group + header-template selector share one row at equal width.
-        # The template dropdown: pick a saved set to load, or type a new name to
-        # create one from the current header boxes (like the analysis-opts
-        # parameter-set dropdowns). Edits auto-save to the selected name.
+        class = "mp-modal-form",
+        # Export group + header-template selector + Save, one row.
         div(
           style = "display: flex; flex-flow: row nowrap; gap: 1em;",
           div(
             style = "flex: 1; min-width: 0;",
             shinyWidgets::pickerInput(
               ns("export_group"),
-              "Export Group:",
+              "Export group:",
               choices = choices,
               width = "100%"
             )
@@ -604,7 +673,7 @@ export_server <- function(id) {
             style = "flex: 1; min-width: 0;",
             selectizeInput(
               ns("template_select"),
-              "Header Template:",
+              "Header template:",
               choices = tmpl_choices,
               selected = sel_tmpl,
               width = "100%",
@@ -614,56 +683,57 @@ export_server <- function(id) {
                 placeholder = "select or type a new template name"
               )
             )
+          ),
+          div(
+            class = "mp-opts-checkbox",
+            actionButton(ns("save_template"), "Save template",
+                         title = "Store the header text below under this template name")
           )
         ),
-        opts_help("Export Group bundles samples into one output set; Header Template ",
-                  "is a reusable, named set of the FASTA header patterns below (type a ",
-                  "new name to save one)."),
-        tags$label(
-          class = "control-label",
-          "Mitogenome FASTA Header (reference columns from your sample data using '{}'):"
+        opts_help(
+          "Export group bundles assemblies into one output set. Header ",
+          "template is a reusable, named set of the FASTA header patterns ",
+          "below: export uses the text on screen, and Save template keeps it ",
+          "for next time."
         ),
-        cols_help,
-        completeness_help,
+        hdr_box("fasta_header", "Mitogenome FASTA header:", opts$fasta_header),
         uiOutput(ns("fasta_header_status")),
-        textAreaInput(
-          ns("fasta_header"),
-          NULL,
-          opts$fasta_header,
-          width = "100%"
-        ),
-        shinyWidgets::prettyCheckbox(
+        cols_help,
+        mp_checkbox(
           ns("include_alignments"),
-          "Generate Group-level PCG alignment summary",
-          value = T,
-          status = "primary"
+          "Generate group-level PCG alignment summary",
+          value = TRUE
         ),
-        shinyWidgets::prettyCheckbox(
+        opts_help(
+          "Writes one HTML page comparing the amino-acid alignment of every ",
+          "protein-coding gene in the group. Needs more than one record."
+        ),
+        mp_checkbox(
           ns("export_genes"),
           "Export individual protein-coding and rRNA genes",
-          value = F,
-          status = "primary"
+          value = FALSE
         ),
-        tags$label(
-          class = "control-label",
-          "Gene FASTA Header (reference columns from your sample data using '{}', gene names will be automatically added):"
+        opts_help(
+          "Writes one FASTA and one feature table per gene, into a genes ",
+          "folder beside the group files."
         ),
-        cols_help,
-        uiOutput(ns("fasta_header_gene_status")),
-        textAreaInput(
-          ns("fasta_header_gene"),
-          NULL,
-          opts$fasta_header_gene,
-          width = "100%"
+        # The gene header only matters when the genes are being written.
+        conditionalPanel(
+          condition = "input.export_genes == true",
+          ns = ns,
+          hdr_box("fasta_header_gene", "Gene FASTA header:",
+                  opts$fasta_header_gene),
+          uiOutput(ns("fasta_header_gene_status")),
+          opts_help("The gene name is added to this header automatically.",
+                    nested = TRUE)
         ),
         # PCG outlier review options, separated from the export options above
-        tags$hr(style = "border-top: 1px solid #ccc; margin: 1em 0 0.75em;"),
-        h4("PCG Annotation Outlier Review", style = "margin-top: 0;"),
-        shinyWidgets::prettyCheckbox(
+        tags$hr(style = "border-top: 1px solid var(--mp-border); margin: 1em 0 0.75em;"),
+        h4("PCG annotation outlier review", style = "margin-top: 0;"),
+        mp_checkbox(
           ns("review_outliers"),
           "Review PCG annotations for outliers",
-          value = rv$opt_review,
-          status = "primary"
+          value = rv$opt_review
         ),
         conditionalPanel(
           condition = "input.review_outliers == true",
@@ -674,7 +744,7 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("start_aa"),
-                export_help_label(
+                mp_help_label(
                   "Flag start offset > (aa):",
                   "Flag genes with start position offset by +/- this many amino acids from the core alignment"
                 ),
@@ -685,7 +755,7 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("stop_aa"),
-                export_help_label(
+                mp_help_label(
                   "Flag stop offset > (aa):",
                   "Flag genes with stop position offset by +/- this many amino acids from the core alignment"
                 ),
@@ -696,7 +766,7 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("ident_pct"),
-                export_help_label(
+                mp_help_label(
                   "Flag sequence identity < (%):",
                   "Mean % identity threshold to flag a gene versus all other genes in alignment group"
                 ),
@@ -705,9 +775,11 @@ export_server <- function(id) {
             )
           )
         ),
-        footer = tagList(
-          actionButton(ns("export_data"), "Export"),
-          modalButton("Close")
+        # What pressing Export will do, in the group currently chosen.
+        uiOutput(ns("export_summary")),
+        footer = mp_footer(
+          primary = actionButton(ns("export_data"), "Export"),
+          dismiss = "Cancel"
         )
       ) |> showModal()
     })
@@ -722,12 +794,13 @@ export_server <- function(id) {
     render_hdr_status <- function(res) {
       style_for <- switch(
         res$level %||% if (isTRUE(res$ok)) "ok" else "error",
-        ok    = list(col = "#28a745", ic = "circle-check"),
-        warn  = list(col = "#e0a800", ic = "triangle-exclamation"),
-        error = list(col = "#d9534f", ic = "circle-xmark")
+        ok    = list(cls = "mp-fg-success", ic = "circle-check"),
+        warn  = list(cls = "mp-fg-warning", ic = "triangle-exclamation"),
+        error = list(cls = "mp-fg-danger", ic = "circle-xmark")
       )
       span(
-        style = sprintf("color: %s; font-size: 0.85em;", style_for$col),
+        class = style_for$cls,
+        style = "font-size: var(--mp-fs-meta);",
         shiny::icon(style_for$ic), " ", res$message
       )
     }
@@ -737,6 +810,45 @@ export_server <- function(id) {
     })
     output$fasta_header_gene_status <- renderUI({
       render_hdr_status(validate_fasta_header(hdr_gene(), rv$data))
+    })
+
+    # Gears turn only while an export is actually running (T22).
+    output$export_gears <- renderUI({
+      if (isTRUE(rv$exporting)) span(class = "gears")
+    })
+
+    # What Export will write, for the group currently chosen. Recomputed as the
+    # group and the two output switches change.
+    output$export_summary <- renderUI({
+      group <- input$export_group
+      req(group)
+      n <- sum(rv$data$export_group == group, na.rm = TRUE)
+      path <- file.path(session$userData$dir_out, "export", group)
+      files <- c(
+        paste0(group, ".fasta"), paste0(group, ".tbl"), "GFFs/",
+        paste0(group, "_sample_info.csv")
+      )
+      if (isTRUE(input$export_genes)) files <- c(files, "genes/")
+      if (isTRUE(input$include_alignments) && n > 1) {
+        files <- c(files, paste0("AA_alignments_", group, ".html"))
+      }
+      div(
+        style = paste(
+          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin-top: 12px;",
+          "background: var(--mp-surface-alt);",
+          "border-left: 3px solid var(--mp-primary);"
+        ),
+        div(sprintf("%s in group \"%s\".", mp_n(n, "record"), group)),
+        div("Written to ", tags$code(class = "mp-path", path), " as: ",
+            paste(files, collapse = ", ")),
+        if (dir.exists(path)) {
+          div(
+            class = "mp-fg-warning",
+            icon("triangle-exclamation"), " ",
+            "This folder already exists. Export deletes it and writes it again."
+          )
+        }
+      )
     })
 
     # Template selector ----------------------------------------------------
@@ -752,43 +864,58 @@ export_server <- function(id) {
         o <- get_export_opts(con, name)
         updateTextAreaInput(session, "fasta_header", value = o$fasta_header)
         updateTextAreaInput(session, "fasta_header_gene", value = o$fasta_header_gene)
-      } else if (isTRUE(validate_fasta_header(input$fasta_header, rv$data)$ok) &&
-                 isTRUE(validate_fasta_header(input$fasta_header_gene, rv$data)$ok)) {
-        # New name typed: seed the template from the current (valid) boxes.
-        set_export_opts(con, input$fasta_header, input$fasta_header_gene, name = name)
-        updateSelectizeInput(
-          session, "template_select",
-          choices = list_export_templates(con), selected = name,
-          options = list(create = TRUE, maxItems = 1)
-        )
       }
     }, ignoreInit = TRUE)
 
-    # Auto-save header edits to the currently selected template (when both are
-    # valid). Reacts only to box edits, not selection, so loading a template
-    # never clobbers it. Invalid templates are never persisted.
-    observeEvent(list(hdr_main(), hdr_gene()), {
+    # Nothing is written until Save template is pressed: editing the boxes
+    # while "default" is selected used to rewrite the project default (T18).
+    # The gene box is hidden unless genes are exported, so it must not gate
+    # anything the user cannot see.
+    observe({
+      shinyjs::toggleState(
+        "save_template",
+        condition = isTRUE(validate_fasta_header(hdr_main(), rv$data)$ok) &&
+          (!isTRUE(input$export_genes) ||
+             isTRUE(validate_fasta_header(hdr_gene(), rv$data)$ok))
+      )
+    })
+
+    observeEvent(input$save_template, {
       name <- input$template_select
-      req(name, name %in% list_export_templates(session$userData$con))
-      if (isTRUE(validate_fasta_header(input$fasta_header, rv$data)$ok) &&
-          isTRUE(validate_fasta_header(input$fasta_header_gene, rv$data)$ok)) {
-        set_export_opts(
-          session$userData$con, input$fasta_header, input$fasta_header_gene,
-          name = name
+      if (is.null(name) || !nzchar(name)) {
+        mp_alert(
+          title = "Name the template first",
+          text = "Pick a template name, or type a new one, then press Save template.",
+          type = "info"
         )
+        return()
       }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+      if (!valid_headers_or_alert()) return()
+      con <- session$userData$con
+      set_export_opts(con, input$fasta_header, input$fasta_header_gene, name = name)
+      updateSelectizeInput(
+        session, "template_select",
+        choices = list_export_templates(con), selected = name,
+        options = list(create = TRUE, maxItems = 1)
+      )
+      rv$export_template <- name
+      mp_toast(sprintf("Saved header template \"%s\".", name))
+    })
 
     # Validate both header boxes; show an error alert and return FALSE if either
-    # is invalid (so a bad template can never reach export).
+    # is invalid (so a bad template can never reach export). The gene header is
+    # only checked when genes are being exported: its box is hidden otherwise.
     valid_headers_or_alert <- function() {
       v_main <- validate_fasta_header(input$fasta_header, rv$data)
-      v_gene <- validate_fasta_header(input$fasta_header_gene, rv$data)
+      v_gene <- if (isTRUE(input$export_genes)) {
+        validate_fasta_header(input$fasta_header_gene, rv$data)
+      } else {
+        list(ok = TRUE)
+      }
       if (!isTRUE(v_main$ok) || !isTRUE(v_gene$ok)) {
         bad <- if (!isTRUE(v_main$ok)) v_main$message else v_gene$message
         which_t <- if (!isTRUE(v_main$ok)) "mitogenome" else "gene"
-        shinyWidgets::sendSweetAlert(
-          session = session,
+        mp_alert(
           title = "Invalid FASTA header template",
           text = stringr::str_glue("The {which_t} header template is invalid: {bad}"),
           type = "error"
@@ -832,7 +959,7 @@ export_server <- function(id) {
 
       # Only touch the export modal's own elements while it is still on screen
       if (on_screen) {
-        shinyjs::removeClass("gears", "paused")
+        rv$exporting <- TRUE
         shinyjs::disable("export_data")
       }
 
@@ -848,15 +975,29 @@ export_server <- function(id) {
           ident_pct = rv$review_ident
         )
         if (on_screen) {
-          shinyjs::addClass("gears", "paused")
+          rv$exporting <- FALSE
           shinyjs::enable("export_data")
         }
-        present_review(review_res)
+        # An internal stop means the record will fail NCBI validation, so warn
+        # before the outlier review rather than after the files are written.
+        if (nrow(review_res$internal_stops) > 0) {
+          pending_review <<- review_res
+          mp_confirm(
+            ns("internal_stop_confirm"),
+            title = "Internal stop codons",
+            text = internal_stop_alert_text(review_res$internal_stops),
+            action_label = "Continue to review",
+            danger = TRUE,
+            html = TRUE
+          )
+        } else {
+          present_review(review_res)
+        }
       } else {
         # No review: write files immediately, then announce.
         write_export_files()
         if (on_screen) {
-          shinyjs::addClass("gears", "paused")
+          rv$exporting <- FALSE
           shinyjs::enable("export_data")
         }
         show_export_done_alert()
@@ -887,8 +1028,7 @@ export_server <- function(id) {
         TRUE
       }, error = function(e) {
         waiter::waiter_hide()
-        shinyWidgets::sendSweetAlert(
-          session = session,
+        mp_alert(
           title = "Export failed",
           text = conditionMessage(e),
           type = "error"
@@ -923,9 +1063,10 @@ export_server <- function(id) {
       if (is.null(path)) return(invisible(NULL))
       # JS-safe single-quoted string for the clipboard onclick
       path_js <- gsub("'", "\\\\'", gsub("\\\\", "\\\\\\\\", path))
-      shinyWidgets::sendSweetAlert(
-        session = session,
+      mp_alert(
         title = "Export complete",
+        html = TRUE,
+        type = "success",
         text = tagList(
           "Data exported to:",
           tags$div(
@@ -936,7 +1077,7 @@ export_server <- function(id) {
             tags$div(
               style = paste(
                 "min-width: 0; background: #000; color: #fff;",
-                "font-family: monospace; font-size: 0.8em; padding: 0.5em 0.6em; border-radius: 4px;",
+                "font-family: monospace; font-size: var(--mp-fs-meta); padding: 0.5em 0.6em; border-radius: 4px;",
                 "white-space: normal; word-break: break-all; text-align: center;"
               ),
               path
@@ -945,7 +1086,7 @@ export_server <- function(id) {
               style = "display: flex; flex-direction: row; gap: 0.4em; justify-content: center;",
               tags$button(
                 type = "button",
-                class = "btn btn-secondary",
+                class = "btn btn-default",
                 title = "Copy path",
                 onclick = sprintf(
                   paste0(
@@ -969,7 +1110,7 @@ export_server <- function(id) {
               # notification), or a warning path on headless sessions.
               tags$button(
                 type = "button",
-                class = "btn btn-secondary",
+                class = "btn btn-default",
                 title = "Open export folder",
                 onclick = sprintf(
                   "Shiny.setInputValue('%s', Math.random(), {priority: 'event'});",
@@ -984,9 +1125,7 @@ export_server <- function(id) {
             )
           ),
           if (!is.null(extra)) tags$p(style = "margin-top: 0.75em;", extra)
-        ),
-        type = "success",
-        html = TRUE
+        )
       )
     }
 
@@ -1025,6 +1164,21 @@ export_server <- function(id) {
     # focus_gene: optional gene name to navigate to (e.g. the gene just reviewed
     # via "Back to Review"); falls back to the first gene when absent or no longer
     # flagged.
+    # Review state held while the internal-stop warning is on screen. A plain
+    # variable, not rv$: writing it from its own observer would retrigger it.
+    pending_review <- NULL
+    observeEvent(input$internal_stop_confirm, ignoreNULL = TRUE, {
+      res <- pending_review
+      pending_review <<- NULL
+      req(!is.null(res))
+      if (isTRUE(input$internal_stop_confirm)) {
+        present_review(res)
+      } else {
+        # Cancelled: nothing has been written yet, so just drop the export.
+        removeModal()
+      }
+    })
+
     present_review <- function(res, focus_gene = NULL) {
       rv$outliers <- res$flags
       rv$review_samples <- res$samples
@@ -1202,16 +1356,15 @@ export_server <- function(id) {
       group <- exp_val("export_group")
       export_path <- file.path(session$userData$dir_out, "export", group)
       if (dir.exists(export_path)) {
-        shinyWidgets::confirmSweetAlert(
-          session = session,
-          inputId = ns("overwrite_confirm"),
+        mp_confirm(
+          ns("overwrite_confirm"),
           title = "Export already exists",
           text = stringr::str_glue(
-            "Export files for group '{group}' already exist. Overwrite them?"
+            "Export files for group '{group}' are already on disk. Exporting ",
+            "deletes that folder and writes it again."
           ),
-          type = "warning",
-          btn_labels = c("Cancel", "Overwrite"),
-          btn_colors = c("#0056b3", "#d9534f")
+          action_label = "Overwrite",
+          danger = TRUE
         )
         return()
       }
@@ -1230,11 +1383,10 @@ export_server <- function(id) {
       if (length(mp) > 0) {
         shown <- paste(utils::head(mp, 8), collapse = ", ")
         if (length(mp) > 8) shown <- paste0(shown, ", and ", length(mp) - 8, " more")
-        shinyWidgets::sendSweetAlert(
-          session = session,
+        mp_alert(
           title = "Cannot export samples with multiple assembly paths",
           text = stringr::str_glue(
-            "{length(mp)} sample(s) still have more than one assembly path: {shown}.\n\n",
+            "{mp_n(length(mp), 'sample')} still have more than one assembly path: {shown}.\n\n",
             "Assembly paths are alternative resolutions of the same genome, so ",
             "exporting each would submit duplicate records for one specimen. In the ",
             "Assemble module, open the assembly details and 'ignore' all but the ",
@@ -1248,12 +1400,11 @@ export_server <- function(id) {
       if (length(frag) > 0) {
         shown <- paste(utils::head(frag, 5), collapse = ", ")
         if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
-        shinyWidgets::confirmSweetAlert(
-          session = session,
-          inputId = ns("fragmented_confirm"),
+        mp_confirm(
+          ns("fragmented_confirm"),
           title = "Some samples export as multiple records",
           text = stringr::str_glue(
-            "{length(frag)} sample(s) have more than one assembly and will each ",
+            "{mp_n(length(frag), 'sample')} have more than one assembly and will each ",
             "produce a SEPARATE GenBank record: {shown}.\n\n",
             "That is correct when the scaffolds really are different genomes. If a ",
             "sample is instead ONE genome broken into fragments, each record will ",
@@ -1261,9 +1412,8 @@ export_server <- function(id) {
             "trimming / scaffold joining to combine them, or 'ignore' all but one ",
             "scaffold."
           ),
-          type = "warning",
-          btn_labels = c("Cancel", "Export anyway"),
-          btn_colors = c("#0056b3", "#d9534f")
+          action_label = "Export anyway",
+          danger = TRUE
         )
         return()
       }
@@ -1314,30 +1464,44 @@ export_server <- function(id) {
       # Bump so review_aln_ui rebuilds the widget from scratch on every (re)open.
       aln_nonce(isolate(aln_nonce()) + 1L)
       modalDialog(
-        title = "PCG Annotation Outlier Review",
+        # No close X: leaving the review is an explicit decision, and both
+        # exits below clean up the review state.
+        title = mp_modal_title("PCG annotation outlier review", close = FALSE),
         size = "l",
+        # Prev / Next page the review, so they sit with the position they move.
         div(
-          style = "margin-bottom: 0.5em; font-weight: bold;",
-          textOutput(ns("review_header"))
+          style = "display: flex; align-items: center; gap: 0.75em; margin-bottom: 0.5em;",
+          div(style = "font-weight: bold;", textOutput(ns("review_header"), inline = TRUE)),
+          div(
+            style = "margin-left: auto; display: flex; gap: 0.5em;",
+            actionButton(ns("review_prev"), "Prev", icon = icon("chevron-left"),
+                         class = "btn-sm btn-default"),
+            actionButton(ns("review_next"), "Next", icon = icon("chevron-right"),
+                         class = "btn-sm btn-default")
+          )
         ),
-        p(
-          style = "color: #666; font-size: 0.9em;",
+        opts_help(
           "Review the alignment below to decide whether the flagged samples ",
           "need to be revised. Click 'edit' to jump to the annotation editor ",
-          "for a sample, or skip the gene if the flags look benign."
+          "for a sample, or mark the gene resolved if the flags look benign."
         ),
         uiOutput(ns("review_aln_ui")),
         tags$hr(),
         reactableOutput(ns("review_table")),
+        # Acts on the gene shown above, not on the modal, so it stays here.
+        div(
+          style = "margin-top: 0.5em;",
+          actionButton(ns("skip_gene"), "Mark gene resolved",
+                       class = "btn-sm btn-default",
+                       title = "Mark every flag for this gene as resolved and move on")
+        ),
         # Edit any sample of this gene, flagged or not (only this gene stays
         # editable in the details modal, same as clicking a flagged sample's 'edit').
         uiOutput(ns("review_sample_picker")),
-        footer = tagList(
-          actionButton(ns("review_prev"), "Prev"),
-          actionButton(ns("review_next"), "Next"),
-          actionButton(ns("skip_gene"), "Mark gene resolved", class = "btn-success"),
-          actionButton(ns("cancel_review"), "Cancel export", class = "btn-danger"),
-          actionButton(ns("review_done"), "Done", class = "btn-primary")
+        footer = mp_footer(
+          primary = actionButton(ns("review_done"), "Continue export"),
+          dismiss = NULL,
+          extra = actionButton(ns("cancel_review"), "Stop without exporting")
         )
       ) |> showModal()
     })
@@ -1408,6 +1572,7 @@ export_server <- function(id) {
           `Start offset (aa)` = start_offset,
           `Stop offset (aa)` = stop_offset,
           `Identity (%)` = pct_identity,
+          `Internal stops` = internal_stops,
           resolved = keys %in% rv$resolved,
           edit = "edit"
         )
@@ -1424,46 +1589,75 @@ export_server <- function(id) {
         sortable = TRUE,
         highlight = TRUE,
         rowStyle = resolved_row_style,
-        defaultColDef = reactable::colDef(html = TRUE),
+        # Headers carry a help icon, so keep every one on a single line and give
+        # the wider labels room; Issue takes what is left.
+        defaultColDef = reactable::colDef(
+          html = TRUE,
+          headerStyle = list(whiteSpace = "nowrap")
+        ),
         columns = list(
           Sample = reactable::colDef(
-            cell = rt_link(ns("review_pick"))
+            minWidth = 130,
+            cell = rt_link(ns("review_pick"),
+                           title = "Highlight this sample in the alignment")
           ),
+          Issue = reactable::colDef(minWidth = 120),
           `Start offset (aa)` = reactable::colDef(
+            minWidth = 150,
             cell = signed_cell,
-            header = export_help_label(
+            header = mp_help_label(
               "Start offset (aa)",
               "Number of amino acids this sample's start extends past (+) or falls short of (-) the core alignment."
             )
           ),
           `Stop offset (aa)` = reactable::colDef(
+            minWidth = 150,
             cell = signed_cell,
-            header = export_help_label(
+            header = mp_help_label(
               "Stop offset (aa)",
               "Number of amino acids this sample's stop extends past (+) or falls short of (-) the core alignment."
             )
           ),
           `Identity (%)` = reactable::colDef(
-            header = export_help_label(
+            minWidth = 125,
+            header = mp_help_label(
               "Identity (%)",
               "Mean percent identity of this sample versus rest of samples in alignment group."
             )
           ),
+          `Internal stops` = reactable::colDef(
+            minWidth = 135,
+            align = "center",
+            header = mp_help_label(
+              "Internal stops",
+              "Number of stop codons inside this sample's translation. Any at all will fail NCBI validation."
+            )
+          ),
           resolved = reactable::colDef(
             name = "Resolved",
-            width = 90,
+            width = 100,
             align = "center",
+            sortable = FALSE,
+            filterable = FALSE,
             cell = rt_bool_bttn(
               ns("toggle_resolved"),
               "fas fa-circle-check",
-              "far fa-circle"
+              "far fa-circle",
+              title_true = "Resolved - click to reopen",
+              title_false = "Unresolved - click to mark resolved"
             )
           ),
           edit = reactable::colDef(
-            name = "",
-            width = 80,
+            name = "Edit",
+            width = 90,
             align = "center",
-            cell = rt_icon_bttn_text(ns("goto_annot"), "fas fa-pen-to-square fa-xs")
+            sortable = FALSE,
+            filterable = FALSE,
+            cell = rt_icon_bttn_text(
+              ns("goto_annot"), "fas fa-pen-to-square fa-xs",
+              label = "Edit",
+              title = "Open the annotation editor for this sample"
+            )
           )
         )
       )
@@ -1486,8 +1680,9 @@ export_server <- function(id) {
           )
         ),
         actionButton(
-          ns("edit_sample"), "edit",
-          class = "btn-primary", style = "margin-bottom: 15px;"
+          ns("edit_sample"), "Edit",
+          class = "btn-default", style = "margin-bottom: 15px;",
+          title = "Open the annotation editor for the chosen sample"
         )
       )
     })
@@ -1587,6 +1782,7 @@ export_server <- function(id) {
       rv$resolved <- character(0)
       rv$review_focus <- NULL
       rv$review_focus_sig <- NULL
+      mp_toast("Export stopped. Nothing was written.")
     })
   })
 }

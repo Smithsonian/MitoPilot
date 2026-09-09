@@ -5,148 +5,134 @@
 #' @import shiny reactable
 #' @noRd
 app_ui_userAsmb <- function(request) {
-  tagList(
+  # `lang` has to sit on the object shiny renders, which is this tagList.
+  structure(lang = "en", tagList(
     add_external_resources(),
     fluidPage(
+      tags$a(href = "#mp-content", class = "sr-only sr-only-focusable", "Skip to table"),
       div(
         style = "display: flex; flex-direction: column;",
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-          shinyWidgets::pickerInput(
-            inputId = "mode",
-            width = 150,
-            label = "",
-            choices = c("Assemble", "Annotate", "Export")
-          ),
-          shinyWidgets::actionBttn(
-            "refresh",
-            label = NULL,
-            icon = icon("sync"),
-            style = "material-flat",
-            size = "sm"
-          ),
+        tags$header(
+          role = "banner",
+          uiOutput("app_header"),
           div(
-            id = "asmb_ctrls",
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-            shinyWidgets::actionBttn(
-              "state",
-              label = "State",
-              style = "material-flat",
+            class = "mp-toolbar",
+            shinyWidgets::radioGroupButtons(
+              inputId = "mode",
+              label = "Step:",
+              choiceNames = list(
+                HTML("<span class='mp-step-n'>1</span> Assemble"),
+                HTML("<span class='mp-step-n'>2</span> Annotate"),
+                HTML("<span class='mp-step-n'>3</span> Export")
+              ),
+              choiceValues = c("Assemble", "Annotate", "Export"),
+              selected = "Assemble",
               size = "sm"
             ),
-            shinyWidgets::actionBttn(
-              "lock",
-              label = "Lock",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "refresh",
+              label = NULL,
+              icon = mp_icon("arrows-rotate"),
+              title = "Reload the table from the database"
             ),
-            shinyWidgets::actionBttn(
-              "run_modal",
-              label = "Update",
-              style = "material-flat",
-              size = "sm"
-            )
-          ),
-          div(
-            id = "annot_ctrls",
-            #id = "ctrls",
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-            shinyWidgets::actionBttn(
-              "state",
-              label = "State",
-              style = "material-flat",
-              size = "sm"
+            conditionalPanel(
+              condition = "input.mode == 'Assemble'",
+              id = "asmb_ctrls",
+              class = "mp-toolbar",
+              mp_toolbar_button(
+                "state", "State",
+                title = "Set the pipeline state of the selected samples",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "lock", "Lock",
+                title = MP_LOCK_DEF("assemble"),
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "run_modal", "Update",
+                icon = mp_icon("circle-play"), emphasis = "primary",
+                title = "Review and launch the assembly pipeline"
+              )
             ),
-            shinyWidgets::actionBttn(
-              "lock",
-              label = "Lock",
-              style = "material-flat",
-              size = "sm"
+            conditionalPanel(
+              condition = "input.mode == 'Annotate'",
+              id = "annot_ctrls",
+              class = "mp-toolbar",
+              mp_toolbar_button(
+                "state", "State",
+                title = "Set the pipeline state of the selected assemblies",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "lock", "Lock",
+                title = MP_LOCK_DEF("annotate"),
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "id_verified_top", "Mark ID Verified",
+                title = "Mark or clear species ID verified on the selected assemblies",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "problematic_top", "Mark Problematic",
+                title = "Mark or clear problematic on the selected assemblies",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "partial_top", "Mark Partial",
+                title = "Mark or clear partial on the selected assemblies",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "run_modal", "Update",
+                icon = mp_icon("circle-play"), emphasis = "primary",
+                title = "Review and launch the annotation pipeline"
+              )
             ),
-            shinyWidgets::actionBttn(
-              "id_verified_top",
-              label = "ID Verified",
-              style = "material-flat",
-              size = "sm"
+            conditionalPanel(
+              condition = "input.mode == 'Export'",
+              id = "export_ctrls",
+              class = "mp-toolbar",
+              mp_toolbar_button(
+                "group", "Assign Group",
+                title = "Assign the selected assemblies to an export group",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "clear_group", "Clear Group",
+                title = "Remove the selected assemblies from their export group",
+                needs_selection = TRUE
+              ),
+              mp_toolbar_button(
+                "export", "Export Data",
+                emphasis = "primary",
+                title = "Open the export window for the selected assemblies"
+              )
             ),
-            shinyWidgets::actionBttn(
-              "problematic_top",
-              label = "Mark Problematic",
-              style = "material-flat",
-              size = "sm"
-            ),
-            shinyWidgets::actionBttn(
-              "partial_top",
-              label = "Mark Partial",
-              style = "material-flat",
-              size = "sm"
-            ),
-            shinyWidgets::actionBttn(
-              "run_modal",
-              label = "Update",
-              style = "material-flat",
-              size = "sm"
-            )
-          ),
-          div(
-            id = "export_ctrls",
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-            shinyWidgets::actionBttn(
-              "group",
-              label = "Group",
-              style = "material-flat",
-              size = "sm"
-            ),
-            shinyWidgets::actionBttn(
-              "export",
-              label = "Export Data",
-              style = "material-flat",
-              size = "sm"
-            )
-          ),
-          workdir_browser_ui("workdir_browser")
+            workdir_browser_ui("workdir_browser")
+          )
         ),
-        div(
+        tags$main(
+          id = "mp-content",
           style = "padding: 1em;",
           conditionalPanel(
             condition = "input.mode == 'Assemble'",
+            tags$h1(class = "mp-module-h1", "Assemble"),
             assemble_ui_userAsmb("assemble")
           ),
           conditionalPanel(
             condition = "input.mode == 'Annotate'",
+            tags$h1(class = "mp-module-h1", "Annotate"),
             annotate_ui("annotate")
           ),
           conditionalPanel(
             condition = "input.mode == 'Export'",
-            annotate_ui("export")
+            tags$h1(class = "mp-module-h1", "Export"),
+            export_ui("export")
           )
         )
       )
     )
-  )
-}
-
-#' Add external Resources to the Application
-#'
-#' This function is internally used to add external
-#' resources inside the Shiny application.
-#'
-#' @import shiny
-#' @importFrom golem add_resource_path activate_js favicon bundle_resources
-#' @noRd
-add_external_resources <- function() {
-  add_resource_path(
-    "www",
-    app_sys("app/www")
-  )
-  tags$head(
-    favicon(),
-    bundle_resources(
-      path = app_sys("app/www"),
-      app_title = "MitoPilot"
-    ),
-    waiter::useWaiter(),
-    rclipboard::rclipboardSetup(),
-    shinyjs::useShinyjs()
-  )
+  ))
 }

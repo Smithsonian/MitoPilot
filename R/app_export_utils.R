@@ -198,10 +198,10 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     if (!grepl("\\{seqid\\}", template)) {
       multi_unit <- !is.null(data) && "ID" %in% names(data) && any(duplicated(data$ID))
       msg <- paste(
-        "Header does not use {seqid}. Samples with more than one assembly unit",
+        "Header does not use {seqid}. Samples with more than one assembly",
         "will produce duplicate FASTA deflines that do not match the .tbl",
         ">Feature line, and table2asn will reject the submission. Use {seqid}",
-        "instead of {ID}: it is the plain ID for single-unit samples."
+        "instead of {ID}: it is the plain ID for samples with one assembly."
       )
       if (multi_unit) {
         return(err(msg))
@@ -220,11 +220,14 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     list(ok = TRUE, level = "ok", message = "Valid template.")
   }, error = function(e) {
     raw <- conditionMessage(e)
-    # Unknown column -> glue reports "object 'XXX' not found"
+    # Unknown field -> glue reports "object 'XXX' not found"
     col <- regmatches(raw, regexpr("object '[^']+' not found", raw))
     if (length(col) > 0) {
       name <- sub("object '([^']+)' not found", "\\1", col)
-      return(err(sprintf('column "%s" not found in database', name)))
+      return(err(sprintf(
+        '{%s} is not one of the available fields. See "Available columns" above.',
+        name
+      )))
     }
     # Fallback: strip glue's multi-line wrapper to the last informative line
     err(sub("^.*!\\s*", "", gsub("\n", " ", raw)))
@@ -307,7 +310,8 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(
       ID, path, scaffold, curate_opts, topology,
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
-      dplyr::any_of(c("blast_accession_auto", "poor_blast_ref", "partial"))
+      dplyr::any_of(c("annotate_switch", "blast_accession_auto",
+                      "poor_blast_ref", "partial"))
     ) |>
     dplyr::left_join(
       dplyr::tbl(db, "curate_opts") |>
@@ -332,6 +336,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
   # these columns are absent on un-migrated DBs
   if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_
   if (!"partial" %in% names(out)) out$partial <- NA_character_
+  if (!"annotate_switch" %in% names(out)) out$annotate_switch <- NA_integer_
 
   out |>
     dplyr::mutate(
@@ -379,5 +384,9 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::ungroup() |>
     dplyr::relocate(path, scaffold, seqid, .after = ID) |>
     dplyr::relocate(ORFCount, .after = rRNACount) |>
-    dplyr::relocate(blast_ref_status, .after = blast_accession)
+    dplyr::relocate(blast_ref_status, .after = blast_accession) |>
+    # State leads, like the other tables; Export Group is pinned right, so
+    # nothing may render after it (T08).
+    dplyr::relocate(annotate_switch, .before = ID) |>
+    dplyr::relocate(export_group, .after = dplyr::last_col())
 }

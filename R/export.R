@@ -16,7 +16,7 @@ check_single_path <- function(units) {
     dplyr::filter(n_paths > 1)
   if (nrow(multi_path) > 0) {
     stop(
-      "Cannot export ", nrow(multi_path), " sample(s) with more than one assembly path: ",
+      "Cannot export ", mp_n(nrow(multi_path), "sample"), " with more than one assembly path: ",
       paste(multi_path$ID, collapse = ", "),
       ".\nAssembly paths are alternative resolutions of the same genome, so exporting ",
       "each one would submit duplicate records for a single specimen. Open the ",
@@ -199,61 +199,6 @@ write_tbl_gap <- function(gap, fn) {
     cat(file = fn, sep = "\n", append = TRUE)
   paste0("\t\t\testimated_length\t", gap$length) |>
     cat(file = fn, sep = "\n", append = TRUE)
-}
-
-#' Write one .tbl feature location block; only the first interval carries the key
-#'
-#' @noRd
-write_tbl_loc <- function(pos, key, fn) {
-  for (i in seq_along(pos)) {
-    paste(c(pos[[i]], if (i == 1L) key), collapse = "\t") |>
-      cat(file = fn, sep = "\n", append = TRUE)
-  }
-}
-
-#' `transl_except` qualifier for a partial (poly-A completed) stop codon
-#'
-#' The codon sits at the 3' end of the CDS, which is `pos2` on the plus strand
-#' and `pos1` on the minus strand - not `max()`/`min()`, which pick the wrong end
-#' once the feature spans the origin.
-#'
-#' @noRd
-.transl_except_pos <- function(pos1, pos2, direction, n_stop, wraps, asmb_len) {
-  on_circle <- function(p) if (wraps) wrap_pos(p, asmb_len) else p
-  if (direction == "+") {
-    te_end <- pos2
-    te_start <- on_circle(te_end - n_stop + 1L)
-  } else {
-    te_end <- pos1
-    te_start <- on_circle(te_end + n_stop - 1L)
-  }
-  if (n_stop == 1) {
-    paste0("(pos:", te_end, ",aa:TERM)")
-  } else {
-    paste0("(pos:", te_start, "..", te_end, ",aa:TERM)")
-  }
-}
-
-#' GFF3 end coordinate for a feature that may span the origin
-#'
-#' GFF3 has no join() syntax, so an origin-spanning feature is written as
-#' `pos1 .. (asmb_len + pos2)`, i.e. running past the end of the sequence.
-#'
-#' @noRd
-gff_end <- function(pos2, wraps, asmb_len) {
-  if (wraps) asmb_len + pos2 else pos2
-}
-
-#' Mark the 3' end of a .tbl location block as partial (">")
-#'
-#' The 3' coordinate is the second element of the LAST interval, which is not
-#' `pos[[1]][2]` once a feature spans the origin.
-#'
-#' @noRd
-mark_tbl_3p <- function(pos) {
-  last <- length(pos)
-  pos[[last]][2] <- paste0(">", pos[[last]][2])
-  pos
 }
 
 #' Write one .tbl feature location block; only the first interval carries the key
@@ -1358,7 +1303,7 @@ export_files <- function(
 
   # Per-sample summary CSV, dropped into the export directory
   if (isTRUE(summary_csv)) {
-    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts")
+    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts", "annotate_switch")
     # seqid/path/scaffold lead: a sample can contribute several records, so the row
     # identity is the unit, not the ID.
     core <- c("ID", "seqid", "path", "scaffold",
@@ -1550,50 +1495,48 @@ get_export_PCG_annotations <- function(con, group) {
                          annotations$path == u$path &
                          annotations$scaffold == u$scaffold)
     genes_in_unit <- unique(annotations$gene[unit_rows])
+    gcode <- Biostrings::getGeneticCode(as.character(dat$genetic_code))
 
     for (current_gene in genes_in_unit) {
       exons_idx <- unit_rows[which(annotations$gene[unit_rows] == current_gene)]
       if (any(exons_idx %in% rows_to_remove)) next
-      if (length(exons_idx) <= 1) next
 
-      cur <- annotations[exons_idx[1], ] # Use the first exon as the reference
-      cur_rules <- curate_rules$rules[[cur$gene]]
+      cur_rules <- curate_rules$rules[[current_gene]]
       intron <- cur_rules$intron %||% curate_rules$default_rules$PCG$intron %||% FALSE
 
-      if (intron) {
-        exons <- annotations[exons_idx, ]
-        exon_seqs <- character(nrow(exons))
+      # Which rows splice together. A user-defined join group (set in the annotate
+      # modal, members share a "JOIN: mode=<..> group=<id>" note) takes precedence
+      # over the curation intron rule, matching the GenBank export path: without
+      # this, a joined gene reaches the alignment as one segment per row.
+      grp <- stringr::str_match(
+        dplyr::coalesce(annotations$notes[exons_idx], ""),
+        "^JOIN: mode=\\w+ group=(\\d+)"
+      )[, 2]
+      merge_sets <- if (any(!is.na(grp))) {
+        split(exons_idx, grp)            # split() drops the unjoined (NA) rows
+      } else if (intron && length(exons_idx) > 1) {
+        list(exons_idx)
+      } else {
+        list()
+      }
 
-        message(paste("Merged ", length(exon_seqs), " exons for gene ", cur$gene, " (", u$seqid, ")", sep = ""))
-
-        if (all(exons$direction %in% c("+", "-")) && length(unique(exons$direction)) == 1L) {
-          # extract_circ_region, not subseq: an exon spanning the origin is
-          # stored pos1 > pos2 and subseq() aborts on it
-          for (i in 1:nrow(exons)) {
-            exon_seqs[i] <- as.character(
-              extract_circ_region(seq, exons$pos1[i], exons$pos2[i])
-            )
-          }
-          merged_sequence <- Biostrings::DNAString(paste(exon_seqs, collapse = ""))
-          if (exons$direction[1] == "-") {
-            merged_sequence <- Biostrings::reverseComplement(merged_sequence)
-          }
-        } else {
-          message(crayon::red(paste("Warning: exons on opposite strands for gene", cur$gene)))
+      for (idx in merge_sets) {
+        if (length(idx) <= 1) next
+        exons <- annotations[idx, ]
+        if (length(unique(exons$direction)) != 1L ||
+            !all(exons$direction %in% c("+", "-"))) {
+          message(crayon::red(paste("Warning: exons on opposite strands for gene", current_gene)))
           next
         }
-
-        translation <- Biostrings::translate(
-          merged_sequence,
-          genetic.code = Biostrings::getGeneticCode(as.character(dat$genetic_code)),
-          if.fuzzy.codon = "solve"
-        ) |> as.character()
-        translation <- sub("\\*$", "", translation) # remove terminal stop codon
-
-        annotations[exons_idx[1], "translation"] <- translation
+        message(paste0("Merged ", length(idx), " exons for gene ", current_gene,
+                       " (", u$seqid, ")"))
+        # Shared splice helper (also used by the GenBank export and the annotate
+        # editor), so all three see the same spliced CDS.
+        spliced <- splice_join_cds(exons, seq, gcode)
+        annotations[idx[1], "translation"] <- spliced$translation
         # Mark the merge on the label the report keys by (seqid), not the raw ID.
-        annotations[exons_idx[1], "seqid"] <- paste0("*", annotations[exons_idx[1], "seqid"])
-        rows_to_remove <- c(rows_to_remove, exons_idx[-1])
+        annotations[idx[1], "seqid"] <- paste0("*", annotations[idx[1], "seqid"])
+        rows_to_remove <- c(rows_to_remove, idx[-1])
       }
     }
   }
@@ -1606,6 +1549,23 @@ get_export_PCG_annotations <- function(con, group) {
 }
 
 
+# Records whose (spliced) translation still carries a "*", i.e. an internal stop
+# codon. Terminal stops are already stripped upstream, so any "*" left here is
+# internal. Shared by the pre-review pop-up and the HTML batch report.
+internal_stop_records <- function(annotations) {
+  hit <- !is.na(annotations$translation) &
+    stringr::str_detect(annotations$translation, "\\*")
+  dplyr::tibble(
+    ID = annotations$ID[hit],
+    label = annotations$seqid[hit],
+    path = annotations$path[hit],
+    scaffold = annotations$scaffold[hit],
+    gene = annotations$gene[hit],
+    n_stops = stringr::str_count(annotations$translation[hit], "\\*")
+  ) |>
+    dplyr::arrange(label, gene)
+}
+
 #' Flag outlier PCG annotations in an export group
 #'
 #' For each protein-coding gene in an export group, aligns the amino-acid
@@ -1614,7 +1574,8 @@ get_export_PCG_annotations <- function(con, group) {
 #' the alignment's well-occupied core by more than a set number of residues
 #' (pointing at a start/stop codon placed too long or too short) and those that
 #' align poorly to the rest of the group (a low sequence-identity catch-all for
-#' badly annotated regions).
+#' badly annotated regions). Records whose translation carries an internal stop
+#' codon are always flagged as well, with no threshold.
 #'
 #' @param group Name of the export group.
 #' @param db Path to the project SQLite database.
@@ -1634,14 +1595,17 @@ get_export_PCG_annotations <- function(con, group) {
 #'   \describe{
 #'     \item{flags}{A tibble with one row per flagged (sample, gene):
 #'       `ID`, `label`, `path`, `scaffold`, `gene`, `pct_identity`,
-#'       `start_offset`, `stop_offset`, `start_flag`, `stop_flag`,
-#'       `identity_flag`, `issue`.}
+#'       `start_offset`, `stop_offset`, `internal_stops`, `start_flag`,
+#'       `stop_flag`, `identity_flag`, `internal_stop_flag`, `issue`.}
 #'     \item{alignments}{A named list (by gene) of clustering-ordered aligned
 #'       `AAStringSet` objects, for every gene that has a flagged sample (plus any
 #'       explicitly requested via `genes`, even if their last flag was cleared).}
 #'     \item{samples}{A named list (by gene) of tibbles listing every unit in the
 #'       gene's alignment (`ID`, `label`, `path`, `scaffold`), flagged or not, so
 #'       the review UI can edit any sample of the gene.}
+#'     \item{internal_stops}{A tibble of records whose translation contains an
+#'       internal stop codon: `ID`, `label`, `path`, `scaffold`, `gene`,
+#'       `n_stops`.}
 #'   }
 #'
 #' @export
@@ -1652,7 +1616,10 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
   annotations <- get_export_PCG_annotations(con, group)
   annotations <- annotations[!is.na(annotations$translation) & nzchar(annotations$translation), , drop = FALSE]
   if (nrow(annotations) == 0) {
-    return(list(flags = .empty_outlier_flags(), alignments = list()))
+    return(list(
+      flags = .empty_outlier_flags(), alignments = list(),
+      internal_stops = internal_stop_records(annotations)
+    ))
   }
 
   all_genes <- sort(unique(annotations$gene))
@@ -1673,6 +1640,12 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
     # and duplicate names here would make the row lookups below silently resolve to
     # the first match, misattributing or dropping the siblings.
     seqs <- Biostrings::AAStringSet(stats::setNames(sub$translation, sub$seqid))
+    # Internal stops, counted on the unaligned translation (terminal stops are
+    # already stripped). Always checked: unlike the offset/identity tests this
+    # has no threshold, any "*" left is a defect.
+    n_istop <- stats::setNames(
+      stringr::str_count(sub$translation, "\\*"), sub$seqid
+    )
 
     aln <- DECIPHER::AlignSeqs(seqs, processors = NULL, verbose = FALSE)
     dst <- DECIPHER::DistanceMatrix(
@@ -1723,7 +1696,11 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
       ident <- unname(pct_identity[idx])
       identity_flag <- isTRUE(ident < ident_pct)
 
-      if (!start_flag && !stop_flag && !identity_flag) next
+      istop <- unname(n_istop[label])
+      if (length(istop) != 1 || is.na(istop)) istop <- 0L
+      internal_stop_flag <- istop > 0L
+
+      if (!start_flag && !stop_flag && !identity_flag && !internal_stop_flag) next
 
       # Signed per-end offset (aa) relative to the alignment core:
       # negative = end placed too short, positive = extends too long.
@@ -1734,6 +1711,7 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
       if (start_flag) issues <- c(issues, if (start_offset < 0) "start too short" else "start too long")
       if (stop_flag) issues <- c(issues, if (stop_offset < 0) "stop too short" else "stop too long")
       if (identity_flag) issues <- c(issues, "low identity")
+      if (internal_stop_flag) issues <- c(issues, "internal stop")
 
       srow <- sub[match(label, sub$seqid), ]
       flag_rows[[length(flag_rows) + 1L]] <- dplyr::tibble(
@@ -1745,9 +1723,11 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
         pct_identity = round(ident, 1),
         start_offset = start_offset,
         stop_offset = stop_offset,
+        internal_stops = as.integer(istop),
         start_flag = start_flag,
         stop_flag = stop_flag,
         identity_flag = identity_flag,
+        internal_stop_flag = internal_stop_flag,
         issue = paste(issues, collapse = ", ")
       )
     }
@@ -1763,7 +1743,10 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
   alignments <- alignments[names(alignments) %in% keep_genes]
   samples <- samples[names(samples) %in% keep_genes]
 
-  list(flags = flags, alignments = alignments, samples = samples)
+  list(
+    flags = flags, alignments = alignments, samples = samples,
+    internal_stops = internal_stop_records(annotations)
+  )
 }
 
 # Empty flags tibble with the canonical column types
@@ -1777,9 +1760,11 @@ flag_PCG_outliers <- function(group, db, start_aa = 10, stop_aa = 10, ident_pct 
     pct_identity = numeric(0),
     start_offset = integer(0),
     stop_offset = integer(0),
+    internal_stops = integer(0),
     start_flag = logical(0),
     stop_flag = logical(0),
     identity_flag = logical(0),
+    internal_stop_flag = logical(0),
     issue = character(0)
   )
 }

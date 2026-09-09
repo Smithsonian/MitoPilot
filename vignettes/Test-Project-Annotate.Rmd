@@ -169,7 +169,7 @@ Dan MacGuigan directly at <macguigand@si.edu>. We are always looking to expand t
 of MitoPilot.
 </div>
 
-When ready, click **UPDATE** and run the workflow the same way you ran Assemble.
+When ready, click **Update** and run the workflow the same way you ran Assemble.
 
 This module is slower than Assemble. MITOS2 takes a few minutes per unit,
 and curation aligns every protein-coding gene against reference sequences. 
@@ -249,7 +249,7 @@ proteins.
 
 ## Manually fix annotations
 
-Click **EDIT** in the alignment section to nudge the start or stop position 
+Click **Edit** in the alignment section to nudge the start or stop position 
 and watch the alignment respond. 
 
 ![Alignment-based annotation editing](figures/get-started/annotation-codon-edits.png)
@@ -295,7 +295,7 @@ underlying problem. They record the state at the time the Annotate module ran. U
 
 ## Lock and move on
 
-When you are satisfied, select the samples and click **LOCK** to release them to
+When you are satisfied, select the samples and click **Lock** to release them to
 the Export module.
 
 <p class="next-step"><a href="Test-Project-Export.html">Next: Export &rarr;</a></p>
