@@ -137,7 +137,7 @@ GFF3 annotation files and alignment summaries.
 ## Make a group
 
 Export works on **groups**, which correspond to submission batches. Select the
-samples you want and click **ASSIGN GROUP**.
+samples you want and click **Assign Group**.
 
 ![Submission group window](figures/get-started/export-group-modal.png)
 
@@ -158,13 +158,13 @@ or the `linear_complete` project setting.
 
 ![Export table with samples assigned to groups](figures/get-started/export-table-grouped.png)
 
-A unit can only belong to one export group at a time. **CLEAR GROUP** removes the selected
+An assembly can only belong to one export group at a time. **Clear Group** removes the selected
 samples from their group. Re-assigning a grouped sample asks for confirmation
 first, because files already written for the old group are not cleaned up.
 
 ## Export
 
-Click **EXPORT DATA**.
+Click **Export Data**.
 
 ![Export Data window with header template and output options](figures/get-started/export-modal.png)
 

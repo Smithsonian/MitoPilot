@@ -208,7 +208,7 @@ for details about the available compute nodes.
 
 ## Run the workflow
 
-Click **UPDATE** at the top of the window. MitoPilot shows the Nextflow command
+Click **Update** at the top of the window. MitoPilot shows the Nextflow command
 it is about to run and how many samples it applies to.
 
 ![Update window showing the Nextflow command and Run from App button](figures/get-started/update-window.png)
@@ -432,7 +432,7 @@ multipartite mitogenomes all look like "extra scaffolds" at first glance.
 ## Lock and move on
 
 Select every sample that assembled successfully, which is all of them except
-SRR22396758, and click **LOCK**.
+SRR22396758, and click **Lock**.
 
 ![Sample table with successful samples selected for locking](figures/get-started/assemble-selected.png)
 
