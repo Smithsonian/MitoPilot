@@ -1,13 +1,3 @@
-#' Feature not ready message
-#' @noRd
-coming_soon <- function(text = "This feature is not yet implemented.") {
-  mp_alert(
-    title = "Coming soon",
-    text = text,
-    type = "info"
-  )
-}
-
 #' Open a directory in an environment-aware way
 #'
 #' Local desktop opens the OS file browser; RStudio Server navigates the Files pane (and
