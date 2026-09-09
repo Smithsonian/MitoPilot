@@ -691,6 +691,23 @@ a.mp-link:focus-visible {
   margin-bottom: var(--mp-space-3);
 }
 
+/* Scaffold table (T09): reactable already scrolls its columns internally
+   when they need more room than the modal, but the default scrollbar is
+   invisible until hovered. Force a permanent one, same treatment as
+   .mp-table-resize, so "there is more to the right" is never hidden. */
+.mp-coverage-table .rt-table {
+  scrollbar-width: thin;
+}
+
+.mp-coverage-table .rt-table::-webkit-scrollbar {
+  height: 10px;
+}
+
+.mp-coverage-table .rt-table::-webkit-scrollbar-thumb {
+  background-color: var(--mp-border);
+  border-radius: 5px;
+}
+
 
 /* ------------------------------------------------------------------ */
 /* MapToRef coverage and pileup viewer                                 */

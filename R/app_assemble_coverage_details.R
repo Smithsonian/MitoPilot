@@ -181,7 +181,7 @@ assembly_coverage_details_server <- function(id, rv) {
             tool_help_icon("assembly_paths", label = "choosing an assembly path")
           )
         },
-        reactableOutput(ns("table"), width = "100%"),
+        div(class = "mp-coverage-table", reactableOutput(ns("table"), width = "100%")),
         uiOutput(ns("consensus_admin")),
         maptoref_viewer_ui(ns("maptoref_viewer")),
         uiOutput(ns("scaffold_join_div")),
@@ -246,7 +246,7 @@ assembly_coverage_details_server <- function(id, rv) {
           columns = list(
             ignore = colDef(
               name = "Ignore",
-              width = 60,
+              width = 50,
               html = TRUE, align = "center",
               sortable = FALSE, filterable = FALSE,
               cell = rt_bool_bttn(
@@ -258,28 +258,28 @@ assembly_coverage_details_server <- function(id, rv) {
             ),
             ID = colDef(name = "ID", align = "left", minWidth = mp_fit_width(tbl$ID)),
             path = colDef(
-              name = "Path", width = 60, align = "center"
+              name = "Path", width = 45, align = "center"
             ),
             scaffold = colDef(
-              name = "Scaffold", width = 80, align = "center"
+              name = "Scaffold", width = 55, align = "center"
             ),
             path_flags = colDef(
-              name = "Flags", minWidth = 200, resizable = TRUE, align = "left",
+              name = "Flags", minWidth = 100, resizable = TRUE, align = "left",
               html = TRUE, cell = rt_longtext()
             ),
             topology = colDef(
-              name = "Topology", width = 90, align = "center", html = TRUE,
+              name = "Topology", width = 70, align = "center", html = TRUE,
               cell = rt_pill(c(circular = "info", linear = "neutral"),
                              empty = "")
             ),
             length_raw = colDef(
-              name = "Length (raw)", width = 110, align = "center"
+              name = "Length (raw)", width = 80, align = "center"
             ),
             length = colDef(
-              name = "Length (trimmed)", width = 130, align = "center"
+              name = "Length (trimmed)", width = 90, align = "center"
             ),
             ambiguous_bases = colDef(
-              name = "Ambig. Bases", width = 110, align = "center",
+              name = "Ambiguous Bases", width = 105, align = "center",
               show = any(tbl$ambiguous_bases > 0)
             ),
             sequence = colDef(show = FALSE),
