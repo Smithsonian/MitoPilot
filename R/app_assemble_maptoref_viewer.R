@@ -159,26 +159,29 @@ maptoref_viewer_server <- function(id, rv) {
 
     output$header <- renderUI({
       s <- state$summary
+      # Older runs never wrote every key (e.g. reference_source); omit the
+      # field rather than print a "not recorded" placeholder for it.
       fld <- function(k) {
         v <- unname(s[k])
-        if (is.null(v) || is.na(v)) "not recorded" else v
+        if (is.null(v) || is.na(v)) NA_character_ else v
       }
+      ref_len <- fld("reference_length")
       n_pct <- suppressWarnings(
-        round(100 * as.numeric(fld("n_count")) /
-                as.numeric(fld("reference_length")), 1)
+        round(100 * as.numeric(fld("n_count")) / as.numeric(ref_len), 1)
       )
       item <- function(label, value) {
+        if (is.null(value) || is.na(value)) return(NULL)
         tags$span(class = "mp-maptoref-field", tags$b(label), " ", value)
       }
       tags$div(
         class = "mp-maptoref-meta",
         item("Reference:", fld("accession")),
         item("Organism:", fld("organism")),
-        item("Length:", paste0(fld("reference_length"), " bp")),
+        item("Length:", if (!is.na(ref_len)) paste0(ref_len, " bp")),
         item("Source:", fld("reference_source")),
         item("Reads mapped:", fld("reads_mapped_final")),
         item("Mean depth:", round(mean(state$depth$Depth), 1)),
-        item("Uncalled bases:", paste0(n_pct, "%")),
+        item("Uncalled bases:", if (!is.na(n_pct)) paste0(n_pct, "%")),
         if (nrow(state$features) == 0L) {
           tags$span(class = "mp-maptoref-field mp-maptoref-nofeat",
                     "Reference has no annotation record.")
