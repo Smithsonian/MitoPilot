@@ -14,21 +14,6 @@ EXPORT_COL_GROUP_LOOKUP <- {
   out
 }
 
-# Inline grey "?" help icon matching the tool-help icons (tool_help_icon),
-# but as a plain hover tooltip (native title) rather than a help modal.
-export_help_icon <- function(tip) {
-  shiny::icon(
-    "circle-question",
-    title = tip,
-    style = "color: #888; margin-left: 4px; cursor: help;"
-  )
-}
-
-# Label text followed by the help icon, for input labels and table headers.
-export_help_label <- function(label, tip) {
-  htmltools::tagList(label, export_help_icon(tip))
-}
-
 # Per-gene signature of one unit's PCG annotations, read straight from the db.
 # Covers exactly the fields flag_PCG_outliers aligns on (see
 # get_export_PCG_annotations), so two equal signatures mean the alignment for
@@ -402,44 +387,44 @@ export_server <- function(id) {
     )
 
     # Group ----
+    # The "already in a group" warning is shown inside the modal, next to the
+    # group name, rather than as a confirm before the modal opens (T24).
     init("group")
     on("group", {
       req(session$userData$mode == "Export")
-      req(selected())
-      if (any(!is.na(rv$data$export_group[selected()]))) {
-        shinyWidgets::confirmSweetAlert(
-          title = "Re-assign group?",
-          text = "Some selected samples are already assigned to an export group. Assigning them to a new group will not automatically remove them from previously generated export files. Do you want to continue?",
-          inputId = ns("group_confirm"),
-          btn_labels = c("No", "Yes"),
-          btn_colors = c("#0056b3", "#0056b3")
-        )
-        req(F)
-      }
-      trigger("group_modal")
-    })
-    observeEvent(input$group_confirm, {
-      req(input$group_confirm)
+      if (!need_selection(length(selected()))) return()
       trigger("group_modal")
     })
 
     # Clear Group ----
     # Remove the export_group assignment from any selected samples that currently
-    # have one. Always-visible button; a no-group selection is a silent no-op.
+    # have one.
     init("clear_group")
     on("clear_group", {
       req(session$userData$mode == "Export")
-      req(selected())
+      if (!need_selection(length(selected()))) return()
       rv$updating <- rv$data |> dplyr::slice(selected())
       if (!any(!is.na(rv$updating$export_group))) {
-        req(FALSE)
+        mp_toast(
+          sprintf(
+            "None of the %s in an export group.",
+            mp_n(nrow(rv$updating), "selected assembly is", "selected assemblies are")
+          ),
+          type = "warning"
+        )
+        return()
       }
-      shinyWidgets::confirmSweetAlert(
-        title = "Clear group?",
-        text = "Remove the selected samples from their export group? This will not automatically remove them from previously generated export files.",
-        inputId = ns("clear_group_confirm"),
-        btn_labels = c("No", "Yes"),
-        btn_colors = c("#0056b3", "#0056b3")
+      mp_confirm(
+        ns("clear_group_confirm"),
+        title = "Clear export group",
+        text = sprintf(
+          paste(
+            "%s leave their export group. Files already written for that group",
+            "are not removed."
+          ),
+          mp_n(nrow(rv$updating), "assembly", "assemblies")
+        ),
+        action_label = "Clear group"
       )
     })
     observeEvent(input$clear_group_confirm, {
@@ -459,32 +444,47 @@ export_server <- function(id) {
       group_current <- rv$updating |>
         dplyr::pull(export_group) |>
         unique()
+      already <- sort(group_current[!is.na(group_current)])
       modalDialog(
-        title = "Submission Group",
+        title = mp_modal_title(
+          "Assign export group",
+          subtitle = sprintf(
+            "%s selected", mp_n(nrow(rv$updating), "assembly", "assemblies")
+          )
+        ),
         size = "l",
         easyClose = FALSE,
-        stringr::str_glue(
-          "<b># Selected:</b> {nrow(rv$updating)}"
-        ) |> HTML() |> p(),
-        stringr::str_glue(
-          "<b># Topology:</b> {paste(topologies, collapse=', ')}"
-        ) |> HTML() |> p(),
-        HTML("<b>Structure:") |> p(),
+        p(tags$b("Topology: "), paste(topologies, collapse = ", ")),
+        p(tags$b("Gene Order:")),
         list_to_li(structures),
         hr(),
         selectizeInput(
           ns("group_name"),
-          label = "Group Name:",
+          label = "Group name:",
           choices = c("", sort(unique(rv$data$export_group))),
           selected = character(0),
           options = list(
             create = TRUE,
-            maxItems = 1
+            maxItems = 1,
+            # Refuses to create a name the export path cannot use, at the
+            # keystroke rather than after Create (T18).
+            createFilter = "^[A-Za-z0-9._-]+$",
+            placeholder = "letters, numbers, dot, hyphen, underscore"
           )
         ),
-        footer = tagList(
-          actionButton(ns("make_group"), "Create"),
-          modalButton("Close")
+        if (length(already) > 0) {
+          p(
+            class = "mp-fg-warning",
+            icon("triangle-exclamation"), " ",
+            sprintf(
+              "Some of these are already in %s. A new group does not remove them from export files already written.",
+              paste(sprintf("\"%s\"", already), collapse = ", ")
+            )
+          )
+        },
+        footer = mp_footer(
+          primary = actionButton(ns("make_group"), "Create"),
+          dismiss = "Cancel"
         )
       ) |> showModal()
     })
@@ -515,10 +515,11 @@ export_server <- function(id) {
 
     observeEvent(input$make_group, {
       name <- req(input$group_name)
-      if (any(!(grepl("^[a-zA-Z0-9_-]+$", name)))) {
-        shinyWidgets::sendSweetAlert(
+      # Backstop: the selectize createFilter already refuses these keystrokes.
+      if (any(!(grepl("^[A-Za-z0-9._-]+$", name)))) {
+        mp_alert(
           title = "Invalid group name",
-          text = "Group names must contain only alphanumeric characters, dashes, or underscores",
+          text = "Use only letters, numbers, dots, hyphens, and underscores.",
           type = "error"
         )
         return()
@@ -531,7 +532,7 @@ export_server <- function(id) {
       if (n_complete > 0 && n_partial > 0) {
         rv$pending_group_name <- name
         modalDialog(
-          title = "Mixed complete and partial mitogenomes",
+          title = mp_modal_title("Mixed complete and partial mitogenomes"),
           size = "m",
           easyClose = FALSE,
           HTML(stringr::str_glue(
@@ -540,10 +541,14 @@ export_server <- function(id) {
             "complete and {n_partial} partial. Split into two groups, ",
             "'{name}-complete' and '{name}-partial', or keep them as one group?"
           )),
-          footer = tagList(
-            actionButton(ns("group_split"), "Split into two groups", class = "btn-primary"),
-            actionButton(ns("group_keep_one"), "Keep as one mixed group"),
-            actionButton(ns("group_back"), "Cancel")
+          # Cancel returns to the group modal, so the typed name is not lost.
+          footer = mp_footer(
+            primary = actionButton(ns("group_split"), "Split into two groups"),
+            dismiss = NULL,
+            extra = tagList(
+              actionButton(ns("group_back"), "Cancel"),
+              actionButton(ns("group_keep_one"), "Keep as one mixed group")
+            )
           )
         ) |> showModal()
         return()
@@ -699,7 +704,7 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("start_aa"),
-                export_help_label(
+                mp_help_label(
                   "Flag start offset > (aa):",
                   "Flag genes with start position offset by +/- this many amino acids from the core alignment"
                 ),
@@ -710,7 +715,7 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("stop_aa"),
-                export_help_label(
+                mp_help_label(
                   "Flag stop offset > (aa):",
                   "Flag genes with stop position offset by +/- this many amino acids from the core alignment"
                 ),
@@ -721,7 +726,7 @@ export_server <- function(id) {
               style = "flex: 1",
               numericInput(
                 ns("ident_pct"),
-                export_help_label(
+                mp_help_label(
                   "Flag sequence identity < (%):",
                   "Mean % identity threshold to flag a gene versus all other genes in alignment group"
                 ),
@@ -1369,30 +1374,44 @@ export_server <- function(id) {
       # Bump so review_aln_ui rebuilds the widget from scratch on every (re)open.
       aln_nonce(isolate(aln_nonce()) + 1L)
       modalDialog(
-        title = "PCG Annotation Outlier Review",
+        # No close X: leaving the review is an explicit decision, and both
+        # exits below clean up the review state.
+        title = mp_modal_title("PCG annotation outlier review", close = FALSE),
         size = "l",
+        # Prev / Next page the review, so they sit with the position they move.
         div(
-          style = "margin-bottom: 0.5em; font-weight: bold;",
-          textOutput(ns("review_header"))
+          style = "display: flex; align-items: center; gap: 0.75em; margin-bottom: 0.5em;",
+          div(style = "font-weight: bold;", textOutput(ns("review_header"), inline = TRUE)),
+          div(
+            style = "margin-left: auto; display: flex; gap: 0.5em;",
+            actionButton(ns("review_prev"), "Prev", icon = icon("chevron-left"),
+                         class = "btn-sm btn-default"),
+            actionButton(ns("review_next"), "Next", icon = icon("chevron-right"),
+                         class = "btn-sm btn-default")
+          )
         ),
-        p(
-          style = "color: #666; font-size: 0.9em;",
+        opts_help(
           "Review the alignment below to decide whether the flagged samples ",
           "need to be revised. Click 'edit' to jump to the annotation editor ",
-          "for a sample, or skip the gene if the flags look benign."
+          "for a sample, or mark the gene resolved if the flags look benign."
         ),
         uiOutput(ns("review_aln_ui")),
         tags$hr(),
         reactableOutput(ns("review_table")),
+        # Acts on the gene shown above, not on the modal, so it stays here.
+        div(
+          style = "margin-top: 0.5em;",
+          actionButton(ns("skip_gene"), "Mark gene resolved",
+                       class = "btn-sm btn-default",
+                       title = "Mark every flag for this gene as resolved and move on")
+        ),
         # Edit any sample of this gene, flagged or not (only this gene stays
         # editable in the details modal, same as clicking a flagged sample's 'edit').
         uiOutput(ns("review_sample_picker")),
-        footer = tagList(
-          actionButton(ns("review_prev"), "Prev"),
-          actionButton(ns("review_next"), "Next"),
-          actionButton(ns("skip_gene"), "Mark gene resolved", class = "btn-success"),
-          actionButton(ns("cancel_review"), "Cancel export", class = "btn-danger"),
-          actionButton(ns("review_done"), "Done", class = "btn-primary")
+        footer = mp_footer(
+          primary = actionButton(ns("review_done"), "Continue export"),
+          dismiss = NULL,
+          extra = actionButton(ns("cancel_review"), "Stop without exporting")
         )
       ) |> showModal()
     })
@@ -1489,13 +1508,14 @@ export_server <- function(id) {
         columns = list(
           Sample = reactable::colDef(
             minWidth = 130,
-            cell = rt_link(ns("review_pick"))
+            cell = rt_link(ns("review_pick"),
+                           title = "Highlight this sample in the alignment")
           ),
           Issue = reactable::colDef(minWidth = 120),
           `Start offset (aa)` = reactable::colDef(
             minWidth = 150,
             cell = signed_cell,
-            header = export_help_label(
+            header = mp_help_label(
               "Start offset (aa)",
               "Number of amino acids this sample's start extends past (+) or falls short of (-) the core alignment."
             )
@@ -1503,14 +1523,14 @@ export_server <- function(id) {
           `Stop offset (aa)` = reactable::colDef(
             minWidth = 150,
             cell = signed_cell,
-            header = export_help_label(
+            header = mp_help_label(
               "Stop offset (aa)",
               "Number of amino acids this sample's stop extends past (+) or falls short of (-) the core alignment."
             )
           ),
           `Identity (%)` = reactable::colDef(
             minWidth = 125,
-            header = export_help_label(
+            header = mp_help_label(
               "Identity (%)",
               "Mean percent identity of this sample versus rest of samples in alignment group."
             )
@@ -1518,26 +1538,36 @@ export_server <- function(id) {
           `Internal stops` = reactable::colDef(
             minWidth = 135,
             align = "center",
-            header = export_help_label(
+            header = mp_help_label(
               "Internal stops",
               "Number of stop codons inside this sample's translation. Any at all will fail NCBI validation."
             )
           ),
           resolved = reactable::colDef(
             name = "Resolved",
-            width = 90,
+            width = 100,
             align = "center",
+            sortable = FALSE,
+            filterable = FALSE,
             cell = rt_bool_bttn(
               ns("toggle_resolved"),
               "fas fa-circle-check",
-              "far fa-circle"
+              "far fa-circle",
+              title_true = "Resolved - click to reopen",
+              title_false = "Unresolved - click to mark resolved"
             )
           ),
           edit = reactable::colDef(
-            name = "",
-            width = 80,
+            name = "Edit",
+            width = 90,
             align = "center",
-            cell = rt_icon_bttn_text(ns("goto_annot"), "fas fa-pen-to-square fa-xs")
+            sortable = FALSE,
+            filterable = FALSE,
+            cell = rt_icon_bttn_text(
+              ns("goto_annot"), "fas fa-pen-to-square fa-xs",
+              label = "Edit",
+              title = "Open the annotation editor for this sample"
+            )
           )
         )
       )
@@ -1560,8 +1590,9 @@ export_server <- function(id) {
           )
         ),
         actionButton(
-          ns("edit_sample"), "edit",
-          class = "btn-primary", style = "margin-bottom: 15px;"
+          ns("edit_sample"), "Edit",
+          class = "btn-default", style = "margin-bottom: 15px;",
+          title = "Open the annotation editor for the chosen sample"
         )
       )
     })
