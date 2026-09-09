@@ -192,7 +192,8 @@ assembly_coverage_details_server <- function(id, rv) {
             label = "Notes:",
             value = rv$updating$assemble_notes %|NA|% character(0),
             width = "100%"
-          )
+          ) |>
+            (\(x) if (locked()) shinyjs::disabled(x) else x)()
         ),
         footer = mp_footer(
           dismiss = NULL,
@@ -244,7 +245,8 @@ assembly_coverage_details_server <- function(id, rv) {
               cell = rt_bool_bttn(
                 ns("ignore"), "fa fa-circle-xmark", "far fa-circle",
                 title_true = "Ignored - click to include this scaffold",
-                title_false = "Included - click to ignore this scaffold"
+                title_false = "Included - click to ignore this scaffold",
+                disabled = if (locked()) MP_LOCK_DEF("assemble") else FALSE
               )
             ),
             ID = colDef(name = "ID", align = "left", minWidth = mp_fit_width(tbl$ID)),
@@ -370,6 +372,11 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # Ignore bttn ----
     observeEvent(input$ignore, {
+      if (locked()) {
+        mp_alert(title = "This sample is locked", text = MP_LOCK_DEF("assemble"),
+                 type = "warning")
+        req(F)
+      }
       row <- as.numeric(input$ignore)
       rv$focal_assembly$ignore[row] <- as.numeric(!rv$focal_assembly$ignore[row])
       dplyr::tbl(session$userData$con, "assemblies") |>
@@ -410,6 +417,7 @@ assembly_coverage_details_server <- function(id, rv) {
       # scaffold assemblies this is correct because BLAST info already exists;
       # multi-path assemblies will lack BLAST info, which is a known gap.
       n_active <- sum(rv$focal_assembly$ignore == 0)
+      new_switch <- NULL
       if (n_active == 1L && isTRUE(rv$updating$assemble_switch == 3)) {
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::rows_update(
@@ -425,10 +433,7 @@ assembly_coverage_details_server <- function(id, rv) {
             data.frame(ID = rv$updating$ID, assemble_switch = 2L),
             by = "ID"
           )
-        mp_toast(
-          "Marked successful: 1 scaffold or path is left active.",
-          type = "message", duration = 5
-        )
+        new_switch <- 2L
       } else if (n_active > 1L && isTRUE(rv$updating$assemble_switch == 2)) {
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::rows_update(
@@ -444,11 +449,28 @@ assembly_coverage_details_server <- function(id, rv) {
             data.frame(ID = rv$updating$ID, assemble_switch = 3L),
             by = "ID"
           )
-        mp_toast(
-          "Marked needs attention: more than one scaffold or path is active.",
-          type = "warning", duration = 5
-        )
+        new_switch <- 3L
       }
+
+      # One report for the whole write: the scaffold, and the state if the
+      # number of active scaffolds moved it.
+      unit <- if (length(unique(rv$focal_assembly$path)) > 1) {
+        sprintf("Path %s scaffold %s", rv$focal_assembly$path[row],
+                rv$focal_assembly$scaffold[row])
+      } else {
+        sprintf("Scaffold %s", rv$focal_assembly$scaffold[row])
+      }
+      msg <- paste0(
+        unit,
+        if (rv$focal_assembly$ignore[row] == 1) " ignored." else " included.",
+        if (!is.null(new_switch)) {
+          paste0(" State is now ",
+                 MP_STATE_META[[as.character(new_switch)]]$label, ".")
+        }
+      )
+      mp_toast(msg,
+               type = if (identical(new_switch, 3L)) "warning" else "message",
+               duration = 5)
     })
 
     # Notes ----
@@ -456,6 +478,7 @@ assembly_coverage_details_server <- function(id, rv) {
       input$notes
     }) |> debounce(500)
     observeEvent(notes_update(), ignoreInit = T, ignoreNULL = T, {
+      req(!locked())
       req(input$notes != (rv$updating$assemble_notes %|NA|% ""))
       rv$updating$assemble_notes <- input$notes |>
         stringr::str_remove_all(",")
@@ -1663,6 +1686,7 @@ assembly_coverage_details_server <- function(id, rv) {
       # A disabled input shows no tooltip of its own, so the reason sits on the
       # container the user hovers (T01, T02).
       lock_title <- if (locked()) MP_LOCK_DEF("assemble")
+      off <- function(x) if (locked()) shinyjs::disabled(x) else x
       div(
         style = paste("margin: 8px 0; padding: 10px; border: 1px solid #b9c6d6;",
                       "border-radius: 4px; background: #f4f8fc; font-size: 0.9em;"),
@@ -1679,15 +1703,18 @@ assembly_coverage_details_server <- function(id, rv) {
               paste("These scaffolds carry different BLAST hits, so joining them may",
                     "produce poor overlaps and an unreliable assembly. Review the",
                     "mapping below before joining.")),
-          checkboxInput(ns("join_override_diff"),
-                        "I understand the risk; allow joining anyway", value = FALSE)
+          off(checkboxInput(ns("join_override_diff"),
+                            "I understand the risk; allow joining anyway",
+                            value = FALSE))
         ),
         div(style = "display: flex; gap: 12px; align-items: flex-end; margin-top: 8px; flex-wrap: wrap;",
             title = lock_title,
-            selectInput(ns("join_reference"), "Reference",
-                        choices = accs, selected = default_ref, width = "200px"),
+            off(selectInput(ns("join_reference"), "Reference",
+                            choices = accs, selected = default_ref,
+                            width = "200px")),
             div(style = "padding-bottom: 6px;",
-                checkboxInput(ns("join_circular"), "Circular", value = FALSE)),
+                off(checkboxInput(ns("join_circular"), "Circular",
+                                  value = FALSE))),
             actionButton(ns("join_autolayout"), "Re-map to reference",
                          icon = icon("wand-magic-sparkles"),
                          class = "btn-default",
