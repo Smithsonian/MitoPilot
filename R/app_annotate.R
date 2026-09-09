@@ -22,14 +22,18 @@ ANNOTATE_COL_GROUP_LOOKUP <- {
 # codes; each row is tagged with mp-lock-<v> / mp-state-<v> classes so
 # unselected codes can be hidden via CSS (same mechanism as the column
 # picker, so sort order, search, other filters, page, and selection survive).
+# State labels come from mp_state_choices("annotate"); R sources constants.R
+# after this file, so they are read inside function bodies, never at top level.
 ANNOTATE_LOCK_CHOICES <- c("Unlocked" = "0", "Locked" = "1")
-ANNOTATE_STATE_CHOICES <- c(
-  "Pre-Annotate" = "0",
-  "In Progress"  = "1",
-  "Success"      = "2",
-  "Failed"       = "3"
-)
 ANNOTATE_EXPORT_CHOICES <- c("Not Exported" = "0", "Exported" = "1")
+
+# What choosing each state does to the next Update, shown under its radio.
+ANNOTATE_STATE_CONSEQUENCE <- c(
+  `0` = "Skipped by the next update.",
+  `1` = "Processed by the next update; annotations already stored are replaced.",
+  `2` = "Treated as finished; the next update skips it.",
+  `3` = "Treated as finished with an error; the next update skips it."
+)
 
 #' annotate UI Function
 #'
@@ -183,7 +187,7 @@ annotate_server <- function(id) {
     observeEvent(input$lock_filter, {
       lock_filter_rv(input$lock_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    state_filter_rv <- reactiveVal(unname(ANNOTATE_STATE_CHOICES))
+    state_filter_rv <- reactiveVal(MP_STATE_CODES$annotate)
     observeEvent(input$state_filter, {
       state_filter_rv(input$state_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -217,7 +221,7 @@ annotate_server <- function(id) {
     output$col_css <- renderUI({
       hidden_grp   <- setdiff(names(ANNOTATE_COL_GROUPS), col_groups_rv())
       hidden_lock  <- setdiff(unname(ANNOTATE_LOCK_CHOICES), lock_filter_rv())
-      hidden_state <- setdiff(unname(ANNOTATE_STATE_CHOICES), state_filter_rv())
+      hidden_state <- setdiff(MP_STATE_CODES$annotate, state_filter_rv())
       hidden_exp   <- setdiff(unname(ANNOTATE_EXPORT_CHOICES), export_filter_rv())
       # Hide the Path / Scaffold columns when every unit shares value 1 (single
       # path/scaffold everywhere -> no extra info). Reactive on rv$data so the
@@ -290,9 +294,10 @@ annotate_server <- function(id) {
             width = 50,
             align = "center",
             cell = rt_dynamicIcon(
-              c(
-                `0` = "fa fa-lock-open",
-                `1` = "fa fa-lock"
+              c(`0` = "fa fa-lock-open", `1` = "fa fa-lock"),
+              labels = c(
+                `0` = paste("Unlocked -", MP_LOCK_DEF("annotate")),
+                `1` = paste("Locked -", MP_LOCK_DEF("annotate"))
               )
             )
           ),
@@ -307,12 +312,10 @@ annotate_server <- function(id) {
             width = 62,
             align = "center",
             cell = rt_dynamicIcon(
-              c(
-                `0` = "fa fa-hourglass",
-                `1` = "fa fa-person-running",
-                `2` = "fa fa-circle-check",
-                `3` = "fa fa-triangle-exclamation"
-              )
+              icons  = mp_state_icons("annotate"),
+              labels = paste0(mp_state_labels("annotate"), " - ",
+                              mp_state_tips("annotate")) |>
+                stats::setNames(MP_STATE_CODES$annotate)
             )
           ),
           ID = colDef(
@@ -643,24 +646,40 @@ annotate_server <- function(id) {
         dplyr::slice(selected())
       current <- character(0)
       if (length(unique(rv$updating$annotate_switch)) == 1) {
-        current <- rv$updating$annotate_switch[1]
+        current <- as.character(rv$updating$annotate_switch[1])
       }
       showModal(
         modalDialog(
-          title = "Select New State:",
+          title = mp_modal_title(
+            paste("Set state for", mp_n(nrow(rv$updating), "assembly"))
+          ),
+          tags$p(class = "text-muted", mp_id_list(unique(rv$updating$ID))),
+          if (length(current) == 0) {
+            tags$p(class = "text-muted",
+                   "The selected rows are not all in the same state.")
+          },
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
-            label = NULL,
-            choices = c("Pre-Annotate (wait)" = 0, "Ready to Annotate" = 1, "Successful Annotation" = 2),
-            selected = current,
-            shape = "square",
+            label = "New state",
+            choiceValues = MP_STATE_SETTABLE,
+            choiceNames = lapply(MP_STATE_SETTABLE, function(k) {
+              tagList(
+                tags$strong(MP_STATE_META[[k]]$label),
+                tags$span(class = "text-muted", style = "font-size: 0.85em;",
+                          paste0(" ", ANNOTATE_STATE_CONSEQUENCE[[k]]))
+              )
+            }),
+            selected = if (length(current) && current %in% MP_STATE_SETTABLE) {
+              current
+            } else {
+              character(0)
+            },
+            shape = "round",
             status = "primary"
           ),
           size = "m",
-          footer = tagList(
-            actionButton(ns("update_state"), "Update"),
-            modalButton("Cancel")
-          )
+          easyClose = TRUE,
+          footer = mp_footer(primary = actionButton(ns("update_state"), "Update"))
         )
       )
     })
