@@ -377,7 +377,7 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
   circularize_load_evidence(rv, session = session)
 
   showModal(modalDialog(
-    title = stringr::str_glue("Circularization: {id}"),
+    title = mp_modal_title(stringr::str_glue("Circularization: {id}")),
     size = "l",
     easyClose = TRUE,
     opts_help(
@@ -393,7 +393,7 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
     ),
     circ_caption(circ_coverage_label(nrow(ov_all), n_contigs), top = 0),
     uiOutput(ns("circ_body")),
-    footer = modalButton("Close")
+    footer = mp_footer(dismiss = "Close")
   ))
 
   invisible(NULL)

@@ -133,12 +133,9 @@ assembly_coverage_details_server <- function(id, rv) {
       )
 
       modalDialog(
-        title = tagList(
-          div(stringr::str_glue("Assembly details for ID: {rv$updating$ID}")),
-          div(
-            style = "font-size: 0.85em; font-weight: normal; color: #555; margin-top: 4px;",
-            stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
-          )
+        title = mp_modal_title(
+          stringr::str_glue("Assembly details: {rv$updating$ID}"),
+          subtitle = stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
         ),
         size = "l",
         if (isTRUE(rv$asmb_multiscaffold_blocked)) {
@@ -181,16 +178,25 @@ assembly_coverage_details_server <- function(id, rv) {
             width = "100%"
           )
         ),
-        footer = tagList(
-          div(
-            style = "display: flex; justify-content: right; gap: 0.5em;",
+        footer = mp_footer(
+          dismiss = NULL,
+          extra = tagList(
             uiOutput(ns("clip")) |> shinyjs::hidden(),
-            actionButton(ns("align"), "Align", icon("align-justify")) |> shinyjs::hidden(),
-            actionButton(ns("close_modal"), "Close")
+            actionButton(ns("align"), "Align", icon("align-justify"),
+                         class = "btn-default") |> shinyjs::hidden(),
+            actionButton(ns("close_modal"), "Close", class = "btn-default")
           )
         )
       ) |>
         showModal()
+
+      # The header X dismisses client-side, which would skip the table refresh
+      # the Close button does. Route it through the same input.
+      shinyjs::runjs(sprintf(
+        "setTimeout(function(){$('#shiny-modal .modal-header .close').on('click', function(){
+           Shiny.setInputValue('%s', Date.now(), {priority: 'event'});});}, 0);",
+        ns("close_modal")
+      ))
     })
 
     # Render table ----
@@ -1391,12 +1397,13 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$consensus_finalize <- finalize
       rv$consensus_blast_choices <- cand
       showModal(modalDialog(
-        title = "Multiple BLAST hits among paths",
+        title = mp_modal_title("Multiple BLAST hits among paths"),
         radioButtons(ns("consensus_blast_choice"),
                      "Choose a BLAST hit to assign to the consensus assembly:",
                      choiceNames = labels, choiceValues = as.character(seq_len(nrow(cand)))),
-        footer = tagList(modalButton("Cancel"),
-                         actionButton(ns("consensus_blast_confirm"), "Assign hit")),
+        footer = mp_footer(
+          primary = actionButton(ns("consensus_blast_confirm"), "Assign hit")
+        ),
         easyClose = FALSE
       ))
     }
@@ -1432,7 +1439,7 @@ assembly_coverage_details_server <- function(id, rv) {
         dplyr::pull(line)
       rv$consensus_topology_finalize <- finalize
       showModal(modalDialog(
-        title = "Confirm consensus topology",
+        title = mp_modal_title("Confirm consensus topology"),
         div(
           style = "font-size: 0.9em; color: #555; margin-bottom: 8px;",
           "Source path topologies:",
@@ -1441,8 +1448,9 @@ assembly_coverage_details_server <- function(id, rv) {
         radioButtons(ns("consensus_topology_choice"),
                      "Topology to assign to the consensus assembly:",
                      choices = c("linear", "circular"), selected = inherited),
-        footer = tagList(modalButton("Cancel"),
-                         actionButton(ns("consensus_topology_confirm"), "Confirm topology")),
+        footer = mp_footer(
+          primary = actionButton(ns("consensus_topology_confirm"), "Confirm topology")
+        ),
         easyClose = FALSE
       ))
     }
