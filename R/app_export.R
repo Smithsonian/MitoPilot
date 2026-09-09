@@ -247,11 +247,6 @@ export_server <- function(id) {
         # fetch_export_data().
         columns = list(
           `.selection` = colDef(show = TRUE, sticky = "left", width = 28),
-          annotate_switch = .cd(
-            "annotate_switch", sticky = "left", width = 60, align = "center",
-            html = TRUE, filterable = FALSE,
-            cell = rt_dynamicIcon(mp_state_icons("annotate"), mp_state_labels("annotate"))
-          ),
           # Wide enough for a 16-character ID; the tooltip covers longer ones.
           ID = .cd("ID", minWidth = 160, sticky = "left", html = TRUE,
                    cell = rt_longtext()),
