@@ -198,10 +198,10 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     if (!grepl("\\{seqid\\}", template)) {
       multi_unit <- !is.null(data) && "ID" %in% names(data) && any(duplicated(data$ID))
       msg <- paste(
-        "Header does not use {seqid}. Samples with more than one assembly unit",
+        "Header does not use {seqid}. Samples with more than one assembly",
         "will produce duplicate FASTA deflines that do not match the .tbl",
         ">Feature line, and table2asn will reject the submission. Use {seqid}",
-        "instead of {ID}: it is the plain ID for single-unit samples."
+        "instead of {ID}: it is the plain ID for samples with one assembly."
       )
       if (multi_unit) {
         return(err(msg))

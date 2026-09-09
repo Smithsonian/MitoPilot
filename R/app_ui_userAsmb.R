@@ -61,7 +61,7 @@ app_ui_userAsmb <- function(request) {
               class = "mp-toolbar",
               mp_toolbar_button(
                 "state", "State",
-                title = "Set the pipeline state of the selected samples",
+                title = "Set the pipeline state of the selected assemblies",
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
@@ -71,17 +71,17 @@ app_ui_userAsmb <- function(request) {
               ),
               mp_toolbar_button(
                 "id_verified_top", "Mark ID Verified",
-                title = "Mark or clear species ID verified on the selected samples",
+                title = "Mark or clear species ID verified on the selected assemblies",
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
                 "problematic_top", "Mark Problematic",
-                title = "Mark or clear problematic on the selected samples",
+                title = "Mark or clear problematic on the selected assemblies",
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
                 "partial_top", "Mark Partial",
-                title = "Mark or clear partial on the selected samples",
+                title = "Mark or clear partial on the selected assemblies",
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
@@ -96,18 +96,18 @@ app_ui_userAsmb <- function(request) {
               class = "mp-toolbar",
               mp_toolbar_button(
                 "group", "Assign Group",
-                title = "Assign the selected samples to an export group",
+                title = "Assign the selected assemblies to an export group",
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
                 "clear_group", "Clear Group",
-                title = "Remove the selected samples from their export group",
+                title = "Remove the selected assemblies from their export group",
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
                 "export", "Export Data",
                 emphasis = "primary",
-                title = "Open the export window for the selected samples"
+                title = "Open the export window for the selected assemblies"
               )
             ),
             workdir_browser_ui("workdir_browser")

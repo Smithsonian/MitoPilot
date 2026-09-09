@@ -1742,7 +1742,7 @@ annotations_details_server <- function(id, rv) {
             ),
             ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
           ))),
-          numericInput(ns("synteny_zoom_window"), label = "window size (bp)",
+          numericInput(ns("synteny_zoom_window"), label = "Window size (bp)",
                        value = isolate(input$synteny_zoom_window) %||% 200L,
                        min = 30L, max = 2000L, step = 50L,
                        width = "auto")
@@ -2944,11 +2944,11 @@ annotations_details_server <- function(id, rv) {
       st <- asmb_state()
       e <- st$ends
       reason <- if (is.null(e)) {
-        "This unit has no assembly on record."
+        "This assembly has no sequence on record."
       } else if (!isTRUE(e$topology == "linear")) {
         "Only linear assemblies can be trimmed. Linearize a circular assembly first."
       } else if (is.na(e$from)) {
-        "This unit has no annotations to trim to."
+        "This assembly has no annotations to trim to."
       } else if (e$lead + e$trail == 0L) {
         "The annotations already span the whole assembly; nothing to trim."
       } else {
@@ -3050,7 +3050,7 @@ annotations_details_server <- function(id, rv) {
         ns("restore_asmb_confirm"),
         title = "Restore assembly",
         text = paste0(
-          "This undoes the in-app assembly edits for this unit (",
+          "This undoes the in-app assembly edits for this assembly (",
           paste(ops, collapse = ", "),
           ") and puts back the sequence and feature model as the pipeline left ",
           "them. Annotation edits made since then are lost."
@@ -5411,7 +5411,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           div(
             shinyWidgets::prettyCheckbox(
               ns("local_blast"),
-              label = "Local blast",
+              label = "Local BLAST",
               status = "primary",
               inline = TRUE
             ),

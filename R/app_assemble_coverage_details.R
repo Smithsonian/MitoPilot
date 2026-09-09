@@ -1899,7 +1899,7 @@ assembly_coverage_details_server <- function(id, rv) {
             div(style = "flex: 1 1 auto; min-width: 0; overflow-x: auto;",
                 plotOutput(ns("join_zoom_plot"), width = paste0(plot_w, "px"),
                            height = "160px"))),
-        numericInput(ns("join_zoom_window"), "window size (bp)",
+        numericInput(ns("join_zoom_window"), "Window size (bp)",
                      value = isolate(input$join_zoom_window) %||% 60L,
                      min = 20L, max = ZOOM_WINDOW_MAX_BP, step = 20L, width = "140px")
       )
@@ -2254,7 +2254,7 @@ assembly_coverage_details_server <- function(id, rv) {
           title = "Ambiguous bases added",
           text = paste(
             "This resolved assembly contains ambiguous bases (IUPAC codes or Ns).",
-            "These can cause problems during annotation - MITOS in particular does",
+            "These can cause problems during annotation - MITOS2 in particular does",
             "not handle ambiguous base calls well. A warning has been added to the",
             "assembly notes."
           ),

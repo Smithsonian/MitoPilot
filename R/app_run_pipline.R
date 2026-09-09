@@ -100,8 +100,8 @@ pipeline_server <- function(id) {
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
-        unit_label <- "sequences"
-        unit_noun <- "sequence"
+        unit_label <- "assemblies"
+        unit_noun <- "assembly"
         samples <- dplyr::left_join(
           dplyr::tbl(session$userData$con, "assemble"),
           dplyr::tbl(session$userData$con, "annotate"),
@@ -115,7 +115,7 @@ pipeline_server <- function(id) {
         why_txt <- if (session$userData$mode == "Assemble") {
           "No samples are queued. Locked or already-successful samples are skipped. Unlock a sample, or set its state to Ready to run, then press Update."
         } else {
-          "No sequences are queued. Sequences need their sample locked in Assemble and their own state set to Ready to run. Lock the sample, or set the sequence's state to Ready to run, then press Update."
+          "No assemblies are queued. An assembly needs its sample locked in Assemble and its own state set to Ready to run. Lock the sample, or set the assembly's state to Ready to run, then press Update."
         }
         modalDialog(
           title = stringr::str_glue("{session$userData$mode}: nothing to update"),
@@ -175,14 +175,14 @@ pipeline_server <- function(id) {
           )
         ),
         size = "l",
-        if (!headless) h5("Nextflow Command:"),
+        if (!headless) h5("Nextflow command"),
         if (!headless) div(style = "display: flex; justify-content: space-between; align-items: left;", class = "code-block", textOutput(ns(
           "nf_code_block"
         ))),
         headless_ui,
         div(
           id = ns("progress_div"),
-          h5("Progress:"),
+          h5("Progress"),
           div(
             id = ns("progress_div_text"),
             style = "max-height: 300px; overflow-y: auto;",

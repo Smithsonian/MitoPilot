@@ -16,7 +16,7 @@ check_single_path <- function(units) {
     dplyr::filter(n_paths > 1)
   if (nrow(multi_path) > 0) {
     stop(
-      "Cannot export ", nrow(multi_path), " sample(s) with more than one assembly path: ",
+      "Cannot export ", mp_n(nrow(multi_path), "sample"), " with more than one assembly path: ",
       paste(multi_path$ID, collapse = ", "),
       ".\nAssembly paths are alternative resolutions of the same genome, so exporting ",
       "each one would submit duplicate records for a single specimen. Open the ",

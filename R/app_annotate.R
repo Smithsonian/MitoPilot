@@ -538,7 +538,7 @@ annotate_server <- function(id) {
             align = "center",
             cell = rt_icon_bttn_text(
               ns("details"), "fas fa-square-arrow-up-right fa-xs",
-              label = "Details", title = "Open the details window for this row"
+              label = "Details", title = "Open the details window for this assembly"
             )
           ),
           output = colDef(

@@ -619,7 +619,7 @@ export_server <- function(id) {
         opts_help(
           "Write a column name in braces to use its value, for example ",
           tags$code("{Taxon}"), ". ", tags$code("{seqid}"), " is the record ",
-          "name MitoPilot gives this unit: the sample ID, or ",
+          "name MitoPilot gives this assembly: the sample ID, or ",
           tags$code("ID_p<path>_s<scaffold>"), " when one sample exports more ",
           "than one record. Columns from your mapping file work here even ",
           "when the table does not show them.",
