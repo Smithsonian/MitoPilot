@@ -9,9 +9,9 @@ app_server <- function(input, output, session) {
   db <- getOption("MitoPilot.db") %||% normalizePath(".sqlite")
   session$userData$dir <- dirname(db)
   if (!file.exists(db)) {
-    shinyWidgets::sendSweetAlert(
-      title = "Database not found",
-      text = "The MitoPilot::gui() app requires a database to run. Please make sure your working directory is set to an active MitoPilot project, or use set the location of the database using, options(MitoPilot.db = 'path/to/the/.sqlite').",
+    mp_alert(
+      title = "Project database not found",
+      text = "The MitoPilot() app requires a database to run. Please make sure your working directory is set to an active MitoPilot project, or set the location of the database with options(MitoPilot.db = 'path/to/the/.sqlite').",
       type = "error"
     )
   }
@@ -30,8 +30,7 @@ app_server <- function(input, output, session) {
   # in place, which is not something to do silently to someone's project.
   gaps <- schema_gaps(session$userData$con)
   if (length(gaps) > 0) {
-    shinyWidgets::sendSweetAlert(
-      session = session,
+    mp_alert(
       title = "Project database needs updating",
       text = shiny::tags$div(
         shiny::tags$p("This project was created with an older version of MitoPilot:"),
@@ -55,8 +54,7 @@ app_server <- function(input, output, session) {
   # no local BLAST database, so every sample goes to the remote search instead).
   cgap <- container_version_gap(dirname(db))
   if (!is.null(cgap)) {
-    shinyWidgets::sendSweetAlert(
-      session = session,
+    mp_alert(
       title = "Container version does not match MitoPilot",
       text = shiny::tags$div(
         shiny::tags$p("This project runs the pipeline from:"),
@@ -135,8 +133,7 @@ app_server <- function(input, output, session) {
   tryCatch({
     stale <- stale_assemble_dirs(session$userData$con, session$userData$dir_out)
     if (nrow(stale) > 0) {
-      shinyWidgets::sendSweetAlert(
-        session = session,
+      mp_alert(
         title = "Assembly output not found",
         text = shiny::tags$div(
           shiny::tags$p(
