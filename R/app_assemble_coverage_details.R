@@ -10,7 +10,7 @@ assembly_coverage_details_server <- function(id, rv) {
     ns <- session$ns
 
     # One lock predicate for every editing control in this window (T02).
-    locked <- reactive(isTRUE(rv$updating$assemble_lock == 1))
+    locked <- reactive(isTRUE(rv$updating[["assemble_lock"]] == 1))
 
     init("coverage_modal")
 
