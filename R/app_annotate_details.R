@@ -756,7 +756,7 @@ annotations_details_server <- function(id, rv) {
             if (length(focal_idx) > 0) {
               focal_idx <- focal_idx[[1]]
               if (!identical(sel, focal_idx)) {
-                shinyWidgets::sendSweetAlert(
+                mp_alert(
                   title = "Review mode",
                   text = paste0(
                     "Only ", toupper(info$gene),
@@ -784,9 +784,10 @@ annotations_details_server <- function(id, rv) {
           return(sel)
         }
         if (!is.null(rv$editing) && editing_unsaved(rv$editing$idx)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Unsaved Edits!",
-            text = "Discard or save edits before selecting a new annotation"
+          mp_alert(
+            title = "Unsaved edits",
+            text = "Save or discard your edits before selecting another annotation.",
+            type = "warning"
           )
           reactable::updateReactable(
             "table",
@@ -899,9 +900,10 @@ annotations_details_server <- function(id, rv) {
       # close after rv$annotations was nulled below) - avoids filter() on NULL.
       req(!is.null(rv$annotations))
       if (editing_unsaved()) {
-        shinyWidgets::sendSweetAlert(
-          title = "Unsaved Edits!",
-          text = "Discard or save edits before closing"
+        mp_alert(
+          title = "Unsaved edits",
+          text = "Save or discard your edits before closing this window.",
+          type = "warning"
         )
         req(F)
       }
@@ -946,9 +948,10 @@ annotations_details_server <- function(id, rv) {
     ## Lock and Close ----
     observeEvent(input$lock, {
       if (editing_unsaved()) {
-        shinyWidgets::sendSweetAlert(
-          title = "Unsaved Edits!",
-          text = "Discard or save edits before locking"
+        mp_alert(
+          title = "Unsaved edits",
+          text = "Save or discard your edits before locking this assembly.",
+          type = "warning"
         )
         req(F)
       }
@@ -2727,25 +2730,27 @@ annotations_details_server <- function(id, rv) {
     # Linearize ----
     observeEvent(input$linearize, {
       if (rv$updating$topology != "circular") {
-        shinyWidgets::sendSweetAlert(
-          title = "Assembly is already linear."
-        )
+        mp_toast("This assembly is already linear.", type = "warning")
         req(F)
       }
       if (length(selected()) != 1) {
-        shinyWidgets::sendSweetAlert(
-          title = "Select an annotation to set the break point (before/after)."
+        mp_toast(
+          "Select one annotation to set the break point before or after it.",
+          type = "warning"
         )
         req(F)
       }
+      # Not an mp_confirm: this is a two-way choice (before / after), not an
+      # accept-or-cancel, and dismissing it must write neither answer.
       shinyWidgets::confirmSweetAlert(
         inputId = ns("linearize_loc"),
-        title = "Linearize Assembly!",
+        title = "Linearize assembly",
         text = stringr::str_glue(
-          "Do you want to set the breakpoint before or after the selected gene ({rv$annotations$gene[selected()]})?"
+          "Set the break point before or after {rv$annotations$gene[selected()]}?"
         ),
+        type = "question",
         btn_labels = c("After", "Before"),
-        btn_colors = c("#0056b3", "#0056b3"),
+        btn_colors = unname(MP_COLORS[c("primary", "primary")]),
         cancelOnDismiss = FALSE,
         showCloseButton = TRUE
       )
@@ -2773,12 +2778,13 @@ annotations_details_server <- function(id, rv) {
           circ_overlap(before_cut, before_cut, rv$annotations$pos1, rv$annotations$pos2),
       ]
       if (nrow(chk) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "Operation failed",
+        mp_alert(
+          title = "Cannot break here",
           text = stringr::str_glue(
             "The selected break point would split the ",
             "{paste(unique(chk$gene), collapse = ', ')} annotation."
-          )
+          ),
+          type = "warning"
         )
         req(F)
       }
@@ -2981,21 +2987,20 @@ annotations_details_server <- function(id, rv) {
       e <- asmb_state()$ends
       if (is.null(e) || !isTRUE(e$topology == "linear") || is.na(e$from) ||
           (e$lead + e$trail) == 0L) {
-        shinyWidgets::sendSweetAlert(title = "Nothing to trim.")
+        mp_toast("There is nothing to trim on this assembly.", type = "warning")
         req(F)
       }
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("trim_ends_confirm"),
-        title = "Trim unannotated ends?",
+      mp_confirm(
+        ns("trim_ends_confirm"),
+        title = "Trim unannotated ends",
         text = stringr::str_glue(
           "Removes {e$lead} bp before the first annotation and {e$trail} bp after ",
           "the last, leaving {format(e$to - e$from + 1, big.mark = ',')} bp. ",
           "Feature coordinates and the coverage track shift to match. ",
           "Use \"Restore assembly\" to undo."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Trim"),
-        btn_colors = c("#6c757d", "#d9534f")
+        action_label = "Trim",
+        danger = TRUE
       )
     })
 
@@ -3007,7 +3012,7 @@ annotations_details_server <- function(id, rv) {
           session$userData$con, u$ID, u$path, u$scaffold, session$userData$dir_out
         ),
         error = function(e) {
-          shinyWidgets::sendSweetAlert(title = "Trim failed", text = conditionMessage(e))
+          mp_alert(title = "Trim failed", text = conditionMessage(e), type = "error")
           NULL
         }
       )
@@ -3033,7 +3038,7 @@ annotations_details_server <- function(id, rv) {
       # Full reload: annotations, coverage and every figure come off the trimmed
       # record, and the reopened modal shows the new coordinates.
       trigger("annotations_modal")
-      showNotification(
+      mp_toast(
         stringr::str_glue(
           "Trimmed {res$removed_lead + res$removed_trail} bp of unannotated ends; ",
           "assembly is now {format(res$length, big.mark = ',')} bp."
@@ -3046,18 +3051,17 @@ annotations_details_server <- function(id, rv) {
       ops <- assembly_backup_ops(
         session$userData$con, rv$updating$ID, rv$updating$path, rv$updating$scaffold
       )
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("restore_asmb_confirm"),
-        title = "Restore assembly?",
+      mp_confirm(
+        ns("restore_asmb_confirm"),
+        title = "Restore assembly",
         text = paste0(
           "This undoes the in-app assembly edits for this unit (",
           paste(ops, collapse = ", "),
           ") and puts back the sequence and feature model as the pipeline left ",
           "them. Annotation edits made since then are lost."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Restore"),
-        btn_colors = c("#6c757d", "#0056b3")
+        action_label = "Restore",
+        danger = TRUE
       )
     })
 
@@ -3069,7 +3073,7 @@ annotations_details_server <- function(id, rv) {
           session$userData$con, u$ID, u$path, u$scaffold, session$userData$dir_out
         ),
         error = function(e) {
-          shinyWidgets::sendSweetAlert(title = "Restore failed", text = conditionMessage(e))
+          mp_alert(title = "Restore failed", text = conditionMessage(e), type = "error")
           NULL
         }
       )
@@ -3106,7 +3110,7 @@ annotations_details_server <- function(id, rv) {
       trigger("update_annotate_table")
       trigger("refresh_export")
       trigger("annotations_modal")
-      showNotification(
+      mp_toast(
         stringr::str_glue(
           "Assembly restored ({format(res$length, big.mark = ',')} bp, ",
           "{res$topology %|NA|% 'unknown'})."
@@ -3265,7 +3269,7 @@ annotations_details_server <- function(id, rv) {
           )
         }
         TRUE
-      }, error = function(e) { showNotification(paste("Failed to set reference:", conditionMessage(e)), type = "error"); FALSE })
+      }, error = function(e) { mp_toast(paste("Could not set the reference:", conditionMessage(e)), type = "error"); FALSE })
       req(ok)
 
       # Reflect in the modal (fig_ctx / picker) and the Annotate table (rv$data), for
@@ -3285,7 +3289,7 @@ annotations_details_server <- function(id, rv) {
                      stringsAsFactors = FALSE),
           by = c("ID", "path", "scaffold"), unmatched = "ignore"
         )
-      showNotification(paste0("Reference set to ", acc, " for ", rv$updating$ID), type = "message")
+      mp_toast(paste0("Reference set to ", acc, " for ", rv$updating$ID), type = "message")
     })
 
     # Join-group editing helpers ----
@@ -3503,7 +3507,7 @@ annotations_details_server <- function(id, rv) {
         shiny.silent.error = function(e) NULL,
         error = function(e) {
           waiter::waiter_hide()
-          showNotification(
+          mp_toast(
             paste("Edit failed:", conditionMessage(e)),
             type = "error",
             duration = 10
@@ -4011,16 +4015,15 @@ annotations_details_server <- function(id, rv) {
         pending_seg_move <<- list(
           sel = sel, end = end, pos1 = pos1, pos2 = pos2, is_rrna = is_rrna
         )
-        shinyWidgets::confirmSweetAlert(
-          inputId = ns("seg_overlap_confirm"),
+        mp_confirm(
+          ns("seg_overlap_confirm"),
           title = "Segments would overlap",
           text = paste(
             "That move would overlap another segment of this gene.",
             "You can continue if you are working the segments apart."
           ),
-          type = "warning",
-          btn_labels = c("Cancel", "Move anyway"),
-          btn_colors = c("#6c757d", "#d9534f")
+          action_label = "Move anyway",
+          danger = TRUE
         )
         return(invisible(NULL))
       }
@@ -4068,16 +4071,16 @@ annotations_details_server <- function(id, rv) {
       req(rv$annotations$type[selected()] == "PCG")
       stop_codon <- rv$annotations$stop_codon[selected()]
       if (is.na(stop_codon) || nchar(stop_codon) <= 1) {
-        shinyWidgets::sendSweetAlert(
-          session, title = "Stop already minimal",
-          text = "Stop codon is already a single base (T).", type = "info"
+        mp_alert(
+          title = "Stop codon is already minimal",
+          text = "The stop codon is already a single base (T).", type = "info"
         )
         req(FALSE)
       }
       new_stop <- stringr::str_sub(stop_codon, 1, nchar(stop_codon) - 1)
       if (new_stop %nin% rv$editing$params$stop_codons) {
-        shinyWidgets::sendSweetAlert(
-          session, title = "Invalid partial stop",
+        mp_alert(
+          title = "Invalid partial stop",
           text = paste0("'", new_stop, "' is not an allowed stop for this gene."),
           type = "warning"
         )
@@ -4200,9 +4203,10 @@ annotations_details_server <- function(id, rv) {
       # Check for local blast db
       rv$local_db <- rv$local_db %||% getOption("MitoPilot.local.db")
       if (length(rv$local_db) == 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "No local database found!",
-          text = "Run options('MitoPilot.local.db' = '/path/to/local/blastp/db') - add to .Rprofile for persistence."
+        mp_alert(
+          title = "No local BLAST database found",
+          text = "Run options('MitoPilot.local.db' = '/path/to/local/blastp/db') - add to .Rprofile for persistence.",
+          type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "local_blast",
@@ -4212,8 +4216,10 @@ annotations_details_server <- function(id, rv) {
       }
       # Check for edit mode
       if (length(rv$editing) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "In edit mode!"
+        mp_alert(
+          title = "Edits in progress",
+          text = "Save or discard your edits before changing the BLAST source.",
+          type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "local_blast",
@@ -4239,8 +4245,10 @@ annotations_details_server <- function(id, rv) {
         dplyr::pull(max_blast_hits)
       # Check for edit mode
       if (length(rv$editing) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "In edit mode!"
+        mp_alert(
+          title = "Edits in progress",
+          text = "Save or discard your edits before changing the BLAST source.",
+          type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "local_blast",
@@ -4265,14 +4273,15 @@ annotations_details_server <- function(id, rv) {
     # Merge Annotations ----
     observeEvent(input$merge, {
       if (length(selected()) == 0) {
-        shinyWidgets::sendSweetAlert(title = "No annotation selected")
+        mp_toast("Select an annotation in the table first.", type = "warning")
         req(F)
       }
       sel_type <- rv$annotations$type[selected()]
       if (!sel_type %in% c("PCG", "rRNA")) {
-        shinyWidgets::sendSweetAlert(
-          title = "Merge only available for PCGs and rRNAs",
-          text = "Select a protein-coding gene or ribosomal RNA annotation to merge."
+        mp_alert(
+          title = "Merge is only available for PCGs and rRNAs",
+          text = "Select a protein-coding gene or ribosomal RNA annotation to merge.",
+          type = "info"
         )
         req(F)
       }
@@ -4283,9 +4292,10 @@ annotations_details_server <- function(id, rv) {
         !stringr::str_detect(rv$annotations$gene, "_DELETED_")
       )
       if (length(dup_idx) < 2) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Nothing to merge",
-          text = stringr::str_glue("Only one non-deleted {sel_gene} annotation exists.")
+          text = stringr::str_glue("Only one non-deleted {sel_gene} annotation exists."),
+          type = "info"
         )
         req(F)
       }
@@ -4349,16 +4359,17 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$confirm_merge, {
       rows_to_merge <- as.integer(req(input$merge_selected_rows))
       if (length(rows_to_merge) < 2) {
-        shinyWidgets::sendSweetAlert(title = "Select at least 2 annotations to merge")
+        mp_toast("Select at least two annotations to merge.", type = "warning")
         req(F)
       }
       merge_anns <- rv$annotations[rows_to_merge, ]
       if (length(unique(merge_anns$path)) > 1 ||
           length(unique(merge_anns$scaffold)) > 1 ||
           length(unique(merge_anns$direction)) > 1) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot merge",
-          text = "All selected annotations must be on the same path, scaffold, and strand direction."
+          text = "All selected annotations must be on the same path, scaffold, and strand direction.",
+          type = "warning"
         )
         req(F)
       }
@@ -4369,7 +4380,7 @@ annotations_details_server <- function(id, rv) {
         # Block joining features that are already part of a join; the user must
         # un-join them first (nested/overlapping join groups are not supported).
         if (any(stringr::str_detect(dplyr::coalesce(merge_anns$notes, ""), "^JOIN: "))) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "Already joined",
             text = "One or more selected features are already part of a joined gene. Un-join them first before creating a new join.",
             type = "warning"
@@ -4393,12 +4404,12 @@ annotations_details_server <- function(id, rv) {
         slip_note <- if (identical(join_mode, "frameshift")) input$slippage_note else NULL
         pending_join(list(rows = rows_to_merge, anns = merge_anns, mode = join_mode, slip_note = slip_note))
         if (length(warn_msgs) > 0) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = ns("confirm_join"),
-            title = "Proceed with join?",
+          mp_confirm(
+            ns("confirm_join"),
+            title = "Proceed with join",
             text = paste(warn_msgs, collapse = " "),
-            type = "warning",
-            btn_labels = c("Cancel", "Join anyway")
+            action_label = "Join anyway",
+            danger = TRUE
           )
         } else {
           do_join_merge(rows_to_merge, merge_anns, join_mode, slip_note)
@@ -4410,7 +4421,7 @@ annotations_details_server <- function(id, rv) {
       # yields the complementary arc - silently discarding the real gene. There
       # is no unambiguous "span" across an origin, so refuse instead of guessing.
       if (any(merge_anns$pos1 > merge_anns$pos2)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot span the origin",
           text = paste(
             "One of these annotations crosses the start of the assembly, so a",
@@ -4730,12 +4741,13 @@ annotations_details_server <- function(id, rv) {
       # attributes, FASTA headers, and the export's shell/file paths (which embed
       # the gene name via system("cat ...") and file paths).
       if (!grepl("^[A-Za-z0-9_.-]+$", gene)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Invalid gene name",
           text = paste(
             "Gene names may only contain letters, numbers, underscores, dots,",
             "and hyphens (no spaces or other special characters)."
-          )
+          ),
+          type = "warning"
         )
         req(F)
       }
@@ -4748,9 +4760,10 @@ annotations_details_server <- function(id, rv) {
       )
       collision <- setdiff(collision, idx)
       if (length(collision) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "Cannot assign",
-          text = stringr::str_glue("An annotation named '{gene}' already exists at this position.")
+        mp_alert(
+          title = "Cannot assign this name",
+          text = stringr::str_glue("An annotation named '{gene}' already exists at this position."),
+          type = "warning"
         )
         req(F)
       }
@@ -4767,9 +4780,10 @@ annotations_details_server <- function(id, rv) {
       # Recover the original ORF.N name recorded in the assignment note.
       orig <- stringr::str_match(notes_cur, "(ORF\\.\\d+) assigned to")[, 2]
       if (is.na(orig)) {
-        shinyWidgets::sendSweetAlert(
-          title = "Cannot remove assignment",
-          text = "Could not determine the original ORF name from the annotation notes."
+        mp_alert(
+          title = "Cannot remove this assignment",
+          text = "The original ORF name could not be read from the annotation notes.",
+          type = "warning"
         )
         req(F)
       }
@@ -4798,22 +4812,23 @@ annotations_details_server <- function(id, rv) {
           !stringr::str_detect(dplyr::coalesce(rv$annotations$gene, ""), "_DELETED_")
       )
       if (length(orf_idx) == 0) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "No ORFs to assign",
-          text = "There are no unassigned ORF annotations in this sample."
+          text = "There are no unassigned ORF annotations in this sample.",
+          type = "info"
         )
         return()
       }
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("confirm_auto_assign_orfs"),
-        title = "Auto-assign ORF gene names?",
+      mp_confirm(
+        ns("confirm_auto_assign_orfs"),
+        title = "Auto-assign ORF gene names",
         text = stringr::str_glue(
           "Each unassigned ORF with a confident BLAST match (>= {ORF_ASSIGN_SIM_THRESHOLD}% ",
           "similarity to a standard mitochondrial gene) will be relabeled. ",
           "Low-confidence ORFs are left unchanged. You can undo any assignment ",
           "individually via 'Remove assignment'."
         ),
-        btn_colors = c("#6c757d", "#0056b3")
+        action_label = "Assign"
       )
     })
     observeEvent(input$confirm_auto_assign_orfs, {
@@ -4835,9 +4850,11 @@ annotations_details_server <- function(id, rv) {
         restore_do_save()
       }
       reopen_details()
-      shinyWidgets::sendSweetAlert(
+      mp_alert(
         title = "Auto-assign complete",
-        text = stringr::str_glue("Assigned {assigned} ORF{ifelse(assigned == 1, '', 's')}; {left} left unassigned."),
+        text = stringr::str_glue(
+          "Assigned {mp_n(assigned, 'ORF')}; {left} left unassigned."
+        ),
         type = if (assigned > 0L) "success" else "info"
       )
     })
@@ -4848,9 +4865,10 @@ annotations_details_server <- function(id, rv) {
       req(stringr::str_detect(sel_row$gene, "_DELETED_"))
       orig_range <- stringr::str_match(sel_row$notes, "DELETED: from (\\d+)-(\\d+)")
       if (is.na(orig_range[1])) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot restore",
-          text = "Could not determine original position from annotation notes."
+          text = "The original position could not be read from the annotation notes.",
+          type = "warning"
         )
         req(F)
       }
@@ -4860,13 +4878,14 @@ annotations_details_server <- function(id, rv) {
         stringr::str_detect(dplyr::coalesce(rv$annotations$notes, ""), "^MERGED:")
       )
       if (length(merged_idx) > 0) {
-        shinyWidgets::confirmSweetAlert(
-          inputId = ns("confirm_restore_merged"),
-          title = stringr::str_glue("Un-merge {orig_gene}?"),
+        mp_confirm(
+          ns("confirm_restore_merged"),
+          title = stringr::str_glue("Un-merge {orig_gene}"),
           text = stringr::str_glue(
             "This annotation was deleted during a merge. Restoring will undo the entire merge: all deleted {orig_gene} annotations will be restored and the merged annotation will be reverted to its original bounds."
           ),
-          btn_colors = c("#0056b3", "#0056b3")
+          action_label = "Un-merge",
+          danger = TRUE
         )
       } else {
         orig_pos1 <- as.integer(orig_range[2])
@@ -4878,11 +4897,12 @@ annotations_details_server <- function(id, rv) {
             !stringr::str_detect(gene, "_DELETED_")
           )
         if (nrow(conflict) > 0) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "Cannot restore",
             text = stringr::str_glue(
               "An active annotation for {orig_gene} at {orig_pos1}-{orig_pos2} already exists."
-            )
+            ),
+            type = "warning"
           )
           req(F)
         }
@@ -4918,9 +4938,10 @@ annotations_details_server <- function(id, rv) {
         merged_row$notes, "\\(from (\\d+)-(\\d+)\\)"
       )
       if (is.na(merged_orig_range[1])) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot un-merge",
-          text = "Original bounds of the merged annotation could not be determined."
+          text = "The original bounds of the merged annotation could not be determined.",
+          type = "warning"
         )
         req(F)
       }
