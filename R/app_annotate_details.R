@@ -1275,11 +1275,11 @@ annotations_details_server <- function(id, rv) {
             if (nzchar(active_acc) && !identical(active_acc, cur_ref)) {
               div(
                 style = "margin-top: 2px;",
-                shinyWidgets::actionBttn(
+                actionButton(
                   ns("synteny_set_ref"),
                   label = paste0("Set ", active_acc, " as best reference"),
-                  style = "material-flat", size = "xs", color = "primary",
-                  icon = shiny::icon("check")
+                  icon = shiny::icon("check"),
+                  class = "btn-sm btn-default"
                 ),
                 div(style = "font-size: 11px; color: #888; margin-top: 3px;",
                     "Overwrites the sample's best reference, shown in the Annotate/Export ",
@@ -5122,19 +5122,17 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         ),
         div(
           style = "display: flex; gap: 8px; margin-top: 8px;",
-          shinyWidgets::actionBttn(
+          actionButton(
             ns("confirm_merge"),
             label = "Confirm Merge",
-            style = "material-flat",
-            size = "xs",
-            icon = icon("object-group")
+            icon = icon("object-group"),
+            class = "btn-sm btn-default"
           ),
-          shinyWidgets::actionBttn(
+          actionButton(
             ns("cancel_merge"),
             label = "Cancel",
-            style = "material-flat",
-            size = "xs",
-            icon = icon("times")
+            icon = icon("xmark"),
+            class = "btn-sm btn-default"
           )
         )
       )
@@ -5200,26 +5198,26 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em; margin-top: 0.5em; height: 50px;",
           div(
             style = "gap: 0.5em;",
-            shinyWidgets::actionBttn(
+            actionButton(
               ns("edit_mode"),
               label = "Edit",
-              style = "material-flat",
-              size = "xs",
-              icon = icon("edit")
+              icon = icon("pen-to-square"),
+              class = "btn-sm btn-default",
+              title = "Edit the start and stop positions of the selected feature"
             ),
-            shinyWidgets::actionBttn(
+            actionButton(
               ns("save_edits"),
               label = "Save",
-              style = "material-flat",
-              size = "xs",
-              icon = icon("save")
+              icon = icon("floppy-disk"),
+              class = "btn-sm btn-default",
+              title = "Save the edits to the selected feature"
             ) |> shinyjs::hidden(),
-            shinyWidgets::actionBttn(
+            actionButton(
               ns("discard_edits"),
               label = "Reset",
-              style = "material-flat",
-              size = "xs",
-              icon = icon("rotate-left")
+              icon = icon("rotate-left"),
+              class = "btn-sm btn-default",
+              title = "Discard the edits to the selected feature"
             ) |> shinyjs::hidden()
           ),
           div(
@@ -5402,7 +5400,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
             actionButton(
               ns("back_to_review"), "Back to Review",
               icon = icon("arrow-left"),
-              class = "btn-success"
+              class = "btn-default"
             )
           },
           actionButton(ns("lock"), "Lock & Close", icon = icon("lock"),
