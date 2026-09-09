@@ -49,6 +49,7 @@ pipeline_server_userAsmb <- function(id) {
       # Count what the run will update: samples in Assemble, one row per
       # sequence (path/scaffold unit) in Annotate.
       unit_label <- "samples"
+      unit_noun <- "sample"
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
           # join_switch = 1 is a join-only redo: WF1 admits it on its own
@@ -59,6 +60,7 @@ pipeline_server_userAsmb <- function(id) {
       }
       if (session$userData$mode == "Annotate") {
         unit_label <- "sequences"
+        unit_noun <- "sequence"
         samples <- dplyr::left_join(
           dplyr::tbl(session$userData$con, "assemble"),
           dplyr::tbl(session$userData$con, "annotate"),
@@ -68,24 +70,20 @@ pipeline_server_userAsmb <- function(id) {
           dplyr::pull(ID)
       }
       if (length(samples) == 0) {
+        why_txt <- if (session$userData$mode == "Assemble") {
+          "No samples are queued. Locked or already-successful samples are skipped. Unlock a sample, or set its state to Ready to run, then press Update."
+        } else {
+          "No sequences are queued. Sequences need their sample locked in Assemble and their own state set to Ready to run. Lock the sample, or set the sequence's state to Ready to run, then press Update."
+        }
         modalDialog(
-          title = div(
-            style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-            span(stringr::str_glue("{session$userData$mode} - nothing to update")),
-            span(id = ns("gears"), class = "gears paused")
-          ),
+          title = stringr::str_glue("{session$userData$mode}: nothing to update"),
           size = "l",
-          h5("Nextflow Command:"),
-          div(
-            class = "code-block",
-            paste(c("nextflow", nf_cmd()), collapse = " ")
+          p(why_txt),
+          tags$details(
+            tags$summary("Show Nextflow command"),
+            div(class = "code-block", paste(c("nextflow", nf_cmd()), collapse = " "))
           ),
-          footer = tagList(
-            actionButton(
-              ns("close"),
-              "Close"
-            )
-          )
+          footer = tagList(actionButton(ns("close"), "Close"))
         ) |> showModal()
         req(F)
       }
@@ -117,7 +115,7 @@ pipeline_server_userAsmb <- function(id) {
       modalDialog(
         title = div(
           style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-          span(stringr::str_glue("{session$userData$mode}: updating {length(samples)} {unit_label}")),
+          span(stringr::str_glue("{session$userData$mode}: updating {mp_n(length(samples), unit_noun)}")),
           span(id = ns("gears"), class = "gears paused")
         ),
         div(
@@ -285,7 +283,7 @@ pipeline_server_userAsmb <- function(id) {
     observeEvent(input$save_script, {
       tryCatch({
         script_path <- write_headless_script()
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Submission script saved",
           text = paste0(
             "Wrote ", basename(script_path), " to your project directory and ",
@@ -296,10 +294,7 @@ pipeline_server_userAsmb <- function(id) {
         )
         removeModal()
       }, error = function(e) {
-        shinyWidgets::sendSweetAlert(
-          title = "Failed to save submission script:",
-          text = e$message, type = "error"
-        )
+        mp_alert(title = "Submission script failed to save", text = e$message, type = "error")
       })
     })
 
@@ -311,7 +306,7 @@ pipeline_server_userAsmb <- function(id) {
         if (!isTRUE(res$success)) {
           stop(res$output)
         }
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Job submitted",
           text = paste0(res$command, ": ", res$output,
                         "\nLog: ", basename(headless_log_file())),
@@ -319,10 +314,7 @@ pipeline_server_userAsmb <- function(id) {
         )
         removeModal()
       }, error = function(e) {
-        shinyWidgets::sendSweetAlert(
-          title = "Failed to submit job:",
-          text = e$message, type = "error"
-        )
+        mp_alert(title = "Job submission failed", text = e$message, type = "error")
       })
     })
 
