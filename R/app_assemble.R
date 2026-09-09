@@ -962,13 +962,12 @@ assemble_server <- function(id) {
           !grepl("\\.(gb|gbk|gbff)$", ref_value, ignore.case = TRUE) &&
           !nzchar(topology_value)
         if (needs_topology) {
-          shinyWidgets::show_alert(
+          mp_alert(
             title = "Reference topology required",
             text = paste("Set the reference topology (circular or linear) for a",
                          "FASTA reference. A GenBank (.gb) reference takes its",
                          "topology from the file."),
-            type = "error",
-            closeOnClickOutside = FALSE
+            type = "error"
           )
           return()
         }
@@ -976,13 +975,12 @@ assemble_server <- function(id) {
             grepl(.mtr_bad_chars_re, paste(ref_value,
                                            input$maptoref %||% "",
                                            input$maptoref_consensus %||% ""))) {
-          shinyWidgets::show_alert(
+          mp_alert(
             title = "Invalid characters in MapToRef options",
             text = paste("The reference, bowtie2, and samtools consensus values",
                          "are passed through a shell call, so they cannot",
                          "contain a quote, dollar sign, backtick, or backslash."),
-            type = "error",
-            closeOnClickOutside = FALSE
+            type = "error"
           )
           return()
         }

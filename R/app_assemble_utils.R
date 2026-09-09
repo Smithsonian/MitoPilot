@@ -350,7 +350,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             id = ns("help_labels_db"), nested = TRUE)),
         textInput(
           ns("maptoref_ref"),
-          label = "MapToRef Reference (.gb, FASTA, URL, or NCBI accession):",
+          label = "MapToRef reference:",
           value = current$maptoref_ref %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled() |>
@@ -360,25 +360,25 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             "downloaded from GenBank as a full record. A file ending .gb, ",
             ".gbk, or .gbff is read as GenBank and takes its topology from the ",
             "LOCUS line; anything else is read as FASTA and needs the topology ",
-            "set below. A sample whose mapping file gave a 'Reference' has its ",
-            "own parameter set named <ID>_maptoref, holding that reference.",
+            "set below. A sample given a Reference in the mapping file has its ",
+            "own parameter set, named after the sample.",
             href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
             id = ns("help_maptoref_ref"), nested = TRUE)),
         selectInput(
           ns("maptoref_topology"),
-          label = "Reference topology (required for a FASTA reference):",
+          label = "Reference topology:",
           choices = c("", "circular", "linear"),
           selected = current$maptoref_topology %||% "",
           width = "100%"
         ) |> shinyjs::disabled() |>
           tagAppendChild(opts_help(
-            "Ignored when the GenBank LOCUS line names a topology, and used ",
-            "when the LOCUS line names neither. A FASTA header carries no ",
-            "topology, so it must be set here.",
+            "Required for a FASTA reference, whose header carries no topology. ",
+            "A GenBank record supplies its own; this value is used only when ",
+            "the LOCUS line names neither.",
             id = ns("help_maptoref_topology"), nested = TRUE)),
         textInput(
           ns("maptoref"),
-          label = "MapToRef bowtie2 options",
+          label = "MapToRef bowtie2 options:",
           value = current$maptoref %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled() |>
@@ -391,7 +391,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             id = ns("help_maptoref"), nested = TRUE)),
         textInput(
           ns("maptoref_consensus"),
-          label = "MapToRef samtools consensus options",
+          label = "MapToRef samtools consensus options:",
           value = current$maptoref_consensus %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled() |>
@@ -403,7 +403,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             id = ns("help_maptoref_consensus"), nested = TRUE)),
         numericInput(
           ns("maptoref_iter"),
-          label = "Iterate up to (passes):",
+          label = "Maximum passes:",
           value = current$maptoref_iter %||% 5,
           min = 1, step = 1,
           width = "100%"
