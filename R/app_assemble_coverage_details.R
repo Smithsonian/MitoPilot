@@ -1712,7 +1712,16 @@ assembly_coverage_details_server <- function(id, rv) {
             actionButton(ns("join_build"), "Build joined assembly (Path 0)",
                          icon = icon("compress"), class = "btn-primary",
                          title = paste("Build Path 0 now from the layout above and lock",
-                                       "the sample."))
+                                       "the sample.")) |>
+              # Rendered disabled, not left to the observer below: a toggleState
+              # in the same flush lands before this button exists. isolate()
+              # keeps the checkbox from re-rendering the whole panel.
+              (\(b) if (locked() ||
+                        (disagree && !isTRUE(isolate(input$join_override_diff)))) {
+                 shinyjs::disabled(b)
+               } else {
+                 b
+               })()
           ),
           div(class = "mp-coverage-caption",
               paste("Builds Path 0 now from the layout above, replacing any existing",
