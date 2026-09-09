@@ -5,13 +5,16 @@
 #' @import shiny reactable
 #' @noRd
 app_ui_userAsmb <- function(request) {
-  tagList(
+  # `lang` has to sit on the object shiny renders, which is this tagList.
+  structure(lang = "en", tagList(
     add_external_resources(),
     fluidPage(
+      tags$a(href = "#mp-content", class = "sr-only sr-only-focusable", "Skip to table"),
       div(
         style = "display: flex; flex-direction: column;",
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
+        tags$header(
+          role = "banner",
+          class = "mp-toolbar",
           shinyWidgets::pickerInput(
             inputId = "mode",
             width = 150,
@@ -24,7 +27,8 @@ app_ui_userAsmb <- function(request) {
             icon = mp_icon("arrows-rotate"),
             title = "Reload the table from the database"
           ),
-          div(
+          conditionalPanel(
+            condition = "input.mode == 'Assemble'",
             id = "asmb_ctrls",
             class = "mp-toolbar",
             mp_toolbar_button(
@@ -43,7 +47,8 @@ app_ui_userAsmb <- function(request) {
               title = "Review and launch the assembly pipeline"
             )
           ),
-          div(
+          conditionalPanel(
+            condition = "input.mode == 'Annotate'",
             id = "annot_ctrls",
             class = "mp-toolbar",
             mp_toolbar_button(
@@ -77,7 +82,8 @@ app_ui_userAsmb <- function(request) {
               title = "Review and launch the annotation pipeline"
             )
           ),
-          div(
+          conditionalPanel(
+            condition = "input.mode == 'Export'",
             id = "export_ctrls",
             class = "mp-toolbar",
             mp_toolbar_button(
@@ -93,7 +99,8 @@ app_ui_userAsmb <- function(request) {
           ),
           workdir_browser_ui("workdir_browser")
         ),
-        div(
+        tags$main(
+          id = "mp-content",
           style = "padding: 1em;",
           conditionalPanel(
             condition = "input.mode == 'Assemble'",
@@ -110,5 +117,5 @@ app_ui_userAsmb <- function(request) {
         )
       )
     )
-  )
+  ))
 }

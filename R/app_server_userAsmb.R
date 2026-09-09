@@ -145,19 +145,6 @@ app_server_userAsmb <- function(input, output, session) {
   # View mode ----
   observeEvent(input$mode, {
     session$userData$mode <- input$mode
-    if(input$mode == "Export"){
-      shinyjs::toggle("export_ctrls", condition = TRUE)
-      shinyjs::toggle("asmb_ctrls", condition = FALSE)
-      shinyjs::toggle("annot_ctrls", condition = FALSE)
-    }else if(input$mode == "Assemble"){
-      shinyjs::toggle("export_ctrls", condition = FALSE)
-      shinyjs::toggle("asmb_ctrls", condition = TRUE)
-      shinyjs::toggle("annot_ctrls", condition = FALSE)
-    }else{
-      shinyjs::toggle("export_ctrls", condition = FALSE)
-      shinyjs::toggle("asmb_ctrls", condition = FALSE)
-      shinyjs::toggle("annot_ctrls", condition = TRUE)
-    }
   })
 
   # Reload Data
