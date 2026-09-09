@@ -237,6 +237,14 @@ assembly_coverage_details_server <- function(id, rv) {
           language = reactable::reactableLang(
             noData = "No assembly for this sample yet."
           ),
+          # Headers wrap instead of clipping; wrap = FALSE only governs cells.
+          theme = reactable::reactableTheme(
+            headerStyle = list(
+              whiteSpace = "normal", lineHeight = "1.2",
+              "& .rt-th-inner" = list(whiteSpace = "normal", textOverflow = "clip"),
+              "& .rt-text-content" = list(whiteSpace = "normal", textOverflow = "clip")
+            )
+          ),
           onClick = "select",
           selection = "multiple",
           defaultPageSize = 20,
