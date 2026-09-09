@@ -1092,12 +1092,12 @@ assemble_csv_row <- function(ns) {
 #' @param n_visible,n_total,n_selected counts for the current view
 #'
 #' @noRd
-assemble_table_status <- function(n_visible, n_total, n_selected) {
+assemble_table_status <- function(n_visible, n_total, n_selected, noun = "sample") {
   div(
     class = "mp-table-status", role = "status", `aria-live` = "polite",
     span(
-      "Showing ", tags$b(n_visible), " of ", tags$b(n_total),
-      if (n_total == 1) " sample" else " samples"
+      "Showing ", tags$b(n_visible), " of ", tags$b(n_total), " ",
+      sub("^\\S+ ", "", mp_n(n_total, noun))
     ),
     span(class = "mp-sep", `aria-hidden` = "true", HTML("&middot;")),
     span(tags$b(n_selected), " selected")

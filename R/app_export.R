@@ -332,15 +332,7 @@ export_server <- function(id) {
     })
 
     output$n_selected <- renderUI({
-      total <- nrow(rv$data)
-      div(
-        class = "mp-table-status", role = "status", `aria-live` = "polite",
-        HTML(sprintf(
-          "Showing <b>%d</b> of <b>%s</b>", visible_n(), mp_n(total, "assembly")
-        )),
-        span(class = "mp-sep", `aria-hidden` = "true", HTML("&middot;")),
-        HTML(sprintf("<b>%d</b> selected", length(selected())))
-      )
+      assemble_table_status(visible_n(), nrow(rv$data), length(selected()), noun = "assembly")
     })
 
     # Toolbar buttons that act on the selection are dead without one (T01).

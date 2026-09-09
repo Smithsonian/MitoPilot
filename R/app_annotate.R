@@ -70,10 +70,7 @@ annotate_ui <- function(id) {
       mp_filter_picker(ns("col_groups"), "Columns:", names(ANNOTATE_COL_GROUPS),
                        width = "150px")
     ),
-    div(
-      class = "mp-table-status", role = "status", `aria-live` = "polite",
-      textOutput(ns("n_selected"), inline = TRUE)
-    ),
+    uiOutput(ns("n_selected")),
     div(class = "mp-table-resize", reactable::reactableOutput(ns("table"))),
     mp_csv_download_row(ns)
   )
@@ -322,7 +319,7 @@ annotate_server <- function(id) {
           ID = colDef(
             show = TRUE,
             name = .nm("ID"),
-            minWidth = 120,
+            minWidth = mp_fit_width(rv$data$ID),
             sticky = "left",
             html = TRUE,
             cell = rt_longtext()
@@ -619,16 +616,13 @@ annotate_server <- function(id) {
     # Row grain and counts, stated (T07). The first number counts the rows the
     # pickers and the date filter leave visible; reactable's own search box is
     # client-side only, so it is not reflected here.
-    output$n_selected <- renderText({
+    output$n_selected <- renderUI({
       d <- filtered_data()
       exp_code <- ifelse(is.na(d$export_time_stamp), "0", "1")
       visible <- as.character(d$annotate_lock)   %in% lock_filter_rv() &
                  as.character(d$annotate_switch) %in% state_filter_rv() &
                  exp_code %in% export_filter_rv()
-      paste0(
-        "Showing ", sum(visible), " of ", mp_n(nrow(rv$data), "assembly"),
-        " - ", length(selected()), " selected"
-      )
+      assemble_table_status(sum(visible), nrow(rv$data), length(selected()), noun = "assembly")
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample
