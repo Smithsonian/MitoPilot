@@ -220,11 +220,14 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     list(ok = TRUE, level = "ok", message = "Valid template.")
   }, error = function(e) {
     raw <- conditionMessage(e)
-    # Unknown column -> glue reports "object 'XXX' not found"
+    # Unknown field -> glue reports "object 'XXX' not found"
     col <- regmatches(raw, regexpr("object '[^']+' not found", raw))
     if (length(col) > 0) {
       name <- sub("object '([^']+)' not found", "\\1", col)
-      return(err(sprintf('column "%s" not found in database', name)))
+      return(err(sprintf(
+        '{%s} is not one of the available fields. See "Available columns" below.',
+        name
+      )))
     }
     # Fallback: strip glue's multi-line wrapper to the last informative line
     err(sub("^.*!\\s*", "", gsub("\n", " ", raw)))

@@ -397,10 +397,14 @@ export_server <- function(id) {
       rv$updating <- rv$data |> dplyr::slice(selected())
       if (!any(!is.na(rv$updating$export_group))) {
         mp_toast(
-          sprintf(
-            "None of the %s in an export group.",
-            mp_n(nrow(rv$updating), "selected assembly is", "selected assemblies are")
-          ),
+          if (nrow(rv$updating) == 1) {
+            "The selected assembly is not in an export group."
+          } else {
+            sprintf(
+              "None of the %s selected assemblies are in an export group.",
+              nrow(rv$updating)
+            )
+          },
           type = "warning"
         )
         return()
@@ -470,8 +474,10 @@ export_server <- function(id) {
             class = "mp-fg-warning",
             icon("triangle-exclamation"), " ",
             sprintf(
-              "Some of these are already in %s. A new group does not remove them from export files already written.",
-              paste(sprintf("\"%s\"", already), collapse = ", ")
+              "%s already in %s. A new group does not remove %s from export files already written.",
+              if (nrow(rv$updating) == 1) "This assembly is" else "Some of these are",
+              paste(sprintf("\"%s\"", already), collapse = ", "),
+              if (nrow(rv$updating) == 1) "it" else "them"
             )
           )
         },
@@ -856,11 +862,14 @@ export_server <- function(id) {
 
     # Nothing is written until Save template is pressed: editing the boxes
     # while "default" is selected used to rewrite the project default (T18).
+    # The gene box is hidden unless genes are exported, so it must not gate
+    # anything the user cannot see.
     observe({
       shinyjs::toggleState(
         "save_template",
         condition = isTRUE(validate_fasta_header(hdr_main(), rv$data)$ok) &&
-          isTRUE(validate_fasta_header(hdr_gene(), rv$data)$ok)
+          (!isTRUE(input$export_genes) ||
+             isTRUE(validate_fasta_header(hdr_gene(), rv$data)$ok))
       )
     })
 
@@ -887,10 +896,15 @@ export_server <- function(id) {
     })
 
     # Validate both header boxes; show an error alert and return FALSE if either
-    # is invalid (so a bad template can never reach export).
+    # is invalid (so a bad template can never reach export). The gene header is
+    # only checked when genes are being exported: its box is hidden otherwise.
     valid_headers_or_alert <- function() {
       v_main <- validate_fasta_header(input$fasta_header, rv$data)
-      v_gene <- validate_fasta_header(input$fasta_header_gene, rv$data)
+      v_gene <- if (isTRUE(input$export_genes)) {
+        validate_fasta_header(input$fasta_header_gene, rv$data)
+      } else {
+        list(ok = TRUE)
+      }
       if (!isTRUE(v_main$ok) || !isTRUE(v_gene$ok)) {
         bad <- if (!isTRUE(v_main$ok)) v_main$message else v_gene$message
         which_t <- if (!isTRUE(v_main$ok)) "mitogenome" else "gene"
@@ -1761,6 +1775,7 @@ export_server <- function(id) {
       rv$resolved <- character(0)
       rv$review_focus <- NULL
       rv$review_focus_sig <- NULL
+      mp_toast("Export stopped. Nothing was written.")
     })
   })
 }
