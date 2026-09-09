@@ -408,13 +408,6 @@ details summary:hover {
   text-decoration: none;
 }
 
-/* Two-row modal footer (annotate details). Bootstrap gives adjacent footer
-   buttons a left margin, which double-spaces them against the flex gap and
-   also indents the first button of each row group. */
-.annotate-footer-rows .btn + .btn {
-  margin-left: 0;
-}
-
 /* Wider-than-Bootstrap dialogs only where there is room for them. Below
    820px (and at 400% zoom) Bootstrap's fluid width takes over, so a dialog
    never forces horizontal panning. */

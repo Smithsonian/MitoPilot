@@ -4986,6 +4986,29 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       tags$summary("Annotation Table"),
       reactableOutput(ns("table"), width = "100%")
     ),
+    # Assembly-level sequence edits: beside the table they rewrite, each with a
+    # one-line caption saying what it does (theme T16, C10).
+    div(
+      style = paste(
+        "display: flex; flex-wrap: wrap; align-items: flex-start;",
+        "gap: 24px; margin: 8px 0 4px 0;"
+      ),
+      div(
+        actionButton(ns("linearize"), "Linearize",
+                     icon = icon("arrows-left-right-to-line")),
+        div(
+          class = "mp-table-status", style = "margin: 2px 0 0 0;",
+          "Breaks a circular assembly before or after the selected feature."
+        )
+      ),
+      div(
+        uiOutput(ns("asmb_edit_controls"), inline = TRUE, style = "display: contents;"),
+        div(
+          class = "mp-table-status", style = "margin: 2px 0 0 0;",
+          "Removes sequence before the first and after the last annotation."
+        )
+      )
+    ),
     div(
       id = ns("annotation_btns_wrapper"),
       div(
@@ -5314,27 +5337,15 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         width = "100%"
       )
     ),
-    # Two-row footer: up to ten controls no longer fit on one line once the trim
-    # button carries its bp count. Row 1 is the assembly-level edits, row 2 the
-    # unit's status flags (left) and the ways out (right). The uiOutputs use
-    # display:contents so their buttons are flex items of the row rather than one
-    # lump, and so the row's gap applies between them.
-    footer = div(
-      class = "annotate-footer-rows",
-      style = "display:flex; flex-direction:column; gap:6px; width:100%;",
-      div(
-        style = "display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-start;",
-        actionButton(ns("linearize"), "Linearize",
-                     icon = icon("arrows-left-right-to-line")),
-        uiOutput(ns("asmb_edit_controls"), inline = TRUE, style = "display:contents;")
-      ),
-      div(
-        style = paste(
-          "display:flex; flex-wrap:wrap; gap:6px;",
-          "justify-content:space-between; align-items:center;"
-        ),
-        div(
-          style = "display:flex; flex-wrap:wrap; gap:6px;",
+    # One footer row: the two ways out plus the one recommended action. Anything
+    # that does not end the dialog lives in the body beside what it acts on
+    # (theme T16). `close` stays a server button - it guards unsaved edits and
+    # writes the feature counts back before the modal is removed.
+    footer = tagList(
+      mp_footer(
+        primary = actionButton(ns("lock"), "Lock & Close", icon = icon("lock")),
+        dismiss = NULL,
+        extra = tagList(
           if (isTRUE(session$userData$in_outlier_review)) {
             actionButton(
               ns("back_to_review"), "Back to Review",
@@ -5342,10 +5353,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               class = "btn-default"
             )
           },
-          actionButton(ns("lock"), "Lock & Close", icon = icon("lock"),
-                       class = "btn-primary"),
           actionButton(ns("close"), "Close")
         )
+      ),
+      div(
+        class = "mp-table-status",
+        style = "justify-content: flex-end; margin: 6px 0 0 0;",
+        MP_LOCK_DEF("annotate")
       )
     )
   )
