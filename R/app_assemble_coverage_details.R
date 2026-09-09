@@ -9,6 +9,9 @@ assembly_coverage_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # One lock predicate for every editing control in this window (T02).
+    locked <- reactive(isTRUE(rv$updating$assemble_lock == 1))
+
     init("coverage_modal")
 
     # Reads and writes below rebuild the published output path from
@@ -807,17 +810,19 @@ assembly_coverage_details_server <- function(id, rv) {
           style = "display: flex; gap: 8px; margin-top: 10px;",
           actionButton(ns("trim_consensus"), "Trim to consensus",
                        icon = icon("scissors"),
-                       class = "btn-primary",
+                       class = "btn-default",
                        title = paste("Keep only the longest region where all selected paths",
-                                     "agree; discards the conflicting ends. Asks to confirm.")),
+                                     "agree; discards the conflicting ends, saves a trimmed",
+                                     "Path 0 and locks the sample. Asks to confirm.")),
           if (n_blocks > 0) {
             actionButton(ns("build_resolved"),
                          "Build resolved assembly",
                          icon = icon("wand-magic-sparkles"),
                          class = "btn-primary",
                          title = paste("Combine the per-block resolution choices and the base",
-                                       "path into a single consensus (Path 0). Blocks left unset",
-                                       "are N-masked. Confirms topology first."))
+                                       "path into a single consensus (Path 0), and lock the",
+                                       "sample. Blocks left unset are N-masked. Confirms",
+                                       "topology first."))
           }
         )
       ) |> tagList()
@@ -1651,12 +1656,38 @@ assembly_coverage_details_server <- function(id, rv) {
         ),
         uiOutput(ns("join_layout_ui")),
         uiOutput(ns("join_map_div")),
-        div(style = "margin-top: 8px;",
+        div(
+          style = "margin-top: 8px;",
+          # A disabled button fires no pointer events, so the reason for the
+          # disabled state rides on the wrapper (T01).
+          tags$span(
+            title = if (locked()) {
+              MP_LOCK_DEF("assemble")
+            } else if (disagree) {
+              "Tick 'I understand the risk' to join scaffolds that map to different references."
+            },
             actionButton(ns("join_build"), "Build joined assembly (Path 0)",
-                         icon = icon("compress"), class = "btn-primary")),
+                         icon = icon("compress"), class = "btn-primary",
+                         title = paste("Build Path 0 now from the layout above and lock",
+                                       "the sample."))
+          ),
+          div(class = "mp-coverage-caption",
+              paste("Builds Path 0 now from the layout above, replacing any existing",
+                    "Path 0. The original paths are kept, and the sample is locked."))
+        ),
         uiOutput(ns("join_redo_ui"))
       )
     })
+
+    # One enabled condition, not two observers: the lock (T02) and the
+    # disagreeing-reference risk gate (T04) both govern this button, and two
+    # racing toggleState calls would let the later one win.
+    join_build_ok <- reactive({
+      rows <- join_scaffold_rows()
+      !locked() && !is.null(rows) && nrow(rows) > 1 &&
+        (!scaffold_hits_disagree(rows) || isTRUE(input$join_override_diff))
+    })
+    observe(shinyjs::toggleState("join_build", condition = join_build_ok()))
 
     # Hand the join back to the pipeline instead of building it here. Lives beside
     # the manual build because this is where a fragmented sample is actually being

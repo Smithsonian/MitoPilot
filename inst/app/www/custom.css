@@ -646,3 +646,27 @@ a.mp-link:focus-visible {
 .mp-modal-table > div > .reactable {
   height: 100% !important;
 }
+
+
+/* ------------------------------------------------------------------ */
+/* Assembly-details and circularization windows (W1-coverage).         */
+/* ------------------------------------------------------------------ */
+
+/* Caption under a panel action, saying what the action produces. */
+.mp-coverage-caption {
+  font-size: var(--mp-fs-meta);
+  color: var(--mp-text-muted);
+  line-height: 1.4;
+  margin-top: var(--mp-space-1);
+}
+
+/* The sample is locked: a state, not damage, so amber and not red. */
+.mp-lock-banner {
+  background: var(--mp-warning-soft);
+  color: var(--mp-warning-text);
+  border: none;
+  border-left: 3px solid var(--mp-warning);
+  border-radius: var(--mp-radius);
+  padding: var(--mp-space-2) var(--mp-space-3);
+  margin-bottom: var(--mp-space-3);
+}
