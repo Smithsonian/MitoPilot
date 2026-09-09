@@ -126,7 +126,7 @@ app_ui <- function(request) {
           ),
           conditionalPanel(
             condition = "input.mode == 'Export'",
-            annotate_ui("export")
+            export_ui("export")
           )
         )
       )
