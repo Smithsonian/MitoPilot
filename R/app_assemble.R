@@ -566,6 +566,11 @@ assemble_server <- function(id) {
       assemble_state_modal(rv$updating$ID, current)
     })
     observeEvent(input$update_state, {
+      if (!isTruthy(input$new_state)) {
+        mp_toast("Choose a state first.", type = "warning")
+        return()
+      }
+      n <- nrow(rv$updating)
       rv$updating$assemble_switch <- as.numeric(input$new_state)
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
@@ -582,6 +587,10 @@ assemble_server <- function(id) {
         )
       trigger("update_assemble_table")
       removeModal()
+      mp_toast(paste0(
+        mp_n(n, "sample"), " set to ",
+        MP_STATE_META[[as.character(input$new_state)]]$label, "."
+      ))
     })
 
     # Toggle lock ----

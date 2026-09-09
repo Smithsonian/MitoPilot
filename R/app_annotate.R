@@ -700,7 +700,10 @@ annotate_server <- function(id) {
       )
     })
     observeEvent(input$update_state, {
-      req(input$new_state)
+      if (!isTruthy(input$new_state)) {
+        mp_toast("Choose a state first.", type = "warning")
+        return()
+      }
       n <- nrow(rv$updating)
       rv$updating$annotate_switch <- as.numeric(input$new_state)
       dplyr::tbl(session$userData$con, "annotate") |>
