@@ -352,7 +352,7 @@ annotate_server <- function(id) {
             name = .nm("ID_verified"), header = .hd("ID_verified"),
             html = TRUE,
             align = "center",
-            width = 100,
+            width = 150,
             cell = rt_bool_badge()
           ),
           annotate_opts = colDef(
@@ -385,6 +385,7 @@ annotate_server <- function(id) {
           length_raw = colDef(
             show = TRUE, class = .grp("length_raw"), headerClass = .grp("length_raw"),
             name = .nm("length_raw"), header = .hd("length_raw"),
+            minWidth = 125,
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()
@@ -392,6 +393,7 @@ annotate_server <- function(id) {
           length = colDef(
             show = TRUE, class = .grp("length"), headerClass = .grp("length"),
             name = .nm("length_trimmed"), header = .hd("length_trimmed"),
+            minWidth = 150,
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()
@@ -437,13 +439,13 @@ annotate_server <- function(id) {
             show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
             name = .nm("blast_pident"), header = .hd("blast_pident"),
             filterable = FALSE,
-            minWidth = 90
+            minWidth = 130
           ),
           blast_qcovs = colDef(
             show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
             name = .nm("blast_qcovs"), header = .hd("blast_qcovs"),
             filterable = FALSE,
-            minWidth = 90
+            minWidth = 135
           ),
           PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = .nm("PCGCount")),
           tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = .nm("tRNACount")),
