@@ -418,10 +418,11 @@ export_server <- function(id) {
         title = "Clear export group",
         text = sprintf(
           paste(
-            "%s leave their export group. Files already written for that group",
+            "%s %s export group. Files already written for that group",
             "are not removed."
           ),
-          mp_n(nrow(rv$updating), "assembly", "assemblies")
+          mp_n(nrow(rv$updating), "assembly", "assemblies"),
+          if (nrow(rv$updating) == 1) "leaves its" else "leave their"
         ),
         action_label = "Clear group"
       )
