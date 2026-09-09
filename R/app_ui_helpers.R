@@ -78,8 +78,8 @@ mp_modal_title <- function(text, subtitle = NULL, close = TRUE) {
 mp_csv_download_row <- function(ns) {
   div(
     class = "mp-csv-row",
-    downloadButton(ns("export_selected"), "Download table (filtered)", class = "btn-sm"),
-    downloadButton(ns("export_all"), "Download table (all rows)", class = "btn-sm")
+    downloadButton(ns("export_selected"), "Download selected rows", class = "btn-sm"),
+    downloadButton(ns("export_all"), "Download all rows", class = "btn-sm")
   )
 }
 
