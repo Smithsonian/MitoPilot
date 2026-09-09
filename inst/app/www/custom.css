@@ -51,8 +51,23 @@
 }
 
 /* One visible focus ring, everywhere. Nothing in this app sets
-   outline: none. */
+   outline: none. The second block only exists to out-specify Bootstrap's
+   .btn:focus and shinyWidgets' .bttn-no-outline:focus. */
 :focus-visible {
+  outline: 2px solid var(--mp-primary);
+  outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.bttn:focus-visible,
+.bttn-no-outline:focus-visible,
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--mp-primary);
   outline-offset: 2px;
 }
