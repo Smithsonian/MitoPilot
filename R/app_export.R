@@ -50,7 +50,7 @@ internal_stop_alert_text <- function(stops) {
     "</li>"
   )
   htmltools::HTML(paste0(
-    "<p>", nrow(stops), " record", if (nrow(stops) > 1) "s" else "",
+    "<p>", mp_n(nrow(stops), "record"),
     " in this group still translate", if (nrow(stops) == 1) "s" else "",
     " with an internal stop codon. These will fail NCBI validation.</p>",
     "<ul style=\"text-align: left; max-height: 240px; overflow-y: auto;\">",
@@ -212,7 +212,7 @@ export_server <- function(id) {
         isolate(rv$data),
         compact = TRUE,
         language = reactable::reactableLang(
-          noData = "No Completed / Locked Annotations Found"
+          noData = "No annotations are locked yet. Lock an annotation in Annotate to see it here."
         ),
         defaultPageSize = 100,
         showPageSizeOptions = TRUE,
@@ -902,8 +902,7 @@ export_server <- function(id) {
       if (!isTRUE(v_main$ok) || !isTRUE(v_gene$ok)) {
         bad <- if (!isTRUE(v_main$ok)) v_main$message else v_gene$message
         which_t <- if (!isTRUE(v_main$ok)) "mitogenome" else "gene"
-        shinyWidgets::sendSweetAlert(
-          session = session,
+        mp_alert(
           title = "Invalid FASTA header template",
           text = stringr::str_glue("The {which_t} header template is invalid: {bad}"),
           type = "error"
@@ -970,14 +969,13 @@ export_server <- function(id) {
         # before the outlier review rather than after the files are written.
         if (nrow(review_res$internal_stops) > 0) {
           pending_review <<- review_res
-          shinyWidgets::confirmSweetAlert(
-            inputId = ns("internal_stop_confirm"),
+          mp_confirm(
+            ns("internal_stop_confirm"),
             title = "Internal stop codons",
             text = internal_stop_alert_text(review_res$internal_stops),
-            html = TRUE,
-            type = "warning",
-            btn_labels = c("Cancel export", "Continue"),
-            btn_colors = c("#6c757d", "#0056b3")
+            action_label = "Continue to review",
+            danger = TRUE,
+            html = TRUE
           )
         } else {
           present_review(review_res)
@@ -1017,8 +1015,7 @@ export_server <- function(id) {
         TRUE
       }, error = function(e) {
         waiter::waiter_hide()
-        shinyWidgets::sendSweetAlert(
-          session = session,
+        mp_alert(
           title = "Export failed",
           text = conditionMessage(e),
           type = "error"
@@ -1053,9 +1050,10 @@ export_server <- function(id) {
       if (is.null(path)) return(invisible(NULL))
       # JS-safe single-quoted string for the clipboard onclick
       path_js <- gsub("'", "\\\\'", gsub("\\\\", "\\\\\\\\", path))
-      shinyWidgets::sendSweetAlert(
-        session = session,
+      mp_alert(
         title = "Export complete",
+        html = TRUE,
+        type = "success",
         text = tagList(
           "Data exported to:",
           tags$div(
@@ -1075,7 +1073,7 @@ export_server <- function(id) {
               style = "display: flex; flex-direction: row; gap: 0.4em; justify-content: center;",
               tags$button(
                 type = "button",
-                class = "btn btn-secondary",
+                class = "btn btn-default",
                 title = "Copy path",
                 onclick = sprintf(
                   paste0(
@@ -1099,7 +1097,7 @@ export_server <- function(id) {
               # notification), or a warning path on headless sessions.
               tags$button(
                 type = "button",
-                class = "btn btn-secondary",
+                class = "btn btn-default",
                 title = "Open export folder",
                 onclick = sprintf(
                   "Shiny.setInputValue('%s', Math.random(), {priority: 'event'});",
@@ -1114,9 +1112,7 @@ export_server <- function(id) {
             )
           ),
           if (!is.null(extra)) tags$p(style = "margin-top: 0.75em;", extra)
-        ),
-        type = "success",
-        html = TRUE
+        )
       )
     }
 
@@ -1347,16 +1343,15 @@ export_server <- function(id) {
       group <- exp_val("export_group")
       export_path <- file.path(session$userData$dir_out, "export", group)
       if (dir.exists(export_path)) {
-        shinyWidgets::confirmSweetAlert(
-          session = session,
-          inputId = ns("overwrite_confirm"),
+        mp_confirm(
+          ns("overwrite_confirm"),
           title = "Export already exists",
           text = stringr::str_glue(
-            "Export files for group '{group}' already exist. Overwrite them?"
+            "Export files for group '{group}' are already on disk. Exporting ",
+            "deletes that folder and writes it again."
           ),
-          type = "warning",
-          btn_labels = c("Cancel", "Overwrite"),
-          btn_colors = c("#0056b3", "#d9534f")
+          action_label = "Overwrite",
+          danger = TRUE
         )
         return()
       }
@@ -1375,11 +1370,10 @@ export_server <- function(id) {
       if (length(mp) > 0) {
         shown <- paste(utils::head(mp, 8), collapse = ", ")
         if (length(mp) > 8) shown <- paste0(shown, ", and ", length(mp) - 8, " more")
-        shinyWidgets::sendSweetAlert(
-          session = session,
+        mp_alert(
           title = "Cannot export samples with multiple assembly paths",
           text = stringr::str_glue(
-            "{length(mp)} sample(s) still have more than one assembly path: {shown}.\n\n",
+            "{mp_n(length(mp), 'sample')} still have more than one assembly path: {shown}.\n\n",
             "Assembly paths are alternative resolutions of the same genome, so ",
             "exporting each would submit duplicate records for one specimen. In the ",
             "Assemble module, open the assembly details and 'ignore' all but the ",
@@ -1393,12 +1387,11 @@ export_server <- function(id) {
       if (length(frag) > 0) {
         shown <- paste(utils::head(frag, 5), collapse = ", ")
         if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
-        shinyWidgets::confirmSweetAlert(
-          session = session,
-          inputId = ns("fragmented_confirm"),
+        mp_confirm(
+          ns("fragmented_confirm"),
           title = "Some samples export as multiple records",
           text = stringr::str_glue(
-            "{length(frag)} sample(s) have more than one assembly and will each ",
+            "{mp_n(length(frag), 'sample')} have more than one assembly and will each ",
             "produce a SEPARATE GenBank record: {shown}.\n\n",
             "That is correct when the scaffolds really are different genomes. If a ",
             "sample is instead ONE genome broken into fragments, each record will ",
@@ -1406,9 +1399,8 @@ export_server <- function(id) {
             "trimming / scaffold joining to combine them, or 'ignore' all but one ",
             "scaffold."
           ),
-          type = "warning",
-          btn_labels = c("Cancel", "Export anyway"),
-          btn_colors = c("#0056b3", "#d9534f")
+          action_label = "Export anyway",
+          danger = TRUE
         )
         return()
       }
