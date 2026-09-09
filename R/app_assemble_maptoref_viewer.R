@@ -93,39 +93,51 @@ maptoref_viewer_server <- function(id, rv) {
       }
       if (state$len == 0L) {
         return(tags$div(
-          style = "margin: 10px 0; color: #888; font-size: 0.9em;",
-          "MapToRef coverage table not found for this sample. Re-run ",
-          "Assembly to produce the coverage and read files."
+          class = "mp-maptoref",
+          tags$b("MapToRef reference coverage"),
+          tags$div(
+            class = "mp-coverage-caption",
+            "No coverage table for this sample. Run Update on it to produce ",
+            "the coverage and read files."
+          )
         ))
       }
       tags$div(
-        class = "maptoref-viewer",
-        style = paste0("margin-top: 20px; border-top: 2px solid #bbb; ",
-                       "padding-top: 10px;"),
-        tags$h4(
-          "MapToRef reference coverage",
-          style = paste0("margin: 0 0 8px 0; font-size: 20px; ",
-                         "font-weight: 700; color: #2c3e50;")
-        ),
+        class = "mp-maptoref",
+        tags$b("MapToRef reference coverage"),
         uiOutput(ns("header")),
         tags$details(
           id = ns("map_details"),
           open = TRUE,
-          tags$summary("Coverage map"),
+          tags$summary("Coverage Map"),
           tags$div(
-            style = "display:flex; gap:8px; align-items:flex-end; margin:6px 0;",
-            actionButton(ns("zoom_out"), "-", class = "btn-sm"),
-            actionButton(ns("zoom_in"), "+", class = "btn-sm"),
-            actionButton(ns("zoom_reset"), "Full view", class = "btn-sm"),
-            numericInput(ns("win_size"), "Window (bp)",
+            class = "mp-maptoref-controls",
+            actionButton(ns("zoom_out"), NULL,
+                         icon = icon("magnifying-glass-minus"),
+                         class = "btn-sm btn-default",
+                         title = "Zoom out", `aria-label` = "Zoom out"),
+            actionButton(ns("zoom_in"), NULL,
+                         icon = icon("magnifying-glass-plus"),
+                         class = "btn-sm btn-default",
+                         title = "Zoom in", `aria-label` = "Zoom in"),
+            actionButton(ns("zoom_reset"), "Full view",
+                         class = "btn-sm btn-default",
+                         title = "Show the whole reference",
+                         `aria-label` = "Full view - show the whole reference"),
+            numericInput(ns("win_size"), "Window (bp):",
                          value = state$len, min = MTR_VIEW_MIN_BP,
                          max = state$len, step = 100, width = "140px"),
-            numericInput(ns("pileup_size"), "Pileup window (bp)",
+            numericInput(ns("pileup_size"), "Pileup window (bp):",
                          value = MTR_PILEUP_BP, min = MTR_PILEUP_MIN_BP,
                          max = MTR_PILEUP_MAX_BP, step = 50, width = "160px")
           ),
           tags$div(
-            style = "position:relative;",
+            class = "mp-coverage-caption",
+            "Drag across the plot to zoom to a region; click a position to ",
+            "see its reads."
+          ),
+          tags$div(
+            class = "mp-maptoref-plot",
             plotOutput(
               ns("tracks"), height = "420px",
               hover = hoverOpts(ns("tracks_hover"), delay = 100,
@@ -139,7 +151,7 @@ maptoref_viewer_server <- function(id, rv) {
         ),
         tags$details(
           id = ns("pileup_details"),
-          tags$summary("Read pileup"),
+          tags$summary("Read Pileup"),
           uiOutput(ns("pileup_ui"))
         )
       )
@@ -156,25 +168,20 @@ maptoref_viewer_server <- function(id, rv) {
                 as.numeric(fld("reference_length")), 1)
       )
       item <- function(label, value) {
-        tags$span(
-          style = "margin-right:18px;",
-          tags$b(label), " ", value
-        )
+        tags$span(class = "mp-maptoref-field", tags$b(label), " ", value)
       }
       tags$div(
-        style = "font-size:90%; padding-bottom:4px;",
+        class = "mp-maptoref-meta",
         item("Reference:", fld("accession")),
         item("Organism:", fld("organism")),
         item("Length:", paste0(fld("reference_length"), " bp")),
         item("Source:", fld("reference_source")),
         item("Reads mapped:", fld("reads_mapped_final")),
         item("Mean depth:", round(mean(state$depth$Depth), 1)),
-        item("Uncalled:", paste0(n_pct, "%")),
+        item("Uncalled bases:", paste0(n_pct, "%")),
         if (nrow(state$features) == 0L) {
-          tags$span(
-            style = "color:#888;",
-            "Reference has no annotation record."
-          )
+          tags$span(class = "mp-maptoref-field mp-maptoref-nofeat",
+                    "Reference has no annotation record.")
         }
       )
     })
@@ -218,12 +225,10 @@ maptoref_viewer_server <- function(id, rv) {
       f <- state$features
       gene <- f$gene[f$start <= pos & f$end >= pos]
       tags$div(
-        style = paste0(
-          "position:absolute; z-index:100; pointer-events:none; ",
-          "background:rgba(255,255,255,0.92); border:1px solid #999; ",
-          "border-radius:3px; padding:3px 6px; font-size:85%; ",
-          "left:", h$coords_css$x + 12, "px; top:", h$coords_css$y + 12, "px;"
-        ),
+        class = "mp-maptoref-tip",
+        # Position follows the pointer, so it cannot live in a stylesheet.
+        style = paste0("left:", h$coords_css$x + 12, "px; ",
+                       "top:", h$coords_css$y + 12, "px;"),
         tags$div(tags$b("Position: "), format(pos, big.mark = ",")),
         tags$div(tags$b("Depth: "), d),
         if (length(gene) > 0L) tags$div(tags$b("Gene: "), gene[1])
@@ -260,15 +265,15 @@ maptoref_viewer_server <- function(id, rv) {
     output$pileup_ui <- renderUI({
       if (is.na(state$pileup_center)) {
         return(tags$p(
-          style = "color:#888; margin-top:8px;",
+          class = "mp-coverage-caption",
           "Click the coverage plot to see the reads at that position."
         ))
       }
       if (!file.exists(state$paths$bam %||% "")) {
         return(tags$p(
-          style = "color:#888; margin-top:8px;",
-          "No read alignments were kept for this sample. Re-run Assembly to ",
-          "enable the read view."
+          class = "mp-coverage-caption",
+          "No read alignments were kept for this sample. Run Update on it to ",
+          "keep them."
         ))
       }
       w <- pileup_data()
@@ -281,22 +286,21 @@ maptoref_viewer_server <- function(id, rv) {
       tagList(
         uiOutput(ns("pileup_note")),
         tags$div(
-          style = "display:flex; align-items:flex-start;",
+          class = "mp-maptoref-pileup",
           plotOutput(ns("pileup_labels"), width = "112px",
                      height = paste0(height, "px")),
           tags$div(
-            style = "flex:1; min-width:0;",
+            class = "mp-maptoref-pileup-col",
             # Empty strip whose only job is to put a second scrollbar above
             # the plot, kept in step with the real one below.
             tags$div(
               id = ns("pileup_scroll_top"),
-              style = paste0("overflow-x:auto; overflow-y:hidden; ",
-                             "width:100%; height:16px;"),
+              class = "mp-maptoref-scrollbar",
               tags$div(style = paste0("width:", width, "px; height:1px;"))
             ),
             tags$div(
               id = ns("pileup_scroll"),
-              style = "overflow-x:auto; overflow-y:hidden; width:100%;",
+              class = "mp-maptoref-scrollpane",
               plotOutput(ns("pileup"), width = paste0(width, "px"),
                          height = paste0(height, "px"))
             )
@@ -333,7 +337,7 @@ maptoref_viewer_server <- function(id, rv) {
         paste0(format(w$n_total, big.mark = ","), " reads.")
       }
       tags$div(
-        style = "font-size:85%; color:#666; margin-top:6px;",
+        class = "mp-coverage-caption",
         paste0(format(rng[1], big.mark = ","), " - ",
                format(rng[2], big.mark = ","), " bp. "), txt
       )
