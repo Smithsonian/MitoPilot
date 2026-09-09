@@ -141,6 +141,20 @@ assembly_coverage_details_server <- function(id, rv) {
           subtitle = stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
         ),
         size = "l",
+        if (locked()) {
+          div(
+            class = "alert alert-warning mp-lock-banner", role = "status",
+            icon("lock"), tags$b(" This sample is locked."), " ",
+            MP_LOCK_DEF("assemble"), " Editing controls below are disabled.",
+            if (any(rv$focal_assembly$path == 0, na.rm = TRUE)) {
+              tagList(" Use ", tags$b("Delete consensus (Path 0)"),
+                      " to remove the edited consensus and unlock, or unlock",
+                      " from the Assemble table.")
+            } else {
+              " Unlock this sample in the Assemble table to edit it."
+            }
+          )
+        },
         if (isTRUE(rv$asmb_multiscaffold_blocked)) {
           div(
             style = paste("margin-bottom: 12px; padding: 10px; border: 1px solid #E55330;",
@@ -1626,6 +1640,9 @@ assembly_coverage_details_server <- function(id, rv) {
       accs <- unique(rows$blast_accession[!is.na(rows$blast_accession) & nzchar(rows$blast_accession)])
       default_ref <- choose_reference(rows)
       disagree <- scaffold_hits_disagree(rows)
+      # A disabled input shows no tooltip of its own, so the reason sits on the
+      # container the user hovers (T01, T02).
+      lock_title <- if (locked()) MP_LOCK_DEF("assemble")
       div(
         style = paste("margin: 8px 0; padding: 10px; border: 1px solid #b9c6d6;",
                       "border-radius: 4px; background: #f4f8fc; font-size: 0.9em;"),
@@ -1646,13 +1663,17 @@ assembly_coverage_details_server <- function(id, rv) {
                         "I understand the risk; allow joining anyway", value = FALSE)
         ),
         div(style = "display: flex; gap: 12px; align-items: flex-end; margin-top: 8px; flex-wrap: wrap;",
+            title = lock_title,
             selectInput(ns("join_reference"), "Reference",
                         choices = accs, selected = default_ref, width = "200px"),
             div(style = "padding-bottom: 6px;",
                 checkboxInput(ns("join_circular"), "Circular", value = FALSE)),
             actionButton(ns("join_autolayout"), "Re-map to reference",
-                         icon = icon("wand-magic-sparkles")) |>
-              (\(b) if (length(accs) == 0) shinyjs::disabled(b) else b)()
+                         icon = icon("wand-magic-sparkles"),
+                         class = "btn-default",
+                         title = paste("Re-run the reference-guided layout for the",
+                                       "selected reference, discarding manual edits.")) |>
+              (\(b) if (length(accs) == 0 || locked()) shinyjs::disabled(b) else b)()
         ),
         uiOutput(ns("join_layout_ui")),
         uiOutput(ns("join_map_div")),
@@ -1697,31 +1718,42 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$join_redo_tick
       st <- redo_join_status(session$userData$con, session$userData$dir_out,
                              rv$updating$ID)
-      note <- function(txt, colour = "#888") {
-        div(style = paste0("font-size: 11px; color: ", colour, "; margin-top: 4px;"),
-            txt)
-      }
+      # An explanation of why a control is off is information, not an error, so
+      # it reads muted rather than red (T12, T21).
+      note <- function(txt) div(class = "mp-coverage-caption", txt)
       if (st$state == "queued") {
         return(div(
           style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
           actionButton(ns("join_redo"), "Cancel queued pipeline join",
-                       icon = icon("xmark")),
+                       icon = icon("xmark"), class = "btn-default",
+                       title = "Take this sample out of the queued pipeline join."),
           note(paste("Queued. The pipeline re-runs this sample's join from its",
-                     "published assembly output on the next update."), "#0056b3")
+                     "published assembly output on the next update."))
         ))
       }
       btn <- actionButton(ns("join_redo"), "Redo join in pipeline",
-                          icon = icon("rotate"))
+                          icon = icon("rotate"), class = "btn-default",
+                          title = paste("Queue the join so the pipeline rebuilds it on",
+                                        "the next update."))
+      # redo_join_status() has no lock branch, so a locked sample would report
+      # "ready" and queue a join the pipeline can never run.
+      ready <- st$state == "ready" && !locked()
       div(
         style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
-        if (st$state == "ready") btn else shinyjs::disabled(btn),
-        if (st$state == "ready") {
-          note(paste("Queues the join. It runs on the next pipeline update, using",
-                     "the reference and options on record rather than the layout",
-                     "above."))
-        } else {
-          note(st$message, "#a0241c")
-        }
+        title = if (locked()) MP_LOCK_DEF("assemble"),
+        if (ready) btn else shinyjs::disabled(btn),
+        note(
+          if (ready) {
+            paste("Queues the join. It runs on the next pipeline update, using",
+                  "the reference and options on record rather than the layout",
+                  "above.")
+          } else if (locked()) {
+            paste("This sample is locked, so the pipeline will not run a join",
+                  "for it. Unlock it first.")
+          } else {
+            st$message
+          }
+        )
       )
     })
 
@@ -1876,24 +1908,28 @@ assembly_coverage_details_server <- function(id, rv) {
       inc_seed <- if (!is.null(lay) && "include" %in% names(lay)) lay$include else rep(TRUE, length(scaffolds))
       qcov <- if (!is.null(lay) && "qcov" %in% names(lay)) lay$qcov else rep(NA_real_, length(scaffolds))
       reason_seed <- if (!is.null(lay) && "exclude_reason" %in% names(lay)) lay$exclude_reason else rep(NA_character_, length(scaffolds))
+      off <- function(x) if (locked()) shinyjs::disabled(x) else x
       tagList(
         div(style = "margin-top: 8px; font-weight: bold; color: #555;",
             "Scaffold layout (only included scaffolds go into Path 0)"),
-        lapply(seq_along(scaffolds), function(i) {
-          s <- scaffolds[i]
-          qc <- if (!is.na(qcov[i])) sprintf(" (%.0f%% mapped)", 100 * qcov[i]) else ""
-          why <- if (!isTRUE(inc_seed[i]) && !is.na(reason_seed[i]))
-            span(style = "font-size: 11px; color: #d9534f;", reason_seed[i]) else NULL
-          div(style = "display: flex; gap: 12px; align-items: center; margin-top: 4px;",
-              checkboxInput(ns(paste0("join_inc_", s)), NULL, value = isTRUE(inc_seed[i]),
-                            width = "30px"),
-              span(style = "width: 150px;", sprintf("Scaffold %s%s", s, qc)),
-              numericInput(ns(paste0("join_order_", s)), NULL,
-                           value = order_seed[i], min = 1, width = "80px"),
-              checkboxInput(ns(paste0("join_rc_", s)), "reverse-comp",
-                            value = isTRUE(rc_seed[i])),
-              why)
-        })
+        div(
+          title = if (locked()) MP_LOCK_DEF("assemble"),
+          lapply(seq_along(scaffolds), function(i) {
+            s <- scaffolds[i]
+            qc <- if (!is.na(qcov[i])) sprintf(" (%.0f%% mapped)", 100 * qcov[i]) else ""
+            why <- if (!isTRUE(inc_seed[i]) && !is.na(reason_seed[i]))
+              span(class = "mp-coverage-caption", reason_seed[i]) else NULL
+            div(style = "display: flex; gap: 12px; align-items: center; margin-top: 4px;",
+                off(checkboxInput(ns(paste0("join_inc_", s)), NULL,
+                                  value = isTRUE(inc_seed[i]), width = "30px")),
+                span(style = "width: 150px;", sprintf("Scaffold %s%s", s, qc)),
+                off(numericInput(ns(paste0("join_order_", s)), NULL,
+                                 value = order_seed[i], min = 1, width = "80px")),
+                off(checkboxInput(ns(paste0("join_rc_", s)), "reverse-comp",
+                                  value = isTRUE(rc_seed[i]))),
+                why)
+          })
+        )
       )
     })
 
