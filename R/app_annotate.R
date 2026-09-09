@@ -260,6 +260,14 @@ annotate_server <- function(id) {
       if (is.na(g)) NULL else paste0("mp-grp-", g)
     }
 
+    # One name and one header tooltip per field, from the shared registry.
+    # `field` is the column name except for the two length columns, where
+    # Annotate's `length` is the trimmed length.
+    .nm <- function(field) unname(MP_COL_NAMES[[field]])
+    .hd <- function(field, tip = unname(MP_COL_TIPS[field])) {
+      rt_header(.nm(field), if (length(tip) == 0 || is.na(tip)) NULL else tip)
+    }
+
     # Inject a <style> tag that display:nones unselected column groups.
     # Hiding via CSS keeps columns mounted, so filters, sort, page, and
     # selection survive toggling.
@@ -324,16 +332,23 @@ annotate_server <- function(id) {
                  ' mp-state-' + rowInfo.values['annotate_switch'] +
                  ' mp-exp-' + exp;
         }"),
-        defaultColDef = colDef(align = "left", show = FALSE),
+        # No align default: reactable then right-aligns numbers and
+        # left-aligns text on its own (T10).
+        defaultColDef = colDef(show = FALSE),
+        theme = reactable::reactableTheme(
+          headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
+        ),
         columns = list(
           `.selection` = colDef(show = T, sticky = "left", width = 28),
           annotate_lock = colDef(
             show = TRUE,
             sticky = "left",
-            name = "",
+            name = .nm("annotate_lock"),
+            header = .hd("annotate_lock", MP_LOCK_DEF("annotate")),
             html = TRUE,
             filterable = FALSE,
-            width = 32,
+            sortable = FALSE,
+            width = 50,
             align = "center",
             cell = rt_dynamicIcon(
               c(
@@ -345,10 +360,12 @@ annotate_server <- function(id) {
           annotate_switch = colDef(
             show = TRUE,
             sticky = "left",
-            name = "",
+            name = .nm("annotate_switch"),
+            header = .hd("annotate_switch"),
             html = TRUE,
             filterable = FALSE,
-            width = 30,
+            sortable = FALSE,
+            width = 62,
             align = "center",
             cell = rt_dynamicIcon(
               c(
@@ -361,6 +378,7 @@ annotate_server <- function(id) {
           ),
           ID = colDef(
             show = TRUE,
+            name = .nm("ID"),
             minWidth = 120,
             sticky = "left",
             html = TRUE,
@@ -370,22 +388,25 @@ annotate_server <- function(id) {
           # lock/state/ID stay frozen). The classes let col_css hide a column when
           # every unit shares value 1 (no extra info).
           path = colDef(
-            show = TRUE, name = "Path", class = "mp-col-path",
-            headerClass = "mp-col-path", width = 55, align = "center", filterable = FALSE
+            show = TRUE, name = .nm("path"), header = .hd("path"),
+            class = "mp-col-path",
+            headerClass = "mp-col-path", width = 90, align = "center", filterable = FALSE
           ),
           scaffold = colDef(
-            show = TRUE, name = "Scaffold", class = "mp-col-scaffold",
-            headerClass = "mp-col-scaffold", width = 75, align = "center", filterable = FALSE
+            show = TRUE, name = .nm("scaffold"), header = .hd("scaffold"),
+            class = "mp-col-scaffold",
+            headerClass = "mp-col-scaffold", width = 90, align = "center", filterable = FALSE
           ),
           Taxon = colDef(
             show = TRUE,
+            name = .nm("Taxon"),
             minWidth = 140,
             html = TRUE,
             cell = rt_longtext()
           ),
           ID_verified = colDef(
             show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
-            name = "ID Verified",
+            name = .nm("ID_verified"), header = .hd("ID_verified"),
             html = TRUE,
             align = "center",
             width = 100,
@@ -393,45 +414,47 @@ annotate_server <- function(id) {
           ),
           annotate_opts = colDef(
             show = TRUE, class = .grp("annotate_opts"), headerClass = .grp("annotate_opts"),
-            name = "Annotate Opts.",
+            name = .nm("annotate_opts"), header = .hd("annotate_opts"),
             html = TRUE,
             width = 130,
             cell = rt_link(ns("set_annotate_opts"))
           ),
           curate_opts = colDef(
             show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
-            name = "Curate Opts.",
+            name = .nm("curate_opts"), header = .hd("curate_opts"),
             html = TRUE,
             width = 110,
             cell = rt_link(ns("set_curate_opts"))
           ),
           orf_opts = colDef(
             show = TRUE, class = .grp("orf_opts"), headerClass = .grp("orf_opts"),
-            name = "ORF Opts.",
+            name = .nm("orf_opts"), header = .hd("orf_opts"),
             html = TRUE,
             width = 110,
             cell = rt_link(ns("set_orf_opts"))
           ),
           length_raw = colDef(
             show = TRUE, class = .grp("length_raw"), headerClass = .grp("length_raw"),
-            name = "Asmb. Length (raw)",
+            name = .nm("length_raw"), header = .hd("length_raw"),
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()
           ),
           length = colDef(
             show = TRUE, class = .grp("length"), headerClass = .grp("length"),
-            name = "Asmb. Length (trimmed)",
+            name = .nm("length_trimmed"), header = .hd("length_trimmed"),
             filterable = FALSE,
             html = TRUE,
             cell = rt_longtext()
           ),
-          topology = colDef(show = TRUE, class = .grp("topology"), headerClass = .grp("topology"), name = "Topology", align = "center"),
-          scaffolds = colDef(show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"), name = "Scaffolds", align = "center"),
+          topology = colDef(show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
+                            name = .nm("topology"), header = .hd("topology")),
+          scaffolds = colDef(show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
+                             name = .nm("scaffolds"), header = .hd("scaffolds")),
           poor_blast_ref = colDef(show = FALSE),
           blast_ref_status = colDef(
             show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
-            name = "BLAST Ref Align",
+            name = .nm("blast_ref_status"), header = .hd("blast_ref_status"),
             html = TRUE,
             minWidth = 130,
             resizable = TRUE,
@@ -441,7 +464,7 @@ annotate_server <- function(id) {
           ),
           blast_accession = colDef(
             show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Hit",
+            name = .nm("blast_accession"), header = .hd("blast_accession"),
             html = TRUE,
             width = 120,
             cell = rt_ncbi_link(auto_col = "blast_accession_auto")
@@ -449,42 +472,43 @@ annotate_server <- function(id) {
           blast_accession_auto = colDef(show = FALSE),
           blast_species = colDef(
             show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
-            name = "BLAST Species",
+            name = .nm("blast_species"), header = .hd("blast_species"),
             html = TRUE,
             minWidth = 160,
             cell = rt_longtext()
           ),
           blast_lineage = colDef(
             show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
-            name = "BLAST Lineage",
+            name = .nm("blast_lineage"), header = .hd("blast_lineage"),
             html = TRUE,
             minWidth = 200,
             cell = rt_longtext()
           ),
           blast_pident = colDef(
             show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
-            name = "BLAST % Ident",
+            name = .nm("blast_pident"), header = .hd("blast_pident"),
             filterable = FALSE,
-            minWidth = 90,
-            align = "center"
+            minWidth = 90
           ),
           blast_qcovs = colDef(
             show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
-            name = "BLAST % Cov",
+            name = .nm("blast_qcovs"), header = .hd("blast_qcovs"),
             filterable = FALSE,
-            minWidth = 90,
-            align = "center"
+            minWidth = 90
           ),
-          PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = "# PCGs", align = "center"),
-          tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = "# tRNAs", align = "center"),
-          rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = "# rRNAs", align = "center"),
-          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = "# ORFs", align = "center"),
-          missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"), name = "Missing", align = "center", html = TRUE, cell = rt_longtext()),
-          extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"), name = "Extra", align = "center", html = TRUE, cell = rt_longtext()),
-          warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"), name = "Warnings", align = "center"),
+          PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = .nm("PCGCount")),
+          tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = .nm("tRNACount")),
+          rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = .nm("rRNACount")),
+          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = .nm("ORFCount")),
+          missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"),
+                           name = .nm("missing"), header = .hd("missing"), html = TRUE, cell = rt_longtext()),
+          extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"),
+                         name = .nm("extra"), header = .hd("extra"), html = TRUE, cell = rt_longtext()),
+          warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"),
+                            name = .nm("warnings"), header = .hd("warnings")),
           reviewed = colDef(
             show = TRUE, class = .grp("reviewed"), headerClass = .grp("reviewed"),
-            name = "Reviewed",
+            name = .nm("reviewed"), header = .hd("reviewed"),
             html = TRUE,
             align = "center",
             width = 100,
@@ -492,52 +516,53 @@ annotate_server <- function(id) {
           ),
           problematic = colDef(
             show = TRUE, class = .grp("problematic"), headerClass = .grp("problematic"),
-            name = "Problematic",
+            name = .nm("problematic"), header = .hd("problematic"),
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge(invert = TRUE, hide_no = TRUE)
+            cell = rt_bool_badge()
           ),
           partial = colDef(
             show = TRUE, class = .grp("partial"), headerClass = .grp("partial"),
-            name = "Partial",
+            name = .nm("partial"), header = .hd("partial"),
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge(invert = TRUE, hide_no = FALSE)
+            cell = rt_bool_badge()
           ),
           export_group = colDef(
             show = TRUE, class = .grp("export_group"), headerClass = .grp("export_group"),
-            name = "Export Group",
-            align = "left",
+            name = .nm("export_group"), header = .hd("export_group"),
             minWidth = 120,
             cell = function(value) if (is.na(value) || !nzchar(value)) "" else value
           ),
           export_time_stamp = colDef(
             show = TRUE, class = .grp("export_time_stamp"), headerClass = .grp("export_time_stamp"),
-            name = "Exported",
+            name = .nm("export_time_stamp"), header = .hd("export_time_stamp"),
             filterable = FALSE,
             html = TRUE,
             width = 170,
-            # JS cell so it re-renders on updateReactable(); shows a green check +
-            # export date + the group the sample was exported under.
+            align = "center",
+            # JS cell so it re-renders on updateReactable(); shows the exported
+            # pill + export date + the group the sample was exported under.
             cell = htmlwidgets::JS("
               function(cellInfo) {
                 var v = cellInfo.value;
                 if (v == null || v === '') return '';
                 var opts = { year: 'numeric', month: 'numeric', day: 'numeric' };
-                var date = new Date(1000*v).toLocaleDateString('en-US', opts);
+                var date = new Date(1000*v).toLocaleDateString(undefined, opts);
                 if (date === 'Invalid Date') return '';
                 var row = cellInfo.row || {};
                 var g = row.export_group;
                 var grp = (g == null || g === '' || g === 'NA') ? '' : ' (' + g + ')';
-                return '<span style=\"color:#3d9140;font-weight:bold;\">&#10003;</span> ' + date + grp;
+                return `<span class='mp-pill mp-pill-success'>exported</span> ` +
+                  date + grp;
               }
             ")
           ),
           time_stamp = colDef(
             show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
-            name = "Last Updated",
+            name = .nm("time_stamp"), header = .hd("time_stamp"),
             filterable = FALSE,
             html = T,
             width = 150,
@@ -545,9 +570,8 @@ annotate_server <- function(id) {
           ),
           annotate_notes = colDef(
             show = TRUE, class = .grp("annotate_notes"), headerClass = .grp("annotate_notes"),
-            name = "Notes",
+            name = .nm("annotate_notes"),
             html = TRUE,
-            align = "left",
             minWidth = 150,
             # maxWidth = 400,
             cell = rt_longtext()
@@ -556,21 +580,29 @@ annotate_server <- function(id) {
             show = TRUE,
             sticky = "right",
             filterable = FALSE,
-            name = "",
+            sortable = FALSE,
+            name = .nm("view"),
             html = TRUE,
             width = 80,
             align = "center",
-            cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
+            cell = rt_icon_bttn_text(
+              ns("details"), "fas fa-square-arrow-up-right fa-xs",
+              label = "Details", title = "Open the details window for this row"
+            )
           ),
           output = colDef(
             show = TRUE,
             sticky = "right",
             filterable = FALSE,
-            name = "",
+            sortable = FALSE,
+            name = .nm("output"),
             html = TRUE,
             width = 80,
             align = "center",
-            cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
+            cell = rt_icon_bttn_text(
+              ns("output"), "fas fa-folder-open fa-xs",
+              label = "Output", title = "Open the output folder for this sample"
+            )
           )
         )
       )
