@@ -5033,15 +5033,13 @@ annotations_details_server <- function(id, rv) {
 annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   ns <- session$ns
 
+  # Topology reads like every other header badge: shared pill, same casing, no
+  # inline hex (theme T11).
   topo      <- rv$updating$topology %||% "unknown"
   topo_icon <- switch(topo, circular = "\u21ba", linear = "\u2194", "?")
   topo_badge <- span(
-    style = paste0(
-      "background:", if (topo == "circular") "#cce5ff" else if (topo == "linear") "#fff3cd" else "#e9ecef", ";",
-      "color:",      if (topo == "circular") "#004085" else if (topo == "linear") "#856404" else "#6c757d", ";",
-      "border-radius:3px;padding:2px 8px;font-size:0.75em;font-weight:600;white-space:nowrap;"
-    ),
-    paste(topo_icon, toupper(topo))
+    class = paste0("mp-pill mp-pill-", if (topo == "circular") "info" else "neutral"),
+    paste(topo_icon, topo)
   )
 
   modalDialog(
