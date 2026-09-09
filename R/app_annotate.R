@@ -91,6 +91,7 @@ annotate_server <- function(id) {
     reopen_orf <- function() orf_opts_modal(rv)
     register_tool_help("mitos", input, reopen = reopen_annotate)
     register_tool_help("trnaScan-SE", input, reopen = reopen_annotate)
+    register_tool_help("mitofinder", input, reopen = reopen_annotate)
     register_tool_help("arwen", input, reopen = reopen_annotate)
     register_tool_help("aragorn", input, reopen = reopen_annotate)
     register_tool_help("orffinder", input, reopen = reopen_orf)
