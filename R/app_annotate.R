@@ -656,7 +656,7 @@ annotate_server <- function(id) {
       sel <- selected()
       if (!need_selection(length(sel))) return()
       d <- filtered_data()
-      if (!need_unlocked(d$ID[sel][d$annotate_lock[sel] == 1])) return()
+      if (!need_unlocked(d$ID[sel][d$annotate_lock[sel] == 1], "assembly")) return()
       rv$updating <- d |>
         dplyr::select(ID, path, scaffold, annotate_switch) |>
         dplyr::slice(sel)
@@ -730,8 +730,7 @@ annotate_server <- function(id) {
     # Toggle lock ----
     # Locking reports; unlocking asks first, because it drops the units out of
     # Export and lets the next update overwrite curated annotations (T02).
-    write_lock <- function(upd) {
-      n <- nrow(upd)
+    write_lock <- function(upd, n = nrow(upd)) {
       locking <- upd$annotate_lock[1] == 1
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
@@ -745,13 +744,15 @@ annotate_server <- function(id) {
         dplyr::rows_update(upd, by = c("ID", "path", "scaffold"))
       trigger("update_annotate_table")
       trigger("refresh_export")
-      mp_toast(
-        if (locking) {
-          paste0(mp_n(n, "assembly"), " locked - ready to export.")
-        } else {
-          paste0(mp_n(n, "assembly"), " unlocked.")
-        }
-      )
+      if (n > 0L) {
+        mp_toast(
+          if (locking) {
+            paste0(mp_n(n, "assembly"), " locked - ready to export.")
+          } else {
+            paste0(mp_n(n, "assembly"), " unlocked.")
+          }
+        )
+      }
     }
 
     init("lock")
@@ -804,18 +805,22 @@ annotate_server <- function(id) {
         }
       }
 
-      rv$updating$annotate_lock <- as.numeric(!lock_current)
+      new_lock <- as.numeric(!lock_current)
+      # Rows already at the new value are rewritten but change nothing.
+      n_changed <- sum(!rv$updating$annotate_lock %in% new_lock)
+      rv$updating$annotate_lock <- new_lock
       if (locking) {
-        write_lock(rv$updating)
+        write_lock(rv$updating, n_changed)
       } else {
         rv$lock_pending <- rv$updating
+        rv$lock_pending_n <- n_changed
         mp_confirm(
           "unlock_confirm",
-          title = paste("Unlock", mp_n(nrow(rv$updating), "assembly")),
-          text = paste(
-            "Unlocking removes these assemblies from Export. If their state is",
-            "Ready to run, the next update will re-annotate them and replace",
-            "your curated results."
+          title = paste("Unlock", mp_n(n_changed, "assembly")),
+          text = paste0(
+            "Unlocking removes ", mp_n(n_changed, "assembly"), " from Export. ",
+            "Any assembly whose state is Ready to run will be re-annotated by ",
+            "the next update, replacing your curated results."
           ),
           action_label = "Unlock",
           danger = TRUE
@@ -824,8 +829,9 @@ annotate_server <- function(id) {
     })
     observeEvent(input$unlock_confirm, ignoreInit = TRUE, {
       upd <- rv$lock_pending
+      n <- rv$lock_pending_n %||% nrow(upd)
       rv$lock_pending <- NULL
-      if (isTRUE(input$unlock_confirm) && !is.null(upd)) write_lock(upd)
+      if (isTRUE(input$unlock_confirm) && !is.null(upd)) write_lock(upd, n)
     })
 
     # Review flags ----
@@ -928,9 +934,9 @@ annotate_server <- function(id) {
     observeEvent(input$set_annotate_opts, {
       row <- as.numeric(input$set_annotate_opts)
       d <- filtered_data()
-      if (!row_in_selection(row, selected(), d$ID[row])) return()
+      if (!row_in_selection(row, selected(), d$ID[row], "assembly")) return()
       selected <- c(row, selected()) |> unique()
-      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1])) return()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1], "assembly")) return()
       rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       annotate_opts_modal(rv)
@@ -1225,9 +1231,9 @@ annotate_server <- function(id) {
     observeEvent(input$set_curate_opts, {
       row <- as.numeric(input$set_curate_opts)
       d <- filtered_data()
-      if (!row_in_selection(row, selected(), d$ID[row])) return()
+      if (!row_in_selection(row, selected(), d$ID[row], "assembly")) return()
       selected <- c(row, selected()) |> unique()
-      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1])) return()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1], "assembly")) return()
       rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       curate_opts_modal(rv)
@@ -1473,9 +1479,9 @@ annotate_server <- function(id) {
     observeEvent(input$set_orf_opts, {
       row <- as.numeric(input$set_orf_opts)
       d <- filtered_data()
-      if (!row_in_selection(row, selected(), d$ID[row])) return()
+      if (!row_in_selection(row, selected(), d$ID[row], "assembly")) return()
       selected <- c(row, selected()) |> unique()
-      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1])) return()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1], "assembly")) return()
       rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       orf_opts_modal(rv)

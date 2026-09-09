@@ -20,11 +20,14 @@ need_selection <- function(n, session = getDefaultReactiveDomain()) {
 
 #' None of the selected units may be locked. `locked_ids` are the IDs that are.
 #' @noRd
-need_unlocked <- function(locked_ids, session = getDefaultReactiveDomain()) {
+need_unlocked <- function(locked_ids, noun = "sample",
+                          session = getDefaultReactiveDomain()) {
   if (length(locked_ids) == 0) return(TRUE)
+  plural <- sub("^\\S+ ", "", mp_n(2, noun))
   mp_alert(
-    title = "Locked samples cannot be edited",
-    text = paste0("Unlock these samples in the Lock column first: ", mp_id_list(locked_ids), "."),
+    title = paste("Locked", plural, "cannot be edited"),
+    text = paste0("Unlock these ", plural, " in the Lock column first: ",
+                  mp_id_list(locked_ids), "."),
     type = "warning", session = session
   )
   FALSE
@@ -32,10 +35,12 @@ need_unlocked <- function(locked_ids, session = getDefaultReactiveDomain()) {
 
 #' A row clicked outside a non-empty selection is not edited.
 #' @noRd
-row_in_selection <- function(row, sel, id, session = getDefaultReactiveDomain()) {
+row_in_selection <- function(row, sel, id, noun = "sample",
+                             session = getDefaultReactiveDomain()) {
   if (length(sel) == 0 || row %in% sel) return(TRUE)
   mp_toast(
-    paste0("Clear the current selection, or include ", id, " in it, to edit this sample's options."),
+    paste0("Clear the current selection, or include ", id, " in it, to edit this ",
+           noun, "'s options."),
     type = "warning", session = session
   )
   FALSE

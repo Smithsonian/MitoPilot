@@ -864,13 +864,14 @@ assemble_lock_begin <- function(rv, rows, unit = "assembly",
   lock_current <- as.numeric(names(which.max(table(upd$assemble_lock))))
   if (lock_current != 0) {
     rv$lock_pending <- upd |> dplyr::select(ID, assemble_lock)
+    n_locked <- sum(upd$assemble_lock %in% 1)
     mp_confirm(
       session$ns("lock_confirm"),
-      title = paste("Unlock", mp_n(nrow(upd), "sample")),
-      text = paste(
-        "Unlocking removes these samples from Annotate. If their state is",
-        "Ready to run, the next update will re-assemble them and replace",
-        "their current results."
+      title = paste("Unlock", mp_n(n_locked, "sample")),
+      text = paste0(
+        "Unlocking removes ", mp_n(n_locked, "sample"), " from Annotate. ",
+        "Any sample whose state is Ready to run will be re-assembled by the ",
+        "next update, replacing its current results."
       ),
       action_label = "Unlock",
       danger = TRUE,
@@ -916,13 +917,18 @@ assemble_lock_begin <- function(rv, rows, unit = "assembly",
       return(invisible(NULL))
     }
   }
-  joins <- sum(upd$join_switch %in% 1, na.rm = TRUE)
-  units <- count_annotate_units(session$userData$con, upd$ID)
+  # Rows that were already locked are written again but change nothing, so the
+  # toast counts only the rows whose value moved.
+  changed <- upd |> dplyr::filter(!assemble_lock %in% 1)
+  joins <- sum(changed$join_switch %in% 1, na.rm = TRUE)
+  units <- count_annotate_units(session$userData$con, changed$ID)
   apply_assemble_lock(rv, upd |> dplyr::select(ID, assemble_lock), 1, session)
-  mp_toast(
-    assemble_lock_message(nrow(upd), units, unit, joins),
-    type = "success", session = session
-  )
+  if (nrow(changed) > 0L) {
+    mp_toast(
+      assemble_lock_message(nrow(changed), units, unit, joins),
+      type = "success", session = session
+    )
+  }
   invisible(NULL)
 }
 
@@ -938,8 +944,11 @@ assemble_lock_finish <- function(rv, session = getDefaultReactiveDomain()) {
   if (is.null(upd) || nrow(upd) == 0L) {
     return(invisible(NULL))
   }
+  n_locked <- sum(upd$assemble_lock %in% 1)
   apply_assemble_lock(rv, upd, 0, session)
-  mp_toast(paste0(mp_n(nrow(upd), "sample"), " unlocked."), session = session)
+  if (n_locked > 0L) {
+    mp_toast(paste0(mp_n(n_locked, "sample"), " unlocked."), session = session)
+  }
   invisible(NULL)
 }
 
