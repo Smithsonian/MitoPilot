@@ -287,7 +287,8 @@ assemble_server <- function(id) {
               name = "Preprocess Opts.",
               html = T,
               width = 130,
-              cell = rt_link(ns("set_pre_opts"))
+              cell = rt_link(ns("set_pre_opts"), title = "Edit preprocessing options",
+                             lock_col = "assemble_lock")
             ),
             trimmed_reads = colDef(
               show = TRUE, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
@@ -306,14 +307,16 @@ assemble_server <- function(id) {
               name = "Assembly Opts.",
               html = T,
               width = 130,
-              cell = rt_link(ns("set_assemble_opts"))
+              cell = rt_link(ns("set_assemble_opts"), title = "Edit assembly options",
+                             lock_col = "assemble_lock")
             ),
             blast_opts = colDef(
               show = TRUE, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
               name = "BLAST Opts.",
               html = T,
               width = 120,
-              cell = rt_link(ns("set_blast_opts"))
+              cell = rt_link(ns("set_blast_opts"), title = "Edit BLAST options",
+                             lock_col = "assemble_lock")
             ),
             topology = colDef(
               show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
@@ -494,6 +497,15 @@ assemble_server <- function(id) {
       intersect(sel, which(visible))
     })
 
+    # The toolbar lives in the top-level UI, so this is scoped by container
+    # class, not by id (theme T01).
+    observe({
+      shinyjs::toggleState(
+        selector = "#asmb_ctrls .mp-needs-selection",
+        condition = length(selected()) > 0
+      )
+    })
+
     output$n_selected <- renderText({
       paste0(length(selected()), " selected")
     })
@@ -524,8 +536,8 @@ assemble_server <- function(id) {
     init("state")
     on("state", {
       req(session$userData$mode == "Assemble")
-      req(selected())
-      req(all(rv$data$assemble_lock[req(selected())] == 0))
+      if (!need_selection(length(selected()))) return()
+      if (!need_unlocked(assemble_locked_ids(rv, selected()))) return()
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
         dplyr::slice(selected())
@@ -558,7 +570,7 @@ assemble_server <- function(id) {
     init("lock")
     on("lock", {
       req(session$userData$mode == "Assemble")
-      req(selected())
+      if (!need_selection(length(selected()))) return()
       assemble_lock_begin(rv, selected(), unit = "assembly")
     })
     observeEvent(input$lock_confirm, {
@@ -568,14 +580,9 @@ assemble_server <- function(id) {
 
     # Set Pre-process Opts ----
     observeEvent(input$set_pre_opts, {
-      row <- as.numeric(input$set_pre_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
+      rows <- assemble_opts_rows(rv, as.numeric(input$set_pre_opts), selected())
+      if (is.null(rows)) return()
+      rv$updating <- rv$data |> dplyr::slice(rows)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       pre_opts_modal(rv)
     })
@@ -708,14 +715,9 @@ assemble_server <- function(id) {
 
     # Set Assemble Opts ----
     observeEvent(input$set_assemble_opts, {
-      row <- as.numeric(input$set_assemble_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
+      rows <- assemble_opts_rows(rv, as.numeric(input$set_assemble_opts), selected())
+      if (is.null(rows)) return()
+      rv$updating <- rv$data |> dplyr::slice(rows)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       assemble_opts_modal(rv)
     })
@@ -964,14 +966,9 @@ assemble_server <- function(id) {
 
     # Set BLAST Opts ----
     observeEvent(input$set_blast_opts, {
-      row <- as.numeric(input$set_blast_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
+      rows <- assemble_opts_rows(rv, as.numeric(input$set_blast_opts), selected())
+      if (is.null(rows)) return()
+      rv$updating <- rv$data |> dplyr::slice(rows)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       blast_opts_modal(rv)
     })

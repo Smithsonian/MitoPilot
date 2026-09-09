@@ -1029,3 +1029,39 @@ assemble_lock_message <- function(n_samples, n_units, unit = "assembly",
   }
   msg
 }
+
+#' IDs of the selected rows that are locked
+#'
+#' @param rv the local reactive vals object
+#' @param rows row indices
+#'
+#' @noRd
+assemble_locked_ids <- function(rv, rows) {
+  rows <- rows[!is.na(rows)]
+  if (length(rows) == 0) {
+    return(character(0))
+  }
+  rv$data$ID[rows][rv$data$assemble_lock[rows] == 1]
+}
+
+#' Rows an options-cell click applies to, or NULL once it has explained itself
+#'
+#' Replaces the bare `req(FALSE)` that used to abort the click in silence
+#' whenever the clicked row sat outside a non-empty selection (theme T01).
+#'
+#' @param rv the local reactive vals object
+#' @param row the clicked row index
+#' @param sel the current selection
+#' @param session current shiny session
+#'
+#' @noRd
+assemble_opts_rows <- function(rv, row, sel, session = getDefaultReactiveDomain()) {
+  if (!row_in_selection(row, sel, rv$data$ID[row], session = session)) {
+    return(NULL)
+  }
+  rows <- unique(c(row, sel))
+  if (!need_unlocked(assemble_locked_ids(rv, rows), session = session)) {
+    return(NULL)
+  }
+  rows
+}

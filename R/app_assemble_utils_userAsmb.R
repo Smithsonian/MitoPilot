@@ -153,12 +153,10 @@ opts_modal_server <- function(rv, name, fields, label, modal, save,
   indirect_id <- paste0("editing_", name, "_indirect")
 
   observeEvent(input[[paste0("set_", name)]], {
-    row <- as.numeric(input[[paste0("set_", name)]])
-    if (length(selected()) > 0 && !row %in% selected()) {
-      req(F)
-    }
-    rows <- c(row, selected()) |> unique()
-    req(all(rv$data$assemble_lock[rows] == 0))
+    rows <- assemble_opts_rows(
+      rv, as.numeric(input[[paste0("set_", name)]]), selected(), session = session
+    )
+    if (is.null(rows)) return()
     rv$updating <- rv$data |> dplyr::slice(rows)
     rv$updating_indirect <- rv$updating |> dplyr::slice(0)
     modal(rv)

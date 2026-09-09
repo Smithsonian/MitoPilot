@@ -280,14 +280,16 @@ assemble_server_userAsmb <- function(id) {
               name = "Preprocess Opts.",
               html = T,
               width = 130,
-              cell = rt_link(ns("set_pre_opts"))
+              cell = rt_link(ns("set_pre_opts"), title = "Edit preprocessing options",
+                             lock_col = "assemble_lock")
             ),
             find_mito_opts = colDef(
               show = TRUE, class = .grp("find_mito_opts"), headerClass = .grp("find_mito_opts"),
               name = "Find Mito Opts.",
               html = T,
               width = 140,
-              cell = rt_link(ns("set_find_mito_opts"))
+              cell = rt_link(ns("set_find_mito_opts"), title = "Edit mitogenome search options",
+                             lock_col = "assemble_lock")
             ),
             # The note doubles as the link to the search evidence.
             find_mito_notes = colDef(
@@ -295,14 +297,16 @@ assemble_server_userAsmb <- function(id) {
               name = "Mito Search",
               minWidth = 180,
               html = T,
-              cell = rt_link(ns("show_mito_candidates"))
+              cell = rt_link(ns("show_mito_candidates"),
+                             title = "Show the contigs screened for this sample")
             ),
             circularize_opts = colDef(
               show = TRUE, class = .grp("circularize_opts"), headerClass = .grp("circularize_opts"),
               name = "Circularize Opts.",
               html = T,
               width = 140,
-              cell = rt_link(ns("set_circularize_opts"))
+              cell = rt_link(ns("set_circularize_opts"), title = "Edit circularization options",
+                             lock_col = "assemble_lock")
             ),
             # The note doubles as the link to the circularization evidence.
             circularize_notes = colDef(
@@ -310,7 +314,8 @@ assemble_server_userAsmb <- function(id) {
               name = "Circularization",
               minWidth = 160,
               html = T,
-              cell = rt_link(ns("show_circularize_details"))
+              cell = rt_link(ns("show_circularize_details"),
+                             title = "Show the circularization evidence for this sample")
             ),
             join_notes = colDef(
               show = TRUE, class = .grp("join_notes"), headerClass = .grp("join_notes"),
@@ -325,7 +330,8 @@ assemble_server_userAsmb <- function(id) {
               name = "BLAST Opts.",
               html = T,
               width = 120,
-              cell = rt_link(ns("set_blast_opts"))
+              cell = rt_link(ns("set_blast_opts"), title = "Edit BLAST options",
+                             lock_col = "assemble_lock")
             ),
             trimmed_reads = colDef(
               show = !no_raw, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
@@ -494,6 +500,15 @@ assemble_server_userAsmb <- function(id) {
       intersect(sel, which(visible))
     })
 
+    # The toolbar lives in the top-level UI, so this is scoped by container
+    # class, not by id (theme T01).
+    observe({
+      shinyjs::toggleState(
+        selector = "#asmb_ctrls .mp-needs-selection",
+        condition = length(selected()) > 0
+      )
+    })
+
     output$n_selected <- renderText({
       paste0(length(selected()), " selected")
     })
@@ -524,8 +539,8 @@ assemble_server_userAsmb <- function(id) {
     init("state")
     on("state", {
       req(session$userData$mode == "Assemble")
-      req(selected())
-      req(all(rv$data$assemble_lock[req(selected())] == 0))
+      if (!need_selection(length(selected()))) return()
+      if (!need_unlocked(assemble_locked_ids(rv, selected()))) return()
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
         dplyr::slice(selected())
@@ -558,7 +573,7 @@ assemble_server_userAsmb <- function(id) {
     init("lock")
     on("lock", {
       req(session$userData$mode == "Assemble")
-      req(selected())
+      if (!need_selection(length(selected()))) return()
       assemble_lock_begin(rv, selected(), unit = "contig")
     })
     observeEvent(input$lock_confirm, {
@@ -568,14 +583,9 @@ assemble_server_userAsmb <- function(id) {
 
     # Set Pre-process Opts ----
     observeEvent(input$set_pre_opts, {
-      row <- as.numeric(input$set_pre_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
+      rows <- assemble_opts_rows(rv, as.numeric(input$set_pre_opts), selected())
+      if (is.null(rows)) return()
+      rv$updating <- rv$data |> dplyr::slice(rows)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       pre_opts_modal(rv)
     })
