@@ -769,7 +769,7 @@ a.mp-link:focus-visible {
 }
 
 .mp-maptoref-scrollbar {
-  overflow-x: auto;
+  overflow-x: scroll;
   overflow-y: hidden;
   width: 100%;
   height: 16px;
@@ -779,4 +779,21 @@ a.mp-link:focus-visible {
   overflow-x: scroll;
   overflow-y: hidden;
   width: 100%;
+}
+
+/* Both strips keep a visible bar, so "there is more to the side" shows. */
+.mp-maptoref-scrollbar,
+.mp-maptoref-scrollpane {
+  scrollbar-width: thin;
+}
+
+.mp-maptoref-scrollbar::-webkit-scrollbar,
+.mp-maptoref-scrollpane::-webkit-scrollbar {
+  height: 10px;
+}
+
+.mp-maptoref-scrollbar::-webkit-scrollbar-thumb,
+.mp-maptoref-scrollpane::-webkit-scrollbar-thumb {
+  background-color: var(--mp-border);
+  border-radius: 5px;
 }
