@@ -425,9 +425,10 @@ details summary:hover {
   }
 }
 
-/* Form-shaped modals scroll their body so the footer is never below the
-   fold on a laptop. */
-.mp-modal-form .modal-body {
+/* Form-shaped modals scroll so the footer is never below the fold on a
+   laptop. modalDialog() has no class argument, so class = "mp-modal-form"
+   lands on .modal-body itself; cap whichever element carries the class. */
+.mp-modal-form {
   max-height: 70vh;
   overflow-y: auto;
 }
@@ -504,6 +505,12 @@ details summary:hover {
 
 .mp-table-status .mp-sep {
   color: var(--mp-border);
+}
+
+/* "No rows match" line, next to the counts. */
+.mp-empty-state {
+  color: var(--mp-text-muted);
+  margin: 0 0 var(--mp-space-1) 0;
 }
 
 a.mp-link {

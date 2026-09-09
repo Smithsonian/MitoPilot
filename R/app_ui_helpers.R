@@ -59,16 +59,21 @@ mp_footer <- function(primary = NULL, dismiss = "Cancel", danger = NULL, extra =
 }
 
 #' Modal title with a Bootstrap close X and an optional subtitle.
+#'
+#' `modalDialog()` already wraps whatever it is handed in its own
+#' `h4.modal-title`, so this returns a plain div: one heading per dialog.
+#'
 #' @noRd
 mp_modal_title <- function(text, subtitle = NULL, close = TRUE) {
-  tagList(
+  div(
+    class = "mp-modal-title",
     if (close) {
       tags$button(
         type = "button", class = "close", `data-dismiss` = "modal",
         `aria-label` = "Close", tags$span(`aria-hidden` = "true", HTML("&times;"))
       )
     },
-    tags$h4(class = "modal-title", text),
+    text,
     if (is.null(subtitle)) NULL else tags$p(class = "text-muted mp-modal-subtitle", subtitle)
   )
 }

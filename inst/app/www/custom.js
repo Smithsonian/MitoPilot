@@ -193,3 +193,12 @@ $( document ).ready(function(){
     }
   }, true);
 });
+
+// Name the current module in the browser tab, so a window switcher, a
+// bookmark and a second window all say which step the tab is on.
+$(document).on('shiny:inputchanged', function(e) {
+  if (e.name === 'mode' && e.value) document.title = 'MitoPilot - ' + e.value;
+});
+$(document).on('shiny:connected', function() {
+  document.title = 'MitoPilot - ' + ($('#mode input:checked').val() || 'Assemble');
+});
