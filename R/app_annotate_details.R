@@ -4740,7 +4740,9 @@ annotations_details_server <- function(id, rv) {
       }
 
       showModal(modalDialog(
-        title = if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF",
+        title = mp_modal_title(
+          if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF"
+        ),
         selectizeInput(
           ns("assign_gene_choice"),
           label = "Gene name (pick a standard mitochondrial PCG or type a custom name):",
@@ -4749,12 +4751,32 @@ annotations_details_server <- function(id, rv) {
           options = list(create = TRUE, maxItems = 1, placeholder = "e.g. nad6 or a custom name")
         ),
         suggestion_ui,
-        footer = tagList(
-          actionButton(ns("confirm_assign_gene"), "Assign"),
-          if (is_assigned) actionButton(ns("remove_assign_gene"), "Remove assignment"),
-          actionButton(ns("cancel_assign_gene"), "Cancel")
+        # Cancel is a server button, not modalButton(): dismissing this dialog has
+        # to reopen the details window it replaced.
+        footer = mp_footer(
+          primary = actionButton(ns("confirm_assign_gene"), "Assign"),
+          dismiss = NULL,
+          extra = tagList(
+            if (is_assigned) {
+              actionButton(ns("remove_assign_gene"), "Remove assignment",
+                           class = "btn-danger")
+            },
+            actionButton(ns("cancel_assign_gene"), "Cancel")
+          )
         ),
-        easyClose = TRUE
+        easyClose = FALSE
+      ))
+      # Same reason: the header X returns to the details window rather than
+      # dismissing to the bare table.
+      shinyjs::runjs(sprintf(
+        "setTimeout(function(){
+           var b = document.querySelector('#shiny-modal .modal-header .close');
+           if (b) { b.removeAttribute('data-dismiss');
+             b.addEventListener('click', function() {
+               Shiny.setInputValue('%s', Date.now(), {priority: 'event'});
+             }); }
+         }, 0);",
+        ns("cancel_assign_gene")
       ))
     })
     observeEvent(input$confirm_assign_gene, {
@@ -5075,7 +5097,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   modalDialog(
     # The four review flags sit in the header beside the badges they mirror, so
     # a metadata click is never one mis-click from a sequence edit (theme T16).
-    title = div(
+    title = mp_modal_title(div(
       div(
         style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
         span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
@@ -5089,9 +5111,21 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         uiOutput(ns("status_badges"), inline = TRUE, style = "display: contents;"),
         uiOutput(ns("status_toggles"), inline = TRUE, style = "display: contents;")
       )
-    ),
+    )),
     size = "l",
     easyClose = F,
+    # The header X dismisses client-side, which would skip the unsaved-edit
+    # guard and the feature-count write Close does. Route it through Close.
+    tags$script(HTML(sprintf(
+      "setTimeout(function(){
+         var b = document.querySelector('#shiny-modal .modal-header .close');
+         if (b) { b.removeAttribute('data-dismiss');
+           b.addEventListener('click', function() {
+             Shiny.setInputValue('%s', Date.now(), {priority: 'event'});
+           }); }
+       }, 0);",
+      ns("close")
+    ))),
     if (is_locked) {
       div(
         class = "alert alert-warning mp-lock-banner", role = "status",
