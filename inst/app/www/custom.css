@@ -626,3 +626,23 @@ a.mp-link:focus-visible {
 .mp-needs-selection-wrap {
   display: inline-flex;
 }
+
+
+/* ------------------------------------------------------------------ */
+/* Annotation details window (R/app_annotate_details.R).               */
+/* ------------------------------------------------------------------ */
+
+/* The annotation table hugs its rows and grows with the window instead of a
+   fixed 250px. Not .mp-table-resize: that one is sized against the viewport
+   and custom.js clears its inline height, both wrong inside a modal body
+   that is already capped at 70vh. */
+.mp-modal-table {
+  height: clamp(280px, 50vh, 640px);
+  resize: vertical;
+  overflow: hidden;
+}
+
+.mp-modal-table > div,
+.mp-modal-table > div > .reactable {
+  height: 100% !important;
+}

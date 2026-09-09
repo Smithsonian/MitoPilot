@@ -533,6 +533,28 @@ annotations_details_server <- function(id, rv) {
       )
       if (length(tags) > 0) paste0("<b>Partial:</b> ", paste(tags, collapse = ", ")) else ""
     }
+    # Feature count line above the table. Its own renderUI reading rv$annotations,
+    # so an updateReactable() after an edit cannot leave it stale (theme T04).
+    output$annotation_count <- renderUI({
+      ann <- rv$annotations
+      if (is.null(ann) || nrow(ann) == 0) {
+        return("No features on record for this assembly.")
+      }
+      deleted <- stringr::str_detect(ann$gene, "_DELETED_")
+      live <- ann[!deleted, , drop = FALSE]
+      cats <- c(PCG = "PCG", tRNA = "tRNA", rRNA = "rRNA", ORF = "ORF",
+                ctrl = "control region")
+      parts <- vapply(names(cats), function(k) {
+        n <- sum(live$type == k, na.rm = TRUE)
+        if (n == 0) "" else mp_n(n, cats[[k]])
+      }, character(1))
+      parts <- parts[nzchar(parts)]
+      out <- mp_n(nrow(live), "feature")
+      if (length(parts) > 0) out <- paste0(out, " - ", paste(parts, collapse = ", "))
+      if (any(deleted)) out <- paste0(out, ", ", sum(deleted), " deleted")
+      out
+    })
+
     # Render table ----
     render_annotations_table <- reactiveVal()
     output$table <- reactable::renderReactable({
@@ -546,7 +568,7 @@ annotations_details_server <- function(id, rv) {
           selection = "single",
           filterable = TRUE,
           defaultPageSize = 50,
-          height = 250,
+          height = "100%",
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(maxWidth = 80, align = "center", show = F),
           columns = list(
@@ -594,6 +616,8 @@ annotations_details_server <- function(id, rv) {
               html = T,
               align = "center",
               maxWidth = 90,
+              # The filter would match the stored 0/1, not the 5'/3' pills shown.
+              filterable = FALSE,
               # JS cell (re-renders on updateReactable) reading the stored 5'/3'
               # partial flags (partial_start/partial_stop are 5'/3' in the gene's
               # orientation) so partiality is visible without entering edit mode.
@@ -620,28 +644,43 @@ annotations_details_server <- function(id, rv) {
             notes = colDef(
               show = T,
               name = "Notes",
+              minWidth = 220,
               maxWidth = 1000,
               html = T,
-              cell = rt_longtext(),
+              style = list(whiteSpace = "normal"),
               align = "left",
               resizable = TRUE
             ),
             warnings = colDef(
               show = T,
               name = "Warnings",
+              minWidth = 220,
               maxWidth = 1000,
               html = T,
-              cell = rt_longtext(),
+              style = list(whiteSpace = "normal"),
               align = "left",
               resizable = TRUE
             ),
+            # Action columns: nothing to sort or filter, and each button names
+            # what it copies (themes T04, T05). "nt" / "aa" stay lowercase; they
+            # are the standard abbreviations and the column is 60px.
             fas = colDef(
               name = "", show = T, html = T, width = 60, sticky = "right",
-              cell = rt_icon_bttn_text(ns("copy_fas"), "fas fa-copy fa-xs")
+              sortable = FALSE, filterable = FALSE,
+              header = tags$span(class = "sr-only", "Copy nucleotide sequence"),
+              cell = rt_icon_bttn_text(
+                ns("copy_fas"), "fas fa-copy fa-xs",
+                title = "Copy nucleotide sequence (FASTA)"
+              )
             ),
             faa = colDef(
               name = "", show = T, html = T, width = 60, sticky = "right",
-              cell = rt_icon_bttn_text(ns("copy_faa"), "fas fa-copy fa-xs")
+              sortable = FALSE, filterable = FALSE,
+              header = tags$span(class = "sr-only", "Copy amino-acid sequence"),
+              cell = rt_icon_bttn_text(
+                ns("copy_faa"), "fas fa-copy fa-xs",
+                title = "Copy amino-acid sequence (FASTA)"
+              )
             )
           )
         )
@@ -4985,7 +5024,13 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
       id = ns("annotation_table_details"),
       open = TRUE,
       tags$summary("Annotation Table"),
-      reactableOutput(ns("table"), width = "100%")
+      uiOutput(ns("annotation_count"), class = "mp-table-status"),
+      # Fluid height: the table hugs its rows and grows with the window instead
+      # of always being 250px of scroll (theme T04).
+      div(
+        class = "mp-modal-table",
+        reactableOutput(ns("table"), width = "100%")
+      )
     ),
     # Assembly-level sequence edits: beside the table they rewrite, each with a
     # one-line caption saying what it does (theme T16, C10).
