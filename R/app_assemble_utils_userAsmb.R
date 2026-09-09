@@ -174,23 +174,28 @@ opts_modal_server <- function(rv, name, fields, label, modal, save,
         dplyr::filter(.data[[name]] == set_name) |>
         dplyr::anti_join(rv$updating, by = "ID")
       if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-        shinyWidgets::sendSweetAlert(
-          title = "Attempting to edit locked samples",
-          text = "Processing parameters associated with locked samples can not be edited.",
+        mp_alert(
+          title = "Locked samples cannot be edited",
+          text = paste(
+            "This parameter set is also used by locked samples, so its",
+            "values cannot be changed. Unlock those samples first."
+          ),
           type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(inputId = edit_id, value = FALSE)
         req(F)
       }
       if (nrow(rv$updating_indirect) > 0L) {
-        shinyWidgets::confirmSweetAlert(
-          inputId = indirect_id,
-          title = "Editing beyond selection",
+        mp_confirm(
+          indirect_id,
+          title = "Edit beyond the selection",
           text = paste0(
-            "You are attempting to edit ", label, " that apply to samples beyond ",
-            "the current selection. Are you sure you want to proceed?"
+            "These ", label, " also apply to ",
+            mp_n(nrow(rv$updating_indirect), "sample"),
+            " outside the current selection, which this edit will change too."
           ),
-          btn_colors = c("#0056b3", "#0056b3")
+          action_label = "Continue",
+          session = session
         )
       }
     } else {
@@ -243,11 +248,13 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
   ns <- session$ns
 
   if (length(unique(rv$updating$circularize_opts)) != 1) {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "Multiple circularization parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+      text = paste(
+        "One modal edits one parameter set. Select samples that share a set,",
+        "or edit them one set at a time."
+      ),
+      type = "warning"
     )
     return(invisible(NULL))
   }
@@ -387,11 +394,13 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
   ns <- session$ns
 
   if (length(unique(rv$updating$find_mito_opts)) != 1) {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "Multiple mitogenome search parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+      text = paste(
+        "One modal edits one parameter set. Select samples that share a set,",
+        "or edit them one set at a time."
+      ),
+      type = "warning"
     )
     return(invisible(NULL))
   }
@@ -545,7 +554,7 @@ mito_candidates_modal <- function(id, session = getDefaultReactiveDomain()) {
     dplyr::arrange(dplyr::desc(selected), rank, dplyr::desc(aligned_length))
 
   if (nrow(rows) == 0L) {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "No search results",
       text = "This sample has no mitogenome search records yet.",
       type = "info"
@@ -555,7 +564,7 @@ mito_candidates_modal <- function(id, session = getDefaultReactiveDomain()) {
 
   showModal(
     modalDialog(
-      title = stringr::str_glue("Mitogenome Search Candidates: {id}"),
+      title = mp_modal_title(paste("Mitogenome search candidates for", id)),
       size = "l",
       easyClose = TRUE,
       opts_help("Every contig the search considered, best first. 'Kept' contigs ",

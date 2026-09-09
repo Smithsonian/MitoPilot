@@ -632,9 +632,12 @@ assemble_server <- function(id) {
 
         # Prevent editing opts that apply to locked
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked samples cannot be edited",
+            text = paste(
+              "This parameter set is also used by locked samples, so its",
+              "values cannot be changed. Unlock those samples first."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -645,11 +648,15 @@ assemble_server <- function(id) {
         }
 
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit pre-processing options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste0(
+              "These preprocessing options also apply to ",
+              mp_n(nrow(rv$updating_indirect), "sample"),
+              " outside the current selection, which this edit will change too."
+            ),
+            action_label = "Continue"
           )
         }
       } else {
@@ -827,9 +834,12 @@ assemble_server <- function(id) {
           dplyr::anti_join(rv$updating, by = "ID")
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked samples cannot be edited",
+            text = paste(
+              "This parameter set is also used by locked samples, so its",
+              "values cannot be changed. Unlock those samples first."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -840,11 +850,15 @@ assemble_server <- function(id) {
         }
         # Confirm editing opts that apply beyond selection
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_assemble_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_assemble_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste0(
+              "These assembly options also apply to ",
+              mp_n(nrow(rv$updating_indirect), "sample"),
+              " outside the current selection, which this edit will change too."
+            ),
+            action_label = "Continue"
           )
         }
       } else {
@@ -956,7 +970,7 @@ assemble_server <- function(id) {
             paste0("... and ", nrow(unpublished) - nrow(shown), " more")
           )))
         }
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "No assembly output for this parameter set",
           text = shiny::tags$div(
             shiny::tags$p(
@@ -1046,20 +1060,27 @@ assemble_server <- function(id) {
           dplyr::filter(blast_opts == input$blast_opts) |>
           dplyr::anti_join(rv$updating, by = "ID")
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked samples cannot be edited",
+            text = paste(
+              "This parameter set is also used by locked samples, so its",
+              "values cannot be changed. Unlock those samples first."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(inputId = "edit_blast_opts", value = FALSE)
           req(F)
         }
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_blast_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit BLAST options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_blast_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste0(
+              "These BLAST options also apply to ",
+              mp_n(nrow(rv$updating_indirect), "sample"),
+              " outside the current selection, which this edit will change too."
+            ),
+            action_label = "Continue"
           )
         }
       } else {
@@ -1104,7 +1125,7 @@ assemble_server <- function(id) {
           collapse = ","
         )
         if (nzchar(taxids) && !grepl("^[0-9]+(,[0-9]+)*$", taxids)) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "Invalid taxon restriction",
             text = paste0(
               "Enter comma-separated numeric NCBI taxon IDs (e.g. 7711 or ",

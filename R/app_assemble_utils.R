@@ -199,11 +199,13 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
     )
 
   } else {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "Multiple preprocess parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+      text = paste(
+        "One modal edits one parameter set. Select samples that share a set,",
+        "or edit them one set at a time."
+      ),
+      type = "warning"
     )
   }
 }
@@ -426,11 +428,13 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
       shinyjs::hide(id = "labels_db")
     }
   } else {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "Multiple assembly parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE,
+      text = paste(
+        "One modal edits one parameter set. Select samples that share a set,",
+        "or edit them one set at a time."
+      ),
+      type = "warning"
     )
   }
 }
@@ -577,11 +581,13 @@ blast_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
     }
 
   } else {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "Multiple BLAST parameter sets selected",
-      text = "Cannot edit different parameter sets simultaneously",
-      type = "error",
-      closeOnClickOutside = FALSE
+      text = paste(
+        "One modal edits one parameter set. Select samples that share a set,",
+        "or edit them one set at a time."
+      ),
+      type = "warning"
     )
   }
 }
@@ -660,7 +666,7 @@ blast_hits_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         style = "margin-top: 12px;",
         tags$summary(
           style = "cursor: pointer; font-weight: bold;",
-          stringr::str_glue("Path {p} / Scaffold {s} ({nrow(sub)} hits)")
+          stringr::str_glue("Path {p} / Scaffold {s} ({mp_n(nrow(sub), 'hit')})")
         ),
         div(style = "margin-top: 8px;", tbl)
       )
@@ -668,12 +674,9 @@ blast_hits_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
   }
 
   showModal(modalDialog(
-    title = tagList(
-      div(stringr::str_glue("All BLAST hits for ID: {id}")),
-      div(
-        style = "font-size: 0.85em; font-weight: normal; color: #555; margin-top: 4px;",
-        stringr::str_glue("Taxon: {taxon}")
-      )
+    title = mp_modal_title(
+      paste("All BLAST hits for", id),
+      subtitle = paste("Taxon:", taxon)
     ),
     size = "l",
     body,

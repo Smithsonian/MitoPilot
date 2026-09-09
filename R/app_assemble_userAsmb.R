@@ -646,9 +646,12 @@ assemble_server_userAsmb <- function(id) {
 
         # Prevent editing opts that apply to locked
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked samples cannot be edited",
+            text = paste(
+              "This parameter set is also used by locked samples, so its",
+              "values cannot be changed. Unlock those samples first."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -659,11 +662,15 @@ assemble_server_userAsmb <- function(id) {
         }
 
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit pre-processing options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste0(
+              "These preprocessing options also apply to ",
+              mp_n(nrow(rv$updating_indirect), "sample"),
+              " outside the current selection, which this edit will change too."
+            ),
+            action_label = "Continue"
           )
         }
       } else {
@@ -753,7 +760,7 @@ assemble_server_userAsmb <- function(id) {
         # refuse to save that combination rather than fail mid-run.
         db_path <- trimws(input$find_mitofinder_db %||% "")
         if (isTRUE(input$find_mitogenome) && (!nzchar(db_path) || !file.exists(db_path))) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "MitoFinder database not found",
             text = paste0(
               "The mitogenome search confirms candidates with MitoFinder, which needs ",
@@ -1062,7 +1069,7 @@ assemble_server_userAsmb <- function(id) {
           collapse = ","
         )
         if (nzchar(taxids) && !grepl("^[0-9]+(,[0-9]+)*$", taxids)) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "Invalid taxon restriction",
             text = paste0(
               "Enter comma-separated numeric NCBI taxon IDs (e.g. 7711 or ",
