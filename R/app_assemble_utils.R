@@ -1106,3 +1106,38 @@ mp_fit_width <- function(x, floor = 120, cap = 260) {
   }
   max(floor, min(cap, ceiling(8.5 * n) + 26))
 }
+
+#' The two CSV download buttons, labelled for what they actually do
+#'
+#' `mp_csv_download_row()` calls the first download "filtered", which
+#' reactable 0.4.5 cannot report. Both buttons say what they really send
+#' (theme T13).
+#'
+#' @param ns the module's namespace function
+#'
+#' @noRd
+assemble_csv_row <- function(ns) {
+  row <- mp_csv_download_row(ns)
+  labels <- c("Download selected rows", "Download all rows")
+  for (i in seq_along(row$children)) {
+    row$children[[i]]$children[[2]] <- labels[i]
+  }
+  row
+}
+
+#' The row-count and selection line above a sample table
+#'
+#' @param n_visible,n_total,n_selected counts for the current view
+#'
+#' @noRd
+assemble_table_status <- function(n_visible, n_total, n_selected) {
+  div(
+    class = "mp-table-status", role = "status", `aria-live` = "polite",
+    span(
+      "Showing ", tags$b(n_visible), " of ", tags$b(n_total),
+      if (n_total == 1) " sample" else " samples"
+    ),
+    span(class = "mp-sep", `aria-hidden` = "true", HTML("&middot;")),
+    span(tags$b(n_selected), " selected")
+  )
+}

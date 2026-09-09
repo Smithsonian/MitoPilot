@@ -29,52 +29,11 @@ assemble_ui_userAsmb <- function(id) {
   tagList(
     uiOutput(ns("col_css")),
     div(
-      style = "display: flex; flex-flow: row wrap; gap: 1em; align-items: flex-end;",
-      shinyWidgets::pickerInput(
-        inputId  = ns("lock_filter"),
-        width    = "140px",
-        label    = "Lock:",
-        choices  = ASSEMBLE_LOCK_CHOICES,
-        selected = ASSEMBLE_LOCK_CHOICES,
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "140px"
-        )
-      ),
-      shinyWidgets::pickerInput(
-        inputId  = ns("state_filter"),
-        width    = "140px",
-        label    = "State:",
-        choices  = mp_state_choices("assemble"),
-        selected = mp_state_choices("assemble"),
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "140px"
-        )
-      ),
-      shinyWidgets::pickerInput(
-        inputId  = ns("col_groups"),
-        width    = "150px",
-        label    = "Show columns:",
-        choices  = names(ASSEMBLE_COL_GROUPS_USERASMB),
-        selected = names(ASSEMBLE_COL_GROUPS_USERASMB),
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "150px"
-        )
-      ),
+      class = "mp-filter-row",
+      mp_filter_picker(ns("lock_filter"), "Lock:", ASSEMBLE_LOCK_CHOICES,
+                       width = "140px"),
+      mp_filter_picker(ns("state_filter"), "State:", mp_state_choices("assemble"),
+                       width = "150px"),
       shinyWidgets::airDatepickerInput(
         inputId     = ns("date_filter"),
         label       = "Updated between:",
@@ -83,13 +42,19 @@ assemble_ui_userAsmb <- function(id) {
         value       = NULL,
         width       = "220px",
         placeholder = "any time"
+      ),
+      div(
+        style = paste(
+          "margin-left: 12px; padding-left: 16px;",
+          "border-left: 1px solid var(--mp-border, #ddd);"
+        ),
+        mp_filter_picker(ns("col_groups"), "Columns:",
+                         names(ASSEMBLE_COL_GROUPS_USERASMB), width = "150px")
       )
     ),
+    uiOutput(ns("n_selected")),
     div(class = "mp-table-resize", reactableOutput(ns("table"))),
-    div(
-      style = "font-size: 0.85em; color: #555; margin-top: 4px;",
-      textOutput(ns("n_selected"), inline = TRUE)
-    )
+    assemble_csv_row(ns)
   )
 }
 
@@ -560,8 +525,15 @@ assemble_server_userAsmb <- function(id) {
       )
     })
 
-    output$n_selected <- renderText({
-      paste0(length(selected()), " selected")
+    # Rows the pickers and the date filter leave visible. reactable's own
+    # search and column filters are client-side, so they are not counted.
+    output$n_selected <- renderUI({
+      vis <- filtered_data()
+      shown <- sum(
+        as.character(vis$assemble_lock) %in% lock_filter_rv() &
+          as.character(vis$assemble_switch) %in% state_filter_rv()
+      )
+      assemble_table_status(shown, nrow(rv$data), length(selected()))
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample
@@ -1160,5 +1132,32 @@ assemble_server_userAsmb <- function(id) {
       rv$updating <- rv$data |> dplyr::slice(as.numeric(input$all_blast_hits))
       blast_hits_modal(rv)
     })
+
+    # CSV Export ----
+    .export_cols_drop <- c("output", "view", "blast_hits", "poor_blast_ref")
+
+    observe({
+      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
+    })
+
+    output$export_selected <- downloadHandler(
+      filename = function() paste0("assemble_selected_", Sys.Date(), ".csv"),
+      content = function(file) {
+        req(length(selected()) > 0)
+        rv$data |>
+          dplyr::slice(selected()) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
+
+    output$export_all <- downloadHandler(
+      filename = function() paste0("assemble_all_", Sys.Date(), ".csv"),
+      content = function(file) {
+        rv$data |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
   })
 }
