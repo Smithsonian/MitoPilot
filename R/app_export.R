@@ -724,7 +724,8 @@ export_server <- function(id) {
           hdr_box("fasta_header_gene", "Gene FASTA header:",
                   opts$fasta_header_gene),
           uiOutput(ns("fasta_header_gene_status")),
-          opts_help("The gene name is added to this header automatically.")
+          opts_help("The gene name is added to this header automatically.",
+                    nested = TRUE)
         ),
         # PCG outlier review options, separated from the export options above
         tags$hr(style = "border-top: 1px solid var(--mp-border); margin: 1em 0 0.75em;"),
