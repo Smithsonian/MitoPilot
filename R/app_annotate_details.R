@@ -23,6 +23,16 @@ gene_type_alpha <- 0.5
 # the two pieces are far apart on a linearised layout, and labelling only the
 # longer one leaves an unidentified arrow at the opposite edge. `df` must already
 # carry numeric `xmin`/`xmax` columns (same coordinate space as `x_lo`/`x_hi`).
+#' Give a label-less Shiny input an accessible name
+#'
+#' A `label = NULL` input renders a bare `<input>` that screen readers and voice
+#' control cannot name (theme T22).
+#'
+#' @noRd
+mp_named_input <- function(x, label, sel = "input") {
+  htmltools::tagQuery(x)$find(sel)$addAttrs(`aria-label` = label)$allTags()
+}
+
 split_wrapped_genes <- function(df, x_lo, x_hi) {
   if (nrow(df) == 0 || !all(c("xmin", "xmax") %in% names(df)) ||
       !any(df$xmin > df$xmax, na.rm = TRUE)) {
@@ -703,7 +713,10 @@ annotations_details_server <- function(id, rv) {
       # Check for unsaved edits
       isolate({
         req(rv$annotations)
-        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] %in% c("PCG", "ORF", "rRNA"))
+        can_align <- length(sel) > 0 &&
+          rv$annotations$type[sel] %in% c("PCG", "ORF", "rRNA")
+        shinyjs::toggle("aln_div", condition = can_align)
+        shinyjs::toggle("aln_empty", condition = !can_align)
         is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
         is_orf <- length(sel) > 0 && rv$annotations$type[sel] == "ORF"
         # An assigned ORF keeps tool == "ORFfinder" but a non-ORF type; offer the
@@ -1191,9 +1204,18 @@ annotations_details_server <- function(id, rv) {
       # rendered even when the active reference has no annotations, so the user can
       # switch away from an unannotated top hit.
       cand <- rv$blast_ref_candidates
-      req(!is.null(cand), nrow(cand) > 0)
+      none <- div(
+        class = "mp-table-status",
+        "No BLAST reference is on record for this assembly, so there is nothing ",
+        "to compare it against."
+      )
+      if (is.null(cand) || nrow(cand) == 0) {
+        return(none)
+      }
       active_acc <- active_ref_acc() %||% ctx$blast_accession
-      req(!is.null(active_acc), !is.na(active_acc), nzchar(active_acc))
+      if (is.null(active_acc) || is.na(active_acc) || !nzchar(active_acc)) {
+        return(none)
+      }
 
       has_ref    <- !is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0
       w          <- synteny_plot_w()
@@ -2659,18 +2681,20 @@ annotations_details_server <- function(id, rv) {
 
     # Delete Annotation ----
     observeEvent(input$delete, {
-      if (length(selected()) == 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "No annotation selected"
-        )
+      if (!need_selection(length(selected()))) {
         req(F)
       }
-      req(selected())
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("confirm_delete"),
+      idx <- selected()
+      mp_confirm(
+        ns("confirm_delete"),
         title = "Delete annotation",
-        text = "This will completely remove the selected annotation. Details of the gene name and position of the deleted annotation will be added to the notes section.",
-        btn_colors = c("#0056b3", "#0056b3")
+        text = stringr::str_glue(
+          "Delete {rv$annotations$gene[idx]} at {rv$annotations$pos1[idx]}-",
+          "{rv$annotations$pos2[idx]}? The gene name and position are recorded ",
+          "in this feature's notes. This cannot be undone from this window."
+        ),
+        action_label = "Delete",
+        danger = TRUE
       )
     })
     observeEvent(input$confirm_delete, {
@@ -5204,6 +5228,12 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         onclick = sprintf("Shiny.onInputChange('%s', Math.random())", ns("align"))
       ),
       div(
+        id = ns("aln_empty"),
+        class = "mp-table-status",
+        "Select a protein-coding gene, ORF or rRNA in the annotation table to ",
+        "align it against the reference sequences."
+      ),
+      div(
         id = ns("aln_div"),
         div(
           id = ns("aln_ctlr_div"),
@@ -5263,15 +5293,24 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               id = ns("start_search_ctrl"),
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "START"),
+              # + grows the feature and - shrinks it, in both rows; the grow
+              # button sits on the outer edge of each pair, so each button
+              # points the way the boundary moves (theme T04).
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the start codon upstream (longer feature)",
+                `aria-label` = "Move the start codon upstream (longer feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "+")
+                icon("plus")
               ),
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the start codon downstream (shorter feature)",
+                `aria-label` = "Move the start codon downstream (shorter feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "\u2212")
+                icon("minus")
               ),
               div(
                 class = "mp-step-box",
@@ -5284,7 +5323,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                   max = 50,
                   step = 1,
                   width = "48px"
-                )
+                ) |> mp_named_input("Codons per click")
               )
             ),
             tags$label(
@@ -5306,14 +5345,20 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "STOP"),
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the stop codon upstream (shorter feature)",
+                `aria-label` = "Move the stop codon upstream (shorter feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "\u2212")
+                icon("minus")
               ),
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the stop codon downstream (longer feature)",
+                `aria-label` = "Move the stop codon downstream (longer feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add')}', 'plus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "+")
+                icon("plus")
               ),
               div(
                 class = "mp-step-box",
@@ -5326,7 +5371,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                   max = 50,
                   step = 1,
                   width = "48px"
-                )
+                ) |> mp_named_input("Codons per click")
               )
             )
             ),
@@ -5380,8 +5425,9 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         ns("notes"),
         label = NULL,
         value = rv$updating$annotate_notes %|NA|% "",
-        width = "100%"
-      )
+        width = "100%",
+        placeholder = "Notes for this assembly, saved as you type."
+      ) |> mp_named_input("Notes for this assembly", sel = "textarea")
     ),
     # One footer row: the two ways out plus the one recommended action. Anything
     # that does not end the dialog lives in the body beside what it acts on
