@@ -408,6 +408,13 @@ details summary:hover {
   text-decoration: none;
 }
 
+/* A disabled in-table button reads as disabled, not merely inert. */
+.reactable button[disabled],
+.reactable button[aria-disabled="true"] {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 /* Wider-than-Bootstrap dialogs only where there is room for them. Below
    820px (and at 400% zoom) Bootstrap's fluid width takes over, so a dialog
    never forces horizontal panning. */
