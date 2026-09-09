@@ -231,6 +231,9 @@ assembly_coverage_details_server <- function(id, rv) {
           compact = TRUE,
           wrap = FALSE,
           width = "100%",
+          language = reactable::reactableLang(
+            noData = "No assembly for this sample yet."
+          ),
           onClick = "select",
           selection = "multiple",
           defaultPageSize = 20,
@@ -261,7 +264,9 @@ assembly_coverage_details_server <- function(id, rv) {
               html = TRUE, cell = rt_longtext()
             ),
             topology = colDef(
-              name = "Topology", width = 90, align = "center"
+              name = "Topology", width = 90, align = "center", html = TRUE,
+              cell = rt_pill(c(circular = "info", linear = "neutral"),
+                             empty = "")
             ),
             length_raw = colDef(
               name = "Length (raw)", width = 110, align = "center"
