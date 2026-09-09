@@ -180,6 +180,18 @@ export_server <- function(id) {
       if (is.na(g)) NULL else paste0("mp-grp-", g)
     }
 
+    # One colDef per data column, with the shared header name and tooltip
+    # (T10). `extra_class` adds the col_css hide hooks on top of the group
+    # class. `name`/`tip` override the registry where Export means something
+    # the other tables do not.
+    .cd <- function(col, extra_class = NULL, name = NULL, tip = NULL, ...) {
+      nm <- name %||% unname(MP_COL_NAMES[[col]])
+      tp <- tip %||% (if (col %in% names(MP_COL_TIPS)) unname(MP_COL_TIPS[[col]]) else NULL)
+      cls <- c(.grp(col), extra_class)
+      colDef(show = TRUE, name = nm, header = rt_header(nm, tp),
+             class = cls, headerClass = cls, ...)
+    }
+
     # CSS hide for unselected groups / exported states; keeps DOM intact so
     # filter/sort/page state survives toggling.
     output$col_css <- renderUI({
@@ -234,88 +246,72 @@ export_server <- function(id) {
           var ets = rowInfo.values['export_time_stamp'];
           return 'mp-exp-' + ((ets != null && ets !== '') ? '1' : '0');
         }"),
-        defaultColDef = colDef(align = "left"),
+        # Alphabetical by ID: Export is a checklist over a fixed set, and the
+        # only date column (export_time_stamp) is NA for exactly the rows that
+        # still need work.
+        defaultSorted = list(ID = "asc"),
+        theme = reactable::reactableTheme(
+          headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
+        ),
+        # A column shows only if it is declared below, so nothing a user put in
+        # their mapping file leaks into the table (T08).
+        defaultColDef = colDef(show = FALSE),
+        # Render order comes from the data frame, not this list. See
+        # fetch_export_data().
         columns = list(
-          ID = colDef(show = T, minWidth = 120, sticky = "left"),
+          `.selection` = colDef(show = TRUE, sticky = "left", width = 28),
+          annotate_switch = .cd(
+            "annotate_switch", sticky = "left", width = 60, align = "center",
+            html = TRUE, filterable = FALSE,
+            cell = rt_dynamicIcon(mp_state_icons("annotate"), mp_state_labels("annotate"))
+          ),
+          ID = .cd("ID", minWidth = 120, sticky = "left"),
           # One row per assembly unit; the classes let col_css hide these when every
           # unit shares value 1.
-          path = colDef(
-            show = TRUE, name = "Path", class = "mp-col-path",
-            headerClass = "mp-col-path", width = 55, align = "center"
-          ),
-          scaffold = colDef(
-            show = TRUE, name = "Scaffold", class = "mp-col-scaffold",
-            headerClass = "mp-col-scaffold", width = 75, align = "center"
-          ),
+          path = .cd("path", extra_class = "mp-col-path", width = 90,
+                     align = "center", filterable = FALSE),
+          scaffold = .cd("scaffold", extra_class = "mp-col-scaffold", width = 90,
+                         align = "center", filterable = FALSE),
           # The GenBank record name this unit exports under; hidden when it is just
           # the ID (no fragmented sample in the project).
-          seqid = colDef(
-            show = TRUE, name = "SeqID", class = "mp-col-seqid",
-            headerClass = "mp-col-seqid", minWidth = 130
-          ),
-          Taxon = colDef(show = T, name = "Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
-          curate_opts = colDef(
-            show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
-            name = "Curate Opts.",
-            width = 110
-          ),
-          genetic_code = colDef(show = T, name = "Genetic Code", align = "center", width = 110),
-          poor_blast_ref = colDef(show = FALSE),
-          partial = colDef(show = FALSE),
-          completeness = colDef(show = FALSE),
-          length = colDef(show = FALSE),
-          blast_ref_status = colDef(
-            show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
-            name = "BLAST Ref Align",
-            html = TRUE,
-            minWidth = 130,
-            resizable = TRUE,
-            align = "center",
-            filterable = TRUE,
+          seqid = .cd("seqid", extra_class = "mp-col-seqid", minWidth = 130),
+          Taxon = .cd("Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
+          curate_opts = .cd("curate_opts", width = 110),
+          genetic_code = .cd("genetic_code", width = 110),
+          blast_ref_status = .cd(
+            "blast_ref_status", html = TRUE, minWidth = 130, align = "center",
             cell = rt_blast_ref_status()
           ),
-          blast_accession = colDef(
-            show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Hit",
-            html = TRUE,
-            width = 120,
+          blast_accession = .cd(
+            "blast_accession", html = TRUE, width = 130,
             cell = rt_ncbi_link(auto_col = "blast_accession_auto")
           ),
           blast_accession_auto = colDef(show = FALSE),
-          blast_species = colDef(
-            show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
-            name = "BLAST Species",
-            html = TRUE,
-            minWidth = 160,
-            cell = rt_longtext()
+          blast_species = .cd("blast_species", html = TRUE, minWidth = 160,
+                              cell = rt_longtext()),
+          blast_lineage = .cd("blast_lineage", html = TRUE, minWidth = 200,
+                              cell = rt_longtext()),
+          topology = .cd("topology", width = 100),
+          structure = .cd("structure", html = TRUE, minWidth = 200,
+                          cell = rt_longtext()),
+          PCGCount = .cd("PCGCount", width = 90),
+          tRNACount = .cd("tRNACount", width = 90),
+          rRNACount = .cd("rRNACount", width = 90),
+          ORFCount = .cd("ORFCount", width = 90),
+          missing = .cd("missing", html = TRUE, minWidth = 130, cell = rt_longtext()),
+          extra = .cd("extra", html = TRUE, minWidth = 130, cell = rt_longtext()),
+          # Stored, not recomputed: annotate.warnings counts warning events at
+          # curation time, while the Annotate table recounts them per feature.
+          warnings = .cd(
+            "warnings", width = 110, na = "0", name = "Stored Warnings",
+            tip = paste(
+              "Counted when the assembly was curated; the Annotate table",
+              "recounts per feature, so its number can be higher"
+            )
           ),
-          blast_lineage = colDef(
-            show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
-            name = "BLAST Lineage",
-            html = TRUE,
-            minWidth = 200,
-            cell = rt_longtext()
-          ),
-          topology = colDef(
-            show = T, class = .grp("topology"), headerClass = .grp("topology"),
-            name = "Topology", width = 100
-          ),
-          structure = colDef(
-            show = T, class = .grp("structure"), headerClass = .grp("structure"),
-            name = "Structure"
-          ),
-          PCGCount = colDef(show = T, name = "# PCGs", align = "center"),
-          tRNACount = colDef(show = T, name = "# tRNAs", align = "center"),
-          rRNACount = colDef(show = T, name = "# rRNAs", align = "center"),
-          ORFCount = colDef(show = T, name = "# ORFs", align = "center"),
-          missing = colDef(show = T, name = "Missing", align = "left", html = TRUE, cell = rt_longtext()),
-          extra = colDef(show = T, name = "Extra", align = "left", html = TRUE, cell = rt_longtext()),
-          warnings = colDef(show = T, name = "Warnings", align = "left", html = TRUE, cell = rt_longtext()),
-          export_time_stamp = colDef(
-            show = T, name = "Exported", html = TRUE, width = 150,
-            filterable = FALSE, cell = rt_ts_date()
-          ),
-          export_group = colDef(show = T, name = "Export Group", sticky = "right")
+          export_time_stamp = .cd("export_time_stamp", html = TRUE, width = 150,
+                                  filterable = FALSE, cell = rt_ts_date()),
+          export_group = .cd("export_group", sticky = "right", minWidth = 140)
         )
       )
     })
@@ -378,7 +374,8 @@ export_server <- function(id) {
     })
 
     # CSV Export ----
-    .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto")
+    .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto",
+                           "annotate_switch")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)

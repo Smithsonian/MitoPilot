@@ -307,7 +307,8 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(
       ID, path, scaffold, curate_opts, topology,
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,
-      dplyr::any_of(c("blast_accession_auto", "poor_blast_ref", "partial"))
+      dplyr::any_of(c("annotate_switch", "blast_accession_auto",
+                      "poor_blast_ref", "partial"))
     ) |>
     dplyr::left_join(
       dplyr::tbl(db, "curate_opts") |>
@@ -332,6 +333,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
   # these columns are absent on un-migrated DBs
   if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_
   if (!"partial" %in% names(out)) out$partial <- NA_character_
+  if (!"annotate_switch" %in% names(out)) out$annotate_switch <- NA_integer_
 
   out |>
     dplyr::mutate(
@@ -379,5 +381,9 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::ungroup() |>
     dplyr::relocate(path, scaffold, seqid, .after = ID) |>
     dplyr::relocate(ORFCount, .after = rRNACount) |>
-    dplyr::relocate(blast_ref_status, .after = blast_accession)
+    dplyr::relocate(blast_ref_status, .after = blast_accession) |>
+    # State leads, like the other tables; Export Group is pinned right, so
+    # nothing may render after it (T08).
+    dplyr::relocate(annotate_switch, .before = ID) |>
+    dplyr::relocate(export_group, .after = dplyr::last_col())
 }
