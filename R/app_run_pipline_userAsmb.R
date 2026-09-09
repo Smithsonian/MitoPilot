@@ -152,18 +152,9 @@ pipeline_server_userAsmb <- function(id) {
           )
         ) |> shinyjs::hidden(),
         footer = tagList(
-          tags$div(
-            style = "margin-bottom: 10px;",
-            uiOutput(ns("start_button_ui"))
-          ),
-          actionButton(
-            ns("stop"),
-            "Stop / Interrupt"
-          ) |> shinyjs::hidden(),
-          actionButton(
-            ns("close"),
-            "Close"
-          )
+          actionButton(ns("stop"), "Stop / Interrupt") |> shinyjs::hidden(),
+          actionButton(ns("close"), "Close"),
+          uiOutput(ns("start_button_ui"), inline = TRUE)
         )
       ) |> showModal()
     })
@@ -173,35 +164,38 @@ pipeline_server_userAsmb <- function(id) {
       if (isTRUE(getOption("MitoPilot.headless"))) {
         cmd <- submit_command(headless_exec())
         submit_btn <- if (is.null(cmd)) {
-          shinyjs::disabled(actionButton(ns("submit_headless"), "Submit to Cluster"))
+          shinyjs::disabled(actionButton(ns("submit_headless"), "Submit to Cluster", class = "btn-primary"))
         } else {
           actionButton(ns("submit_headless"),
-                       paste0("Submit to Cluster (", cmd, ")"), class = "btn-success")
+                       paste0("Submit to Cluster (", cmd, ")"), class = "btn-primary")
         }
         return(tagList(
           submit_btn,
-          actionButton(ns("save_script"), "Save Script Only")
+          actionButton(ns("save_script"), "Save Script Only", class = "btn-default")
         ))
       }
 
       is_hydra_cluster <- FALSE
+      is_sedna_cluster <- FALSE
 
       # Use a try block to gracefully handle errors if the command fails
       motd_output <- try(system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE), silent = TRUE)
 
       if (!inherits(motd_output, "try-error") && any(grepl("hydra", motd_output, ignore.case = TRUE))) {
         is_hydra_cluster <- TRUE
+      } else if (!inherits(motd_output, "try-error") && any(grepl("sedna", motd_output, ignore.case = TRUE))) {
+        is_sedna_cluster <- TRUE
       }
 
-      if (is_hydra_cluster) {
-        # If hydra is found, render a list containing both buttons
+      if (is_hydra_cluster || is_sedna_cluster) {
+        # Recommended launch path on a detected cluster is submitting a job.
         tagList(
-          actionButton(ns("start"), "Run from App", class = "btn-success"),
-          actionButton(ns("submit_job"), "Submit as Job", class = "btn-secondary")
+          actionButton(ns("start"), "Run from App", class = "btn-default"),
+          actionButton(ns("submit_job"), "Submit as Job", class = "btn-primary")
         )
       } else {
-        # Otherwise, render only the default start button
-        actionButton(ns("start"), "Run from App", class = "btn-success")
+        # No cluster: running from the app is the only, recommended path.
+        actionButton(ns("start"), "Run from App", class = "btn-primary")
       }
     })
 
@@ -338,70 +332,164 @@ pipeline_server_userAsmb <- function(id) {
       job_submitting(TRUE)
       shinyjs::disable(ns("submit_job"))
 
-      # Let the user know submission is underway. The qsub call below blocks the
-      # R thread, so defer it to the next event-loop tick to let this render.
-      shinyWidgets::sendSweetAlert(
-        title = "Submitting job...",
-        text = "Hold tight, handing your job off to the scheduler. This can take a moment.",
-        type = "info",
-        btn_labels = NA,
-        closeOnClickOutside = FALSE
-      )
+      # Let the user know submission is underway. The qsub/sbatch call below
+      # blocks the R thread, so defer it to the next event-loop tick to let
+      # this message render first.
+      mp_toast("Submitting job to the scheduler - this can take a moment.", type = "message", duration = 4)
 
       later::later(function() {
        shiny::withReactiveDomain(session, {
-      tryCatch({
-        work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
-        # nf_cmd() is reactive; read it via isolate() since this deferred
-        # callback runs outside a reactive context.
-        full_nf_cmd <- paste(c("nextflow", shiny::isolate(nf_cmd())), collapse = " ")
+      is_hydra_cluster <- FALSE
+      is_sedna_cluster <- FALSE
 
-        # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
-        timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
-        workflow_label <- tolower(session$userData$mode)
+      # Use a try block to gracefully handle errors if the command fails
+      motd_output <- try(system2("cat",
+                                 "/etc/hosts",
+                                 stdout = TRUE,
+                                 stderr = FALSE),
+                         silent = TRUE)
 
-        # 2. Combine them for a unique base filename.
-        base_filename <- paste(workflow_label, timestamp, sep = "_")
+      if (!inherits(motd_output, "try-error") &&
+          any(grepl("hydra", motd_output, ignore.case = TRUE))) {
+        is_hydra_cluster <- TRUE
+      } else if (!inherits(motd_output, "try-error") &&
+                 any(grepl("sedna", motd_output, ignore.case = TRUE))) {
+        is_sedna_cluster <- TRUE
+      }
 
-        # 3. Define the job name, log file path, and script path using the base filename.
-        job_name <- base_filename
-        log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
-        script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
+      if (is_hydra_cluster) {
+        tryCatch({
+          work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
+          # nf_cmd() is reactive; read it via isolate() since this deferred
+          # callback runs outside a reactive context.
+          full_nf_cmd <- paste(c("nextflow", shiny::isolate(nf_cmd())), collapse = " ")
 
-        script_content <- hydra_submission_script(full_nf_cmd, job_name, log_file_path)
+          # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
+          timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+          workflow_label <- tolower(session$userData$mode)
 
-        # Write the script to the unique, timestamped file path.
-        writeLines(script_content, script_path)
+          # 2. Combine them for a unique base filename.
+          base_filename <- paste(workflow_label, timestamp, sep = "_")
 
-        # Submit the job using the new script name.
-        submit_output <- system2(
-          "qsub",
-          args = basename(script_path),
-          stdout = TRUE,
-          stderr = TRUE
-        )
+          # 3. Define the job name, log file path, and script path using the base filename.
+          job_name <- base_filename
+          log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
+          script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
 
-        if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
-          shinyWidgets::sendSweetAlert(
-            title = "Success!",
-            text = paste0(submit_output, ". You can monitor your job on Hydra with the `qstat` command or see `",
-                          paste0(base_filename, ".log"), "` in your project directory"),
-            type = "success"
+          script_content <- hydra_submission_script(full_nf_cmd, job_name, log_file_path)
+
+          # Write the script to the unique, timestamped file path.
+          writeLines(script_content, script_path)
+
+          # Submit the job using the new script name.
+          submit_output <- system2(
+            "qsub",
+            args = basename(script_path),
+            stdout = TRUE,
+            stderr = TRUE
           )
-          removeModal()
-        } else {
-          stop(paste(submit_output, collapse = "\n"))
-        }
 
-      }, error = function(e) {
-        job_submitting(FALSE)
-        shinyjs::enable(ns("submit_job"))
-        shinyWidgets::sendSweetAlert(
-          title = "Failed to submit job:",
-          text = e$message,
-          type = "error"
-        )
-      })
+          if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
+            mp_alert(
+              title = "Job submitted",
+              text = paste0(
+                submit_output,
+                ". You can monitor your job on Hydra with the `qstat` command or see `",
+                paste0(base_filename, ".log"),
+                "` in your project directory"
+              ),
+              type = "success"
+            )
+            removeModal()
+          } else {
+            stop(paste(submit_output, collapse = "\n"))
+          }
+
+        }, error = function(e) {
+          job_submitting(FALSE)
+          shinyjs::enable(ns("submit_job"))
+          mp_alert(title = "Job submission failed", text = e$message, type = "error")
+        })
+      } else if (is_sedna_cluster) {
+        tryCatch({
+          work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
+          # nf_cmd() is reactive; read it via isolate() since this deferred
+          # callback runs outside a reactive context.
+          full_nf_cmd <- paste(c("nextflow", shiny::isolate(nf_cmd())), collapse = " ")
+
+          # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
+          timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+          workflow_label <- tolower(session$userData$mode)
+
+          # 2. Combine them for a unique base filename.
+          base_filename <- paste(workflow_label, timestamp, sep = "_")
+
+          # 3. Define the job name, log file path, and script path using the base filename.
+          job_name <- base_filename
+          log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
+          script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
+
+          script_content <- c(
+            "#!/bin/sh",
+            paste0("#SBATCH -J ", job_name),
+            # Use the new dynamic job name
+            paste0("#SBATCH -o ", log_file_path),
+            # Use the new dynamic log file path
+            "#SBATCH -p standard",
+            "#SBATCH -c 1",
+            "#SBATCH --mem=8G",
+            "#SBATCH -t 24:00:00",
+            "",
+            'echo "---"',
+            'echo + `date` job $SLURM_JOB_NAME started in $SLURM_JOB_PARTITION with jobID=$SLURM_JOBID on $SLURM_JOB_NODELIST',
+            'echo "---"',
+            "",
+            "source ~/.bashrc",
+            "mamba activate MitoPilot_deps",
+            "",
+            # Pin the Nextflow engine to a MitoPilot-compatible version.
+            if (!is.na(nf_pin_version())) paste0("export NXF_VER=", nf_pin_version()),
+            full_nf_cmd,
+            "",
+            'echo "---"',
+            'echo = `date` job $SLURM_JOB_NAME done',
+            'echo "---"'
+          )
+
+          # Write the script to the unique, timestamped file path.
+          writeLines(script_content, script_path)
+
+          # Submit the job using the new script name.
+          submit_output <- system2(
+            "sbatch",
+            args = basename(script_path),
+            stdout = TRUE,
+            stderr = TRUE
+          )
+
+          if (any(grepl("[0-9]", submit_output, ignore.case = TRUE))) {
+            mp_alert(
+              title = "Job submitted",
+              text = paste0(
+                "Job ID: ",
+                submit_output,
+                ". You can monitor your job on SEDNA with the `squeue` command or see `",
+                paste0(base_filename, ".out"),
+                "` in your project directory"
+              ),
+              type = "success"
+            )
+            removeModal()
+          } else {
+            stop(paste(submit_output, collapse = "\n"))
+          }
+
+        }, error = function(e) {
+          job_submitting(FALSE)
+          shinyjs::enable(ns("submit_job"))
+          mp_alert(title = "Job submission failed", text = e$message, type = "error")
+        })
+      }
        })
       }, delay = 0.05)
     })
@@ -502,7 +590,7 @@ pipeline_server_userAsmb <- function(id) {
         apply_progress(p$read_output_lines())
         process(NULL)
         shinyjs::hide("stop")
-        shinyjs::show("start")
+        shinyjs::show("start_button_ui") # Show the button container again
         shinyjs::addClass("gears", "paused")
         trigger(paste0("refresh_", tolower(session$userData$mode)))
       }
@@ -529,7 +617,7 @@ pipeline_server_userAsmb <- function(id) {
       }
       process(NULL)
       shinyjs::hide("stop")
-      shinyjs::show("start")
+      shinyjs::show("start_button_ui") # Also show the buttons if stopped manually
       shinyjs::addClass("gears", "paused")
       trigger(paste0("refresh_", tolower(session$userData$mode)))
     })

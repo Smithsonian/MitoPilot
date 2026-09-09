@@ -192,11 +192,9 @@ pipeline_server <- function(id) {
           )
         ) |> shinyjs::hidden(),
         footer = tagList(
-          tags$div(style = "margin-bottom: 10px;", uiOutput(ns(
-            "start_button_ui"
-          ))),
           actionButton(ns("stop"), "Stop / Interrupt") |> shinyjs::hidden(),
-          actionButton(ns("close"), "Close")
+          actionButton(ns("close"), "Close"),
+          uiOutput(ns("start_button_ui"), inline = TRUE)
         )
       ) |> showModal()
     })
@@ -206,14 +204,14 @@ pipeline_server <- function(id) {
       if (isTRUE(getOption("MitoPilot.headless"))) {
         cmd <- submit_command(headless_exec())
         submit_btn <- if (is.null(cmd)) {
-          shinyjs::disabled(actionButton(ns("submit_headless"), "Submit to Cluster"))
+          shinyjs::disabled(actionButton(ns("submit_headless"), "Submit to Cluster", class = "btn-primary"))
         } else {
           actionButton(ns("submit_headless"),
-                       paste0("Submit to Cluster (", cmd, ")"), class = "btn-success")
+                       paste0("Submit to Cluster (", cmd, ")"), class = "btn-primary")
         }
         return(tagList(
           submit_btn,
-          actionButton(ns("save_script"), "Save Script Only")
+          actionButton(ns("save_script"), "Save Script Only", class = "btn-default")
         ))
       }
 
@@ -236,14 +234,14 @@ pipeline_server <- function(id) {
       }
 
       if (is_hydra_cluster || is_sedna_cluster) {
-        # If hydra or sedna is found, render a list containing both buttons
+        # Recommended launch path on a detected cluster is submitting a job.
         tagList(
-          actionButton(ns("start"), "Run from App"),
-          actionButton(ns("submit_job"), "Submit as Job", class = "btn-success")
+          actionButton(ns("start"), "Run from App", class = "btn-default"),
+          actionButton(ns("submit_job"), "Submit as Job", class = "btn-primary")
         )
       } else {
-        # Otherwise, render only the default start button
-        actionButton(ns("start"), "Run from App", class = "btn-success")
+        # No cluster: running from the app is the only, recommended path.
+        actionButton(ns("start"), "Run from App", class = "btn-primary")
       }
     })
 
