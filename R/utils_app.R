@@ -1,9 +1,10 @@
 #' Feature not ready message
 #' @noRd
 coming_soon <- function(text = "This feature is not yet implemented.") {
-  shinyWidgets::sendSweetAlert(
-    title = "Coming soon...",
-    text = text
+  mp_alert(
+    title = "Coming soon",
+    text = text,
+    type = "info"
   )
 }
 
@@ -16,26 +17,23 @@ coming_soon <- function(text = "This feature is not yet implemented.") {
 #' @noRd
 open_path <- function(pth) {
   if (isTRUE(getOption("MitoPilot.headless"))) {
-    showNotification(
+    mp_toast(
       paste0("Headless session: cannot open folders here. Use the Copy button. Path: ", pth),
-      type = "warning", duration = 10
+      type = "warning"
     )
     return(invisible(FALSE))
   }
   if (!dir.exists(pth)) {
-    showNotification(
+    mp_toast(
       paste0("Folder not found (it may have been cleaned or is on storage this host ",
              "cannot see): ", pth),
-      type = "warning", duration = 10
+      type = "warning"
     )
     return(invisible(FALSE))
   }
   if (tolower(Sys.getenv("RSTUDIO_PROGRAM_MODE")) == "server") {
     if (requireNamespace("rstudioapi", quietly = TRUE)) rstudioapi::filesPaneNavigate(pth)
-    showNotification(
-      "Opened in the RStudio Files pane (bottom-right panel).",
-      type = "message", duration = 5
-    )
+    mp_toast("Opened in the RStudio Files pane (bottom-right panel).", type = "message")
   } else {
     utils::browseURL(pth)
   }
