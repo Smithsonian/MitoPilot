@@ -776,3 +776,105 @@ refresh_assemble_summary <- function(con, id) {
   )
   invisible(out)
 }
+
+#' Set-state modal, shared by both Assemble variants
+#'
+#' Words, order and consequences all come from `MP_STATE_META`, so the filter
+#' picker, the state icon column and this modal can never disagree (theme T06).
+#'
+#' @param ids sample IDs in the selection
+#' @param current current state code when the selection shares one, else empty
+#' @param session current shiny session
+#'
+#' @noRd
+assemble_state_modal <- function(ids, current = character(0),
+                                 session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+  codes <- MP_STATE_SETTABLE
+  effect <- c(
+    `0` = "Skipped by the next Update.",
+    `1` = "Processed by the next Update; results this module already stored are replaced.",
+    `2` = "Treated as finished; the next Update skips it.",
+    `3` = "Treated as finished with an error; the next Update skips it."
+  )
+  choice_names <- lapply(codes, function(k) {
+    tagList(
+      tags$strong(MP_STATE_META[[k]]$label),
+      tags$span(class = "text-muted", style = "font-size: 0.85em;",
+                paste0(" - ", effect[[k]]))
+    )
+  })
+  showModal(
+    modalDialog(
+      title = mp_modal_title(paste("Set state for", mp_n(length(ids), "sample"))),
+      tags$p(class = "text-muted", mp_id_list(ids)),
+      if (length(current) == 1 && current == "4") {
+        tags$p(class = "text-muted",
+               paste("These are In progress. The pipeline sets that state;",
+                     "choose another to take them out of it."))
+      } else if (length(current) == 0) {
+        tags$p(class = "text-muted", "The selected rows are not all in the same state.")
+      },
+      shinyWidgets::prettyRadioButtons(
+        ns("new_state"),
+        label = "New state",
+        choiceValues = codes,
+        choiceNames = choice_names,
+        selected = if (length(current) == 1 && current %in% codes) current else character(0),
+        shape = "round",
+        status = "primary"
+      ),
+      size = "m",
+      easyClose = TRUE,
+      footer = mp_footer(primary = actionButton(ns("update_state"), "Update"))
+    )
+  )
+}
+
+#' Count the annotation units a set of samples hands to WF2
+#'
+#' Locking advances every non-ignored (path, scaffold) unit, so the lock toast
+#' can say how much work the click created (theme T02).
+#'
+#' @param con database connection
+#' @param ids sample IDs
+#'
+#' @noRd
+count_annotate_units <- function(con, ids) {
+  out <- tryCatch(
+    dplyr::tbl(con, "assemblies") |>
+      dplyr::filter(ignore == 0 & ID %in% !!ids) |>
+      dplyr::count() |>
+      dplyr::pull(n),
+    error = function(e) NA_integer_
+  )
+  if (length(out) != 1 || is.na(out)) NA_integer_ else as.integer(out)
+}
+
+#' State glyphs for a table icon column, tone class included
+#'
+#' Colour is redundant with shape: the three tones are the shared status
+#' colours from custom.css, keyed to the state codes (theme T06).
+#'
+#' @param module "assemble" or "annotate"
+#'
+#' @noRd
+assemble_state_icons <- function(module) {
+  codes <- MP_STATE_CODES[[module]]
+  tone <- c(`0` = "mp-fg-neutral", `1` = "mp-fg-neutral", `4` = "mp-fg-neutral",
+            `2` = "mp-fg-success", `3` = "mp-fg-danger")
+  stats::setNames(paste(mp_state_icons(module), tone[codes]), codes)
+}
+
+#' Accessible name for each state glyph: the label plus its meaning.
+#'
+#' @param module "assemble" or "annotate"
+#'
+#' @noRd
+assemble_state_titles <- function(module) {
+  codes <- MP_STATE_CODES[[module]]
+  stats::setNames(
+    paste0(mp_state_labels(module), " - ", mp_state_tips(module)),
+    codes
+  )
+}

@@ -49,8 +49,8 @@ assemble_ui_userAsmb <- function(id) {
         inputId  = ns("state_filter"),
         width    = "140px",
         label    = "State:",
-        choices  = ASSEMBLE_STATE_CHOICES,
-        selected = ASSEMBLE_STATE_CHOICES,
+        choices  = mp_state_choices("assemble"),
+        selected = mp_state_choices("assemble"),
         multiple = TRUE,
         options  = list(
           `actions-box`          = TRUE,
@@ -159,7 +159,7 @@ assemble_server_userAsmb <- function(id) {
     observeEvent(input$lock_filter, {
       lock_filter_rv(input$lock_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    state_filter_rv <- reactiveVal(unname(ASSEMBLE_STATE_CHOICES))
+    state_filter_rv <- reactiveVal(MP_STATE_CODES[["assemble"]])
     observeEvent(input$state_filter, {
       state_filter_rv(input$state_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -181,7 +181,7 @@ assemble_server_userAsmb <- function(id) {
     output$col_css <- renderUI({
       hidden_grp   <- setdiff(names(ASSEMBLE_COL_GROUPS_USERASMB), col_groups_rv())
       hidden_lock  <- setdiff(unname(ASSEMBLE_LOCK_CHOICES), lock_filter_rv())
-      hidden_state <- setdiff(unname(ASSEMBLE_STATE_CHOICES), state_filter_rv())
+      hidden_state <- setdiff(MP_STATE_CODES[["assemble"]], state_filter_rv())
       # Scope to THIS module's table so rules don't hit the shared mp-lock /
       # mp-state / mp-grp classes on the annotate, export, and assemble tables.
       sel <- paste0("#", ns("table"), " ")
@@ -232,10 +232,8 @@ assemble_server_userAsmb <- function(id) {
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-lock-open",
-                  `1` = "fa fa-lock"
-                )
+                icons = c(`0` = "fa fa-lock-open", `1` = "fa fa-lock"),
+                labels = c(`0` = "Unlocked", `1` = MP_LOCK_DEF("assemble"))
               )
             ),
             assemble_switch = colDef(
@@ -247,13 +245,8 @@ assemble_server_userAsmb <- function(id) {
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-hourglass",
-                  `1` = "fa fa-person-running",
-                  `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation",
-                  `4` = "fa fa-circle-half-stroke"
-                )
+                icons = assemble_state_icons("assemble"),
+                labels = assemble_state_titles("assemble")
               )
             ),
             ID = colDef(
@@ -538,30 +531,9 @@ assemble_server_userAsmb <- function(id) {
         dplyr::slice(selected())
       current <- character(0)
       if (length(unique(rv$updating$assemble_switch)) == 1) {
-        current <- rv$updating$assemble_switch[1]
+        current <- as.character(rv$updating$assemble_switch[1])
       }
-      showModal(
-        modalDialog(
-          title = "Select New State:",
-          shinyWidgets::prettyRadioButtons(
-            ns("new_state"),
-            label = NULL,
-            choices = c("Pre-Coverage (wait)" = 0, 
-             "Ready to Calculate Coverage" = 1,
-             "In Progress" = 4, 
-             "Successful Coverage Calculation" = 2, 
-             "Failed Coverage Calculation" = 3),
-            selected = current,
-            shape = "square",
-            status = "primary"
-          ),
-          size = "m",
-          footer = tagList(
-            actionButton(ns("update_state"), "Update"),
-            modalButton("Cancel")
-          )
-        )
-      )
+      assemble_state_modal(rv$updating$ID, current)
     })
     observeEvent(input$update_state, {
       rv$updating$assemble_switch <- as.numeric(input$new_state)
