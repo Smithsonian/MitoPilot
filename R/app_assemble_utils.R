@@ -1128,6 +1128,10 @@ assemble_table_status <- function(n_visible, n_total, n_selected, noun = "sample
       sub("^\\S+ ", "", mp_n(n_total, noun))
     ),
     span(class = "mp-sep", `aria-hidden` = "true", HTML("&middot;")),
-    span(tags$b(n_selected), " selected")
+    span(tags$b(n_selected), " selected"),
+    # Filtered-out rows are hidden by CSS, so reactable's own noData never fires.
+    if (n_visible == 0) {
+      span(class = "mp-empty-state", "No rows match the current filters.")
+    }
   )
 }
