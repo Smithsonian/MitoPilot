@@ -478,74 +478,51 @@ annotations_details_server <- function(id, rv) {
       }
     })
 
-    # Compact status pill renderer. `state` is one of "yes" / "no" / NA;
-    # `invert = TRUE` flips the color mapping so "yes" reads as warning.
-    # neutral_no: render a "no" value with the neutral (grey) styling rather than
-    # a coloured one. Used for the Partial badge, where "no" means a complete
-    # assembly and a green "good" colour is misleading.
-    status_badge <- function(label, state, invert = FALSE, neutral_no = FALSE) {
-      val <- if (is.na(state)) "na" else as.character(state)
-      # Colour decision separate from the displayed text so "no" can read NO but
-      # render neutral.
-      color_val <- if (neutral_no && val == "no") "na" else val
-      bg <- if (color_val == "yes") {
-        if (invert) "#fde8d0" else "#d4edda"
-      } else if (color_val == "no") {
-        if (invert) "#d4edda" else "#fde8d0"
-      } else {
-        "#e9ecef"
-      }
-      fg <- if (color_val == "yes") {
-        if (invert) "#7d4a1e" else "#2d6a4f"
-      } else if (color_val == "no") {
-        if (invert) "#2d6a4f" else "#7d4a1e"
-      } else {
-        "#6c757d"
-      }
-      span(
-        style = paste0(
-          "background:", bg, "; color:", fg,
-          "; border-radius:3px; padding:2px 8px; font-size:0.75em;",
-          " font-weight: 600; white-space: nowrap;"
-        ),
-        paste0(label, ": ", toupper(val))
-      )
+    # Header status pill. One component, one casing, and a value nobody has set
+    # reads "not set" rather than NA (theme T11).
+    status_badge <- function(label, state, yes_tone = "success") {
+      val <- if (is.na(state)) "not set" else tolower(as.character(state))
+      tone <- if (identical(val, "yes")) yes_tone else "neutral"
+      span(class = paste0("mp-pill mp-pill-", tone), paste0(label, ": ", val))
     }
 
-    # Title-area passive badges: ID verified / Reviewed / Problematic.
+    # Title-area passive badges, mirrored by the toggle group beside them.
     output$status_badges <- shiny::renderUI({
       tagList(
-        status_badge("ID verified", rv$updating$ID_verified),
-        status_badge("Reviewed",    rv$updating$reviewed),
-        status_badge("Problematic", rv$updating$problematic, invert = TRUE),
-        status_badge("Partial Mito",     rv$updating$partial, invert = TRUE, neutral_no = TRUE)
+        status_badge("Species ID verified", rv$updating$ID_verified),
+        status_badge("Reviewed", rv$updating$reviewed),
+        status_badge("Problematic", rv$updating$problematic, yes_tone = "warning"),
+        status_badge("Partial", rv$updating$partial, yes_tone = "warning")
       )
     })
 
-    # Footer toggle buttons: clicking still drives the same input$ID_verified /
-    # input$reviewed / input$problematic observers below; visual state reflects
-    # the current value so the user sees what each click will flip.
-    # neutral_no: style a "no" value as the neutral default button rather than a
-    # coloured one (for Partial, where "no" = complete and green is misleading).
-    toggle_btn <- function(id, label, state, invert = FALSE, neutral_no = FALSE) {
-      val <- if (is.na(state)) "na" else as.character(state)
-      cls_val <- if (neutral_no && val == "no") "na" else val
-      cls <- if (cls_val == "yes") {
-        if (invert) "btn btn-warning" else "btn btn-success"
-      } else if (cls_val == "no") {
-        if (invert) "btn btn-success" else "btn btn-default"
-      } else {
-        "btn btn-default"
-      }
-      ico <- if (val == "yes") {
-        shiny::icon(if (invert) "triangle-exclamation" else "check")
-      } else if (val == "no") {
-        shiny::icon("xmark")
-      } else {
-        shiny::icon("question")
-      }
-      actionButton(id, label, icon = ico, class = cls)
+    # Header toggle button. mp_flag_next() picks the value the click will write
+    # and the label that names it, so the two can never disagree (theme T02).
+    # No colour: the pill beside it carries the state, green is status only.
+    toggle_btn <- function(id, label, state, title, off = "no") {
+      nxt <- mp_flag_next(state, off = off)
+      set <- identical(nxt, "yes")
+      actionButton(
+        id,
+        paste(if (set) "Mark" else "Clear", label),
+        icon = icon(if (set) "check" else "minus"),
+        class = "btn-sm btn-default",
+        title = title
+      )
     }
+
+    output$status_toggles <- shiny::renderUI({
+      tagList(
+        toggle_btn(ns("ID_verified"), "ID Verified", rv$updating$ID_verified,
+                   "Record whether the species identification has been checked"),
+        toggle_btn(ns("reviewed"), "Reviewed", rv$updating$reviewed,
+                   "Record whether this assembly has been reviewed"),
+        toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
+                   "Flag this assembly for another look", off = NA_character_),
+        toggle_btn(ns("partial"), "Partial", rv$updating$partial,
+                   "Flag this assembly as an incomplete mitogenome")
+      )
+    })
 
     # HTML label summarizing the manual partial flags for annotation row `idx`.
     partial_label <- function(idx) {
@@ -556,17 +533,6 @@ annotations_details_server <- function(id, rv) {
       )
       if (length(tags) > 0) paste0("<b>Partial:</b> ", paste(tags, collapse = ", ")) else ""
     }
-    output$status_toggles <- shiny::renderUI({
-      tagList(
-        toggle_btn(ns("ID_verified"), "ID verified", rv$updating$ID_verified),
-        toggle_btn(ns("reviewed"),    "Reviewed",    rv$updating$reviewed),
-        toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
-                   invert = TRUE),
-        toggle_btn(ns("partial"),     "Partial",     rv$updating$partial,
-                   invert = TRUE, neutral_no = TRUE)
-      )
-    })
-
     # Render table ----
     render_annotations_table <- reactiveVal()
     output$table <- reactable::renderReactable({
@@ -3085,100 +3051,66 @@ annotations_details_server <- function(id, rv) {
       )
     })
 
-    # Mark ID verified ----
-    observeEvent(input$ID_verified, {
-      if(is.na(rv$updating$ID_verified)) {
-        updateActionButton(session, "ID_verified")
-        rv$updating$ID_verified <- "yes"
-        update_annotate_unit("ID_verified")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
-      } else if(as.character(rv$updating$ID_verified) == "no"){
-        updateActionButton(session, "ID_verified")
-        rv$updating$ID_verified <- "yes"
-        update_annotate_unit("ID_verified")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
-      } else {
-        updateActionButton(session, "ID_verified")
-        rv$updating$ID_verified <- "no"
-        update_annotate_unit("ID_verified")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
-      }
-    }) # END ID VERIFIED
-
-    # Mark as reviewed ----
-    observeEvent(input$reviewed, {
-      if (as.character(rv$updating$reviewed) == "no") {
-        updateActionButton(session, "reviewed")
-        rv$updating$reviewed <- "yes"
-        update_annotate_unit("reviewed")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
-      } else {
-        updateActionButton(session, "reviewed")
-        rv$updating$reviewed <- "no"
-        update_annotate_unit("reviewed")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
-      }
-    }) # END REVIEWED
-
-    # Mark as problematic ----
-    observeEvent(input$problematic, {
-      if (is.na(rv$updating$problematic)) {
-        updateActionButton(session, "problematic")
-        rv$updating$problematic <- "yes"
-        update_annotate_unit("problematic")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
-      } else {
-        updateActionButton(session, "problematic")
-        rv$updating$problematic <- NA_character_
-        update_annotate_unit("problematic")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
-      }
-    }) # END PROBLEMATIC
-
-    # Mark as partial ----
-    apply_partial <- function(value) {
-      updateActionButton(session, "partial")
-      rv$updating$partial <- value
-      update_annotate_unit("partial")
+    # Review flags ----
+    # One write path for all four flags: mp_flag_next() decides the value, the
+    # same rows_update carries it, and every write says what it did (theme T02).
+    write_flag <- function(field, label, value) {
+      rv$updating[[field]] <- value
+      update_annotate_unit(field)
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "partial")], by = c("ID", "path", "scaffold"))
+        dplyr::rows_update(
+          rv$updating[, c("ID", "path", "scaffold", field)],
+          by = c("ID", "path", "scaffold")
+        )
+      mp_toast(
+        if (identical(value, "yes")) {
+          paste0("Marked ", label, ".")
+        } else {
+          paste0("Cleared ", label, ".")
+        },
+        type = "message"
+      )
     }
-    observeEvent(input$partial, {
-      if (!isTRUE(rv$updating$partial == "yes")) {
-        # turning partial on: warn first if the assembly is circular
-        if (isTRUE(rv$updating$topology == "circular")) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = ns("partial_circular_confirm"),
-            title = "Mark circular assembly as partial?",
-            text = paste(
-              "This assembly is circular. A closed circle represents the whole",
-              "molecule, so flagging it 'partial' is contradictory. Use the",
-              "Linearize button to break the circle before submission, or mark",
-              "it partial anyway."
-            ),
-            type = "warning",
-            btn_labels = c("Cancel", "Mark partial anyway"),
-            btn_colors = c("#6c757d", "#0056b3")
-          )
-          req(F)
-        }
-        apply_partial("yes")
-      } else {
-        apply_partial("no")
-      }
+
+    observeEvent(input$ID_verified, {
+      write_flag("ID_verified", "species ID verified",
+                 mp_flag_next(rv$updating$ID_verified))
     })
+
+    observeEvent(input$reviewed, {
+      write_flag("reviewed", "reviewed", mp_flag_next(rv$updating$reviewed))
+    })
+
+    observeEvent(input$problematic, {
+      write_flag("problematic", "problematic",
+                 mp_flag_next(rv$updating$problematic, off = NA_character_))
+    })
+
+    observeEvent(input$partial, {
+      nxt <- mp_flag_next(rv$updating$partial)
+      # Turning partial on: a closed circle is the whole molecule, so say so
+      # before flagging it incomplete.
+      if (identical(nxt, "yes") && isTRUE(rv$updating$topology == "circular")) {
+        mp_confirm(
+          ns("partial_circular_confirm"),
+          title = "Mark circular assembly as partial",
+          text = paste(
+            "This assembly is circular. A closed circle represents the whole",
+            "molecule, so flagging it partial is contradictory. Use Linearize",
+            "to break the circle before submission, or mark it partial anyway."
+          ),
+          action_label = "Mark partial anyway"
+        )
+        req(F)
+      }
+      write_flag("partial", "partial", nxt)
+    })
+
     observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
       if (isTRUE(input$partial_circular_confirm)) {
-        apply_partial("yes")
+        write_flag("partial", "partial", "yes")
       }
-    }) # END PARTIAL
+    })
 
     # Poor BLAST reference toggle ----
     observeEvent(input$poor_blast_ref_toggle, ignoreInit = TRUE, {
@@ -5028,11 +4960,22 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
   )
 
   modalDialog(
+    # The four review flags sit in the header beside the badges they mirror, so
+    # a metadata click is never one mis-click from a sequence edit (theme T16).
     title = div(
-      style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
-      span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
-      topo_badge,
-      uiOutput(ns("status_badges"), inline = TRUE)
+      div(
+        style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
+        span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
+        topo_badge
+      ),
+      div(
+        style = paste(
+          "display: flex; align-items: center; gap: 8px;",
+          "flex-wrap: wrap; margin-top: 8px;"
+        ),
+        uiOutput(ns("status_badges"), inline = TRUE, style = "display: contents;"),
+        uiOutput(ns("status_toggles"), inline = TRUE, style = "display: contents;")
+      )
     ),
     size = "l",
     easyClose = F,
@@ -5389,10 +5332,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         style = paste(
           "display:flex; flex-wrap:wrap; gap:6px;",
           "justify-content:space-between; align-items:center;"
-        ),
-        div(
-          style = "display:flex; flex-wrap:wrap; gap:6px;",
-          uiOutput(ns("status_toggles"), inline = TRUE, style = "display:contents;")
         ),
         div(
           style = "display:flex; flex-wrap:wrap; gap:6px;",
