@@ -240,7 +240,12 @@ assembly_coverage_details_server <- function(id, rv) {
               name = "Ignore",
               width = 60,
               html = TRUE, align = "center",
-              cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
+              sortable = FALSE, filterable = FALSE,
+              cell = rt_bool_bttn(
+                ns("ignore"), "fa fa-circle-xmark", "far fa-circle",
+                title_true = "Ignored - click to include this scaffold",
+                title_false = "Included - click to ignore this scaffold"
+              )
             ),
             #ID = colDef(
             #  align = "left", minWidth = 80, resizable = TRUE, html = T, cell = rt_longtext()
@@ -293,9 +298,17 @@ assembly_coverage_details_server <- function(id, rv) {
               name = "BLAST Lineage", minWidth = 200, resizable = TRUE, align = "left", html = TRUE,
               cell = rt_longtext()
             ),
+            # Sticky, so it needs the opaque background and edge shadow or the
+            # BLAST Species text scrolls underneath it (T09).
             view_coverage = colDef(
-              name = "", html = T, width = 70, align = "center", sticky = "right",
-              cell = rt_icon_bttn_text(ns("view_coverage"), "fas fa-eye fa-xs", "view")
+              name = MP_COL_NAMES[["view_coverage"]], html = T, width = 90,
+              align = "center", sticky = "right",
+              sortable = FALSE, filterable = FALSE,
+              class = "mp-actions-sticky", headerClass = "mp-actions-sticky",
+              cell = rt_icon_bttn_text(
+                ns("view_coverage"), "fas fa-eye fa-xs", "View",
+                title = "Open this scaffold's read-coverage plot (PDF)"
+              )
             )
           )
         )
