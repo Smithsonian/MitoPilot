@@ -343,7 +343,7 @@ details summary:hover {
 /* Truncated cell text: a visible cue that there is more, reachable
    without a mouse. */
 .mp-abbr {
-  text-decoration: underline dotted;
+  text-decoration: none;
   cursor: help;
 }
 
@@ -430,6 +430,12 @@ details summary:hover {
 .mp-modal-form .modal-body {
   max-height: 70vh;
   overflow-y: auto;
+}
+
+/* Launch buttons rendered through a uiOutput span lose Bootstrap's
+   sibling spacing in the footer. */
+.modal-footer > span > .btn {
+  margin-left: 5px;
 }
 
 /* SweetAlert lays its buttons out confirm-first; the app's footer order is
