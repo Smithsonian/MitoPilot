@@ -18,89 +18,77 @@ app_ui_userAsmb <- function(request) {
             label = "",
             choices = c("Assemble", "Annotate", "Export")
           ),
-          shinyWidgets::actionBttn(
+          mp_toolbar_button(
             "refresh",
             label = NULL,
-            icon = icon("sync"),
-            style = "material-flat",
-            size = "sm"
+            icon = mp_icon("arrows-rotate"),
+            title = "Reload the table from the database"
           ),
           div(
             id = "asmb_ctrls",
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-            shinyWidgets::actionBttn(
-              "state",
-              label = "State",
-              style = "material-flat",
-              size = "sm"
+            class = "mp-toolbar",
+            mp_toolbar_button(
+              "state", "State",
+              title = "Set the pipeline state of the selected samples",
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "lock",
-              label = "Lock",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "lock", "Lock",
+              title = MP_LOCK_DEF("assemble"),
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "run_modal",
-              label = "Update",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "run_modal", "Update",
+              emphasis = "primary",
+              title = "Review and launch the assembly pipeline"
             )
           ),
           div(
             id = "annot_ctrls",
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-            shinyWidgets::actionBttn(
-              "state",
-              label = "State",
-              style = "material-flat",
-              size = "sm"
+            class = "mp-toolbar",
+            mp_toolbar_button(
+              "state", "State",
+              title = "Set the pipeline state of the selected samples",
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "lock",
-              label = "Lock",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "lock", "Lock",
+              title = MP_LOCK_DEF("annotate"),
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "id_verified_top",
-              label = "ID Verified",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "id_verified_top", "Mark ID Verified",
+              title = "Mark or clear species ID verified on the selected samples",
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "problematic_top",
-              label = "Mark Problematic",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "problematic_top", "Mark Problematic",
+              title = "Mark or clear problematic on the selected samples",
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "partial_top",
-              label = "Mark Partial",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "partial_top", "Mark Partial",
+              title = "Mark or clear partial on the selected samples",
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "run_modal",
-              label = "Update",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "run_modal", "Update",
+              emphasis = "primary",
+              title = "Review and launch the annotation pipeline"
             )
           ),
           div(
             id = "export_ctrls",
-            style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1em;",
-            shinyWidgets::actionBttn(
-              "group",
-              label = "Group",
-              style = "material-flat",
-              size = "sm"
+            class = "mp-toolbar",
+            mp_toolbar_button(
+              "group", "Group",
+              title = "Assign the selected samples to an export group",
+              needs_selection = TRUE
             ),
-            shinyWidgets::actionBttn(
-              "export",
-              label = "Export Data",
-              style = "material-flat",
-              size = "sm"
+            mp_toolbar_button(
+              "export", "Export Data",
+              emphasis = "primary",
+              title = "Open the export window for the selected samples"
             )
           ),
           workdir_browser_ui("workdir_browser")

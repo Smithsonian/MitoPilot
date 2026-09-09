@@ -9,12 +9,11 @@ workdir_browser_ui <- function(id) {
   ns <- NS(id)
   div(
     style = "margin-left: auto;",
-    shinyWidgets::actionBttn(
+    mp_toolbar_button(
       ns("open_browser"),
       label = "Work Dirs",
-      icon = icon("folder-tree"),
-      style = "material-flat",
-      size = "sm"
+      icon = mp_icon("folder-tree"),
+      title = "Browse the pipeline work directories for one sample"
     )
   )
 }
