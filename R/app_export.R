@@ -788,12 +788,13 @@ export_server <- function(id) {
     render_hdr_status <- function(res) {
       style_for <- switch(
         res$level %||% if (isTRUE(res$ok)) "ok" else "error",
-        ok    = list(col = "#28a745", ic = "circle-check"),
-        warn  = list(col = "#e0a800", ic = "triangle-exclamation"),
-        error = list(col = "#d9534f", ic = "circle-xmark")
+        ok    = list(cls = "mp-fg-success", ic = "circle-check"),
+        warn  = list(cls = "mp-fg-warning", ic = "triangle-exclamation"),
+        error = list(cls = "mp-fg-danger", ic = "circle-xmark")
       )
       span(
-        style = sprintf("color: %s; font-size: 0.85em;", style_for$col),
+        class = style_for$cls,
+        style = "font-size: var(--mp-fs-meta);",
         shiny::icon(style_for$ic), " ", res$message
       )
     }
