@@ -26,7 +26,7 @@ assembly_coverage_details_server <- function(id, rv) {
         assemble_dirs_on_disk(session$userData$dir_out, rv$updating$ID),
         error = function(e) character(0)
       )
-      shinyWidgets::sendSweetAlert(
+      mp_alert(
         title = "Assembly output not found",
         text = tags$div(
           tags$p(
@@ -427,10 +427,9 @@ assembly_coverage_details_server <- function(id, rv) {
             data.frame(ID = rv$updating$ID, assemble_switch = 2L),
             by = "ID"
           )
-        shiny::showNotification(
-          "Auto-promoted to successful \u2014 1 scaffold/path remaining.",
-          type = "message",
-          duration = 5
+        mp_toast(
+          "Marked successful: 1 scaffold or path is left active.",
+          type = "message", duration = 5
         )
       } else if (n_active > 1L && isTRUE(rv$updating$assemble_switch == 2)) {
         dplyr::tbl(session$userData$con, "assemble") |>
@@ -447,10 +446,9 @@ assembly_coverage_details_server <- function(id, rv) {
             data.frame(ID = rv$updating$ID, assemble_switch = 3L),
             by = "ID"
           )
-        shiny::showNotification(
-          "Reverted to needs attention \u2014 multiple scaffolds/paths active.",
-          type = "warning",
-          duration = 5
+        mp_toast(
+          "Marked needs attention: more than one scaffold or path is active.",
+          type = "warning", duration = 5
         )
       }
     })
@@ -1574,6 +1572,8 @@ assembly_coverage_details_server <- function(id, rv) {
       sync_consensus_annotate(ID, nchar(seq_str), topology)
       rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
       trigger("coverage_modal")
+      mp_toast("Consensus saved as Path 0. The sample is now locked.",
+               type = "message")
     }
 
     # Multi-scaffold join editor (single-path fragmented assemblies) ----
@@ -1609,18 +1609,18 @@ assembly_coverage_details_server <- function(id, rv) {
       if (is.null(rows) || nrow(rows) <= 1) return(invisible(FALSE))
       ref_seq <- join_reference_seq(accession)
       if (is.na(ref_seq)) {
-        if (notify) shinyWidgets::sendSweetAlert(
+        if (notify) mp_alert(
           title = "No reference sequence",
-          text = "The chosen reference has no cached sequence. Run BLAST/ref-fetch first.",
+          text = "The chosen reference has no cached sequence. Run BLAST first.",
           type = "warning")
         return(invisible(FALSE))
       }
       mappings <- load_scaffold_mappings(session$userData$con, rv$updating$ID, accession)
       if (is.null(mappings)) {
-        if (notify) shinyWidgets::sendSweetAlert(
+        if (notify) mp_alert(
           title = "No precomputed mapping",
-          text = paste("No scaffold->reference mapping is cached for this reference.",
-                       "Re-run the assembly workflow (WF1) to compute it."),
+          text = paste("No scaffold-to-reference mapping is cached for this reference.",
+                       "Run Assembly again for this sample to compute it."),
           type = "warning")
         return(invisible(FALSE))
       }
@@ -1991,10 +1991,10 @@ assembly_coverage_details_server <- function(id, rv) {
       req(!is.null(rows), nrow(rows) > 1)
       # Conflicting BLAST hits: block the join until the user explicitly overrides.
       if (scaffold_hits_disagree(rows) && !isTRUE(input$join_override_diff)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Scaffolds map to different references",
           text = paste("Joining scaffolds with different BLAST hits is risky.",
-                       "Check 'allow joining anyway' to override."),
+                       "Tick 'I understand the risk' to join them anyway."),
           type = "warning")
         req(FALSE)
       }
@@ -2012,7 +2012,7 @@ assembly_coverage_details_server <- function(id, rv) {
         if (is.null(v)) TRUE else isTRUE(v)
       }, logical(1))
       if (!any(inc)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "No scaffolds selected",
           text = "Include at least one scaffold to build the joined assembly.",
           type = "warning")
@@ -2021,9 +2021,9 @@ assembly_coverage_details_server <- function(id, rv) {
       ord[is.na(ord)] <- seq_along(ord)[is.na(ord)]
       o <- order(ord)
       if (anyDuplicated(ord)) {
-        shiny::showNotification(
+        mp_toast(
           "Duplicate scaffold order values; ties broken by the on-screen order.",
-          type = "warning", duration = 6)
+          type = "warning")
       }
       layout <- data.frame(
         scaffold = scaffolds[o], order = seq_along(o), rc = rc[o],
@@ -2096,8 +2096,7 @@ assembly_coverage_details_server <- function(id, rv) {
           # submitted, so the sample stays fragmented instead.
           unsized <- unsized_gaps(res$gap_intervals)
           if (nrow(unsized) > 0) {
-            shinyWidgets::sendSweetAlert(
-              session = session,
+            mp_alert(
               title = "Cannot join: gap length unknown",
               text = unsized_join_note(unsized),
               type = "error"
@@ -2129,17 +2128,16 @@ assembly_coverage_details_server <- function(id, rv) {
     })
 
     observeEvent(input$delete_consensus, {
-      shinyWidgets::ask_confirmation(
-        inputId = ns("delete_consensus_confirm"),
-        title = "Delete consensus (Path 0)?",
+      mp_confirm(
+        id = ns("delete_consensus_confirm"),
+        title = "Delete consensus (Path 0)",
         text = paste(
           "This deletes the edited consensus sequence (Path 0), brings back all the",
           "original assembly paths (un-ignored), unlocks the sample, and removes the",
           "edit note. The original paths themselves are not changed."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Delete consensus"),
-        btn_colors = c("#6c757d", "#d9534f")
+        action_label = "Delete consensus",
+        danger = TRUE
       )
     })
 
@@ -2184,12 +2182,16 @@ assembly_coverage_details_server <- function(id, rv) {
                            unmatched = "ignore")
       rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
       trigger("coverage_modal")
+      mp_toast(paste0("Consensus deleted. The sample is unlocked and ",
+                      mp_n(n_remaining, "assembly path"), " restored."),
+               type = "message")
     })
 
     # Build resolved assembly from per-block decisions ----
     observeEvent(input$build_resolved, {
-      if (rv$updating$assemble_lock == 1) {
-        shinyWidgets::sendSweetAlert(title = "Assembly Locked!", type = "warning")
+      if (locked()) {
+        mp_alert(title = "This sample is locked", text = MP_LOCK_DEF("assemble"),
+                 type = "warning")
         req(F)
       }
       aln_mat <- rv$alignment$aln_mat
@@ -2239,7 +2241,7 @@ assembly_coverage_details_server <- function(id, rv) {
           " WARNING: contains ambiguous bases (IUPAC/N) - may cause problems in ",
           "annotation; MITOS does not handle ambiguous base calls well."
         )
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Ambiguous bases added",
           text = paste(
             "This resolved assembly contains ambiguous bases (IUPAC codes or Ns).",
@@ -2264,25 +2266,22 @@ assembly_coverage_details_server <- function(id, rv) {
     # Trim Consensus ----
     # Ask for confirmation first - "Trim Consensus" is destructive/ambiguous.
     observeEvent(input$trim_consensus, {
-      if (rv$updating$assemble_lock == 1) {
-        shinyWidgets::sendSweetAlert(
-          title = "Assembly Locked!",
-          type = "warning"
-        )
+      if (locked()) {
+        mp_alert(title = "This sample is locked", text = MP_LOCK_DEF("assemble"),
+                 type = "warning")
         req(F)
       }
-      shinyWidgets::ask_confirmation(
-        inputId = ns("trim_confirm"),
-        title = "Trim to consensus?",
+      mp_confirm(
+        id = ns("trim_confirm"),
+        title = "Trim to consensus",
         text = paste(
           "This keeps ONLY the single longest region where all selected paths agree and",
           "discards everything outside it (including the conflicting ends), saving the",
           "result as a new trimmed Path 0. The original paths are kept but ignored and the",
-          "assembly is locked. Best used only when the disagreements are at the edges."
+          "sample is locked. Best used only when the disagreements are at the edges."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Trim to consensus"),
-        btn_colors = c("#6c757d", "#E55330")
+        action_label = "Trim to consensus",
+        danger = TRUE
       )
     })
 
@@ -2402,6 +2401,8 @@ assembly_coverage_details_server <- function(id, rv) {
         dplyr::filter(ID == !!rv$updating$ID)
 
       trigger("coverage_modal")
+      mp_toast("Trimmed consensus saved as Path 0. The sample is now locked.",
+               type = "message")
       } # end finalize_trim
 
       cand_paths <- rv$focal_assembly$path[sel]
