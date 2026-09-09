@@ -559,52 +559,10 @@ assemble_server_userAsmb <- function(id) {
     on("lock", {
       req(session$userData$mode == "Assemble")
       req(selected())
-      rv$updating <- rv$data |>
-        dplyr::select(ID, assemble_lock) |>
-        dplyr::slice(selected())
-      # Locking advances every non-ignored contig of the sample. Each contig is
-      # its own annotation unit and was seeded its own annotate row by WF1, so a
-      # fragmented user assembly no longer has to be reduced to one contig.
-      lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
-      rv$updating$assemble_lock <- as.numeric(!lock_current)
-      if (lock_current == 0) {
-        # A locked sample is never admitted by WF1 (its query requires
-        # assemble_lock = 0), so a pending join redo could never run and the
-        # flag would sit at 1 forever, keeping the Update modal reporting work
-        # that cannot be done. Locking resolves it.
-        rv$updating$join_switch <- NA_integer_
-      }
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = "ID"
-        )
-      rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating, by = "ID")
-      # One click can now hand several contigs to annotation, so say how many.
-      # The lock itself is still per sample; the units are what WF2 will run.
-      if (lock_current == 0) {
-        n_units <- dplyr::tbl(session$userData$con, "assemblies") |>
-          dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
-          dplyr::count() |>
-          dplyr::pull(n)
-        shiny::showNotification(
-          paste0(
-            "Locked ", nrow(rv$updating),
-            ngettext(nrow(rv$updating), " sample", " samples"),
-            ": ", n_units, ngettext(n_units, " contig", " contigs"),
-            " will be annotated."
-          ),
-          type = "message",
-          duration = 5
-        )
-      }
-      trigger("update_assemble_table")
-      trigger("refresh_annotate")
-      trigger("refresh_export")
+      assemble_lock_begin(rv, selected(), unit = "contig")
+    })
+    observeEvent(input$lock_confirm, {
+      if (isTRUE(input$lock_confirm)) assemble_lock_finish(rv)
     })
 
 

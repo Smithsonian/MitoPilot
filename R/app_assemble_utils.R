@@ -878,3 +878,154 @@ assemble_state_titles <- function(module) {
     codes
   )
 }
+
+#' Lock or unlock the selected samples
+#'
+#' Locking is the routine, reversible half of the toggle, so it writes and
+#' reports. Unlocking drops the samples out of Annotate, so it asks first and
+#' writes from `rv$lock_pending` in [assemble_lock_finish()] (theme T02).
+#'
+#' @param rv the local reactive vals object
+#' @param rows row indices of the current selection
+#' @param unit noun for one annotation unit ("assembly" or "contig")
+#' @param session current shiny session
+#'
+#' @noRd
+assemble_lock_begin <- function(rv, rows, unit = "assembly",
+                                session = getDefaultReactiveDomain()) {
+  upd <- rv$data |>
+    dplyr::select(ID, assemble_lock, join_switch) |>
+    dplyr::slice(rows)
+  # A mixed selection is already collapsed to one direction by majority.
+  lock_current <- as.numeric(names(which.max(table(upd$assemble_lock))))
+  if (lock_current != 0) {
+    rv$lock_pending <- upd |> dplyr::select(ID, assemble_lock)
+    mp_confirm(
+      session$ns("lock_confirm"),
+      title = paste("Unlock", mp_n(nrow(upd), "sample")),
+      text = paste(
+        "Unlocking removes these samples from Annotate. If their state is",
+        "Ready to run, the next update will re-assemble them and replace",
+        "their current results."
+      ),
+      action_label = "Unlock",
+      danger = TRUE,
+      session = session
+    )
+    return(invisible(NULL))
+  }
+  # Locking hands the sample to WF2, which rebuilds the published output path
+  # from assemble_opts. Samples whose output is not on disk are held back.
+  stale <- tryCatch(
+    stale_assemble_dirs(
+      session$userData$con, session$userData$dir_out,
+      ids = upd$ID, pending_only = FALSE
+    ),
+    error = function(e) NULL
+  )
+  if (!is.null(stale) && nrow(stale) > 0L) {
+    upd <- upd |> dplyr::filter(!ID %in% stale$ID)
+    mp_alert(
+      title = "Assembly output not found",
+      text = shiny::tags$div(
+        shiny::tags$p(
+          "These samples were not locked, because Annotation and Curation ",
+          "would look for assembly output that is not on disk:"
+        ),
+        shiny::tags$ul(stale_assemble_items(stale)),
+        shiny::tags$p("Either:"),
+        shiny::tags$ul(
+          shiny::tags$li("set the assembly parameter set back to the name that exists on disk, or"),
+          shiny::tags$li("re-run Assembly so the output is published under the assigned name.")
+        ),
+        shiny::tags$p(
+          if (nrow(upd) > 0L) {
+            "The rest of the selected samples were locked."
+          } else {
+            "No other samples remained, so nothing was locked."
+          }
+        )
+      ),
+      type = "error", html = TRUE, session = session
+    )
+    if (nrow(upd) == 0L) {
+      return(invisible(NULL))
+    }
+  }
+  joins <- sum(upd$join_switch %in% 1, na.rm = TRUE)
+  units <- count_annotate_units(session$userData$con, upd$ID)
+  apply_assemble_lock(rv, upd |> dplyr::select(ID, assemble_lock), 1, session)
+  mp_toast(
+    assemble_lock_message(nrow(upd), units, unit, joins),
+    type = "success", session = session
+  )
+  invisible(NULL)
+}
+
+#' Write the unlock the user confirmed
+#'
+#' @param rv the local reactive vals object
+#' @param session current shiny session
+#'
+#' @noRd
+assemble_lock_finish <- function(rv, session = getDefaultReactiveDomain()) {
+  upd <- rv$lock_pending
+  rv$lock_pending <- NULL
+  if (is.null(upd) || nrow(upd) == 0L) {
+    return(invisible(NULL))
+  }
+  apply_assemble_lock(rv, upd, 0, session)
+  mp_toast(paste0(mp_n(nrow(upd), "sample"), " unlocked."), session = session)
+  invisible(NULL)
+}
+
+#' Write one lock value to the database and to the table data
+#'
+#' @param rv the local reactive vals object
+#' @param upd data frame of ID / assemble_lock rows
+#' @param lock 1 to lock, 0 to unlock
+#' @param session current shiny session
+#'
+#' @noRd
+apply_assemble_lock <- function(rv, upd, lock, session = getDefaultReactiveDomain()) {
+  upd$assemble_lock <- as.numeric(lock)
+  # A locked sample is never admitted by WF1, so a queued join could never run
+  # and the flag would sit at 1 forever. Locking resolves it.
+  if (lock == 1) {
+    upd$join_switch <- NA_integer_
+  }
+  upd$time_stamp <- as.integer(Sys.time())
+  dplyr::tbl(session$userData$con, "assemble") |>
+    dplyr::rows_update(
+      upd,
+      unmatched = "ignore", in_place = TRUE, copy = TRUE, by = "ID"
+    )
+  rv$data <- rv$data |> dplyr::rows_update(upd, by = "ID")
+  trigger("update_assemble_table")
+  trigger("refresh_annotate")
+  trigger("refresh_export")
+  invisible(upd)
+}
+
+#' The sentence a lock reports
+#'
+#' @param n_samples,n_units how many samples were locked, and how many
+#'   annotation units that hands to the next step
+#' @param unit noun for one annotation unit
+#' @param n_joins how many queued scaffold joins the lock cleared
+#'
+#' @noRd
+assemble_lock_message <- function(n_samples, n_units, unit = "assembly",
+                                  n_joins = 0) {
+  msg <- paste0(mp_n(n_samples, "sample"), " locked")
+  if (!is.na(n_units)) {
+    msg <- paste0(msg, " - ", mp_n(n_units, unit),
+                  " will be annotated on the next update")
+  }
+  msg <- paste0(msg, ".")
+  if (n_joins > 0) {
+    msg <- paste0(msg, " A queued scaffold join was cleared for ",
+                  mp_n(n_joins, "sample"), ".")
+  }
+  msg
+}

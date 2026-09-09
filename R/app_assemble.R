@@ -559,74 +559,10 @@ assemble_server <- function(id) {
     on("lock", {
       req(session$userData$mode == "Assemble")
       req(selected())
-      rv$updating <- rv$data |>
-        dplyr::select(ID, assemble_lock) |>
-        dplyr::slice(selected())
-      # Locking advances every non-ignored (path, scaffold) unit for the sample
-      # (multi-assembly). Each unit was seeded an annotate row at assemble time.
-      lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
-      upd <- rv$updating
-      # Locking hands the sample to WF2, which rebuilds the published output path
-      # from assemble_opts. Samples that never assembled are not affected.
-      if (lock_current == 0) {
-        stale <- tryCatch(
-          stale_assemble_dirs(
-            session$userData$con,
-            session$userData$dir_out,
-            ids = upd$ID,
-            pending_only = FALSE
-          ),
-          error = function(e) NULL
-        )
-        if (!is.null(stale) && nrow(stale) > 0L) {
-          upd <- upd |> dplyr::filter(!ID %in% stale$ID)
-          shinyWidgets::sendSweetAlert(
-            title = "Assembly output not found",
-            text = shiny::tags$div(
-              shiny::tags$p(
-                "These samples were NOT locked, because Annotation and Curation ",
-                "would look for assembly output that is not on disk:"
-              ),
-              shiny::tags$ul(stale_assemble_items(stale)),
-              shiny::tags$p("Either:"),
-              shiny::tags$ul(
-                shiny::tags$li("set the assembly parameter set back to the name that exists on disk, or"),
-                shiny::tags$li("re-run Assembly so the output is published under the assigned name.")
-              ),
-              shiny::tags$p(
-                if (nrow(upd) > 0L) {
-                  "The rest of the selected samples were locked."
-                } else {
-                  "No other samples remained, so nothing was locked."
-                }
-              )
-            ),
-            html = TRUE,
-            type = "error"
-          )
-          req(nrow(upd) > 0L)
-        }
-        # A locked sample is never admitted by WF1 (its query requires
-        # assemble_lock = 0), so a pending join redo could never run and the
-        # flag would sit at 1 forever, keeping the Update modal reporting work
-        # that cannot be done. Locking resolves it.
-        upd$join_switch <- NA_integer_
-      }
-      upd$assemble_lock <- as.numeric(!lock_current)
-      rv$updating <- upd
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = "ID"
-        )
-      rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating, by = "ID")
-      trigger("update_assemble_table")
-      trigger("refresh_annotate")
-      trigger("refresh_export")
+      assemble_lock_begin(rv, selected(), unit = "assembly")
+    })
+    observeEvent(input$lock_confirm, {
+      if (isTRUE(input$lock_confirm)) assemble_lock_finish(rv)
     })
 
 
