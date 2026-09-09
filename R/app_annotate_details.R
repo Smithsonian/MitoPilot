@@ -905,6 +905,7 @@ annotations_details_server <- function(id, rv) {
         update_annotate_unit("annotate_lock")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "annotate_lock")], by = c("ID", "path", "scaffold"))
+        mp_toast("1 assembly locked - ready to export.", type = "message")
       }
       shinyjs::click("close")
     })
