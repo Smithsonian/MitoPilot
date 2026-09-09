@@ -87,49 +87,34 @@ export_ui <- function(id) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("col_css")),
+    # Row filters first, column visibility last and set off by a rule (T13).
     div(
-      style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
-      shinyWidgets::pickerInput(
-        inputId  = ns("col_groups"),
-        width    = "150px",
-        label    = "Show columns:",
-        choices  = names(EXPORT_COL_GROUPS),
-        selected = names(EXPORT_COL_GROUPS),
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "150px"
-        )
+      class = "mp-filter-row",
+      mp_filter_picker(
+        ns("export_filter"), "Exported:", ANNOTATE_EXPORT_CHOICES,
+        width = "140px"
       ),
-      shinyWidgets::pickerInput(
-        inputId  = ns("export_filter"),
-        width    = "140px",
-        label    = "Exported:",
-        choices  = ANNOTATE_EXPORT_CHOICES,
-        selected = ANNOTATE_EXPORT_CHOICES,
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "140px"
+      div(
+        style = paste(
+          "margin-left: 24px; padding-left: 24px;",
+          "border-left: 1px solid var(--mp-border);"
+        ),
+        mp_filter_picker(
+          ns("col_groups"), "Columns:", names(EXPORT_COL_GROUPS),
+          width = "150px"
         )
       )
     ),
+    uiOutput(ns("n_selected")),
     div(class = "mp-table-resize", reactableOutput(ns("table"))),
+    # mp_csv_download_row() shape with the labels T13 settled on: reactable
+    # 0.4.5 cannot report its filtered row set, so neither button claims to.
     div(
-      style = "font-size: 0.85em; color: #555; margin-top: 4px;",
-      textOutput(ns("n_selected"), inline = TRUE)
-    ),
-    div(
+      class = "mp-csv-row",
       style = "margin-top: 12px; display: flex; gap: 8px;",
-      downloadButton(ns("export_selected"), "Export Selected to CSV",
+      downloadButton(ns("export_selected"), "Download selected rows",
                      class = "btn-sm btn-default"),
-      downloadButton(ns("export_all"), "Export All to CSV",
+      downloadButton(ns("export_all"), "Download all rows",
                      class = "btn-sm btn-default")
     )
   )
@@ -357,8 +342,34 @@ export_server <- function(id) {
       intersect(sel, which(visible))
     })
 
-    output$n_selected <- renderText({
-      paste0(length(selected()), " selected")
+    # Rows the Exported picker leaves on screen. reactable's own search and
+    # column filters are a browser-side layer R cannot see, so this is the
+    # server-visible count, not a live DOM count.
+    visible_n <- reactive({
+      d <- rv$data
+      if (is.null(d) || nrow(d) == 0) return(0L)
+      sum(ifelse(is.na(d$export_time_stamp), "0", "1") %in% export_filter_rv())
+    })
+
+    output$n_selected <- renderUI({
+      total <- nrow(rv$data)
+      div(
+        class = "mp-table-status", role = "status", `aria-live` = "polite",
+        HTML(sprintf(
+          "Showing <b>%d</b> of <b>%s</b>", visible_n(), mp_n(total, "assembly")
+        )),
+        span(class = "mp-sep", `aria-hidden` = "true", HTML("&middot;")),
+        HTML(sprintf("<b>%d</b> selected", length(selected())))
+      )
+    })
+
+    # Toolbar buttons that act on the selection are dead without one (T01).
+    # A class selector, not an id: these buttons live in the top-level UI.
+    observe({
+      shinyjs::toggleState(
+        selector = "#export_ctrls .mp-needs-selection",
+        condition = length(selected()) > 0
+      )
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample
