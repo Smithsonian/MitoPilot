@@ -166,15 +166,6 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         opts_help("Reusable named set of options applied to the selected samples; ",
                   "check Edit to change values or type a new name to create a set. ",
                   "Saving re-queues the selected samples: their state becomes Ready to run."),
-        textInput(
-          ns("fastp"),
-          label = tagList("fastp options:", tool_help_icon("fastp")),
-          value =  current$fastp %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled(),
-        opts_help("Command-line flags passed to fastp, which trims adapters and ",
-                  "filters low-quality reads.",
-                  href = "https://github.com/OpenGene/fastp"),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -194,6 +185,15 @@ pre_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
             ) |> shinyjs::disabled()
           )
         ),
+        textInput(
+          ns("fastp"),
+          label = tagList("fastp options:", tool_help_icon("fastp")),
+          value =  current$fastp %||% character(0),
+          width = "100%"
+        ) |> shinyjs::disabled(),
+        opts_help("Command-line flags passed to fastp, which trims adapters and ",
+                  "filters low-quality reads.",
+                  href = "https://github.com/OpenGene/fastp"),
         size = "m",
         footer = mp_footer(primary = actionButton(ns("update_pre_opts"), "Save"))
       )
@@ -249,6 +249,25 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         opts_help("Reusable named set of options applied to the selected samples; ",
                   "check Edit to change values or type a new name to create a set. ",
                   "Saving re-queues the selected samples: their state becomes Ready to run."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("assemble_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("assemble_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
         # Assembler choice + its tool-specific options, boxed off.
         div(
           style = paste(
@@ -393,25 +412,6 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           "reference-ordered into a joined Path 0 (only if scaffolds share a ",
           "BLAST hit). Scaffold-to-reference mappings are always computed so ",
           "the in-app join editor works regardless of this setting."
-        ),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("assemble_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("assemble_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
         ),
         size = "m",
         footer = mp_footer(primary = actionButton(ns("update_assemble_opts"), "Save"))
