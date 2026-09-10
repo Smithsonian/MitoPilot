@@ -187,7 +187,7 @@ maptoref_viewer_server <- function(id, rv) {
         # The run records the reference it was given; a different value on the
         # sample now means this assembly is behind its settings.
         if (!is.na(fld("reference")) && !is.na(state$ref_now) &&
-            trimws(fld("reference")) != trimws(state$ref_now)) {
+            .mtr_ref_key(fld("reference")) != .mtr_ref_key(state$ref_now)) {
           tags$span(class = "mp-maptoref-field mp-maptoref-stale",
                     tags$b("Reference changed since this assembly:"),
                     paste0(" now ", state$ref_now, ". Run Update on the sample to re-map."))

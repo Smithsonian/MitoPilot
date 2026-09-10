@@ -300,6 +300,7 @@
 .mtr_dedicated_opts <- function(con, ids) {
   q <- DBI::dbGetQuery(con, paste(
     "SELECT a.ID, a.assemble_opts, o.assembler, o.maptoref_ref,",
+    "o.maptoref_topology,",
     "(SELECT COUNT(*) FROM assemble x",
     "WHERE x.assemble_opts = a.assemble_opts) AS n_samples",
     "FROM assemble a JOIN assemble_opts o",
@@ -311,7 +312,27 @@
     q$n_samples == 1L &
     !is.na(q$assembler) & q$assembler == "MapToRef"
   own[is.na(own)] <- FALSE
-  list(own = own, opts = q$assemble_opts, set_ref = q$maptoref_ref)
+  list(own = own, opts = q$assemble_opts, set_ref = q$maptoref_ref,
+       topology = q$maptoref_topology)
+}
+
+#' A FASTA reference carries no topology, so its set must name one.
+#' @noRd
+.mtr_needs_topology <- function(x) {
+  v <- trimws(.mtr_opts(x))
+  nzchar(v) && !identical(.mtr_ref_class(v), "accession") &&
+    !grepl("\\.(gb|gbk|gbff)$", v, ignore.case = TRUE)
+}
+
+#' Comparable form of a reference: a file by its normalised path, anything
+#' else as typed.
+#' @noRd
+.mtr_ref_key <- function(x) {
+  v <- trimws(.mtr_opts(x))
+  if (identical(.mtr_ref_class(v), "file")) {
+    v <- normalizePath(v, winslash = "/", mustWork = FALSE)
+  }
+  v
 }
 
 #' Write references to their one home, the sample's own parameter set
@@ -328,6 +349,25 @@
   if (length(ids) == 0L) return(invisible(character(0)))
   ded <- .mtr_dedicated_opts(con, ids)
   own <- ded$own
+  # Every check runs before any write, so a refusal leaves the database as it
+  # was (the migration relies on that to keep an unfoldable column value).
+  orphan <- !is.na(vals) & is.na(ded$opts)
+  if (any(orphan)) {
+    stop("sample(s) ", paste(shQuote(ids[orphan]), collapse = ", "),
+         " point at no existing assemble options set; fix that in the ",
+         "Assemble module first", call. = FALSE)
+  }
+  needs <- !is.na(vals) & vapply(vals, .mtr_needs_topology, logical(1)) &
+    (is.na(ded$topology) | !nzchar(trimws(ded$topology)))
+  if (any(needs)) {
+    warning("sample(s) ", paste(shQuote(ids[needs]), collapse = ", "),
+            " get a FASTA reference on a parameter set with no topology; set ",
+            "the reference topology (circular or linear) on ",
+            paste(shQuote(unique(ifelse(own, ded$opts, .mtr_opts_name(ids))[needs])),
+                  collapse = ", "),
+            " in the Assemble options before running, or the sample will ",
+            "fail at the Assemble step", call. = FALSE)
+  }
   if (any(own)) {
     dplyr::tbl(con, "assemble_opts") |>
       dplyr::rows_update(

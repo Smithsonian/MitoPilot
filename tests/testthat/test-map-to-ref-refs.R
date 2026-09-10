@@ -415,9 +415,13 @@ test_that("update_sample_metadata strips a Reference column with a message", {
                c(NA_character_, NA_character_))
 })
 
-mtr_refs_project <- function(dir, ids = c("S1", "S2"), ...) {
+mtr_refs_project <- function(dir, ids = c("S1", "S2"),
+                             maptoref_topology = "circular", ...) {
+  # The fixtures use FASTA references, which need a topology on the set they
+  # are cloned from; one test below covers the missing-topology warning.
   new_db(db_path = file.path(dir, ".sqlite"),
-         mapping_fn = mtr_refs_mapping(dir, ids = ids), ...)
+         mapping_fn = mtr_refs_mapping(dir, ids = ids),
+         maptoref_topology = maptoref_topology, ...)
   file.path(dir, ".sqlite")
 }
 
@@ -478,7 +482,8 @@ test_that("set_maptoref_refs edits the sample\'s own set, not the column", {
   fa <- mtr_ref_fasta(d)
   fa2 <- mtr_ref_fasta(d, name = "ref2.fasta")
   db <- file.path(d, ".sqlite")
-  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d, refs = c(fa, "")))
+  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d, refs = c(fa, "")),
+         maptoref_topology = "circular")
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
@@ -600,6 +605,55 @@ test_that("a column value the migration cannot fold stays where the pipeline rea
   expect_message(.mtr_fold_override_column(con), "kept")
   expect_equal(DBI::dbGetQuery(
     con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref, fa2)
+})
+
+test_that("a sample pointing at no existing set is refused before any write", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  db <- mtr_refs_project(d)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "UPDATE assemble SET assemble_opts = 'gone' WHERE ID = 'S1'")
+
+  expect_error(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "S1")
+  expect_equal(nrow(DBI::dbGetQuery(
+    con, "SELECT 1 FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")), 0L)
+  a <- DBI::dbGetQuery(con, "SELECT assemble_opts, assemble_switch FROM assemble WHERE ID = 'S1'")
+  expect_equal(a$assemble_opts, "gone")
+
+  # The migration keeps such a value on the column instead of losing it.
+  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
+                 params = list(fa))
+  expect_message(.mtr_fold_override_column(con), "kept")
+  expect_equal(DBI::dbGetQuery(
+    con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref, fa)
+})
+
+test_that("a FASTA reference on a set without a topology warns and names the set", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  db <- mtr_refs_project(d, maptoref_topology = NA)
+  expect_warning(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "S1_maptoref")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  # Written all the same: the topology can be set in the app before running.
+  expect_equal(DBI::dbGetQuery(
+    con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref,
+    normalizePath(fa, winslash = "/"))
+  # An accession needs no topology.
+  expect_no_warning(.mtr_needs_topology("NC_002333"))
+  expect_false(.mtr_needs_topology("NC_002333"))
+  expect_false(.mtr_needs_topology(file.path(d, "ref.gb")))
+  expect_true(.mtr_needs_topology(fa))
+})
+
+test_that(".mtr_ref_key compares files by their normalised path", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  dotted <- file.path(dirname(fa), ".", basename(fa))
+  expect_equal(.mtr_ref_key(dotted), .mtr_ref_key(fa))
+  expect_equal(.mtr_ref_key(" NC_002333 "), "NC_002333")
+  expect_equal(.mtr_ref_key("https://x.org/a.gb"), "https://x.org/a.gb")
 })
 
 test_that(".mtr_ref_now reads the set, and a leftover column value over it", {
