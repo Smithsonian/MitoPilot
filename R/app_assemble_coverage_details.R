@@ -1584,9 +1584,10 @@ assembly_coverage_details_server <- function(id, rv) {
       store_scaffold_junctions(session$userData$con, ID, gap_intervals)
       # Summary now describes the consensus, not the scaffolds it replaced.
       summ <- refresh_assemble_summary(session$userData$con, ID)
+      # One active assembly now, whatever the scaffolds before it were called.
       update <- data.frame(
         ID = ID, paths = -abs(rv$updating$paths), assemble_lock = 1,
-        topology = topology,
+        assemble_switch = 2L, topology = topology,
         length = summ$length, scaffolds = summ$scaffolds,
         assemble_notes = compose_edit_notes(note)
       )
