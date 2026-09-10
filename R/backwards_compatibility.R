@@ -1504,11 +1504,13 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN synteny_accession TEXT")
   }
 
-  # per-sample MapToRef reference (NULL falls back to the option-set value)
+  # per-sample MapToRef reference column; kept for old projects, but a
+  # reference has one home (the sample's own parameter set), so fold values in
   if (!("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))) {
     message("added 'maptoref_ref' column to assemble table")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_ref TEXT")
   }
+  .mtr_fold_override_column(con)
 
   # if tool column doesn't exist in annotations table, add it
   annotations_cols <- DBI::dbListFields(con, "annotations")

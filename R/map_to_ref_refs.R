@@ -265,8 +265,8 @@
   )
   if (length(taken) > 0L) {
     stop("assemble options set(s) ", paste(shQuote(taken), collapse = ", "),
-         " already exist; rename them before adding these samples",
-         call. = FALSE)
+         " already exist and are not that sample's own MapToRef set; rename ",
+         "them first", call. = FALSE)
   }
 
   new_opts <- base_row[rep(1L, length(ids)), , drop = FALSE]
@@ -314,6 +314,98 @@
   list(own = own, opts = q$assemble_opts, set_ref = q$maptoref_ref)
 }
 
+#' Write references to their one home, the sample's own parameter set
+#'
+#' A sample on its own set has the value written there; any other sample gets
+#' a set cloned from the one it is on. The assemble column is cleared for every
+#' sample touched, so nothing can shadow the set.
+#'
+#' @param con database connection
+#' @param ids sample IDs
+#' @param vals references, NA to clear
+#' @noRd
+.mtr_route_refs <- function(con, ids, vals) {
+  if (length(ids) == 0L) return(invisible(character(0)))
+  ded <- .mtr_dedicated_opts(con, ids)
+  own <- ded$own
+  if (any(own)) {
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_update(
+        data.frame(assemble_opts = ded$opts[own], maptoref_ref = vals[own]),
+        unmatched = "ignore",
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+  # A blank for a sample without a set of its own has nothing to clear.
+  new <- which(!own & !is.na(vals))
+  for (base in unique(ded$opts[new])) {
+    i <- new[ded$opts[new] == base]
+    .mtr_seed_per_sample_opts(con, stats::setNames(vals[i], ids[i]), base = base)
+  }
+  dplyr::tbl(con, "assemble") |>
+    dplyr::rows_update(
+      data.frame(ID = ids, maptoref_ref = NA_character_),
+      unmatched = "ignore",
+      in_place = TRUE,
+      copy = TRUE,
+      by = "ID"
+    )
+  invisible(ids)
+}
+
+#' Fold per-sample reference column values into per-sample sets (migration)
+#'
+#' A value that cannot be moved (its set name is taken by a set the sample
+#' does not own) is left on the column, where the pipeline still reads it.
+#'
+#' @param con database connection
+#' @return invisibly, the IDs folded
+#' @noRd
+.mtr_fold_override_column <- function(con) {
+  if ("assembler" %nin% DBI::dbListFields(con, "assemble_opts") ||
+      "maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
+    return(invisible(character(0)))
+  }
+  cur <- DBI::dbGetQuery(con, paste(
+    "SELECT ID, maptoref_ref FROM assemble",
+    "WHERE maptoref_ref IS NOT NULL AND TRIM(maptoref_ref) <> ''"
+  ))
+  done <- character(0)
+  for (i in seq_len(nrow(cur))) {
+    ok <- tryCatch({
+      .mtr_route_refs(con, cur$ID[i], cur$maptoref_ref[i])
+      TRUE
+    }, error = function(e) {
+      message("kept the MapToRef reference of ", cur$ID[i],
+              " on the assemble table: ", conditionMessage(e))
+      FALSE
+    })
+    if (ok) done <- c(done, cur$ID[i])
+  }
+  if (length(done) > 0L) {
+    message("moved the MapToRef reference of ", length(done),
+            " sample(s) onto their own parameter set")
+  }
+  invisible(done)
+}
+
+#' The reference the next run of a sample would use
+#' @noRd
+.mtr_ref_now <- function(con, id) {
+  if ("maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
+    return(NA_character_)
+  }
+  v <- DBI::dbGetQuery(con, paste(
+    "SELECT COALESCE(NULLIF(TRIM(a.maptoref_ref), ''),",
+    "NULLIF(TRIM(o.maptoref_ref), '')) AS ref",
+    "FROM assemble a LEFT JOIN assemble_opts o",
+    "ON a.assemble_opts = o.assemble_opts WHERE a.ID = ?"
+  ), params = list(id))$ref
+  if (length(v) != 1L || is.na(v)) NA_character_ else v
+}
+
 # R8's warning, answered from the database rather than from the mapping file, so
 # it sees both sources. The COALESCE is the same expression the pipeline uses in
 # inst/nextflow/modules/assemble_workflow.nf.
@@ -349,11 +441,13 @@
 #' Set per-sample MapToRef references
 #'
 #' Assigns a MapToRef reference mitogenome to individual samples in an existing
-#' project. A sample that already has a parameter set of its own (one named for
-#' the sample, used by no other sample, and assembling with MapToRef) has the
-#' reference written onto that set. Any other sample gets a per-sample value
-#' that overrides the reference on its shared parameter set; a blank value
-#' clears the override so the parameter set applies again.
+#' project. A reference has one home: the sample's own parameter set, named
+#' \code{<ID>_maptoref}. A sample that already has one (used by no other sample,
+#' assembling with MapToRef) has the reference written onto it; any other sample
+#' gets one, cloned from the set it is on, with the assembler switched to
+#' MapToRef. A blank value clears the reference on the sample's own set. The
+#' Assemble options modal therefore always shows the reference the next run
+#' will use.
 #'
 #' Samples whose reference actually changes are queued for (re-)assembly, the
 #' same way changing a sample's parameter set does in the Assemble module.
@@ -414,11 +508,11 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
          " absent in the existing database")
   }
   new_vals <- .mtr_validate_refs(vals, ids = ids, context = "the reference list")
-  # A sample on its own MapToRef set keeps its reference on that set, so that is
-  # the value to compare against and the value to write.
+  # The reference in force today: a value still on the assemble column (from
+  # before the fold) wins in the pipeline, otherwise the set's value.
   ded <- .mtr_dedicated_opts(con, ids)
   old_vals <- cur$maptoref_ref[match(ids, cur$ID)]
-  old_vals[ded$own] <- ded$set_ref[ded$own]
+  old_vals[is.na(old_vals)] <- ded$set_ref[is.na(old_vals)]
   same <- (is.na(new_vals) & is.na(old_vals)) |
     (!is.na(new_vals) & !is.na(old_vals) & new_vals == old_vals)
   changed <- which(!same)
@@ -437,33 +531,7 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
     return(invisible(.mtr_warn_missing_refs(con)))
   }
 
-  # Samples on their own set: the reference lives on the set, so write it there.
-  on_set <- changed[ded$own[changed]]
-  if (length(on_set) > 0L) {
-    dplyr::tbl(con, "assemble_opts") |>
-      dplyr::rows_update(
-        data.frame(
-          assemble_opts = ded$opts[on_set],
-          maptoref_ref = new_vals[on_set]
-        ),
-        unmatched = "ignore",
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-  # Everyone else keeps the per-sample column, which overrides a shared set.
-  on_col <- changed[!ded$own[changed]]
-  if (length(on_col) > 0L) {
-    dplyr::tbl(con, "assemble") |>
-      dplyr::rows_update(
-        data.frame(ID = ids[on_col], maptoref_ref = new_vals[on_col]),
-        unmatched = "ignore",
-        in_place = TRUE,
-        copy = TRUE,
-        by = "ID"
-      )
-  }
+  .mtr_route_refs(con, ids[changed], new_vals[changed])
   # Same requeue the app makes when a sample's parameter set changes
   # (R/app_assemble.R).
   dplyr::tbl(con, "assemble") |>

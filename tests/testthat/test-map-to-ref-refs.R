@@ -421,7 +421,7 @@ mtr_refs_project <- function(dir, ids = c("S1", "S2"), ...) {
   file.path(dir, ".sqlite")
 }
 
-test_that("set_maptoref_refs writes the column and flips the switch", {
+test_that("set_maptoref_refs gives the sample its own set and flips the switch", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
@@ -431,9 +431,16 @@ test_that("set_maptoref_refs writes the column and flips the switch", {
 
   set_maptoref_refs(d, data.frame(a = "S1", b = fa))
 
-  a <- DBI::dbGetQuery(con, "SELECT ID, maptoref_ref, assemble_switch FROM assemble ORDER BY ID")
-  expect_equal(a$maptoref_ref, c(normalizePath(fa, winslash = "/"), NA_character_))
+  a <- DBI::dbGetQuery(
+    con, "SELECT ID, assemble_opts, maptoref_ref, assemble_switch FROM assemble ORDER BY ID")
+  expect_equal(a$assemble_opts, c("S1_maptoref", "default"))
+  # One home: the column never carries a value.
+  expect_equal(a$maptoref_ref, c(NA_character_, NA_character_))
   expect_equal(a$assemble_switch, c(1, 2))
+  o <- DBI::dbGetQuery(
+    con, "SELECT assembler, maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")
+  expect_equal(o$assembler, "MapToRef")
+  expect_equal(o$maptoref_ref, normalizePath(fa, winslash = "/"))
 })
 
 test_that("set_maptoref_refs reads a CSV by position, ignoring header names", {
@@ -447,8 +454,10 @@ test_that("set_maptoref_refs reads a CSV by position, ignoring header names", {
 
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_equal(DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble")$maptoref_ref,
-               rep(normalizePath(fa, winslash = "/"), 2L))
+  o <- DBI::dbGetQuery(con, paste(
+    "SELECT o.maptoref_ref FROM assemble a",
+    "JOIN assemble_opts o ON a.assemble_opts = o.assemble_opts ORDER BY a.ID"))
+  expect_equal(o$maptoref_ref, rep(normalizePath(fa, winslash = "/"), 2L))
 })
 
 test_that("set_maptoref_refs does not re-queue an unchanged row", {
@@ -504,12 +513,13 @@ test_that("a blank value clears the per-sample reference", {
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
   set_maptoref_refs(d, data.frame(a = "S1", b = fa))
-  set_maptoref_refs(d, data.frame(a = "S1", b = ""))
+  # S1 keeps its MapToRef set, now without a reference, so the call warns.
+  expect_warning(set_maptoref_refs(d, data.frame(a = "S1", b = "")), "S1")
 
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_true(is.na(DBI::dbGetQuery(
-    con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref))
+    con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref))
 })
 
 test_that("set_maptoref_refs refuses unknown IDs, duplicates, and locked rows", {
@@ -549,8 +559,62 @@ test_that("set_maptoref_refs validates values before writing anything", {
   )
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_true(is.na(DBI::dbGetQuery(
-    con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref))
+  expect_equal(nrow(DBI::dbGetQuery(
+    con, "SELECT 1 FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")), 0L)
+})
+
+test_that("the migration folds a column value into the sample's own set", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  db <- mtr_refs_project(d)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
+                 params = list(fa))
+
+  expect_message(.mtr_fold_override_column(con), "1 sample")
+
+  a <- DBI::dbGetQuery(con, "SELECT ID, assemble_opts, maptoref_ref FROM assemble ORDER BY ID")
+  expect_equal(a$assemble_opts, c("S1_maptoref", "default"))
+  expect_true(all(is.na(a$maptoref_ref)))
+  expect_equal(DBI::dbGetQuery(
+    con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref,
+    fa)
+  # Nothing left to fold: silent.
+  expect_silent(.mtr_fold_override_column(con))
+})
+
+test_that("a column value the migration cannot fold stays where the pipeline reads it", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  fa2 <- mtr_ref_fasta(d, name = "ref2.fasta")
+  db <- mtr_refs_project(d)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa))
+  # S1's set is now shared, so S1 no longer owns it and its name is taken.
+  DBI::dbExecute(con, "UPDATE assemble SET assemble_opts = 'S1_maptoref' WHERE ID = 'S2'")
+  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
+                 params = list(fa2))
+
+  expect_message(.mtr_fold_override_column(con), "kept")
+  expect_equal(DBI::dbGetQuery(
+    con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref, fa2)
+})
+
+test_that(".mtr_ref_now reads the set, and a leftover column value over it", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  fa2 <- mtr_ref_fasta(d, name = "ref2.fasta")
+  db <- mtr_refs_project(d)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_true(is.na(.mtr_ref_now(con, "S1")))
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa))
+  expect_equal(.mtr_ref_now(con, "S1"), normalizePath(fa, winslash = "/"))
+  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
+                 params = list(fa2))
+  expect_equal(.mtr_ref_now(con, "S1"), fa2)
 })
 
 test_that("set_maptoref_refs warns about samples still without a reference", {
