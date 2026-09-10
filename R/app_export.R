@@ -246,7 +246,7 @@ export_server <- function(id) {
         # Render order comes from the data frame, not this list. See
         # fetch_export_data().
         columns = list(
-          `.selection` = colDef(show = TRUE, sticky = "left", width = 28),
+          `.selection` = colDef(show = TRUE, sticky = "left", width = 28, align = "center"),
           # Wide enough for a 16-character ID; the tooltip covers longer ones.
           ID = .cd("ID", minWidth = 160, sticky = "left", html = TRUE,
                    cell = rt_longtext()),
@@ -261,7 +261,7 @@ export_server <- function(id) {
           seqid = .cd("seqid", extra_class = "mp-col-seqid", minWidth = 130),
           Taxon = .cd("Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
           curate_opts = .cd("curate_opts", width = 110),
-          genetic_code = .cd("genetic_code", width = 110),
+          genetic_code = .cd("genetic_code", width = 110, align = "center"),
           blast_ref_status = .cd(
             "blast_ref_status", html = TRUE, minWidth = 130, align = "center",
             cell = rt_blast_ref_status()
@@ -275,26 +275,27 @@ export_server <- function(id) {
                               cell = rt_longtext()),
           blast_lineage = .cd("blast_lineage", html = TRUE, minWidth = 200,
                               cell = rt_longtext()),
-          topology = .cd("topology", width = 100),
+          topology = .cd("topology", width = 100, align = "center"),
           structure = .cd("structure", html = TRUE, minWidth = 200,
                           cell = rt_longtext()),
-          PCGCount = .cd("PCGCount", width = 90),
-          tRNACount = .cd("tRNACount", width = 90),
-          rRNACount = .cd("rRNACount", width = 90),
-          ORFCount = .cd("ORFCount", width = 90),
+          PCGCount = .cd("PCGCount", width = 90, align = "center"),
+          tRNACount = .cd("tRNACount", width = 90, align = "center"),
+          rRNACount = .cd("rRNACount", width = 90, align = "center"),
+          ORFCount = .cd("ORFCount", width = 90, align = "center"),
           missing = .cd("missing", html = TRUE, minWidth = 130, cell = rt_longtext()),
           extra = .cd("extra", html = TRUE, minWidth = 130, cell = rt_longtext()),
           # Stored, not recomputed: annotate.warnings counts warning events at
           # curation time, while the Annotate table recounts them per feature.
           warnings = .cd(
             "warnings", width = 110, na = "0", name = "Stored Warnings",
+            align = "center",
             tip = paste(
               "Counted when the assembly was curated; the Annotate table",
               "recounts per feature, so its number can be higher"
             )
           ),
           export_time_stamp = .cd("export_time_stamp", html = TRUE, width = 150,
-                                  filterable = FALSE, cell = rt_ts_date()),
+                                  filterable = FALSE, align = "center", cell = rt_ts_date()),
           export_group = .cd("export_group", sticky = "right", minWidth = 140)
         )
       )
@@ -1604,6 +1605,7 @@ export_server <- function(id) {
           Issue = reactable::colDef(minWidth = 120),
           `Start offset (aa)` = reactable::colDef(
             minWidth = 150,
+            align = "center",
             cell = signed_cell,
             header = mp_help_label(
               "Start offset (aa)",
@@ -1612,6 +1614,7 @@ export_server <- function(id) {
           ),
           `Stop offset (aa)` = reactable::colDef(
             minWidth = 150,
+            align = "center",
             cell = signed_cell,
             header = mp_help_label(
               "Stop offset (aa)",
@@ -1620,6 +1623,7 @@ export_server <- function(id) {
           ),
           `Identity (%)` = reactable::colDef(
             minWidth = 125,
+            align = "center",
             header = mp_help_label(
               "Identity (%)",
               "Mean percent identity of this sample versus rest of samples in alignment group."
