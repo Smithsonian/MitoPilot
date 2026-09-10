@@ -297,10 +297,12 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ),
         opts_help("Tool used to assemble the mitogenome from reads: ",
                   tags$a(href = "https://github.com/Kinggerm/GetOrganelle",
-                         target = "_blank", rel = "noopener", "GetOrganelle"),
+                         target = "_blank", rel = "noopener", "GetOrganelle",
+                         .noWS = "outside"),
                   " or ",
                   tags$a(href = "https://github.com/RemiAllio/MitoFinder",
-                         target = "_blank", rel = "noopener", "MitoFinder"),
+                         target = "_blank", rel = "noopener", "MitoFinder",
+                         .noWS = "outside"),
                   "; the relevant tool options appear below."),
         # Each tool's help line is appended INSIDE its input's container (not as a
         # standalone <p>), so it shows/hides together with the field: shinyjs::hide
