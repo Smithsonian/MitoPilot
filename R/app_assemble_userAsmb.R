@@ -368,7 +368,7 @@ assemble_server_userAsmb <- function(id) {
             ),
             scaffolds = colDef(
               show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
-              width = 80,
+              width = 95,
               align = "center",
               name = mp_col_name("scaffolds"),
               header = mp_col_header("scaffolds")
