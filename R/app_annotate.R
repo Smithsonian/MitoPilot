@@ -244,10 +244,12 @@ annotate_server <- function(id) {
 
     # Render table ----
     output$table <- renderReactable({
-      # isolate(req(rv$data)) |>
-      # req(filtered_data())
+      # Rendered once; later changes arrive through updateReactable(), so
+      # nothing here may read rv$data reactively (that would re-render and
+      # drop the selection).
+      tbl_data <- isolate(filtered_data())
       reactable(
-        data = isolate(filtered_data()),
+        data = tbl_data,
         compact = TRUE,
         striped = TRUE,
         language = reactable::reactableLang(
@@ -319,7 +321,7 @@ annotate_server <- function(id) {
           ID = colDef(
             show = TRUE,
             name = .nm("ID"),
-            minWidth = mp_fit_width(rv$data$ID),
+            minWidth = mp_fit_width(tbl_data$ID),
             sticky = "left",
             html = TRUE,
             cell = rt_longtext()
