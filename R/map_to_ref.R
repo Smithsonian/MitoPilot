@@ -796,6 +796,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
              file.path(out_dir, paste0(id, "_assembly_1.fasta")))
   writeLines(c(
     "assembler=MapToRef",
+    paste0("reference=", .mtr_opts(ref_value)),
     paste0("accession=", ref$accession),
     paste0("reference_source=", src),
     paste0("organism=", ref$organism),

@@ -781,6 +781,11 @@ a.mp-link:focus-visible {
   white-space: normal;
 }
 
+/* The sample's reference no longer matches the one this assembly used. */
+.mp-maptoref-stale {
+  color: var(--mp-warning);
+}
+
 .mp-maptoref-controls {
   display: flex;
   flex-wrap: wrap;

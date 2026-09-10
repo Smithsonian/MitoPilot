@@ -49,6 +49,7 @@ maptoref_viewer_server <- function(id, rv) {
     state <- reactiveValues(
       paths = NULL, depth = NULL, features = NULL, summary = NULL,
       ref_seq = NA_character_, cons_seq = NA_character_, len = 0L,
+      ref_now = NA_character_,
       has_work = FALSE,
       win_center = 0, win_size = 0, pileup_center = NA_real_
     )
@@ -79,6 +80,7 @@ maptoref_viewer_server <- function(id, rv) {
       state$depth <- maptoref_read_depth(p$depth)
       state$features <- maptoref_read_features(p$features)
       state$summary <- maptoref_read_summary(p$summary)
+      state$ref_now <- .mtr_ref_now(session$userData$con, rv$updating$ID)
       state$ref_seq <- maptoref_read_seq(p$ref_fasta)
       state$cons_seq <- maptoref_read_seq(p$consensus)
       state$len <- nrow(state$depth)
@@ -182,6 +184,14 @@ maptoref_viewer_server <- function(id, rv) {
         item("Reads mapped:", fld("reads_mapped_final")),
         item("Mean depth:", round(mean(state$depth$Depth), 1)),
         item("Uncalled bases:", if (!is.na(n_pct)) paste0(n_pct, "%")),
+        # The run records the reference it was given; a different value on the
+        # sample now means this assembly is behind its settings.
+        if (!is.na(fld("reference")) && !is.na(state$ref_now) &&
+            trimws(fld("reference")) != trimws(state$ref_now)) {
+          tags$span(class = "mp-maptoref-field mp-maptoref-stale",
+                    tags$b("Reference changed since this assembly:"),
+                    paste0(" now ", state$ref_now, ". Run Update on the sample to re-map."))
+        },
         if (nrow(state$features) == 0L) {
           tags$span(class = "mp-maptoref-field mp-maptoref-nofeat",
                     "Reference has no annotation record.")
