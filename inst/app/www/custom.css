@@ -471,6 +471,9 @@ details summary:hover {
   align-items: flex-end;
   gap: var(--mp-space-2);
   row-gap: var(--mp-space-2);
+  /* The module h1 above it is screen-reader-only now; restore the breathing
+     room its box used to give before the toolbar. */
+  margin-top: var(--mp-space-3);
   margin-bottom: var(--mp-space-2);
 }
 
@@ -631,14 +634,6 @@ a.mp-link:focus-visible {
 .mp-step-n {
   opacity: .7;
   margin-right: 2px;
-}
-
-/* One visible module heading, sized into the existing scale so it costs
-   the table as little height as possible. */
-.mp-module-h1 {
-  font-size: var(--mp-fs-title);
-  font-weight: 600;
-  margin: 0 0 var(--mp-space-2);
 }
 
 /* The wrapper that carries the "select rows first" tooltip for a

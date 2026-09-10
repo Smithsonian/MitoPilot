@@ -92,7 +92,7 @@ is_nonstandard_mito_gene <- function(gene, type, tool) {
 MP_STATE_META <- list(
   `0` = list(label = "On hold",      icon = "fa fa-hourglass",
              tip = "Skipped by the next Update until you set it to Ready to run."),
-  `1` = list(label = "Ready to run", icon = "fa fa-list-check",
+  `1` = list(label = "Ready to run", icon = "fa fa-play",
              tip = "Queued: the next Update will process it."),
   `4` = list(label = "In progress",  icon = "fa fa-circle-half-stroke",
              tip = "Being processed by the running pipeline."),

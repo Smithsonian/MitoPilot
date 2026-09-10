@@ -274,6 +274,25 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
             style = "flex: 1",
+            numericInput(
+              ns("annotate_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("annotate_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
             selectizeInput(
               ns("start_gene"),
               label = "Starting gene for circular assemblies:",
@@ -498,25 +517,6 @@ annotate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         ) |> shinyjs::disabled(),
         opts_help("Keep predicted tRNAs whose anticodon could not be confidently ",
                   "determined (reported with an NNN anticodon)."),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("annotate_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("annotate_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        ),
         size = "m",
         footer = mp_footer(
           primary = actionButton(ns("update_annotate_opts"), "Save")
@@ -580,6 +580,25 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         opts_help("Reusable named set of options applied to the selected assemblies; ",
                   "check Edit to change values or type a new name to create a set. ",
                   "Saving re-queues the selected assemblies: their state becomes Ready to run."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("curate_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("curate_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
         div(
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
           div(
@@ -697,25 +716,6 @@ curate_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
                     "codons, and so on) for the selected ruleset.",
                     href = "https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.html")
         ),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("curate_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("curate_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        ),
         size = "m",
         footer = mp_footer(
           primary = actionButton(ns("update_curate_opts"), "Save")
@@ -800,26 +800,7 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
       opts_help("Extra command-line flags passed to NCBI ORFfinder. The genetic ",
                 "code (-g) and minimum length (-ml) are set for you, from the ",
                 "sample's curation ruleset and the minimum ORF length above.",
-                href = "https://www.ncbi.nlm.nih.gov/orffinder/"),
-      div(
-        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-        div(
-          style = "flex: 1",
-          numericInput(
-            ns("orf_opts_cpus"), "CPUs:",
-            width = "100%",
-            value = current$cpus %||% numeric(0)
-          ) |> shinyjs::disabled()
-        ),
-        div(
-          style = "flex: 1",
-          numericInput(
-            ns("orf_opts_memory"), "Memory (GB):",
-            width = "100%",
-            value = current$memory %||% numeric(0)
-          ) |> shinyjs::disabled()
-        )
-      )
+                href = "https://www.ncbi.nlm.nih.gov/orffinder/")
     )
     if (!orf_on) orf_param_opts <- shinyjs::hidden(orf_param_opts)
 
@@ -852,6 +833,25 @@ orf_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()) {
         opts_help("Reusable named set of options applied to the selected assemblies; ",
                   "check Edit to change values or type a new name to create a set. ",
                   "Saving re-queues the selected assemblies: their state becomes Ready to run."),
+        div(
+          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("orf_opts_cpus"), "CPUs:",
+              width = "100%",
+              value = current$cpus %||% numeric(0)
+            ) |> shinyjs::disabled()
+          ),
+          div(
+            style = "flex: 1",
+            numericInput(
+              ns("orf_opts_memory"), "Memory (GB):",
+              width = "100%",
+              value = current$memory %||% numeric(0)
+            ) |> shinyjs::disabled()
+          )
+        ),
         mp_checkbox(
           ns("use_orffinder"),
           label = "Run ORF finder step (after curation; finds ORFs in unannotated regions)",

@@ -244,10 +244,12 @@ annotate_server <- function(id) {
 
     # Render table ----
     output$table <- renderReactable({
-      # isolate(req(rv$data)) |>
-      # req(filtered_data())
+      # Rendered once; later changes arrive through updateReactable(), so
+      # nothing here may read rv$data reactively (that would re-render and
+      # drop the selection).
+      tbl_data <- isolate(filtered_data())
       reactable(
-        data = isolate(filtered_data()),
+        data = tbl_data,
         compact = TRUE,
         striped = TRUE,
         language = reactable::reactableLang(
@@ -280,7 +282,7 @@ annotate_server <- function(id) {
           headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
         ),
         columns = list(
-          `.selection` = colDef(show = T, sticky = "left", width = 28),
+          `.selection` = colDef(show = T, sticky = "left", width = 28, align = "center"),
           annotate_lock = colDef(
             show = TRUE,
             sticky = "left",
@@ -319,7 +321,7 @@ annotate_server <- function(id) {
           ID = colDef(
             show = TRUE,
             name = .nm("ID"),
-            minWidth = mp_fit_width(rv$data$ID),
+            minWidth = mp_fit_width(tbl_data$ID),
             sticky = "left",
             html = TRUE,
             cell = rt_longtext()
@@ -384,6 +386,7 @@ annotate_server <- function(id) {
             name = .nm("length_raw"), header = .hd("length_raw"),
             minWidth = 125,
             filterable = FALSE,
+            align = "center",
             html = TRUE,
             cell = rt_longtext()
           ),
@@ -392,13 +395,14 @@ annotate_server <- function(id) {
             name = .nm("length_trimmed"), header = .hd("length_trimmed"),
             minWidth = 150,
             filterable = FALSE,
+            align = "center",
             html = TRUE,
             cell = rt_longtext()
           ),
           topology = colDef(show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
-                            name = .nm("topology"), header = .hd("topology")),
+                            name = .nm("topology"), header = .hd("topology"), align = "center"),
           scaffolds = colDef(show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
-                             name = .nm("scaffolds"), header = .hd("scaffolds")),
+                             name = .nm("scaffolds"), header = .hd("scaffolds"), align = "center"),
           poor_blast_ref = colDef(show = FALSE),
           blast_ref_status = colDef(
             show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
@@ -436,24 +440,26 @@ annotate_server <- function(id) {
             show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
             name = .nm("blast_pident"), header = .hd("blast_pident"),
             filterable = FALSE,
+            align = "center",
             minWidth = 130
           ),
           blast_qcovs = colDef(
             show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
             name = .nm("blast_qcovs"), header = .hd("blast_qcovs"),
             filterable = FALSE,
+            align = "center",
             minWidth = 135
           ),
-          PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = .nm("PCGCount"), header = .hd("PCGCount")),
-          tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = .nm("tRNACount"), header = .hd("tRNACount")),
-          rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = .nm("rRNACount"), header = .hd("rRNACount")),
-          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = .nm("ORFCount"), header = .hd("ORFCount")),
+          PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = .nm("PCGCount"), header = .hd("PCGCount"), align = "center"),
+          tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = .nm("tRNACount"), header = .hd("tRNACount"), align = "center"),
+          rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = .nm("rRNACount"), header = .hd("rRNACount"), align = "center"),
+          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = .nm("ORFCount"), header = .hd("ORFCount"), align = "center"),
           missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"),
                            name = .nm("missing"), header = .hd("missing"), html = TRUE, cell = rt_longtext()),
           extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"),
                          name = .nm("extra"), header = .hd("extra"), html = TRUE, cell = rt_longtext()),
           warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"),
-                            name = .nm("warnings"), header = .hd("warnings")),
+                            name = .nm("warnings"), header = .hd("warnings"), align = "center"),
           reviewed = colDef(
             show = TRUE, class = .grp("reviewed"), headerClass = .grp("reviewed"),
             name = .nm("reviewed"), header = .hd("reviewed"),
@@ -514,6 +520,7 @@ annotate_server <- function(id) {
             filterable = FALSE,
             html = T,
             width = 150,
+            align = "center",
             cell = rt_ts_date()
           ),
           annotate_notes = colDef(

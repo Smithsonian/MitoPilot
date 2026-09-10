@@ -196,7 +196,7 @@ assemble_server_userAsmb <- function(id) {
           ),
           defaultColDef = colDef(show = FALSE),
           columns = list(
-            `.selection` = colDef(show = T, sticky = "left", width = 28),
+            `.selection` = colDef(show = T, sticky = "left", width = 28, align = "center"),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
@@ -244,6 +244,7 @@ assemble_server_userAsmb <- function(id) {
             topology = colDef(
               show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
               minWidth = 120,
+              align = "center",
               name = mp_col_name("topology"),
               header = mp_col_header("topology")
             ),
@@ -327,6 +328,7 @@ assemble_server_userAsmb <- function(id) {
               name = mp_col_name("trimmed_reads"),
               header = mp_col_header("trimmed_reads"),
               filterable = FALSE,
+              align = "center",
               minWidth = 100
             ),
             mean_length = colDef(
@@ -334,11 +336,13 @@ assemble_server_userAsmb <- function(id) {
               name = mp_col_name("mean_length"),
               header = mp_col_header("mean_length"),
               filterable = FALSE,
+              align = "center",
               minWidth = 100
             ),
             length = colDef(
               show = TRUE, class = .grp("length"), headerClass = .grp("length"),
               minWidth = 140,
+              align = "center",
               name = mp_col_name("length_raw"),
               header = mp_col_header("length_raw"),
               filterable = FALSE,
@@ -348,6 +352,7 @@ assemble_server_userAsmb <- function(id) {
             ambiguous_bases = colDef(
               show = TRUE, class = .grp("ambiguous_bases"), headerClass = .grp("ambiguous_bases"),
               width = 110,
+              align = "center",
               name = mp_col_name("ambiguous_bases"),
               header = mp_col_header("ambiguous_bases"),
               filterable = FALSE
@@ -355,6 +360,7 @@ assemble_server_userAsmb <- function(id) {
             paths = colDef(
               show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
               width = 80,
+              align = "center",
               name = mp_col_name("paths"),
               header = mp_col_header("paths"),
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
@@ -362,7 +368,8 @@ assemble_server_userAsmb <- function(id) {
             ),
             scaffolds = colDef(
               show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
-              width = 80,
+              width = 95,
+              align = "center",
               name = mp_col_name("scaffolds"),
               header = mp_col_header("scaffolds")
             ),
@@ -407,6 +414,7 @@ assemble_server_userAsmb <- function(id) {
               name = mp_col_name("blast_pident"),
               header = mp_col_header("blast_pident"),
               filterable = FALSE,
+              align = "center",
               width = 90
             ),
             blast_qcovs = colDef(
@@ -414,6 +422,7 @@ assemble_server_userAsmb <- function(id) {
               name = mp_col_name("blast_qcovs"),
               header = mp_col_header("blast_qcovs"),
               filterable = FALSE,
+              align = "center",
               width = 90
             ),
             time_stamp = colDef(
@@ -423,6 +432,7 @@ assemble_server_userAsmb <- function(id) {
               filterable = FALSE,
               html = T,
               width = 150,
+              align = "center",
               cell = rt_ts_date()
             ),
             assemble_notes = colDef(

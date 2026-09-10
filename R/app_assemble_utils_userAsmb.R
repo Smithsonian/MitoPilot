@@ -292,6 +292,25 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
       opts_help("Reusable named set of options applied to the selected samples; ",
                 "check Edit to change values or type a new name to create a set. ",
                 "Saving re-queues the selected samples: their state becomes Ready to run."),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("circ_opts_cpus"), "CPUs:",
+            width = "100%",
+            value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("circ_opts_memory"), "Memory (GB):",
+            width = "100%",
+            value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
       mp_checkbox(
         ns("attempt_circularization"),
         label = "Attempt to circularize linear assemblies",
@@ -352,26 +371,7 @@ circularize_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain
                       "the junction, each extending the given number of bases past ",
                       "it on both sides.")
           )
-        },
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("circ_opts_cpus"), "CPUs:",
-              width = "100%",
-              value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("circ_opts_memory"), "Memory (GB):",
-              width = "100%",
-              value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        )
+        }
       ),
       size = "m",
       footer = mp_footer(primary = actionButton(ns("update_circularize_opts"), "Save"))
@@ -436,6 +436,23 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
       opts_help("Reusable named set of options applied to the selected samples; ",
                 "check Edit to change values or type a new name to create a set. ",
                 "Saving re-queues the selected samples: their state becomes Ready to run."),
+      div(
+        style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("find_opts_cpus"), "CPUs:",
+            width = "100%", value = current$cpus %||% numeric(0)
+          ) |> shinyjs::disabled()
+        ),
+        div(
+          style = "flex: 1",
+          numericInput(
+            ns("find_opts_memory"), "Memory (GB):",
+            width = "100%", value = current$memory %||% numeric(0)
+          ) |> shinyjs::disabled()
+        )
+      ),
       mp_checkbox(
         ns("find_mitogenome"),
         label = "Search the assembly for mitochondrial contigs",
@@ -515,24 +532,7 @@ find_mito_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain()
           )
         ),
         opts_help("Only the best candidates go to MitoFinder, and a candidate is ",
-                  "confirmed once it carries at least this many mitochondrial genes."),
-        div(
-          style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em;",
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("find_opts_cpus"), "CPUs:",
-              width = "100%", value = current$cpus %||% numeric(0)
-            ) |> shinyjs::disabled()
-          ),
-          div(
-            style = "flex: 1",
-            numericInput(
-              ns("find_opts_memory"), "Memory (GB):",
-              width = "100%", value = current$memory %||% numeric(0)
-            ) |> shinyjs::disabled()
-          )
-        )
+                  "confirmed once it carries at least this many mitochondrial genes.")
       ),
       size = "m",
       footer = mp_footer(primary = actionButton(ns("update_find_mito_opts"), "Save"))

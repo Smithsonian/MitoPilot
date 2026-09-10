@@ -118,17 +118,17 @@ app_ui_userAsmb <- function(request) {
           style = "padding: 1em;",
           conditionalPanel(
             condition = "input.mode == 'Assemble'",
-            tags$h1(class = "mp-module-h1", "Assemble"),
+            tags$h1(class = "mp-module-h1 sr-only", "Assemble"),
             assemble_ui_userAsmb("assemble")
           ),
           conditionalPanel(
             condition = "input.mode == 'Annotate'",
-            tags$h1(class = "mp-module-h1", "Annotate"),
+            tags$h1(class = "mp-module-h1 sr-only", "Annotate"),
             annotate_ui("annotate")
           ),
           conditionalPanel(
             condition = "input.mode == 'Export'",
-            tags$h1(class = "mp-module-h1", "Export"),
+            tags$h1(class = "mp-module-h1 sr-only", "Export"),
             export_ui("export")
           )
         )
