@@ -190,10 +190,12 @@ rt_topology <- function() {
 #' @param hide_no if TRUE, render an empty cell for "no"/NA values (only
 #'   "yes" gets a pill). Useful for columns where "no" is the default
 #'   and noisy to display.
+#' @param yes_tone pill tone for "yes" when invert is FALSE; "warning" for a
+#'   flag whose "yes" asks for attention (problematic, partial).
 #' @noRd
-rt_bool_badge <- function(invert = FALSE, hide_no = FALSE) {
+rt_bool_badge <- function(invert = FALSE, hide_no = FALSE, yes_tone = "success") {
   rt_pill(
-    map = c(yes = if (invert) "danger" else "success", no = "neutral"),
+    map = c(yes = if (invert) "danger" else yes_tone, no = "neutral"),
     empty = if (hide_no) "" else "not set",
     hide = if (hide_no) "no" else NULL
   )

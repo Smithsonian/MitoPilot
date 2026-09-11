@@ -475,7 +475,7 @@ annotate_server <- function(id) {
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge()
+            cell = rt_bool_badge(yes_tone = "warning")
           ),
           partial = colDef(
             show = TRUE, class = .grp("partial"), headerClass = .grp("partial"),
@@ -483,7 +483,7 @@ annotate_server <- function(id) {
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge()
+            cell = rt_bool_badge(yes_tone = "warning")
           ),
           export_group = colDef(
             show = TRUE, class = .grp("export_group"), headerClass = .grp("export_group"),
