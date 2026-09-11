@@ -166,6 +166,22 @@ rt_pill <- function(map, labels = NULL, empty = "not set", hide = NULL) {
   ) |> htmlwidgets::JS()
 }
 
+#' Topology cell: the glyph and pill the annotation details header uses
+#'
+#' One pill per value, so a multi-scaffold "circular;linear" reads as two.
+#' @noRd
+rt_topology <- function() {
+  htmlwidgets::JS("function(cellInfo) {
+    var v = cellInfo.value;
+    if (v === null || v === undefined || String(v).trim() === '') return '';
+    return String(v).split(/[;,]\\s*/).map(function(t) {
+      var circ = /circular$/.test(t);
+      var glyph = circ ? '\\u21ba ' : (/linear$/.test(t) ? '\\u2194 ' : '');
+      return `<span class='mp-pill mp-pill-${circ ? 'info' : 'neutral'}'>${glyph}${t}</span>`;
+    }).join(' ');
+  }")
+}
+
 #' Render a yes/no text column as a status pill
 #'
 #' "no" is grey in every column, never green; a blank value reads "not set".
