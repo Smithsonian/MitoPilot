@@ -1469,16 +1469,19 @@ export_server <- function(id) {
         # exits below clean up the review state.
         title = mp_modal_title("PCG annotation outlier review", close = FALSE),
         size = "l",
-        # Prev / Next page the review, so they sit with the position they move.
+        # One pinned bar: the position the arrows move, and the action on the
+        # gene shown. Stays in view while the alignment scrolls.
         div(
-          style = "display: flex; align-items: center; gap: 0.75em; margin-bottom: 0.5em;",
-          div(style = "font-weight: bold;", textOutput(ns("review_header"), inline = TRUE)),
+          class = "mp-review-bar",
+          actionButton(ns("review_prev"), "Prev", icon = icon("chevron-left"),
+                       class = "btn-default"),
+          div(class = "mp-review-gene", textOutput(ns("review_header"), inline = TRUE)),
+          actionButton(ns("review_next"), "Next", icon = icon("chevron-right"),
+                       class = "btn-default"),
           div(
-            style = "margin-left: auto; display: flex; gap: 0.5em;",
-            actionButton(ns("review_prev"), "Prev", icon = icon("chevron-left"),
-                         class = "btn-sm btn-default"),
-            actionButton(ns("review_next"), "Next", icon = icon("chevron-right"),
-                         class = "btn-sm btn-default")
+            class = "mp-review-resolve",
+            actionButton(ns("skip_gene"), "Mark gene resolved", class = "btn-default",
+                         title = "Mark every flag for this gene as resolved and move on")
           )
         ),
         opts_help(
@@ -1489,13 +1492,6 @@ export_server <- function(id) {
         uiOutput(ns("review_aln_ui")),
         tags$hr(),
         reactableOutput(ns("review_table")),
-        # Acts on the gene shown above, not on the modal, so it stays here.
-        div(
-          style = "margin-top: 0.5em;",
-          actionButton(ns("skip_gene"), "Mark gene resolved",
-                       class = "btn-sm btn-default",
-                       title = "Mark every flag for this gene as resolved and move on")
-        ),
         # Edit any sample of this gene, flagged or not (only this gene stays
         # editable in the details modal, same as clicking a flagged sample's 'edit').
         uiOutput(ns("review_sample_picker")),
@@ -1555,7 +1551,10 @@ export_server <- function(id) {
         conservation = TRUE,
         labelNameLength = 150,
         colorscheme = "zappo",
-        alignmentHeight = review_aln_height()
+        alignmentHeight = review_aln_height(),
+        # The widget box otherwise keeps htmlwidgets' default height and leaves
+        # a blank band under a short alignment.
+        height = paste0(review_aln_height() + 60L, "px")
       )
     })
 
