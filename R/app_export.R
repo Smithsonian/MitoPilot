@@ -275,7 +275,7 @@ export_server <- function(id) {
                               cell = rt_longtext()),
           blast_lineage = .cd("blast_lineage", html = TRUE, minWidth = 200,
                               cell = rt_longtext()),
-          topology = .cd("topology", width = 100, align = "center", html = TRUE, cell = rt_topology()),
+          topology = .cd("topology", width = 125, align = "center", html = TRUE, cell = rt_topology()),
           structure = .cd("structure", html = TRUE, minWidth = 200,
                           cell = rt_longtext()),
           PCGCount = .cd("PCGCount", width = 90, align = "center"),
