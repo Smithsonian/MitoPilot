@@ -400,7 +400,8 @@ annotate_server <- function(id) {
             cell = rt_longtext()
           ),
           topology = colDef(show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
-                            name = .nm("topology"), header = .hd("topology"), align = "center"),
+                            name = .nm("topology"), header = .hd("topology"), align = "center",
+                            html = TRUE, cell = rt_topology()),
           scaffolds = colDef(show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
                              name = .nm("scaffolds"), header = .hd("scaffolds"), align = "center"),
           poor_blast_ref = colDef(show = FALSE),

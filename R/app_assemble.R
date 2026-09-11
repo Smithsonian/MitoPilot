@@ -304,7 +304,8 @@ assemble_server <- function(id) {
               minWidth = 120,
               align = "center",
               name = mp_col_name("topology"),
-              header = mp_col_header("topology")
+              header = mp_col_header("topology"),
+              html = TRUE, cell = rt_topology()
             ),
             length = colDef(
               show = TRUE, class = .grp("length"), headerClass = .grp("length"),
