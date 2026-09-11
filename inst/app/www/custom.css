@@ -652,7 +652,7 @@ a.mp-link:focus-visible {
    and custom.js clears its inline height, both wrong inside a modal body
    that is already capped at 70vh. */
 .mp-modal-table {
-  height: clamp(280px, 50vh, 640px);
+  height: clamp(140px, 25vh, 320px);
   resize: vertical;
   overflow: hidden;
 }
