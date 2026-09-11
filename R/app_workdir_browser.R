@@ -223,14 +223,19 @@ find_workdirs <- function(project_dir, sample_id) {
   # Stop at first whitespace or "]": grid executors (e.g. SGE) append
   # " started: ...; exited: ...; " after the path before the closing "]".
   workdir <- stringr::str_match(th, "workDir:\\s*([^\\]\\s]+)")[, 2]
-  # name is e.g. "WF1:ASSEMBLE:assemble (sample)"; tag may carry a ".<path_idx>" suffix
+  # name is e.g. "WF1:ASSEMBLE:assemble (sample)"; the tag is the sample id
+  # followed by dot-separated suffixes: ".<path>" in WF1, ".<path>.<scaffold>"
+  # in WF2, and ".<path>.<scaffold>.<accession>" for the BLAST reference tasks.
   nm      <- stringr::str_match(name, "([^:\\s]+)\\s*\\(([^)]+)\\)\\s*$")
   process <- nm[, 2]
-  sample  <- sub("\\.[0-9]+$", "", nm[, 3])
+  tag     <- nm[, 3]
+  is_sample <- !is.na(tag) &
+    (tag == sample_id | startsWith(tag, paste0(sample_id, ".")))
+  sample  <- ifelse(is_sample, sample_id, NA_character_)
 
   # Native bookkeeping tasks with no inspectable work dir (and no OS exit code).
   exclude_processes <- c("write_curated_result")
-  keep <- !is.na(workdir) & !is.na(process) & sample == sample_id &
+  keep <- !is.na(workdir) & !is.na(process) & is_sample &
           !process %in% exclude_processes
   if (!any(keep)) return(empty)
   out <- data.frame(
