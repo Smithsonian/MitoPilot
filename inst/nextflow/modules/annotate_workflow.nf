@@ -25,6 +25,12 @@ params.sqlRead =    'SELECT DISTINCT a.ID, a.path, a.scaffold, b.assemble_opts, 
                     'AND an.annotate_switch = 1 AND an.annotate_lock = 0'
 
 workflow ANNOTATE {
+    // Placeholder for the optional MitoFinder reference. It lives under launchDir,
+    // which every task already mounts; the pipeline's own directory is the
+    // installed R library, which Docker Desktop does not share (docker exit 125).
+    def mitofinder_placeholder = file("${launchDir}/.MitoPilot_NO_FILE")
+    if (!mitofinder_placeholder.exists()) { mitofinder_placeholder.text = '' }
+
 
     channel.fromQuery(params.sqlRead, db: 'sqlite')
         .map{ it ->
@@ -89,7 +95,7 @@ workflow ANNOTATE {
                 ],
                 file(it[7] + "/" + it[6]),                              // MITOS ref dir + clade (tarball)
                 it[6].replaceFirst(/\.tar\.gz$/, ''),               // ref_db without ".tar.gz"
-                file((it[17] != null && it[17].toString().trim()) ? it[17] : "${projectDir}/assets/NO_FILE")  // MitoFinder reference .gb (or placeholder)
+                file((it[17] != null && it[17].toString().trim()) ? it[17] : mitofinder_placeholder)  // MitoFinder reference .gb (or placeholder)
             )
         }
         .set { annotate_pre }
