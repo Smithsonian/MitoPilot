@@ -535,7 +535,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
                           cpus, out_dir, log_fn, ref_value) {
   src <- .mtr_ref_class(ref_value)
   if (identical(src, "none")) {
-    # Nextflow stages assets/NO_FILE (0 bytes) when no reference is set on the
+    # Nextflow stages an empty placeholder (0 bytes) when no reference is set on the
     # sample or the parameter set. A direct caller passes a real path and no
     # ref_value, so an existing non-empty file still counts as a reference.
     if (!file.exists(ref_file) || file.size(ref_file) == 0L) {

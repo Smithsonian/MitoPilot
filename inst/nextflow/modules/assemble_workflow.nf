@@ -103,6 +103,11 @@ params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?,
 
 
 workflow ASSEMBLE {
+    // Placeholder for a sample without a MapToRef reference (0 bytes, which
+    // map_to_ref() reads as "none"). Under launchDir so it adds no bind mount.
+    def maptoref_placeholder = file("${launchDir}/.MitoPilot_NO_FILE")
+    if (!maptoref_placeholder.exists()) { maptoref_placeholder.text = '' }
+
     take:
         input
 
@@ -133,7 +138,7 @@ workflow ASSEMBLE {
                     it[10],                                                     // genetic code
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
                     (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer)), // max_scaffolds
-                    file((it[7] == 'MapToRef' && it[19] != null && it[19].toString().trim() && !isMaptorefAccession(it[19])) ? it[19].toString().trim() : "${projectDir}/assets/NO_FILE")  // MapToRef reference (accessions resolve in-task)
+                    file((it[7] == 'MapToRef' && it[19] != null && it[19].toString().trim() && !isMaptorefAccession(it[19])) ? it[19].toString().trim() : maptoref_placeholder)  // MapToRef reference (accessions resolve in-task)
                 )
                 min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
