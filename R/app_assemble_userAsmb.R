@@ -242,7 +242,8 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_longtext()
             ),
             topology = colDef(
-              show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
+              show = TRUE, class = paste(.grp("topology"), "mp-note-cell"),
+              headerClass = .grp("topology"),
               minWidth = 120,
               align = "center",
               name = mp_col_name("topology"),
