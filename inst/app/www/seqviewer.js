@@ -52,9 +52,27 @@
     return (i === n - 1 && tr.length === n - 1) ? '*' : '';
   }
 
+  // Genomic side made partial by strand + partial5/partial3: 'start' (pos1
+  // end), 'end' (pos2 end), 'both', or null when both ends are real.
+  function partialEdge(f) {
+    var startOpen = f.dir === '-' ? f.partial3 : f.partial5;
+    var endOpen = f.dir === '-' ? f.partial5 : f.partial3;
+    if (startOpen && endOpen) return 'both';
+    if (startOpen) return 'start';
+    if (endOpen) return 'end';
+    return null;
+  }
+  // Whether a linearised [a, b, k] piece shows the pos1 ("start") and/or
+  // pos2 ("end") boundary at its own true edge, vs. being cut off by the
+  // visible linearised range [vs, ve).
+  function segOwns(seg, vs, ve) {
+    return { start: seg[0] >= vs, end: seg[1] <= ve };
+  }
+
   window.mpseq = window.mpseq || {};
   window.mpseq.geom = { span: span, wraps: wraps, lanes: lanes, nCodons: nCodons,
-                        codonCentre: codonCentre, stopLetter: stopLetter };
+                        codonCentre: codonCentre, stopLetter: stopLetter,
+                        partialEdge: partialEdge, segOwns: segOwns };
 })();
 
 (function () {
@@ -164,6 +182,7 @@
   };
   Viewer.prototype.draw = function () {
     if (!this.len || !this.canvas.offsetParent) return;
+    this.clamp();
     var dpr = window.devicePixelRatio || 1, W = this.wrap.clientWidth;
     this.aaRows = this.showAa && this.ppb >= AA_MIN
       ? this.feats.filter(function (f) { return f.type === 'PCG' && f.translation !== undefined && this.segments(f).length; }, this)
@@ -201,22 +220,42 @@
     }
   };
   Viewer.prototype.drawLanes = function (c) {
+    var vs = this.viewStart, ve = this.viewStart + this.viewLen();
     c.textAlign = 'center'; c.textBaseline = 'middle';
     this.feats.forEach(function (f) {
-      var col = typeColor(f.type), y = this.laneY(f.lane), h = LANE_H - 6;
+      var col = typeColor(f.type), y = this.laneY(f.lane), h = LANE_H - 6, edge = G.partialEdge(f);
       this.segments(f).forEach(function (seg) {
         var x0 = Math.max(GUTTER, this.x(seg[0])), x1 = Math.min(this.wrap.clientWidth, this.x(seg[1] + 1));
         if (x1 - x0 < 1) return;
         var fwd = f.dir !== '-', head = Math.min(8, x1 - x0);
+        // vertices in drawing order; pts[4]-pts[0] is the closing edge.
+        var pts = fwd ? [[x0, y], [x1 - head, y], [x1, y + h / 2], [x1 - head, y + h], [x0, y + h]]
+                      : [[x1, y], [x0 + head, y], [x0, y + h / 2], [x0 + head, y + h], [x1, y + h]];
         c.beginPath();
-        if (fwd) { c.moveTo(x0, y); c.lineTo(x1 - head, y); c.lineTo(x1, y + h / 2); c.lineTo(x1 - head, y + h); c.lineTo(x0, y + h); }
-        else { c.moveTo(x1, y); c.lineTo(x0 + head, y); c.lineTo(x0, y + h / 2); c.lineTo(x0 + head, y + h); c.lineTo(x1, y + h); }
+        c.moveTo(pts[0][0], pts[0][1]);
+        for (var i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
         c.closePath();
         c.fillStyle = col + '55'; c.fill();
         c.lineWidth = f.row === this.selected ? 2 : 1;
         c.strokeStyle = f.row === this.selected ? cssVar('--mp-primary', '#337ab7') : col;
-        c.setLineDash((f.partial5 && fwd === true && seg[0] === f.pos1 + seg[2] * this.len) || (f.partial3 && !fwd) ? [3, 2] : []);
-        c.stroke(); c.setLineDash([]);
+
+        // the flat closing edge (pts[4]-pts[0]) is the pos1 side when fwd,
+        // pos2 side otherwise; the tip (pts[1..3]) is the other side.
+        var owns = edge ? G.segOwns(seg, vs, ve) : null;
+        var dashStart = !!edge && (edge === 'start' || edge === 'both') && owns.start;
+        var dashEnd = !!edge && (edge === 'end' || edge === 'both') && owns.end;
+        var dashFlat = fwd ? dashStart : dashEnd;
+        var dashTip = fwd ? dashEnd : dashStart;
+
+        c.setLineDash([]);
+        c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); c.lineTo(pts[1][0], pts[1][1]); c.stroke();
+        c.beginPath(); c.moveTo(pts[3][0], pts[3][1]); c.lineTo(pts[4][0], pts[4][1]); c.stroke();
+        c.setLineDash(dashTip ? [3, 2] : []);
+        c.beginPath(); c.moveTo(pts[1][0], pts[1][1]); c.lineTo(pts[2][0], pts[2][1]); c.lineTo(pts[3][0], pts[3][1]); c.stroke();
+        c.setLineDash(dashFlat ? [3, 2] : []);
+        c.beginPath(); c.moveTo(pts[4][0], pts[4][1]); c.lineTo(pts[0][0], pts[0][1]); c.stroke();
+        c.setLineDash([]);
+
         if (x1 - x0 > c.measureText(f.gene).width + 8) { c.fillStyle = cssVar('--mp-text', '#333'); c.fillText(f.gene, (x0 + x1) / 2, y + h / 2); }
         this.hits.push({ x0: x0, x1: x1, y0: y, y1: y + h, f: f, row: f.row });
       }, this);
@@ -318,7 +357,12 @@
     if (go) go.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var v = parseInt(go.value, 10); if (v >= 1 && v <= self.len) self.goto(v); } });
   };
 
-  function get(id) { return viewers[id] || (document.getElementById(id) ? (viewers[id] = new Viewer(id)) : null); }
+  function get(id) {
+    var el = document.getElementById(id);
+    if (!el) return null;
+    if (viewers[id] && viewers[id].canvas !== el) delete viewers[id];
+    return viewers[id] || (viewers[id] = new Viewer(id));
+  }
   if (window.Shiny) {
     window.Shiny.addCustomMessageHandler('mpseq', function (p) { var v = get(p.id); if (v) v.load(p); });
     window.Shiny.addCustomMessageHandler('mpseq_select', function (p) { var v = get(p.id); if (v) v.fit(p.row); });

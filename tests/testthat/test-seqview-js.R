@@ -78,3 +78,71 @@ test_that("a click on a gene arrow sends the row through the Shiny input", {
   expect_equal(s$hit, 2)
   expect_equal(s$sent, "sv-pick:2")
 })
+
+test_that("partialEdge picks the genomic side and segOwns finds which piece is real", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var g = window.mpseq.geom;
+    var edges = [
+      g.partialEdge({dir:'+',partial5:true,partial3:false}),
+      g.partialEdge({dir:'+',partial5:false,partial3:true}),
+      g.partialEdge({dir:'-',partial5:true,partial3:false}),
+      g.partialEdge({dir:'-',partial5:false,partial3:true})
+    ];
+    var len = 16600, f = {pos1:16500, pos2:120, dir:'+'};
+    var span = g.span(f, len);
+    var segA = [f.pos1, f.pos1 + span - 1, 0];               // the piece that starts at pos1
+    var segB = [f.pos1 - len, f.pos1 - len + span - 1, -1];  // the piece that ends at pos2
+    var ownsA = g.segOwns(segA, 1, len + 1);
+    var ownsB = g.segOwns(segB, 1, len + 1);
+    return JSON.stringify({edges: edges, ownsA: ownsA, ownsB: ownsB});
+  })()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$edges, c("start", "end", "end", "start"))
+  expect_true(s$ownsA$start); expect_false(s$ownsA$end)
+  expect_false(s$ownsB$start); expect_true(s$ownsB$end)
+})
+
+test_that("swapping the canvas node drops the stale viewer instead of drawing into nothing", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    var small = {id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'linear', seq:seq, version:1,
+      selected:null, features:[{row:5,type:'PCG',gene:'nad2',pos1:1,pos2:200,dir:'+',partial5:false,partial3:false,notes:'',translation:'M'}]};
+    window.__handlers.mpseq(small);
+    window.mpseq.whole('sv-canvas');
+    var missBefore = window.mpseq.hitTest('sv-canvas', 500, window.mpseq.laneY('sv-canvas', 0));
+    var wrap = document.getElementById('sv-canvas').parentElement;
+    wrap.removeChild(document.getElementById('sv-canvas'));
+    var fresh = document.createElement('canvas'); fresh.id = 'sv-canvas';
+    wrap.appendChild(fresh);
+    // a new version with the gene spanning the whole genome: only a redraw against
+    // the fresh, attached canvas will produce a hit at px 500
+    var full = {id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'linear', seq:seq, version:2,
+      selected:null, features:[{row:5,type:'PCG',gene:'nad2',pos1:1,pos2:2000,dir:'+',partial5:false,partial3:false,notes:'',translation:'M'}]};
+    window.__handlers.mpseq(full);
+    var hit = window.mpseq.hitTest('sv-canvas', 500, window.mpseq.laneY('sv-canvas', 0));
+    return JSON.stringify({missBefore: missBefore, hit: hit && hit.row, isFresh: document.getElementById('sv-canvas') === fresh});
+  })()")
+  s <- jsonlite::fromJSON(r)
+  expect_null(s$missBefore)
+  expect_equal(s$hit, 5)
+  expect_true(s$isFresh)
+})
+
+test_that("the scale self-corrects once the container's real width is known", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var wrap = document.getElementById('sv-canvas').parentElement;
+    wrap.style.display = 'none';
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    window.__handlers.mpseq({id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'linear', seq:seq, version:1,
+      selected:null, features:[]});
+    wrap.style.display = '';
+    document.getElementById('sv-section').dispatchEvent(new Event('toggle'));
+    var s = window.mpseq.state('sv-canvas');
+    return JSON.stringify({ppb: s.ppb});
+  })()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(round(s$ppb * 2000), 940)
+})
