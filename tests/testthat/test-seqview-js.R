@@ -38,3 +38,43 @@ test_that("the stop letter is drawn only for a stop codon beyond the translation
     return JSON.stringify([g.stopLetter(withStop,2,len), g.stopLetter(withStop,1,len), g.stopLetter(trimmed,2,len)]);})()")
   expect_equal(jsonlite::fromJSON(r), c("*", "K", "L"))
 })
+
+test_that("the viewer loads a payload, fits a gene, and reports clicks", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    window.__handlers.mpseq({id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'circular', seq:seq, version:1,
+      selected:null, features:[{row:1,type:'PCG',gene:'nad1',pos1:100,pos2:399,dir:'+',partial5:false,partial3:false,notes:'',translation:'MKL'},
+                               {row:3,type:'tRNA',gene:'trnF',pos1:380,pos2:450,dir:'-',partial5:false,partial3:false,notes:''}]});
+    var s0 = window.mpseq.state('sv-canvas');
+    window.__handlers.mpseq_select({id:'sv-canvas', row:1});
+    var s1 = window.mpseq.state('sv-canvas');
+    window.mpseq.whole('sv-canvas'); var s2 = window.mpseq.state('sv-canvas');
+    window.mpseq.zoom('sv-canvas', 2); var s3 = window.mpseq.state('sv-canvas');
+    window.mpseq.goto('sv-canvas', 1990); var s4 = window.mpseq.state('sv-canvas');
+    return JSON.stringify({n:s0.features.length, lanes:s0.nLanes, sel:s1.selected, fitStart:s1.viewStart, fitPpb:s1.ppb,
+      wholePpb:s2.ppb, zoomPpb:s3.ppb, gotoStart:s4.viewStart, inputs:window.__inputs.length});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$n, 2); expect_equal(s$lanes, 2); expect_equal(s$sel, 1)
+  expect_lt(s$fitStart, 100); expect_gt(s$fitPpb, 1)
+  expect_equal(round(s$wholePpb * 2000), 940)   # canvas wrapper is 1000 px wide, minus the 60 px gutter
+  expect_equal(round(s$zoomPpb / s$wholePpb), 2)
+  # centred on 1990 the view starts before the origin on a circular unit
+  expect_gt(s$gotoStart, 1000)
+})
+
+test_that("a click on a gene arrow sends the row through the Shiny input", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    window.__inputs = [];
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    window.__handlers.mpseq({id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'linear', seq:seq, version:1,
+      selected:null, features:[{row:2,type:'PCG',gene:'cox1',pos1:1,pos2:2000,dir:'+',partial5:false,partial3:false,notes:'',translation:'M'}]});
+    window.mpseq.whole('sv-canvas');
+    var hit = window.mpseq.hitTest('sv-canvas', 500, window.mpseq.laneY('sv-canvas', 0));
+    window.mpseq.click('sv-canvas', 500, window.mpseq.laneY('sv-canvas', 0));
+    return JSON.stringify({hit: hit && hit.row, sent: window.__inputs.map(function(i){return i.name+':'+i.value.row;})});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$hit, 2)
+  expect_equal(s$sent, "sv-pick:2")
+})

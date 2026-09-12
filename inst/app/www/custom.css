@@ -48,6 +48,14 @@
   --mp-space-3: 12px;
   --mp-space-4: 16px;
   --mp-space-5: 24px;
+
+  /* Feature types, shared by the annotation table badges (literal copies
+     today) and the sequence viewer (read at draw time). */
+  --mp-type-pcg:  #60BD68;
+  --mp-type-trna: #F17CB0;
+  --mp-type-rrna: #5DA5DA;
+  --mp-type-ctrl: #FAA34A;
+  --mp-type-orf:  #4D4D4D;
 }
 
 /* One visible focus ring, everywhere. Nothing in this app sets
@@ -870,3 +878,28 @@ a.mp-link:focus-visible {
   background-color: var(--mp-border);
   border-radius: 5px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Sequence viewer (R/app_annotate_seqview.R, inst/app/www/seqviewer.js). */
+/* ------------------------------------------------------------------ */
+.mp-seqview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--mp-space-2);
+  margin: var(--mp-space-2) 0;
+}
+.mp-seqview-controls .form-group { margin-bottom: 0; }
+.mp-seqview {
+  position: relative;
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  background: var(--mp-surface);
+  overflow: hidden;
+}
+.mp-seqview-canvas {
+  display: block;
+  width: 100%;
+  cursor: grab;
+}
+.mp-seqview-canvas:active { cursor: grabbing; }
