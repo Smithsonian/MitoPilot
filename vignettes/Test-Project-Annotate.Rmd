@@ -247,6 +247,12 @@ the codon frame marked, along with the start and stop codons that were called.
 Below it, the protein alignment shows your gene ("focal") alongside the reference
 proteins.
 
+Below the annotation table, the **Sequence** section shows the assembly itself:
+genes as arrows in lanes, the nucleotides once you zoom in, and the translated
+amino acids of each protein-coding gene under their codons. Click a row in the
+table to jump to that gene, or use Whole genome to step back out. The view
+follows every edit you make in this window.
+
 ## Manually fix annotations
 
 Click **Edit** in the alignment section to nudge the start or stop position 

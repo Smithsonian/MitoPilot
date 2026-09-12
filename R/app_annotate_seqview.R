@@ -43,3 +43,97 @@ seqview_payload <- function(annotations, seq, topology, unit,
     version = as.integer(version), selected = sel, features = feats
   )
 }
+
+#' Sequence viewer section (tools/nt_viewer_spec.md, section 3)
+#' @noRd
+seqview_ui <- function(id) {
+  ns <- NS(id)
+  btn <- function(action, label, icon = NULL, title = NULL) {
+    tags$button(
+      type = "button", class = "btn btn-default", `data-mpseq` = action,
+      title = title, `aria-label` = title %||% label, icon, label
+    )
+  }
+  tags$details(
+    id = ns("section"),
+    tags$summary("Sequence"),
+    div(
+      class = "mp-seqview-controls",
+      mp_checkbox(ns("show_nt"), label = "Nucleotides", value = TRUE),
+      mp_checkbox(ns("show_aa"), label = "Amino acids", value = TRUE),
+      numericInput(ns("goto"), "Position:", value = NA, min = 1, step = 1, width = "130px"),
+      btn("fit", "Fit gene"),
+      btn("whole", "Whole genome"),
+      btn("zoom_in", NULL, icon("magnifying-glass-plus"), "Zoom in"),
+      btn("zoom_out", NULL, icon("magnifying-glass-minus"), "Zoom out")
+    ),
+    div(class = "mp-coverage-caption",
+        "Drag to pan, scroll or pinch to zoom; click a gene to select its row. Letters appear when zoomed in."),
+    uiOutput(ns("empty")),
+    div(
+      class = "mp-seqview",
+      tags$canvas(id = ns("canvas"), class = "mp-seqview-canvas"),
+      tags$div(id = ns("tip"), class = "mp-maptoref-tip", hidden = NA)
+    )
+  )
+}
+
+#' @param rv the annotate module's reactive values (annotations, updating, editing)
+#' @param tick reactiveVal bumped when the assembly sequence changes
+#' @param selected reactive of the annotation table's selected row indices
+#' @noRd
+seqview_server <- function(id, rv, tick, selected) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+
+    # The unit sequence: the edit session's copy while one is open, else the
+    # stored assembly. Re-read when the window (re)opens or the sequence is
+    # rewritten (trim, linearize, restore); shiny drops the downstream
+    # invalidation when the string is unchanged.
+    unit_seq <- reactive({
+      tick()
+      gargoyle::watch("annotations_modal")
+      s <- rv$editing$assembly
+      if (is.null(s)) {
+        s <- tryCatch(
+          get_assembly(rv$updating$ID, rv$updating$path, rv$updating$scaffold,
+                       session$userData$con),
+          error = function(e) NULL
+        )
+      }
+      if (is.null(s) || length(s) == 0L) return(NULL)
+      as.character(s[[1]])
+    })
+    version <- reactiveVal(0L)
+    observeEvent(unit_seq(), version(isolate(version()) + 1L), ignoreNULL = FALSE)
+
+    observe({
+      req(rv$annotations)
+      s <- unit_seq()
+      if (is.null(s)) {
+        output$empty <- renderUI(div(class = "mp-coverage-caption",
+                                     "No sequence stored for this assembly."))
+        return()
+      }
+      output$empty <- renderUI(NULL)
+      sel <- selected()
+      p <- seqview_payload(
+        rv$annotations, s, rv$updating$topology %||% "linear",
+        paste(rv$updating$ID, rv$updating$path, rv$updating$scaffold, sep = "."),
+        selected = if (length(sel) == 1L) sel else NULL, version = version()
+      )
+      p$id <- ns("canvas")
+      p$input <- ns("pick")
+      session$sendCustomMessage("mpseq", p)
+    })
+
+    observeEvent(selected(), {
+      sel <- selected()
+      if (length(sel) == 1L) {
+        session$sendCustomMessage("mpseq_select", list(id = ns("canvas"), row = sel))
+      }
+    })
+
+    list(pick = reactive(input$pick))
+  })
+}

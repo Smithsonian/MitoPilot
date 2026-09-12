@@ -836,6 +836,16 @@ annotations_details_server <- function(id, rv) {
       return(sel)
     })
 
+    # Sequence viewer under the table: follows every edit through rv$annotations
+    # and the assembly tick; a click on a gene arrow selects its table row.
+    # Built here, not in the call: a lazily forced argument would capture the
+    # child module's session and look up the table in the wrong namespace.
+    seqview_sel <- reactive(reactable::getReactableState("table", "selected"))
+    sv <- seqview_server("seqview", rv, asmb_edit_tick, seqview_sel)
+    observeEvent(sv$pick(), {
+      reactable::updateReactable("table", selected = as.integer(sv$pick()$row))
+    })
+
     # Copy Fasta ----
     observeEvent(input$copy_fas, {
       idx <- as.numeric(input$copy_fas)
@@ -5287,6 +5297,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ),
     ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
   ))),
+    seqview_ui(ns("seqview")),
     tags$hr(style = "margin: 4px 0; border: none; border-top: 1px solid #e0e0e0;"),
     tags$details(
       tags$summary("Coverage Map"),

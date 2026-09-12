@@ -17,6 +17,10 @@ Released TBD. Container: `macguigand/mitopilot:1.5.5`
 - Upgrading changes the assemble task signature, so the first run after the upgrade re-runs any still-queued assemble task even with `-resume`. Samples already at state 2 are unaffected, because they never enter the channel.
 - **MapToRef coverage viewer.** A new button on MapToRef samples opens an interactive plot of read depth across the reference, with a gene annotation track when the reference is a GenBank record, and a click-through read pileup showing reference bases, consensus bases, and individual reads with mismatches, insertions, deletions, and strand. MapToRef now keeps its final read alignment so the pileup can be drawn.
 
+### Sequence viewer in the annotation window
+
+- The annotation details window has a **Sequence** section: the assembly's nucleotides with the annotated genes drawn in lanes above them and, for each protein-coding gene, its translated amino acids lined up under their codons. Click a gene in the table to jump to it; drag, scroll, or use the zoom buttons to move around; a circular assembly wraps through its origin. Every edit in the window (deleting, merging, moving a start or stop codon, linearizing, trimming) is reflected immediately.
+
 ### Preprocessing
 
 - **Remove duplicate reads** checkbox in the Preprocess options runs fastp with `--dedup` instead of `--dont_eval_duplication`. Off by default; it lowers depth and rarely changes calls.
