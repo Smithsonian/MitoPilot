@@ -252,6 +252,14 @@ extract_circ_region <- function(seq, p1, p2) {
   )
 }
 
+#' Feature sequence in reading direction (reverse complement on "-")
+#' @noRd
+feature_nt <- function(seq, pos1, pos2, direction) {
+  x <- extract_circ_region(seq, pos1, pos2)
+  if (identical(direction, "-")) x <- Biostrings::reverseComplement(x)
+  x
+}
+
 #' Format one or more BLAST databases for a `-db` argument.
 #'
 #' BLAST+ takes several databases as a single space-separated, quoted value. Used

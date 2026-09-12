@@ -861,7 +861,8 @@ annotations_details_server <- function(id, rv) {
         dplyr::collect() |>
         dplyr::pull(sequence) |>
         Biostrings::DNAString() |>
-        extract_circ_region(rv$annotations$pos1[idx], rv$annotations$pos2[idx]) |>
+        feature_nt(rv$annotations$pos1[idx], rv$annotations$pos2[idx],
+                   rv$annotations$direction[idx]) |>
         as.character()
       session$sendCustomMessage(
         "copy_to_clipboard", list(text = paste(name, seq, sep = "\n"))
