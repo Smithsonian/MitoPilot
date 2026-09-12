@@ -5,4 +5,6 @@ test_that("feature_nt reads minus-strand and wrapped features in gene direction"
   expect_equal(as.character(feature_nt(s, 7, 12, "-")), "AAACCC")
   expect_equal(as.character(feature_nt(s, 11, 2, "+")), "TTAA")
   expect_equal(as.character(feature_nt(s, 11, 2, "-")), "TTAA")
+  s2 <- Biostrings::DNAString("AAACCCGGGTTA")
+  expect_equal(as.character(feature_nt(s2, 11, 2, "-")), "TTTA")
 })

@@ -836,16 +836,6 @@ annotations_details_server <- function(id, rv) {
       return(sel)
     })
 
-    # Sequence viewer under the table: follows every edit through rv$annotations
-    # and the assembly tick; a click on a gene arrow selects its table row.
-    # Built here, not in the call: a lazily forced argument would capture the
-    # child module's session and look up the table in the wrong namespace.
-    seqview_sel <- reactive(reactable::getReactableState("table", "selected"))
-    sv <- seqview_server("seqview", rv, asmb_edit_tick, seqview_sel)
-    observeEvent(sv$pick(), {
-      reactable::updateReactable("table", selected = as.integer(sv$pick()$row))
-    })
-
     # Copy Fasta ----
     observeEvent(input$copy_fas, {
       idx <- as.numeric(input$copy_fas)
@@ -2145,9 +2135,8 @@ annotations_details_server <- function(id, rv) {
         scaffold = rv$annotations$scaffold[sel], con = session$userData$con
       ), error = function(e) NULL)
       focal_seq <- tryCatch({
-        s <- extract_circ_region(asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel])
-        if (rv$annotations$direction[sel] == "-") s <- Biostrings::reverseComplement(s)
-        as.character(s)
+        as.character(feature_nt(asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel],
+                                rv$annotations$direction[sel]))
       }, error = function(e) NA_character_)
 
       if (is.na(focal_seq) || !nzchar(focal_seq)) {
@@ -2947,6 +2936,16 @@ annotations_details_server <- function(id, rv) {
     # not otherwise change rv$updating.
     asmb_edit_tick <- reactiveVal(0)
     bump_asmb_edit <- function() asmb_edit_tick(isolate(asmb_edit_tick()) + 1)
+
+    # Sequence viewer under the table: follows every edit through rv$annotations
+    # and the assembly tick; a click on a gene arrow selects its table row.
+    # Built here, not in the call: a lazily forced argument would capture the
+    # child module's session and look up the table in the wrong namespace.
+    seqview_sel <- reactive(reactable::getReactableState("table", "selected"))
+    sv <- seqview_server("seqview", rv, asmb_edit_tick, seqview_sel)
+    observeEvent(sv$pick(), {
+      reactable::updateReactable("table", selected = as.integer(sv$pick()$row))
+    })
 
     # Everything the controls need, read from the DB rather than tracked in a
     # reactiveVal: a manually refreshed value would depend on gargoyle observer
