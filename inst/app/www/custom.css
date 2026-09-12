@@ -890,6 +890,7 @@ a.mp-link:focus-visible {
   margin: var(--mp-space-2) 0;
 }
 .mp-seqview-controls .form-group { margin-bottom: 0; }
+.mp-seqview-controls .shiny-input-container { width: auto; }
 .mp-seqview {
   position: relative;
   border: 1px solid var(--mp-border);

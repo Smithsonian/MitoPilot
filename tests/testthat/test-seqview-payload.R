@@ -80,3 +80,39 @@ test_that("seqview_server bumps version only when the sequence string changes", 
     }
   )
 })
+
+test_that("an edit to a position is resent without bumping the version", {
+  a <- cbind(sv_ann(), data.frame(ID = "S1", path = 1L, scaffold = 1L,
+                                   stringsAsFactors = FALSE))
+  rv <- shiny::reactiveValues(
+    annotations = a,
+    updating = list(ID = "S1", path = 1L, scaffold = 1L, topology = "circular"),
+    editing = list(assembly = "ACGTACGTAC")
+  )
+  tick <- shiny::reactiveVal(0L)
+  selected <- shiny::reactive(NULL)
+
+  shiny::testServer(
+    seqview_server,
+    args = list(rv = rv, tick = tick, selected = selected),
+    {
+      gargoyle::init("annotations_modal", session = session)
+      # the mock session drops custom messages; capture them on the real one
+      sent <- list()
+      real <- .subset2(session, "parent")
+      real$sendCustomMessage <- function(type, message) {
+        if (identical(type, "mpseq")) sent[[length(sent) + 1L]] <<- message
+        invisible()
+      }
+      session$flushReact()
+      first <- sent[[length(sent)]]
+
+      rv$annotations$pos1[1] <- rv$annotations$pos1[1] + 3L
+      session$flushReact()
+      last <- sent[[length(sent)]]
+      expect_gt(length(sent), 1L)
+      expect_equal(last$features[[1]]$pos1, first$features[[1]]$pos1 + 3L)
+      expect_equal(last$version, first$version)
+    }
+  )
+})

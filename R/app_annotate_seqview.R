@@ -14,7 +14,7 @@ seqview_payload <- function(annotations, seq, topology, unit,
     x <- tolower(as.character(x))
     length(x) == 1L && !is.na(x) && x %in% c("yes", "true", "1")
   }
-  rows <- which(!is.na(a$pos1) & a$pos1 > 0)
+  rows <- which(!is.na(a$pos1) & a$pos1 > 0 & !is.na(a$pos2))
   feats <- lapply(rows, function(i) {
     notes <- as.character(a$notes[i])
     if (is.na(notes)) notes <- ""
@@ -112,6 +112,17 @@ seqview_server <- function(id, rv, tick, selected) {
       }
     }, ignoreNULL = FALSE)
 
+    # A selection counts only if the table reported it since the last open:
+    # the reactable input persists while the window is closed.
+    open_n <- reactiveVal(0L)
+    sel_n <- reactiveVal(-1L)
+    observeEvent(gargoyle::watch("annotations_modal"), open_n(open_n() + 1L))
+    observeEvent(selected(), sel_n(isolate(open_n())), ignoreNULL = FALSE)
+    cur_sel <- reactive({
+      s <- selected()
+      if (sel_n() == open_n() && length(s) == 1L) s else NULL
+    })
+
     observe({
       req(rv$annotations)
       s <- unit_seq()
@@ -121,22 +132,18 @@ seqview_server <- function(id, rv, tick, selected) {
         return()
       }
       output$empty <- renderUI(NULL)
-      sel <- selected()
       p <- seqview_payload(
         rv$annotations, s, rv$updating$topology %||% "linear",
         paste(rv$updating$ID, rv$updating$path, rv$updating$scaffold, sep = "."),
-        selected = if (length(sel) == 1L) sel else NULL, version = version()
+        selected = cur_sel(), version = version()
       )
       p$id <- ns("canvas")
       p$input <- ns("pick")
       session$sendCustomMessage("mpseq", p)
     })
 
-    observeEvent(selected(), {
-      sel <- selected()
-      if (length(sel) == 1L) {
-        session$sendCustomMessage("mpseq_select", list(id = ns("canvas"), row = sel))
-      }
+    observeEvent(cur_sel(), {
+      session$sendCustomMessage("mpseq_select", list(id = ns("canvas"), row = cur_sel()))
     })
 
     list(pick = reactive(input$pick))

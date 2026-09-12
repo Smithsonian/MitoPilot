@@ -146,3 +146,45 @@ test_that("the scale self-corrects once the container's real width is known", {
   s <- jsonlite::fromJSON(r)
   expect_equal(round(s$ppb * 2000), 940)
 })
+
+test_that("a payload selection outlines a row and a null selection clears it", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    var p = {id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'linear', seq:seq, version:1,
+      selected:2, features:[{row:2,type:'PCG',gene:'cox1',pos1:1,pos2:900,dir:'+',partial5:false,partial3:false,notes:'',translation:'M'}]};
+    window.__handlers.mpseq(p);
+    var first = window.mpseq.state('sv-canvas').selected;
+    p.selected = null;
+    window.__handlers.mpseq(p);
+    var cleared = window.mpseq.state('sv-canvas').selected;
+    return JSON.stringify({first: first, cleared: cleared === null});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$first, 2)
+  expect_true(s$cleared)
+})
+
+test_that("codon centres of a minus-strand wrapped feature step back through the origin", {
+  b <- sv_page()
+  r <- js(b, "(function(){var g=window.mpseq.geom, len=100, f={pos1:95,pos2:6,dir:'-'};
+    return JSON.stringify([g.span(f,len), g.nCodons(f,len),
+      g.codonCentre(f,0,len,'circular'), g.codonCentre(f,1,len,'circular'),
+      g.codonCentre(f,2,len,'circular'), g.codonCentre(f,3,len,'circular')]);})()")
+  expect_equal(jsonlite::fromJSON(r), c(12, 4, 5, 2, 99, 96))
+})
+
+test_that("joined pieces draw their connector and stay in the state", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var seq = Array(2000).join('ACGT').slice(0, 2000), j = 'JOIN: mode=exon group=1';
+    window.__handlers.mpseq({id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'linear', seq:seq, version:7,
+      selected:null, features:[
+        {row:1,type:'PCG',gene:'cox1',pos1:100,pos2:399,dir:'+',partial5:false,partial3:false,notes:j,joined:j,translation:'MKL'},
+        {row:2,type:'PCG',gene:'cox1',pos1:800,pos2:1099,dir:'+',partial5:false,partial3:false,notes:j,joined:j,translation:'MKL'}]});
+    window.mpseq.whole('sv-canvas');
+    var s = window.mpseq.state('sv-canvas');
+    return JSON.stringify({rows: s.features.map(function(f){return f.row;}), lanes: s.nLanes});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$rows, c(1, 2))
+  expect_equal(s$lanes, 1)
+})

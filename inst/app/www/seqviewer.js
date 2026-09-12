@@ -117,8 +117,7 @@
     this.version = p.version; this.input = p.input;
     this.feats = (p.features || []).map(function (f) { return Object.assign({}, f); });
     this.nLanes = G.lanes(this.feats, this.len);
-    if (p.selected !== undefined && p.selected !== null) this.selected = p.selected;
-    else if (!this.feats.some(function (f) { return f.row === this.selected; }, this)) this.selected = null;
+    this.selected = (p.selected === undefined || p.selected === null) ? null : p.selected;
     if (!sameSeq) this.whole();
     this.draw();
   };
@@ -194,7 +193,7 @@
     c.clearRect(0, 0, W, H);
     c.font = '12px ' + cssVar('--mp-font-mono', 'monospace');
     this.hits = [];
-    this.drawRuler(c, W); this.drawLanes(c);
+    this.drawRuler(c, W); this.drawJoins(c); this.drawLanes(c);
     var y = RULER_H + PAD + this.nLanes * LANE_H + PAD;
     if (this.showNt && this.ppb >= NT_BAR) { this.drawNt(c, y); y += NT_H; }
     this.aaRows.forEach(function (f) { this.drawAa(c, f, y); y += AA_H; }, this);
@@ -218,6 +217,24 @@
         }
       }, this);
     }
+  };
+  // Connector between the pieces of a joined feature (notes JOIN: marker).
+  Viewer.prototype.drawJoins = function (c) {
+    var groups = {}, W = this.wrap.clientWidth;
+    this.feats.forEach(function (f) { if (f.joined) (groups[f.joined] = groups[f.joined] || []).push(f); });
+    c.lineWidth = 1; c.setLineDash([]);
+    Object.keys(groups).forEach(function (k) {
+      var g = groups[k].sort(function (a, b) { return a.pos1 - b.pos1; });
+      for (var i = 1; i < g.length; i++) {
+        var x0 = this.x(g[i - 1].pos2 + 1), x1 = this.x(g[i].pos1);
+        if (x1 < GUTTER || x0 > W) continue;
+        c.strokeStyle = typeColor(g[i].type);
+        c.beginPath();
+        c.moveTo(Math.max(GUTTER, x0), this.laneY(g[i - 1].lane) + (LANE_H - 6) / 2);
+        c.lineTo(Math.min(W, x1), this.laneY(g[i].lane) + (LANE_H - 6) / 2);
+        c.stroke();
+      }
+    }, this);
   };
   Viewer.prototype.drawLanes = function (c) {
     var vs = this.viewStart, ve = this.viewStart + this.viewLen();
@@ -340,6 +357,7 @@
       if (!b) { self.tip.hidden = true; return; }
       var t = 'Position ' + b.pos.toLocaleString() + ', ' + b.base;
       if (h) t += ' | ' + h.f.gene + (h.codon !== undefined ? ' codon ' + (h.codon + 1) + ' ' + h.letter : ' (' + h.f.type + ')');
+      if (h && typeof h.f.notes === 'string' && h.f.notes) t += ' | ' + h.f.notes;
       self.tip.textContent = t; self.tip.hidden = false;
       self.tip.style.left = (px + 12) + 'px'; self.tip.style.top = (py + 12) + 'px';
     });
