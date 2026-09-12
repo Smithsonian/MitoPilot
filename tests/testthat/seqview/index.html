@@ -1,0 +1,25 @@
+<!-- tests/testthat/seqview/index.html -->
+<!doctype html><meta charset="utf-8"><title>seqviewer test</title>
+<script>
+  // Shiny shim: capture handlers and inputs so the viewer can be driven by hand.
+  window.__handlers = {}; window.__inputs = [];
+  window.Shiny = {
+    addCustomMessageHandler: function (name, fn) { window.__handlers[name] = fn; },
+    setInputValue: function (name, value) { window.__inputs.push({ name: name, value: value }); }
+  };
+</script>
+<div style="width:1000px">
+  <details id="sv-section" open><summary>Sequence</summary>
+    <div class="mp-seqview-controls">
+      <input type="checkbox" id="sv-show_nt" checked>
+      <input type="checkbox" id="sv-show_aa" checked>
+      <input type="number" id="sv-goto">
+      <button type="button" data-mpseq="zoom_in">+</button>
+      <button type="button" data-mpseq="zoom_out">-</button>
+      <button type="button" data-mpseq="whole">Whole</button>
+      <button type="button" data-mpseq="fit">Fit</button>
+    </div>
+    <div class="mp-seqview"><canvas id="sv-canvas"></canvas><div id="sv-tip" hidden></div></div>
+  </details>
+</div>
+<script src="../../../inst/app/www/seqviewer.js"></script>
