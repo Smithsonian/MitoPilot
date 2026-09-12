@@ -86,10 +86,8 @@ seqview_server <- function(id, rv, tick, selected) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # The unit sequence: the edit session's copy while one is open, else the
-    # stored assembly. Re-read when the window (re)opens or the sequence is
-    # rewritten (trim, linearize, restore); shiny drops the downstream
-    # invalidation when the string is unchanged.
+    # Re-read when the window (re)opens or the sequence is rewritten; version
+    # bumps only when the string differs.
     unit_seq <- reactive({
       tick()
       gargoyle::watch("annotations_modal")
@@ -105,7 +103,14 @@ seqview_server <- function(id, rv, tick, selected) {
       as.character(s[[1]])
     })
     version <- reactiveVal(0L)
-    observeEvent(unit_seq(), version(isolate(version()) + 1L), ignoreNULL = FALSE)
+    last_seq <- NULL
+    observeEvent(unit_seq(), {
+      s <- unit_seq()
+      if (!identical(s, last_seq)) {
+        last_seq <<- s
+        version(isolate(version()) + 1L)
+      }
+    }, ignoreNULL = FALSE)
 
     observe({
       req(rv$annotations)

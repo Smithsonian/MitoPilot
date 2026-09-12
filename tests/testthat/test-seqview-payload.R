@@ -50,3 +50,33 @@ test_that("a wrap-around feature is passed through untouched", {
   f <- seqview_payload(a, strrep("A", 16600), "circular", "S1.1.1")$features[[1]]
   expect_equal(c(f$pos1, f$pos2), c(16500L, 120L))
 })
+
+test_that("seqview_server bumps version only when the sequence string changes", {
+  a <- cbind(sv_ann(), data.frame(ID = "S1", path = 1L, scaffold = 1L,
+                                   stringsAsFactors = FALSE))
+  rv <- shiny::reactiveValues(
+    annotations = a,
+    updating = list(ID = "S1", path = 1L, scaffold = 1L, topology = "circular"),
+    editing = list(assembly = "ACGTACGTAC")
+  )
+  tick <- shiny::reactiveVal(0L)
+  selected <- shiny::reactive(NULL)
+
+  shiny::testServer(
+    seqview_server,
+    args = list(rv = rv, tick = tick, selected = selected),
+    {
+      gargoyle::init("annotations_modal", session = session)
+      session$flushReact()
+      v0 <- version()
+
+      rv$editing <- list(assembly = "ACGTACGTAC", stop_aln = 1)
+      session$flushReact()
+      expect_equal(version(), v0)
+
+      rv$editing <- list(assembly = "ACGTACGTACGG")
+      session$flushReact()
+      expect_equal(version(), v0 + 1L)
+    }
+  )
+})
