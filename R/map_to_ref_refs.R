@@ -274,29 +274,6 @@
   list(mapping = mapping[, keep, drop = FALSE], refs = refs, topology = topology)
 }
 
-# The sample's own set, when it has one: named for the sample, used by nobody
-# else, and assembling with MapToRef. set_maptoref_refs() edits that set instead
-# of the column, so the reference keeps living in exactly one place.
-#' @noRd
-.mtr_dedicated_opts <- function(con, ids) {
-  q <- DBI::dbGetQuery(con, paste(
-    "SELECT a.ID, a.assemble_opts, o.assembler, o.maptoref_ref,",
-    "o.maptoref_topology,",
-    "(SELECT COUNT(*) FROM assemble x",
-    "WHERE x.assemble_opts = a.assemble_opts) AS n_samples",
-    "FROM assemble a JOIN assemble_opts o",
-    "ON a.assemble_opts = o.assemble_opts"
-  ))
-  q <- q[match(ids, q$ID), , drop = FALSE]
-  own <- !is.na(q$ID) &
-    q$assemble_opts == .mtr_opts_name(q$ID) &
-    q$n_samples == 1L &
-    !is.na(q$assembler) & q$assembler == "MapToRef"
-  own[is.na(own)] <- FALSE
-  list(own = own, opts = q$assemble_opts, set_ref = q$maptoref_ref,
-       topology = q$maptoref_topology)
-}
-
 #' A FASTA reference carries no topology, so its set must name one.
 #' @noRd
 .mtr_needs_topology <- function(x) {
@@ -314,66 +291,6 @@
     v <- normalizePath(v, winslash = "/", mustWork = FALSE)
   }
   v
-}
-
-#' Write references to their one home, the sample's own parameter set
-#'
-#' A sample on its own set has the value written there; any other sample gets
-#' a set cloned from the one it is on. The assemble column is cleared for every
-#' sample touched, so nothing can shadow the set.
-#'
-#' @param con database connection
-#' @param ids sample IDs
-#' @param vals references, NA to clear
-#' @noRd
-.mtr_route_refs <- function(con, ids, vals) {
-  if (length(ids) == 0L) return(invisible(character(0)))
-  ded <- .mtr_dedicated_opts(con, ids)
-  own <- ded$own
-  # Every check runs before any write, so a refusal leaves the database as it
-  # was (the migration relies on that to keep an unfoldable column value).
-  orphan <- !is.na(vals) & is.na(ded$opts)
-  if (any(orphan)) {
-    stop("sample(s) ", paste(shQuote(ids[orphan]), collapse = ", "),
-         " point at no existing assemble options set; fix that in the ",
-         "Assemble module first", call. = FALSE)
-  }
-  needs <- !is.na(vals) & vapply(vals, .mtr_needs_topology, logical(1)) &
-    (is.na(ded$topology) | !nzchar(trimws(ded$topology)))
-  if (any(needs)) {
-    warning("sample(s) ", paste(shQuote(ids[needs]), collapse = ", "),
-            " get a FASTA reference on a parameter set with no topology; set ",
-            "the reference topology (circular or linear) on ",
-            paste(shQuote(unique(ifelse(own, ded$opts, .mtr_opts_name(ids))[needs])),
-                  collapse = ", "),
-            " in the Assemble options before running, or the sample will ",
-            "fail at the Assemble step", call. = FALSE)
-  }
-  if (any(own)) {
-    dplyr::tbl(con, "assemble_opts") |>
-      dplyr::rows_update(
-        data.frame(assemble_opts = ded$opts[own], maptoref_ref = vals[own]),
-        unmatched = "ignore",
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-  # A blank for a sample without a set of its own has nothing to clear.
-  new <- which(!own & !is.na(vals))
-  for (base in unique(ded$opts[new])) {
-    i <- new[ded$opts[new] == base]
-    .mtr_seed_per_sample_opts(con, stats::setNames(vals[i], ids[i]), base = base)
-  }
-  dplyr::tbl(con, "assemble") |>
-    dplyr::rows_update(
-      data.frame(ID = ids, maptoref_ref = NA_character_),
-      unmatched = "ignore",
-      in_place = TRUE,
-      copy = TRUE,
-      by = "ID"
-    )
-  invisible(ids)
 }
 
 #' Fold per-sample reference column values into per-sample sets (migration)
@@ -482,13 +399,10 @@
 #' Set per-sample MapToRef references
 #'
 #' Assigns a MapToRef reference mitogenome to individual samples in an existing
-#' project. A reference has one home: the sample's own parameter set, named
-#' \code{<ID>_maptoref}. A sample that already has one (used by no other sample,
-#' assembling with MapToRef) has the reference written onto it; any other sample
-#' gets one, cloned from the set it is on, with the assembler switched to
-#' MapToRef. A blank value clears the reference on the sample's own set. The
-#' Assemble options modal therefore always shows the reference the next run
-#' will use.
+#' project. A reference has one home, the sample row; the parameter set the
+#' sample is on supplies the mapper and its options. A FASTA reference also
+#' needs a topology (circular or linear) in the third column. A blank
+#' reference clears both values.
 #'
 #' Samples whose reference actually changes are queued for (re-)assembly, the
 #' same way changing a sample's parameter set does in the Assemble module.
@@ -497,7 +411,8 @@
 #'   directory)
 #' @param refs A CSV path or a data frame. The first column holds sample IDs and
 #'   the second holds references; column names are ignored, but a CSV must have
-#'   a header row (its first line is not read as data). Any further columns are
+#'   a header row (its first line is not read as data). An optional third column
+#'   holds the topology, required for a FASTA reference; any further columns are
 #'   ignored. A reference is an absolute file path to a
 #'   single-record GenBank or FASTA mitogenome, a URL, or an NCBI nucleotide
 #'   accession (for example NC_002333). Blank clears the sample's reference.
@@ -525,11 +440,12 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
   }
   if (!is.data.frame(refs) || ncol(refs) < 2L || nrow(refs) == 0L) {
     stop("refs must be a CSV path or a data frame with at least two columns ",
-         "(sample ID, reference) and at least one row")
+         "(sample ID, reference, optional topology) and at least one row")
   }
 
   ids <- trimws(as.character(refs[[1]]))
   vals <- as.character(refs[[2]])
+  topo_in <- if (ncol(refs) >= 3L) as.character(refs[[3]]) else rep(NA_character_, length(ids))
   if (any(duplicated(ids))) {
     stop("Duplicate IDs in refs: ",
          paste(unique(ids[duplicated(ids)]), collapse = ", "))
@@ -537,11 +453,12 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
 
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
   on.exit(DBI::dbDisconnect(con))
-  if ("maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
-    stop("This project predates the per-sample MapToRef reference column; run ",
+  if (!all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble"))) {
+    stop("This project predates the per-sample MapToRef reference columns; run ",
          "MitoPilot::backwards_compatibility() first")
   }
-  cur <- DBI::dbGetQuery(con, "SELECT ID, maptoref_ref, assemble_lock FROM assemble")
+  cur <- DBI::dbGetQuery(
+    con, "SELECT ID, maptoref_ref, maptoref_topology, assemble_lock FROM assemble")
 
   unknown <- setdiff(ids, cur$ID)
   if (length(unknown) > 0L) {
@@ -549,16 +466,14 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
          " absent in the existing database")
   }
   new_vals <- .mtr_validate_refs(vals, ids = ids, context = "the reference list")
-  # The reference in force today: a value still on the assemble column (from
-  # before the fold) wins in the pipeline, otherwise the set's value.
-  ded <- .mtr_dedicated_opts(con, ids)
-  old_vals <- cur$maptoref_ref[match(ids, cur$ID)]
-  old_vals[is.na(old_vals)] <- ded$set_ref[is.na(old_vals)]
-  same <- (is.na(new_vals) & is.na(old_vals)) |
-    (!is.na(new_vals) & !is.na(old_vals) & new_vals == old_vals)
-  changed <- which(!same)
-  # Only rows that would be written: a locked row this call leaves alone is not
-  # an edit, and writing without flipping assemble_switch would be a no-op.
+  new_topo <- .mtr_validate_ref_topology(new_vals, topo_in, ids = ids,
+                                     context = "the reference list")
+  m <- match(ids, cur$ID)
+  same_ref <- (is.na(new_vals) & is.na(cur$maptoref_ref[m])) |
+    (!is.na(new_vals) & !is.na(cur$maptoref_ref[m]) & new_vals == cur$maptoref_ref[m])
+  same_topo <- (is.na(new_topo) & is.na(cur$maptoref_topology[m])) |
+    (!is.na(new_topo) & !is.na(cur$maptoref_topology[m]) & new_topo == cur$maptoref_topology[m])
+  changed <- which(!(same_ref & same_topo))
   locked <- intersect(
     ids[changed],
     cur$ID[!is.na(cur$assemble_lock) & cur$assemble_lock == 1]
@@ -572,12 +487,10 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
     return(invisible(.mtr_warn_missing_refs(con)))
   }
 
-  .mtr_route_refs(con, ids[changed], new_vals[changed])
-  # Same requeue the app makes when a sample's parameter set changes
-  # (R/app_assemble.R).
   dplyr::tbl(con, "assemble") |>
     dplyr::rows_update(
-      data.frame(ID = ids[changed], assemble_switch = 1),
+      data.frame(ID = ids[changed], maptoref_ref = new_vals[changed],
+                 maptoref_topology = new_topo[changed], assemble_switch = 1),
       unmatched = "ignore",
       in_place = TRUE,
       copy = TRUE,

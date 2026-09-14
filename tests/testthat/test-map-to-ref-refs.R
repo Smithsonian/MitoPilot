@@ -381,7 +381,7 @@ test_that("update_sample_metadata strips a Reference column with a message", {
                c(NA_character_, NA_character_))
 })
 
-test_that("set_maptoref_refs gives the sample its own set and flips the switch", {
+test_that("set_maptoref_refs writes both columns and flips the switch", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
@@ -389,18 +389,37 @@ test_that("set_maptoref_refs gives the sample its own set and flips the switch",
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
 
-  set_maptoref_refs(d, data.frame(a = "S1", b = fa))
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "Linear"))
 
-  a <- DBI::dbGetQuery(
-    con, "SELECT ID, assemble_opts, maptoref_ref, assemble_switch FROM assemble ORDER BY ID")
-  expect_equal(a$assemble_opts, c("S1_maptoref", "default"))
-  # One home: the column never carries a value.
-  expect_equal(a$maptoref_ref, c(NA_character_, NA_character_))
+  a <- DBI::dbGetQuery(con, paste(
+    "SELECT ID, assemble_opts, maptoref_ref, maptoref_topology, assemble_switch",
+    "FROM assemble ORDER BY ID"))
+  expect_equal(a$assemble_opts, c("default", "default"))
+  expect_equal(a$maptoref_ref, c(normalizePath(fa, winslash = "/"), NA_character_))
+  expect_equal(a$maptoref_topology, c("linear", NA_character_))
   expect_equal(a$assemble_switch, c(1, 2))
-  o <- DBI::dbGetQuery(
-    con, "SELECT assembler, maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")
-  expect_equal(o$assembler, "MapToRef")
-  expect_equal(o$maptoref_ref, normalizePath(fa, winslash = "/"))
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM assemble_opts")$n, 1L)
+})
+
+test_that("set_maptoref_refs refuses a FASTA without a topology", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  mtr_refs_project(d)
+  expect_error(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "needs a topology")
+})
+
+test_that("a topology change alone re-queues the row", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  db <- mtr_refs_project(d)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "circular"))
+  DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
+  expect_message(set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "linear")), "Updated 1")
+  a <- DBI::dbGetQuery(con, "SELECT maptoref_topology, assemble_switch FROM assemble WHERE ID = 'S1'")
+  expect_equal(a$maptoref_topology, "linear")
+  expect_equal(a$assemble_switch, 1)
 })
 
 test_that("set_maptoref_refs reads a CSV by position, ignoring header names", {
@@ -408,106 +427,68 @@ test_that("set_maptoref_refs reads a CSV by position, ignoring header names", {
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
   csv <- file.path(d, "refs.csv")
-  utils::write.csv(data.frame(sample = c("S1", "S2"), whatever = fa),
+  utils::write.csv(data.frame(sample = c("S1", "S2"), whatever = fa, topology = "circular"),
                    csv, row.names = FALSE)
   set_maptoref_refs(d, csv)
 
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  o <- DBI::dbGetQuery(con, paste(
-    "SELECT o.maptoref_ref FROM assemble a",
-    "JOIN assemble_opts o ON a.assemble_opts = o.assemble_opts ORDER BY a.ID"))
-  expect_equal(o$maptoref_ref, rep(normalizePath(fa, winslash = "/"), 2L))
+  a <- DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble ORDER BY ID")
+  expect_equal(a$maptoref_ref, rep(normalizePath(fa, winslash = "/"), 2L))
 })
 
 test_that("set_maptoref_refs does not re-queue an unchanged row", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
-  set_maptoref_refs(d, data.frame(a = "S1", b = fa))
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "circular"))
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
 
-  expect_message(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "No changes")
+  expect_message(set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "circular")), "No changes")
   expect_equal(DBI::dbGetQuery(con, "SELECT assemble_switch FROM assemble WHERE ID = 'S1'")$assemble_switch, 2)
-})
-
-test_that("set_maptoref_refs edits the sample\'s own set, not the column", {
-  d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  fa2 <- mtr_ref_fasta(d, name = "ref2.fasta")
-  db <- file.path(d, ".sqlite")
-  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d, refs = c(fa, "")),
-         maptoref_topology = "circular")
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
-
-  set_maptoref_refs(d, data.frame(a = "S1", b = fa2))
-
-  expect_equal(
-    DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref,
-    normalizePath(fa2, winslash = "/"))
-  a <- DBI::dbGetQuery(con, "SELECT maptoref_ref, assemble_switch FROM assemble WHERE ID = 'S1'")
-  expect_true(is.na(a$maptoref_ref))
-  expect_equal(a$assemble_switch, 1)
-})
-
-test_that("set_maptoref_refs compares against the value on the sample\'s own set", {
-  d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  db <- file.path(d, ".sqlite")
-  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d, refs = c(fa, "")))
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  DBI::dbExecute(con, "UPDATE assemble SET assemble_switch = 2")
-
-  expect_message(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "No changes")
-  expect_equal(
-    DBI::dbGetQuery(con, "SELECT assemble_switch FROM assemble WHERE ID = 'S1'")$assemble_switch,
-    2)
 })
 
 test_that("a blank value clears the per-sample reference", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
-  set_maptoref_refs(d, data.frame(a = "S1", b = fa))
-  # S1 keeps its MapToRef set, now without a reference, so the call warns.
-  expect_warning(set_maptoref_refs(d, data.frame(a = "S1", b = "")), "S1")
-
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_true(is.na(DBI::dbGetQuery(
-    con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref))
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "circular"))
+  set_maptoref_refs(d, data.frame(a = "S1", b = ""))
+  a <- DBI::dbGetQuery(con, "SELECT ID, maptoref_ref, maptoref_topology, assemble_switch FROM assemble WHERE ID = 'S1'")
+  expect_true(is.na(a$maptoref_ref))
+  expect_true(is.na(a$maptoref_topology))
+  expect_equal(a$assemble_switch, 1)
 })
 
 test_that("set_maptoref_refs refuses unknown IDs, duplicates, and locked rows", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
-  expect_error(set_maptoref_refs(d, data.frame(a = "NOPE", b = fa)), "NOPE")
-  expect_error(set_maptoref_refs(d, data.frame(a = c("S1", "S1"), b = fa)),
+  expect_error(set_maptoref_refs(d, data.frame(a = "NOPE", b = fa, c = "circular")), "NOPE")
+  expect_error(set_maptoref_refs(d, data.frame(a = c("S1", "S1"), b = fa, c = "circular")),
                "Duplicate")
   expect_error(set_maptoref_refs(d, d), "refs CSV not found")
 
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "UPDATE assemble SET assemble_lock = 1 WHERE ID = 'S2'")
-  expect_error(set_maptoref_refs(d, data.frame(a = "S2", b = fa)), "locked")
+  expect_error(set_maptoref_refs(d, data.frame(a = "S2", b = fa, c = "circular")), "locked")
 })
 
 test_that("a locked row the call would not change is left alone", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
-  set_maptoref_refs(d, data.frame(a = c("S1", "S2"), b = fa))
+  set_maptoref_refs(d, data.frame(a = c("S1", "S2"), b = fa, c = "circular"))
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "UPDATE assemble SET assemble_lock = 1 WHERE ID = 'S2'")
 
-  expect_message(set_maptoref_refs(d, data.frame(a = c("S1", "S2"), b = fa)),
+  expect_message(set_maptoref_refs(d, data.frame(a = c("S1", "S2"), b = fa, c = "circular")),
                  "No changes")
 })
 
@@ -552,7 +533,7 @@ test_that("a column value the migration cannot fold stays where the pipeline rea
   db <- mtr_refs_project(d)
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  set_maptoref_refs(d, data.frame(a = "S1", b = fa))
+  set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "circular"))
   # S1's set is now shared, so S1 no longer owns it and its name is taken.
   DBI::dbExecute(con, "UPDATE assemble SET assemble_opts = 'S1_maptoref' WHERE ID = 'S2'")
   DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
@@ -561,46 +542,6 @@ test_that("a column value the migration cannot fold stays where the pipeline rea
   expect_message(.mtr_fold_override_column(con), "kept")
   expect_equal(DBI::dbGetQuery(
     con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref, fa2)
-})
-
-test_that("a sample pointing at no existing set is refused before any write", {
-  d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  db <- mtr_refs_project(d)
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  DBI::dbExecute(con, "UPDATE assemble SET assemble_opts = 'gone' WHERE ID = 'S1'")
-
-  expect_error(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "S1")
-  expect_equal(nrow(DBI::dbGetQuery(
-    con, "SELECT 1 FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")), 0L)
-  a <- DBI::dbGetQuery(con, "SELECT assemble_opts, assemble_switch FROM assemble WHERE ID = 'S1'")
-  expect_equal(a$assemble_opts, "gone")
-
-  # The migration keeps such a value on the column instead of losing it.
-  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
-                 params = list(fa))
-  expect_message(.mtr_fold_override_column(con), "kept")
-  expect_equal(DBI::dbGetQuery(
-    con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref, fa)
-})
-
-test_that("a FASTA reference on a set without a topology warns and names the set", {
-  d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  db <- mtr_refs_project(d, maptoref_topology = NA)
-  expect_warning(set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "S1_maptoref")
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  # Written all the same: the topology can be set in the app before running.
-  expect_equal(DBI::dbGetQuery(
-    con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref,
-    normalizePath(fa, winslash = "/"))
-  # An accession needs no topology.
-  expect_no_warning(.mtr_needs_topology("NC_002333"))
-  expect_false(.mtr_needs_topology("NC_002333"))
-  expect_false(.mtr_needs_topology(file.path(d, "ref.gb")))
-  expect_true(.mtr_needs_topology(fa))
 })
 
 test_that(".mtr_ref_key compares files by their normalised path", {
@@ -633,7 +574,7 @@ test_that("set_maptoref_refs warns about samples still without a reference", {
   # Creating a MapToRef project with no reference warns by design; an uncaught
   # warning inside test_that() would be counted in the WARN column.
   db <- suppressWarnings(mtr_refs_project(d, assembler = "MapToRef"))
-  expect_warning(still <- set_maptoref_refs(d, data.frame(a = "S1", b = fa)), "S2")
+  expect_warning(still <- set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "circular")), "S2")
   expect_equal(still, "S2")
 })
 
