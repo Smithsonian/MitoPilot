@@ -519,7 +519,8 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
 
     # Header toggle button. mp_flag_next() picks the value the click will write
     # and the label that names it, so the two can never disagree (theme T02).
-    # Tone matches the pill the flag sets: green for status, amber for concern.
+    # Tone mirrors the pill beside it: coloured while the flag is set, plain
+    # otherwise, so the button reads as the flag's current state.
     toggle_btn <- function(id, label, state, title, off = "no", tone = "success") {
       nxt <- mp_flag_next(state, off = off)
       set <- identical(nxt, "yes")
@@ -527,7 +528,7 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
         id,
         paste(if (set) "Mark" else "Clear", label),
         icon = icon(if (set) "check" else "minus"),
-        class = paste0("btn-sm btn-default mp-btn-", tone),
+        class = paste("btn-sm btn-default", if (!set) paste0("mp-btn-", tone)),
         title = title
       )
       if (locked()) shinyjs::disabled(btn) else btn
@@ -950,7 +951,7 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
     nav_to <- function(key) {
       if (is.null(key) || identical(key, unit_key(rv$updating))) return()
       nav_target <<- key
-      shinyjs::click("close")
+      close_modal()
     }
     nav_step <- function(by) {
       o <- nav_order(); i <- match(unit_key(rv$updating), unit_key(o)) + by
@@ -961,7 +962,9 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
     observeEvent(input$nav_pick, nav_to(input$nav_pick))
 
     # Close Modal ----
-    observeEvent(input$close, {
+    # The body lives in a function because Back to Review reaches it without a
+    # Close button on screen.
+    close_modal <- function() {
       # Nothing to do if the modal state is already cleared (e.g. a second/spurious
       # close after rv$annotations was nulled below) - avoids filter() on NULL.
       req(!is.null(rv$annotations))
@@ -1007,7 +1010,8 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
         session$userData$in_outlier_review <- FALSE
         trigger("reopen_outlier_review")
       }
-    })
+    }
+    observeEvent(input$close, close_modal())
 
     # Return to the export outlier review (saves via the standard close path).
     # Which unit/gene was reviewed, and whether it changed, is tracked by the
@@ -1015,7 +1019,7 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
     # from here, so a rejected close or a modal reload cannot corrupt it.
     observeEvent(input$back_to_review, {
       session$userData$return_to_review <- TRUE
-      shinyjs::click("close")
+      close_modal()
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
@@ -1034,7 +1038,7 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
           dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "annotate_lock")], by = c("ID", "path", "scaffold"))
         mp_toast("1 assembly locked - ready to export.", type = "message")
       }
-      shinyjs::click("close")
+      close_modal()
     })
 
     # Snapshot of the sample fields the figures actually use. Updated only when one
@@ -1641,15 +1645,18 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
               "  display: flex !important; flex-direction: row;",
               "  align-items: center; gap: 6px;",
               "  width: auto !important; margin-bottom: 0; }",
-              "#%s.shiny-input-container label { margin-bottom: 0; font-weight: normal; white-space: nowrap; }",
-              "#%s.shiny-input-container input { width: 70px !important; }"
+              "#%s.shiny-input-container input { width: 120px !important; }"
             ),
-            ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
+            ns("synteny_zoom_window"), ns("synteny_zoom_window")
           ))),
-          numericInput(ns("synteny_zoom_window"), label = "Window size (bp)",
-                       value = isolate(input$synteny_zoom_window) %||% 200L,
-                       min = 30L, max = 2000L, step = 50L,
-                       width = "auto")
+          htmltools::tagQuery(numericInput(
+            ns("synteny_zoom_window"), label = NULL,
+            value = isolate(input$synteny_zoom_window) %||% 200L,
+            min = 30L, max = 2000L, step = 50L, width = "auto"
+          ))$find("input")$addAttrs(
+            placeholder = "Window size (bp)", title = "Window size (bp)",
+            `aria-label` = "Window size (bp)"
+          )$allTags()
         )
       )
     })
@@ -5013,15 +5020,28 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
     easyClose = F,
     # The header X dismisses client-side, which would skip the unsaved-edit
     # guard and the feature-count write Close does. Route it through Close.
-    # Snapshot the table's displayed row order for the footer navigation.
+    # Snapshot the table's displayed row order for the footer navigation. The
+    # lock / state / export dropdowns hide rows with CSS rather than removing
+    # them, so each row's class is probed against those rules (rowClass in
+    # app_annotate.R names the classes).
     if (!is.null(table_id)) tags$script(HTML(sprintf(
       "setTimeout(function(){
+         var tbl = document.getElementById('%s');
          var st = window.Reactable ? Reactable.getState('%s') : null;
          var rows = (st && st.sortedData) || [];
+         if (tbl) {
+           var probe = document.createElement('div'); tbl.appendChild(probe);
+           rows = rows.filter(function(r){
+             var ets = r.export_time_stamp, exp = (ets != null && ets !== '') ? '1' : '0';
+             probe.className = 'mp-lock-' + r.annotate_lock + ' mp-state-' + r.annotate_switch + ' mp-exp-' + exp;
+             return getComputedStyle(probe).display !== 'none';
+           });
+           probe.remove();
+         }
          var col = function(k){ return rows.map(function(r){ return String(r[k]); }); };
          Shiny.setInputValue('%s', {ID: col('ID'), path: col('path'), scaffold: col('scaffold')}, {priority: 'event'});
        }, 0);",
-      table_id, ns("nav_order")
+      table_id, table_id, ns("nav_order")
     ))),
     tags$script(HTML(sprintf(
       "setTimeout(function(){
@@ -5042,24 +5062,12 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
       )
     },
     uiOutput(ns("outlier_flag_banner")),
-    tags$details(
-      id = ns("annotation_table_details"),
-      open = TRUE,
-      tags$summary("Annotation Table"),
-      uiOutput(ns("annotation_count"), class = "mp-table-status"),
-      # Fluid height: the table hugs its rows and grows with the window instead
-      # of always being 250px of scroll (theme T04).
-      div(
-        class = "mp-modal-table",
-        reactableOutput(ns("table"), width = "100%")
-      )
-    ),
-    # Assembly-level sequence edits: beside the table they rewrite, each with a
+    # Assembly-level sequence edits: above the table they rewrite, each with a
     # one-line caption saying what it does (theme T16, C10).
     div(
       style = paste(
         "display: flex; flex-wrap: wrap; align-items: flex-start;",
-        "gap: 24px; margin: 8px 0 4px 0;"
+        "gap: 24px; margin: 4px 0 8px 0;"
       ),
       div(
         off(actionButton(ns("linearize"), "Linearize",
@@ -5075,6 +5083,18 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
           class = "mp-table-status", style = "margin: 2px 0 0 0;",
           "Removes sequence before the first and after the last annotation."
         )
+      )
+    ),
+    tags$details(
+      id = ns("annotation_table_details"),
+      open = TRUE,
+      tags$summary("Annotation Table"),
+      uiOutput(ns("annotation_count"), class = "mp-table-status"),
+      # Fluid height: the table hugs its rows and grows with the window instead
+      # of always being 250px of scroll (theme T04).
+      div(
+        class = "mp-modal-table",
+        reactableOutput(ns("table"), width = "100%")
       )
     ),
     div(
@@ -5418,7 +5438,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
     # writes the feature counts back before the modal is removed.
     footer = tagList(
       uiOutput(ns("nav"), inline = TRUE),
-      mp_footer(
+      # From the export outlier review the only way out is back to it; the
+      # header X still routes through the same close path.
+      if (isTRUE(session$userData$in_outlier_review)) {
+        mp_footer(
+          primary = actionButton(ns("back_to_review"), "Back to Review", icon = icon("arrow-left")),
+          dismiss = NULL
+        )
+      } else mp_footer(
         # Already locked: there is nothing left to lock, so Close is the action.
         primary = if (is_locked) {
           actionButton(ns("close"), "Close")
@@ -5426,16 +5453,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
           actionButton(ns("lock"), "Lock & Close", icon = icon("lock"))
         },
         dismiss = NULL,
-        extra = tagList(
-          if (isTRUE(session$userData$in_outlier_review)) {
-            actionButton(
-              ns("back_to_review"), "Back to Review",
-              icon = icon("arrow-left"),
-              class = "btn-default"
-            )
-          },
-          if (is_locked) NULL else actionButton(ns("close"), "Close")
-        )
+        extra = if (is_locked) NULL else actionButton(ns("close"), "Close")
       ),
       div(
         class = "mp-table-status mp-sticky-foot",
