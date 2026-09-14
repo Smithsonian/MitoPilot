@@ -292,7 +292,7 @@
       var x = this.x(lin), col = BASE[b.base] || BASE.N;
       c.fillStyle = col + (this.ppb >= NT_LETTER ? '99' : 'cc');
       c.fillRect(x, y + 2, Math.max(1, this.ppb - (this.ppb >= NT_LETTER ? 1 : 0)), NT_H - 4);
-      if (this.ppb >= NT_LETTER) { c.fillStyle = '#ffffff'; c.fillText(b.base, x + this.ppb / 2, y + NT_H / 2); }
+      if (this.ppb >= NT_LETTER) { c.fillStyle = '#000000'; c.fillText(b.base, x + this.ppb / 2, y + NT_H / 2); }
     }
     c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a'); c.textAlign = 'right';
     c.fillText('nt', GUTTER - 6, y + NT_H / 2);
@@ -310,10 +310,10 @@
         var lin = centre + k * this.len;
         if (lin < vs - 1 || lin > ve + 1) return;
         var x = this.x(lin) + this.ppb / 2;
-        var zc = ZAPPO[letter];
-        c.fillStyle = zc || cssVar('--mp-surface-alt', '#f5f5f5');
+        var stop = letter === '*', zc = ZAPPO[letter];
+        c.fillStyle = stop ? '#000000' : zc || cssVar('--mp-surface-alt', '#f5f5f5');
         c.fillRect(x - 1.5 * this.ppb + 1, y + 2, 3 * this.ppb - 2, AA_H - 4);
-        c.fillStyle = letter === '*' ? cssVar('--mp-danger', '#b02a37') : zc ? '#222222' : cssVar('--mp-text', '#333');
+        c.fillStyle = stop ? '#ffffff' : zc ? '#222222' : cssVar('--mp-text', '#333');
         c.fillText(letter, x, y + AA_H / 2);
         this.hits.push({ x0: x - 1.5 * this.ppb, x1: x + 1.5 * this.ppb, y0: y, y1: y + AA_H, f: f, row: f.row, codon: i, letter: letter });
       }, this);

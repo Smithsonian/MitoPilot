@@ -5298,7 +5298,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
   ))),
     seqview_ui(ns("seqview")),
-    tags$hr(style = "margin: 4px 0; border: none; border-top: 1px solid #e0e0e0;"),
     tags$details(
       tags$summary("Coverage Map"),
       div(
