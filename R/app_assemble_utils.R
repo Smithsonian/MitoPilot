@@ -1256,7 +1256,7 @@ maptoref_ref_modal <- function(id, ref, topology, session = getDefaultReactiveDo
         "Absolute path on this machine, URL, or NCBI nucleotide accession ",
         "(for example NC_002333) of one complete mitogenome to map this ",
         "sample's reads against. Blank clears the reference. Saving ",
-        "re-queues the sample.")),
+        "re-queues the sample.", nested = TRUE)),
       {
         el <- selectInput(
           ns("maptoref_ref_topology"),
@@ -1266,7 +1266,7 @@ maptoref_ref_modal <- function(id, ref, topology, session = getDefaultReactiveDo
           width = "100%"
         ) |> tagAppendChild(opts_help(
           "Required for a FASTA reference, whose header carries no topology. ",
-          "A GenBank record or accession supplies its own."))
+          "A GenBank record or accession supplies its own.", nested = TRUE))
         if (!.mtr_needs_topology(ref %|NA|% "")) shinyjs::hidden(el) else el
       },
       footer = mp_footer(primary = actionButton(ns("update_maptoref_ref"), "Save"))

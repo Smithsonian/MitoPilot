@@ -1098,11 +1098,9 @@ assemble_server <- function(id) {
           copy = TRUE,
           by = "ID"
         )
-      rv$data <- rv$data |>
-        dplyr::rows_update(
-          update,
-          by = "ID"
-        )
+      # Re-read rather than patch: the set's assembler and the MapToRef ref
+      # cell both depend on the new assignment.
+      rv$data <- fetch_assemble_data()
       ## Flag samples with no output under the new parameter set ----
       dir_out <- session$userData$dir_out
       unpublished <- prior |> dplyr::slice(0)
