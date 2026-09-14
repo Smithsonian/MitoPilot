@@ -180,6 +180,9 @@ new_db <- function(
   if (!maptoref_mapper %in% .mtr_mappers) {
     stop("maptoref_mapper must be bowtie2 or bwa-mem")
   }
+  if (missing(maptoref) && maptoref_mapper == "bwa-mem") {
+    maptoref <- .mtr_default_bwa
+  }
   if (grepl("['\"]", paste0(maptoref, maptoref_consensus))) {
     stop("maptoref and maptoref_consensus must not contain quote characters")
   }

@@ -384,6 +384,17 @@ test_that("new_db stores the five MapToRef option columns", {
   expect_equal(opts$maptoref_topology, "circular")
 })
 
+test_that("new_db defaults the options string to the chosen mapper", {
+  d <- withr::local_tempdir()
+  db <- mtr_test_db(d, assembler = "MapToRef", maptoref_ref = mtr_fixture(),
+                    maptoref_topology = "circular", maptoref_mapper = "bwa-mem")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  opts <- DBI::dbGetQuery(con, "SELECT maptoref_mapper, maptoref FROM assemble_opts")
+  expect_equal(opts$maptoref_mapper, "bwa-mem")
+  expect_equal(opts$maptoref, "")
+})
+
 test_that("new_db rejects an unknown mapper", {
   d <- withr::local_tempdir()
   expect_error(
