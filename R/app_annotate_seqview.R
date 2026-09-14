@@ -68,7 +68,7 @@ seqview_ui <- function(id) {
       btn("zoom_out", NULL, icon("magnifying-glass-minus"), "Zoom out")
     ),
     div(class = "mp-coverage-caption",
-        "Drag to pan, scroll or pinch to zoom; click a gene to select its row. Letters appear when zoomed in."),
+        "Drag or scroll sideways to pan, scroll or pinch to zoom; click a gene to select its row. Letters appear when zoomed in."),
     uiOutput(ns("empty")),
     div(
       class = "mp-seqview",

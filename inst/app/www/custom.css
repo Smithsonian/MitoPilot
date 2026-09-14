@@ -887,7 +887,7 @@ a.mp-link:focus-visible {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--mp-space-2);
-  margin: var(--mp-space-2) 0;
+  margin: 0 0 var(--mp-space-2);
 }
 .mp-seqview-controls .form-group { margin-bottom: 0; }
 .mp-seqview-controls .shiny-input-container { width: auto; }

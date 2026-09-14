@@ -80,7 +80,13 @@
   var G = window.mpseq.geom;
   var MAX_PPB = 14, NT_LETTER = 8, NT_BAR = 3, AA_MIN = 4;
   var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4;
-  var BASE = { A: '#3aa03a', C: '#2f6fb5', G: '#e0a030', T: '#cc4b4b', N: '#999999' };
+  // Same shades as the BLAST synteny zoom (app_annotate_details.R base_color)
+  // and msaR's zappo scheme in the alignment viewer.
+  var BASE = { A: '#4faf45', C: '#e0a53f', G: '#e0555a', T: '#4a90d9', N: '#666666' };
+  var ZAPPO = { I: '#ffafaf', L: '#ffafaf', V: '#ffafaf', A: '#ffafaf', M: '#ffafaf',
+                F: '#ffc800', W: '#ffc800', Y: '#ffc800', K: '#6464ff', R: '#6464ff', H: '#6464ff',
+                D: '#ff0000', E: '#ff0000', S: '#00ff00', T: '#00ff00', N: '#00ff00', Q: '#00ff00',
+                P: '#ff00ff', G: '#ff00ff', C: '#ffff00' };
   var viewers = {};
 
   function cssVar(name, fallback) {
@@ -304,9 +310,10 @@
         var lin = centre + k * this.len;
         if (lin < vs - 1 || lin > ve + 1) return;
         var x = this.x(lin) + this.ppb / 2;
-        c.fillStyle = cssVar('--mp-surface-alt', '#f5f5f5');
+        var zc = ZAPPO[letter];
+        c.fillStyle = zc || cssVar('--mp-surface-alt', '#f5f5f5');
         c.fillRect(x - 1.5 * this.ppb + 1, y + 2, 3 * this.ppb - 2, AA_H - 4);
-        c.fillStyle = letter === '*' ? cssVar('--mp-danger', '#b02a37') : cssVar('--mp-text', '#333');
+        c.fillStyle = letter === '*' ? cssVar('--mp-danger', '#b02a37') : zc ? '#222222' : cssVar('--mp-text', '#333');
         c.fillText(letter, x, y + AA_H / 2);
         this.hits.push({ x0: x - 1.5 * this.ppb, x1: x + 1.5 * this.ppb, y0: y, y1: y + AA_H, f: f, row: f.row, codon: i, letter: letter });
       }, this);
@@ -335,7 +342,8 @@
     cv.addEventListener('wheel', function (e) {
       e.preventDefault();
       var rect = cv.getBoundingClientRect(), px = e.clientX - rect.left;
-      if (e.shiftKey) { self.viewStart += e.deltaY / self.ppb; self.clamp(); self.draw(); return; }
+      var pan = e.shiftKey ? e.deltaY : Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : 0;
+      if (pan) { self.viewStart += pan / self.ppb; self.clamp(); self.draw(); return; }
       self.zoom(Math.pow(1.15, -e.deltaY / 100), self.viewStart + (px - GUTTER) / self.ppb);
     }, { passive: false });
     cv.addEventListener('mousedown', function (e) { dragging = { x: e.clientX, start: self.viewStart, moved: false }; });
