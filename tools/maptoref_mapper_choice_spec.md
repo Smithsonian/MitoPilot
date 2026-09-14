@@ -121,7 +121,9 @@ pass 1 count.
 
 ### Schema and options
 
-- `R/init_db.R`: `maptoref_mapper = "bowtie2"` parameter on `new_db()` and in
+- `R/init_db.R`: `maptoref_mapper = "bowtie2"` parameter on `new_db()` (reached
+  from `new_project(...)` via dots), validated `%in% c("bowtie2", "bwa-mem")`
+  next to the topology check near line 164, and in
   the `assemble_opts` default row; `.mtr_default_bwa`.
 - `R/backwards_compatibility.R`: add `maptoref_mapper` column (default
   `"bowtie2"`) alongside the existing maptoref column migration near line
