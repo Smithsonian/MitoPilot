@@ -8,12 +8,11 @@
 #' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2".
 #'   May include additional columns with other sample metadata, and an optional
 #'   \code{Reference} column naming a per-sample MapToRef reference (file path,
-#'   URL, or NCBI accession). A sample with a \code{Reference} is given its own
-#'   assembly parameter set, named \code{<ID>_maptoref}, cloned from the default
-#'   set but assembling with MapToRef against that reference; samples with a
-#'   blank \code{Reference} keep the default set. \code{Reference} is a reserved
-#'   column name: it is never stored as sample metadata, so rename the column if
-#'   you use it for something else.
+#'   URL, or NCBI accession). A FASTA reference also needs a
+#'   \code{Reference_topology} column (circular or linear). Both values are
+#'   stored on the sample and used when its parameter set assembles with
+#'   MapToRef. \code{Reference} is a reserved column name: it is never stored
+#'   as sample metadata, so rename the column if you use it for something else.
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
 #'
@@ -71,13 +70,14 @@ add_samples <- function(
   # unseen mapping column below).
   taken <- .mtr_take_ref_col(mapping, mapping_id = mapping_id)
   mapping <- taken$mapping
-  refs <- if (is.null(taken$refs)) {
-    NULL
-  } else {
-    v <- .mtr_validate_refs(taken$refs, ids = names(taken$refs),
-                            context = "the mapping file 'Reference' column")
-    names(v) <- names(taken$refs)
-    v
+  refs <- NULL
+  topo <- NULL
+  if (!is.null(taken$refs)) {
+    refs <- .mtr_validate_refs(taken$refs, ids = names(taken$refs),
+                               context = "the mapping file 'Reference' column")
+    topo <- .mtr_validate_ref_topology(refs, taken$topology, ids = names(taken$refs),
+                                   context = "the mapping file 'Reference_topology' column")
+    names(refs) <- names(topo) <- names(taken$refs)
   }
 
   # genetic_code auto-selects from each sample's curation ruleset; it is filled
@@ -91,7 +91,7 @@ add_samples <- function(
 
   # The assemble insert below writes maptoref_ref, so the column must exist
   # before samples and preprocess are committed.
-  if ("maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
+  if (!all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble"))) {
     stop("This project predates the per-sample MapToRef reference column; run ",
          "MitoPilot::backwards_compatibility() before adding samples")
   }
@@ -211,7 +211,8 @@ add_samples <- function(
           hide_switch = 0,
           assemble_opts = "default",
           blast_opts = "default",
-          maptoref_ref = NA_character_,
+          maptoref_ref = if (is.null(refs)) NA_character_ else unname(refs[mapping$ID]),
+          maptoref_topology = if (is.null(topo)) NA_character_ else unname(topo[mapping$ID]),
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -220,9 +221,7 @@ add_samples <- function(
       conflict = "ignore"
     )
 
-  # A sample that brought its own reference gets its own MapToRef parameter set,
-  # cloned from "default", instead of a value on assemble.maptoref_ref.
-  .mtr_seed_per_sample_opts(con, refs)
+  .mtr_warn_refs_ignored(con, names(refs)[!is.na(refs)])
 
   # Annotate table ----
   ##############################################################################################################

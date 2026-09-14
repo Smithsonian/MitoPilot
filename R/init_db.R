@@ -55,13 +55,6 @@
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
 #'   Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
 #' @param mitofinder Default MitoFinder command line options
-#' @param maptoref_ref Default MapToRef reference mitogenome for the parameter
-#'   set: an absolute file path, a URL, or an NCBI nucleotide accession (for
-#'   example NC_002333). A single-record GenBank file (.gb) is preferred; a
-#'   FASTA is accepted but then \code{maptoref_topology} must be set. Optional:
-#'   samples may instead name their own reference in the mapping file's
-#'   \code{Reference} column, which gives each of those samples its own
-#'   MapToRef parameter set, or through \code{\link{set_maptoref_refs}}.
 #' @param maptoref_mapper MapToRef read mapper, "bowtie2" or "bwa-mem"
 #'   (default = "bowtie2")
 #' @param maptoref Default mapper options for MapToRef
@@ -69,9 +62,6 @@
 #' @param maptoref_consensus Default samtools consensus options for MapToRef
 #'   (default = "-d 3 --min-BQ 20")
 #' @param maptoref_iter Maximum MapToRef iteration passes (default = 5)
-#' @param maptoref_topology Topology of a MapToRef reference, "circular" or
-#'   "linear". Ignored when the GenBank LOCUS line names a topology, and used
-#'   when the LOCUS line names neither. Required for a FASTA reference.
 #' @param max_paths Maximum number of assembly paths allowed for a sample to
 #'   continue past the Assemble step (default = 10). Samples exceeding this are
 #'   flagged as failed and skipped by downstream steps in WF1.
@@ -109,12 +99,10 @@ new_db <- function(
     mitofinder = paste(
       "--megahit"
     ),
-    maptoref_ref = NA_character_,
     maptoref_mapper = "bowtie2",
     maptoref = .mtr_default_bowtie2,
     maptoref_consensus = .mtr_default_consensus,
     maptoref_iter = 5L,
-    maptoref_topology = NA_character_,
     max_paths = 10,
     max_scaffolds = 10,
     min_assembly_length = 500,
@@ -165,18 +153,6 @@ new_db <- function(
   if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
     stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder, MapToRef]")
   }
-  if (!is.na(maptoref_topology) &&
-      maptoref_topology %nin% c("circular", "linear")) {
-    stop("maptoref_topology must be circular or linear")
-  }
-  if (assembler == "MapToRef" &&
-      !is.na(maptoref_ref) && nzchar(trimws(maptoref_ref)) &&
-      !identical(.mtr_ref_class(maptoref_ref), "accession") &&
-      !grepl("\\.(gb|gbk|gbff)$", trimws(maptoref_ref), ignore.case = TRUE) &&
-      (is.na(maptoref_topology) || !nzchar(trimws(maptoref_topology)))) {
-    stop("Set maptoref_topology (circular or linear) for a FASTA reference; ",
-         "a GenBank (.gb) reference takes its topology from the file")
-  }
   if (!maptoref_mapper %in% .mtr_mappers) {
     stop("maptoref_mapper must be bowtie2 or bwa-mem")
   }
@@ -210,17 +186,14 @@ new_db <- function(
   # the moment the user switches a project to MapToRef in the app.
   taken <- .mtr_take_ref_col(mapping, mapping_id = mapping_id)
   mapping <- taken$mapping
-  # One validation pass over both sources, so every bad value is listed at once.
-  checked <- .mtr_validate_refs(
-    c(maptoref_ref %||% NA_character_, taken$refs),
-    ids = c("assemble options", names(taken$refs)),
-    context = "the assemble options and the mapping file 'Reference' column"
-  )
-  maptoref_ref <- checked[1]
   refs <- NULL
+  topo <- NULL
   if (!is.null(taken$refs)) {
-    refs <- checked[-1]
-    names(refs) <- names(taken$refs)
+    refs <- .mtr_validate_refs(taken$refs, ids = names(taken$refs),
+                               context = "the mapping file 'Reference' column")
+    topo <- .mtr_validate_ref_topology(refs, taken$topology, ids = names(taken$refs),
+                                   context = "the mapping file 'Reference_topology' column")
+    names(refs) <- names(topo) <- names(taken$refs)
   }
 
   # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
@@ -380,8 +353,8 @@ new_db <- function(
           poor_blast_ref = NA_character_,
           join_notes = NA_character_,
           join_switch = NA_integer_,
-          maptoref_ref = NA_character_,
-          maptoref_topology = NA_character_,
+          maptoref_ref = if (is.null(refs)) NA_character_ else unname(refs[ID]),
+          maptoref_topology = if (is.null(topo)) NA_character_ else unname(topo[ID]),
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -431,22 +404,19 @@ new_db <- function(
         max_scaffolds = max_scaffolds,
         min_assembly_length = min_assembly_length,
         join_scaffolds = 0L,
-        maptoref_ref = maptoref_ref,
+        maptoref_ref = NA_character_,
         maptoref_mapper = maptoref_mapper,
         maptoref = maptoref,
         maptoref_consensus = maptoref_consensus,
         maptoref_iter = as.integer(maptoref_iter),
-        maptoref_topology = maptoref_topology
+        maptoref_topology = NA_character_
       ),
       in_place = TRUE,
       copy = TRUE,
       by = "assemble_opts"
     )
 
-  # A sample that brought its own reference gets its own MapToRef parameter set,
-  # so the app shows the assembler and the reference that sample will actually
-  # use. Must follow the assemble_opts insert above: the set is cloned from it.
-  .mtr_seed_per_sample_opts(con, refs)
+  .mtr_warn_refs_ignored(con, names(refs)[!is.na(refs)])
 
   ## BLAST options ----
   DBI::dbExecute(

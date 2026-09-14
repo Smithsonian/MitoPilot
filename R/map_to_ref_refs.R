@@ -248,82 +248,30 @@
   out
 }
 
-# Strip the optional Reference column out of a mapping before the samples table
-# is built from colnames(mapping). Precedent: R/init_db_userAsmb.R strips
-# Assembly/Topology the same way. Values are returned raw; callers validate.
+# Strip the optional Reference and Reference_topology columns out of a mapping
+# before the samples table is built from colnames(mapping). Precedent:
+# R/init_db_userAsmb.R strips Assembly/Topology the same way. Values are
+# returned raw; callers validate.
 #' @noRd
 .mtr_take_ref_col <- function(mapping, mapping_id = "ID") {
-  if ("Reference" %nin% colnames(mapping)) {
-    return(list(mapping = mapping, refs = NULL))
+  has_ref <- "Reference" %in% colnames(mapping)
+  has_topo <- "Reference_topology" %in% colnames(mapping)
+  if (has_topo && !has_ref) {
+    stop("The mapping file has a Reference_topology column but no Reference column",
+         call. = FALSE)
   }
-  refs <- as.character(mapping[["Reference"]])
-  names(refs) <- as.character(mapping[[mapping_id]])
-  keep <- setdiff(colnames(mapping), "Reference")
-  list(mapping = mapping[, keep, drop = FALSE], refs = refs)
-}
-
-# Per-sample MapToRef parameter sets.
-#
-# A mapping-file Reference means "assemble this sample by mapping to that
-# reference", so the sample gets a parameter set of its own, cloned from the
-# base set with assembler = MapToRef and the reference on it. The reference is
-# deliberately NOT also written to assemble.maptoref_ref: the pipeline
-# COALESCEs the column over the set, so a value in both would make the Assemble
-# options modal look editable while the column silently won.
-#' @noRd
-.mtr_opts_name <- function(id) paste0(id, "_maptoref")
-
-# refs is a named character vector (names are sample IDs), as built by new_db()
-# and add_samples(). Blank and NA references are left on the base set.
-#' @noRd
-.mtr_seed_per_sample_opts <- function(con, refs, base = "default") {
-  if (is.null(refs) || length(refs) == 0L) return(invisible(character(0)))
-  keep <- !is.na(refs) & nzchar(trimws(refs))
-  if (!any(keep)) return(invisible(character(0)))
-  refs <- refs[keep]
-  ids <- names(refs)
-  names <- .mtr_opts_name(ids)
-
-  base_row <- DBI::dbGetQuery(
-    con, "SELECT * FROM assemble_opts WHERE assemble_opts = ?",
-    params = list(base)
-  )
-  if (nrow(base_row) != 1L) {
-    stop("assemble options set ", shQuote(base), " not found", call. = FALSE)
+  if (!has_ref) {
+    return(list(mapping = mapping, refs = NULL, topology = NULL))
   }
-  # An upsert here would silently reconfigure a set the user built by hand.
-  taken <- intersect(
-    names,
-    DBI::dbGetQuery(con, "SELECT assemble_opts FROM assemble_opts")$assemble_opts
-  )
-  if (length(taken) > 0L) {
-    stop("assemble options set(s) ", paste(shQuote(taken), collapse = ", "),
-         " already exist and are not that sample's own MapToRef set; rename ",
-         "them first", call. = FALSE)
+  ids <- as.character(mapping[[mapping_id]])
+  refs <- stats::setNames(as.character(mapping[["Reference"]]), ids)
+  topology <- if (has_topo) {
+    stats::setNames(as.character(mapping[["Reference_topology"]]), ids)
+  } else {
+    stats::setNames(rep(NA_character_, length(ids)), ids)
   }
-
-  new_opts <- base_row[rep(1L, length(ids)), , drop = FALSE]
-  rownames(new_opts) <- NULL
-  new_opts$assemble_opts <- names
-  new_opts$assembler <- "MapToRef"
-  new_opts$maptoref_ref <- unname(refs)
-  dplyr::tbl(con, "assemble_opts") |>
-    dplyr::rows_insert(
-      new_opts,
-      in_place = TRUE,
-      copy = TRUE,
-      by = "assemble_opts",
-      conflict = "ignore"
-    )
-  dplyr::tbl(con, "assemble") |>
-    dplyr::rows_update(
-      data.frame(ID = ids, assemble_opts = names),
-      unmatched = "ignore",
-      in_place = TRUE,
-      copy = TRUE,
-      by = "ID"
-    )
-  invisible(names)
+  keep <- setdiff(colnames(mapping), c("Reference", "Reference_topology"))
+  list(mapping = mapping[, keep, drop = FALSE], refs = refs, topology = topology)
 }
 
 # The sample's own set, when it has one: named for the sample, used by nobody
@@ -475,6 +423,29 @@
     params = list(id)
   )$ref
   if (length(v) != 1L || is.na(v)) NA_character_ else v
+}
+
+# A reference stored under a set that does not assemble with MapToRef is not
+# an error: the user may switch the set later. Say so once.
+#' @noRd
+.mtr_warn_refs_ignored <- function(con, ids) {
+  if (length(ids) == 0L ||
+      "assembler" %nin% DBI::dbListFields(con, "assemble_opts")) {
+    return(invisible(character(0)))
+  }
+  q <- DBI::dbGetQuery(con, paste(
+    "SELECT a.ID FROM assemble a JOIN assemble_opts o",
+    "ON a.assemble_opts = o.assemble_opts",
+    "WHERE o.assembler <> 'MapToRef'"
+  ))$ID
+  hit <- intersect(ids, q)
+  if (length(hit) > 0L) {
+    warning(length(hit), " sample(s) have a MapToRef reference but are on a ",
+            "parameter set that does not assemble with MapToRef; the reference ",
+            "is stored and ignored until the set is switched to MapToRef.",
+            call. = FALSE)
+  }
+  invisible(hit)
 }
 
 # R8's warning, answered from the database rather than from the mapping file, so

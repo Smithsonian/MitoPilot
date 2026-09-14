@@ -200,7 +200,7 @@ test_that(".mtr_validate_ref_topology demands one for a FASTA and normalises cas
   expect_equal(.mtr_validate_ref_topology(NA, "linear", ids = "S1"), NA_character_)
 })
 
-mtr_refs_mapping <- function(dir, refs = NULL, ids = c("S1", "S2")) {
+mtr_refs_mapping <- function(dir, refs = NULL, topology = NULL, ids = c("S1", "S2")) {
   m <- data.frame(
     ID = ids,
     Taxon = "Danio rerio",
@@ -208,18 +208,15 @@ mtr_refs_mapping <- function(dir, refs = NULL, ids = c("S1", "S2")) {
     R2 = paste0(ids, "_R2.fastq.gz")
   )
   if (!is.null(refs)) m$Reference <- refs
+  if (!is.null(topology)) m$Reference_topology <- topology
   fn <- file.path(dir, "mapping.csv")
   utils::write.csv(m, fn, row.names = FALSE)
   fn
 }
 
-mtr_refs_project <- function(dir, ids = c("S1", "S2"),
-                             maptoref_topology = "circular", ...) {
-  # The fixtures use FASTA references, which need a topology on the set they
-  # are cloned from; one test below covers the missing-topology warning.
+mtr_refs_project <- function(dir, ids = c("S1", "S2"), ...) {
   new_db(db_path = file.path(dir, ".sqlite"),
-         mapping_fn = mtr_refs_mapping(dir, ids = ids),
-         maptoref_topology = maptoref_topology, ...)
+         mapping_fn = mtr_refs_mapping(dir, ids = ids), ...)
   file.path(dir, ".sqlite")
 }
 
@@ -240,10 +237,10 @@ test_that("new_db warns instead of demanding a reference or a topology", {
                c(NA_character_, NA_character_))
 })
 
-test_that("new_db puts a Reference on the sample\'s own MapToRef options set", {
+test_that("new_db writes a Reference and its topology onto the sample row", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
-  mapping <- mtr_refs_mapping(d, refs = c(fa, ""))
+  mapping <- mtr_refs_mapping(d, refs = c(fa, ""), topology = c("circular", ""))
   db <- file.path(d, ".sqlite")
   expect_warning(
     new_db(db_path = db, mapping_fn = mapping, assembler = "MapToRef"),
@@ -251,50 +248,56 @@ test_that("new_db puts a Reference on the sample\'s own MapToRef options set", {
   )
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_false("Reference" %in% DBI::dbListFields(con, "samples"))
+  expect_false(any(c("Reference", "Reference_topology") %in% DBI::dbListFields(con, "samples")))
   a <- DBI::dbGetQuery(
-    con, "SELECT ID, assemble_opts, maptoref_ref FROM assemble ORDER BY ID")
-  expect_equal(a$assemble_opts, c("S1_maptoref", "default"))
-  # The reference has exactly one home, so the app modal is the one place it
-  # can be read and edited.
-  expect_equal(a$maptoref_ref, c(NA_character_, NA_character_))
-  o <- DBI::dbGetQuery(
-    con, "SELECT assembler, maptoref_ref FROM assemble_opts WHERE assemble_opts = \'S1_maptoref\'")
-  expect_equal(o$assembler, "MapToRef")
-  expect_equal(o$maptoref_ref, normalizePath(fa, winslash = "/"))
+    con, "SELECT ID, assemble_opts, maptoref_ref, maptoref_topology FROM assemble ORDER BY ID")
+  expect_equal(a$assemble_opts, c("default", "default"))
+  expect_equal(a$maptoref_ref, c(normalizePath(fa, winslash = "/"), NA_character_))
+  expect_equal(a$maptoref_topology, c("circular", NA_character_))
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM assemble_opts")$n, 1L)
 })
 
-test_that("a per-sample set inherits the base set and leaves other samples alone", {
+test_that("new_db refuses a FASTA Reference without a Reference_topology", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   mapping <- mtr_refs_mapping(d, refs = c(fa, ""))
-  db <- file.path(d, ".sqlite")
-  new_db(db_path = db, mapping_fn = mapping, assemble_cpus = 12,
-         min_assembly_length = 900)
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  o <- DBI::dbGetQuery(con, "SELECT * FROM assemble_opts ORDER BY assemble_opts")
-  expect_equal(o$assemble_opts, c("S1_maptoref", "default"))
-  expect_equal(o$cpus, c(12, 12))
-  expect_equal(o$min_assembly_length, c(900, 900))
-  # A Reference switches only that sample to MapToRef; the base set is untouched.
-  expect_equal(o$assembler, c("MapToRef", "GetOrganelle"))
+  expect_error(
+    new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping, assembler = "MapToRef"),
+    "S1.*needs a topology"
+  )
+  expect_false(file.exists(file.path(d, ".sqlite")))
 })
 
-test_that("no Reference column means no extra options sets", {
+test_that("Reference_topology without Reference is refused", {
   d <- withr::local_tempdir()
+  mapping <- mtr_refs_mapping(d, topology = c("circular", ""))
+  expect_error(
+    new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping),
+    "Reference_topology"
+  )
+})
+
+test_that("a Reference under a non-MapToRef default set is stored and warned about", {
+  d <- withr::local_tempdir()
+  mapping <- mtr_refs_mapping(d, refs = c("NC_002333", "NC_002333"))
   db <- file.path(d, ".sqlite")
-  new_db(db_path = db, mapping_fn = mtr_refs_mapping(d))
+  testthat::local_mocked_bindings(
+    .mtr_ncbi_known = function(accs, timeout = 30L) list(ok = TRUE, found = "NC_002333")
+  )
+  expect_warning(
+    new_db(db_path = db, mapping_fn = mapping, assembler = "GetOrganelle"),
+    "ignored until"
+  )
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_equal(DBI::dbGetQuery(con, "SELECT assemble_opts FROM assemble_opts")$assemble_opts,
-               "default")
+  expect_equal(DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble")$maptoref_ref,
+               rep("NC_002333", 2))
 })
 
 test_that("new_db does not warn when every sample has a reference", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
-  mapping <- mtr_refs_mapping(d, refs = c(fa, fa))
+  mapping <- mtr_refs_mapping(d, refs = c(fa, fa), topology = c("circular", "circular"))
   expect_no_warning(
     new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping,
            assembler = "MapToRef")
@@ -311,40 +314,14 @@ test_that("a set-level reference no longer covers a sample", {
   expect_setequal(ids, c("S1", "S2"))
 })
 
-test_that("a bad Reference value and a bad option-set value are reported together", {
+test_that("every bad Reference value is reported at once", {
   d <- withr::local_tempdir()
-  mapping <- mtr_refs_mapping(d, refs = c(file.path(d, "a.gb"), ""))
-  err <- expect_error(
-    new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping,
-           assembler = "MapToRef", maptoref_ref = file.path(d, "b.gb")),
-    "problems \\(2\\)"
-  )
-  expect_match(conditionMessage(err), "assemble options \\[.*b\\.gb\\]")
-  expect_match(conditionMessage(err), "S1 \\[.*a\\.gb\\]")
-  expect_false(file.exists(file.path(d, ".sqlite")))
-})
-
-test_that("new_db still demands a topology for a FASTA option-set reference", {
-  d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  mapping <- mtr_refs_mapping(d)
+  mapping <- mtr_refs_mapping(d, refs = c("/no/such/a.gb", "/no/such/b.gb"))
   expect_error(
-    new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping,
-           assembler = "MapToRef", maptoref_ref = fa),
-    "maptoref_topology"
+    new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping, assembler = "MapToRef"),
+    "S1.*S2"
   )
-})
-
-test_that("new_db does not demand a topology for an accession", {
-  d <- withr::local_tempdir()
-  mapping <- mtr_refs_mapping(d)
-  testthat::local_mocked_bindings(
-    .mtr_ncbi_known = function(accs, ...) list(ok = TRUE, found = "NC_002333")
-  )
-  expect_no_error(
-    new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping,
-           assembler = "MapToRef", maptoref_ref = "NC_002333")
-  )
+  expect_false(file.exists(file.path(d, ".sqlite")))
 })
 
 test_that("add_samples seeds the reference and never adds a samples column", {
@@ -352,60 +329,19 @@ test_that("add_samples seeds the reference and never adds a samples column", {
   fa <- mtr_ref_fasta(d)
   new_db(db_path = file.path(d, ".sqlite"),
          mapping_fn = mtr_refs_mapping(d, ids = c("S1", "S2")))
-  add_fn <- mtr_refs_mapping(file.path(d), refs = fa, ids = c("S3", "S4"))
+  add_fn <- mtr_refs_mapping(file.path(d), refs = fa, topology = "circular", ids = c("S3", "S4"))
   add_samples(path = d, update_mapping_fn = add_fn)
 
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_false("Reference" %in% DBI::dbListFields(con, "samples"))
+  expect_false(any(c("Reference", "Reference_topology") %in% DBI::dbListFields(con, "samples")))
   a <- DBI::dbGetQuery(
-    con, "SELECT ID, assemble_opts, maptoref_ref FROM assemble ORDER BY ID")
-  expect_equal(a$assemble_opts,
-               c("default", "default", "S3_maptoref", "S4_maptoref"))
-  expect_true(all(is.na(a$maptoref_ref)))
-  o <- DBI::dbGetQuery(con, paste(
-    "SELECT assemble_opts, assembler, maptoref_ref FROM assemble_opts",
-    "WHERE assemble_opts IN (\'S3_maptoref\', \'S4_maptoref\') ORDER BY assemble_opts"))
-  expect_equal(o$assembler, rep("MapToRef", 2L))
-  expect_equal(o$maptoref_ref, rep(normalizePath(fa, winslash = "/"), 2L))
-})
-
-test_that("add_samples refuses to clobber an options set that already exists", {
-  d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  new_db(db_path = file.path(d, ".sqlite"),
-         mapping_fn = mtr_refs_mapping(d, ids = c("S1", "S2")))
-  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
-  DBI::dbExecute(con, paste(
-    "INSERT INTO assemble_opts (assemble_opts, cpus) VALUES (\'S3_maptoref\', 4)"))
-  DBI::dbDisconnect(con)
-  expect_error(
-    add_samples(path = d,
-                update_mapping_fn = mtr_refs_mapping(d, refs = fa,
-                                                     ids = c("S3", "S4"))),
-    "already exist"
-  )
-})
-
-test_that("a Reference switches that sample to MapToRef whatever assembler says", {
-  # A reference is only meaningful to MapToRef, so supplying one is the request.
-  # The base set keeps the assembler the caller asked for.
-  d <- withr::local_tempdir()
-  testthat::local_mocked_bindings(
-    .mtr_ncbi_known = function(accs, ...) list(ok = TRUE, found = "NC_002333")
-  )
-  mapping <- mtr_refs_mapping(d, refs = c("NC_002333", ""))
-  db <- file.path(d, ".sqlite")
-  expect_no_warning(
-    new_db(db_path = db, mapping_fn = mapping, assembler = "GetOrganelle")
-  )
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_false("Reference" %in% DBI::dbListFields(con, "samples"))
-  o <- DBI::dbGetQuery(
-    con, "SELECT assemble_opts, assembler, maptoref_ref FROM assemble_opts ORDER BY assemble_opts")
-  expect_equal(o$assembler, c("MapToRef", "GetOrganelle"))
-  expect_equal(o$maptoref_ref, c("NC_002333", NA_character_))
+    con, "SELECT ID, assemble_opts, maptoref_ref, maptoref_topology FROM assemble ORDER BY ID")
+  expect_equal(a$assemble_opts, rep("default", 4L))
+  expect_equal(a$maptoref_ref[a$ID %in% c("S3", "S4")],
+               rep(normalizePath(fa, winslash = "/"), 2L))
+  expect_equal(a$maptoref_topology[a$ID %in% c("S3", "S4")], rep("circular", 2L))
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM assemble_opts")$n, 1L)
 })
 
 test_that("add_samples refuses a project that predates the reference column", {
