@@ -354,6 +354,7 @@ new_db <- function(
       blast_lineage TEXT,
       synteny_accession TEXT,
       maptoref_ref TEXT,
+      maptoref_topology TEXT,
       poor_blast_ref TEXT,
       join_notes TEXT,
       join_switch INTEGER,
@@ -380,6 +381,7 @@ new_db <- function(
           join_notes = NA_character_,
           join_switch = NA_integer_,
           maptoref_ref = NA_character_,
+          maptoref_topology = NA_character_,
           time_stamp = NA_integer_
         ),
       in_place = TRUE,

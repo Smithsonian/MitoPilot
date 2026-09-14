@@ -215,6 +215,39 @@
   out
 }
 
+# Second pass over what .mtr_validate_refs() returned. Only a FASTA (a file or
+# URL not named .gb/.gbk/.gbff) needs a topology; GenBank and accessions carry
+# their own. Same report shape as .mtr_validate_refs().
+#' @noRd
+.mtr_validate_ref_topology <- function(vals, topology, ids, context = "reference") {
+  n <- length(vals)
+  topology <- tolower(trimws(as.character(topology)))
+  topology[is.na(topology)] <- ""
+  if (length(topology) != n) stop("topology must be the same length as vals", call. = FALSE)
+  ids <- as.character(ids)
+  out <- rep(NA_character_, n)
+  bad <- character(0)
+  for (i in seq_len(n)) {
+    if (is.na(vals[i])) next
+    needs <- .mtr_needs_topology(vals[i])
+    if (nzchar(topology[i]) && topology[i] %nin% c("circular", "linear")) {
+      bad <- c(bad, sprintf("  %s [%s]: topology must be circular or linear, not %s",
+                            ids[i], vals[i], topology[i]))
+    } else if (needs && !nzchar(topology[i])) {
+      bad <- c(bad, sprintf("  %s [%s]: FASTA reference needs a topology (circular or linear)",
+                            ids[i], vals[i]))
+    } else if (needs) {
+      out[i] <- topology[i]
+    }
+  }
+  if (length(bad) > 0L) {
+    stop(sprintf("MapToRef reference topology problems (%d) in %s:\n%s",
+                 length(bad), context, paste(bad, collapse = "\n")),
+         call. = FALSE)
+  }
+  out
+}
+
 # Strip the optional Reference column out of a mapping before the samples table
 # is built from colnames(mapping). Precedent: R/init_db_userAsmb.R strips
 # Assembly/Topology the same way. Values are returned raw; callers validate.
@@ -437,12 +470,10 @@
   if ("maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
     return(NA_character_)
   }
-  v <- DBI::dbGetQuery(con, paste(
-    "SELECT COALESCE(NULLIF(TRIM(a.maptoref_ref), ''),",
-    "NULLIF(TRIM(o.maptoref_ref), '')) AS ref",
-    "FROM assemble a LEFT JOIN assemble_opts o",
-    "ON a.assemble_opts = o.assemble_opts WHERE a.ID = ?"
-  ), params = list(id))$ref
+  v <- DBI::dbGetQuery(
+    con, "SELECT NULLIF(TRIM(maptoref_ref), '') AS ref FROM assemble WHERE ID = ?",
+    params = list(id)
+  )$ref
   if (length(v) != 1L || is.na(v)) NA_character_ else v
 }
 
@@ -464,16 +495,15 @@
     "SELECT a.ID FROM assemble a",
     "JOIN assemble_opts o ON a.assemble_opts = o.assemble_opts",
     "WHERE o.assembler = 'MapToRef'",
-    "AND COALESCE(NULLIF(TRIM(a.maptoref_ref), ''),",
-    "NULLIF(TRIM(o.maptoref_ref), '')) IS NULL"
+    "AND NULLIF(TRIM(a.maptoref_ref), '') IS NULL"
   ))$ID
   if (length(ids) > 0L) {
     warning("MapToRef has no reference for ", length(ids), " sample(s): ",
             paste(utils::head(ids, 10L), collapse = ", "),
             if (length(ids) > 10L) paste0(" and ", length(ids) - 10L, " more") else "",
             ". Those samples will fail at the Assemble step. Set a reference per ",
-            "sample with MitoPilot::set_maptoref_refs(), or set one for the ",
-            "parameter set in the Assemble options.", call. = FALSE)
+            "sample with MitoPilot::set_maptoref_refs() or by clicking the sample's ",
+            "MapToRef ref cell in the Assemble table.", call. = FALSE)
   }
   invisible(ids)
 }

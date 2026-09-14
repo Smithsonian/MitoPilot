@@ -253,6 +253,7 @@ backwards_compatibility <- function(
       user_asmb_current &&
       "synteny_accession" %in% names(assemble_table) &&
       "maptoref_ref" %in% names(assemble_table) &&
+      "maptoref_topology" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
@@ -1530,6 +1531,10 @@ backwards_compatibility <- function(
     message("added 'maptoref_ref' column to assemble table")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_ref TEXT")
   }
+  if (!("maptoref_topology" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'maptoref_topology' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_topology TEXT")
+  }
   .mtr_fold_override_column(con)
 
   # if tool column doesn't exist in annotations table, add it
@@ -2308,8 +2313,8 @@ schema_gaps <- function(con) {
                DBI::dbListFields(con, "assemble_opts")))) {
     gaps <- c(gaps, "the assemble_opts table lacks the MapToRef option columns")
   }
-  if (!has("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))) {
-    gaps <- c(gaps, "the assemble table lacks the per-sample MapToRef reference column")
+  if (!has(all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble")))) {
+    gaps <- c(gaps, "the assemble table lacks the per-sample MapToRef reference columns")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%

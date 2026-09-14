@@ -179,6 +179,27 @@ test_that("a distinct file value is content-checked only once", {
   expect_equal(calls, 1L)
 })
 
+test_that(".mtr_validate_ref_topology demands one for a FASTA and normalises case", {
+  d <- withr::local_tempdir()
+  fa <- mtr_ref_fasta(d)
+  expect_equal(
+    .mtr_validate_ref_topology(c(fa, "NC_002333", NA), c("Circular", "", NA),
+                           ids = c("S1", "S2", "S3")),
+    c("circular", NA, NA)
+  )
+  expect_error(
+    .mtr_validate_ref_topology(fa, "", ids = "S1"),
+    "S1.*FASTA reference needs a topology"
+  )
+  expect_error(
+    .mtr_validate_ref_topology(c(fa, fa), c("round", ""), ids = c("S1", "S2")),
+    "S1.*circular or linear.*S2.*needs a topology"
+  )
+  # A GenBank name never needs one; a blank reference drops a stale topology.
+  expect_equal(.mtr_validate_ref_topology("/x/ref.gb", "", ids = "S1"), NA_character_)
+  expect_equal(.mtr_validate_ref_topology(NA, "linear", ids = "S1"), NA_character_)
+})
+
 mtr_refs_mapping <- function(dir, refs = NULL, ids = c("S1", "S2")) {
   m <- data.frame(
     ID = ids,
@@ -190,6 +211,16 @@ mtr_refs_mapping <- function(dir, refs = NULL, ids = c("S1", "S2")) {
   fn <- file.path(dir, "mapping.csv")
   utils::write.csv(m, fn, row.names = FALSE)
   fn
+}
+
+mtr_refs_project <- function(dir, ids = c("S1", "S2"),
+                             maptoref_topology = "circular", ...) {
+  # The fixtures use FASTA references, which need a topology on the set they
+  # are cloned from; one test below covers the missing-topology warning.
+  new_db(db_path = file.path(dir, ".sqlite"),
+         mapping_fn = mtr_refs_mapping(dir, ids = ids),
+         maptoref_topology = maptoref_topology, ...)
+  file.path(dir, ".sqlite")
 }
 
 test_that("new_db warns instead of demanding a reference or a topology", {
@@ -270,15 +301,14 @@ test_that("new_db does not warn when every sample has a reference", {
   )
 })
 
-test_that("the option-set reference covers samples that have none of their own", {
+test_that("a set-level reference no longer covers a sample", {
   d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  mapping <- mtr_refs_mapping(d, refs = c("", ""))
-  expect_no_warning(
-    new_db(db_path = file.path(d, ".sqlite"), mapping_fn = mapping,
-           assembler = "MapToRef", maptoref_ref = fa,
-           maptoref_topology = "circular")
-  )
+  db <- mtr_refs_project(d)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "UPDATE assemble_opts SET maptoref_ref = 'NC_002333', assembler = 'MapToRef'")
+  expect_warning(ids <- .mtr_warn_missing_refs(con), "2 sample")
+  expect_setequal(ids, c("S1", "S2"))
 })
 
 test_that("a bad Reference value and a bad option-set value are reported together", {
@@ -414,16 +444,6 @@ test_that("update_sample_metadata strips a Reference column with a message", {
   expect_equal(DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble")$maptoref_ref,
                c(NA_character_, NA_character_))
 })
-
-mtr_refs_project <- function(dir, ids = c("S1", "S2"),
-                             maptoref_topology = "circular", ...) {
-  # The fixtures use FASTA references, which need a topology on the set they
-  # are cloned from; one test below covers the missing-topology warning.
-  new_db(db_path = file.path(dir, ".sqlite"),
-         mapping_fn = mtr_refs_mapping(dir, ids = ids),
-         maptoref_topology = maptoref_topology, ...)
-  file.path(dir, ".sqlite")
-}
 
 test_that("set_maptoref_refs gives the sample its own set and flips the switch", {
   d <- withr::local_tempdir()
@@ -656,19 +676,19 @@ test_that(".mtr_ref_key compares files by their normalised path", {
   expect_equal(.mtr_ref_key("https://x.org/a.gb"), "https://x.org/a.gb")
 })
 
-test_that(".mtr_ref_now reads the set, and a leftover column value over it", {
+test_that(".mtr_ref_now reads the sample column only", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
-  fa2 <- mtr_ref_fasta(d, name = "ref2.fasta")
   db <- mtr_refs_project(d)
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_true(is.na(.mtr_ref_now(con, "S1")))
-  set_maptoref_refs(d, data.frame(a = "S1", b = fa))
-  expect_equal(.mtr_ref_now(con, "S1"), normalizePath(fa, winslash = "/"))
+  DBI::dbExecute(con, "UPDATE assemble_opts SET maptoref_ref = 'NC_002333'")
+  expect_true(is.na(.mtr_ref_now(con, "S1")))
   DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
-                 params = list(fa2))
-  expect_equal(.mtr_ref_now(con, "S1"), fa2)
+                 params = list(fa))
+  expect_equal(.mtr_ref_now(con, "S1"), fa)
+  expect_true(is.na(.mtr_ref_now(con, "S2")))
 })
 
 test_that("set_maptoref_refs warns about samples still without a reference", {
