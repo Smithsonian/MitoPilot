@@ -293,40 +293,41 @@
   v
 }
 
-#' Fold per-sample reference column values into per-sample sets (migration)
-#'
-#' A value that cannot be moved (its set name is taken by a set the sample
-#' does not own) is left on the column, where the pipeline still reads it.
-#'
-#' @param con database connection
-#' @return invisibly, the IDs folded
+# One-time move of set-level values onto the samples that used them. The last
+# statement empties the source, so running it again is silent.
 #' @noRd
-.mtr_fold_override_column <- function(con) {
-  if ("assembler" %nin% DBI::dbListFields(con, "assemble_opts") ||
-      "maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
+.mtr_copy_set_refs_down <- function(con) {
+  opts_cols <- DBI::dbListFields(con, "assemble_opts")
+  asm_cols <- DBI::dbListFields(con, "assemble")
+  if (!all(c("maptoref_ref", "maptoref_topology") %in% opts_cols) ||
+      !all(c("maptoref_ref", "maptoref_topology", "assemble_opts") %in% asm_cols)) {
     return(invisible(character(0)))
   }
-  cur <- DBI::dbGetQuery(con, paste(
-    "SELECT ID, maptoref_ref FROM assemble",
-    "WHERE maptoref_ref IS NOT NULL AND TRIM(maptoref_ref) <> ''"
-  ))
-  done <- character(0)
-  for (i in seq_len(nrow(cur))) {
-    ok <- tryCatch({
-      .mtr_route_refs(con, cur$ID[i], cur$maptoref_ref[i])
-      TRUE
-    }, error = function(e) {
-      message("kept the MapToRef reference of ", cur$ID[i],
-              " on the assemble table: ", conditionMessage(e))
-      FALSE
-    })
-    if (ok) done <- c(done, cur$ID[i])
+  copy <- function(col) {
+    ids <- DBI::dbGetQuery(con, sprintf(paste(
+      "SELECT a.ID FROM assemble a JOIN assemble_opts o",
+      "ON a.assemble_opts = o.assemble_opts",
+      "WHERE NULLIF(TRIM(a.%1$s), '') IS NULL",
+      "AND NULLIF(TRIM(o.%1$s), '') IS NOT NULL"), col))$ID
+    if (length(ids) > 0L) {
+      DBI::dbExecute(con, sprintf(paste(
+        "UPDATE assemble SET %1$s = (SELECT TRIM(o.%1$s) FROM assemble_opts o",
+        "WHERE o.assemble_opts = assemble.assemble_opts)",
+        "WHERE NULLIF(TRIM(%1$s), '') IS NULL AND ID IN (%2$s)"),
+        col, paste(sprintf("'%s'", ids), collapse = ",")))
+    }
+    ids
   }
-  if (length(done) > 0L) {
-    message("moved the MapToRef reference of ", length(done),
-            " sample(s) onto their own parameter set")
+  refs <- copy("maptoref_ref")
+  copy("maptoref_topology")
+  if (length(refs) > 0L) {
+    message("moved the MapToRef reference of ", length(refs),
+            " sample(s) from their parameter set onto the sample")
   }
-  invisible(done)
+  DBI::dbExecute(con, paste(
+    "UPDATE assemble_opts SET maptoref_ref = NULL, maptoref_topology = NULL",
+    "WHERE maptoref_ref IS NOT NULL OR maptoref_topology IS NOT NULL"))
+  invisible(refs)
 }
 
 #' The reference the next run of a sample would use

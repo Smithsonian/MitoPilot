@@ -505,43 +505,34 @@ test_that("set_maptoref_refs validates values before writing anything", {
     con, "SELECT 1 FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")), 0L)
 })
 
-test_that("the migration folds a column value into the sample's own set", {
+test_that("the migration copies a set reference and topology down onto its samples", {
   d <- withr::local_tempdir()
   fa <- mtr_ref_fasta(d)
   db <- mtr_refs_project(d)
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
+  DBI::dbExecute(con, "UPDATE assemble_opts SET maptoref_ref = ?, maptoref_topology = 'circular'",
                  params = list(fa))
+  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = 'NC_002333' WHERE ID = 'S2'")
 
-  expect_message(.mtr_fold_override_column(con), "1 sample")
+  expect_message(.mtr_copy_set_refs_down(con), "1 sample")
 
-  a <- DBI::dbGetQuery(con, "SELECT ID, assemble_opts, maptoref_ref FROM assemble ORDER BY ID")
-  expect_equal(a$assemble_opts, c("S1_maptoref", "default"))
-  expect_true(all(is.na(a$maptoref_ref)))
-  expect_equal(DBI::dbGetQuery(
-    con, "SELECT maptoref_ref FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")$maptoref_ref,
-    fa)
-  # Nothing left to fold: silent.
-  expect_silent(.mtr_fold_override_column(con))
+  a <- DBI::dbGetQuery(
+    con, "SELECT ID, maptoref_ref, maptoref_topology FROM assemble ORDER BY ID")
+  expect_equal(a$maptoref_ref, c(fa, "NC_002333"))
+  expect_equal(a$maptoref_topology, c("circular", "circular"))
+  o <- DBI::dbGetQuery(con, "SELECT maptoref_ref, maptoref_topology FROM assemble_opts")
+  expect_true(is.na(o$maptoref_ref) && is.na(o$maptoref_topology))
+  expect_silent(.mtr_copy_set_refs_down(con))
 })
 
-test_that("a column value the migration cannot fold stays where the pipeline reads it", {
+test_that("the migration is a no-op on a userAsmb project", {
   d <- withr::local_tempdir()
-  fa <- mtr_ref_fasta(d)
-  fa2 <- mtr_ref_fasta(d, name = "ref2.fasta")
-  db <- mtr_refs_project(d)
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  set_maptoref_refs(d, data.frame(a = "S1", b = fa, c = "circular"))
-  # S1's set is now shared, so S1 no longer owns it and its name is taken.
-  DBI::dbExecute(con, "UPDATE assemble SET assemble_opts = 'S1_maptoref' WHERE ID = 'S2'")
-  DBI::dbExecute(con, "UPDATE assemble SET maptoref_ref = ? WHERE ID = 'S1'",
-                 params = list(fa2))
-
-  expect_message(.mtr_fold_override_column(con), "kept")
-  expect_equal(DBI::dbGetQuery(
-    con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref, fa2)
+  DBI::dbExecute(con, "CREATE TABLE assemble (ID TEXT, maptoref_ref TEXT, maptoref_topology TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE assemble_opts (assemble_opts TEXT)")
+  expect_silent(.mtr_copy_set_refs_down(con))
 })
 
 test_that(".mtr_ref_key compares files by their normalised path", {
