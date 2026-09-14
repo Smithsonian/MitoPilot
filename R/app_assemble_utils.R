@@ -84,7 +84,8 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::arrange(dplyr::desc(time_stamp)) |>
     dplyr::mutate(
       blast_ref_status = poor_blast_ref,
-      blast_hits = dplyr::if_else(assemble_switch > 1, "All BLAST Hits", NA_character_)
+      blast_hits = dplyr::if_else(assemble_switch > 1, "All BLAST Hits", NA_character_),
+      maptoref_ref = mtr_display_ref(assembler, maptoref_ref, maptoref_topology)
     )
 
   out |>
@@ -96,6 +97,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       pre_opts,
       assemble_opts,
       blast_opts,
+      maptoref_ref,
       reads,
       trimmed_reads,
       mean_length,
@@ -369,34 +371,6 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             "and extend mitochondrial contigs.",
             href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
             id = ns("help_labels_db"), nested = TRUE)),
-        textInput(
-          ns("maptoref_ref"),
-          label = "MapToRef reference:",
-          value = current$maptoref_ref %||% character(0),
-          width = "100%"
-        ) |> shinyjs::disabled() |>
-          tagAppendChild(opts_help(
-            "Path, URL, or NCBI nucleotide accession (for example NC_002333) of ",
-            "one complete mitogenome to map against. An accession is ",
-            "downloaded from GenBank as a full record. A file ending .gb, ",
-            ".gbk, or .gbff is read as GenBank and takes its topology from the ",
-            "LOCUS line; anything else is read as FASTA and needs the topology ",
-            "set below. A sample given a Reference in the mapping file has its ",
-            "own parameter set, named after the sample.",
-            href = "https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html",
-            id = ns("help_maptoref_ref"), nested = TRUE)),
-        selectInput(
-          ns("maptoref_topology"),
-          label = "Reference topology:",
-          choices = c("", "circular", "linear"),
-          selected = current$maptoref_topology %||% "",
-          width = "100%"
-        ) |> shinyjs::disabled() |>
-          tagAppendChild(opts_help(
-            "Required for a FASTA reference, whose header carries no topology. ",
-            "A GenBank record supplies its own; this value is used only when ",
-            "the LOCUS line names neither.",
-            id = ns("help_maptoref_topology"), nested = TRUE)),
         selectInput(
           ns("maptoref_mapper"),
           label = "MapToRef mapper:",
@@ -508,7 +482,7 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
     # Hide the non-selected assembler's inputs. Each help line lives inside its
     # input's container, so hiding the input hides its help too - do NOT hide the
     # help_* ids separately, or showing the input later won't bring the help back.
-    maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+    maptoref_ids <- c("maptoref_mapper",
                       "maptoref", "maptoref_consensus", "maptoref_iter")
     if(current$assembler == "GetOrganelle"){
       shinyjs::hide(id = "mitofinder")
@@ -1264,4 +1238,35 @@ mtr_mapper_help_text <- function(selected, ns) {
       href = sp$href, id = ns(paste0("help_maptoref_", m)), nested = TRUE)))
     if (identical(m, selected)) el else shinyjs::hidden(el)
   }))
+}
+
+#' Set one sample's MapToRef reference and, for a FASTA, its topology
+#' @noRd
+maptoref_ref_modal <- function(id, ref, topology, session = getDefaultReactiveDomain()) {
+  ns <- session$ns
+  showModal(
+    modalDialog(
+      title = mp_modal_title(paste("MapToRef reference for", id)),
+      textInput(
+        ns("maptoref_ref_value"),
+        label = "Reference:",
+        value = ref %|NA|% "",
+        width = "100%"
+      ) |> tagAppendChild(opts_help(
+        "Absolute path on this machine, URL, or NCBI nucleotide accession ",
+        "(for example NC_002333) of one complete mitogenome to map this ",
+        "sample's reads against. Blank clears the reference. Saving ",
+        "re-queues the sample.")),
+      selectInput(
+        ns("maptoref_ref_topology"),
+        label = "Reference topology:",
+        choices = c("", "circular", "linear"),
+        selected = topology %|NA|% "",
+        width = "100%"
+      ) |> tagAppendChild(opts_help(
+        "Required for a FASTA reference, whose header carries no topology. ",
+        "A GenBank record or accession supplies its own.")),
+      footer = mp_footer(primary = actionButton(ns("update_maptoref_ref"), "Save"))
+    )
+  )
 }
