@@ -311,7 +311,7 @@ assemble_server <- function(id) {
               name = mp_col_name("maptoref_ref"),
               header = mp_col_header("maptoref_ref"),
               html = TRUE,
-              width = 180,
+              minWidth = 180,
               cell = rt_link(ns("set_maptoref_ref"), title = "Set MapToRef reference",
                              lock_col = "assemble_lock")
             ),
