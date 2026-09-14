@@ -42,11 +42,15 @@ seqview_payload <- function(annotations, seq, topology, unit,
     unit = unit, len = nchar(seq), topology = topology, seq = seq,
     version = as.integer(version), selected = sel, features = feats
   )
-  # Per-base read depth and error rate, indexed by position; NA -> null.
+  # Per-base read depth and error rate, indexed by position; NA -> null. An
+  # all-NA column (assembly supplied without reads) is left out so the track
+  # is not drawn at all.
   if (is.data.frame(coverage) && nrow(coverage) > 0 && nchar(seq) > 0) {
     i <- match(seq_len(nchar(seq)), coverage$Position)
-    out$depth <- as.integer(coverage$Depth[i])
-    out$err <- round(as.numeric(coverage$ErrorRate[i]), 4)
+    depth <- as.integer(coverage$Depth[i])
+    err <- round(as.numeric(coverage$ErrorRate[i]), 4)
+    if (any(!is.na(depth))) out$depth <- depth
+    if (any(!is.na(err))) out$err <- err
   }
   out
 }
@@ -61,24 +65,27 @@ seqview_ui <- function(id) {
       title = title, `aria-label` = title %||% label, icon, label
     )
   }
+  goto <- numericInput(ns("goto"), NULL, value = NA, min = 1, step = 1, width = "130px")
+  goto <- htmltools::tagQuery(goto)$find("input")$
+    addAttrs(placeholder = "Go to position", `aria-label` = "Go to position")$allTags()
   tags$details(
     id = ns("section"),
     tags$summary("Sequence"),
     div(
       class = "mp-seqview-controls",
-      mp_checkbox(ns("show_cov"), label = "Coverage", value = TRUE),
-      mp_checkbox(ns("show_err"), label = "Error rate", value = TRUE),
-      mp_checkbox(ns("show_nt"), label = "Nucleotides", value = TRUE),
-      mp_checkbox(ns("show_aa"), label = "Amino acids", value = TRUE),
-      numericInput(ns("goto"), "Position:", value = NA, min = 1, step = 1, width = "130px"),
+      goto,
       btn("fit", "Fit gene"),
       btn("whole", "Whole genome"),
       btn("zoom_in", NULL, icon("magnifying-glass-plus"), "Zoom in"),
-      btn("zoom_out", NULL, icon("magnifying-glass-minus"), "Zoom out")
+      btn("zoom_out", NULL, icon("magnifying-glass-minus"), "Zoom out"),
+      mp_checkbox(ns("show_cov"), label = "Coverage", value = TRUE),
+      mp_checkbox(ns("show_err"), label = "Error rate", value = TRUE),
+      mp_checkbox(ns("show_nt"), label = "Nucleotides", value = TRUE),
+      mp_checkbox(ns("show_aa"), label = "Amino acids", value = TRUE)
     ),
     div(class = "mp-coverage-caption",
         paste("Drag or scroll sideways to pan, scroll or pinch to zoom; click a gene to select its row.",
-              "Letters appear when zoomed in. Error rate bars turn red above 5%.")),
+              "Letters appear when zoomed in. Error rate bars turn orange above 5%.")),
     uiOutput(ns("empty")),
     div(
       class = "mp-seqview",

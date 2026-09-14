@@ -205,8 +205,8 @@ test_that("coverage and error tracks add height above the lanes and toggle off",
     var h3 = window.mpseq.state('sv-canvas').height;
     return JSON.stringify({h0:h0, h1:h1, h2:h2, h3:h3, lane0:lane0, lane1:lane1});})()")
   s <- jsonlite::fromJSON(r)
-  expect_equal(s$h1 - s$h0, 60 + 4 + 36 + 4)
-  expect_equal(s$lane1 - s$lane0, 60 + 4 + 36 + 4)
-  expect_equal(s$h2, s$h0 + 36 + 4)
+  expect_equal(s$h1 - s$h0, 60 + 12 + 36 + 12)
+  expect_equal(s$lane1 - s$lane0, 60 + 12 + 36 + 12)
+  expect_equal(s$h2, s$h0 + 36 + 12)
   expect_equal(s$h3, s$h0)
 })

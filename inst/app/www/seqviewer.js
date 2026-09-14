@@ -79,7 +79,7 @@
   'use strict';
   var G = window.mpseq.geom;
   var MAX_PPB = 14, NT_LETTER = 8, NT_BAR = 3, AA_MIN = 4;
-  var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4, COV_H = 60, ERR_H = 36;
+  var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4, COV_H = 60, ERR_H = 36, GAP = 12;
   var ERR_FLAG = 0.05;
   // Same shades as the BLAST synteny zoom (app_annotate_details.R base_color)
   // and msaR's zappo scheme in the alignment viewer.
@@ -189,7 +189,7 @@
   Viewer.prototype.covOn = function () { return this.showCov && !!this.depth; };
   Viewer.prototype.errOn = function () { return this.showErr && !!this.err; };
   Viewer.prototype.topH = function () {
-    return RULER_H + PAD + (this.covOn() ? COV_H + PAD : 0) + (this.errOn() ? ERR_H + PAD : 0);
+    return RULER_H + PAD + (this.covOn() ? COV_H + GAP : 0) + (this.errOn() ? ERR_H + GAP : 0);
   };
   Viewer.prototype.laneY = function (lane) { return this.topH() + lane * LANE_H; };
   Viewer.prototype.height = function () {
@@ -212,8 +212,8 @@
     this.hits = [];
     this.drawRuler(c, W);
     var y = RULER_H + PAD;
-    if (this.covOn()) { this.drawTrack(c, W, y, COV_H, this.depth, this.depthMax, 'depth', false); y += COV_H + PAD; }
-    if (this.errOn()) { this.drawTrack(c, W, y, ERR_H, this.err, Math.max(this.errMax, ERR_FLAG * 2), 'error', true); y += ERR_H + PAD; }
+    if (this.covOn()) { this.drawTrack(c, W, y, COV_H, this.depth, this.depthMax, 'depth', false); y += COV_H + GAP; }
+    if (this.errOn()) { this.drawTrack(c, W, y, ERR_H, this.err, Math.max(this.errMax, ERR_FLAG * 2), 'error', true); y += ERR_H + GAP; }
     this.drawJoins(c); this.drawLanes(c);
     y = this.topH() + this.nLanes * LANE_H + PAD;
     if (this.showNt && this.ppb >= NT_BAR) { this.drawNt(c, y); y += NT_H; }
@@ -299,9 +299,11 @@
       }, this);
     }, this);
   };
-  // One bar per pixel column, the max of the positions under it.
+  // One bar per pixel column, the max of the positions under it. Depth is
+  // blue; error rate is grey with bars over the threshold in Okabe-Ito
+  // orange, which stays distinct from the blue for colour-blind viewers.
   Viewer.prototype.drawTrack = function (c, W, y, h, vals, vmax, label, flag) {
-    var base = cssVar('--mp-primary', '#337ab7'), red = '#e04b5a', muted = cssVar('--mp-text-muted', '#6a6a6a');
+    var base = flag ? '#a0a0a0' : cssVar('--mp-primary', '#337ab7'), red = '#e69f00', muted = cssVar('--mp-text-muted', '#6a6a6a');
     c.fillStyle = cssVar('--mp-surface-alt', '#f5f5f5'); c.fillRect(GUTTER, y, W - GUTTER, h);
     for (var px = GUTTER; px < W; px++) {
       var a = Math.floor(this.viewStart + (px - GUTTER) / this.ppb), b = Math.floor(this.viewStart + (px + 1 - GUTTER) / this.ppb);

@@ -125,3 +125,11 @@ test_that("coverage arrays are indexed by position with null gaps", {
   expect_equal(p$err, c(0, 0.1235, NA, NA))
   expect_null(seqview_payload(a, "ACGT", "linear", "S1.1.1")$depth)
 })
+
+test_that("an assembly without reads carries no coverage tracks", {
+  a <- sv_ann()
+  cov <- data.frame(Position = 1:4, Depth = NA_real_, ErrorRate = NA_real_)
+  p <- seqview_payload(a, "ACGT", "linear", "S1.1.1", coverage = cov)
+  expect_null(p$depth); expect_null(p$err)
+  expect_null(seqview_payload(a, "ACGT", "linear", "S1.1.1", coverage = NULL)$depth)
+})
