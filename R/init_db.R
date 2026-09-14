@@ -1,6 +1,7 @@
 # MapToRef option defaults, shared by new_db() and the assemble-options modal.
 .mtr_default_bowtie2 <- "--very-sensitive-local"
 .mtr_default_consensus <- "-d 3 --min-BQ 20"
+.mtr_default_bwa <- ""
 
 #' Initialize a new project database
 #'
@@ -61,7 +62,9 @@
 #'   samples may instead name their own reference in the mapping file's
 #'   \code{Reference} column, which gives each of those samples its own
 #'   MapToRef parameter set, or through \code{\link{set_maptoref_refs}}.
-#' @param maptoref Default bowtie2 options for MapToRef
+#' @param maptoref_mapper MapToRef read mapper, "bowtie2" or "bwa-mem"
+#'   (default = "bowtie2")
+#' @param maptoref Default mapper options for MapToRef
 #'   (default = "--very-sensitive-local")
 #' @param maptoref_consensus Default samtools consensus options for MapToRef
 #'   (default = "-d 3 --min-BQ 20")
@@ -107,6 +110,7 @@ new_db <- function(
       "--megahit"
     ),
     maptoref_ref = NA_character_,
+    maptoref_mapper = "bowtie2",
     maptoref = .mtr_default_bowtie2,
     maptoref_consensus = .mtr_default_consensus,
     maptoref_iter = 5L,
@@ -172,6 +176,12 @@ new_db <- function(
       (is.na(maptoref_topology) || !nzchar(trimws(maptoref_topology)))) {
     stop("Set maptoref_topology (circular or linear) for a FASTA reference; ",
          "a GenBank (.gb) reference takes its topology from the file")
+  }
+  if (!maptoref_mapper %in% .mtr_mappers) {
+    stop("maptoref_mapper must be bowtie2 or bwa-mem")
+  }
+  if (missing(maptoref) && maptoref_mapper == "bwa-mem") {
+    maptoref <- .mtr_default_bwa
   }
   if (grepl("['\"]", paste0(maptoref, maptoref_consensus))) {
     stop("maptoref and maptoref_consensus must not contain quote characters")
@@ -395,6 +405,7 @@ new_db <- function(
       min_assembly_length INTEGER,
       join_scaffolds INTEGER,
       maptoref_ref TEXT,
+      maptoref_mapper TEXT,
       maptoref TEXT,
       maptoref_consensus TEXT,
       maptoref_iter INTEGER,
@@ -419,6 +430,7 @@ new_db <- function(
         min_assembly_length = min_assembly_length,
         join_scaffolds = 0L,
         maptoref_ref = maptoref_ref,
+        maptoref_mapper = maptoref_mapper,
         maptoref = maptoref,
         maptoref_consensus = maptoref_consensus,
         maptoref_iter = as.integer(maptoref_iter),

@@ -180,6 +180,7 @@ backwards_compatibility <- function(
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
       "maptoref_ref" %in% names(assemble_opts_table) &&
+      "maptoref_mapper" %in% names(assemble_opts_table) &&
       "maptoref" %in% names(assemble_opts_table) &&
       "maptoref_consensus" %in% names(assemble_opts_table) &&
       "maptoref_iter" %in% names(assemble_opts_table) &&
@@ -1328,6 +1329,25 @@ backwards_compatibility <- function(
     glue::glue_sql(
       "ALTER TABLE assemble_opts
        ADD COLUMN maptoref_ref TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_mapper column doesn't exist, add it
+  if(!("maptoref_mapper" %in% names(assemble_opts_table))){
+    message("added 'maptoref_mapper' column to assemble_opts table")
+    assemble_opts_table$maptoref_mapper <- rep("bowtie2", nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_mapper TEXT",
       .con = con
     ) |> DBI::dbExecute(con, statement = _)
 

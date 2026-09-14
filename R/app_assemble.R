@@ -833,6 +833,8 @@ assemble_server <- function(id) {
           inputId = "maptoref_topology",
           selected = (cur$maptoref_topology %||% NA_character_) %|NA|% ""
         )
+        updateSelectInput(inputId = "maptoref_mapper",
+                          selected = cur$maptoref_mapper %||% "bowtie2")
         updateTextInput(inputId = "maptoref", value = cur$maptoref)
         updateTextInput(inputId = "maptoref_consensus", value = cur$maptoref_consensus)
         updateNumericInput(inputId = "maptoref_iter", value = cur$maptoref_iter)
@@ -840,8 +842,8 @@ assemble_server <- function(id) {
           inputId = "assembler",
           selected = cur$assembler
         )
-        maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref",
-                          "maptoref_consensus", "maptoref_iter")
+        maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+                          "maptoref", "maptoref_consensus", "maptoref_iter")
         # Each help line lives inside its input's container, so toggling the
         # input shows/hides its help too (no separate help_* toggles needed).
         if (cur$assembler == "GetOrganelle") {
@@ -881,8 +883,8 @@ assemble_server <- function(id) {
       shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
       shinyjs::toggleState("min_assembly_length", condition = input$edit_assemble_opts)
       shinyjs::toggleState("join_scaffolds", condition = input$edit_assemble_opts)
-      for (i in c("maptoref_ref", "maptoref_topology", "maptoref",
-                  "maptoref_consensus", "maptoref_iter")) {
+      for (i in c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+                  "maptoref", "maptoref_consensus", "maptoref_iter")) {
         shinyjs::toggleState(i, condition = input$edit_assemble_opts)
       }
       # Check if editing opts that apply beyond selection
@@ -935,9 +937,19 @@ assemble_server <- function(id) {
     })
     # toggle parameters depending on selected assembler. Each help line lives
     # inside its input's container, so toggling the input carries its help too.
+    # Switching mapper swaps the options box only when it still holds the
+    # other mapper's default.
+    observeEvent(input$maptoref_mapper, {
+      cur <- trimws(input$maptoref %||% "")
+      defaults <- c("bowtie2" = .mtr_default_bowtie2, "bwa-mem" = .mtr_default_bwa)
+      if (cur %in% defaults) {
+        updateTextInput(inputId = "maptoref",
+                        value = defaults[[input$maptoref_mapper]])
+      }
+    }, ignoreInit = TRUE)
     observeEvent(input$assembler, {
-      maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref",
-                        "maptoref_consensus", "maptoref_iter")
+      maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+                        "maptoref", "maptoref_consensus", "maptoref_iter")
       if (input$assembler == "GetOrganelle") {
         shinyjs::hide(id = "mitofinder")
         shinyjs::hide(id = "mf_db")
@@ -1012,8 +1024,11 @@ assemble_server <- function(id) {
               min_assembly_length = as.integer(req(input$min_assembly_length)),
               join_scaffolds = as.integer(isTRUE(input$join_scaffolds)),
               maptoref_ref = if (nzchar(ref_value)) ref_value else NA_character_,
+              maptoref_mapper = input$maptoref_mapper %||% "bowtie2",
               maptoref = if (nzchar(trimws(input$maptoref %||% ""))) {
                 input$maptoref
+              } else if (identical(input$maptoref_mapper, "bwa-mem")) {
+                .mtr_default_bwa
               } else {
                 .mtr_default_bowtie2
               },

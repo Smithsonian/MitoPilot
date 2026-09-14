@@ -16,7 +16,8 @@ map_to_ref(
   genetic_code = NA_integer_,
   cpus = 4,
   out_dir = ".",
-  ref_value = NA_character_
+  ref_value = NA_character_,
+  mapper = "bowtie2"
 )
 }
 \arguments{
@@ -26,7 +27,7 @@ map_to_ref(
 
 \item{reads_1, reads_2}{Preprocessed paired reads.}
 
-\item{bowtie2_opts}{Flags passed verbatim to bowtie2.}
+\item{bowtie2_opts}{Flags passed verbatim to the chosen mapper.}
 
 \item{consensus_opts}{Flags passed to samtools consensus after validation.}
 
@@ -45,6 +46,10 @@ ignored for GenBank.}
 file path, a URL, or an NCBI nucleotide accession. An accession is
 downloaded from GenBank here; anything else means \code{ref} is already
 the staged reference file.}
+
+\item{mapper}{Read mapper: "bowtie2" or "bwa-mem". The first pass against
+the user's reference runs with relaxed seeding appended to the flags;
+later passes and the final pass use the flags as given.}
 }
 \value{
 invisibly TRUE on success, FALSE after writing the failure sentinel.

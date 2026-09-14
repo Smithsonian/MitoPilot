@@ -22,7 +22,7 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   "COALESCE(NULLIF(TRIM(a.maptoref_ref), ''), " +
                   "NULLIF(TRIM(opts.maptoref_ref), '')), " +
                   'opts.maptoref, opts.maptoref_consensus, ' +
-                  'opts.maptoref_iter, opts.maptoref_topology ' +
+                  'opts.maptoref_iter, opts.maptoref_topology, opts.maptoref_mapper ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
@@ -128,7 +128,8 @@ workflow ASSEMBLE {
                         maptoref_consensus: (it[21] ?: ""),                     // MapToRef samtools consensus options
                         maptoref_iter: (it[22] == null ? 5 : (it[22] as Integer)), // MapToRef iteration cap
                         maptoref_topology: (it[23] ?: ""),                      // MapToRef reference topology
-                        maptoref_value: ((it[19] ?: "").toString().trim())      // raw reference: path, URL, or accession
+                        maptoref_value: ((it[19] ?: "").toString().trim()),     // raw reference: path, URL, or accession
+                        maptoref_mapper: (it[24] ?: "bowtie2")                  // MapToRef read mapper
                     ],
                     [
                         it[4],                                                  // getOrganelle seeds_db

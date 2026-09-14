@@ -6,6 +6,7 @@ mtr_stub_bin <- function(dir) {
 
   writeLines(c("#!/bin/sh", "exit 0"), file.path(bin, "bowtie2-build"))
   writeLines(c("#!/bin/sh", "exit 0"), file.path(bin, "bowtie2"))
+  writeLines(c("#!/bin/sh", "exit 0"), file.path(bin, "bwa"))
   writeLines(c(
     "#!/bin/sh",
     "cmd=$1; shift",
@@ -615,4 +616,34 @@ test_that("a successful run keeps final.bam, its index, and the depth CSV", {
     sort(basename(list.files(work, pattern = "\\.bam$"))),
     "final.bam"
   )
+})
+
+test_that("an unknown mapper writes the failure sentinel", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d)
+  out <- file.path(d, "out")
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "--very-sensitive-local",
+                   "-d 3 --min-BQ 20", 5, "circular", 2, 1, out, mapper = "hisat")
+  expect_false(ok)
+  expect_true(file.exists(file.path(out, "T1_summary.txt")))
+  expect_match(paste(readLines(file.path(out, "assembler.log.txt")), collapse = "\n"),
+               "mapper must be one of bowtie2, bwa-mem")
+})
+
+test_that("bwa-mem runs the loop and logs the flags used per pass", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d, reps = 1600L)
+  out <- file.path(d, "out")
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "", "-d 3 --min-BQ 20", 5,
+                   "circular", 2, 1, out, mapper = "bwa-mem")
+  expect_true(ok)
+  log <- readLines(file.path(out, "assembler.log.txt"))
+  expect_true(any(grepl("^pass 1 \\(bwa-mem\\): -k 15 -B 2 -T 20$", log)))
+  expect_true(any(grepl("^final pass \\(bwa-mem\\): $", log)))
+  expect_true(any(grepl("^\\+ bwa index", log)))
+  expect_true(any(grepl("bwa mem -t 1 .*\\| samtools view -b -F 4 - \\| samtools sort", log)))
+  expect_false(any(grepl("bowtie2", log)))
+  expect_true(file.exists(file.path(out, "maptoref", "final.bam.bai")))
 })

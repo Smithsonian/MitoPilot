@@ -373,14 +373,35 @@ test_that("new_db stores the five MapToRef option columns", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   opts <- DBI::dbGetQuery(con, "SELECT * FROM assemble_opts")
-  expect_true(all(c("maptoref_ref", "maptoref", "maptoref_consensus",
+  expect_true(all(c("maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
                     "maptoref_iter", "maptoref_topology") %in% names(opts)))
   expect_equal(opts$assembler, "MapToRef")
   expect_equal(opts$maptoref_ref, normalizePath(mtr_fixture(), winslash = "/"))
+  expect_equal(opts$maptoref_mapper, "bowtie2")
   expect_equal(opts$maptoref, "--very-sensitive-local")
   expect_equal(opts$maptoref_consensus, "-d 3 --min-BQ 20")
   expect_equal(opts$maptoref_iter, 5L)
   expect_equal(opts$maptoref_topology, "circular")
+})
+
+test_that("new_db defaults the options string to the chosen mapper", {
+  d <- withr::local_tempdir()
+  db <- mtr_test_db(d, assembler = "MapToRef", maptoref_ref = mtr_fixture(),
+                    maptoref_topology = "circular", maptoref_mapper = "bwa-mem")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  opts <- DBI::dbGetQuery(con, "SELECT maptoref_mapper, maptoref FROM assemble_opts")
+  expect_equal(opts$maptoref_mapper, "bwa-mem")
+  expect_equal(opts$maptoref, "")
+})
+
+test_that("new_db rejects an unknown mapper", {
+  d <- withr::local_tempdir()
+  expect_error(
+    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "x.gb",
+                maptoref_mapper = "hisat"),
+    "bowtie2 or bwa-mem"
+  )
 })
 
 test_that("new_db warns for MapToRef without a reference and rejects a bad topology", {
