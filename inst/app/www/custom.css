@@ -539,6 +539,33 @@ details summary:hover {
   margin-bottom: var(--mp-space-2);
 }
 
+/* Column picker sits apart from the row filters, same rule in every module. */
+.mp-filter-cols {
+  margin-left: var(--mp-space-3);
+  padding-left: var(--mp-space-4, 16px);
+  border-left: 1px solid var(--mp-border);
+}
+
+/* Step switcher lives in the toolbar as a peer of the action buttons: label
+   kept for screen readers only, form margin dropped, buttons at toolbar
+   height, a divider between navigation and actions. */
+.mp-toolbar .form-group:has(> #mode) {
+  margin-bottom: 0;
+  padding-right: var(--mp-space-3);
+  border-right: 1px solid var(--mp-border);
+}
+.mp-toolbar #mode-label {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.mp-toolbar #mode-label + br { display: none; }
+.mp-toolbar #mode .btn {
+  height: var(--mp-control-h);
+  line-height: calc(var(--mp-control-h) - 2px);
+  padding: 0 12px;
+  font-size: var(--mp-fs-body);
+}
+
 /* App / project / variant orientation line above the toolbar. */
 .mp-header {
   display: flex;
@@ -922,7 +949,7 @@ a.mp-link:focus-visible {
 .mp-seqview-controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--mp-space-2);
   margin: 0 0 var(--mp-space-2);
 }

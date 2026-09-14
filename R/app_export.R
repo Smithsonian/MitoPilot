@@ -80,10 +80,7 @@ export_ui <- function(id) {
         width = "140px"
       ),
       div(
-        style = paste(
-          "margin-left: 24px; padding-left: 24px;",
-          "border-left: 1px solid var(--mp-border);"
-        ),
+        class = "mp-filter-cols",
         mp_filter_picker(
           ns("col_groups"), "Columns:", names(EXPORT_COL_GROUPS),
           width = "150px"
@@ -205,6 +202,9 @@ export_server <- function(id) {
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
     })
+    # Style-only output has no size, so Shiny would treat it as hidden and
+    # stop re-rendering it after the first pass.
+    outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
     # Render table ----
     output$table <- reactable::renderReactable({

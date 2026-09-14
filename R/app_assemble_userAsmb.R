@@ -44,10 +44,7 @@ assemble_ui_userAsmb <- function(id) {
         placeholder = "any time"
       ),
       div(
-        style = paste(
-          "margin-left: 12px; padding-left: 16px;",
-          "border-left: 1px solid var(--mp-border, #ddd);"
-        ),
+        class = "mp-filter-cols",
         mp_filter_picker(ns("col_groups"), "Columns:",
                          names(ASSEMBLE_COL_GROUPS_USERASMB), width = "150px")
       )
@@ -158,6 +155,9 @@ assemble_server_userAsmb <- function(id) {
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
     })
+    # Style-only output has no size, so Shiny would treat it as hidden and
+    # stop re-rendering it after the first pass.
+    outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
     # Render table ----
     # Render order comes from the data frame, not this list. See

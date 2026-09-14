@@ -67,8 +67,11 @@ annotate_ui <- function(id) {
         width      = "220px",
         placeholder = "any time"
       ),
-      mp_filter_picker(ns("col_groups"), "Columns:", names(ANNOTATE_COL_GROUPS),
-                       width = "150px")
+      div(
+        class = "mp-filter-cols",
+        mp_filter_picker(ns("col_groups"), "Columns:", names(ANNOTATE_COL_GROUPS),
+                         width = "150px")
+      )
     ),
     uiOutput(ns("n_selected")),
     div(class = "mp-table-resize", reactable::reactableOutput(ns("table"))),
@@ -241,6 +244,9 @@ annotate_server <- function(id) {
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
     })
+    # The output holds only a <style>, so it has no size and Shiny would treat
+    # it as hidden and stop re-rendering it after the first pass.
+    outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
     # Render table ----
     output$table <- renderReactable({
