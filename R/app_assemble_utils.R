@@ -397,17 +397,30 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             "A GenBank record supplies its own; this value is used only when ",
             "the LOCUS line names neither.",
             id = ns("help_maptoref_topology"), nested = TRUE)),
+        selectInput(
+          ns("maptoref_mapper"),
+          label = "MapToRef mapper:",
+          choices = c("bowtie2", "bwa-mem"),
+          selected = current$maptoref_mapper %||% "bowtie2",
+          width = "100%"
+        ) |> shinyjs::disabled() |>
+          tagAppendChild(opts_help(
+            "Read mapper for every pass. The first pass, against your ",
+            "reference, runs with relaxed seeding added to the options below ",
+            "so a distant reference still recruits reads; later passes map to ",
+            "the sample's own consensus with the options as given.",
+            id = ns("help_maptoref_mapper"), nested = TRUE)),
         textInput(
           ns("maptoref"),
-          label = "MapToRef bowtie2 options:",
+          label = "MapToRef mapper options:",
           value = current$maptoref %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled() |>
           tagAppendChild(opts_help(
-            "Flags passed to bowtie2. Presets: --fast-local, ",
+            "Flags passed to the chosen mapper. bowtie2 presets: --fast-local, ",
             "--sensitive-local, --very-sensitive-local (default), ",
-            "--very-sensitive-local -N 1, and, for a distant reference, ",
-            "--very-sensitive-local -N 1 -L 15 --score-min G,10,6.",
+            "--very-sensitive-local -N 1. bwa-mem: empty (default), or ",
+            "for example -B 2 -T 20 for a distant reference.",
             href = "https://bowtie-bio.sourceforge.net/bowtie2/manual.shtml",
             id = ns("help_maptoref"), nested = TRUE)),
         textInput(
@@ -497,8 +510,8 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
     # Hide the non-selected assembler's inputs. Each help line lives inside its
     # input's container, so hiding the input hides its help too - do NOT hide the
     # help_* ids separately, or showing the input later won't bring the help back.
-    maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref",
-                      "maptoref_consensus", "maptoref_iter")
+    maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+                      "maptoref", "maptoref_consensus", "maptoref_iter")
     if(current$assembler == "GetOrganelle"){
       shinyjs::hide(id = "mitofinder")
       shinyjs::hide(id = "mf_db")

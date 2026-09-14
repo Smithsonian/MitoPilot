@@ -24,6 +24,7 @@ new_db(
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
   mitofinder = paste("--megahit"),
   maptoref_ref = NA_character_,
+  maptoref_mapper = "bowtie2",
   maptoref = .mtr_default_bowtie2,
   maptoref_consensus = .mtr_default_consensus,
   maptoref_iter = 5L,
@@ -101,7 +102,10 @@ samples may instead name their own reference in the mapping file's
 \code{Reference} column, which gives each of those samples its own
 MapToRef parameter set, or through \code{\link{set_maptoref_refs}}.}
 
-\item{maptoref}{Default bowtie2 options for MapToRef
+\item{maptoref_mapper}{MapToRef read mapper, "bowtie2" or "bwa-mem"
+(default = "bowtie2")}
+
+\item{maptoref}{Default mapper options for MapToRef
 (default = "--very-sensitive-local")}
 
 \item{maptoref_consensus}{Default samtools consensus options for MapToRef

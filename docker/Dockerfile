@@ -29,6 +29,7 @@ RUN mamba install -c bioconda fastp=0.23.4 && \
     mamba install -c bioconda getorganelle=1.7.7.1 && \
     mamba install -c bioconda bam-readcount=1.0.1 -m -n bam-readcount && \
     mamba install -c bioconda bowtie2=2.5.4 && \
+    mamba install -c bioconda bwa=0.7.19 && \
     mamba install -c bioconda samtools=1.24 && \
     mamba install -c bioconda minimap2=2.28 && \
     mamba install -c bioconda trnascan-se=2.0.12 -m -n trnascan-se && \

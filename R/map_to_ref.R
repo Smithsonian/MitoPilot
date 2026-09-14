@@ -338,7 +338,10 @@ maptoref_prepare_ref <- function(ref_file,
 #' @param id Sample ID.
 #' @param ref Path to the reference (.gb or FASTA, one record).
 #' @param reads_1,reads_2 Preprocessed paired reads.
-#' @param bowtie2_opts Flags passed verbatim to bowtie2.
+#' @param bowtie2_opts Flags passed verbatim to the chosen mapper.
+#' @param mapper Read mapper: "bowtie2" or "bwa-mem". The first pass against
+#'   the user's reference runs with relaxed seeding appended to the flags;
+#'   later passes and the final pass use the flags as given.
 #' @param consensus_opts Flags passed to samtools consensus after validation.
 #' @param iter_cap Maximum number of iteration passes.
 #' @param topology "circular" or "linear"; required for a FASTA reference,
@@ -361,7 +364,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
                        genetic_code = NA_integer_,
                        cpus = 4,
                        out_dir = ".",
-                       ref_value = NA_character_) {
+                       ref_value = NA_character_,
+                       mapper = "bowtie2") {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   log_fn <- file.path(out_dir, "assembler.log.txt")
   if (!file.exists(log_fn)) {
@@ -373,7 +377,14 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   bowtie2_opts <- .mtr_opts(bowtie2_opts)
   if (grepl("['\"]", bowtie2_opts)) {
     .mtr_fail(id, out_dir, log_fn,
-              "bowtie2 options must not contain quote characters")
+              "mapper options must not contain quote characters")
+    return(invisible(FALSE))
+  }
+  mapper <- .mtr_opts(mapper)
+  if (!mapper %in% .mtr_mappers) {
+    .mtr_fail(id, out_dir, log_fn, paste0(
+      "mapper must be one of ", paste(.mtr_mappers, collapse = ", "),
+      ", not: ", mapper))
     return(invisible(FALSE))
   }
   if (grepl(.mtr_bad_chars_re, .mtr_opts(ref_value))) {
@@ -385,7 +396,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     {
       .mtr_assemble(id, ref, reads_1, reads_2, bowtie2_opts, consensus_opts,
                     as.integer(iter_cap), topology, genetic_code,
-                    as.integer(cpus), out_dir, log_fn, ref_value)
+                    as.integer(cpus), out_dir, log_fn, ref_value, mapper)
       TRUE
     },
     error = function(e) {
@@ -405,6 +416,60 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 #' @noRd
 .mtr_opts <- function(x) {
   if (is.null(x) || length(x) == 0L || is.na(x[1])) "" else as.character(x[1])
+}
+
+.mtr_mappers <- c("bowtie2", "bwa-mem")
+
+# Relaxed seeding for the first pass only, appended after the user's flags so
+# it wins. Later passes map to the sample's own consensus, where the user's
+# stringency is right.
+.mtr_relaxed <- c(
+  "bowtie2" = "-N 1 -L 15 -i S,1,0.25 --mp 4,2 --score-min G,10,6",
+  "bwa-mem" = "-k 15 -B 2 -T 20"
+)
+
+#' @noRd
+.mtr_pass_opts <- function(mapper, user_opts, pass) {
+  user_opts <- .mtr_opts(user_opts)
+  if (identical(pass, 1L)) trimws(paste(user_opts, .mtr_relaxed[[mapper]])) else user_opts
+}
+
+#' @noRd
+.mtr_check_tools <- function(mapper) {
+  bins <- if (mapper == "bwa-mem") "bwa" else c("bowtie2", "bowtie2-build")
+  missing <- bins[!nzchar(Sys.which(bins))]
+  if (length(missing)) {
+    stop("mapper ", mapper, " needs ", paste(missing, collapse = " and "),
+         " on PATH")
+  }
+  invisible(TRUE)
+}
+
+#' @noRd
+.mtr_index_cmd <- function(mapper, ref_fa, idx) {
+  if (mapper == "bwa-mem") {
+    stringr::str_glue("bwa index -p {shQuote(idx)} {shQuote(ref_fa)}")
+  } else {
+    stringr::str_glue("bowtie2-build -q {shQuote(ref_fa)} {shQuote(idx)}")
+  }
+}
+
+# Mapper command through its stderr redirect. drop_unal mirrors bowtie2's
+# --no-unal for bwa, which has no such flag.
+#' @noRd
+.mtr_map_cmd <- function(mapper, opts, idx, r1, r2, cpus, log_fn, drop_unal) {
+  if (mapper == "bwa-mem") {
+    cmd <- stringr::str_glue(
+      "bwa mem -t {cpus} {opts} {shQuote(idx)} {shQuote(r1)} {shQuote(r2)} ",
+      "2>> {shQuote(log_fn)}")
+    if (drop_unal) cmd <- paste(cmd, "| samtools view -b -F 4 -")
+  } else {
+    unal <- if (drop_unal) "--no-unal " else ""
+    cmd <- stringr::str_glue(
+      "bowtie2 {opts} {unal}-x {shQuote(idx)} -1 {shQuote(r1)} -2 {shQuote(r2)} ",
+      "--threads {cpus} 2>> {shQuote(log_fn)}")
+  }
+  gsub("  +", " ", as.character(cmd))
 }
 
 # bash -o pipefail so a failed bowtie2 stage is not masked by a later stage that
@@ -532,7 +597,9 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 #' @noRd
 .mtr_assemble <- function(id, ref_file, reads_1, reads_2, bowtie2_opts,
                           consensus_opts, iter_cap, topology, genetic_code,
-                          cpus, out_dir, log_fn, ref_value) {
+                          cpus, out_dir, log_fn, ref_value,
+                          mapper = "bowtie2") {
+  .mtr_check_tools(mapper)
   src <- .mtr_ref_class(ref_value)
   if (identical(src, "none")) {
     # Nextflow stages an empty placeholder (0 bytes) when no reference is set on the
@@ -589,15 +656,15 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 
   idx <- file.path(work, "idx")
   bam <- file.path(work, "pass_1.bam")
-  .mtr_run(stringr::str_glue(
-    "bowtie2-build -q {shQuote(ref_fa)} {shQuote(idx)}"
-  ), log_fn)
-  # No --no-unal: it would drop the unmapped mate of a half-mapped pair, and
-  # recruitment below would then keep only fully mapped pairs.
-  .mtr_run(stringr::str_glue(
-    "bowtie2 {bowtie2_opts} -x {shQuote(idx)} -1 {shQuote(reads_1)} ",
-    "-2 {shQuote(reads_2)} --threads {cpus} 2>> {shQuote(log_fn)} ",
-    "| samtools view -b -G 12 - | samtools sort -@ {cpus} -o {shQuote(bam)} -"
+  .mtr_run(.mtr_index_cmd(mapper, ref_fa, idx), log_fn)
+  # Unaligned records kept: dropping them would lose the unmapped mate of a
+  # half-mapped pair, and recruitment below would then keep only fully mapped
+  # pairs.
+  pass1_opts <- .mtr_pass_opts(mapper, bowtie2_opts, 1L)
+  .mtr_log(log_fn, "pass 1 (", mapper, "): ", pass1_opts)
+  .mtr_run(paste(
+    .mtr_map_cmd(mapper, pass1_opts, idx, reads_1, reads_2, cpus, log_fn, FALSE),
+    stringr::str_glue("| samtools view -b -G 12 - | samtools sort -@ {cpus} -o {shQuote(bam)} -")
   ), log_fn)
 
   reads_pass_1 <- .mtr_count_primary(bam)
@@ -670,13 +737,11 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     writeLines(c(">mapping_ref", prev_ref), ref_fa)
     idx <- file.path(work, paste0("idx_", k))
     bam <- file.path(work, paste0("pass_", k + 1L, ".bam"))
-    .mtr_run(stringr::str_glue(
-      "bowtie2-build -q {shQuote(ref_fa)} {shQuote(idx)}"
-    ), log_fn)
-    .mtr_run(stringr::str_glue(
-      "bowtie2 {bowtie2_opts} --no-unal -x {shQuote(idx)} -1 {shQuote(sub_1)} ",
-      "-2 {shQuote(sub_2)} --threads {cpus} 2>> {shQuote(log_fn)} ",
-      "| samtools sort -@ {cpus} -o {shQuote(bam)} -"
+    .mtr_run(.mtr_index_cmd(mapper, ref_fa, idx), log_fn)
+    .mtr_log(log_fn, "pass ", k + 1L, " (", mapper, "): ", bowtie2_opts)
+    .mtr_run(paste(
+      .mtr_map_cmd(mapper, bowtie2_opts, idx, sub_1, sub_2, cpus, log_fn, TRUE),
+      stringr::str_glue("| samtools sort -@ {cpus} -o {shQuote(bam)} -")
     ), log_fn)
   }
   utils::write.table(iters, file.path(work, "iterations.tsv"),
@@ -689,13 +754,11 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   writeLines(c(">mapping_ref", prev_ref), final_ref)
   final_idx <- file.path(work, "idx_final")
   final_bam <- file.path(work, "final.bam")
-  .mtr_run(stringr::str_glue(
-    "bowtie2-build -q {shQuote(final_ref)} {shQuote(final_idx)}"
-  ), log_fn)
-  .mtr_run(stringr::str_glue(
-    "bowtie2 {bowtie2_opts} --no-unal -x {shQuote(final_idx)} ",
-    "-1 {shQuote(reads_1)} -2 {shQuote(reads_2)} --threads {cpus} ",
-    "2>> {shQuote(log_fn)} | samtools sort -@ {cpus} -o {shQuote(final_bam)} -"
+  .mtr_run(.mtr_index_cmd(mapper, final_ref, final_idx), log_fn)
+  .mtr_log(log_fn, "final pass (", mapper, "): ", bowtie2_opts)
+  .mtr_run(paste(
+    .mtr_map_cmd(mapper, bowtie2_opts, final_idx, reads_1, reads_2, cpus, log_fn, TRUE),
+    stringr::str_glue("| samtools sort -@ {cpus} -o {shQuote(final_bam)} -")
   ), log_fn)
   reads_final <- .mtr_count_primary(final_bam)
   # Indexed for every reference, not just circular ones: the viewer's pileup

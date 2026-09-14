@@ -497,7 +497,7 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
   expect_cols(con, "assemble_opts",
               c("assembler", "mitofinder_db", "mitofinder",
                 "max_paths", "max_scaffolds",
-                "maptoref_ref", "maptoref", "maptoref_consensus",
+                "maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
                 "maptoref_iter", "maptoref_topology"))
 
   # annotate_opts
@@ -561,7 +561,7 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   # assemble_opts - max_paths / max_scaffolds added in this release
   expect_cols(con, "assemble_opts",
               c("max_paths", "max_scaffolds",
-                "maptoref_ref", "maptoref", "maptoref_consensus",
+                "maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
                 "maptoref_iter", "maptoref_topology"))
 
   # annotations
