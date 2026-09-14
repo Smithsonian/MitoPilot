@@ -19,7 +19,7 @@ single-record GenBank or FASTA mitogenome, a URL, or an NCBI nucleotide
 accession (for example NC_002333). Blank clears the sample's reference.}
 }
 \value{
-Invisibly, the IDs that still have no reference from either source.
+Invisibly, the IDs that still have no reference.
 }
 \description{
 Assigns a MapToRef reference mitogenome to individual samples in an existing

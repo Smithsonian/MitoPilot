@@ -92,7 +92,7 @@ add_samples <- function(
   # The assemble insert below writes maptoref_ref, so the column must exist
   # before samples and preprocess are committed.
   if (!all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble"))) {
-    stop("This project predates the per-sample MapToRef reference column; run ",
+    stop("This project predates the per-sample MapToRef reference columns; run ",
          "MitoPilot::backwards_compatibility() before adding samples")
   }
 

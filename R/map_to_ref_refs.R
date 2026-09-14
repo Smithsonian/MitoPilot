@@ -313,12 +313,16 @@
       DBI::dbExecute(con, sprintf(paste(
         "UPDATE assemble SET %1$s = (SELECT TRIM(o.%1$s) FROM assemble_opts o",
         "WHERE o.assemble_opts = assemble.assemble_opts)",
-        "WHERE NULLIF(TRIM(%1$s), '') IS NULL AND ID IN (%2$s)"),
-        col, paste(sprintf("'%s'", ids), collapse = ",")))
+        "WHERE NULLIF(TRIM(%1$s), '') IS NULL",
+        "AND assemble_opts IN (SELECT assemble_opts FROM assemble_opts",
+        "WHERE NULLIF(TRIM(%1$s), '') IS NOT NULL)"),
+        col))
     }
     ids
   }
   refs <- copy("maptoref_ref")
+  # Safe to copy independently: before this branch maptoref_ref was never
+  # populated on a sample, so no sample yet has its own topology to protect.
   copy("maptoref_topology")
   if (length(refs) > 0L) {
     message("moved the MapToRef reference of ", length(refs),
@@ -367,8 +371,8 @@
 }
 
 # R8's warning, answered from the database rather than from the mapping file, so
-# it sees both sources. The COALESCE is the same expression the pipeline uses in
-# inst/nextflow/modules/assemble_workflow.nf.
+# it sees both sources. The pipeline select in
+# inst/nextflow/modules/assemble_workflow.nf reads the same column.
 #' @noRd
 .mtr_warn_missing_refs <- function(con) {
   # userAsmb projects have a minimal assemble_opts with no assembler column.
@@ -418,7 +422,7 @@
 #'   single-record GenBank or FASTA mitogenome, a URL, or an NCBI nucleotide
 #'   accession (for example NC_002333). Blank clears the sample's reference.
 #'
-#' @return Invisibly, the IDs that still have no reference from either source.
+#' @return Invisibly, the IDs that still have no reference.
 #' @export
 #'
 set_maptoref_refs <- function(path = ".", refs = NULL) {

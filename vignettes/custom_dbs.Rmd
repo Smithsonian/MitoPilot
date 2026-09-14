@@ -151,8 +151,12 @@ Assembly of contigs with MitoFinder is completely de novo. The MitoFinder refere
 MapToRef needs exactly one complete mitogenome record to map reads against, not
 a multi-record database. GenBank format (`.gb`) is preferred because the
 record's `LOCUS` line states its topology (circular or linear) for you; a
-FASTA reference works too, but then you must set the topology yourself in the
-assembly options.
+FASTA reference works too, but then you must give the topology yourself. The
+reference is set per sample, through the mapping CSV's `Reference` column,
+`set_maptoref_refs()`, or the sample's `MapToRef ref` cell in the app's
+Assemble table; a FASTA reference needs its topology given the same way
+(the mapping CSV's `Reference_topology` column, the third column to
+`set_maptoref_refs()`, or the topology field in that same modal).
 
 To get one:
 
@@ -171,8 +175,8 @@ sequence to map every read against.
 You can skip the download entirely and give the accession instead (for example
 `NC_002333.1`). MitoPilot downloads the GenBank record from NCBI at run time, so
 the compute node needs network access. The record carries its own topology when
-its `LOCUS` line names one (mitogenome records normally do); otherwise set the
-reference topology in the Assemble options.
+its `LOCUS` line names one (mitogenome records normally do); otherwise give the
+reference topology the same way you gave the reference.
 
 If a sample's reference cannot be resolved at run time, only that sample fails:
 it is marked `failed assembly` in the Assemble table, and the reason is written

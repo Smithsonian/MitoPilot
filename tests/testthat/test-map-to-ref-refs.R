@@ -330,7 +330,7 @@ test_that("add_samples seeds the reference and never adds a samples column", {
   new_db(db_path = file.path(d, ".sqlite"),
          mapping_fn = mtr_refs_mapping(d, ids = c("S1", "S2")))
   add_fn <- mtr_refs_mapping(file.path(d), refs = fa, topology = "circular", ids = c("S3", "S4"))
-  add_samples(path = d, update_mapping_fn = add_fn)
+  expect_warning(add_samples(path = d, update_mapping_fn = add_fn), "ignored until")
 
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
