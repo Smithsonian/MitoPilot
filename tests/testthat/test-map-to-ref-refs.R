@@ -501,8 +501,7 @@ test_that("set_maptoref_refs validates values before writing anything", {
   )
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  expect_equal(nrow(DBI::dbGetQuery(
-    con, "SELECT 1 FROM assemble_opts WHERE assemble_opts = 'S1_maptoref'")), 0L)
+  expect_true(is.na(DBI::dbGetQuery(con, "SELECT maptoref_ref FROM assemble WHERE ID = 'S1'")$maptoref_ref))
 })
 
 test_that("the migration copies a set reference and topology down onto its samples", {
