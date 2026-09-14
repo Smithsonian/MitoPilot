@@ -79,7 +79,8 @@
   'use strict';
   var G = window.mpseq.geom;
   var MAX_PPB = 14, NT_LETTER = 8, NT_BAR = 3, AA_MIN = 4;
-  var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4;
+  var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4, COV_H = 60, ERR_H = 36;
+  var ERR_FLAG = 0.05;
   // Same shades as the BLAST synteny zoom (app_annotate_details.R base_color)
   // and msaR's zappo scheme in the alignment viewer.
   var BASE = { A: '#4faf45', C: '#e0a53f', G: '#e0555a', T: '#4a90d9', N: '#666666' };
@@ -109,7 +110,8 @@
     this.len = 0; this.seq = ''; this.feats = []; this.topology = 'linear';
     this.version = null; this.selected = null; this.nLanes = 0;
     this.viewStart = 1; this.ppb = 1;
-    this.showNt = true; this.showAa = true;
+    this.showNt = true; this.showAa = true; this.showCov = true; this.showErr = true;
+    this.depth = null; this.err = null; this.depthMax = 0; this.errMax = 0;
     this.hits = []; this.aaRows = [];
     this.bindControls();
     var self = this;
@@ -123,6 +125,9 @@
     this.version = p.version; this.input = p.input;
     this.feats = (p.features || []).map(function (f) { return Object.assign({}, f); });
     this.nLanes = G.lanes(this.feats, this.len);
+    this.depth = p.depth || null; this.err = p.err || null;
+    var mx = function (a, floor) { return (a || []).reduce(function (m, d) { return d !== null && d > m ? d : m; }, floor); };
+    this.depthMax = mx(this.depth, 1); this.errMax = mx(this.err, 0);
     this.selected = (p.selected === undefined || p.selected === null) ? null : p.selected;
     if (!sameSeq) this.whole();
     this.draw();
@@ -174,16 +179,22 @@
     return out;
   };
   Viewer.prototype.baseAt = function (lin) {
+    lin = Math.floor(lin);
     var p = this.topology === 'circular' ? ((lin - 1) % this.len + this.len) % this.len + 1 : lin;
     if (p < 1 || p > this.len) return null;
     return { pos: p, base: this.seq.charAt(p - 1) || 'N' };
   };
 
   // ---- drawing ----
-  Viewer.prototype.laneY = function (lane) { return RULER_H + PAD + lane * LANE_H; };
+  Viewer.prototype.covOn = function () { return this.showCov && !!this.depth; };
+  Viewer.prototype.errOn = function () { return this.showErr && !!this.err; };
+  Viewer.prototype.topH = function () {
+    return RULER_H + PAD + (this.covOn() ? COV_H + PAD : 0) + (this.errOn() ? ERR_H + PAD : 0);
+  };
+  Viewer.prototype.laneY = function (lane) { return this.topH() + lane * LANE_H; };
   Viewer.prototype.height = function () {
     var pcgs = this.showAa && this.ppb >= AA_MIN ? this.aaRows.length : 0;
-    return RULER_H + PAD + this.nLanes * LANE_H + PAD + (this.showNt && this.ppb >= NT_BAR ? NT_H : 0) + pcgs * AA_H + PAD;
+    return this.topH() + this.nLanes * LANE_H + PAD + (this.showNt && this.ppb >= NT_BAR ? NT_H : 0) + pcgs * AA_H + PAD;
   };
   Viewer.prototype.draw = function () {
     if (!this.len || !this.canvas.offsetParent) return;
@@ -199,8 +210,12 @@
     c.clearRect(0, 0, W, H);
     c.font = '12px ' + cssVar('--mp-font-mono', 'monospace');
     this.hits = [];
-    this.drawRuler(c, W); this.drawJoins(c); this.drawLanes(c);
-    var y = RULER_H + PAD + this.nLanes * LANE_H + PAD;
+    this.drawRuler(c, W);
+    var y = RULER_H + PAD;
+    if (this.covOn()) { this.drawTrack(c, W, y, COV_H, this.depth, this.depthMax, 'depth', false); y += COV_H + PAD; }
+    if (this.errOn()) { this.drawTrack(c, W, y, ERR_H, this.err, Math.max(this.errMax, ERR_FLAG * 2), 'error', true); y += ERR_H + PAD; }
+    this.drawJoins(c); this.drawLanes(c);
+    y = this.topH() + this.nLanes * LANE_H + PAD;
     if (this.showNt && this.ppb >= NT_BAR) { this.drawNt(c, y); y += NT_H; }
     this.aaRows.forEach(function (f) { this.drawAa(c, f, y); y += AA_H; }, this);
   };
@@ -284,6 +299,29 @@
       }, this);
     }, this);
   };
+  // One bar per pixel column, the max of the positions under it.
+  Viewer.prototype.drawTrack = function (c, W, y, h, vals, vmax, label, flag) {
+    var base = cssVar('--mp-primary', '#337ab7'), red = '#e04b5a', muted = cssVar('--mp-text-muted', '#6a6a6a');
+    c.fillStyle = cssVar('--mp-surface-alt', '#f5f5f5'); c.fillRect(GUTTER, y, W - GUTTER, h);
+    for (var px = GUTTER; px < W; px++) {
+      var a = Math.floor(this.viewStart + (px - GUTTER) / this.ppb), b = Math.floor(this.viewStart + (px + 1 - GUTTER) / this.ppb);
+      var v = null;
+      for (var lin = a; lin <= b; lin++) {
+        var bp = this.baseAt(lin); if (!bp) continue;
+        var d = vals[bp.pos - 1]; if (d !== null && d !== undefined && (v === null || d > v)) v = d;
+      }
+      if (v === null) continue;
+      var bh = Math.min(h, Math.round(v / vmax * h));
+      c.fillStyle = flag && v > ERR_FLAG ? red : base;
+      c.fillRect(px, y + h - bh, 1, bh);
+    }
+    c.strokeStyle = cssVar('--mp-border', '#ccc'); c.beginPath(); c.moveTo(GUTTER, y + h + 0.5); c.lineTo(W, y + h + 0.5); c.stroke();
+    if (flag) { c.save(); c.strokeStyle = red; c.setLineDash([2, 3]); var fy = y + h - ERR_FLAG / vmax * h;
+      c.beginPath(); c.moveTo(GUTTER, fy + 0.5); c.lineTo(W, fy + 0.5); c.stroke(); c.restore(); }
+    c.fillStyle = muted; c.textAlign = 'right';
+    c.textBaseline = 'top'; c.fillText(flag ? (vmax * 100).toFixed(0) + '%' : String(vmax), GUTTER - 6, y);
+    c.textBaseline = 'bottom'; c.fillText(label, GUTTER - 6, y + h);
+  };
   Viewer.prototype.drawNt = function (c, y) {
     var vs = Math.floor(this.viewStart), ve = Math.ceil(this.viewStart + this.viewLen());
     c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -364,10 +402,14 @@
       if (!self.tip) return;
       if (!b) { self.tip.hidden = true; return; }
       var t = 'Position ' + b.pos.toLocaleString() + ', ' + b.base;
+      if (self.depth && self.depth[b.pos - 1] !== null) t += ' | depth ' + self.depth[b.pos - 1];
+      if (self.err && self.err[b.pos - 1] !== null) t += ', error ' + (self.err[b.pos - 1] * 100).toFixed(1) + '%';
       if (h) t += ' | ' + h.f.gene + (h.codon !== undefined ? ' codon ' + (h.codon + 1) + ' ' + h.letter : ' (' + h.f.type + ')');
       if (h && typeof h.f.notes === 'string' && h.f.notes) t += ' | ' + h.f.notes;
       self.tip.textContent = t; self.tip.hidden = false;
-      self.tip.style.left = (px + 12) + 'px'; self.tip.style.top = (py + 12) + 'px';
+      var tw = self.tip.offsetWidth, th = self.tip.offsetHeight;
+      self.tip.style.left = Math.max(0, Math.min(px + 12, cv.clientWidth - tw)) + 'px';
+      self.tip.style.top = (py + 12 + th > cv.clientHeight ? py - th - 8 : py + 12) + 'px';
     });
     cv.addEventListener('mouseleave', function () { if (self.tip) self.tip.hidden = true; });
     sec.querySelectorAll('[data-mpseq]').forEach(function (btn) {
@@ -377,9 +419,11 @@
         else if (a === 'whole') self.whole(); else if (a === 'fit' && self.selected !== null) self.fit(self.selected);
       });
     });
-    var nt = document.getElementById(prefix + '-show_nt'), aa = document.getElementById(prefix + '-show_aa'), go = document.getElementById(prefix + '-goto');
-    if (nt) nt.addEventListener('change', function () { self.showNt = nt.checked; self.draw(); });
-    if (aa) aa.addEventListener('change', function () { self.showAa = aa.checked; self.draw(); });
+    var go = document.getElementById(prefix + '-goto');
+    [['show_nt', 'showNt'], ['show_aa', 'showAa'], ['show_cov', 'showCov'], ['show_err', 'showErr']].forEach(function (pair) {
+      var box = document.getElementById(prefix + '-' + pair[0]);
+      if (box) box.addEventListener('change', function () { self[pair[1]] = box.checked; self.draw(); });
+    });
     if (go) go.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var v = parseInt(go.value, 10); if (v >= 1 && v <= self.len) self.goto(v); } });
   };
 
@@ -395,7 +439,7 @@
   }
   window.mpseq.state = function (id) {
     var v = viewers[id]; if (!v) return null;
-    return { len: v.len, version: v.version, topology: v.topology, viewStart: v.viewStart, ppb: v.ppb, selected: v.selected,
+    return { len: v.len, version: v.version, topology: v.topology, viewStart: v.viewStart, ppb: v.ppb, selected: v.selected, height: v.height(),
              nLanes: v.nLanes, features: v.feats.map(function (f) { return { row: f.row, gene: f.gene, pos1: f.pos1, pos2: f.pos2, lane: f.lane }; }) };
   };
   window.mpseq.zoom = function (id, f) { var v = get(id); if (v) v.zoom(f); };

@@ -7,7 +7,7 @@
 #' stored (1-based, inclusive, pos1 > pos2 for an origin-crossing feature).
 #' @noRd
 seqview_payload <- function(annotations, seq, topology, unit,
-                            selected = NULL, version = 0L) {
+                            selected = NULL, version = 0L, coverage = NULL) {
   seq <- toupper(as.character(seq)[1])
   a <- annotations
   yes <- function(x) {
@@ -38,10 +38,17 @@ seqview_payload <- function(annotations, seq, topology, unit,
   sel <- if (length(selected) == 1L && !is.na(selected) && selected %in% rows) {
     as.integer(selected)
   }
-  list(
+  out <- list(
     unit = unit, len = nchar(seq), topology = topology, seq = seq,
     version = as.integer(version), selected = sel, features = feats
   )
+  # Per-base read depth and error rate, indexed by position; NA -> null.
+  if (is.data.frame(coverage) && nrow(coverage) > 0 && nchar(seq) > 0) {
+    i <- match(seq_len(nchar(seq)), coverage$Position)
+    out$depth <- as.integer(coverage$Depth[i])
+    out$err <- round(as.numeric(coverage$ErrorRate[i]), 4)
+  }
+  out
 }
 
 #' Sequence viewer section (tools/nt_viewer_spec.md, section 3)
@@ -59,6 +66,8 @@ seqview_ui <- function(id) {
     tags$summary("Sequence"),
     div(
       class = "mp-seqview-controls",
+      mp_checkbox(ns("show_cov"), label = "Coverage", value = TRUE),
+      mp_checkbox(ns("show_err"), label = "Error rate", value = TRUE),
       mp_checkbox(ns("show_nt"), label = "Nucleotides", value = TRUE),
       mp_checkbox(ns("show_aa"), label = "Amino acids", value = TRUE),
       numericInput(ns("goto"), "Position:", value = NA, min = 1, step = 1, width = "130px"),
@@ -68,7 +77,8 @@ seqview_ui <- function(id) {
       btn("zoom_out", NULL, icon("magnifying-glass-minus"), "Zoom out")
     ),
     div(class = "mp-coverage-caption",
-        "Drag or scroll sideways to pan, scroll or pinch to zoom; click a gene to select its row. Letters appear when zoomed in."),
+        paste("Drag or scroll sideways to pan, scroll or pinch to zoom; click a gene to select its row.",
+              "Letters appear when zoomed in. Error rate bars turn red above 5%.")),
     uiOutput(ns("empty")),
     div(
       class = "mp-seqview",
@@ -135,7 +145,7 @@ seqview_server <- function(id, rv, tick, selected) {
       p <- seqview_payload(
         rv$annotations, s, rv$updating$topology %||% "linear",
         paste(rv$updating$ID, rv$updating$path, rv$updating$scaffold, sep = "."),
-        selected = cur_sel(), version = version()
+        selected = cur_sel(), version = version(), coverage = rv$coverage
       )
       p$id <- ns("canvas")
       p$input <- ns("pick")

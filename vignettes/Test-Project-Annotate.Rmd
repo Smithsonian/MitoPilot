@@ -219,9 +219,10 @@ keep track of what you have already looked at across a large project.
 
 Below the table are three collapsible views.
 
-**Coverage Map** plots read depth along the assembly with the gene models drawn below,
-zoomed to whichever gene you have selected. The gene bars are
-semi-transparent so overlapping gene models are easy to spot.
+**Sequence** shows read depth and per-base error rate along the assembly, the gene
+models drawn in lanes below them, then the nucleotides and translated amino acids
+once you zoom in. Each track can be hidden with its checkbox. Error rate bars turn
+red above 5%, a sign of possible sequencing or assembly errors.
 
 ![Coverage map with gene models drawn over read depth](figures/get-started/annotate-coverage-map.png)
 

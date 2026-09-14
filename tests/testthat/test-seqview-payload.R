@@ -116,3 +116,12 @@ test_that("an edit to a position is resent without bumping the version", {
     }
   )
 })
+
+test_that("coverage arrays are indexed by position with null gaps", {
+  a <- sv_ann()
+  cov <- data.frame(Position = c(1L, 2L, 4L), Depth = c(10L, 20L, 40L), ErrorRate = c(0, 0.12345, NA))
+  p <- seqview_payload(a, "ACGT", "linear", "S1.1.1", coverage = cov)
+  expect_equal(p$depth, c(10L, 20L, NA, 40L))
+  expect_equal(p$err, c(0, 0.1235, NA, NA))
+  expect_null(seqview_payload(a, "ACGT", "linear", "S1.1.1")$depth)
+})

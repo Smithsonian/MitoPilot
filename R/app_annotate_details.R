@@ -141,9 +141,10 @@ gene_label_overlay <- function(df, img_w, x_lo, x_hi, track_top, track_height,
   )
 }
 
-annotations_details_server <- function(id, rv) {
+annotations_details_server <- function(id, rv, table_id = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    open_modal <- function() annotate_details_modal(rv, table_id = table_id) |> showModal()
 
     # A locked assembly is read-only in this window, the same rule the Annotate
     # toolbar enforces (theme T02).
@@ -468,7 +469,7 @@ annotations_details_server <- function(id, rv) {
       active_ref_acc(acc0)
       load_blast_ref(acc0)
 
-      annotate_details_modal(rv) |> showModal()
+      open_modal()
       render_annotations_table(Sys.time())
 
       # Cross-tab jump from the export outlier review: auto-select the flagged
@@ -518,15 +519,15 @@ annotations_details_server <- function(id, rv) {
 
     # Header toggle button. mp_flag_next() picks the value the click will write
     # and the label that names it, so the two can never disagree (theme T02).
-    # No colour: the pill beside it carries the state, green is status only.
-    toggle_btn <- function(id, label, state, title, off = "no") {
+    # Tone matches the pill the flag sets: green for status, amber for concern.
+    toggle_btn <- function(id, label, state, title, off = "no", tone = "success") {
       nxt <- mp_flag_next(state, off = off)
       set <- identical(nxt, "yes")
       btn <- actionButton(
         id,
         paste(if (set) "Mark" else "Clear", label),
         icon = icon(if (set) "check" else "minus"),
-        class = "btn-sm btn-default",
+        class = paste0("btn-sm btn-default mp-btn-", tone),
         title = title
       )
       if (locked()) shinyjs::disabled(btn) else btn
@@ -539,9 +540,9 @@ annotations_details_server <- function(id, rv) {
         toggle_btn(ns("reviewed"), "Reviewed", rv$updating$reviewed,
                    "Record whether this assembly has been reviewed"),
         toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
-                   "Flag this assembly for another look", off = NA_character_),
+                   "Flag this assembly for another look", off = NA_character_, tone = "warning"),
         toggle_btn(ns("partial"), "Partial", rv$updating$partial,
-                   "Flag this assembly as an incomplete mitogenome")
+                   "Flag this assembly as an incomplete mitogenome", tone = "warning")
       )
     })
 
@@ -906,6 +907,59 @@ annotations_details_server <- function(id, rv) {
       ))
     }
 
+    # Sample navigation ----
+    # The order is whatever the Annotate table shows when the window opens:
+    # server filters, column filters, search, and sort, read from the widget
+    # by the modal's script. A switch goes through Close so the unsaved-edit
+    # guard and the count write-back still run, then opens the target.
+    unit_key <- function(d) paste(d$ID, d$path, d$scaffold, sep = "|")
+    nav_order <- reactive({
+      o <- input$nav_order
+      if (length(o$ID) == 0) return(NULL)
+      data.frame(ID = as.character(o$ID), path = as.character(o$path),
+                 scaffold = as.character(o$scaffold), stringsAsFactors = FALSE)
+    })
+    nav_target <- NULL
+    output$nav <- renderUI({
+      o <- nav_order(); u <- rv$updating
+      req(o, u, !isTRUE(session$userData$in_outlier_review))
+      keys <- unit_key(o); cur <- unit_key(u); i <- match(cur, keys)
+      req(!is.na(i))
+      multi <- any(duplicated(o$ID))
+      labels <- if (multi) paste0(o$ID, " (", o$path, ".", o$scaffold, ")") else o$ID
+      arrow <- function(id, dir, off, title) {
+        b <- actionButton(ns(id), NULL, icon = icon(paste0("chevron-", dir)), class = "btn-sm", title = title)
+        if (off) shinyjs::disabled(b) else b
+      }
+      # A plain select, reported only on a user change: a bound input would
+      # re-send the old sample while the outgoing and incoming modals overlap.
+      picker <- tags$select(
+        class = "form-control input-sm", `aria-label` = "Open another sample",
+        onchange = sprintf("Shiny.setInputValue('%s', this.value, {priority: 'event'})", ns("nav_pick")),
+        lapply(seq_len(nrow(o)), function(k) {
+          tags$option(value = keys[k], selected = if (k == i) NA, labels[k])
+        })
+      )
+      div(
+        class = "mp-nav", title = sprintf("%d of %d in the table", i, nrow(o)),
+        arrow("nav_prev", "left", i == 1, "Previous sample in the table"),
+        picker,
+        arrow("nav_next", "right", i == nrow(o), "Next sample in the table")
+      )
+    })
+    nav_to <- function(key) {
+      if (is.null(key) || identical(key, unit_key(rv$updating))) return()
+      nav_target <<- key
+      shinyjs::click("close")
+    }
+    nav_step <- function(by) {
+      o <- nav_order(); i <- match(unit_key(rv$updating), unit_key(o)) + by
+      if (!is.na(i) && i >= 1 && i <= nrow(o)) nav_to(unit_key(o[i, ]))
+    }
+    observeEvent(input$nav_prev, nav_step(-1L))
+    observeEvent(input$nav_next, nav_step(1L))
+    observeEvent(input$nav_pick, nav_to(input$nav_pick))
+
     # Close Modal ----
     observeEvent(input$close, {
       # Nothing to do if the modal state is already cleared (e.g. a second/spurious
@@ -941,6 +995,12 @@ annotations_details_server <- function(id, rv) {
       # in-place rv$data writes above are per-ID and cannot roll up sibling units).
       trigger("refresh_annotate")
       removeModal()
+      if (!is.null(nav_target)) {
+        hit <- rv$data[unit_key(rv$data) == nav_target, ]
+        nav_target <<- NULL
+        if (nrow(hit) == 1) { rv$updating <- hit; trigger("annotations_modal") }
+        return()
+      }
       # If we arrived here from the export outlier review, hop back to it
       if (isTRUE(session$userData$return_to_review)) {
         session$userData$return_to_review <- FALSE
@@ -1001,177 +1061,6 @@ annotations_details_server <- function(id, rv) {
       if (!identical(ctx, fig_ctx())) fig_ctx(ctx)
     })
 
-    # Coverage Map ----
-    output$coverage_map <- renderUI({
-      req(rv$coverage, fig_ctx())
-      # Split features that wrap the circular origin (pos1 > pos2) into two arrows.
-      cov_seq_len <- max(rv$coverage$Position)
-      # 1 kb axis ticks; empty for short scaffolds (seq(1000, <1000, by=1000)
-      # errors "wrong sign in 'by'").
-      xbreaks <- if (cov_seq_len >= 1000) seq(1000, cov_seq_len, by = 1000) else numeric(0)
-      genes_df <- rv$annotations |>
-        dplyr::filter(pos1 > 0) |>
-        dplyr::mutate(
-          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
-          xmin = pos1, xmax = pos2
-        ) |>
-        split_wrapped_genes(x_lo = 1, x_hi = cov_seq_len)
-      rv$genes_plot <- genes_df |>
-        ggplot2::ggplot() +
-        ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+", fill = type, y = scaffold, label = gene) +
-        gggenes::geom_gene_arrow(
-          arrow_body_height = ggplot2::unit(6, "mm"),
-          arrowhead_height = ggplot2::unit(6, "mm"),
-          arrowhead_width = ggplot2::unit(1, "mm"),
-          alpha = gene_type_alpha
-        ) +
-        ggplot2::scale_fill_manual(values = gene_type_fill) +
-        ggplot2::scale_x_continuous(
-          expand = c(0, 0),
-          limits = c(
-            1,
-            max(c(rv$coverage$Position, rv$annotations$pos2))
-          ),
-          breaks = xbreaks,
-          labels = format(xbreaks, big.mark = ",")
-        ) +
-        ggplot2::coord_cartesian(clip = "off") +
-        ggthemes::theme_tufte() +
-        ggplot2::theme(
-          legend.position = "none",
-          axis.title  = ggplot2::element_blank(),
-          axis.text.y = ggplot2::element_blank(),
-          # Match coverage plot's bottom-axis bounding box (invisible) so cowplot
-          # align="lr" doesn't pad either panel.
-          axis.text.x = ggplot2::element_text(size = 7, color = NA),
-          axis.ticks.y = ggplot2::element_blank(),
-          axis.ticks.x = ggplot2::element_line(color = NA, linewidth = 0.4),
-          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
-          plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
-        )
-
-      y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
-      cov_max  <- cov_seq_len
-      minor_tick_x <- setdiff(
-        if (cov_max >= 50) seq(50, cov_max, by = 50) else numeric(0), xbreaks
-      )
-      major_tick_x <- xbreaks
-      depth_rng    <- range(rv$coverage$Depth)
-      y_bottom     <- depth_rng[1]
-      y_tick_minor <- depth_rng[1] + diff(depth_rng) * 0.04
-      major_tick_labels <- format(major_tick_x, big.mark = ",")
-
-      # Bin coverage to ~one point per output pixel (max-depth per bin) to
-      # cut geom_line vertex count on huge mitogenomes - visually lossless
-      # at 1px/bp display, ~10x faster path stroke.
-      target_pts  <- min(nrow(rv$coverage), 4000L)
-      bin_size    <- max(1L, ceiling(cov_max / target_pts))
-      cov_line_df <- rv$coverage |>
-        dplyr::mutate(.bin = ((Position - 1L) %/% bin_size) * bin_size + 1L) |>
-        dplyr::summarise(Depth = max(Depth), .by = .bin) |>
-        dplyr::rename(Position = .bin) |>
-        dplyr::arrange(Position)
-
-      # Only positions flagged as Errors get a red vline; everything else is
-      # invisible so emit no geom for them (drawing 16k transparent vlines was
-      # the dominant render cost).
-      err_df <- rv$coverage |>
-        dplyr::filter(!is.na(ErrorRate) & ErrorRate > 0.05) |>
-        dplyr::select(Position)
-
-      rv$coverage_plot <- ggplot2::ggplot(cov_line_df) +
-        ggplot2::aes(x = Position, y = Depth) +
-        ggplot2::geom_vline(
-          data = err_df,
-          ggplot2::aes(xintercept = Position),
-          inherit.aes = FALSE,
-          color = "#FF667040", linewidth = 1
-        ) +
-        ggplot2::geom_label(
-          data = data.frame(
-            x = rep(major_tick_x, length(y_breaks)),
-            y = rep(y_breaks, each = length(major_tick_x)),
-            label = rep(y_breaks, each = length(major_tick_x))
-          ),
-          ggplot2::aes(x = x, y = y, label = label),
-          inherit.aes = FALSE,
-          fill = "#FFFFFF50",
-          color = "#00000050",
-          label.size = 0,
-          size = 3
-        ) +
-        ggplot2::geom_segment(
-          data = data.frame(x = minor_tick_x),
-          ggplot2::aes(x = x, xend = x, y = y_bottom, yend = y_tick_minor),
-          inherit.aes = FALSE,
-          color = "#00000060", linewidth = 0.3
-        ) +
-        ggplot2::geom_line() +
-        ggplot2::scale_y_continuous(breaks = y_breaks) +
-        ggplot2::scale_x_continuous(
-          expand = c(0, 0),
-          limits = c(
-            1,
-            max(c(rv$coverage$Position, rv$annotations$pos2))
-          ),
-          breaks = major_tick_x,
-          labels = major_tick_labels
-        ) +
-        ggplot2::coord_cartesian(clip = "off") +
-        ggthemes::theme_tufte() +
-        ggplot2::theme(
-          legend.position = "none",
-          axis.title = ggplot2::element_blank(),
-          axis.text.y = ggplot2::element_blank(),
-          axis.text.x = ggplot2::element_text(size = 7, color = "#000000B0"),
-          axis.ticks.y = ggplot2::element_blank(),
-          axis.ticks.x = ggplot2::element_line(color = "#000000B0", linewidth = 0.4),
-          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
-          panel.grid.major.y = ggplot2::element_line(
-            linetype = "dotted", color = "#00000050"
-          ),
-          plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
-        )
-      # plot with dynamic width
-      #plotOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")  # OLD CODE, problems with Cairo
-      img_w <- fig_ctx()$length
-      x_hi  <- max(c(rv$coverage$Position, rv$annotations$pos2))
-      div(
-        style = sprintf("position:relative; width:%dpx; height:125px;", as.integer(img_w)),
-        shiny::imageOutput(ns("coverage_plot"), width = paste0(img_w, "px"), height = "125px"),
-        # Block = measured gene-arrow band (px 96-112 in the 125px cowplot image).
-        gene_label_overlay(genes_df, img_w = img_w, x_lo = 1, x_hi = x_hi,
-                           track_top = 96, track_height = 16, scale_y = 1.6,
-                           arrow_w = 0.6)
-      )
-    })
-    # Use renderImage + ragg::agg_png to bypass Cairo's per-dimension image
-    # surface limit (~16384 px on common libcairo builds), which silently
-    # truncated the right edge of large mitogenome plots under renderPlot.
-    output$coverage_plot <- shiny::renderImage(
-      {
-        req(rv$coverage_plot, rv$coverage, fig_ctx())
-        w <- fig_ctx()$length
-        h <- 125L
-        outfile <- tempfile(fileext = ".png")
-        ragg::agg_png(outfile, width = w, height = h, units = "px", res = 72)
-        combined_plot <- cowplot::plot_grid(
-          rv$coverage_plot, rv$genes_plot,
-          ncol = 1, align = "v", axis = "lr",
-          rel_heights = c(3, 1)
-        )
-        print(combined_plot)
-        dev.off()
-        list(
-          src = outfile,
-          contentType = "image/png",
-          width = w,
-          height = h,
-          alt = "Coverage map"
-        )
-      },
-      deleteFile = TRUE
-    )
     # BLAST Reference Synteny ----
     # Gene-block coords (alignment-space %) stashed by the synteny image render,
     # consumed by the sticky-label overlay (output$synteny_labels).
@@ -2060,9 +1949,6 @@ annotations_details_server <- function(id, rv) {
       req(selected())
       # New gene selection overrides any prior click anchor
       zoom_click_col(NULL)
-      session$sendCustomMessage(
-        "hScroll", list(id = ns("coverageDiv"), px = as.numeric(rv$annotations$pos1[selected()]))
-      )
       if (!is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0 && !is.null(rv$coverage)) {
         scroll_px <- synteny_proj()(rv$annotations$pos1[selected()])
         session$sendCustomMessage(
@@ -4614,7 +4500,7 @@ annotations_details_server <- function(id, rv) {
     # current rv$annotations (the render isolates rv$annotations, gated on
     # render_annotations_table; see the normal open path).
     reopen_details <- function() {
-      annotate_details_modal(rv) |> showModal()
+      open_modal()
       render_annotations_table(Sys.time())
     }
 
@@ -5090,7 +4976,7 @@ annotations_details_server <- function(id, rv) {
 #' @param session shiny session
 #'
 #' @noRd
-annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
+annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), table_id = NULL) {
   ns <- session$ns
 
   # Topology reads like every other header badge: shared pill, same casing, no
@@ -5108,6 +4994,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     # The four review flags sit in the header beside the badges they mirror, so
     # a metadata click is never one mis-click from a sequence edit (theme T16).
     title = mp_modal_title(div(
+      class = "mp-sticky-head",
       div(
         style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
         span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
@@ -5126,6 +5013,16 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     easyClose = F,
     # The header X dismisses client-side, which would skip the unsaved-edit
     # guard and the feature-count write Close does. Route it through Close.
+    # Snapshot the table's displayed row order for the footer navigation.
+    if (!is.null(table_id)) tags$script(HTML(sprintf(
+      "setTimeout(function(){
+         var st = window.Reactable ? Reactable.getState('%s') : null;
+         var rows = (st && st.sortedData) || [];
+         var col = function(k){ return rows.map(function(r){ return String(r[k]); }); };
+         Shiny.setInputValue('%s', {ID: col('ID'), path: col('path'), scaffold: col('scaffold')}, {priority: 'event'});
+       }, 0);",
+      table_id, ns("nav_order")
+    ))),
     tags$script(HTML(sprintf(
       "setTimeout(function(){
          var b = document.querySelector('#shiny-modal .modal-header .close');
@@ -5298,21 +5195,6 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
   ))),
     seqview_ui(ns("seqview")),
-    tags$details(
-      tags$summary("Coverage Map"),
-      div(
-        style = "padding: 2px 5mm 0 5mm; font-size: 0.85em; color: #555;",
-        tags$span(
-          style = "display: inline-block; width: 10px; height: 10px; background: #FF667040; vertical-align: middle; margin-right: 4px;"
-        ),
-        "mean error rate > 5% (possible sequencing or assembly errors)."
-      ),
-      div(
-        id = ns("coverageDiv"),
-        style = "width: 100%; overflow-x: auto; padding: 5mm;",
-        uiOutput(ns("coverage_map"))
-      )
-    ),
     tags$details(
       id = ns("blast_synteny_details"),
       tags$summary("BLAST Reference Synteny"),
@@ -5535,6 +5417,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     # (theme T16). `close` stays a server button - it guards unsaved edits and
     # writes the feature counts back before the modal is removed.
     footer = tagList(
+      uiOutput(ns("nav"), inline = TRUE),
       mp_footer(
         # Already locked: there is nothing left to lock, so Close is the action.
         primary = if (is_locked) {
@@ -5555,8 +5438,8 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         )
       ),
       div(
-        class = "mp-table-status",
-        style = "justify-content: flex-end; margin: 6px 0 0 0;",
+        class = "mp-table-status mp-sticky-foot",
+        style = "justify-content: flex-end; margin: 6px 0 0 0; clear: both;",
         MP_LOCK_DEF("annotate")
       )
     )

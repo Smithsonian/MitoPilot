@@ -111,6 +111,18 @@ p.mp-help-text {
   color: var(--mp-primary);
 }
 
+/* Flag toggle buttons carry the tone of the pill they set. */
+.mp-btn-success, .mp-btn-success:hover, .mp-btn-success:focus {
+  background-color: var(--mp-success-soft);
+  border-color: var(--mp-success);
+  color: var(--mp-success);
+}
+.mp-btn-warning, .mp-btn-warning:hover, .mp-btn-warning:focus {
+  background-color: var(--mp-warning-soft);
+  border-color: var(--mp-warning);
+  color: var(--mp-warning);
+}
+
 /* Filled amber is unreadable with white text. */
 .btn-warning,
 .btn-warning:hover,
@@ -447,6 +459,31 @@ details summary:hover {
   max-height: 70vh;
   overflow-y: auto;
 }
+
+/* Annotation details: sample name, flags, and toggles stay pinned at the top
+   and the Close / Lock buttons at the bottom while the body scrolls (the
+   .modal element is the scrollport). */
+.modal-header:has(.mp-sticky-head) {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--mp-surface);
+}
+.modal-footer:has(.mp-sticky-foot) {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  background: var(--mp-surface);
+}
+
+/* Footer sample navigation: prev, picker, next on one line, left of Close. */
+.mp-nav {
+  float: left;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mp-nav select { width: 220px; }
 
 /* Outlier review: the gene navigation and the per-gene action stay pinned
    while the alignment scrolls (the .modal element is the scrollport). */

@@ -188,3 +188,25 @@ test_that("joined pieces draw their connector and stay in the state", {
   expect_equal(s$rows, c(1, 2))
   expect_equal(s$lanes, 1)
 })
+
+test_that("coverage and error tracks add height above the lanes and toggle off", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var seq = Array(2000).join('ACGT').slice(0, 2000), depth = [], err = [];
+    for (var i = 0; i < 2000; i++) { depth.push(50 + (i % 7)); err.push(i === 100 ? 0.2 : 0.001); }
+    var feats = [{row:1,type:'tRNA',gene:'trnF',pos1:10,pos2:80,dir:'+',partial5:false,partial3:false,notes:''}];
+    var base = {id:'sv-canvas', input:'sv-pick', unit:'S1.1.1', len:2000, topology:'linear', seq:seq, version:1, selected:null, features:feats};
+    window.__handlers.mpseq(base); var h0 = window.mpseq.state('sv-canvas').height, lane0 = window.mpseq.laneY('sv-canvas', 0);
+    window.__handlers.mpseq(Object.assign({depth:depth, err:err}, base));
+    var h1 = window.mpseq.state('sv-canvas').height, lane1 = window.mpseq.laneY('sv-canvas', 0);
+    var box = document.getElementById('sv-show_cov'); box.checked = false; box.dispatchEvent(new Event('change'));
+    var h2 = window.mpseq.state('sv-canvas').height;
+    box = document.getElementById('sv-show_err'); box.checked = false; box.dispatchEvent(new Event('change'));
+    var h3 = window.mpseq.state('sv-canvas').height;
+    return JSON.stringify({h0:h0, h1:h1, h2:h2, h3:h3, lane0:lane0, lane1:lane1});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$h1 - s$h0, 60 + 4 + 36 + 4)
+  expect_equal(s$lane1 - s$lane0, 60 + 4 + 36 + 4)
+  expect_equal(s$h2, s$h0 + 36 + 4)
+  expect_equal(s$h3, s$h0)
+})
