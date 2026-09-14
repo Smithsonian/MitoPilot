@@ -75,6 +75,9 @@ assemble_server <- function(id) {
     register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
     register_tool_help("getOrganelle", input, reopen = function() assemble_opts_modal(rv))
     register_tool_help("mitofinder", input, reopen = function() assemble_opts_modal(rv))
+    register_tool_help("bowtie2", input)
+    register_tool_help("bwa-mem", input)
+    register_tool_help("samtools-consensus", input)
     register_tool_help("blastn", input, reopen = function() blast_opts_modal(rv))
 
     # Prepare data ----
@@ -945,6 +948,10 @@ assemble_server <- function(id) {
       if (cur %in% defaults) {
         updateTextInput(inputId = "maptoref",
                         value = defaults[[input$maptoref_mapper]])
+      }
+      for (m in names(defaults)) {
+        shinyjs::toggle(id = paste0("help_icon_", m), condition = m == input$maptoref_mapper)
+        shinyjs::toggle(id = paste0("help_maptoref_", m), condition = m == input$maptoref_mapper)
       }
     }, ignoreInit = TRUE)
     observeEvent(input$assembler, {

@@ -1,0 +1,68 @@
+# MitoPilot image: macguigand/mitopilot:maptoref
+# Tool: samtools-consensus
+# Version: samtools 1.24
+# Captured: 2026-09-14T17:21:43Z
+# ----------------------------------------------------------------
+
+Usage: samtools consensus [options] <in.bam>
+
+Options:
+  -r, --region REG      Limit query to REG. Requires an index
+      --regions-file FILE
+                        Output regions listed in the BED FILE
+  -f, --format FMT      Output in format FASTA, FASTQ or PILEUP [FASTA]
+  -l, --line-len INT    Wrap FASTA/Q at line length INT [70]
+  -o, --output FILE     Output consensus to FILE
+  -m, --mode STR        Switch consensus mode to "simple"/"bayesian" [bayesian]
+  -a                    Output all bases (start/end of reference)
+  --rf, --incl-flags STR|INT
+                        Only include reads with any flag bit set [0]
+  --ff, --excl-flags STR|INT
+                        Exclude reads with any flag bit set
+                        [UNMAP,SECONDARY,QCFAIL,DUP]
+  --min-MQ INT          Exclude reads with mapping quality below INT [0]
+  --min-BQ INT          Exclude reads with base quality below INT [0]
+  --show-del yes/no     Whether to show deletion as "*" [no]
+  --show-ins yes/no     Whether to show insertions [yes]
+  --mark-ins            Add '+' before every inserted base/qual [off]
+  -A, --ambig           Enable IUPAC ambiguity codes [off]
+  -d, --min-depth INT   Minimum depth of INT [1]
+  -Z, --block-size INT  Size of chromosome block (bp) when threading [100000]
+      --ref-qual INT    QUAL to use for reference bases [0]
+
+For simple consensus mode:
+  -q, --(no-)use-qual   Use quality values in calculation [off]
+  -c, --call-fract INT  At least INT portion of bases must agree [0.75]
+  -H, --het-fract INT   Minimum fraction of 2nd-most to most common base [0.15]
+
+For default "Bayesian" consensus mode:
+  -C, --cutoff C        Consensus cutoff quality C [10]
+      --(no-)adj-qual   Modify quality with local minima [on]
+      --(no-)use-MQ     Use mapping quality in calculation [on]
+      --(no-)adj-MQ     Modify mapping quality by local NM [on]
+      --NM-halo INT     Size of window for NM count in --adj-MQ [50]
+      --scale-MQ FLOAT  Scale mapping quality by FLOAT [1.00]
+      --low-MQ  INT     Cap minimum mapping quality [1]
+      --high-MQ INT     Cap maximum mapping quality [60]
+      --P-het FLOAT     Probability of heterozygous site[1.0e-03]
+      --P-indel FLOAT   Probability of indel sites[2.0e-04]
+      --het-scale FLOAT Heterozygous SNP probability multiplier[1.0e+00]
+  -p, --homopoly-fix    Spread low-qual bases to both ends of homopolymers
+      --homopoly-score FLOAT
+                        Qual fraction adjustment for -p option [0.5]
+  -t, --qual-calibration FILE / :config (see man page)
+                        Load quality calibration file
+
+  -X, --config STR      Use pre-defined configuration set. STR from:
+                        hiseq, hifi, r10.4_sup, r10.4_dup and ultima
+
+Global options:
+      --input-fmt-option OPT[=VAL]
+               Specify a single input file format option in the form
+               of OPTION or OPTION=VALUE
+  -T, --reference FILE
+               Reference sequence FASTA FILE [null]
+  -@, --threads INT
+               Number of additional decompression threads to use [0]
+      --verbosity INT
+               Set level of verbosity

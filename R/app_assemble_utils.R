@@ -412,20 +412,18 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
             id = ns("help_maptoref_mapper"), nested = TRUE)),
         textInput(
           ns("maptoref"),
-          label = "MapToRef mapper options:",
+          label = tagList(
+            "MapToRef mapper options:",
+            mtr_mapper_help(current$maptoref_mapper %||% "bowtie2", ns)
+          ),
           value = current$maptoref %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled() |>
-          tagAppendChild(opts_help(
-            "Flags passed to the chosen mapper. bowtie2 presets: --fast-local, ",
-            "--sensitive-local, --very-sensitive-local (default), ",
-            "--very-sensitive-local -N 1. bwa-mem: empty (default), or ",
-            "for example -B 2 -T 20 for a distant reference.",
-            href = "https://bowtie-bio.sourceforge.net/bowtie2/manual.shtml",
-            id = ns("help_maptoref"), nested = TRUE)),
+          tagAppendChild(mtr_mapper_help_text(current$maptoref_mapper %||% "bowtie2", ns)),
         textInput(
           ns("maptoref_consensus"),
-          label = "MapToRef samtools consensus options:",
+          label = tagList("MapToRef samtools consensus options:",
+                          tool_help_icon("samtools-consensus")),
           value = current$maptoref_consensus %||% character(0),
           width = "100%"
         ) |> shinyjs::disabled() |>
@@ -1233,4 +1231,37 @@ assemble_table_status <- function(n_visible, n_total, n_selected, noun = "sample
       span(class = "mp-empty-state", "No rows match the current filters.")
     }
   )
+}
+
+
+# Mapper help: one "?" icon and one help line per mapper, only the selected
+# mapper's pair visible. Toggled client-side when the mapper select changes.
+.mtr_mapper_help_spec <- list(
+  "bowtie2" = list(
+    text = c("Flags passed to bowtie2 on every pass. Presets: --fast-local, ",
+             "--sensitive-local, --very-sensitive-local (default), ",
+             "--very-sensitive-local -N 1 for a distant reference."),
+    href = "https://bowtie-bio.sourceforge.net/bowtie2/manual.shtml"),
+  "bwa-mem" = list(
+    text = c("Flags passed to bwa mem on every pass. Empty (default) uses bwa's ",
+             "own defaults; for example -B 2 -T 20 for a distant reference."),
+    href = "https://bio-bwa.sourceforge.net/bwa.shtml")
+)
+
+#' @noRd
+mtr_mapper_help <- function(selected, ns) {
+  tagList(lapply(names(.mtr_mapper_help_spec), function(m) {
+    el <- tags$span(id = ns(paste0("help_icon_", m)), tool_help_icon(m))
+    if (identical(m, selected)) el else shinyjs::hidden(el)
+  }))
+}
+
+#' @noRd
+mtr_mapper_help_text <- function(selected, ns) {
+  tagList(lapply(names(.mtr_mapper_help_spec), function(m) {
+    sp <- .mtr_mapper_help_spec[[m]]
+    el <- do.call(opts_help, c(as.list(sp$text), list(
+      href = sp$href, id = ns(paste0("help_maptoref_", m)), nested = TRUE)))
+    if (identical(m, selected)) el else shinyjs::hidden(el)
+  }))
 }
