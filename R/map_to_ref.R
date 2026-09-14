@@ -608,7 +608,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     if (!file.exists(ref_file) || file.size(ref_file) == 0L) {
       stop("no MapToRef reference for this sample (", ref_file, "); set one in ",
            "the mapping file 'Reference' column, with ",
-           "MitoPilot::set_maptoref_refs(), or in the Assemble options")
+           "MitoPilot::set_maptoref_refs(), or in the Assemble table")
     }
     src <- "file"
   }

@@ -1,7 +1,7 @@
 # Togglable column groups for the Assemble table. Cols not listed here
 # (sticky cols, action buttons) are always shown.
 ASSEMBLE_COL_GROUPS <- list(
-  Options  = c("pre_opts", "assemble_opts", "blast_opts"),
+  Options  = c("pre_opts", "assemble_opts", "maptoref_ref", "blast_opts"),
   Stats    = c("trimmed_reads", "mean_length", "topology", "length",
                "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
@@ -162,13 +162,15 @@ assemble_server <- function(id) {
       hidden_grp   <- setdiff(names(ASSEMBLE_COL_GROUPS), col_groups_rv())
       hidden_lock  <- setdiff(unname(ASSEMBLE_LOCK_CHOICES), lock_filter_rv())
       hidden_state <- setdiff(MP_STATE_CODES[["assemble"]], state_filter_rv())
+      no_mtr <- is.null(rv$data) || !any(rv$data$assembler %in% "MapToRef")
       # Scope to THIS module's table so rules don't hit the shared mp-lock /
       # mp-state / mp-grp classes on the annotate, export, and userAsmb tables.
       sel <- paste0("#", ns("table"), " ")
       rules <- c(
         if (length(hidden_grp))   paste0(sel, ".mp-grp-",   hidden_grp,   " { display: none !important; }"),
         if (length(hidden_lock))  paste0(sel, ".mp-lock-",  hidden_lock,  " { display: none !important; }"),
-        if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }")
+        if (length(hidden_state)) paste0(sel, ".mp-state-", hidden_state, " { display: none !important; }"),
+        if (no_mtr) paste0(sel, ".mp-col-maptoref { display: none !important; }")
       )
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
@@ -300,6 +302,17 @@ assemble_server <- function(id) {
               html = T,
               width = 120,
               cell = rt_link(ns("set_blast_opts"), title = "Edit BLAST options",
+                             lock_col = "assemble_lock")
+            ),
+            maptoref_ref = colDef(
+              show = TRUE,
+              class = paste(.grp("maptoref_ref"), "mp-col-maptoref"),
+              headerClass = paste(.grp("maptoref_ref"), "mp-col-maptoref"),
+              name = mp_col_name("maptoref_ref"),
+              header = mp_col_header("maptoref_ref"),
+              html = TRUE,
+              width = 180,
+              cell = rt_link(ns("set_maptoref_ref"), title = "Set MapToRef reference",
                              lock_col = "assemble_lock")
             ),
             topology = colDef(
@@ -775,6 +788,46 @@ assemble_server <- function(id) {
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       assemble_opts_modal(rv)
     })
+    observeEvent(input$set_maptoref_ref, {
+      row <- as.numeric(input$set_maptoref_ref)
+      if (!need_unlocked(assemble_locked_ids(rv, row))) return()
+      id <- rv$data$ID[row]
+      rv$mtr_ref_id <- id
+      cur <- DBI::dbGetQuery(
+        session$userData$con,
+        "SELECT maptoref_ref, maptoref_topology FROM assemble WHERE ID = ?",
+        params = list(id)
+      )
+      maptoref_ref_modal(id, cur$maptoref_ref, cur$maptoref_topology)
+    })
+    # Only a FASTA needs the topology select.
+    observeEvent(input$maptoref_ref_value, {
+      shinyjs::toggle("maptoref_ref_topology",
+                      condition = .mtr_needs_topology(input$maptoref_ref_value %||% ""))
+    }, ignoreNULL = FALSE)
+    observeEvent(input$update_maptoref_ref, {
+      id <- req(rv$mtr_ref_id)
+      res <- tryCatch({
+        val <- .mtr_validate_refs(input$maptoref_ref_value %||% "", ids = id,
+                                  context = "the MapToRef reference")
+        topo <- .mtr_validate_ref_topology(val, input$maptoref_ref_topology %||% "",
+                                       ids = id, context = "the MapToRef reference")
+        list(val = val, topo = topo)
+      }, error = function(e) {
+        mp_alert(title = "Invalid reference", text = conditionMessage(e), type = "error")
+        NULL
+      })
+      if (is.null(res)) return()
+      dplyr::tbl(session$userData$con, "assemble") |>
+        dplyr::rows_update(
+          data.frame(ID = id, maptoref_ref = res$val, maptoref_topology = res$topo,
+                     assemble_switch = 1),
+          unmatched = "ignore", in_place = TRUE, copy = TRUE, by = "ID"
+        )
+      rv$mtr_ref_id <- NULL
+      removeModal()
+      trigger("refresh_assemble")
+    })
     observeEvent(input$assemble_opts, ignoreInit = T, {
       exists <- input$assemble_opts %in% rv$assemble_opts$assemble_opts
       shinyWidgets::updatePrettyCheckbox(
@@ -828,14 +881,6 @@ assemble_server <- function(id) {
           inputId = "mitofinder",
           value = cur$mitofinder
         )
-        updateTextInput(
-          inputId = "maptoref_ref",
-          value = (cur$maptoref_ref %||% NA_character_) %|NA|% ""
-        )
-        updateSelectInput(
-          inputId = "maptoref_topology",
-          selected = (cur$maptoref_topology %||% NA_character_) %|NA|% ""
-        )
         updateSelectInput(inputId = "maptoref_mapper",
                           selected = cur$maptoref_mapper %||% "bowtie2")
         updateTextInput(inputId = "maptoref", value = cur$maptoref)
@@ -845,7 +890,7 @@ assemble_server <- function(id) {
           inputId = "assembler",
           selected = cur$assembler
         )
-        maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+        maptoref_ids <- c("maptoref_mapper",
                           "maptoref", "maptoref_consensus", "maptoref_iter")
         # Each help line lives inside its input's container, so toggling the
         # input shows/hides its help too (no separate help_* toggles needed).
@@ -886,7 +931,7 @@ assemble_server <- function(id) {
       shinyjs::toggleState("max_scaffolds", condition = input$edit_assemble_opts)
       shinyjs::toggleState("min_assembly_length", condition = input$edit_assemble_opts)
       shinyjs::toggleState("join_scaffolds", condition = input$edit_assemble_opts)
-      for (i in c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+      for (i in c("maptoref_mapper",
                   "maptoref", "maptoref_consensus", "maptoref_iter")) {
         shinyjs::toggleState(i, condition = input$edit_assemble_opts)
       }
@@ -955,7 +1000,7 @@ assemble_server <- function(id) {
       }
     }, ignoreInit = TRUE)
     observeEvent(input$assembler, {
-      maptoref_ids <- c("maptoref_ref", "maptoref_topology", "maptoref_mapper",
+      maptoref_ids <- c("maptoref_mapper",
                         "maptoref", "maptoref_consensus", "maptoref_iter")
       if (input$assembler == "GetOrganelle") {
         shinyjs::hide(id = "mitofinder")
@@ -984,30 +1029,12 @@ assemble_server <- function(id) {
     observeEvent(input$update_assemble_opts, ignoreInit = T, {
       ## Add to params table if new or editing ----
       if (input$edit_assemble_opts) {
-        ref_value <- trimws(input$maptoref_ref %||% "")
-        topology_value <- trimws(input$maptoref_topology %||% "")
-        needs_topology <- identical(input$assembler, "MapToRef") &&
-          nzchar(ref_value) &&
-          !identical(.mtr_ref_class(ref_value), "accession") &&
-          !grepl("\\.(gb|gbk|gbff)$", ref_value, ignore.case = TRUE) &&
-          !nzchar(topology_value)
-        if (needs_topology) {
-          mp_alert(
-            title = "Reference topology required",
-            text = paste("Set the reference topology (circular or linear) for a",
-                         "FASTA reference. A GenBank (.gb) reference takes its",
-                         "topology from the file."),
-            type = "error"
-          )
-          return()
-        }
         if (identical(input$assembler, "MapToRef") &&
-            grepl(.mtr_bad_chars_re, paste(ref_value,
-                                           input$maptoref %||% "",
+            grepl(.mtr_bad_chars_re, paste(input$maptoref %||% "",
                                            input$maptoref_consensus %||% ""))) {
           mp_alert(
             title = "Invalid characters in MapToRef options",
-            text = paste("The reference, bowtie2, and samtools consensus values",
+            text = paste("The mapper and samtools consensus values",
                          "are passed through a shell call, so they cannot",
                          "contain a quote, dollar sign, backtick, or backslash."),
             type = "error"
@@ -1030,7 +1057,7 @@ assemble_server <- function(id) {
               max_scaffolds = as.integer(req(input$max_scaffolds)),
               min_assembly_length = as.integer(req(input$min_assembly_length)),
               join_scaffolds = as.integer(isTRUE(input$join_scaffolds)),
-              maptoref_ref = if (nzchar(ref_value)) ref_value else NA_character_,
+              maptoref_ref = NA_character_,
               maptoref_mapper = input$maptoref_mapper %||% "bowtie2",
               maptoref = if (nzchar(trimws(input$maptoref %||% ""))) {
                 input$maptoref
@@ -1045,7 +1072,7 @@ assemble_server <- function(id) {
                 .mtr_default_consensus
               },
               maptoref_iter = as.integer(input$maptoref_iter %||% 5L) %|NA|% 5L,
-              maptoref_topology = if (nzchar(topology_value)) topology_value else NA_character_
+              maptoref_topology = NA_character_
             ),
             in_place = TRUE,
             copy = TRUE,

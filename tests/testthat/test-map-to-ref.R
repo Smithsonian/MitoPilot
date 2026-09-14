@@ -365,10 +365,8 @@ mtr_test_db <- function(dir, ...) {
 }
 
 test_that("new_db stores the five MapToRef option columns", {
-  skip_if_not(file.exists(mtr_fixture()))
   d <- withr::local_tempdir()
-  db <- mtr_test_db(d, assembler = "MapToRef", maptoref_ref = mtr_fixture(),
-                    maptoref_topology = "circular")
+  db <- suppressWarnings(mtr_test_db(d, assembler = "MapToRef"))
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -376,18 +374,17 @@ test_that("new_db stores the five MapToRef option columns", {
   expect_true(all(c("maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
                     "maptoref_iter", "maptoref_topology") %in% names(opts)))
   expect_equal(opts$assembler, "MapToRef")
-  expect_equal(opts$maptoref_ref, normalizePath(mtr_fixture(), winslash = "/"))
+  expect_true(is.na(opts$maptoref_ref))
   expect_equal(opts$maptoref_mapper, "bowtie2")
   expect_equal(opts$maptoref, "--very-sensitive-local")
   expect_equal(opts$maptoref_consensus, "-d 3 --min-BQ 20")
   expect_equal(opts$maptoref_iter, 5L)
-  expect_equal(opts$maptoref_topology, "circular")
+  expect_true(is.na(opts$maptoref_topology))
 })
 
 test_that("new_db defaults the options string to the chosen mapper", {
   d <- withr::local_tempdir()
-  db <- mtr_test_db(d, assembler = "MapToRef", maptoref_ref = mtr_fixture(),
-                    maptoref_topology = "circular", maptoref_mapper = "bwa-mem")
+  db <- suppressWarnings(mtr_test_db(d, assembler = "MapToRef", maptoref_mapper = "bwa-mem"))
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   opts <- DBI::dbGetQuery(con, "SELECT maptoref_mapper, maptoref FROM assemble_opts")
@@ -398,44 +395,29 @@ test_that("new_db defaults the options string to the chosen mapper", {
 test_that("new_db rejects an unknown mapper", {
   d <- withr::local_tempdir()
   expect_error(
-    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "x.gb",
-                maptoref_mapper = "hisat"),
+    mtr_test_db(d, assembler = "MapToRef", maptoref_mapper = "hisat"),
     "bowtie2 or bwa-mem"
   )
 })
 
-test_that("new_db warns for MapToRef without a reference and rejects a bad topology", {
+test_that("new_db warns for MapToRef without a reference", {
   d <- withr::local_tempdir()
   expect_warning(mtr_test_db(d, assembler = "MapToRef"), "no reference")
-  d2 <- withr::local_tempdir()
-  expect_error(
-    mtr_test_db(d2, assembler = "MapToRef", maptoref_ref = "x.gb",
-                maptoref_topology = "round"),
-    "circular or linear"
-  )
 })
 
-test_that("new_db applies the modal's reference-topology and quote rules", {
+test_that("new_db applies the modal's quote rules", {
   d <- withr::local_tempdir()
-  fa <- mtr_write(d, "mito.fasta", c(">R", strrep("ACGT", 3000L)))
   expect_error(
-    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "ref/mito.fasta"),
-    "maptoref_topology"
-  )
-  expect_error(
-    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "x.gb",
+    mtr_test_db(d, assembler = "MapToRef",
                 maptoref = "--very-sensitive-local -N '1'"),
     "quote characters"
   )
   expect_error(
-    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = "x.gb",
+    mtr_test_db(d, assembler = "MapToRef",
                 maptoref_consensus = "-d 3 --min-BQ \"20\""),
     "quote characters"
   )
-  expect_no_error(
-    mtr_test_db(d, assembler = "MapToRef", maptoref_ref = fa,
-                maptoref_topology = "linear")
-  )
+  expect_no_error(suppressWarnings(mtr_test_db(d, assembler = "MapToRef")))
 })
 
 test_that("new_db still refuses an unknown assembler", {

@@ -1380,6 +1380,7 @@ test_that("redo_join_no_ref_ids reads the stored accession, not the blanked disp
     blast_qcovs = 99, blast_evalue = 0, blast_lineage = "x",
     poor_blast_ref = "ok", time_stamp = "2026-01-01", assemble_notes = "",
     join_notes = NA_character_, join_switch = NA_integer_,
+    maptoref_ref = NA_character_, maptoref_topology = NA_character_,
     stringsAsFactors = FALSE))
   DBI::dbWriteTable(con, "preprocess", data.frame(
     ID = "frag", R1 = "a", R2 = "b", pre_opts = "d", reads = 100,

@@ -1,6 +1,6 @@
 # Per-sample MapToRef References Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Superseded by tools/maptoref_ref_decouple_spec.md and tools/maptoref_ref_decouple_plan.md (2026-09-14).
 
 **Goal:** Let every sample name its own MapToRef reference - an absolute file path, a URL, or an NCBI nucleotide accession - instead of forcing one reference per parameter set. The reference is designated in the mapping CSV (optional `Reference` column) or set later with a new exported helper. An accession is downloaded from NCBI as a GenBank record inside the container, so the record carries its own topology.
 

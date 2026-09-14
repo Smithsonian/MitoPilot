@@ -128,12 +128,13 @@ Any other columns you add are carried along and can be pulled into GenBank FASTA
 headers at export, so this is the place to put voucher numbers, BioSample
 accessions, collection data, and anything else your submission needs.
 
-`Reference` is the one reserved name: MitoPilot takes that column as a
-per-sample MapToRef reference (see below) instead of sample metadata, and checks
-its values whatever the assembler, so rename the column if you use it for
-something else. Set it when you create the project or when you run
-`add_samples()`; `update_sample_metadata()` ignores a `Reference` column, so use
-`set_maptoref_refs()` to change references later.
+`Reference` (and, for a FASTA reference, `Reference_topology`) is a reserved
+name: MitoPilot takes that column as a per-sample MapToRef reference (see
+below) instead of sample metadata, and checks its values whatever the
+assembler, so rename the column if you use it for something else. Set it when
+you create the project or when you run `add_samples()`; `update_sample_metadata()`
+ignores a `Reference` column, so use `set_maptoref_refs()` to change references
+later.
 
 ```
 ID,Taxon,R1,R2,Voucher,BioSample
@@ -198,52 +199,53 @@ be a local path or a URL. The default is the zebrafish mitogenome, so supply
 your own for anything that is not a fish. Leave both alone to stay on
 GetOrganelle.
 
-**`assembler` and `maptoref_ref`** switch the assembler to `"MapToRef"`, which
-maps your reads onto a reference mitogenome instead of assembling de novo.
-`maptoref_ref` must be one complete mitogenome; GenBank (`.gb`) is preferred
-because it carries its own topology, so `maptoref_topology` is only needed for
-a FASTA reference:
+**`assembler`** set to `"MapToRef"` maps your reads onto a reference mitogenome
+instead of assembling de novo. Unlike the other assemblers, MapToRef takes its
+reference per sample rather than as a project-wide setting, so there is no
+`new_project()` argument for it; give each sample a reference through the
+mapping CSV, `set_maptoref_refs()`, or the sample's `MapToRef ref` cell in the
+app's Assemble table.
+
+Add a `Reference` column to your mapping CSV holding a file path, a URL, or an
+NCBI nucleotide accession. GenBank (`.gb`) is preferred because it carries its
+own topology; a FASTA reference needs a `Reference_topology` column too
+(`circular` or `linear`), since a FASTA header carries no topology:
+
+```
+ID,Taxon,R1,R2,Reference,Reference_topology
+OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,ref/NC_002333.gb,
+OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,ref/mito.fasta,circular
+```
 
 ```r
 new_project(
   assembler = "MapToRef",
-  maptoref_ref = "ref/NC_002333.gb"
-)
-
-# A FASTA reference needs its topology stated:
-new_project(
-  assembler = "MapToRef",
-  maptoref_ref = "ref/mito.fasta",
-  maptoref_topology = "circular"
+  mapping_fn = "~/my_mitogenomes/mapping.csv"
 )
 ```
 
-`maptoref_ref` may also be an NCBI nucleotide accession, whose GenBank record
-MitoPilot downloads from NCBI:
+`Reference` may also be an NCBI nucleotide accession, whose GenBank record
+MitoPilot downloads from NCBI. The `Reference` and `Reference_topology`
+columns never become sample metadata.
+
+If your reference list is not ready at project creation, leave the columns out
+(MitoPilot warns which samples have no reference) and supply the list later
+with `set_maptoref_refs()`, using a CSV with an ID column, a reference column,
+and an optional third column for topology:
 
 ```r
-new_project(assembler = "MapToRef", maptoref_ref = "NC_002333.1")
-```
-
-To give each sample its own reference, add a `Reference` column to your mapping
-CSV holding a file path, a URL, or an accession; blank cells fall back to
-`maptoref_ref`. The column never becomes sample metadata. If your reference list
-is not ready at project creation, leave `maptoref_ref` empty (MitoPilot warns
-which samples have no reference) and supply the list later:
-
-```r
-set_maptoref_refs(refs = "my_refs.csv")   # header row, then column 1: sample ID, column 2: reference
+set_maptoref_refs(refs = "my_refs.csv")   # ID, reference, and optionally topology
 ```
 
 Every value is checked when it is set: a path must exist and be a readable
 single-record GenBank or FASTA mitogenome, a URL must be reachable, and an
 accession must exist at NCBI. Every bad value in the file is reported at once.
-Note that the existing examples above assume the reference file is really there;
-they now fail immediately if it is not. A per-sample FASTA reference still takes
-its topology from the parameter set's reference topology, so set that in the
-Assemble options; a GenBank file carries its own, and an accession downloaded
-from NCBI does too when its `LOCUS` line names one (mitogenome records normally
-do); otherwise set the reference topology in the Assemble options.
+Note that the existing examples above assume the reference file is really
+there; they now fail immediately if it is not. A GenBank file carries its own
+topology, and an accession downloaded from NCBI does too when its `LOCUS` line
+names one (mitogenome records normally do); otherwise give the topology
+alongside the reference, in the mapping CSV, in `set_maptoref_refs()`, or in
+the sample's `MapToRef ref` cell in the app's Assemble table.
 
 See [building custom databases](custom_dbs.html) for how to get a reference
 mitogenome.

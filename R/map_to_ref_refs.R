@@ -215,105 +215,63 @@
   out
 }
 
-# Strip the optional Reference column out of a mapping before the samples table
-# is built from colnames(mapping). Precedent: R/init_db_userAsmb.R strips
-# Assembly/Topology the same way. Values are returned raw; callers validate.
+# Second pass over what .mtr_validate_refs() returned. Only a FASTA (a file or
+# URL not named .gb/.gbk/.gbff) needs a topology; GenBank and accessions carry
+# their own. Same report shape as .mtr_validate_refs().
+#' @noRd
+.mtr_validate_ref_topology <- function(vals, topology, ids, context = "reference") {
+  n <- length(vals)
+  topology <- tolower(trimws(as.character(topology)))
+  topology[is.na(topology)] <- ""
+  if (length(topology) != n) stop("topology must be the same length as vals", call. = FALSE)
+  ids <- as.character(ids)
+  out <- rep(NA_character_, n)
+  bad <- character(0)
+  for (i in seq_len(n)) {
+    if (is.na(vals[i])) next
+    needs <- .mtr_needs_topology(vals[i])
+    if (nzchar(topology[i]) && topology[i] %nin% c("circular", "linear")) {
+      bad <- c(bad, sprintf("  %s [%s]: topology must be circular or linear, not %s",
+                            ids[i], vals[i], topology[i]))
+    } else if (needs && !nzchar(topology[i])) {
+      bad <- c(bad, sprintf("  %s [%s]: FASTA reference needs a topology (circular or linear)",
+                            ids[i], vals[i]))
+    } else if (needs) {
+      out[i] <- topology[i]
+    }
+  }
+  if (length(bad) > 0L) {
+    stop(sprintf("MapToRef reference topology problems (%d) in %s:\n%s",
+                 length(bad), context, paste(bad, collapse = "\n")),
+         call. = FALSE)
+  }
+  out
+}
+
+# Strip the optional Reference and Reference_topology columns out of a mapping
+# before the samples table is built from colnames(mapping). Precedent:
+# R/init_db_userAsmb.R strips Assembly/Topology the same way. Values are
+# returned raw; callers validate.
 #' @noRd
 .mtr_take_ref_col <- function(mapping, mapping_id = "ID") {
-  if ("Reference" %nin% colnames(mapping)) {
-    return(list(mapping = mapping, refs = NULL))
+  has_ref <- "Reference" %in% colnames(mapping)
+  has_topo <- "Reference_topology" %in% colnames(mapping)
+  if (has_topo && !has_ref) {
+    stop("The mapping file has a Reference_topology column but no Reference column",
+         call. = FALSE)
   }
-  refs <- as.character(mapping[["Reference"]])
-  names(refs) <- as.character(mapping[[mapping_id]])
-  keep <- setdiff(colnames(mapping), "Reference")
-  list(mapping = mapping[, keep, drop = FALSE], refs = refs)
-}
-
-# Per-sample MapToRef parameter sets.
-#
-# A mapping-file Reference means "assemble this sample by mapping to that
-# reference", so the sample gets a parameter set of its own, cloned from the
-# base set with assembler = MapToRef and the reference on it. The reference is
-# deliberately NOT also written to assemble.maptoref_ref: the pipeline
-# COALESCEs the column over the set, so a value in both would make the Assemble
-# options modal look editable while the column silently won.
-#' @noRd
-.mtr_opts_name <- function(id) paste0(id, "_maptoref")
-
-# refs is a named character vector (names are sample IDs), as built by new_db()
-# and add_samples(). Blank and NA references are left on the base set.
-#' @noRd
-.mtr_seed_per_sample_opts <- function(con, refs, base = "default") {
-  if (is.null(refs) || length(refs) == 0L) return(invisible(character(0)))
-  keep <- !is.na(refs) & nzchar(trimws(refs))
-  if (!any(keep)) return(invisible(character(0)))
-  refs <- refs[keep]
-  ids <- names(refs)
-  names <- .mtr_opts_name(ids)
-
-  base_row <- DBI::dbGetQuery(
-    con, "SELECT * FROM assemble_opts WHERE assemble_opts = ?",
-    params = list(base)
-  )
-  if (nrow(base_row) != 1L) {
-    stop("assemble options set ", shQuote(base), " not found", call. = FALSE)
+  if (!has_ref) {
+    return(list(mapping = mapping, refs = NULL, topology = NULL))
   }
-  # An upsert here would silently reconfigure a set the user built by hand.
-  taken <- intersect(
-    names,
-    DBI::dbGetQuery(con, "SELECT assemble_opts FROM assemble_opts")$assemble_opts
-  )
-  if (length(taken) > 0L) {
-    stop("assemble options set(s) ", paste(shQuote(taken), collapse = ", "),
-         " already exist and are not that sample's own MapToRef set; rename ",
-         "them first", call. = FALSE)
+  ids <- as.character(mapping[[mapping_id]])
+  refs <- stats::setNames(as.character(mapping[["Reference"]]), ids)
+  topology <- if (has_topo) {
+    stats::setNames(as.character(mapping[["Reference_topology"]]), ids)
+  } else {
+    stats::setNames(rep(NA_character_, length(ids)), ids)
   }
-
-  new_opts <- base_row[rep(1L, length(ids)), , drop = FALSE]
-  rownames(new_opts) <- NULL
-  new_opts$assemble_opts <- names
-  new_opts$assembler <- "MapToRef"
-  new_opts$maptoref_ref <- unname(refs)
-  dplyr::tbl(con, "assemble_opts") |>
-    dplyr::rows_insert(
-      new_opts,
-      in_place = TRUE,
-      copy = TRUE,
-      by = "assemble_opts",
-      conflict = "ignore"
-    )
-  dplyr::tbl(con, "assemble") |>
-    dplyr::rows_update(
-      data.frame(ID = ids, assemble_opts = names),
-      unmatched = "ignore",
-      in_place = TRUE,
-      copy = TRUE,
-      by = "ID"
-    )
-  invisible(names)
-}
-
-# The sample's own set, when it has one: named for the sample, used by nobody
-# else, and assembling with MapToRef. set_maptoref_refs() edits that set instead
-# of the column, so the reference keeps living in exactly one place.
-#' @noRd
-.mtr_dedicated_opts <- function(con, ids) {
-  q <- DBI::dbGetQuery(con, paste(
-    "SELECT a.ID, a.assemble_opts, o.assembler, o.maptoref_ref,",
-    "o.maptoref_topology,",
-    "(SELECT COUNT(*) FROM assemble x",
-    "WHERE x.assemble_opts = a.assemble_opts) AS n_samples",
-    "FROM assemble a JOIN assemble_opts o",
-    "ON a.assemble_opts = o.assemble_opts"
-  ))
-  q <- q[match(ids, q$ID), , drop = FALSE]
-  own <- !is.na(q$ID) &
-    q$assemble_opts == .mtr_opts_name(q$ID) &
-    q$n_samples == 1L &
-    !is.na(q$assembler) & q$assembler == "MapToRef"
-  own[is.na(own)] <- FALSE
-  list(own = own, opts = q$assemble_opts, set_ref = q$maptoref_ref,
-       topology = q$maptoref_topology)
+  keep <- setdiff(colnames(mapping), c("Reference", "Reference_topology"))
+  list(mapping = mapping[, keep, drop = FALSE], refs = refs, topology = topology)
 }
 
 #' A FASTA reference carries no topology, so its set must name one.
@@ -335,100 +293,45 @@
   v
 }
 
-#' Write references to their one home, the sample's own parameter set
-#'
-#' A sample on its own set has the value written there; any other sample gets
-#' a set cloned from the one it is on. The assemble column is cleared for every
-#' sample touched, so nothing can shadow the set.
-#'
-#' @param con database connection
-#' @param ids sample IDs
-#' @param vals references, NA to clear
+# One-time move of set-level values onto the samples that used them. The last
+# statement empties the source, so running it again is silent.
 #' @noRd
-.mtr_route_refs <- function(con, ids, vals) {
-  if (length(ids) == 0L) return(invisible(character(0)))
-  ded <- .mtr_dedicated_opts(con, ids)
-  own <- ded$own
-  # Every check runs before any write, so a refusal leaves the database as it
-  # was (the migration relies on that to keep an unfoldable column value).
-  orphan <- !is.na(vals) & is.na(ded$opts)
-  if (any(orphan)) {
-    stop("sample(s) ", paste(shQuote(ids[orphan]), collapse = ", "),
-         " point at no existing assemble options set; fix that in the ",
-         "Assemble module first", call. = FALSE)
-  }
-  needs <- !is.na(vals) & vapply(vals, .mtr_needs_topology, logical(1)) &
-    (is.na(ded$topology) | !nzchar(trimws(ded$topology)))
-  if (any(needs)) {
-    warning("sample(s) ", paste(shQuote(ids[needs]), collapse = ", "),
-            " get a FASTA reference on a parameter set with no topology; set ",
-            "the reference topology (circular or linear) on ",
-            paste(shQuote(unique(ifelse(own, ded$opts, .mtr_opts_name(ids))[needs])),
-                  collapse = ", "),
-            " in the Assemble options before running, or the sample will ",
-            "fail at the Assemble step", call. = FALSE)
-  }
-  if (any(own)) {
-    dplyr::tbl(con, "assemble_opts") |>
-      dplyr::rows_update(
-        data.frame(assemble_opts = ded$opts[own], maptoref_ref = vals[own]),
-        unmatched = "ignore",
-        in_place = TRUE,
-        copy = TRUE,
-        by = "assemble_opts"
-      )
-  }
-  # A blank for a sample without a set of its own has nothing to clear.
-  new <- which(!own & !is.na(vals))
-  for (base in unique(ded$opts[new])) {
-    i <- new[ded$opts[new] == base]
-    .mtr_seed_per_sample_opts(con, stats::setNames(vals[i], ids[i]), base = base)
-  }
-  dplyr::tbl(con, "assemble") |>
-    dplyr::rows_update(
-      data.frame(ID = ids, maptoref_ref = NA_character_),
-      unmatched = "ignore",
-      in_place = TRUE,
-      copy = TRUE,
-      by = "ID"
-    )
-  invisible(ids)
-}
-
-#' Fold per-sample reference column values into per-sample sets (migration)
-#'
-#' A value that cannot be moved (its set name is taken by a set the sample
-#' does not own) is left on the column, where the pipeline still reads it.
-#'
-#' @param con database connection
-#' @return invisibly, the IDs folded
-#' @noRd
-.mtr_fold_override_column <- function(con) {
-  if ("assembler" %nin% DBI::dbListFields(con, "assemble_opts") ||
-      "maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
+.mtr_copy_set_refs_down <- function(con) {
+  opts_cols <- DBI::dbListFields(con, "assemble_opts")
+  asm_cols <- DBI::dbListFields(con, "assemble")
+  if (!all(c("maptoref_ref", "maptoref_topology") %in% opts_cols) ||
+      !all(c("maptoref_ref", "maptoref_topology", "assemble_opts") %in% asm_cols)) {
     return(invisible(character(0)))
   }
-  cur <- DBI::dbGetQuery(con, paste(
-    "SELECT ID, maptoref_ref FROM assemble",
-    "WHERE maptoref_ref IS NOT NULL AND TRIM(maptoref_ref) <> ''"
-  ))
-  done <- character(0)
-  for (i in seq_len(nrow(cur))) {
-    ok <- tryCatch({
-      .mtr_route_refs(con, cur$ID[i], cur$maptoref_ref[i])
-      TRUE
-    }, error = function(e) {
-      message("kept the MapToRef reference of ", cur$ID[i],
-              " on the assemble table: ", conditionMessage(e))
-      FALSE
-    })
-    if (ok) done <- c(done, cur$ID[i])
+  copy <- function(col) {
+    ids <- DBI::dbGetQuery(con, sprintf(paste(
+      "SELECT a.ID FROM assemble a JOIN assemble_opts o",
+      "ON a.assemble_opts = o.assemble_opts",
+      "WHERE NULLIF(TRIM(a.%1$s), '') IS NULL",
+      "AND NULLIF(TRIM(o.%1$s), '') IS NOT NULL"), col))$ID
+    if (length(ids) > 0L) {
+      DBI::dbExecute(con, sprintf(paste(
+        "UPDATE assemble SET %1$s = (SELECT TRIM(o.%1$s) FROM assemble_opts o",
+        "WHERE o.assemble_opts = assemble.assemble_opts)",
+        "WHERE NULLIF(TRIM(%1$s), '') IS NULL",
+        "AND assemble_opts IN (SELECT assemble_opts FROM assemble_opts",
+        "WHERE NULLIF(TRIM(%1$s), '') IS NOT NULL)"),
+        col))
+    }
+    ids
   }
-  if (length(done) > 0L) {
-    message("moved the MapToRef reference of ", length(done),
-            " sample(s) onto their own parameter set")
+  refs <- copy("maptoref_ref")
+  # Safe to copy independently: before this branch maptoref_ref was never
+  # populated on a sample, so no sample yet has its own topology to protect.
+  copy("maptoref_topology")
+  if (length(refs) > 0L) {
+    message("moved the MapToRef reference of ", length(refs),
+            " sample(s) from their parameter set onto the sample")
   }
-  invisible(done)
+  DBI::dbExecute(con, paste(
+    "UPDATE assemble_opts SET maptoref_ref = NULL, maptoref_topology = NULL",
+    "WHERE maptoref_ref IS NOT NULL OR maptoref_topology IS NOT NULL"))
+  invisible(refs)
 }
 
 #' The reference the next run of a sample would use
@@ -437,18 +340,39 @@
   if ("maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
     return(NA_character_)
   }
-  v <- DBI::dbGetQuery(con, paste(
-    "SELECT COALESCE(NULLIF(TRIM(a.maptoref_ref), ''),",
-    "NULLIF(TRIM(o.maptoref_ref), '')) AS ref",
-    "FROM assemble a LEFT JOIN assemble_opts o",
-    "ON a.assemble_opts = o.assemble_opts WHERE a.ID = ?"
-  ), params = list(id))$ref
+  v <- DBI::dbGetQuery(
+    con, "SELECT NULLIF(TRIM(maptoref_ref), '') AS ref FROM assemble WHERE ID = ?",
+    params = list(id)
+  )$ref
   if (length(v) != 1L || is.na(v)) NA_character_ else v
 }
 
+# A reference stored under a set that does not assemble with MapToRef is not
+# an error: the user may switch the set later. Say so once.
+#' @noRd
+.mtr_warn_refs_ignored <- function(con, ids) {
+  if (length(ids) == 0L ||
+      "assembler" %nin% DBI::dbListFields(con, "assemble_opts")) {
+    return(invisible(character(0)))
+  }
+  q <- DBI::dbGetQuery(con, paste(
+    "SELECT a.ID FROM assemble a JOIN assemble_opts o",
+    "ON a.assemble_opts = o.assemble_opts",
+    "WHERE o.assembler <> 'MapToRef'"
+  ))$ID
+  hit <- intersect(ids, q)
+  if (length(hit) > 0L) {
+    warning(length(hit), " sample(s) have a MapToRef reference but are on a ",
+            "parameter set that does not assemble with MapToRef; the reference ",
+            "is stored and ignored until the set is switched to MapToRef.",
+            call. = FALSE)
+  }
+  invisible(hit)
+}
+
 # R8's warning, answered from the database rather than from the mapping file, so
-# it sees both sources. The COALESCE is the same expression the pipeline uses in
-# inst/nextflow/modules/assemble_workflow.nf.
+# it sees both sources. The pipeline select in
+# inst/nextflow/modules/assemble_workflow.nf reads the same column.
 #' @noRd
 .mtr_warn_missing_refs <- function(con) {
   # userAsmb projects have a minimal assemble_opts with no assembler column.
@@ -464,16 +388,15 @@
     "SELECT a.ID FROM assemble a",
     "JOIN assemble_opts o ON a.assemble_opts = o.assemble_opts",
     "WHERE o.assembler = 'MapToRef'",
-    "AND COALESCE(NULLIF(TRIM(a.maptoref_ref), ''),",
-    "NULLIF(TRIM(o.maptoref_ref), '')) IS NULL"
+    "AND NULLIF(TRIM(a.maptoref_ref), '') IS NULL"
   ))$ID
   if (length(ids) > 0L) {
     warning("MapToRef has no reference for ", length(ids), " sample(s): ",
             paste(utils::head(ids, 10L), collapse = ", "),
             if (length(ids) > 10L) paste0(" and ", length(ids) - 10L, " more") else "",
             ". Those samples will fail at the Assemble step. Set a reference per ",
-            "sample with MitoPilot::set_maptoref_refs(), or set one for the ",
-            "parameter set in the Assemble options.", call. = FALSE)
+            "sample with MitoPilot::set_maptoref_refs() or by clicking the sample's ",
+            "MapToRef ref cell in the Assemble table.", call. = FALSE)
   }
   invisible(ids)
 }
@@ -481,13 +404,10 @@
 #' Set per-sample MapToRef references
 #'
 #' Assigns a MapToRef reference mitogenome to individual samples in an existing
-#' project. A reference has one home: the sample's own parameter set, named
-#' \code{<ID>_maptoref}. A sample that already has one (used by no other sample,
-#' assembling with MapToRef) has the reference written onto it; any other sample
-#' gets one, cloned from the set it is on, with the assembler switched to
-#' MapToRef. A blank value clears the reference on the sample's own set. The
-#' Assemble options modal therefore always shows the reference the next run
-#' will use.
+#' project. A reference has one home, the sample row; the parameter set the
+#' sample is on supplies the mapper and its options. A FASTA reference also
+#' needs a topology (circular or linear) in the third column. A blank
+#' reference clears both values.
 #'
 #' Samples whose reference actually changes are queued for (re-)assembly, the
 #' same way changing a sample's parameter set does in the Assemble module.
@@ -496,12 +416,13 @@
 #'   directory)
 #' @param refs A CSV path or a data frame. The first column holds sample IDs and
 #'   the second holds references; column names are ignored, but a CSV must have
-#'   a header row (its first line is not read as data). Any further columns are
+#'   a header row (its first line is not read as data). An optional third column
+#'   holds the topology, required for a FASTA reference; any further columns are
 #'   ignored. A reference is an absolute file path to a
 #'   single-record GenBank or FASTA mitogenome, a URL, or an NCBI nucleotide
 #'   accession (for example NC_002333). Blank clears the sample's reference.
 #'
-#' @return Invisibly, the IDs that still have no reference from either source.
+#' @return Invisibly, the IDs that still have no reference.
 #' @export
 #'
 set_maptoref_refs <- function(path = ".", refs = NULL) {
@@ -524,11 +445,12 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
   }
   if (!is.data.frame(refs) || ncol(refs) < 2L || nrow(refs) == 0L) {
     stop("refs must be a CSV path or a data frame with at least two columns ",
-         "(sample ID, reference) and at least one row")
+         "(sample ID, reference, optional topology) and at least one row")
   }
 
   ids <- trimws(as.character(refs[[1]]))
   vals <- as.character(refs[[2]])
+  topo_in <- if (ncol(refs) >= 3L) as.character(refs[[3]]) else rep(NA_character_, length(ids))
   if (any(duplicated(ids))) {
     stop("Duplicate IDs in refs: ",
          paste(unique(ids[duplicated(ids)]), collapse = ", "))
@@ -536,11 +458,12 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
 
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
   on.exit(DBI::dbDisconnect(con))
-  if ("maptoref_ref" %nin% DBI::dbListFields(con, "assemble")) {
-    stop("This project predates the per-sample MapToRef reference column; run ",
+  if (!all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble"))) {
+    stop("This project predates the per-sample MapToRef reference columns; run ",
          "MitoPilot::backwards_compatibility() first")
   }
-  cur <- DBI::dbGetQuery(con, "SELECT ID, maptoref_ref, assemble_lock FROM assemble")
+  cur <- DBI::dbGetQuery(
+    con, "SELECT ID, maptoref_ref, maptoref_topology, assemble_lock FROM assemble")
 
   unknown <- setdiff(ids, cur$ID)
   if (length(unknown) > 0L) {
@@ -548,16 +471,14 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
          " absent in the existing database")
   }
   new_vals <- .mtr_validate_refs(vals, ids = ids, context = "the reference list")
-  # The reference in force today: a value still on the assemble column (from
-  # before the fold) wins in the pipeline, otherwise the set's value.
-  ded <- .mtr_dedicated_opts(con, ids)
-  old_vals <- cur$maptoref_ref[match(ids, cur$ID)]
-  old_vals[is.na(old_vals)] <- ded$set_ref[is.na(old_vals)]
-  same <- (is.na(new_vals) & is.na(old_vals)) |
-    (!is.na(new_vals) & !is.na(old_vals) & new_vals == old_vals)
-  changed <- which(!same)
-  # Only rows that would be written: a locked row this call leaves alone is not
-  # an edit, and writing without flipping assemble_switch would be a no-op.
+  new_topo <- .mtr_validate_ref_topology(new_vals, topo_in, ids = ids,
+                                     context = "the reference list")
+  m <- match(ids, cur$ID)
+  same_ref <- (is.na(new_vals) & is.na(cur$maptoref_ref[m])) |
+    (!is.na(new_vals) & !is.na(cur$maptoref_ref[m]) & new_vals == cur$maptoref_ref[m])
+  same_topo <- (is.na(new_topo) & is.na(cur$maptoref_topology[m])) |
+    (!is.na(new_topo) & !is.na(cur$maptoref_topology[m]) & new_topo == cur$maptoref_topology[m])
+  changed <- which(!(same_ref & same_topo))
   locked <- intersect(
     ids[changed],
     cur$ID[!is.na(cur$assemble_lock) & cur$assemble_lock == 1]
@@ -571,12 +492,10 @@ set_maptoref_refs <- function(path = ".", refs = NULL) {
     return(invisible(.mtr_warn_missing_refs(con)))
   }
 
-  .mtr_route_refs(con, ids[changed], new_vals[changed])
-  # Same requeue the app makes when a sample's parameter set changes
-  # (R/app_assemble.R).
   dplyr::tbl(con, "assemble") |>
     dplyr::rows_update(
-      data.frame(ID = ids[changed], assemble_switch = 1),
+      data.frame(ID = ids[changed], maptoref_ref = new_vals[changed],
+                 maptoref_topology = new_topo[changed], assemble_switch = 1),
       unmatched = "ignore",
       in_place = TRUE,
       copy = TRUE,

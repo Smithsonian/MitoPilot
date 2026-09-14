@@ -21,8 +21,8 @@
 #'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
 #'     normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
 #'     "join_switch", "circularize_opts"/"circularize_notes",
-#'     "find_mito_opts"/"find_mito_notes", "maptoref_ref" (the per-sample
-#'     MapToRef reference).
+#'     "find_mito_opts"/"find_mito_notes", "maptoref_ref"/"maptoref_topology"
+#'     (the per-sample MapToRef reference and topology).
 #'   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
 #'     "remote_fallback" (any parameter set carrying a non-default Entrez query is
 #'     switched to the remote search, with a warning, since the local database
@@ -253,6 +253,7 @@ backwards_compatibility <- function(
       user_asmb_current &&
       "synteny_accession" %in% names(assemble_table) &&
       "maptoref_ref" %in% names(assemble_table) &&
+      "maptoref_topology" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
@@ -1524,13 +1525,16 @@ backwards_compatibility <- function(
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN synteny_accession TEXT")
   }
 
-  # per-sample MapToRef reference column; kept for old projects, but a
-  # reference has one home (the sample's own parameter set), so fold values in
+  # per-sample MapToRef reference and topology; set-level values move down onto samples
   if (!("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))) {
     message("added 'maptoref_ref' column to assemble table")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_ref TEXT")
   }
-  .mtr_fold_override_column(con)
+  if (!("maptoref_topology" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'maptoref_topology' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_topology TEXT")
+  }
+  .mtr_copy_set_refs_down(con)
 
   # if tool column doesn't exist in annotations table, add it
   annotations_cols <- DBI::dbListFields(con, "annotations")
@@ -2308,8 +2312,8 @@ schema_gaps <- function(con) {
                DBI::dbListFields(con, "assemble_opts")))) {
     gaps <- c(gaps, "the assemble_opts table lacks the MapToRef option columns")
   }
-  if (!has("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))) {
-    gaps <- c(gaps, "the assemble table lacks the per-sample MapToRef reference column")
+  if (!has(all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble")))) {
+    gaps <- c(gaps, "the assemble table lacks the per-sample MapToRef reference columns")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%

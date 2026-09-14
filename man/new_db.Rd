@@ -23,12 +23,10 @@ new_db(
   mitofinder_db =
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
   mitofinder = paste("--megahit"),
-  maptoref_ref = NA_character_,
   maptoref_mapper = "bowtie2",
   maptoref = .mtr_default_bowtie2,
   maptoref_consensus = .mtr_default_consensus,
   maptoref_iter = 5L,
-  maptoref_topology = NA_character_,
   max_paths = 10,
   max_scaffolds = 10,
   min_assembly_length = 500,
@@ -94,14 +92,6 @@ Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.
 
 \item{mitofinder}{Default MitoFinder command line options}
 
-\item{maptoref_ref}{Default MapToRef reference mitogenome for the parameter
-set: an absolute file path, a URL, or an NCBI nucleotide accession (for
-example NC_002333). A single-record GenBank file (.gb) is preferred; a
-FASTA is accepted but then \code{maptoref_topology} must be set. Optional:
-samples may instead name their own reference in the mapping file's
-\code{Reference} column, which gives each of those samples its own
-MapToRef parameter set, or through \code{\link{set_maptoref_refs}}.}
-
 \item{maptoref_mapper}{MapToRef read mapper, "bowtie2" or "bwa-mem"
 (default = "bowtie2")}
 
@@ -112,10 +102,6 @@ MapToRef parameter set, or through \code{\link{set_maptoref_refs}}.}
 (default = "-d 3 --min-BQ 20")}
 
 \item{maptoref_iter}{Maximum MapToRef iteration passes (default = 5)}
-
-\item{maptoref_topology}{Topology of a MapToRef reference, "circular" or
-"linear". Ignored when the GenBank LOCUS line names a topology, and used
-when the LOCUS line names neither. Required for a FASTA reference.}
 
 \item{max_paths}{Maximum number of assembly paths allowed for a sample to
 continue past the Assemble step (default = 10). Samples exceeding this are

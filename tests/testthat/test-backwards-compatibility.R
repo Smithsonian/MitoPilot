@@ -354,7 +354,8 @@ test_that("schema_gaps passes a freshly created database", {
   expect_false("the assemble_opts table lacks the MapToRef option columns" %in%
                  schema_gaps(con))
   expect_true("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))
-  expect_false("the assemble table lacks the per-sample MapToRef reference column" %in%
+  expect_true("maptoref_topology" %in% DBI::dbListFields(con, "assemble"))
+  expect_false("the assemble table lacks the per-sample MapToRef reference columns" %in%
                  schema_gaps(con))
 })
 
@@ -368,7 +369,7 @@ test_that("schema_gaps flags assemble without the per-sample MapToRef reference"
 
   con0 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
   expect_false("maptoref_ref" %in% DBI::dbListFields(con0, "assemble"))
-  expect_true("the assemble table lacks the per-sample MapToRef reference column" %in%
+  expect_true("the assemble table lacks the per-sample MapToRef reference columns" %in%
                 schema_gaps(con0))
   DBI::dbDisconnect(con0)
 
@@ -377,7 +378,8 @@ test_that("schema_gaps flags assemble without the per-sample MapToRef reference"
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_true("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))
-  expect_false("the assemble table lacks the per-sample MapToRef reference column" %in%
+  expect_true("maptoref_topology" %in% DBI::dbListFields(con, "assemble"))
+  expect_false("the assemble table lacks the per-sample MapToRef reference columns" %in%
                  schema_gaps(con))
 })
 

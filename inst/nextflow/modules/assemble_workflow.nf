@@ -16,13 +16,10 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length, ' +
                   'b.run_blast, opts.join_scaffolds, ' +
                   'a.join_switch, a.assemble_switch, a.blast_accession, ' +
-                  // Per-sample reference wins when it is set and non-blank; the
-                  // parameter set is the default. Position 19 is unchanged.
-                  // Same expression as .mtr_warn_missing_refs() in R/map_to_ref_refs.R.
-                  "COALESCE(NULLIF(TRIM(a.maptoref_ref), ''), " +
-                  "NULLIF(TRIM(opts.maptoref_ref), '')), " +
+                  // Per-sample reference; a value on the set is not read.
+                  "NULLIF(TRIM(a.maptoref_ref), ''), " +
                   'opts.maptoref, opts.maptoref_consensus, ' +
-                  'opts.maptoref_iter, opts.maptoref_topology, opts.maptoref_mapper ' +
+                  'opts.maptoref_iter, a.maptoref_topology, opts.maptoref_mapper ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
@@ -127,7 +124,7 @@ workflow ASSEMBLE {
                         maptoref: (it[20] ?: ""),                               // MapToRef bowtie2 options
                         maptoref_consensus: (it[21] ?: ""),                     // MapToRef samtools consensus options
                         maptoref_iter: (it[22] == null ? 5 : (it[22] as Integer)), // MapToRef iteration cap
-                        maptoref_topology: (it[23] ?: ""),                      // MapToRef reference topology
+                        maptoref_topology: (it[23] ?: ""),                      // MapToRef reference topology (per sample)
                         maptoref_value: ((it[19] ?: "").toString().trim()),     // raw reference: path, URL, or accession
                         maptoref_mapper: (it[24] ?: "bowtie2")                  // MapToRef read mapper
                     ],
