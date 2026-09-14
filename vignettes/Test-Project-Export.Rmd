@@ -236,7 +236,7 @@ During export, files are saved to `<project>/out/export/<group name>/`:
 |---|---|
 | `<group>.fasta` | The mitogenome sequences with your header template applied |
 | `<group>.tbl` | The [five-column feature table](https://www.ncbi.nlm.nih.gov/genbank/feature_table/) of annotations |
-| `<group>_sample_info.csv` | The sample metadata behind the submission |
+| `<group>_sample_info.csv` | The sample metadata behind the submission, including a `ref_comparison` column naming the GenBank reference each annotation was compared to |
 | `AA_alignments_<group>.html` | The group-level protein alignment report |
 | `GFFs/` | One [GFF3](https://gmod.org/wiki/GFF3) per sample, can be reviewed using Geneious or other tools |
 | `genes/` | Per-gene FASTA and feature tables, if you asked for them |

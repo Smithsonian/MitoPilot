@@ -231,9 +231,11 @@ mitogenome, with a percent-identity bar between them. Click anywhere in this plo
 zoomed-in base-pair level alignment of your sample
 versus the reference.
 
-The reference mitogenome shown in this plot will be exported in your GenBank submission files as a note: 
-"annotation compared to GenBank accession XXX".
-If the reference mitogenome is a poor match, you can flag it (remove the submission note)
+The reference mitogenome shown in this plot is recorded in the export's
+`sample_info.csv` in the `ref_comparison` column, as
+"compared sample XXX to GenBank accession XXX". It is not written to the
+FASTA headers.
+If the reference mitogenome is a poor match, you can flag it (the CSV column is then left blank)
 or use the dropdown menu to pick a better reference from among the top BLAST hits.
 
 ![Gene order compared against the closest GenBank reference](figures/get-started/annotate-synteny.png)

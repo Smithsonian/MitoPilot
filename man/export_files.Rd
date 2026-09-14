@@ -56,7 +56,9 @@ return the flagged results? (default: TRUE)}
 
 \item{summary_csv}{Write a per-sample summary CSV (organism, topology,
 completeness, gene counts, reference, etc.) into the export directory?
-(default: TRUE)}
+Its `ref_comparison` column reads "compared sample <ID> to GenBank
+accession <accession>" for every sample whose reference was not flagged
+poor; GenBank no longer wants this in the FASTA header. (default: TRUE)}
 }
 \value{
 Invisibly, the list returned by [flag_PCG_outliers()] when `review`

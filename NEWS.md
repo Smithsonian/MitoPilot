@@ -22,6 +22,10 @@ Released TBD. Container: `macguigand/mitopilot:1.5.5`
 - The annotation details window has a **Sequence** section: the assembly's nucleotides with the annotated genes drawn in lanes above them and, for each protein-coding gene, its translated amino acids lined up under their codons. Click a gene in the table to jump to it; drag, scroll, or use the zoom buttons to move around; a circular assembly wraps through its origin. Every edit in the window (deleting, merging, moving a start or stop codon, linearizing, trimming) is reflected immediately.
 - Read depth and per-base error rate are drawn as tracks above the genes, each with its own visibility checkbox. The separate **Coverage Map** section is gone; the sequence viewer replaces it.
 
+### Export
+
+- The FASTA header no longer carries the `[note=annotation compared to GenBank accession ...]` field; GenBank no longer wants it. The reference is recorded instead in the export's `sample_info.csv`, in a new `ref_comparison` column that reads "compared sample <ID> to GenBank accession <accession>" (blank when the reference was flagged poor).
+
 ### Preprocessing
 
 - **Remove duplicate reads** checkbox in the Preprocess options runs fastp with `--dedup` instead of `--dont_eval_duplication`. Off by default; it lowers depth and rarely changes calls.
