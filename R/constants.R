@@ -172,7 +172,7 @@ MP_COL_NAMES <- c(
   assembly            = "Input Assembly File",
   pre_opts            = "Preprocess Opts.",
   assemble_opts       = "Assembly Opts.",
-  maptoref_ref        = "MapToRef ref",
+  maptoref_ref        = "MapToRef Ref",
   blast_opts          = "BLAST Opts.",
   find_mito_opts      = "Find Mito Opts.",
   circularize_opts    = "Circularize Opts.",
