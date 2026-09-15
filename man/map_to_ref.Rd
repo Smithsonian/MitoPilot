@@ -47,9 +47,10 @@ file path, a URL, or an NCBI nucleotide accession. An accession is
 downloaded from GenBank here; anything else means \code{ref} is already
 the staged reference file.}
 
-\item{mapper}{Read mapper: "bowtie2" or "bwa-mem". The first pass against
-the user's reference runs with relaxed seeding appended to the flags;
-later passes and the final pass use the flags as given.}
+\item{mapper}{Read mapper: "bowtie2", "bwa-mem", or "bwa-aln" (bwa aln plus
+sampe, for short or damaged reads such as ancient DNA). The first pass
+against the user's reference runs with relaxed seeding appended to the
+flags; later passes and the final pass use the flags as given.}
 }
 \value{
 invisibly TRUE on success, FALSE after writing the failure sentinel.

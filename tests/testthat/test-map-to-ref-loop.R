@@ -628,7 +628,7 @@ test_that("an unknown mapper writes the failure sentinel", {
   expect_false(ok)
   expect_true(file.exists(file.path(out, "T1_summary.txt")))
   expect_match(paste(readLines(file.path(out, "assembler.log.txt")), collapse = "\n"),
-               "mapper must be one of bowtie2, bwa-mem")
+               "mapper must be one of bowtie2, bwa-mem, bwa-aln")
 })
 
 test_that("bwa-mem runs the loop and logs the flags used per pass", {
@@ -646,4 +646,19 @@ test_that("bwa-mem runs the loop and logs the flags used per pass", {
   expect_true(any(grepl("bwa mem -t 1 .*\\| samtools view -b -F 4 - \\| samtools sort", log)))
   expect_false(any(grepl("bowtie2", log)))
   expect_true(file.exists(file.path(out, "maptoref", "final.bam.bai")))
+})
+
+test_that("bwa-aln runs the loop through aln and sampe", {
+  skip_on_os("windows")
+  d <- withr::local_tempdir()
+  s <- mtr_setup(d, reps = 1600L)
+  out <- file.path(d, "out")
+  ok <- map_to_ref("T1", s$ref, s$r1, s$r2, "-l 1024 -n 0.01 -o 2", "-d 3 --min-BQ 20", 5,
+                   "circular", 2, 1, out, mapper = "bwa-aln")
+  expect_true(ok)
+  log <- readLines(file.path(out, "assembler.log.txt"))
+  expect_true(any(grepl("^pass 1 \\(bwa-aln\\): -l 1024 -n 0.01 -o 2 -n 0.06 -o 2 -l 1024$", log)))
+  expect_true(any(grepl("^final pass \\(bwa-aln\\): -l 1024 -n 0.01 -o 2$", log)))
+  expect_true(any(grepl("bwa aln -t 1 .* && bwa aln -t 1 .* && bwa sampe .*\\| samtools view -b -F 4 - \\| samtools sort", log)))
+  expect_false(any(grepl("bwa mem", log)))
 })

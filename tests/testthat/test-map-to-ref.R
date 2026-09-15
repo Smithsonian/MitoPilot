@@ -396,8 +396,18 @@ test_that("new_db rejects an unknown mapper", {
   d <- withr::local_tempdir()
   expect_error(
     mtr_test_db(d, assembler = "MapToRef", maptoref_mapper = "hisat"),
-    "bowtie2 or bwa-mem"
+    "bowtie2, bwa-mem, or bwa-aln"
   )
+})
+
+test_that("new_db defaults bwa-aln to the ancient-DNA flags", {
+  d <- withr::local_tempdir()
+  db <- suppressWarnings(mtr_test_db(d, assembler = "MapToRef", maptoref_mapper = "bwa-aln"))
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  opts <- DBI::dbGetQuery(con, "SELECT maptoref_mapper, maptoref FROM assemble_opts")
+  expect_equal(opts$maptoref_mapper, "bwa-aln")
+  expect_equal(opts$maptoref, "-l 1024 -n 0.01 -o 2")
 })
 
 test_that("new_db warns for MapToRef without a reference", {

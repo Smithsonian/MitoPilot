@@ -77,6 +77,7 @@ assemble_server <- function(id) {
     register_tool_help("mitofinder", input, reopen = function() assemble_opts_modal(rv))
     register_tool_help("bowtie2", input)
     register_tool_help("bwa-mem", input)
+    register_tool_help("bwa-aln", input)
     register_tool_help("samtools-consensus", input)
     register_tool_help("blastn", input, reopen = function() blast_opts_modal(rv))
 
@@ -989,7 +990,7 @@ assemble_server <- function(id) {
     # other mapper's default.
     observeEvent(input$maptoref_mapper, {
       cur <- trimws(input$maptoref %||% "")
-      defaults <- c("bowtie2" = .mtr_default_bowtie2, "bwa-mem" = .mtr_default_bwa)
+      defaults <- .mtr_mapper_defaults
       if (cur %in% defaults) {
         updateTextInput(inputId = "maptoref",
                         value = defaults[[input$maptoref_mapper]])
@@ -1061,10 +1062,8 @@ assemble_server <- function(id) {
               maptoref_mapper = input$maptoref_mapper %||% "bowtie2",
               maptoref = if (nzchar(trimws(input$maptoref %||% ""))) {
                 input$maptoref
-              } else if (identical(input$maptoref_mapper, "bwa-mem")) {
-                .mtr_default_bwa
               } else {
-                .mtr_default_bowtie2
+                .mtr_mapper_defaults[[input$maptoref_mapper %||% "bowtie2"]]
               },
               maptoref_consensus = if (nzchar(trimws(input$maptoref_consensus %||% ""))) {
                 input$maptoref_consensus

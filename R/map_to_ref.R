@@ -339,9 +339,10 @@ maptoref_prepare_ref <- function(ref_file,
 #' @param ref Path to the reference (.gb or FASTA, one record).
 #' @param reads_1,reads_2 Preprocessed paired reads.
 #' @param bowtie2_opts Flags passed verbatim to the chosen mapper.
-#' @param mapper Read mapper: "bowtie2" or "bwa-mem". The first pass against
-#'   the user's reference runs with relaxed seeding appended to the flags;
-#'   later passes and the final pass use the flags as given.
+#' @param mapper Read mapper: "bowtie2", "bwa-mem", or "bwa-aln" (bwa aln plus
+#'   sampe, for short or damaged reads such as ancient DNA). The first pass
+#'   against the user's reference runs with relaxed seeding appended to the
+#'   flags; later passes and the final pass use the flags as given.
 #' @param consensus_opts Flags passed to samtools consensus after validation.
 #' @param iter_cap Maximum number of iteration passes.
 #' @param topology "circular" or "linear"; required for a FASTA reference,
@@ -418,14 +419,15 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   if (is.null(x) || length(x) == 0L || is.na(x[1])) "" else as.character(x[1])
 }
 
-.mtr_mappers <- c("bowtie2", "bwa-mem")
+.mtr_mappers <- c("bowtie2", "bwa-mem", "bwa-aln")
 
 # Relaxed seeding for the first pass only, appended after the user's flags so
 # it wins. Later passes map to the sample's own consensus, where the user's
 # stringency is right.
 .mtr_relaxed <- c(
   "bowtie2" = "-N 1 -L 15 -i S,1,0.25 --mp 4,2 --score-min G,10,6",
-  "bwa-mem" = "-k 15 -B 2 -T 20"
+  "bwa-mem" = "-k 15 -B 2 -T 20",
+  "bwa-aln" = "-n 0.06 -o 2 -l 1024"
 )
 
 #' @noRd
@@ -436,7 +438,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 
 #' @noRd
 .mtr_check_tools <- function(mapper) {
-  bins <- if (mapper == "bwa-mem") "bwa" else c("bowtie2", "bowtie2-build")
+  bins <- if (startsWith(mapper, "bwa")) "bwa" else c("bowtie2", "bowtie2-build")
   missing <- bins[!nzchar(Sys.which(bins))]
   if (length(missing)) {
     stop("mapper ", mapper, " needs ", paste(missing, collapse = " and "),
@@ -447,7 +449,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 
 #' @noRd
 .mtr_index_cmd <- function(mapper, ref_fa, idx) {
-  if (mapper == "bwa-mem") {
+  if (startsWith(mapper, "bwa")) {
     stringr::str_glue("bwa index -p {shQuote(idx)} {shQuote(ref_fa)}")
   } else {
     stringr::str_glue("bowtie2-build -q {shQuote(ref_fa)} {shQuote(idx)}")
@@ -461,6 +463,17 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   if (mapper == "bwa-mem") {
     cmd <- stringr::str_glue(
       "bwa mem -t {cpus} {opts} {shQuote(idx)} {shQuote(r1)} {shQuote(r2)} ",
+      "2>> {shQuote(log_fn)}")
+    if (drop_unal) cmd <- paste(cmd, "| samtools view -b -F 4 -")
+  } else if (mapper == "bwa-aln") {
+    # Two aln passes write .sai files beside the index, then sampe pairs them.
+    # The caller's pipe binds to sampe only.
+    sai1 <- paste0(idx, "_1.sai")
+    sai2 <- paste0(idx, "_2.sai")
+    cmd <- stringr::str_glue(
+      "bwa aln -t {cpus} {opts} {shQuote(idx)} {shQuote(r1)} > {shQuote(sai1)} 2>> {shQuote(log_fn)} && ",
+      "bwa aln -t {cpus} {opts} {shQuote(idx)} {shQuote(r2)} > {shQuote(sai2)} 2>> {shQuote(log_fn)} && ",
+      "bwa sampe {shQuote(idx)} {shQuote(sai1)} {shQuote(sai2)} {shQuote(r1)} {shQuote(r2)} ",
       "2>> {shQuote(log_fn)}")
     if (drop_unal) cmd <- paste(cmd, "| samtools view -b -F 4 -")
   } else {
