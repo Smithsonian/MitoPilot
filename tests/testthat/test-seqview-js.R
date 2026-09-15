@@ -304,3 +304,38 @@ test_that("unchecking Reads drops the lanes and stops requests", {
   n <- js(b, "window.__inputs.filter(function(i){return i.name==='sv-reads';}).length")
   expect_equal(n, 0)
 })
+
+test_that("a circular view over the origin asks for both sides and draws both", {
+  b <- sv_page()
+  js(b, "(function(){
+    window.__inputs = [];
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    window.__handlers.mpseq({id:'sv-canvas', unit:'S1', len:2000, topology:'circular', seq:seq, version:1, selected:null,
+      features:[], readsInput:'sv-reads', readsMaxBp:1000});
+    window.mpseq.goto('sv-canvas', 1);})()")
+  Sys.sleep(0.4)
+  r <- js(b, "(function(){
+    var req = window.__inputs.filter(function(i){return i.name==='sv-reads';});
+    var last = req[req.length-1];
+    // the reply echoes the unclamped window; positions stay in reference coordinates
+    window.__handlers.mpseq_reads({id:'sv-canvas', nonce:last.value.nonce, start:last.value.start, end:last.value.end,
+      reads:[{row:1,start:5,end:15,strand:'+'},{row:2,start:1985,end:1995,strand:'-'}],
+      mm:[], del:[], ins:[], nShown:2, nTotal:2});
+    var s = window.mpseq.state('sv-canvas');
+    var find = function (x) {
+      for (var y = 0; y < s.height; y++) {
+        var h = window.mpseq.hitTest('sv-canvas', x, y);
+        if (h && h.read) return h.read.start;
+      }
+      return null;
+    };
+    var xOf = function (pos) { return 60 + (pos - s.viewStart) * s.ppb; };
+    return JSON.stringify({req:last.value, n:req.length, viewStart:s.viewStart,
+      wrapped: find(xOf(2005)), plain: find(xOf(1990)), nReads:s.nReads});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$nReads, 2)
+  # the request crosses the origin, so it is not clamped to [1, len]
+  expect_true(s$req$start < 1 || s$req$end > 2000)
+  expect_equal(s$wrapped, 5)     # read at position 5 drawn past the origin
+  expect_equal(s$plain, 1985)
+})

@@ -278,6 +278,30 @@ test_that("maptoref_window_reads leaves a linear reference's behaviour unchanged
   expect_false(any(grepl("^rF$", out$reads$read)))
 })
 
+test_that("maptoref_merge_reads stacks the second half below the first", {
+  bam <- mtr_viz_bam()
+  w1 <- maptoref_window_reads(bam, 1L, 20L, mtr_viz_ref())
+  w2 <- maptoref_window_reads(bam, 21L, 45L, mtr_viz_ref())
+  out <- maptoref_merge_reads(w1, w2)
+  expect_equal(out$n_total, w1$n_total + w2$n_total)
+  expect_equal(out$n_shown, w1$n_shown + w2$n_shown)
+  expect_equal(nrow(out$reads), nrow(w1$reads) + nrow(w2$reads))
+  off <- max(w1$reads$row)
+  expect_equal(tail(out$reads$row, nrow(w2$reads)), w2$reads$row + off)
+  expect_equal(nrow(out$mm), nrow(w1$mm) + nrow(w2$mm))
+  # positions are untouched; only rows move
+  expect_setequal(out$reads$start, c(w1$reads$start, w2$reads$start))
+})
+
+test_that("maptoref_merge_reads leaves rows alone when the first half is empty", {
+  bam <- mtr_viz_bam()
+  w1 <- maptoref_window_reads(bam, 55L, 60L, mtr_viz_ref())
+  w2 <- maptoref_window_reads(bam, 1L, 20L, mtr_viz_ref())
+  out <- maptoref_merge_reads(w1, w2)
+  expect_equal(out$reads$row, w2$reads$row)
+  expect_equal(out$n_total, w2$n_total)
+})
+
 test_that("maptoref_window_reads returns an empty result for a missing BAM", {
   out <- maptoref_window_reads(file.path(tempdir(), "nope.bam"), 1L, 60L,
                                mtr_viz_ref())

@@ -169,7 +169,7 @@ test_that("map_to_ref publishes a circular consensus and the loop record", {
   expect_true(as.integer(sm[["passes_run"]]) < 5L)
 
   # A successful run drops the transients, keeps the loop record, and keeps
-  # final.bam for the pileup viewer.
+  # final.bam for the sequence viewer.
   expect_false(file.exists(file.path(out, "maptoref", "pass_1.bam")))
   expect_false(file.exists(file.path(out, "maptoref", "sub_R1.fq")))
   expect_true(file.exists(file.path(out, "maptoref", "final.bam")))

@@ -320,6 +320,30 @@ maptoref_window_reads <- function(bam, start, end, ref_seq,
   )
 }
 
+#' Merge the two halves of a read window that crosses a circular origin
+#'
+#' Pure. `w2` rows are pushed below `w1` so the two halves stack rather than
+#' overlap. Positions stay in reference coordinates; the viewer wraps them.
+#'
+#' @param w1,w2 lists as returned by `maptoref_window_reads()`
+#' @return one list of the same shape
+#'
+#' @noRd
+maptoref_merge_reads <- function(w1, w2) {
+  off <- if (nrow(w1$reads) > 0L) max(w1$reads$row) else 0L
+  bind <- function(field) {
+    b <- w2[[field]]
+    if (nrow(b) > 0L) b$row <- b$row + off
+    out <- rbind(w1[[field]], b)
+    rownames(out) <- NULL
+    out
+  }
+  list(
+    reads = bind("reads"), mm = bind("mm"), del = bind("del"), ins = bind("ins"),
+    n_shown = w1$n_shown + w2$n_shown, n_total = w1$n_total + w2$n_total
+  )
+}
+
 #' Widest view, in bases, at which the browser asks for read lanes.
 #' @noRd
 MTR_READS_MAX_BP <- 1000L

@@ -38,6 +38,8 @@ maptoref_viewer_server <- function(id, rv) {
       state$ref_now <- .mtr_ref_now(session$userData$con, rv$updating$ID)
       state$ref_seq <- maptoref_read_seq(p$ref_fasta)
       state$cons_seq <- maptoref_read_seq(p$consensus)
+      # The depth table is padded to the reference length, so this is the
+      # payload `len`.
       state$len <- nrow(state$depth)
       reads_note(NULL)
       version(isolate(version()) + 1L)
@@ -151,7 +153,7 @@ maptoref_viewer_server <- function(id, rv) {
       req(isTRUE(state$has_work), state$len > 0L)
       p <- maptoref_seqview_payload(
         state$depth, state$features, state$ref_seq, state$cons_seq,
-        unname(state$summary["reference_topology"]), rv$updating$ID, version()
+        unname(state$summary["reference_topology"]), isolate(rv$updating$ID), version()
       )
       p$id <- ns("canvas")
       if (has_bam()) p$readsInput <- ns("reads_req")
@@ -161,9 +163,21 @@ maptoref_viewer_server <- function(id, rv) {
     observeEvent(input$reads_req, {
       r <- input$reads_req
       req(state$len > 0L, has_bam())
-      start <- max(1L, as.integer(r$start))
-      end <- min(state$len, as.integer(r$end))
-      w <- maptoref_window_reads(state$paths$bam, start, end, state$ref_seq)
+      start <- as.integer(r$start)
+      end <- as.integer(r$end)
+      req(is.finite(start), is.finite(end), start <= end)
+      len <- state$len
+      rd <- function(a, b) maptoref_window_reads(state$paths$bam, a, b, state$ref_seq)
+      circular <- identical(unname(state$summary["reference_topology"]), "circular")
+      if (circular && start < 1L) {
+        w <- maptoref_merge_reads(rd(len + start, len), rd(1L, end))
+      } else if (circular && end > len) {
+        w <- maptoref_merge_reads(rd(start, len), rd(1L, end - len))
+      } else {
+        start <- max(1L, start)
+        end <- min(len, end)
+        w <- rd(start, end)
+      }
       reply <- maptoref_reads_reply(w, start, end, r$nonce)
       reply$id <- ns("canvas")
       session$sendCustomMessage("mpseq_reads", reply)

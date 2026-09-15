@@ -213,11 +213,12 @@
   Viewer.prototype.consOn = function () { return this.ntOn() && !!this.seq2; };
   Viewer.prototype.readsOn = function () { return this.showReads && !!this.readsInput && this.viewLen() <= this.readsMaxBp; };
   Viewer.prototype.readRows = function () { return this.readsOn() && this.reads ? this.reads.rows : 0; };
-  // Visible window clamped to the reference; wrapped positions on a circular
-  // unit are not requested (R clamps anyway), which also keeps cover checks stable.
+  // Visible window. On a circular unit it is left unclamped, so a view over the
+  // origin asks for both sides; R reads them and the reply echoes these values.
   Viewer.prototype.viewWindow = function () {
-    return { start: Math.max(1, Math.floor(this.viewStart)),
-             end: Math.min(this.len, Math.ceil(this.viewStart + this.viewLen())) };
+    var s = Math.floor(this.viewStart), e = Math.ceil(this.viewStart + this.viewLen());
+    if (this.topology === 'circular') return { start: s, end: e };
+    return { start: Math.max(1, s), end: Math.min(this.len, e) };
   };
   // Ask R for reads after the view settles; the request is padded to the full
   // reads window so small pans stay inside the last reply.
@@ -230,7 +231,9 @@
       var w = self.viewWindow();
       if (G.readsCover(self.readsWindow, w)) return;
       var pad = Math.max(0, Math.floor((self.readsMaxBp - (w.end - w.start + 1)) / 2));
-      var req = { start: Math.max(1, w.start - pad), end: Math.min(self.len, w.end + pad) };
+      var req = self.topology === 'circular'
+        ? { start: w.start - pad, end: w.end + pad }
+        : { start: Math.max(1, w.start - pad), end: Math.min(self.len, w.end + pad) };
       if (self.readsSent && self.readsSent.start === req.start && self.readsSent.end === req.end) return;
       self.readsSent = req; req.nonce = ++self.readsNonce;
       window.Shiny.setInputValue(self.readsInput, req, { priority: 'event' });
@@ -447,36 +450,43 @@
     var fwd = cssVar('--mp-type-rrna', '#5DA5DA') + '99', rev = cssVar('--mp-type-ctrl', '#FAA34A') + '99';
     var letter = this.ppb >= NT_LETTER, h = READ_H - 2;
     var top = function (row) { return y + (row - 1) * READ_H; };
-    c.textAlign = 'center'; c.textBaseline = 'middle';
-    this.reads.reads.forEach(function (r) {
-      var x0 = Math.max(GUTTER, self.x(r.start)), x1 = Math.min(W, self.x(r.end + 1));
-      if (x1 <= x0) return;
-      c.fillStyle = r.strand === '-' ? rev : fwd;
-      c.fillRect(x0, top(r.row), x1 - x0, h);
-      self.hits.push({ x0: x0, x1: x1, y0: top(r.row), y1: top(r.row) + h, read: r, row: r.row });
-    });
-    this.reads.del.forEach(function (d) {
-      var x0 = Math.max(GUTTER, self.x(d.start)), x1 = Math.min(W, self.x(d.end + 1)), ym = top(d.row) + h / 2;
-      if (x1 <= x0) return;
-      c.fillStyle = cssVar('--mp-surface', '#ffffff'); c.fillRect(x0, top(d.row), x1 - x0, h);
-      c.strokeStyle = '#555555'; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(x0, ym + 0.5); c.lineTo(x1, ym + 0.5); c.stroke();
-    });
-    if (this.ppb >= NT_BAR) {
-      c.font = '9px ' + mono;
-      this.reads.mm.forEach(function (m) {
-        var x = self.x(m.pos);
-        if (x + self.ppb < GUTTER || x > W) return;
-        c.fillStyle = BASE[m.base] || BASE.N; c.fillRect(x, top(m.row), Math.max(1, self.ppb), h);
-        if (letter) { c.fillStyle = '#000000'; c.fillText(m.base, x + self.ppb / 2, top(m.row) + h / 2); }
+    // A circular view over the origin draws each piece at every offset in view.
+    var ks = this.topology === 'circular' ? [-1, 0, 1] : [0];
+    ks.forEach(function (k) {
+      var off = k * self.len;
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      self.reads.reads.forEach(function (r) {
+        var x0 = Math.max(GUTTER, self.x(r.start + off)), x1 = Math.min(W, self.x(r.end + 1 + off));
+        if (x1 <= x0) return;
+        c.fillStyle = r.strand === '-' ? rev : fwd;
+        c.fillRect(x0, top(r.row), x1 - x0, h);
+        self.hits.push({ x0: x0, x1: x1, y0: top(r.row), y1: top(r.row) + h, read: r, row: r.row });
       });
-    }
-    c.font = '8px ' + mono; c.textAlign = 'left'; c.textBaseline = 'top';
-    this.reads.ins.forEach(function (i) {
-      var x = self.x(i.pos + 1);
-      if (x < GUTTER || x > W) return;
-      c.fillStyle = '#7b3fa0'; c.fillRect(x - 1, top(i.row), 2, h);
-      if (letter && i.len > 1) c.fillText(String(i.len), x + 2, top(i.row));
+      self.reads.del.forEach(function (d) {
+        var x0 = Math.max(GUTTER, self.x(d.start + off)), x1 = Math.min(W, self.x(d.end + 1 + off));
+        var ym = top(d.row) + h / 2;
+        if (x1 <= x0) return;
+        c.fillStyle = cssVar('--mp-surface', '#ffffff'); c.fillRect(x0, top(d.row), x1 - x0, h);
+        c.strokeStyle = '#555555'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(x0, ym + 0.5); c.lineTo(x1, ym + 0.5); c.stroke();
+      });
+      if (self.ppb >= NT_BAR) {
+        c.font = '9px ' + mono;
+        self.reads.mm.forEach(function (m) {
+          var x = self.x(m.pos + off);
+          var x0 = Math.max(GUTTER, x), x1 = Math.min(W, x + self.ppb);
+          if (x1 <= x0) return;
+          c.fillStyle = BASE[m.base] || BASE.N; c.fillRect(x0, top(m.row), Math.max(1, x1 - x0), h);
+          if (letter) { c.fillStyle = '#000000'; c.fillText(m.base, x + self.ppb / 2, top(m.row) + h / 2); }
+        });
+      }
+      c.font = '8px ' + mono; c.textAlign = 'left'; c.textBaseline = 'top';
+      self.reads.ins.forEach(function (i) {
+        var x = self.x(i.pos + 1 + off);
+        if (x < GUTTER || x > W) return;
+        c.fillStyle = '#7b3fa0'; c.fillRect(x - 1, top(i.row), 2, h);
+        if (letter && i.len > 1) c.fillText(String(i.len), x + 2, top(i.row));
+      });
     });
     c.font = '12px ' + mono; c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a');
     c.textAlign = 'right'; c.textBaseline = 'middle';
