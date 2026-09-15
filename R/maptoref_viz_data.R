@@ -121,7 +121,8 @@ maptoref_read_seq <- function(path) {
 .mtr_cigar_walk <- function(pos, cigar, seq, ref) {
   n <- as.integer(regmatches(cigar, gregexpr("[0-9]+", cigar))[[1]])
   op <- regmatches(cigar, gregexpr("[MIDNSHP=X]", cigar))[[1]]
-  refv <- strsplit(ref, "", fixed = TRUE)[[1]]
+  # ref may arrive pre-split (one vector shared by every read in a window)
+  refv <- if (length(ref) == 1L) strsplit(ref, "", fixed = TRUE)[[1]] else ref
   qv <- strsplit(toupper(as.character(seq)), "", fixed = TRUE)[[1]]
   rp <- as.integer(pos)
   qp <- 1L
@@ -273,8 +274,10 @@ maptoref_window_reads <- function(bam, start, end, ref_seq,
     return(empty)
   }
 
+  refv <- strsplit(ref_seq, "", fixed = TRUE)[[1]]
+  seqs <- as.character(hit$seq)
   walks <- lapply(seq_len(n_total), function(i) {
-    .mtr_cigar_walk(hit$pos[i], hit$cigar[i], hit$seq[i], ref_seq)
+    .mtr_cigar_walk(hit$pos[i], hit$cigar[i], seqs[i], refv)
   })
   spans <- data.frame(
     read = as.character(hit$qname),

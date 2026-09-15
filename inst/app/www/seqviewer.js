@@ -376,16 +376,20 @@
     c.fillStyle = cssVar('--mp-surface-alt', '#f5f5f5'); c.fillRect(GUTTER, y, W - GUTTER, h);
     for (var px = GUTTER; px < W; px++) {
       var a = Math.floor(this.viewStart + (px - GUTTER) / this.ppb), b = Math.floor(this.viewStart + (px + 1 - GUTTER) / this.ppb);
-      var v = null;
+      var v = null, gap = false;
       for (var lin = a; lin <= b; lin++) {
         var bp = this.baseAt(lin); if (!bp) continue;
-        var d = vals[bp.pos - 1]; if (d !== null && d !== undefined && (v === null || d > v)) v = d;
+        var d = vals[bp.pos - 1]; if (d === null || d === undefined) continue;
+        if (v === null || d > v) v = d;
+        if (d === 0) gap = true;
       }
       if (v === null) continue;
-      if (!flag && v === 0) { c.fillStyle = muted; c.fillRect(px, y + h - 2, 1, 2); continue; }
+      // a column holding any uncovered base gets a full-height red wash, so
+      // gaps survive the per-column max at whole-genome zoom
+      if (!flag && gap) { c.fillStyle = 'rgba(217, 83, 79, 0.35)'; c.fillRect(px, y, 1, h); }
       var bh = Math.min(h, Math.round(v / vmax * h));
       c.fillStyle = flag && v > ERR_FLAG ? red : base;
-      c.fillRect(px, y + h - bh, 1, bh);
+      if (bh > 0) c.fillRect(px, y + h - bh, 1, bh);
     }
     c.strokeStyle = cssVar('--mp-border', '#ccc'); c.beginPath(); c.moveTo(GUTTER, y + h + 0.5); c.lineTo(W, y + h + 0.5); c.stroke();
     if (flag) { c.save(); c.strokeStyle = red; c.setLineDash([2, 3]); var fy = y + h - ERR_FLAG / vmax * h;
