@@ -98,6 +98,8 @@ maptoref_viewer_server <- function(id, rv) {
         div(
           class = "mp-seqview",
           tags$canvas(id = ns("canvas"), class = "mp-seqview-canvas"),
+          tags$div(class = "mp-seqview-reads", hidden = NA,
+                   tags$canvas(id = ns("reads"), class = "mp-seqview-canvas")),
           tags$div(id = ns("tip"), class = "mp-maptoref-tip", hidden = NA)
         )
       )

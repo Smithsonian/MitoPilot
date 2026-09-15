@@ -339,3 +339,34 @@ test_that("a circular view over the origin asks for both sides and draws both", 
   expect_equal(s$wrapped, 5)     # read at position 5 drawn past the origin
   expect_equal(s$plain, 1985)
 })
+
+test_that("a reads panel takes the lanes out of the main canvas and sizes itself", {
+  b <- sv_page()
+  js(b, "(function(){
+    window.__inputs = [];
+    var wrap = document.getElementById('sv-canvas').parentElement;
+    var box = document.createElement('div'); box.className = 'mp-seqview-reads'; box.hidden = true;
+    var rc = document.createElement('canvas'); rc.id = 'sv-reads'; box.appendChild(rc); wrap.appendChild(box);
+    var old = document.getElementById('sv-canvas'); var fresh = document.createElement('canvas'); fresh.id = 'sv-canvas';
+    wrap.replaceChild(fresh, old);
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    window.__handlers.mpseq({id:'sv-canvas', unit:'S1', len:2000, topology:'linear', seq:seq, version:1, selected:null, features:[],
+      readsInput:'sv-reads-req', readsMaxBp:1000});
+    window.mpseq.goto('sv-canvas', 500);})()")
+  Sys.sleep(0.4)
+  r <- js(b, "(function(){
+    var req = window.__inputs.filter(function(i){return i.name==='sv-reads-req';}); var last = req[req.length-1];
+    var h0 = window.mpseq.state('sv-canvas').height, hidden0 = document.querySelector('.mp-seqview-reads').hidden;
+    window.__handlers.mpseq_reads({id:'sv-canvas', nonce:last.value.nonce, start:last.value.start, end:last.value.end,
+      reads:[{row:1,start:400,end:600,strand:'+'},{row:2,start:450,end:650,strand:'-'}], mm:[], del:[], ins:[], nShown:2, nTotal:2});
+    var s = window.mpseq.state('sv-canvas');
+    var hit = window.mpseq.hitTest('sv-canvas', 60 + (500 - s.viewStart) * s.ppb, 2 + 12 + 5);
+    return JSON.stringify({h0:h0, h1:s.height, hidden0:hidden0, hidden1:document.querySelector('.mp-seqview-reads').hidden,
+      panelH:s.readsPanelH, rows:s.readRows, mainHit: hit && hit.row});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$h1, s$h0)
+  expect_true(s$hidden0); expect_false(s$hidden1)
+  expect_equal(s$panelH, 2 * 12 + 4)
+  expect_equal(s$rows, 2)
+  expect_null(s$mainHit)
+})

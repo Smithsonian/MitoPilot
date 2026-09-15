@@ -907,3 +907,10 @@ a.mp-link:focus-visible {
   cursor: grab;
 }
 .mp-seqview-canvas:active { cursor: grabbing; }
+/* Read lanes scroll in their own box so the tracks above stay in view. */
+.mp-seqview-reads {
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 1px solid var(--mp-border);
+}
+.mp-seqview-reads .mp-seqview-canvas { cursor: default; }

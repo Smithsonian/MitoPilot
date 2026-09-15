@@ -131,6 +131,10 @@
     this.showNt = true; this.showAa = true; this.showCov = true; this.showErr = true;
     this.depth = null; this.err = null; this.depthMax = 0; this.errMax = 0;
     this.hits = []; this.aaRows = [];
+    // Optional second canvas for the read lanes, in its own scrolling box.
+    this.readsCanvas = document.getElementById(id.replace(/-canvas$/, '-reads'));
+    this.readsWrap = this.readsCanvas ? this.readsCanvas.parentElement : null;
+    this.readHits = [];
     this.bindControls();
     var self = this;
     if (window.ResizeObserver) new ResizeObserver(function () { self.draw(); }).observe(this.wrap);
@@ -255,7 +259,7 @@
   Viewer.prototype.height = function () {
     var pcgs = this.showAa && this.ppb >= AA_MIN ? this.aaRows.length : 0;
     var nt = (this.ntOn() ? NT_H : 0) + (this.consOn() ? NT_H : 0);
-    var rd = this.readRows() ? this.readRows() * READ_H + PAD : 0;
+    var rd = this.readRows() && !this.readsCanvas ? this.readRows() * READ_H + PAD : 0;
     return this.topH() + this.nLanes * LANE_H + PAD + nt + pcgs * AA_H + rd + PAD;
   };
   Viewer.prototype.draw = function () {
@@ -286,7 +290,21 @@
     if (this.ntOn()) { this.drawNt(c, y, this.seq, this.seqLabel, null); y += NT_H; }
     if (this.consOn()) { this.drawNt(c, y, this.seq2, this.seq2Label, this.seq); y += NT_H; }
     this.aaRows.forEach(function (f) { this.drawAa(c, f, y); y += AA_H; }, this);
-    if (this.readsOn()) { if (this.reads) this.drawReads(c, y); this.requestReads(); }
+    if (this.readsCanvas) this.drawReadsPanel(W, dpr);
+    else if (this.readsOn() && this.reads) this.drawReads(c, y, this.hits);
+    if (this.readsOn()) this.requestReads();
+  };
+  Viewer.prototype.drawReadsPanel = function (W, dpr) {
+    var rows = this.readRows(), H = rows * READ_H + PAD;
+    this.readsWrap.hidden = !rows;
+    this.readHits = [];
+    if (!rows) return;
+    this.readsCanvas.width = W * dpr; this.readsCanvas.height = H * dpr;
+    this.readsCanvas.style.height = H + 'px';
+    var c = this.readsCanvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.font = '12px ' + cssVar('--mp-font-mono', 'monospace');
+    this.drawReads(c, PAD / 2, this.readHits);
   };
   Viewer.prototype.drawRuler = function (c, W) {
     var step = niceStep(90 / this.ppb), vs = this.viewStart, ve = vs + this.viewLen();
@@ -449,7 +467,7 @@
     }
   };
 
-  Viewer.prototype.drawReads = function (c, y) {
+  Viewer.prototype.drawReads = function (c, y, hits) {
     var W = this.wrap.clientWidth, self = this, mono = cssVar('--mp-font-mono', 'monospace');
     var fwd = cssVar('--mp-type-rrna', '#5DA5DA') + '99', rev = cssVar('--mp-type-ctrl', '#FAA34A') + '99';
     var letter = this.ppb >= NT_LETTER, h = READ_H - 2;
@@ -464,7 +482,7 @@
         if (x1 <= x0) return;
         c.fillStyle = r.strand === '-' ? rev : fwd;
         c.fillRect(x0, top(r.row), x1 - x0, h);
-        self.hits.push({ x0: x0, x1: x1, y0: top(r.row), y1: top(r.row) + h, read: r, row: r.row });
+        hits.push({ x0: x0, x1: x1, y0: top(r.row), y1: top(r.row) + h, read: r, row: r.row });
       });
       self.reads.del.forEach(function (d) {
         var x0 = Math.max(GUTTER, self.x(d.start + off)), x1 = Math.min(W, self.x(d.end + 1 + off));
@@ -498,9 +516,10 @@
   };
 
   // ---- interaction ----
-  Viewer.prototype.hitTest = function (px, py) {
-    for (var i = this.hits.length - 1; i >= 0; i--) {
-      var h = this.hits[i];
+  Viewer.prototype.hitTest = function (px, py, hits) {
+    hits = hits || this.hits;
+    for (var i = hits.length - 1; i >= 0; i--) {
+      var h = hits[i];
       if (px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1) return h;
     }
     return null;
@@ -535,9 +554,9 @@
       if (!dragging.moved) self.click(e.clientX - rect.left, e.clientY - rect.top);
       dragging = null;
     });
-    cv.addEventListener('mousemove', function (e) {
+    var hover = function (e, cv, hits) {
       var rect = cv.getBoundingClientRect(), px = e.clientX - rect.left, py = e.clientY - rect.top;
-      var h = self.hitTest(px, py), b = self.baseAt(self.viewStart + (px - GUTTER) / self.ppb);
+      var h = self.hitTest(px, py, hits), b = self.baseAt(self.viewStart + (px - GUTTER) / self.ppb);
       if (!self.tip) return;
       if (!b) { self.tip.hidden = true; return; }
       var t = 'Position ' + b.pos.toLocaleString() + ', ' + b.base;
@@ -553,10 +572,19 @@
       }
       self.tip.textContent = t; self.tip.hidden = false;
       var tw = self.tip.offsetWidth, th = self.tip.offsetHeight;
+      // the tip is positioned in the shared wrapper; the reads canvas sits
+      // lower and may be scrolled inside its box
+      var yOff = cv === self.readsCanvas ? cv.offsetTop - self.readsWrap.scrollTop : 0;
       self.tip.style.left = Math.max(0, Math.min(px + 12, cv.clientWidth - tw)) + 'px';
-      self.tip.style.top = (py + 12 + th > cv.clientHeight ? py - th - 8 : py + 12) + 'px';
-    });
-    cv.addEventListener('mouseleave', function () { if (self.tip) self.tip.hidden = true; });
+      self.tip.style.top = (yOff + (py + 12 + th > cv.clientHeight ? py - th - 8 : py + 12)) + 'px';
+    };
+    var hide = function () { if (self.tip) self.tip.hidden = true; };
+    cv.addEventListener('mousemove', function (e) { hover(e, cv, self.hits); });
+    cv.addEventListener('mouseleave', hide);
+    if (this.readsCanvas) {
+      this.readsCanvas.addEventListener('mousemove', function (e) { hover(e, self.readsCanvas, self.readHits); });
+      this.readsCanvas.addEventListener('mouseleave', hide);
+    }
     sec.querySelectorAll('[data-mpseq]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var a = btn.getAttribute('data-mpseq');
@@ -602,6 +630,7 @@
     return { len: v.len, version: v.version, topology: v.topology, viewStart: v.viewStart, ppb: v.ppb, selected: v.selected, height: v.height(),
              seq2Len: v.seq2.length,
              readsWindow: v.readsWindow, nReads: v.reads ? v.reads.reads.length : 0, readRows: v.readRows(),
+             readsPanelH: v.readsCanvas ? (v.readsWrap.hidden ? 0 : parseInt(v.readsCanvas.style.height, 10) || 0) : null,
              nLanes: v.nLanes, features: v.feats.map(function (f) { return { row: f.row, gene: f.gene, pos1: f.pos1, pos2: f.pos2, lane: f.lane }; }) };
   };
   window.mpseq.zoom = function (id, f) { var v = get(id); if (v) v.zoom(f); };
