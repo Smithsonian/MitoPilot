@@ -293,16 +293,6 @@ test_that(".mtr_cigar_walk handles a read folded back past position 1", {
   expect_true(is.null(w$mm) || all(w$mm$pos >= 1L))
 })
 
-test_that(".mtr_zero_runs merges adjacent gaps and pads short ones", {
-  expect_null(.mtr_zero_runs(integer(0)))
-  r <- .mtr_zero_runs(c(5:9, 20L))
-  expect_equal(nrow(r), 2L)
-  expect_equal(r$xmin, c(4.5, 19.5))
-  expect_equal(r$xmax, c(9.5, 20.5))
-  padded <- .mtr_zero_runs(20L, min_w = 11)
-  expect_equal(padded$xmax - padded$xmin, 11)
-})
-
 test_that("maptoref_seqview_payload maps features and indexes depth by position", {
   depth <- data.frame(Position = c(1L, 2L, 4L), Depth = c(5, 0, 9))
   feats <- data.frame(

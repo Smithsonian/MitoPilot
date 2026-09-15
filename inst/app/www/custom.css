@@ -833,8 +833,7 @@ a.mp-link:focus-visible {
 
 
 /* ------------------------------------------------------------------ */
-/* MapToRef coverage and pileup viewer                                 */
-/* (R/app_assemble_maptoref_viewer.R).                                 */
+/* MapToRef sequence viewer section (R/app_assemble_maptoref_viewer.R). */
 /* ------------------------------------------------------------------ */
 
 /* One more section of the assembly-details window, separated by a rule
@@ -870,25 +869,6 @@ a.mp-link:focus-visible {
   color: var(--mp-warning);
 }
 
-.mp-maptoref-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--mp-space-2);
-  align-items: flex-end;
-  margin: var(--mp-space-2) 0 var(--mp-space-1);
-}
-
-/* Shiny gives every input a 15px bottom margin; inside the control row
-   the caption below supplies the spacing instead. */
-.mp-maptoref-controls .form-group {
-  margin-bottom: 0;
-}
-
-/* Anchors the hover tooltip, which is positioned from the plot origin. */
-.mp-maptoref-plot {
-  position: relative;
-}
-
 .mp-maptoref-tip {
   position: absolute;
   z-index: 100;
@@ -900,47 +880,6 @@ a.mp-link:focus-visible {
   padding: var(--mp-space-1) var(--mp-space-2);
   font-size: var(--mp-fs-meta);
   box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
-}
-
-/* Fixed label gutter, then the strip that scrolls sideways under it. */
-.mp-maptoref-pileup {
-  display: flex;
-  align-items: flex-start;
-}
-
-.mp-maptoref-pileup-col {
-  flex: 1;
-  min-width: 0;
-}
-
-.mp-maptoref-scrollbar {
-  overflow-x: scroll;
-  overflow-y: hidden;
-  width: 100%;
-  height: 16px;
-}
-
-.mp-maptoref-scrollpane {
-  overflow-x: scroll;
-  overflow-y: hidden;
-  width: 100%;
-}
-
-/* Both strips keep a visible bar, so "there is more to the side" shows. */
-.mp-maptoref-scrollbar,
-.mp-maptoref-scrollpane {
-  scrollbar-width: thin;
-}
-
-.mp-maptoref-scrollbar::-webkit-scrollbar,
-.mp-maptoref-scrollpane::-webkit-scrollbar {
-  height: 10px;
-}
-
-.mp-maptoref-scrollbar::-webkit-scrollbar-thumb,
-.mp-maptoref-scrollpane::-webkit-scrollbar-thumb {
-  background-color: var(--mp-border);
-  border-radius: 5px;
 }
 
 /* ------------------------------------------------------------------ */
