@@ -2,6 +2,10 @@
 .mtr_default_bowtie2 <- "--very-sensitive-local"
 .mtr_default_consensus <- "-d 3 --min-BQ 20"
 .mtr_default_bwa <- ""
+# The usual ancient-DNA settings: no seed, relaxed edit distance, more gaps.
+.mtr_default_bwa_aln <- "-l 1024 -n 0.01 -o 2"
+.mtr_mapper_defaults <- c("bowtie2" = .mtr_default_bowtie2, "bwa-mem" = .mtr_default_bwa,
+                          "bwa-aln" = .mtr_default_bwa_aln)
 
 #' Initialize a new project database
 #'
@@ -55,8 +59,8 @@
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
 #'   Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
 #' @param mitofinder Default MitoFinder command line options
-#' @param maptoref_mapper MapToRef read mapper, "bowtie2" or "bwa-mem"
-#'   (default = "bowtie2")
+#' @param maptoref_mapper MapToRef read mapper, "bowtie2", "bwa-mem", or
+#'   "bwa-aln" (default = "bowtie2")
 #' @param maptoref Default mapper options for MapToRef
 #'   (default = "--very-sensitive-local")
 #' @param maptoref_consensus Default samtools consensus options for MapToRef
@@ -154,10 +158,10 @@ new_db <- function(
     stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder, MapToRef]")
   }
   if (!maptoref_mapper %in% .mtr_mappers) {
-    stop("maptoref_mapper must be bowtie2 or bwa-mem")
+    stop("maptoref_mapper must be bowtie2, bwa-mem, or bwa-aln")
   }
-  if (missing(maptoref) && maptoref_mapper == "bwa-mem") {
-    maptoref <- .mtr_default_bwa
+  if (missing(maptoref)) {
+    maptoref <- .mtr_mapper_defaults[[maptoref_mapper]]
   }
   if (grepl("['\"]", paste0(maptoref, maptoref_consensus))) {
     stop("maptoref and maptoref_consensus must not contain quote characters")

@@ -92,8 +92,8 @@ Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.
 
 \item{mitofinder}{Default MitoFinder command line options}
 
-\item{maptoref_mapper}{MapToRef read mapper, "bowtie2" or "bwa-mem"
-(default = "bowtie2")}
+\item{maptoref_mapper}{MapToRef read mapper, "bowtie2", "bwa-mem", or
+"bwa-aln" (default = "bowtie2")}
 
 \item{maptoref}{Default mapper options for MapToRef
 (default = "--very-sensitive-local")}

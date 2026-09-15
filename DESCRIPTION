@@ -52,7 +52,6 @@ Imports:
     Rsamtools,
     RSQLite,
     rstudioapi,
-    scales,
     htmltools,
     shiny,
     shinyjs,

@@ -374,12 +374,14 @@ assemble_opts_modal <- function(rv = NULL, session = getDefaultReactiveDomain())
         selectInput(
           ns("maptoref_mapper"),
           label = "MapToRef mapper:",
-          choices = c("bowtie2", "bwa-mem"),
+          choices = c("bowtie2", "bwa-mem", "bwa-aln"),
           selected = current$maptoref_mapper %||% "bowtie2",
           width = "100%"
         ) |> shinyjs::disabled() |>
           tagAppendChild(opts_help(
-            "Read mapper for every pass. The first pass, against your ",
+            "Read mapper for every pass. bowtie2 and bwa-mem suit modern ",
+            "reads; bwa-aln suits short or damaged reads (ancient DNA, ",
+            "degraded museum tissue). The first pass, against your ",
             "reference, runs with relaxed seeding added to the options below ",
             "so a distant reference still recruits reads; later passes map to ",
             "the sample's own consensus with the options as given.",
@@ -1219,6 +1221,11 @@ assemble_table_status <- function(n_visible, n_total, n_selected, noun = "sample
   "bwa-mem" = list(
     text = c("Flags passed to bwa mem on every pass. Empty (default) uses bwa's ",
              "own defaults; for example -B 2 -T 20 for a distant reference."),
+    href = "https://bio-bwa.sourceforge.net/bwa.shtml"),
+  "bwa-aln" = list(
+    text = c("Flags passed to bwa aln on every pass (bwa sampe pairs the ",
+             "mates). Default -l 1024 -n 0.01 -o 2 disables seeding and ",
+             "relaxes the edit distance, the usual ancient-DNA settings."),
     href = "https://bio-bwa.sourceforge.net/bwa.shtml")
 )
 
