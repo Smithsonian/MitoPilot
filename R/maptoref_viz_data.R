@@ -89,22 +89,6 @@ maptoref_read_summary <- function(path) {
   vapply(split(val, key), paste, character(1), collapse = " | ")
 }
 
-#' Downsample a depth series, keeping the peak of each bin
-#'
-#' The whole-reference view would otherwise draw one point per base. Taking the
-#' maximum rather than the mean keeps spikes and single-base dropouts visible.
-#' @noRd
-maptoref_bin_depth <- function(depth, n = 2000L) {
-  if (nrow(depth) <= n) {
-    return(depth)
-  }
-  bin <- ceiling(seq_len(nrow(depth)) / (nrow(depth) / n))
-  data.frame(
-    Position = as.integer(tapply(depth$Position, bin, min)),
-    Depth = as.numeric(tapply(depth$Depth, bin, max))
-  )
-}
-
 #' First FASTA record as one uppercase string
 #' @noRd
 maptoref_read_seq <- function(path) {
@@ -333,5 +317,73 @@ maptoref_window_reads <- function(bam, start, end, ref_seq,
     ins = bind("ins", c("row", "pos", "len")),
     n_shown = nrow(spans),
     n_total = n_total
+  )
+}
+
+#' Widest view, in bases, at which the browser asks for read lanes.
+#' @noRd
+MTR_READS_MAX_BP <- 1000L
+
+#' Sequence viewer payload for a MapToRef sample (tools/maptoref_seqview_spec.md, 4.1)
+#'
+#' Pure. GenBank feature types are mapped onto the annotation table's colour
+#' tokens where one exists; other types fall through to the viewer's grey.
+#' The consensus is only sent when it lies base for base over the reference.
+#' @noRd
+maptoref_seqview_payload <- function(depth, features, ref_seq, cons_seq,
+                                     topology, unit, version) {
+  seq <- toupper(as.character(ref_seq)[1])
+  if (is.na(seq)) seq <- ""
+  len <- nchar(seq)
+  if (len == 0L) len <- nrow(depth)
+  type_map <- c(CDS = "PCG", "D-loop" = "CTRL")
+  feats <- lapply(seq_len(nrow(features)), function(i) {
+    ty <- as.character(features$type[i])
+    list(
+      row = i,
+      type = if (ty %in% names(type_map)) unname(type_map[ty]) else ty,
+      gene = as.character(features$gene[i]),
+      pos1 = as.integer(features$start[i]),
+      pos2 = as.integer(features$end[i]),
+      dir = as.character(features$strand[i]),
+      partial5 = FALSE, partial3 = FALSE, notes = ""
+    )
+  })
+  out <- list(
+    unit = unit, len = as.integer(len),
+    topology = if (identical(topology, "circular")) "circular" else "linear",
+    seq = seq, seqLabel = "Reference", seq2Label = "Consensus",
+    version = as.integer(version), features = feats,
+    readsMaxBp = MTR_READS_MAX_BP
+  )
+  cons <- toupper(as.character(cons_seq)[1])
+  if (!is.na(cons) && nchar(cons) == len && nchar(seq) > 0L) out$seq2 <- cons
+  if (is.data.frame(depth) && nrow(depth) > 0L && len > 0L) {
+    out$depth <- as.integer(depth$Depth[match(seq_len(len), depth$Position)])
+  }
+  out
+}
+
+#' Reads reply for the sequence viewer (tools/maptoref_seqview_spec.md, 4.3)
+#'
+#' Pure. Frames become lists of rows because Shiny serialises a data.frame
+#' column-wise. Read names are not sent.
+#' @noRd
+maptoref_reads_reply <- function(w, start, end, nonce) {
+  rows <- function(df, cols) {
+    df <- df[, cols, drop = FALSE]
+    lapply(seq_len(nrow(df)), function(i) {
+      lapply(as.list(df[i, , drop = FALSE]), function(v) {
+        if (is.factor(v)) as.character(v) else v
+      })
+    })
+  }
+  list(
+    nonce = nonce, start = as.integer(start), end = as.integer(end),
+    reads = rows(w$reads, c("row", "start", "end", "strand")),
+    mm = rows(w$mm, c("row", "pos", "base")),
+    del = rows(w$del, c("row", "start", "end")),
+    ins = rows(w$ins, c("row", "pos", "len")),
+    nShown = as.integer(w$n_shown), nTotal = as.integer(w$n_total)
   )
 }

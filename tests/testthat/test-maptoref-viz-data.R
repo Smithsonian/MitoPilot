@@ -97,26 +97,6 @@ test_that("maptoref_read_summary returns nothing when absent", {
   expect_length(maptoref_read_summary(file.path(tempdir(), "nope.txt")), 0L)
 })
 
-test_that("maptoref_bin_depth leaves a short series alone", {
-  d <- data.frame(Position = 1:10, Depth = as.numeric(1:10))
-  expect_identical(maptoref_bin_depth(d, n = 2000L), d)
-})
-
-test_that("maptoref_bin_depth keeps spikes and respects the point cap", {
-  d <- data.frame(Position = 1:1000, Depth = rep(1, 1000))
-  d$Depth[c(137, 851)] <- 999
-  out <- maptoref_bin_depth(d, n = 100L)
-  expect_lte(nrow(out), 100L)
-  expect_equal(max(out$Depth), 999)
-  expect_equal(sum(out$Depth == 999), 2L)
-  expect_false(is.unsorted(out$Position))
-})
-
-test_that("maptoref_bin_depth returns zero rows for zero rows", {
-  d <- data.frame(Position = integer(0), Depth = numeric(0))
-  expect_equal(nrow(maptoref_bin_depth(d, n = 100L)), 0L)
-})
-
 test_that("maptoref_read_seq reads and uppercases the first record", {
   pr <- mtr_viz_project()
   p <- maptoref_paths(pr$dir_out, pr$id, pr$opts)
@@ -321,4 +301,80 @@ test_that(".mtr_zero_runs merges adjacent gaps and pads short ones", {
   expect_equal(r$xmax, c(9.5, 20.5))
   padded <- .mtr_zero_runs(20L, min_w = 11)
   expect_equal(padded$xmax - padded$xmin, 11)
+})
+
+test_that("maptoref_seqview_payload maps features and indexes depth by position", {
+  depth <- data.frame(Position = c(1L, 2L, 4L), Depth = c(5, 0, 9))
+  feats <- data.frame(
+    type = c("CDS", "tRNA", "D-loop", "misc_feature"),
+    gene = c("ND1", "trnQ", "D-loop", "x"),
+    start = c(1L, 2L, 3L, 4L), end = c(2L, 3L, 4L, 4L),
+    strand = c("+", "-", "+", "+"), stringsAsFactors = FALSE
+  )
+  p <- maptoref_seqview_payload(depth, feats, "acgt", "ACGA", "circular", "S1", 3L)
+  expect_equal(p$len, 4L)
+  expect_equal(p$seq, "ACGT")
+  expect_equal(p[["seq2"]], "ACGA")
+  expect_equal(p$topology, "circular")
+  expect_equal(p$version, 3L)
+  expect_equal(p$seqLabel, "Reference")
+  expect_equal(p$seq2Label, "Consensus")
+  expect_equal(p$readsMaxBp, 1000L)
+  expect_equal(vapply(p$features, function(f) f$type, ""), c("PCG", "tRNA", "CTRL", "misc_feature"))
+  expect_equal(vapply(p$features, function(f) f$row, 1L), 1:4)
+  expect_equal(p$features[[2]]$pos1, 2L)
+  expect_equal(p$features[[2]]$pos2, 3L)
+  expect_equal(p$features[[2]]$dir, "-")
+  expect_false(p$features[[1]]$partial5)
+  expect_equal(p$features[[1]]$notes, "")
+  expect_equal(p$depth, c(5L, 0L, NA, 9L))
+  expect_null(p[["input"]])
+  expect_null(p[["readsInput"]])
+})
+
+test_that("maptoref_seqview_payload drops a consensus whose length differs", {
+  depth <- data.frame(Position = 1:4, Depth = rep(1, 4))
+  feats <- maptoref_read_features(file.path(tempdir(), "nope.csv"))
+  p <- maptoref_seqview_payload(depth, feats, "ACGT", "ACG", "linear", "S1", 1L)
+  expect_null(p[["seq2"]])
+  expect_length(p$features, 0L)
+  p2 <- maptoref_seqview_payload(depth, feats, "ACGT", NA_character_, "linear", "S1", 1L)
+  expect_null(p2[["seq2"]])
+  p3 <- maptoref_seqview_payload(depth, feats, "ACGT", "ACGT", NA_character_, "S1", 1L)
+  expect_equal(p3$topology, "linear")
+})
+
+test_that("maptoref_seqview_payload falls back to the depth length without a reference", {
+  depth <- data.frame(Position = 1:4, Depth = rep(1, 4))
+  feats <- maptoref_read_features(file.path(tempdir(), "nope.csv"))
+  p <- maptoref_seqview_payload(depth, feats, NA_character_, NA_character_, "linear", "S1", 1L)
+  expect_equal(p$len, 4L)
+  expect_equal(p$seq, "")
+  expect_equal(p$depth, rep(1L, 4))
+})
+
+test_that("maptoref_reads_reply turns the reader's frames into row lists", {
+  bam <- mtr_viz_bam()
+  w <- maptoref_window_reads(bam, 1L, 60L, mtr_viz_ref())
+  r <- maptoref_reads_reply(w, 1L, 60L, 7)
+  expect_equal(r$nonce, 7)
+  expect_equal(r$start, 1L)
+  expect_equal(r$end, 60L)
+  expect_equal(r$nShown, 5L)
+  expect_equal(r$nTotal, 5L)
+  expect_length(r$reads, 5L)
+  expect_setequal(names(r$reads[[1]]), c("row", "start", "end", "strand"))
+  expect_type(r$reads[[1]]$strand, "character")
+  expect_equal(r$mm[[1]]$pos, 25L)
+  expect_equal(r$mm[[1]]$base, "T")
+  expect_equal(r$del[[1]]$start, 35L)
+  expect_equal(r$ins[[1]]$len, 2L)
+})
+
+test_that("maptoref_reads_reply sends empty arrays for an empty window", {
+  w <- maptoref_window_reads(file.path(tempdir(), "nope.bam"), 1L, 60L, mtr_viz_ref())
+  r <- maptoref_reads_reply(w, 1L, 60L, 1)
+  expect_equal(r$reads, list())
+  expect_equal(r$mm, list())
+  expect_equal(r$nTotal, 0L)
 })
