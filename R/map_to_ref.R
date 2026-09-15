@@ -59,7 +59,7 @@ maptoref_prepare_ref <- function(ref_file,
   amb <- nchar(gsub("[ACGT]", "", ref$seq))
   if (amb > 0.01 * ref$length) {
     notes <- c(notes, paste0(
-      "Reference has ", amb, " ambiguous bases (", round(100 * amb / ref$length, 1),
+      "Reference has ", amb, " ambiguous base(s) (", round(100 * amb / ref$length, 1),
       "%); mapping is weaker there."))
   }
   gc_int <- suppressWarnings(as.integer(genetic_code))
