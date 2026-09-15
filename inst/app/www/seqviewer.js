@@ -94,7 +94,7 @@
   'use strict';
   var G = window.mpseq.geom;
   var MAX_PPB = 14, NT_LETTER = 8, NT_BAR = 3, AA_MIN = 4;
-  var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4, COV_H = 60, ERR_H = 36, GAP = 12;
+  var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4, COV_H = 60, ERR_H = 36, GAP = 12, READ_H = 12;
   var ERR_FLAG = 0.05;
   // Same shades as the BLAST synteny zoom (app_annotate_details.R base_color)
   // and msaR's zappo scheme in the alignment viewer.
@@ -124,6 +124,8 @@
     this.section = this.canvas.closest('details, .mp-maptoref');
     this.len = 0; this.seq = ''; this.feats = []; this.topology = 'linear';
     this.seq2 = ''; this.seqLabel = 'nt'; this.seq2Label = 'Consensus';
+    this.showReads = true; this.readsInput = null; this.readsMaxBp = 1000;
+    this.reads = null; this.readsWindow = null; this.readsTimer = null; this.readsNonce = 0; this.readsSent = null;
     this.version = null; this.selected = null; this.nLanes = 0;
     this.viewStart = 1; this.ppb = 1;
     this.showNt = true; this.showAa = true; this.showCov = true; this.showErr = true;
@@ -140,6 +142,8 @@
     this.unit = p.unit; this.len = p.len; this.seq = p.seq || ''; this.topology = p.topology;
     this.version = p.version; this.input = p.input;
     this.seq2 = p.seq2 || ''; this.seqLabel = p.seqLabel || 'nt'; this.seq2Label = p.seq2Label || 'Consensus';
+    this.readsInput = p.readsInput || null; this.readsMaxBp = p.readsMaxBp || 1000;
+    if (!sameSeq) { this.reads = null; this.readsWindow = null; this.readsSent = null; }
     this.feats = (p.features || []).map(function (f) { return Object.assign({}, f); });
     this.nLanes = G.lanes(this.feats, this.len);
     this.depth = p.depth || null; this.err = p.err || null;
@@ -207,6 +211,40 @@
   Viewer.prototype.errOn = function () { return this.showErr && !!this.err; };
   Viewer.prototype.ntOn = function () { return this.showNt && this.ppb >= NT_BAR; };
   Viewer.prototype.consOn = function () { return this.ntOn() && !!this.seq2; };
+  Viewer.prototype.readsOn = function () { return this.showReads && !!this.readsInput && this.viewLen() <= this.readsMaxBp; };
+  Viewer.prototype.readRows = function () { return this.readsOn() && this.reads ? this.reads.rows : 0; };
+  // Visible window clamped to the reference; wrapped positions on a circular
+  // unit are not requested (R clamps anyway), which also keeps cover checks stable.
+  Viewer.prototype.viewWindow = function () {
+    return { start: Math.max(1, Math.floor(this.viewStart)),
+             end: Math.min(this.len, Math.ceil(this.viewStart + this.viewLen())) };
+  };
+  // Ask R for reads after the view settles; the request is padded to the full
+  // reads window so small pans stay inside the last reply.
+  Viewer.prototype.requestReads = function () {
+    var self = this;
+    if (G.readsCover(this.readsWindow, this.viewWindow())) return;
+    clearTimeout(this.readsTimer);
+    this.readsTimer = setTimeout(function () {
+      if (!self.readsOn() || !window.Shiny) return;
+      var w = self.viewWindow();
+      if (G.readsCover(self.readsWindow, w)) return;
+      var pad = Math.max(0, Math.floor((self.readsMaxBp - (w.end - w.start + 1)) / 2));
+      var req = { start: Math.max(1, w.start - pad), end: Math.min(self.len, w.end + pad) };
+      if (self.readsSent && self.readsSent.start === req.start && self.readsSent.end === req.end) return;
+      self.readsSent = req; req.nonce = ++self.readsNonce;
+      window.Shiny.setInputValue(self.readsInput, req, { priority: 'event' });
+    }, 150);
+  };
+  Viewer.prototype.loadReads = function (p) {
+    if (p.nonce !== this.readsNonce) return;
+    var rows = 0;
+    (p.reads || []).forEach(function (r) { if (r.row > rows) rows = r.row; });
+    this.reads = { reads: p.reads || [], mm: p.mm || [], del: p.del || [], ins: p.ins || [],
+                   rows: rows, nShown: p.nShown, nTotal: p.nTotal };
+    this.readsWindow = { start: p.start, end: p.end };
+    this.draw();
+  };
   Viewer.prototype.topH = function () {
     return RULER_H + PAD + (this.covOn() ? COV_H + GAP : 0) + (this.errOn() ? ERR_H + GAP : 0);
   };
@@ -214,11 +252,13 @@
   Viewer.prototype.height = function () {
     var pcgs = this.showAa && this.ppb >= AA_MIN ? this.aaRows.length : 0;
     var nt = (this.ntOn() ? NT_H : 0) + (this.consOn() ? NT_H : 0);
-    return this.topH() + this.nLanes * LANE_H + PAD + nt + pcgs * AA_H + PAD;
+    var rd = this.readRows() ? this.readRows() * READ_H + PAD : 0;
+    return this.topH() + this.nLanes * LANE_H + PAD + nt + pcgs * AA_H + rd + PAD;
   };
   Viewer.prototype.draw = function () {
     if (!this.len || !this.canvas.offsetParent) return;
     this.clamp();
+    if (!this.readsOn()) { this.reads = null; this.readsWindow = null; this.readsSent = null; clearTimeout(this.readsTimer); }
     var dpr = window.devicePixelRatio || 1, W = this.wrap.clientWidth;
     this.aaRows = this.showAa && this.ppb >= AA_MIN
       ? this.feats.filter(function (f) { return f.type === 'PCG' && f.translation !== undefined && this.segments(f).length; }, this)
@@ -239,6 +279,7 @@
     if (this.ntOn()) { this.drawNt(c, y, this.seq, this.seqLabel, null); y += NT_H; }
     if (this.consOn()) { this.drawNt(c, y, this.seq2, this.seq2Label, this.seq); y += NT_H; }
     this.aaRows.forEach(function (f) { this.drawAa(c, f, y); y += AA_H; }, this);
+    if (this.readsOn()) { if (this.reads) this.drawReads(c, y); this.requestReads(); }
   };
   Viewer.prototype.drawRuler = function (c, W) {
     var step = niceStep(90 / this.ppb), vs = this.viewStart, ve = vs + this.viewLen();
@@ -397,6 +438,47 @@
     }
   };
 
+  Viewer.prototype.drawReads = function (c, y) {
+    var W = this.wrap.clientWidth, self = this, mono = cssVar('--mp-font-mono', 'monospace');
+    var fwd = cssVar('--mp-type-rrna', '#5DA5DA') + '99', rev = cssVar('--mp-type-ctrl', '#FAA34A') + '99';
+    var letter = this.ppb >= NT_LETTER, h = READ_H - 2;
+    var top = function (row) { return y + (row - 1) * READ_H; };
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    this.reads.reads.forEach(function (r) {
+      var x0 = Math.max(GUTTER, self.x(r.start)), x1 = Math.min(W, self.x(r.end + 1));
+      if (x1 <= x0) return;
+      c.fillStyle = r.strand === '-' ? rev : fwd;
+      c.fillRect(x0, top(r.row), x1 - x0, h);
+      self.hits.push({ x0: x0, x1: x1, y0: top(r.row), y1: top(r.row) + h, read: r, row: r.row });
+    });
+    this.reads.del.forEach(function (d) {
+      var x0 = Math.max(GUTTER, self.x(d.start)), x1 = Math.min(W, self.x(d.end + 1)), ym = top(d.row) + h / 2;
+      if (x1 <= x0) return;
+      c.fillStyle = cssVar('--mp-surface', '#ffffff'); c.fillRect(x0, top(d.row), x1 - x0, h);
+      c.strokeStyle = '#555555'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(x0, ym + 0.5); c.lineTo(x1, ym + 0.5); c.stroke();
+    });
+    if (this.ppb >= NT_BAR) {
+      c.font = '9px ' + mono;
+      this.reads.mm.forEach(function (m) {
+        var x = self.x(m.pos);
+        if (x + self.ppb < GUTTER || x > W) return;
+        c.fillStyle = BASE[m.base] || BASE.N; c.fillRect(x, top(m.row), Math.max(1, self.ppb), h);
+        if (letter) { c.fillStyle = '#000000'; c.fillText(m.base, x + self.ppb / 2, top(m.row) + h / 2); }
+      });
+    }
+    c.font = '8px ' + mono; c.textAlign = 'left'; c.textBaseline = 'top';
+    this.reads.ins.forEach(function (i) {
+      var x = self.x(i.pos + 1);
+      if (x < GUTTER || x > W) return;
+      c.fillStyle = '#7b3fa0'; c.fillRect(x - 1, top(i.row), 2, h);
+      if (letter && i.len > 1) c.fillText(String(i.len), x + 2, top(i.row));
+    });
+    c.font = '12px ' + mono; c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a');
+    c.textAlign = 'right'; c.textBaseline = 'middle';
+    c.fillText('reads', GUTTER - 6, y + h / 2);
+  };
+
   // ---- interaction ----
   Viewer.prototype.hitTest = function (px, py) {
     for (var i = this.hits.length - 1; i >= 0; i--) {
@@ -407,8 +489,8 @@
   };
   Viewer.prototype.click = function (px, py) {
     var h = this.hitTest(px, py);
-    this.selected = h ? h.f.row : null;
-    if (h && this.input && window.Shiny) {
+    this.selected = h && h.f ? h.f.row : null;
+    if (h && h.f && this.input && window.Shiny) {
       window.Shiny.setInputValue(this.input, { row: h.f.row, nonce: Date.now() }, { priority: 'event' });
     }
     this.draw();
@@ -444,8 +526,13 @@
       if (self.depth && self.depth[b.pos - 1] !== null) t += ' | depth ' + self.depth[b.pos - 1];
       if (self.seq2) { var c2 = self.seq2.charAt(b.pos - 1); if (c2 && c2 !== b.base) t += ' | consensus ' + c2; }
       if (self.err && self.err[b.pos - 1] !== null) t += ', error ' + (self.err[b.pos - 1] * 100).toFixed(1) + '%';
-      if (h) t += ' | ' + h.f.gene + (h.codon !== undefined ? ' codon ' + (h.codon + 1) + ' ' + h.letter : ' (' + h.f.type + ')');
-      if (h && typeof h.f.notes === 'string' && h.f.notes) t += ' | ' + h.f.notes;
+      if (h && h.f) t += ' | ' + h.f.gene + (h.codon !== undefined ? ' codon ' + (h.codon + 1) + ' ' + h.letter : ' (' + h.f.type + ')');
+      if (h && h.f && typeof h.f.notes === 'string' && h.f.notes) t += ' | ' + h.f.notes;
+      if (h && h.read) {
+        t += ' | read ' + h.read.strand + ' ' + h.read.start.toLocaleString() + '-' + h.read.end.toLocaleString();
+        var mm = self.reads && self.reads.mm.find(function (m) { return m.row === h.row && m.pos === b.pos; });
+        if (mm) t += ' mismatch ' + mm.base;
+      }
       self.tip.textContent = t; self.tip.hidden = false;
       var tw = self.tip.offsetWidth, th = self.tip.offsetHeight;
       self.tip.style.left = Math.max(0, Math.min(px + 12, cv.clientWidth - tw)) + 'px';
@@ -460,9 +547,9 @@
       });
     });
     var go = document.getElementById(prefix + '-goto');
-    [['show_nt', 'showNt'], ['show_aa', 'showAa'], ['show_cov', 'showCov'], ['show_err', 'showErr']].forEach(function (pair) {
+    [['show_nt', 'showNt'], ['show_aa', 'showAa'], ['show_cov', 'showCov'], ['show_err', 'showErr'], ['show_reads', 'showReads']].forEach(function (pair) {
       var box = document.getElementById(prefix + '-' + pair[0]);
-      if (box) box.addEventListener('change', function () { self[pair[1]] = box.checked; self.draw(); });
+      if (box) { self[pair[1]] = box.checked; box.addEventListener('change', function () { self[pair[1]] = box.checked; self.draw(); }); }
     });
     if (go) go.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var v = parseInt(go.value, 10); if (v >= 1 && v <= self.len) self.goto(v); } });
   };
@@ -474,13 +561,18 @@
     return viewers[id] || (viewers[id] = new Viewer(id));
   }
   if (window.Shiny) {
-    window.Shiny.addCustomMessageHandler('mpseq', function (p) { var v = get(p.id); if (v) v.load(p); });
+    window.Shiny.addCustomMessageHandler('mpseq', function (p) {
+      var v = get(p.id);
+      if (v) v.load(p); else setTimeout(function () { var w = get(p.id); if (w) w.load(p); }, 250);
+    });
     window.Shiny.addCustomMessageHandler('mpseq_select', function (p) { var v = get(p.id); if (v) v.fit(p.row); });
+    window.Shiny.addCustomMessageHandler('mpseq_reads', function (p) { var v = get(p.id); if (v) v.loadReads(p); });
   }
   window.mpseq.state = function (id) {
     var v = viewers[id]; if (!v) return null;
     return { len: v.len, version: v.version, topology: v.topology, viewStart: v.viewStart, ppb: v.ppb, selected: v.selected, height: v.height(),
              seq2Len: v.seq2.length,
+             readsWindow: v.readsWindow, nReads: v.reads ? v.reads.reads.length : 0, readRows: v.readRows(),
              nLanes: v.nLanes, features: v.feats.map(function (f) { return { row: f.row, gene: f.gene, pos1: f.pos1, pos2: f.pos2, lane: f.lane }; }) };
   };
   window.mpseq.zoom = function (id, f) { var v = get(id); if (v) v.zoom(f); };

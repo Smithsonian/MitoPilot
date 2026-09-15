@@ -244,3 +244,63 @@ test_that("a second sequence adds one row at letter zoom and none when nucleotid
   expect_equal(s$h2, s$h0 - 20)
   expect_equal(s$h3, s$h0 - 20)
 })
+
+test_that("reads mode requests a window under the cap, draws the reply, and clears on zoom out", {
+  b <- sv_page()
+  js(b, "(function(){
+    window.__inputs = [];
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    window.__handlers.mpseq({id:'sv-canvas', unit:'S1', len:2000, topology:'linear', seq:seq, version:1, selected:null, features:[],
+      seq2:seq, seqLabel:'Reference', seq2Label:'Consensus', readsInput:'sv-reads', readsMaxBp:1000});
+    window.mpseq.whole('sv-canvas');
+    window.mpseq.goto('sv-canvas', 500);})()")
+  Sys.sleep(0.4)
+  r <- js(b, "(function(){
+    var req = window.__inputs.filter(function(i){return i.name==='sv-reads';});
+    var last = req[req.length-1];
+    var h0 = window.mpseq.state('sv-canvas').height;
+    window.__handlers.mpseq_reads({id:'sv-canvas', nonce: 999, start:1, end:1000, reads:[{row:1,start:1,end:900,strand:'+'}], mm:[], del:[], ins:[], nShown:1, nTotal:1});
+    var stale = window.mpseq.state('sv-canvas').nReads;
+    window.__handlers.mpseq_reads({id:'sv-canvas', nonce: last.value.nonce, start: last.value.start, end: last.value.end,
+      reads:[{row:1,start:400,end:600,strand:'+'},{row:2,start:450,end:650,strand:'-'},{row:3,start:500,end:520,strand:'+'}],
+      mm:[{row:2,pos:500,base:'T'}], del:[{row:1,start:410,end:412}], ins:[{row:3,pos:505,len:2}], nShown:3, nTotal:3});
+    var s = window.mpseq.state('sv-canvas'), h1 = s.height;
+    var hit = window.mpseq.hitTest('sv-canvas', 60 + (500 - s.viewStart) * s.ppb, h1 - 15);
+    var n0 = req.length;
+    window.mpseq.goto('sv-canvas', 520);
+    var n1 = window.__inputs.filter(function(i){return i.name==='sv-reads';}).length;
+    window.mpseq.whole('sv-canvas');
+    var s2 = window.mpseq.state('sv-canvas');
+    return JSON.stringify({n0:n0, req:last.value, h0:h0, h1:h1, stale:stale, nReads:s.nReads, rows:s.readRows, win:s.readsWindow,
+      hitRow: hit && hit.row, n1:n1, cleared:s2.nReads, h2:s2.height});})()")
+  Sys.sleep(0.4)
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$n0, 1)
+  expect_lte(s$req$end - s$req$start + 1, 1000)
+  expect_lte(s$req$start, 500); expect_gte(s$req$end, 500)
+  expect_equal(s$stale, 0)
+  expect_equal(s$nReads, 3); expect_equal(s$rows, 3)
+  expect_equal(s$h1 - s$h0, 3 * 12 + 4)
+  expect_equal(s$win$start, s$req$start)
+  expect_equal(s$hitRow, 3)
+  expect_equal(s$n1, s$n0)          # the reply covers the small pan; no new request
+  expect_equal(s$cleared, 0)
+  expect_lt(s$h2, s$h1)
+  # zooming out past the cap sends nothing more
+  n2 <- js(b, "window.__inputs.filter(function(i){return i.name==='sv-reads';}).length")
+  expect_equal(n2, 1)
+})
+
+test_that("unchecking Reads drops the lanes and stops requests", {
+  b <- sv_page()
+  js(b, "(function(){
+    window.__inputs = [];
+    var seq = Array(2000).join('ACGT').slice(0, 2000);
+    var box = document.getElementById('sv-show_reads'); box.checked = false; box.dispatchEvent(new Event('change'));
+    window.__handlers.mpseq({id:'sv-canvas', unit:'S1', len:2000, topology:'linear', seq:seq, version:1, selected:null, features:[],
+      readsInput:'sv-reads', readsMaxBp:1000});
+    window.mpseq.goto('sv-canvas', 500);})()")
+  Sys.sleep(0.4)
+  n <- js(b, "window.__inputs.filter(function(i){return i.name==='sv-reads';}).length")
+  expect_equal(n, 0)
+})
