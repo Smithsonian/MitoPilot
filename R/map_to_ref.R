@@ -819,13 +819,14 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   # that is only partly recovered still reports its uncalled fraction.
   n_count <- nchar(gsub("[^N]", "", full_seq))
   n_pct <- round(100 * n_count / ref$length, 1)
+  # Listed first: the uncalled fraction is the number people look for.
   if (n_count > 0.50 * ref$length) {
-    notes <- c(notes, paste0(
+    notes <- c(paste0(
       n_pct, "% of the reference is N; the reference may be too divergent for ",
-      "this sample."))
+      "this sample."), notes)
   } else if (n_count > 0.02 * ref$length) {
-    notes <- c(notes, paste0(
-      n_pct, "% of the reference could not be called (N)."))
+    notes <- c(paste0(
+      n_pct, "% of the reference could not be called (N)."), notes)
   }
 
   # Gated on the published topology, so a downgraded assembly is trimmed too.

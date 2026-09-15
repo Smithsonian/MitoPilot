@@ -204,5 +204,8 @@ maptoref_viewer_server <- function(id, rv) {
     # The viewer hides this note whenever it stops drawing reads, so it must
     # keep rendering while hidden.
     outputOptions(output, "note", suspendWhenHidden = FALSE)
+    # The view renders in the same flush that sends the payload, so the canvas
+    # is already in place when the message arrives.
+    outputOptions(output, "view", suspendWhenHidden = FALSE)
   })
 }
