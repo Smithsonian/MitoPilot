@@ -385,7 +385,7 @@
       c.beginPath(); c.moveTo(GUTTER, fy + 0.5); c.lineTo(W, fy + 0.5); c.stroke(); c.restore(); }
     c.fillStyle = muted; c.textAlign = 'right';
     c.textBaseline = 'top'; c.fillText(flag ? (vmax * 100).toFixed(0) + '%' : String(vmax), GUTTER - 6, y);
-    c.textBaseline = 'bottom'; c.fillText(label, GUTTER - 6, y + h);
+    c.textBaseline = 'bottom'; c.fillText(label, GUTTER - 6, y + h, GUTTER - 10);
   };
   // One sequence row. With `ref`, each base is classed against the reference
   // (diffOverlay): mismatches get an amber outline, N a grey tile, "-" a hatch.
@@ -413,12 +413,12 @@
     }
     c.lineWidth = 1;
     c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a'); c.textAlign = 'right';
-    c.fillText(label, GUTTER - 6, y + NT_H / 2);
+    c.fillText(label, GUTTER - 6, y + NT_H / 2, GUTTER - 10);
   };
   Viewer.prototype.drawAa = function (c, f, y) {
     var n = G.nCodons(f, this.len), vs = this.viewStart, ve = vs + this.viewLen();
     c.textAlign = 'right'; c.textBaseline = 'middle'; c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a');
-    c.fillText(f.gene, GUTTER - 6, y + AA_H / 2);
+    c.fillText(f.gene, GUTTER - 6, y + AA_H / 2, GUTTER - 10);
     c.textAlign = 'center';
     var ks = this.topology === 'circular' ? [-1, 0, 1] : [0];
     for (var i = 0; i < n; i++) {
@@ -476,7 +476,7 @@
     });
     c.font = '12px ' + mono; c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a');
     c.textAlign = 'right'; c.textBaseline = 'middle';
-    c.fillText('reads', GUTTER - 6, y + h / 2);
+    c.fillText('reads', GUTTER - 6, y + h / 2, GUTTER - 10);
   };
 
   // ---- interaction ----
