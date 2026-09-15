@@ -210,3 +210,37 @@ test_that("coverage and error tracks add height above the lanes and toggle off",
   expect_equal(s$h2, s$h0 + 36 + 12)
   expect_equal(s$h3, s$h0)
 })
+
+test_that("diffOverlay classes each consensus base and readsCover checks containment", {
+  b <- sv_page()
+  r <- js(b, "(function(){var g=window.mpseq.geom;
+    return JSON.stringify({d: g.diffOverlay('ACGTA', 'AGGN-'),
+      c1: g.readsCover(null, {start:1,end:5}), c2: g.readsCover({start:1,end:10}, {start:2,end:9}),
+      c3: g.readsCover({start:1,end:10}, {start:2,end:11}), c4: g.readsCover({start:1,end:10}, {start:1,end:10})});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$d, c("same", "mismatch", "same", "n", "gap"))
+  expect_false(s$c1); expect_true(s$c2); expect_false(s$c3); expect_true(s$c4)
+})
+
+test_that("a second sequence adds one row at letter zoom and none when nucleotides are off", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var seq = Array(2000).join('ACGT').slice(0, 2000), seq2 = seq.slice(0, 1000) + 'N' + seq.slice(1001);
+    var base = {id:'sv-canvas', unit:'S1', len:2000, topology:'linear', seq:seq, version:1, selected:null, features:[]};
+    window.__handlers.mpseq(base); window.mpseq.goto('sv-canvas', 1000);
+    var h0 = window.mpseq.state('sv-canvas').height;
+    window.__handlers.mpseq(Object.assign({seq2:seq2, seqLabel:'Reference', seq2Label:'Consensus'}, base));
+    window.mpseq.goto('sv-canvas', 1000);
+    var s1 = window.mpseq.state('sv-canvas'), h1 = s1.height;
+    window.mpseq.whole('sv-canvas'); var h2 = window.mpseq.state('sv-canvas').height;
+    window.mpseq.goto('sv-canvas', 1000);
+    var box = document.getElementById('sv-show_nt'); box.checked = false; box.dispatchEvent(new Event('change'));
+    var h3 = window.mpseq.state('sv-canvas').height;
+    box.checked = true; box.dispatchEvent(new Event('change'));
+    return JSON.stringify({h0:h0, h1:h1, h2:h2, h3:h3, seq2Len:s1.seq2Len});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$h1 - s$h0, 20)
+  expect_equal(s$seq2Len, 2000)
+  expect_equal(s$h2, s$h0 - 20)
+  expect_equal(s$h3, s$h0 - 20)
+})

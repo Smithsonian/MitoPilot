@@ -69,10 +69,25 @@
     return { start: seg[0] >= vs, end: seg[1] <= ve };
   }
 
+  // Per-base class of a consensus string b laid over a reference string a.
+  function diffOverlay(a, b) {
+    var out = [];
+    for (var i = 0; i < b.length; i++) {
+      var y = b.charAt(i), x = a.charAt(i);
+      out.push(y === 'N' ? 'n' : y === '-' ? 'gap' : y !== x ? 'mismatch' : 'same');
+    }
+    return out;
+  }
+  // Whether a reads reply covering `have` already covers the wanted window.
+  function readsCover(have, want) {
+    return !!have && have.start <= want.start && have.end >= want.end;
+  }
+
   window.mpseq = window.mpseq || {};
   window.mpseq.geom = { span: span, wraps: wraps, lanes: lanes, nCodons: nCodons,
                         codonCentre: codonCentre, stopLetter: stopLetter,
-                        partialEdge: partialEdge, segOwns: segOwns };
+                        partialEdge: partialEdge, segOwns: segOwns,
+                        diffOverlay: diffOverlay, readsCover: readsCover };
 })();
 
 (function () {
@@ -106,8 +121,9 @@
     this.canvas = document.getElementById(id);
     this.wrap = this.canvas.parentElement;
     this.tip = document.getElementById(id.replace(/-canvas$/, '-tip'));
-    this.section = this.canvas.closest('details');
+    this.section = this.canvas.closest('details, .mp-maptoref');
     this.len = 0; this.seq = ''; this.feats = []; this.topology = 'linear';
+    this.seq2 = ''; this.seqLabel = 'nt'; this.seq2Label = 'Consensus';
     this.version = null; this.selected = null; this.nLanes = 0;
     this.viewStart = 1; this.ppb = 1;
     this.showNt = true; this.showAa = true; this.showCov = true; this.showErr = true;
@@ -123,6 +139,7 @@
     var sameSeq = (this.version === p.version && this.len === p.len);
     this.unit = p.unit; this.len = p.len; this.seq = p.seq || ''; this.topology = p.topology;
     this.version = p.version; this.input = p.input;
+    this.seq2 = p.seq2 || ''; this.seqLabel = p.seqLabel || 'nt'; this.seq2Label = p.seq2Label || 'Consensus';
     this.feats = (p.features || []).map(function (f) { return Object.assign({}, f); });
     this.nLanes = G.lanes(this.feats, this.len);
     this.depth = p.depth || null; this.err = p.err || null;
@@ -188,13 +205,16 @@
   // ---- drawing ----
   Viewer.prototype.covOn = function () { return this.showCov && !!this.depth; };
   Viewer.prototype.errOn = function () { return this.showErr && !!this.err; };
+  Viewer.prototype.ntOn = function () { return this.showNt && this.ppb >= NT_BAR; };
+  Viewer.prototype.consOn = function () { return this.ntOn() && !!this.seq2; };
   Viewer.prototype.topH = function () {
     return RULER_H + PAD + (this.covOn() ? COV_H + GAP : 0) + (this.errOn() ? ERR_H + GAP : 0);
   };
   Viewer.prototype.laneY = function (lane) { return this.topH() + lane * LANE_H; };
   Viewer.prototype.height = function () {
     var pcgs = this.showAa && this.ppb >= AA_MIN ? this.aaRows.length : 0;
-    return this.topH() + this.nLanes * LANE_H + PAD + (this.showNt && this.ppb >= NT_BAR ? NT_H : 0) + pcgs * AA_H + PAD;
+    var nt = (this.ntOn() ? NT_H : 0) + (this.consOn() ? NT_H : 0);
+    return this.topH() + this.nLanes * LANE_H + PAD + nt + pcgs * AA_H + PAD;
   };
   Viewer.prototype.draw = function () {
     if (!this.len || !this.canvas.offsetParent) return;
@@ -216,7 +236,8 @@
     if (this.errOn()) { this.drawTrack(c, W, y, ERR_H, this.err, Math.max(this.errMax, ERR_FLAG * 2), 'error', true); y += ERR_H + GAP; }
     this.drawJoins(c); this.drawLanes(c);
     y = this.topH() + this.nLanes * LANE_H + PAD;
-    if (this.showNt && this.ppb >= NT_BAR) { this.drawNt(c, y); y += NT_H; }
+    if (this.ntOn()) { this.drawNt(c, y, this.seq, this.seqLabel, null); y += NT_H; }
+    if (this.consOn()) { this.drawNt(c, y, this.seq2, this.seq2Label, this.seq); y += NT_H; }
     this.aaRows.forEach(function (f) { this.drawAa(c, f, y); y += AA_H; }, this);
   };
   Viewer.prototype.drawRuler = function (c, W) {
@@ -313,6 +334,7 @@
         var d = vals[bp.pos - 1]; if (d !== null && d !== undefined && (v === null || d > v)) v = d;
       }
       if (v === null) continue;
+      if (!flag && v === 0) { c.fillStyle = muted; c.fillRect(px, y + h - 2, 1, 2); continue; }
       var bh = Math.min(h, Math.round(v / vmax * h));
       c.fillStyle = flag && v > ERR_FLAG ? red : base;
       c.fillRect(px, y + h - bh, 1, bh);
@@ -324,18 +346,33 @@
     c.textBaseline = 'top'; c.fillText(flag ? (vmax * 100).toFixed(0) + '%' : String(vmax), GUTTER - 6, y);
     c.textBaseline = 'bottom'; c.fillText(label, GUTTER - 6, y + h);
   };
-  Viewer.prototype.drawNt = function (c, y) {
+  // One sequence row. With `ref`, each base is classed against the reference
+  // (diffOverlay): mismatches get an amber outline, N a grey tile, "-" a hatch.
+  Viewer.prototype.drawNt = function (c, y, seq, label, ref) {
     var vs = Math.floor(this.viewStart), ve = Math.ceil(this.viewStart + this.viewLen());
+    var letter = this.ppb >= NT_LETTER, w = Math.max(1, this.ppb - (letter ? 1 : 0));
+    var warn = cssVar('--mp-warning', '#8a5a00');
     c.textAlign = 'center'; c.textBaseline = 'middle';
     for (var lin = vs; lin <= ve; lin++) {
       var b = this.baseAt(lin); if (!b) continue;
-      var x = this.x(lin), col = BASE[b.base] || BASE.N;
-      c.fillStyle = col + (this.ppb >= NT_LETTER ? '99' : 'cc');
-      c.fillRect(x, y + 2, Math.max(1, this.ppb - (this.ppb >= NT_LETTER ? 1 : 0)), NT_H - 4);
-      if (this.ppb >= NT_LETTER) { c.fillStyle = '#000000'; c.fillText(b.base, x + this.ppb / 2, y + NT_H / 2); }
+      var ch = seq.charAt(b.pos - 1) || 'N';
+      var cls = ref ? G.diffOverlay(ref.charAt(b.pos - 1), ch)[0] : 'same';
+      var x = this.x(lin), col = cls === 'n' ? BASE.N : BASE[ch] || BASE.N;
+      if (cls === 'gap') {
+        c.save(); c.beginPath(); c.rect(x, y + 2, w, NT_H - 4); c.clip();
+        c.strokeStyle = BASE.N; c.lineWidth = 1; c.beginPath();
+        for (var d = 0; d < w + NT_H; d += 4) { c.moveTo(x + d, y + 2); c.lineTo(x + d - NT_H, y + NT_H - 2); }
+        c.stroke(); c.restore();
+      } else {
+        c.fillStyle = col + (letter ? '99' : 'cc');
+        c.fillRect(x, y + 2, w, NT_H - 4);
+      }
+      if (cls === 'mismatch') { c.lineWidth = 2; c.strokeStyle = warn; c.strokeRect(x + 1, y + 3, w - 2, NT_H - 6); }
+      if (letter && cls !== 'gap') { c.fillStyle = '#000000'; c.fillText(ch, x + this.ppb / 2, y + NT_H / 2); }
     }
+    c.lineWidth = 1;
     c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a'); c.textAlign = 'right';
-    c.fillText('nt', GUTTER - 6, y + NT_H / 2);
+    c.fillText(label, GUTTER - 6, y + NT_H / 2);
   };
   Viewer.prototype.drawAa = function (c, f, y) {
     var n = G.nCodons(f, this.len), vs = this.viewStart, ve = vs + this.viewLen();
@@ -405,6 +442,7 @@
       if (!b) { self.tip.hidden = true; return; }
       var t = 'Position ' + b.pos.toLocaleString() + ', ' + b.base;
       if (self.depth && self.depth[b.pos - 1] !== null) t += ' | depth ' + self.depth[b.pos - 1];
+      if (self.seq2) { var c2 = self.seq2.charAt(b.pos - 1); if (c2 && c2 !== b.base) t += ' | consensus ' + c2; }
       if (self.err && self.err[b.pos - 1] !== null) t += ', error ' + (self.err[b.pos - 1] * 100).toFixed(1) + '%';
       if (h) t += ' | ' + h.f.gene + (h.codon !== undefined ? ' codon ' + (h.codon + 1) + ' ' + h.letter : ' (' + h.f.type + ')');
       if (h && typeof h.f.notes === 'string' && h.f.notes) t += ' | ' + h.f.notes;
@@ -442,6 +480,7 @@
   window.mpseq.state = function (id) {
     var v = viewers[id]; if (!v) return null;
     return { len: v.len, version: v.version, topology: v.topology, viewStart: v.viewStart, ppb: v.ppb, selected: v.selected, height: v.height(),
+             seq2Len: v.seq2.length,
              nLanes: v.nLanes, features: v.feats.map(function (f) { return { row: f.row, gene: f.gene, pos1: f.pos1, pos2: f.pos2, lane: f.lane }; }) };
   };
   window.mpseq.zoom = function (id, f) { var v = get(id); if (v) v.zoom(f); };
