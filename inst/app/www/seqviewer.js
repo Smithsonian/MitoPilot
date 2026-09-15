@@ -300,7 +300,9 @@
     this.readHits = [];
     if (!rows) return;
     this.readsCanvas.width = W * dpr; this.readsCanvas.height = H * dpr;
-    this.readsCanvas.style.height = H + 'px';
+    // same CSS width as the main canvas, so the x scale matches even though
+    // the box's scrollbar takes a strip off the right
+    this.readsCanvas.style.width = W + 'px'; this.readsCanvas.style.height = H + 'px';
     var c = this.readsCanvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, W, H);
     c.font = '12px ' + cssVar('--mp-font-mono', 'monospace');
