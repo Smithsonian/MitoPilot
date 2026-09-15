@@ -259,6 +259,10 @@
     if (!this.len || !this.canvas.offsetParent) return;
     this.clamp();
     if (!this.readsOn()) { this.reads = null; this.readsWindow = null; this.readsSent = null; clearTimeout(this.readsTimer); }
+    // The server-rendered read count would otherwise name a window that is no
+    // longer drawn. Left alone when there is no BAM (that note is a warning).
+    var note = document.getElementById(this.id.replace(/-canvas$/, '-note'));
+    if (note && this.readsInput) note.hidden = !this.readsOn();
     var dpr = window.devicePixelRatio || 1, W = this.wrap.clientWidth;
     this.aaRows = this.showAa && this.ppb >= AA_MIN
       ? this.feats.filter(function (f) { return f.type === 'PCG' && f.translation !== undefined && this.segments(f).length; }, this)

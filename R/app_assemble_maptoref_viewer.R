@@ -187,5 +187,8 @@ maptoref_viewer_server <- function(id, rv) {
       n <- reads_note()
       if (is.null(n)) NULL else div(class = "mp-coverage-caption", n)
     })
+    # The viewer hides this note whenever it stops drawing reads, so it must
+    # keep rendering while hidden.
+    outputOptions(output, "note", suspendWhenHidden = FALSE)
   })
 }
