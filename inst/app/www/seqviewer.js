@@ -560,13 +560,24 @@
     if (viewers[id] && viewers[id].canvas !== el) delete viewers[id];
     return viewers[id] || (viewers[id] = new Viewer(id));
   }
+  // A canvas inside a uiOutput can reach the DOM several flushes after the
+  // message that fills it, so wait for it instead of giving up.
+  function withViewer(id, fn, tries) {
+    var v = get(id);
+    if (v) { fn(v); return; }
+    if ((tries || 0) >= 40) return;
+    setTimeout(function () { withViewer(id, fn, (tries || 0) + 1); }, 250);
+  }
   if (window.Shiny) {
     window.Shiny.addCustomMessageHandler('mpseq', function (p) {
-      var v = get(p.id);
-      if (v) v.load(p); else setTimeout(function () { var w = get(p.id); if (w) w.load(p); }, 250);
+      withViewer(p.id, function (v) { v.load(p); });
     });
-    window.Shiny.addCustomMessageHandler('mpseq_select', function (p) { var v = get(p.id); if (v) v.fit(p.row); });
-    window.Shiny.addCustomMessageHandler('mpseq_reads', function (p) { var v = get(p.id); if (v) v.loadReads(p); });
+    window.Shiny.addCustomMessageHandler('mpseq_select', function (p) {
+      withViewer(p.id, function (v) { v.fit(p.row); });
+    });
+    window.Shiny.addCustomMessageHandler('mpseq_reads', function (p) {
+      withViewer(p.id, function (v) { v.loadReads(p); });
+    });
   }
   window.mpseq.state = function (id) {
     var v = viewers[id]; if (!v) return null;
