@@ -190,7 +190,11 @@ maptoref_viewer_server <- function(id, rv) {
         paste0(
           "Showing ", format(w$n_shown, big.mark = ","), " of ",
           format(w$n_total, big.mark = ","), " reads in ", rng, ".",
-          if (w$n_shown < w$n_total) " The deepest 100 rows are shown."
+          if (w$n_shown < w$n_total) paste0(
+            " Reads are packed into rows and only the first 100 rows are drawn; ",
+            "the other ", format(w$n_total - w$n_shown, big.mark = ","),
+            " reads are not shown."
+          )
         )
       })
     })

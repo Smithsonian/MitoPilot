@@ -393,24 +393,23 @@ maptoref_seqview_payload <- function(depth, features, ref_seq, cons_seq,
 
 #' Reads reply for the sequence viewer (tools/maptoref_seqview_spec.md, 4.3)
 #'
-#' Pure. Frames become lists of rows because Shiny serialises a data.frame
-#' column-wise. Read names are not sent.
+#' Pure. Read names are not sent.
 #' @noRd
 maptoref_reads_reply <- function(w, start, end, nonce) {
-  rows <- function(df, cols) {
-    df <- df[, cols, drop = FALSE]
-    lapply(seq_len(nrow(df)), function(i) {
-      lapply(as.list(df[i, , drop = FALSE]), function(v) {
-        if (is.factor(v)) as.character(v) else v
-      })
+  # Column-wise: one JSON array per field, a fraction of the size and time of
+  # an object per read or mismatch. The browser expands it.
+  cols <- function(df, keep) {
+    lapply(as.list(df[, keep, drop = FALSE]), function(v) {
+      # I() keeps a length-1 column an array under Shiny's auto_unbox
+      I(if (is.factor(v)) as.character(v) else v)
     })
   }
   list(
     nonce = nonce, start = as.integer(start), end = as.integer(end),
-    reads = rows(w$reads, c("row", "start", "end", "strand")),
-    mm = rows(w$mm, c("row", "pos", "base")),
-    del = rows(w$del, c("row", "start", "end")),
-    ins = rows(w$ins, c("row", "pos", "len")),
+    reads = cols(w$reads, c("row", "start", "end", "strand")),
+    mm = cols(w$mm, c("row", "pos", "base")),
+    del = cols(w$del, c("row", "start", "end")),
+    ins = cols(w$ins, c("row", "pos", "len")),
     nShown = as.integer(w$n_shown), nTotal = as.integer(w$n_total)
   )
 }

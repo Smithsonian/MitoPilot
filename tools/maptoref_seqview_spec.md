@@ -104,10 +104,10 @@ including the circular-flank second scan and the 100-row cap) and sends:
 | `id` | canvas element id |
 | `nonce` | echoed from the request; a reply whose nonce is not the latest sent is dropped |
 | `start`, `end` | the window actually read |
-| `reads` | array of `{ row, start, end, strand }` (`row` 1-based lane) |
-| `mm` | array of `{ row, pos, base }` |
-| `del` | array of `{ row, start, end }` |
-| `ins` | array of `{ row, pos, len }` |
+| `reads` | columns `{ row: [], start: [], end: [], strand: [] }` (`row` 1-based lane); the browser expands to one object per read |
+| `mm` | columns `{ row: [], pos: [], base: [] }` |
+| `del` | columns `{ row: [], start: [], end: [] }` |
+| `ins` | columns `{ row: [], pos: [], len: [] }` |
 | `nShown`, `nTotal` | ints |
 
 Read names are not sent (hover shows strand and span; names are not needed
@@ -131,7 +131,7 @@ orange, T red, N grey), already the viewer's palette.
 
 `uiOutput(note)` above the canvas, rendered by R:
 
-- Reads mode on and a reply arrived: "Showing N of M reads in <start>-<end>." When `nShown < nTotal`: "; the deepest 100 rows are shown." The browser sends `readsInput`; R updates a `reactiveVal` with the reply counts, so this note is server-rendered like the header.
+- Reads mode on and a reply arrived: "Showing N of M reads in <start>-<end>." When `nShown < nTotal`: " Reads are packed into rows and only the first 100 rows are drawn; the other K reads are not shown." The browser sends `readsInput`; R updates a `reactiveVal` with the reply counts, so this note is server-rendered like the header.
 - No BAM file: "No read alignments were kept for this sample. Run Update on it to keep them." and `readsInput` is absent from the payload (reads box disabled).
 - No coverage table (`maptoref_depth.csv` missing): the whole section shows the existing caption "No coverage table for this sample. Run Update on it to produce the coverage and read files." and no canvas, as today.
 - No features file: lanes are empty and the header keeps its existing "Reference has no annotation record." field.

@@ -245,9 +245,17 @@
   };
   Viewer.prototype.loadReads = function (p) {
     if (p.nonce !== this.readsNonce) return;
-    var rows = 0;
-    (p.reads || []).forEach(function (r) { if (r.row > rows) rows = r.row; });
-    this.reads = { reads: p.reads || [], mm: p.mm || [], del: p.del || [], ins: p.ins || [],
+    // R sends each frame column-wise ({row: [...], pos: [...]}); expand to
+    // one object per record. An array is already in that shape.
+    var expand = function (f) {
+      if (!f || Array.isArray(f)) return f || [];
+      var keys = Object.keys(f), n = keys.length ? f[keys[0]].length : 0, out = [];
+      for (var i = 0; i < n; i++) { var o = {}; keys.forEach(function (k) { o[k] = f[k][i]; }); out.push(o); }
+      return out;
+    };
+    var reads = expand(p.reads), rows = 0;
+    reads.forEach(function (r) { if (r.row > rows) rows = r.row; });
+    this.reads = { reads: reads, mm: expand(p.mm), del: expand(p.del), ins: expand(p.ins),
                    rows: rows, nShown: p.nShown, nTotal: p.nTotal };
     this.readsWindow = { start: p.start, end: p.end };
     this.draw();
