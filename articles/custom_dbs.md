@@ -11,7 +11,9 @@ NCBI RefSeq.
 
 ## What parts of the MitoPilot pipeline use reference databases?
 
-- GetOrganelle or MitoFinder (Assemble module)
+- GetOrganelle, MitoFinder, or MapToRef (Assemble module; see [choosing
+  an assembly
+  method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.md))
 - Mitos2 (Annotate module)
 - Automatic and manual curation of protein-coding genes (Annotate
   module)
@@ -171,6 +173,27 @@ Assembly of contigs with MitoFinder is completely de novo. The
 MitoFinder reference database is only used to “label” putative
 mitochondrial contigs. Thus, the species in your reference database can
 be fairly distant relatives of your samples.
+
+## Reference mitogenome for MapToRef
+
+MapToRef needs exactly one complete mitogenome record to map reads
+against, not a multi-record database. The reference is set per sample,
+through the mapping CSV’s `Reference` column,
+[`set_maptoref_refs()`](https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.md),
+or the sample’s **MapToRef Ref** cell in the app’s Assemble table.
+
+The best option is to provide a GenBank accession number, which
+MitoPilot will automatically download. Alternatively, you can supply a
+URL or path to a file. GenBank format (`.gb`) is preferred because it
+contains annotation information. FASTA formatted references are also
+allowed.
+
+A FASTA reference also needs topology specified using a
+`Reference_topology` column, in the mapping file.
+
+**Keep the reference inside the project folder.** MitoPilot runs inside
+a container (Docker or Singularity/Apptainer), which only sees files
+under the paths it is told to mount.
 
 ## Build custom databases for protein-coding gene curation
 

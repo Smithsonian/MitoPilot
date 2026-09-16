@@ -214,8 +214,8 @@ session. An interactive run needs you to hold the connection open for
 the whole workflow, which is fine for a handful of samples and risky for
 a few dozen or more.
 
-MitoPilot builds the submission script for you. Click `UPDATE`, and the
-update window shows a ready-to-edit SLURM script pre-filled with
+MitoPilot builds the submission script for you. Click **Update**, and
+the update window shows a ready-to-edit SLURM script pre-filled with
 `#SBATCH` directives. Add the SEDNA environment setup where the script
 indicates:
 

@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -329,14 +330,16 @@ pipeline has run</div>
 <p>This is a fresh project, so the result columns are still empty: the
 sample metadata comes from your mapping file, and everything else fills
 in as the pipeline runs.</p>
-<p>Each row is a sample. The dropdown at the top left switches between
-the three pipeline modules, <strong>Assemble</strong>,
-<strong>Annotate</strong>, and <strong>Export</strong>, which you work
-through in that order. The circular arrow refreshes the table.</p>
+<p>Each row is a sample. The numbered buttons at the top left switch
+between the three pipeline modules, <strong>1 Assemble</strong>,
+<strong>2 Annotate</strong>, and <strong>3 Export</strong>, which you
+work through in that order. The refresh button beside them reloads the
+table from the database.</p>
 <p>Clicking a column header sorts alphanumerically. The search box at
 the top right filters everything, and most columns have their own filter
 box.</p>
-<p>Two icons sit to the left of each sample ID:</p>
+<p>Two columns sit to the left of each sample ID, <strong>Lock</strong>
+and <strong>State</strong>:</p>
 <ul>
 <li>
 <strong>The lock</strong>
@@ -344,13 +347,13 @@ box.</p>
 <i class="fa fa-lock state-icon"></i> locked). Unlocked samples are
 available for the next pipeline run to process. Locking a sample freezes
 it in the current module and makes it available for the next module.
-Select samples and use the <code>LOCK</code> button to toggle.</li>
+Select samples and use the <strong>Lock</strong> button to toggle.</li>
 <li>
 <strong>The state.</strong> Status of the sample in the current
 module. The pipeline sets these automatically, but you can override them
-with the <code>STATE</code> button. This is how you can park samples you
-do not want to process yet or reset samples that have already completed
-the pipeline. There are five states:</li>
+with the <strong>State</strong> button. This is how you can park samples
+you do not want to process yet or reset samples that have already
+completed the pipeline. There are five states:</li>
 </ul>
 <table class="table state-table">
 <thead><tr>
@@ -364,49 +367,49 @@ Meaning
 <tbody>
 <tr>
 <td>
-<i class="fa fa-hourglass state-icon"></i> Hold / Waiting
+<i class="fa fa-hourglass state-icon"></i> On hold
 </td>
 <td>
-Ready to be updated, but will be skipped on the next run
-</td>
-</tr>
-<tr>
-<td>
-<i class="fa fa-person-running state-icon"></i> Ready to Run
-</td>
-<td>
-Will be updated on the next run
+Skipped by the next Update until you set it to Ready to run
 </td>
 </tr>
 <tr>
 <td>
-<i class="fa fa-circle-half-stroke state-icon"></i> In Progress
+<i class="fa fa-play state-icon"></i> Ready to run
 </td>
 <td>
-Partway through the current module
-</td>
-</tr>
-<tr>
-<td>
-<i class="fa fa-circle-check state-icon"></i> Completed Successfully
-</td>
-<td>
-Processed without problems
+Queued: the next Update will process it
 </td>
 </tr>
 <tr>
 <td>
-<i class="fa fa-triangle-exclamation state-icon"></i> Completed with
-Warning
+<i class="fa fa-circle-half-stroke state-icon"></i> In progress
 </td>
 <td>
-Finished, but may have failed or needs manual review
+Being processed by the running pipeline
+</td>
+</tr>
+<tr>
+<td>
+<i class="fa fa-circle-check state-icon"></i> Success
+</td>
+<td>
+Finished without errors
+</td>
+</tr>
+<tr>
+<td>
+<i class="fa fa-triangle-exclamation state-icon"></i> Failed
+</td>
+<td>
+Stopped with an error; see the Notes column
 </td>
 </tr>
 </tbody>
 </table>
-<p>The Annotate module has no separate half-circle state; a unit being
-worked on shows the runner icon until it finishes.</p>
+<p>The Annotate module has no <strong>In progress</strong> state; an
+assembly waiting to be processed keeps its <strong>Ready to run</strong>
+icon until the run finishes.</p>
 <hr class="part-break">
 </div>
 <div class="section level2">
@@ -428,6 +431,7 @@ sequence data!</p>
 <p>Additional articles for you to explore:</p>
 <ul>
 <li><a href="custom_dbs.html">Building custom databases</a></li>
+<li><a href="Assembly-Methods.html">Choosing an assembly method</a></li>
 <li><a href="Difficult-Assemblies.html">Handling difficult
 assemblies</a></li>
 <li>

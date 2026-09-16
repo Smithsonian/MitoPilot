@@ -89,9 +89,9 @@ annotates and exports those assemblies normally.
 A codon holding an ambiguous base becomes the one amino acid it can be,
 or `X` when more than one is possible, and the gene carries an
 `<n> ambiguous bases in CDS` warning so you can review it. Counts are
-shown per sample in the **Ambig. Bases** column of the Assemble table,
-per contig in the assembly details window, and per gene at the top of
-the annotation alignment. See [“Assemblies containing ambiguous
+shown per sample in the **Ambiguous Bases** column of the Assemble
+table, per contig in the assembly details window, and per gene at the
+top of the annotation alignment. See [“Assemblies containing ambiguous
 bases”](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Assemblies.html#assemblies-containing-ambiguous-bases).
 
 ## How do I skip processing certain samples?
@@ -100,17 +100,16 @@ There are two ways to make MitoPilot skip a set of samples when running
 the Assembly or Annotate modules.
 
 If the samples successfully finished all steps of the current module,
-you can lock them. To do this, select the samples and click the `LOCK`
+you can lock them. To do this, select the samples and click the **Lock**
 button. Locking will also make those samples available for the next
 module.
 
 Alternatively, instead of locking the samples, you can modify their
-state. To do this, select the samples, click on the `STATE` button, then
-choose `Pre-Assembly (wait)` or `Pre-Annotate (wait)`. This can be
-applied to any samples, regardless of whether they completed the current
-module.
+state. To do this, select the samples, click the **State** button, then
+choose **On hold**. This can be applied to any samples, regardless of
+whether they completed the current module.
 
-Setting the state to `wait` can help you skip samples that produce
+Setting the state to **On hold** can help you skip samples that produce
 unexpected errors and interrupt the workflow.
 
 ## Where can I find complete scripts and logs for each process?
@@ -132,7 +131,7 @@ command line with `ls -a`.
 ## How can I export information found in the GUI tables?
 
 From within the GUI, each module table (Assemble, Annotate, and Export)
-has “Export Selected to CSV” and “Export All to CSV” buttons that
+has **Download selected rows** and **Download all rows** buttons that
 download the current table contents as a CSV file.
 
 For exporting outside the GUI, we have included an R function
@@ -160,7 +159,7 @@ Note that rerunning a sample will erase all manual edits and notes.
 
 To rerun specific samples:
 
-- change the state of the target samples to “Ready to Annotate”
+- change the state of the target samples to **Ready to run**
 - lock all other samples
 - make sure your Nextflow command contains the `-resume` flag
 

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -59,6 +60,88 @@
       <small>Source: <a href="https://github.com/Smithsonian/MitoPilot/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.5.5" id="mitopilot-155">MitoPilot 1.5.5<a class="anchor" aria-label="anchor" href="#mitopilot-155"></a></h2>
+<p>Released 2026-09-16. Container: <code>macguigand/mitopilot:1.5.5</code></p>
+<div class="section level3">
+<h3 id="new-features-1-5-5">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5-5"></a></h3>
+<p>This release adds a third assembler, <strong>MapToRef</strong>, a <strong>redesigned app interface</strong>, and a <strong>sequence viewer</strong> in the annotation window.</p>
+<div class="section level4">
+<h4 id="map-to-reference-assembly-1-5-5">Map-to-reference assembly<a class="anchor" aria-label="anchor" href="#map-to-reference-assembly-1-5-5"></a></h4>
+<ul><li>
+<strong>MapToRef</strong> maps your reads to a reference mitogenome you supply and builds a consensus from the read pileup. The reference only places reads; every base in the result comes from your reads. The consensus is re-used as the reference and mapping repeats until the sequence stops changing.</li>
+<li>
+<strong>One reference per sample.</strong> Add a <code>Reference</code> column to the mapping file (a file path, a URL, or an NCBI accession, which is downloaded for you), set references later with <code><a href="../reference/set_maptoref_refs.html">set_maptoref_refs()</a></code>, or click a sample’s <strong>MapToRef Ref</strong> cell in the Assemble table. A FASTA reference also needs a <code>Reference_topology</code>. References are checked when they are set, and every problem is reported at once.</li>
+<li>
+<strong>Choice of mapper.</strong> bowtie2 (default), bwa-mem, or bwa-aln for short or damaged reads such as ancient DNA. The first pass against your reference uses relaxed settings so a distant reference still recruits reads.</li>
+<li>Uncovered sites are called <code>N</code> and mixed sites get IUPAC codes. A circular reference is only published as circular when reads span the junction; otherwise the assembly is linear and a note says so. A note also warns when the reference looks too divergent for the sample.</li>
+<li>The assembly details window opens a <strong>sequence viewer on the reference</strong>: read depth with uncovered positions marked, the reference’s genes, the reference and consensus with differences outlined, and, zoomed in, the individual reads.</li>
+<li>See the new <a href="https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html">Choosing an assembly method</a> article for a comparison of GetOrganelle, MitoFinder, and MapToRef.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="redesigned-app-interface-1-5-5">Redesigned app interface<a class="anchor" aria-label="anchor" href="#redesigned-app-interface-1-5-5"></a></h4>
+<ul><li>The three modules are <strong>numbered steps</strong> (1 Assemble, 2 Annotate, 3 Export) in a header that names the project and version, with a <strong>Help</strong> link.</li>
+<li>
+<strong>One vocabulary everywhere.</strong> Pipeline states are On hold, Ready to run, In progress, Success, and Failed, with the same icons in every table and dialog. Lock and State are proper columns. Toolbar buttons are Lock, State, Update, Assign Group, Clear Group, and Export Data; table buttons are Output, Details, and View.</li>
+<li>Every table has the same <strong>filter row</strong> and a “Showing N of N” line; column headers are spelled out (Assembly Length (bp), # PCGs, Ambiguous Bases); topology, state, and review flags are colored pills; long notes wrap instead of clipping; table headers stay put while you scroll.</li>
+<li>Every <strong>options window</strong> uses one form layout with CPUs and Memory first, help beside each field, and a <strong>Save</strong> button that says it re-queues the sample. Options are read-only on locked rows.</li>
+<li>The <strong>annotation details window</strong> puts the review flags and their Mark buttons in the header, has one footer with Lock &amp; Close, and honours the lock. The assembly details window explains what the lock blocks and keeps one primary action per panel.</li>
+<li>
+<strong>Every action reports back</strong>: locking, state changes, group writes, and exports confirm what they did; destructive actions ask first; errors are explained in plain language.</li>
+<li>Keyboard focus is visible, a skip link and screen-reader landmarks are in place, and motion is reduced when your system asks for it.</li>
+<li>Table downloads are <strong>Download selected rows</strong> and <strong>Download all rows</strong>.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="sequence-viewer-in-the-annotation-window-1-5-5">Sequence viewer in the annotation window<a class="anchor" aria-label="anchor" href="#sequence-viewer-in-the-annotation-window-1-5-5"></a></h4>
+<ul><li>The annotation details window has a <strong>Sequence</strong> section: read depth and error rate tracks, the annotated genes drawn in lanes, the nucleotides, and the translated amino acids of every protein-coding gene under their codons. Click a gene in the table to jump to it; drag, scroll, or zoom to move around; a circular assembly wraps through its origin. Edits in the window show immediately. It replaces the Coverage Map section.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="export-1-5-5">Export<a class="anchor" aria-label="anchor" href="#export-1-5-5"></a></h4>
+<ul><li>
+<strong>Internal stop codons are flagged.</strong> The PCG outlier review lists any protein-coding gene whose translation contains a stop codon before its end, the HTML report has an <strong>Internal Stop Codons</strong> section, and MitoPilot warns before writing files that would fail NCBI validation.</li>
+<li>The FASTA header no longer carries the <code>[note=annotation compared to GenBank accession ...]</code> field, which GenBank no longer wants. The reference is recorded in the export’s <code>sample_info.csv</code> instead, in a new <code>ref_comparison</code> column.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="project-setup-1-5-5">Project setup<a class="anchor" aria-label="anchor" href="#project-setup-1-5-5"></a></h4>
+<ul><li>
+<strong>Pre-flight checks.</strong> <code><a href="../reference/new_project.html">new_project()</a></code> and <code><a href="../reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> check the mapping file, read and assembly files, reference databases, and every parameter before creating anything, and report all problems together.</li>
+<li>The mapping file may be comma-, tab-, or semicolon-delimited; ragged rows, stray quotes, and Excel files are detected and explained. Sample IDs are capped at 40 characters, GenBank’s limit for a SeqID.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="preprocessing-1-5-5">Preprocessing<a class="anchor" aria-label="anchor" href="#preprocessing-1-5-5"></a></h4>
+<ul><li>
+<strong>Remove duplicate reads</strong> checkbox in the Preprocess options runs fastp with <code>--dedup</code>. Off by default; it lowers depth and rarely changes calls.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="container-1-5-5">Container<a class="anchor" aria-label="anchor" href="#container-1-5-5"></a></h4>
+<ul><li>samtools upgraded to 1.24 and bwa 0.7.19 added for MapToRef.</li>
+</ul></div>
+</div>
+<div class="section level3">
+<h3 id="bug-fixes-1-5-5">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-5-5"></a></h3>
+<ul><li>
+<strong>Annotate and curate tasks are back in the Work Dirs browser</strong>; they were missing for any sample with more than one assembly.</li>
+<li>
+<strong>Marking an assembly reviewed, problematic, or partial no longer clears your row selection</strong> in the Annotate table.</li>
+<li>
+<strong>A joined Path 0 sets the sample to Success</strong> instead of leaving it Failed.</li>
+<li>
+<strong>Annotate tasks no longer fail on Docker Desktop</strong> with exit 125 when the project has no MitoFinder database.</li>
+<li>
+<strong>Copying the nucleotide sequence of a minus-strand gene</strong> gives the reverse complement, as it should.</li>
+<li>
+<strong>Genes joined across scaffolds</strong> are spliced correctly in the outlier review and the HTML report.</li>
+<li>The alignment editor lets you <strong>override the segment-overlap block</strong> when you know the overlap is real.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-1-5-5">Documentation<a class="anchor" aria-label="anchor" href="#documentation-1-5-5"></a></h3>
+<ul><li>Every app screenshot is refreshed for the new interface, and the walkthroughs use the new names for buttons, columns, and states.</li>
+<li>New article: <a href="https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html">Choosing an assembly method</a>.</li>
+<li>The <a href="https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.html">Your Own Project</a> arguments are grouped by topic, and the MapToRef reference columns are documented with the mapping file.</li>
+</ul><p><strong>Note</strong> Projects created with an earlier release should be updated with <a href="https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html"><code>MitoPilot::backwards_compatibility()</code></a>, which adds the MapToRef columns; the app refuses to open an un-migrated project and tells you so. Pass <code>update_config = FALSE</code> to leave your <code>.config</code> alone, then change its <code>container</code> line to <code>macguigand/mitopilot:1.5.5</code> by hand. <code>Reference</code> is now a reserved mapping-file column; rename it if you used it for something else. The package has new R dependencies (<code>read.gb</code>, <code>Rsamtools</code>, <code>IRanges</code>), so reinstall rather than update in place.</p>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/Smithsonian/MitoPilot/compare/1.5.4" class="external-link uri">https://github.com/Smithsonian/MitoPilot/compare/1.5.4</a>…1.5.5</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.5.4" id="mitopilot-154">MitoPilot 1.5.4<a class="anchor" aria-label="anchor" href="#mitopilot-154"></a></h2>
 <p>Released 2026-08-31. Container: <code>macguigand/mitopilot:1.5.4</code></p>

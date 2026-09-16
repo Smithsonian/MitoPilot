@@ -11,7 +11,7 @@ Creates a backup of the existing database prior to updating."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,7 @@ Creates a backup of the existing database prior to updating."><meta property="og
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -89,7 +90,14 @@ Creates a backup of the existing database prior to updating.</p>
 
 
 <dt id="arg-update-mapping-fn">update_mapping_fn<a class="anchor" aria-label="anchor" href="#arg-update-mapping-fn"></a></dt>
-<dd><p>Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2"</p></dd>
+<dd><p>Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2".
+May include additional columns with other sample metadata, and an optional
+<code>Reference</code> column naming a per-sample MapToRef reference (file path,
+URL, or NCBI accession). A FASTA reference also needs a
+<code>Reference_topology</code> column (circular or linear). Both values are
+stored on the sample and used when its parameter set assembles with
+MapToRef. <code>Reference</code> is a reserved column name: it is never stored
+as sample metadata, so rename the column if you use it for something else.</p></dd>
 
 
 <dt id="arg-mapping-id">mapping_id<a class="anchor" aria-label="anchor" href="#arg-mapping-id"></a></dt>

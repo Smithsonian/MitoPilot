@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -279,9 +280,9 @@ interactive session. An interactive run needs you to hold the connection
 open for the whole workflow, which is fine for a handful of samples and
 risky for a few dozen or more.</p>
 <p>MitoPilot builds the submission script for you. Click
-<code>UPDATE</code>, and the update window shows a ready-to-edit SLURM
-script pre-filled with <code>#SBATCH</code> directives. Add the SEDNA
-environment setup where the script indicates:</p>
+<strong>Update</strong>, and the update window shows a ready-to-edit
+SLURM script pre-filled with <code>#SBATCH</code> directives. Add the
+SEDNA environment setup where the script indicates:</p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="bu">source</span> ~/.bashrc</span>
 <span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="ex">mamba</span> activate MitoPilot_deps</span></code></pre></div>
 <p>Then use <strong>“Save Script Only”</strong> and submit the written

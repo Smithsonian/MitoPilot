@@ -16,9 +16,10 @@ raw input and performs the following steps.
 1.  Mitogenome assembly
     - [fastp](https://github.com/OpenGene/fastp) for quality control and
       adapter trimming
-    - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (default)
-      or [MitoFinder](https://github.com/RemiAllio/MitoFinder) for
-      mitogenome assembly
+    - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle)
+      (default), [MitoFinder](https://github.com/RemiAllio/MitoFinder),
+      or MapToRef for mitogenome assembly (see [choosing an assembly
+      method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html))
     - [bowtie2](https://github.com/BenLangmead/bowtie2) for read mapping
       to calculate coverage and error rates.
     - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) against a
@@ -150,10 +151,18 @@ For groups other than fishes, make sure you build or pick the
 appropriate reference databases. There are three independent kinds of
 databases:
 
-- **Assembly** references for GetOrganelle or MitoFinder.
+- **Assembly** references for GetOrganelle, MitoFinder, or MapToRef.
   [`MitoPilot::custom_assembly_db()`](https://smithsonian.github.io/MitoPilot/reference/custom_assembly_db.md)
-  builds these for a clade automatically, with no external tools
-  required. See [building custom
+  builds a clade-wide database for GetOrganelle and MitoFinder
+  automatically, with no external tools required; MapToRef instead uses
+  a single reference mitogenome you supply yourself. Each sample carries
+  its own: add a `Reference` column (and, for a FASTA, a
+  `Reference_topology` column) to your mapping CSV, call
+  [`MitoPilot::set_maptoref_refs()`](https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.md),
+  or click the sample’s MapToRef ref cell in the Assemble table. A
+  reference may be a file path, a URL, or an NCBI accession; the mapper
+  and its options come from the sample’s parameter set. See [building
+  custom
   databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html).
 - **Annotation** references for MITOS2. MitoPilot includes Chordata and
   Metazoa databases, selectable in the `Annotate Opts.` window.

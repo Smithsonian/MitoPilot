@@ -11,6 +11,7 @@ new_db(
   mapping_id = "ID",
   mapping_taxon = "Taxon",
   genetic_code = NULL,
+  dedup = FALSE,
   assemble_cpus = 6,
   assemble_memory = 24,
   assembler = "GetOrganelle",
@@ -23,6 +24,10 @@ new_db(
   mitofinder_db =
     "https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb",
   mitofinder = paste("--megahit"),
+  maptoref_mapper = "bowtie2",
+  maptoref = .mtr_default_bowtie2,
+  maptoref_consensus = .mtr_default_consensus,
+  maptoref_iter = 5L,
   max_paths = 10,
   max_scaffolds = 10,
   min_assembly_length = 500,
@@ -77,6 +82,12 @@ new_db(
   sets an override on the default curate_opts set.
   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
 
+- dedup:
+
+  Run fastp with \`–dedup\` to drop PCR and optical duplicates before
+  assembly? Default FALSE keeps \`–dont_eval_duplication\`, the shipped
+  fastp default. Editable later in the preprocess-options modal.
+
 - assemble_cpus:
 
   Default \# cpus for assembly
@@ -87,7 +98,8 @@ new_db(
 
 - assembler:
 
-  Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"
+  Assembler, choice of "GetOrganelle" (default), "MitoFinder", or
+  "MapToRef"
 
 - seeds_db:
 
@@ -116,6 +128,25 @@ new_db(
 - mitofinder:
 
   Default MitoFinder command line options
+
+- maptoref_mapper:
+
+  MapToRef read mapper, "bowtie2", "bwa-mem", or "bwa-aln" (default =
+  "bowtie2")
+
+- maptoref:
+
+  Default mapper options for MapToRef (default =
+  "–very-sensitive-local")
+
+- maptoref_consensus:
+
+  Default samtools consensus options for MapToRef (default = "-d 3
+  –min-BQ 20")
+
+- maptoref_iter:
+
+  Maximum MapToRef iteration passes (default = 5)
 
 - max_paths:
 

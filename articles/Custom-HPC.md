@@ -43,7 +43,7 @@ A quick vocabulary primer if containers are new to you:
 
 The image tag must match your installed MitoPilot version. Get it with
 `packageVersion("MitoPilot")`, which for this build of the documentation
-is 1.5.4.
+is 1.5.5.
 
 ``` bash
 singularity pull mitopilot.sif docker://macguigand/mitopilot:<version>
@@ -250,10 +250,10 @@ you use the app. This replaces the RStudio Server requirement for users
 who only need the app.
 
 **Caveat:** in-app features that open a file or browser on the server
-side (the “Open output folder” button, the HTML annotation report, and
-the ruleset browser) will not work here, since they try to open on the
-cluster rather than your local computer. The main assemble / annotate /
-curate app is unaffected.
+side (the **Output** button, the HTML annotation report, and the ruleset
+browser) will not work here, since they try to open on the cluster
+rather than your local computer. The main assemble / annotate / curate
+app is unaffected.
 
 ### Running the pipeline
 

@@ -81,7 +81,11 @@ export_files(
 - summary_csv:
 
   Write a per-sample summary CSV (organism, topology, completeness, gene
-  counts, reference, etc.) into the export directory? (default: TRUE)
+  counts, reference, etc.) into the export directory? Its
+  \`ref_comparison\` column reads "compared sample \<ID\> to GenBank
+  accession \<accession\>" for every sample whose reference was not
+  flagged poor; GenBank no longer wants this in the FASTA header.
+  (default: TRUE)
 
 ## Value
 

@@ -10,14 +10,17 @@ annotate_opts: &quot;start_gene&quot;, ARWEN / Aragorn / MitoFinder /
     tRNAscan / MITOS toggles and options, coverage/feature trimming, and
     reference db columns.
 assemble_opts: &quot;assembler&quot;, &quot;mitofinder_db&quot;/&quot;mitofinder&quot;,
-    &quot;max_paths&quot;, &quot;max_scaffolds&quot;, &quot;min_assembly_length&quot;, &quot;join_scaffolds&quot;.
+    &quot;max_paths&quot;, &quot;max_scaffolds&quot;, &quot;min_assembly_length&quot;, &quot;join_scaffolds&quot;,
+    and the MapToRef columns &quot;maptoref_ref&quot;, &quot;maptoref_mapper&quot;, &quot;maptoref&quot;,
+    &quot;maptoref_consensus&quot;, &quot;maptoref_iter&quot;, &quot;maptoref_topology&quot;.
 curate_opts: &quot;max_blast_hits&quot;, &quot;ref_dir&quot;, &quot;ref_db&quot;,
     &quot;linear_complete&quot; (and rewriting the legacy in-container Mitos2 ref path
     to the GitHub-hosted reference db).
 assemble: &quot;poor_blast_ref&quot; (migrated from samples and
     normalized to TEXT), BLAST result columns, &quot;blast_opts&quot;, &quot;join_notes&quot;,
     &quot;join_switch&quot;, &quot;circularize_opts&quot;/&quot;circularize_notes&quot;,
-    &quot;find_mito_opts&quot;/&quot;find_mito_notes&quot;.
+    &quot;find_mito_opts&quot;/&quot;find_mito_notes&quot;, &quot;maptoref_ref&quot;/&quot;maptoref_topology&quot;
+    (the per-sample MapToRef reference and topology).
 blast_opts: &quot;max_target_seqs&quot;, &quot;taxids&quot;, &quot;remote_blast&quot;,
     &quot;remote_fallback&quot; (any parameter set carrying a non-default Entrez query is
     switched to the remote search, with a warning, since the local database
@@ -41,14 +44,17 @@ annotate_opts: &quot;start_gene&quot;, ARWEN / Aragorn / MitoFinder /
     tRNAscan / MITOS toggles and options, coverage/feature trimming, and
     reference db columns.
 assemble_opts: &quot;assembler&quot;, &quot;mitofinder_db&quot;/&quot;mitofinder&quot;,
-    &quot;max_paths&quot;, &quot;max_scaffolds&quot;, &quot;min_assembly_length&quot;, &quot;join_scaffolds&quot;.
+    &quot;max_paths&quot;, &quot;max_scaffolds&quot;, &quot;min_assembly_length&quot;, &quot;join_scaffolds&quot;,
+    and the MapToRef columns &quot;maptoref_ref&quot;, &quot;maptoref_mapper&quot;, &quot;maptoref&quot;,
+    &quot;maptoref_consensus&quot;, &quot;maptoref_iter&quot;, &quot;maptoref_topology&quot;.
 curate_opts: &quot;max_blast_hits&quot;, &quot;ref_dir&quot;, &quot;ref_db&quot;,
     &quot;linear_complete&quot; (and rewriting the legacy in-container Mitos2 ref path
     to the GitHub-hosted reference db).
 assemble: &quot;poor_blast_ref&quot; (migrated from samples and
     normalized to TEXT), BLAST result columns, &quot;blast_opts&quot;, &quot;join_notes&quot;,
     &quot;join_switch&quot;, &quot;circularize_opts&quot;/&quot;circularize_notes&quot;,
-    &quot;find_mito_opts&quot;/&quot;find_mito_notes&quot;.
+    &quot;find_mito_opts&quot;/&quot;find_mito_notes&quot;, &quot;maptoref_ref&quot;/&quot;maptoref_topology&quot;
+    (the per-sample MapToRef reference and topology).
 blast_opts: &quot;max_target_seqs&quot;, &quot;taxids&quot;, &quot;remote_blast&quot;,
     &quot;remote_fallback&quot; (any parameter set carrying a non-default Entrez query is
     switched to the remote search, with a warning, since the local database
@@ -69,7 +75,7 @@ New tables: &quot;orf_opts&quot;, &quot;blast_opts&quot;, &quot;export_opts&quot
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,6 +99,7 @@ New tables: &quot;orf_opts&quot;, &quot;blast_opts&quot;, &quot;export_opts&quot
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -133,14 +140,17 @@ others:</p><ul><li><p><code>annotate</code>: "reviewed", "ID_verified", "problem
     tRNAscan / MITOS toggles and options, coverage/feature trimming, and
     reference db columns.</p></li>
 <li><p><code>assemble_opts</code>: "assembler", "mitofinder_db"/"mitofinder",
-    "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds".</p></li>
+    "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds",
+    and the MapToRef columns "maptoref_ref", "maptoref_mapper", "maptoref",
+    "maptoref_consensus", "maptoref_iter", "maptoref_topology".</p></li>
 <li><p><code>curate_opts</code>: "max_blast_hits", "ref_dir", "ref_db",
     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
     to the GitHub-hosted reference db).</p></li>
 <li><p><code>assemble</code>: "poor_blast_ref" (migrated from <code>samples</code> and
     normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
     "join_switch", "circularize_opts"/"circularize_notes",
-    "find_mito_opts"/"find_mito_notes".</p></li>
+    "find_mito_opts"/"find_mito_notes", "maptoref_ref"/"maptoref_topology"
+    (the per-sample MapToRef reference and topology).</p></li>
 <li><p><code>blast_opts</code>: "max_target_seqs", "taxids", "remote_blast",
     "remote_fallback" (any parameter set carrying a non-default Entrez query is
     switched to the remote search, with a warning, since the local database

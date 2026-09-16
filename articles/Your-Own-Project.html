@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -217,8 +218,9 @@ inside the project directory.</li>
 <tbody>
 <tr class="odd">
 <td><code>ID</code></td>
-<td>Unique identifier for the sample. Used as the SeqID at export, so
-keep it short and free of spaces.</td>
+<td>Unique identifier for the sample. Used as the SeqID at export, so at
+most 40 characters, using only letters, digits, dashes, underscores, and
+colons.</td>
 </tr>
 <tr class="even">
 <td><code>Taxon</code></td>
@@ -242,6 +244,24 @@ submission needs.</p>
 <pre><code>ID,Taxon,R1,R2,Voucher,BioSample
 OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN00000001
 OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,USNM:1234568,SAMN00000002</code></pre>
+<p>Two column names are reserved for the MapToRef assembler, which maps
+reads to a reference mitogenome chosen per sample (see <a href="Assembly-Methods.html">choosing an assembly method</a>).
+<code>Reference</code> holds a file path, a URL, or an NCBI nucleotide
+accession (MitoPilot will automatically download when needed) A FASTA
+reference also needs a <code>Reference_topology</code> column
+(<code>circular</code> or <code>linear</code>), since a FASTA header
+carries no topology.</p>
+<pre><code>ID,Taxon,R1,R2,Reference,Reference_topology
+OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,ref/NC_002333.gb,
+OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,ref/mito.fasta,circular</code></pre>
+<p>If your reference list is not ready at project creation, leave the
+columns out and supply them later with <code><a href="../reference/set_maptoref_refs.html">set_maptoref_refs()</a></code>,
+using a CSV with an ID column, a reference column, and an optional
+topology column.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/set_maptoref_refs.html">set_maptoref_refs</a></span><span class="op">(</span>refs <span class="op">=</span> <span class="st">"my_refs.csv"</span><span class="op">)</span>   <span class="co"># ID, reference, and optionally topology</span></span></code></pre></div>
+<p>Or you can set references using the <strong>MapToRef Ref</strong>
+cell in the app’s Assemble table.</p>
 <p>You do not have to get the mapping file columns right the first time.
 <code><a href="../reference/update_sample_metadata.html">update_sample_metadata()</a></code> adds new columns or revises the
 values in existing projects. Close the app before updating the metadata,
@@ -255,7 +275,7 @@ instead of renaming the column.</p>
 <div class="section level3">
 <h3 id="initialize-the-project">Initialize the project<a class="anchor" aria-label="anchor" href="#initialize-the-project"></a>
 </h3>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
@@ -273,69 +293,84 @@ On RStudio Server on a cluster you usually want
 <div class="section level4">
 <h4 id="arguments-worth-setting">Arguments worth setting<a class="anchor" aria-label="anchor" href="#arguments-worth-setting"></a>
 </h4>
-<p>Many of these options can also be set in the MitoPilot app. Setting
-them at project initialization may save you time.</p>
+<p>Many of these can also be changed later in the MitoPilot app, but
+setting them at initialization applies them to every sample at once.</p>
+<div class="section level5">
+<h5 id="taxonomy-and-curation">Taxonomy and curation<a class="anchor" aria-label="anchor" href="#taxonomy-and-curation"></a>
+</h5>
 <p><strong><code>curate_target</code></strong> picks the curation and
 validation ruleset, which controls expected gene content, allowed start
 and stop codons, gene naming, and the genetic code. The default is
 <code>"fish_mito"</code>. Browse the available rulesets in the <a href="Ruleset-Browser.html">curation ruleset browser</a> and pass the
 one matching your clade, for example
 <code>curate_target = "octocoral_mito"</code>.</p>
-<p><strong><code>genetic_code</code></strong> is normally left alone:
-MitoPilot takes it from the curation ruleset. Set it only when you need
-to override that, using an <a href="https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi" class="external-link">NCBI
-translation table number</a>.</p>
-<p><strong><code>custom_seeds_db</code> and
-<code>custom_labels_db</code></strong> point GetOrganelle at reference
-sequences for your group. The defaults are for fishes, but you can build
-databases for any clade with the R function
-<code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code>, see <a href="custom_dbs.html">building custom databases</a>. Give absolute
-paths, not paths starting with <code>~</code>.</p>
-<p><strong><code>assembler</code> and
-<code>mitofinder_db</code></strong> switch the assembler to
-<code>"MitoFinder"</code> and point it at a reference database. The
-reference database must be GenBank format (<code>.gb</code>) and can be
-a local path or a URL. The default is the zebrafish mitogenome, so
-supply your own for anything that is not a fish. Leave both alone to
-stay on GetOrganelle.</p>
 <p><strong><code>annotate_ref_db</code></strong> selects the MITOS2
 reference database. The default is <code>"Chordata"</code>;
 <code>"Metazoa_RefSeq89"</code> is the general-purpose alternative and
 is the right choice for most invertebrates.</p>
+<p><strong><code>linear_complete</code></strong> should be
+<code>TRUE</code> for taxa whose complete mitogenome is genuinely
+linear, so that export labels them “complete genome” rather than
+“partial”.</p>
+</div>
+<div class="section level5">
+<h5 id="assembly">Assembly<a class="anchor" aria-label="anchor" href="#assembly"></a>
+</h5>
+<p><strong><code>assembler</code></strong> chooses
+<code>"GetOrganelle"</code> (default), <code>"MitoFinder"</code>, or
+<code>"MapToRef"</code>. See <a href="Assembly-Methods.html">choosing an
+assembly method</a> for more info. MapToRef sets the reference per
+sample through the mapping file, as described <a href="#the-mapping-file">above</a>, so it has no database argument
+here.</p>
+<p><strong><code>custom_seeds_db</code> and
+<code>custom_labels_db</code></strong> point GetOrganelle at reference
+sequences for your group. The defaults are for fishes, but you can build
+databases for any clade with <code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code>, see <a href="custom_dbs.html">building custom databases</a>. Give absolute
+paths, not paths starting with <code>~</code>.</p>
+<p><strong><code>mitofinder_db</code></strong> points MitoFinder at a
+GenBank-format (<code>.gb</code>) reference database, given as a local
+path or a URL. The default is the zebrafish mitogenome, so supply your
+own for anything that is not a fish.</p>
+</div>
+<div class="section level5">
+<h5 id="data-and-compute">Data and compute<a class="anchor" aria-label="anchor" href="#data-and-compute"></a>
+</h5>
 <p><strong><code>min_depth</code></strong> is the minimum number of read
 pairs after pre-processing for a sample to continue (default 2,000,000).
 Lower it if your reads have already been filtered or baited.</p>
-<p><strong><code>linear_complete</code></strong> should be
-<code>TRUE</code> for taxa whose complete mitogenome is genuinely
-linear, will cause export to label them “complete genome” rather than
-“partial”.</p>
-<p><strong><code>ncbi_api_key</code></strong> raises your NCBI request
-limits. Worth setting even though the BLAST search itself is local,
-because MitoPilot fetches annotations and taxonomic lineage for each
-BLAST hit directly from NCBI. Get an API key from <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">NCBI</a>.</p>
 <p><strong><code>executor</code></strong> decides where the work runs:
 <code>"local"</code>, one of the generic cluster templates
 (<code>"slurm"</code>, <code>"sge"</code>, <code>"pbs"</code>,
 <code>"lsf"</code>, <code>"awsbatch"</code>), a site profile
 (<code>"NMNH_Hydra"</code>, <code>"NOAA_SEDNA"</code>), or a profile you
 saved yourself with <code><a href="../reference/generate_config.html">generate_config()</a></code>. See <a href="Custom-HPC.html">HPC cluster support</a>.</p>
-<p><strong>Processing parameters</strong> for the pipeline modules can
-also be set here, not just in the app. Anything you pass to
-<code><a href="../reference/new_project.html">new_project()</a></code> overrides the stored default for every sample
-in the new project, for example:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<p><strong><code>ncbi_api_key</code></strong> raises your NCBI request
+limits. Worth setting even though the BLAST search itself is local,
+because MitoPilot fetches annotations and taxonomic lineage for each
+BLAST hit directly from NCBI. Get an API key from <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">NCBI</a>.</p>
+</div>
+<div class="section level5">
+<h5 id="any-other-pipeline-parameter">Any other pipeline parameter<a class="anchor" aria-label="anchor" href="#any-other-pipeline-parameter"></a>
+</h5>
+<p>Every processing parameter shown in the app’s options windows can
+also be passed to <code><a href="../reference/new_project.html">new_project()</a></code>, which overrides the stored
+default for every sample in the new project:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  mapping_fn <span class="op">=</span> <span class="st">"path/to/mapping_file.csv"</span>,</span>
 <span>  executor <span class="op">=</span> <span class="st">"local"</span>,</span>
 <span>  assemble_memory <span class="op">=</span> <span class="fl">24</span>,</span>
 <span>  getOrganelle <span class="op">=</span> <span class="st">"-F 'anonym' -R 20 -k '21,45,65,85,105,115' -J 1 -M 1 --expected-max-size 20000 --target-genome-size 16500"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p>For the complete list of parameters that can be set at
-initialization, see the <a href="../reference/new_db.html"><code>new_db()</code></a>
+<p>For the complete list, see the <a href="../reference/new_db.html"><code>new_db()</code></a>
 documentation.</p>
-<p>Below is a more complete <code>new_project</code> example for an
-octocoral dataset on a SLURM cluster:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+</div>
+</div>
+<div class="section level4">
+<h4 id="a-complete-example">A complete example<a class="anchor" aria-label="anchor" href="#a-complete-example"></a>
+</h4>
+<p>An octocoral dataset on a SLURM cluster:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  path <span class="op">=</span> <span class="st">"~/octocorals/run_01"</span>,</span>
 <span>  mapping_fn <span class="op">=</span> <span class="st">"~/octocorals/mapping.csv"</span>,</span>
@@ -351,7 +386,7 @@ octocoral dataset on a SLURM cluster:</p>
 <p>After setting up the project, open the app from the project directory
 and work through Assemble, Annotate, and Export exactly as in the test
 project:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="st">"~/octocorals/run_01"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/MitoPilot.html">MitoPilot</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <div class="alert alert-tip">

@@ -30,6 +30,8 @@ Create, migrate, edit, and export the project SQLite database.
   : Update project database metadata.
 - [`update_sample_seqdata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_seqdata.md)
   : Update sequence files for existing project
+- [`set_maptoref_refs()`](https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.md)
+  : Set per-sample MapToRef references
 - [`backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.md)
   : Update old project database for backwards compatibility
 - [`export_db_to_csv()`](https://smithsonian.github.io/MitoPilot/reference/export_db_to_csv.md)
@@ -355,4 +357,10 @@ Called by the Nextflow workflows. Not intended for direct use.
 - [`get_assembly()`](https://smithsonian.github.io/MitoPilot/reference/get_assembly.md)
   : Get assembly from database
 - [`get_assembly_userAsmb()`](https://smithsonian.github.io/MitoPilot/reference/get_assembly_userAsmb.md)
-  : Get assembly from database
+  : Get assembly from database (user-supplied assemblies)
+- [`map_to_ref()`](https://smithsonian.github.io/MitoPilot/reference/map_to_ref.md)
+  : Map-to-reference mitogenome assembly
+- [`maptoref_prepare_ref()`](https://smithsonian.github.io/MitoPilot/reference/maptoref_prepare_ref.md)
+  : Read and validate a MapToRef reference mitogenome
+- [`maptoref_fetch_accession()`](https://smithsonian.github.io/MitoPilot/reference/maptoref_fetch_accession.md)
+  : Resolve an NCBI accession to a MapToRef reference file

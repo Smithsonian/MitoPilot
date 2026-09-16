@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -214,20 +215,21 @@ table of the annotations. MitoPilot allows you to export entire
 mitogenomes, individual genes, or both. Export also generates GFF3
 annotation files and alignment summaries.</p>
 <div class="float">
-<img src="figures/get-started/export-table.png" alt="Export module sample table"><div class="figcaption">Export module sample table</div>
+<img src="figures/get-started/export-table.png" alt="Export module assembly table"><div class="figcaption">Export module assembly table</div>
 </div>
 <div class="section level2">
 <h2 id="make-a-group">Make a group<a class="anchor" aria-label="anchor" href="#make-a-group"></a>
 </h2>
 <p>Export works on <strong>groups</strong>, which correspond to
-submission batches. Select the samples you want and click <strong>ASSIGN
-GROUP</strong>.</p>
+submission batches. Select the assemblies you want and click
+<strong>Assign Group</strong>.</p>
 <div class="float">
-<img src="figures/get-started/export-group-modal.png" alt="Submission group window"><div class="figcaption">Submission group window</div>
+<img src="figures/get-started/export-group-modal.png" alt="Assign export group window"><div class="figcaption">Assign export group window</div>
 </div>
-<p>The window summarizes what you selected: how many records, which
-topologies, and the gene order of each. Type a name (letters, numbers,
-dashes, and underscores only) and click <strong>Create</strong>.</p>
+<p>The <strong>Assign export group</strong> window summarizes what you
+selected: how many assemblies, which topologies, and the gene order of
+each. Type a name (letters, numbers, dots, hyphens, and underscores
+only) and click <strong>Create</strong>.</p>
 <p>For the test project, select everything. MitoPilot then stops
 you:</p>
 <div class="float">
@@ -246,36 +248,38 @@ overrode it using the per-sample Partial flag or the
 <img src="figures/get-started/export-table-grouped.png" alt="Export table with samples assigned to groups"><div class="figcaption">Export table with samples assigned to
 groups</div>
 </div>
-<p>A unit can only belong to one export group at a time. <strong>CLEAR
-GROUP</strong> removes the selected samples from their group.
-Re-assigning a grouped sample asks for confirmation first, because files
-already written for the old group are not cleaned up.</p>
+<p>An assembly can only belong to one export group at a time.
+<strong>Clear Group</strong> removes the selected assemblies from their
+group. Re-assigning a grouped assembly shows a warning in the window,
+because files already written for the old group are not cleaned up.</p>
 </div>
 <div class="section level2">
 <h2 id="export">Export<a class="anchor" aria-label="anchor" href="#export"></a>
 </h2>
-<p>Click <strong>EXPORT DATA</strong>.</p>
+<p>Click <strong>Export Data</strong>.</p>
 <div class="float">
 <img src="figures/get-started/export-modal.png" alt="Export Data window with header template and output options"><div class="figcaption">Export Data window with header template and
 output options</div>
 </div>
-<p><strong>Header Template</strong> is the FASTA definition line. Any
-extra columns you put in the mapping file at project setup are available
-here and can be referenced using <code>{column_name}</code>. This is how
-you can include things like voucher numbers and BioSample accessions in
-the GenBank submission files.</p>
+<p><strong>Mitogenome FASTA header</strong> is the FASTA definition
+line, and <strong>Header template</strong> is a saved, named set of
+header patterns you can pick from. Any extra columns you put in the
+mapping file at project setup are available here and can be referenced
+using <code>{column_name}</code>. This is how you can include things
+like voucher numbers and BioSample accessions in the GenBank submission
+files.</p>
 <p>There are two special parameters. First, <code>{completeness}</code>
 expands to “complete genome” or “partial genome” and belongs at the end
 of the header for GenBank to parse it correctly. Second,
 <code>{seqid}</code> takes the value in the ID column of the mapping
 file and appends the scaffold/path number if that sample is exporting
 multiple sequences.</p>
-<p>Templates are validated as you type and can be saved by name for
-reuse.</p>
+<p>Templates are validated as you type and can be saved by name with
+<strong>Save template</strong> for reuse.</p>
 <p>Other options in the Export Data window:</p>
 <ul>
 <li>
-<strong>Generate Group-level PCG alignment summary</strong> aligns
+<strong>Generate group-level PCG alignment summary</strong> aligns
 every protein-coding gene across the group and writes an HTML report.
 Worth the wait as a final check.</li>
 <li>
@@ -316,11 +320,13 @@ the group falls below the specified threshold. In the screenshot above,
 SRR21844202’s ATP6 is at 59.2% identity against the others.</p>
 <p>You can page through the flagged genes with <strong>Prev</strong> and
 <strong>Next</strong>, jump straight into the annotation editor for any
-sample with <strong>edit</strong>, mark a gene resolved once you have
-looked at it, or cancel the export entirely. You can also edit genes for
-samples that were not automatically flagged.</p>
-<p>Files are written only when you click <strong>Done</strong>, so edits
-made during review will appear in the exported files.</p>
+sample with <strong>Edit</strong>, mark a gene resolved with
+<strong>Mark gene resolved</strong> once you have looked at it, or stop
+with <strong>Stop without exporting</strong>. You can also edit genes
+for samples that were not automatically flagged.</p>
+<p>Files are written only when you click <strong>Continue
+export</strong>, so edits made during review will appear in the exported
+files.</p>
 <div class="alert alert-tip">
 <p><strong>Tip.</strong> Low identity is not automatically an error.
 ATP8 and NAD6 are genuinely fast-evolving and routinely flag in a
@@ -353,7 +359,9 @@ feature table</a> of annotations</td>
 </tr>
 <tr class="odd">
 <td><code>&lt;group&gt;_sample_info.csv</code></td>
-<td>The sample metadata behind the submission</td>
+<td>The sample metadata behind the submission, including a
+<code>ref_comparison</code> column naming the GenBank reference each
+annotation was compared to</td>
 </tr>
 <tr class="even">
 <td><code>AA_alignments_&lt;group&gt;.html</code></td>
@@ -377,9 +385,10 @@ organelle submission</a>.</p>
 <img src="figures/get-started/export-aa-report.png" alt="Exported HTML report listing flagged outliers and gene alignments"><div class="figcaption">Exported HTML report listing flagged outliers
 and gene alignments</div>
 </div>
-<p>It opens with every flagged outlier in one table, then shows the
-alignment for each protein-coding gene across the group. Poor
-annotations tend to be obvious here.</p>
+<p>It opens with every flagged outlier in one table, lists any
+protein-coding gene whose translation contains an internal stop codon,
+then shows the alignment for each protein-coding gene across the group.
+Poor annotations tend to be obvious here.</p>
 <div class="section level3">
 <h3 id="sequences-containing-unknown-bases">Sequences containing unknown bases<a class="anchor" aria-label="anchor" href="#sequences-containing-unknown-bases"></a>
 </h3>

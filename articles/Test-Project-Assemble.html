@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -222,6 +223,11 @@ cleaned.</p>
 <div class="float">
 <img src="figures/get-started/preprocess-opts.png" alt="Preprocess options window"><div class="figcaption">Preprocess options window</div>
 </div>
+<p>Duplicate reads are kept by default. To remove them, tick
+<strong>Remove duplicate reads</strong> in the Preprocess options (it
+runs fastp with <code>--dedup</code>). In the test data it dropped about
+a fifth of the reads and changed almost no calls, so treat it as a depth
+and runtime control rather than an accuracy fix.</p>
 <p>The <strong>Assembly Opts.</strong> column works the same way, and
 controls the assembler.</p>
 <div class="float">
@@ -235,37 +241,40 @@ important controls:</p>
 fail with out-of-memory errors.</li>
 <li>
 <strong>Assembler.</strong> <a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a> by
-default, or <a href="https://github.com/RemiAllio/MitoFinder" class="external-link">MitoFinder</a>.
-GetOrganelle only assembles reads it recognizes as mitochondrial, which
-makes it fast but dependent on good reference databases. MitoFinder
-assembles everything, which is much slower but can work better for
-groups with few reference mitogenomes.</li>
+default, <a href="https://github.com/RemiAllio/MitoFinder" class="external-link">MitoFinder</a>, or
+MapToRef. GetOrganelle only assembles reads it recognizes as
+mitochondrial, which makes it fast but dependent on good reference
+databases. MitoFinder assembles everything, which is much slower but can
+work better for groups with few reference mitogenomes. MapToRef maps
+your reads to a reference mitogenome you supply and calls the consensus
+from the reads. See <a href="Assembly-Methods.html">choosing an assembly
+method</a> for a comparison.</li>
 <li>
-<strong>Seeds and Labels databases.</strong> The reference sequences
-GetOrganelle uses to recruit and extend mitochondrial reads. The
-defaults are fish; for other groups, build your own with
-<code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code> (see <a href="custom_dbs.html">custom
-databases</a>).</li>
+<strong>GetOrganelle seed and label databases.</strong> The
+reference sequences GetOrganelle uses to recruit and extend
+mitochondrial reads. The defaults are fish; for other groups, build your
+own with <code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code> (see <a href="custom_dbs.html">custom databases</a>).</li>
 <li>
-<strong>MitoFinder reference database.</strong> Only used when the
-assembler is MitoFinder. A GenBank-format (<code>.gb</code>) file of one
-or more reference mitogenomes that MitoFinder uses to identify
-mitochondrial contigs. The default is the zebrafish mitogenome
-(NC_002333.2), so for anything other than a fish, supply a reference
-from your own group. <code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code> can build this
-file too.</li>
+<strong>MitoFinder database.</strong> Only used when the assembler
+is MitoFinder. A GenBank-format (<code>.gb</code>) file of one or more
+reference mitogenomes that MitoFinder uses to identify mitochondrial
+contigs. The default is the zebrafish mitogenome (NC_002333.2), so for
+anything other than a fish, supply a reference from your own group.
+<code><a href="../reference/custom_assembly_db.html">custom_assembly_db()</a></code> can build this file too.</li>
 <li>
 <strong>Max assembly paths / Max scaffolds.</strong> Samples are
 marked failed instead of continuing in the pipeline if they exceed these
 thresholds.</li>
 <li>
-<strong>Automatically join multi-scaffold assemblies.</strong> Off
-by default, and worth leaving off until you understand your data. See <a href="Difficult-Assemblies.html">handling difficult assemblies</a>.</li>
+<strong>Automatically join multi-scaffold assemblies (Path
+0).</strong> Off by default, and worth leaving off until you understand
+your data. See <a href="Difficult-Assemblies.html">handling difficult
+assemblies</a>.</li>
 </ul>
 <p>Options are saved as named, reusable sets. To make one, tick
 <strong>Edit</strong>, change what you want, type a new name in the
 <strong>Parameter set name</strong> box, and click
-<strong>Update</strong>. That name now appears in the dropdown for any
+<strong>Save</strong>. That name now appears in the dropdown for any
 sample. Different samples can use different parameter sets, which can
 allow you to selectively tweak memory usage, assembly method, etc. for
 difficult samples.</p>
@@ -289,7 +298,7 @@ the options sets and use:</p>
 </li>
 </ul>
 <p>Tick <strong>Edit</strong>, change the memory, give the set a name
-such as <code>hydra</code>, and click <strong>Update</strong> so it
+such as <code>hydra</code>, and click <strong>Save</strong> so it
 applies to every selected sample.</p>
 </div>
 <div class="alert alert-hydra">
@@ -303,7 +312,7 @@ wiki</a> for details about the available compute nodes.</p>
 <div class="section level2">
 <h2 id="run-the-workflow">Run the workflow<a class="anchor" aria-label="anchor" href="#run-the-workflow"></a>
 </h2>
-<p>Click <strong>UPDATE</strong> at the top of the window. MitoPilot
+<p>Click <strong>Update</strong> at the top of the window. MitoPilot
 shows the Nextflow command it is about to run and how many samples it
 applies to.</p>
 <div class="float">
@@ -312,12 +321,12 @@ Run from App button</div>
 </div>
 <p><strong>Run from App</strong> runs the pipeline in your R session
 (distributing individual tasks to compute nodes if you are working on a
-HPC cluster). The Progress window updates as samples move through the
-steps, and the spinning gears in the corner mean work is still
-happening. This is the simplest option, and the right one for a project
-this size.</p>
+HPC cluster). The <strong>Progress</strong> section of the same window
+updates as samples move through the steps, and the spinning gears in the
+corner mean work is still happening. This is the simplest option, and
+the right one for a project this size.</p>
 <div class="float">
-<img src="figures/get-started/progress-window.png" alt="Progress window part way through an Assemble run"><div class="figcaption">Progress window part way through an Assemble
+<img src="figures/get-started/progress-window.png" alt="Update window part way through an Assemble run"><div class="figcaption">Update window part way through an Assemble
 run</div>
 </div>
 <p>Each line is a pipeline step, with a count of how many samples have
@@ -346,7 +355,7 @@ finishes. For anything beyond a dozen samples, use <strong>Submit as
 Job</strong> rather than running from the app.</p>
 </div>
 <p>Assemble runs three steps per sample: read pre-processing with <a href="https://github.com/OpenGene/fastp" class="external-link">fastp</a>, assembly with
-GetOrganelle or MitoFinder, and read mapping with <a href="https://github.com/BenLangmead/bowtie2" class="external-link">bowtie2</a> to compute
+GetOrganelle, MitoFinder, or MapToRef, and read mapping with <a href="https://github.com/BenLangmead/bowtie2" class="external-link">bowtie2</a> to compute
 depth and error rates. It then BLASTs each assembly to find its closest
 published relative, and fetches that reference’s annotations from NCBI.
 Nextflow runs all samples in parallel through these steps.</p>
@@ -376,9 +385,9 @@ the BLAST database included with the MitoPilot container.</li>
 by default. If the local search comes up empty, MitoPilot retries that
 sample once against NCBI.</li>
 </ul>
-<p>You can restrict either search to particular <strong>NCBI taxon
+<p>You can restrict either search with <strong>Restrict search to taxon
 IDs</strong> (numeric IDs, not names). The <strong>Entrez query</strong>
-box applies to remote searches only.</p>
+box appears only once <strong>Remote BLAST</strong> is ticked.</p>
 <div class="alert alert-note">
 <p><strong>Note.</strong> Local BLAST does not remove the need for an
 NCBI API key. Only the <em>search</em> is local. Once a reference is
@@ -394,19 +403,19 @@ throttled.</p>
 <h2 id="read-the-results">Read the results<a class="anchor" aria-label="anchor" href="#read-the-results"></a>
 </h2>
 <p>When the run finishes, the sample table should automatically fill in.
-If not try clicking the circular arrow refresh button.</p>
+If not try clicking the refresh button in the toolbar.</p>
 <div class="float">
 <img src="figures/get-started/assemble-table.png" alt="MitoPilot sample table in the Assemble module"><div class="figcaption">MitoPilot sample table in the Assemble
 module</div>
 </div>
 <p>Useful columns: <strong>Reads</strong> surviving pre-processing,
-<strong>Topology</strong> (circular or linear), <strong>Asmb.
-Length</strong>, and <strong># Paths</strong> / <strong>#
+<strong>Topology</strong> (circular or linear), <strong>Assembly Length
+(bp)</strong>, and <strong># Paths</strong> / <strong>#
 Scaffolds</strong>, which tell you whether the sample came back as one
 clean sequence or something messier. The BLAST columns name the closest
-GenBank record. The <code>output</code> button opens the sample’s
+GenBank record. The <strong>Output</strong> button opens the sample’s
 results folder.</p>
-<p>The <code>details</code> button opens a new window for the
+<p>The <strong>Details</strong> button opens a new window for the
 assembly.</p>
 <div class="float">
 <img src="figures/get-started/assemble-details.png" alt="Assembly details for a sample with one clean assembly"><div class="figcaption">Assembly details for a sample with one clean
@@ -420,8 +429,9 @@ sequence to your clipboard.</p>
 <div class="section level3">
 <h3 id="coverage-and-error">Coverage and error<a class="anchor" aria-label="anchor" href="#coverage-and-error"></a>
 </h3>
-<p>In this assembly details window, <code>view</code> opens a plot of
-read depth, error rate, and GC content along the assembly.</p>
+<p>In this assembly details window, the <strong>View</strong> button in
+the <strong>Coverage</strong> column opens a plot of read depth, error
+rate, and GC content along the assembly.</p>
 <div class="float">
 <img src="figures/get-started/coverage-plot.png" alt="Read depth, error rate, and GC content along an assembly"><div class="figcaption">Read depth, error rate, and GC content along an
 assembly</div>
@@ -436,13 +446,13 @@ mitogenomes. A linear mitogenome is not a failure and can still be
 annotated.</p>
 <div class="alert alert-hydra">
 <p><span class="hydra-tag">HYDRA</span> <strong>Buttons that open
-files.</strong> On RStudio Server, the <code>output</code> button opens
-that sample’s results folder in the <strong>Files</strong> pane at the
-bottom right of your RStudio session, and the coverage <code>view</code>
-plot opens the PDF the same way. If you reached the app through an SSH
-tunnel from a container instead, these buttons may do nothing, because
-the app tries to open them on the cluster rather than on your
-laptop.</p>
+files.</strong> On RStudio Server, the <strong>Output</strong> button
+opens that sample’s results folder in the <strong>Files</strong> pane at
+the bottom right of your RStudio session, and the coverage
+<strong>View</strong> plot opens the PDF the same way. If you reached
+the app through an SSH tunnel from a container instead, these buttons
+cannot open anything on your laptop, so the app shows the file path in a
+message instead.</p>
 </div>
 </div>
 <div class="section level3">
@@ -476,8 +486,8 @@ fix here, so leave this sample behind when you lock the rest.</p>
 </h3>
 <p>SRR21844202 (<em>Fundulus majalis</em>) is flagged “Unable to resolve
 single assembly from reads”: GetOrganelle found two valid paths through
-a tangled assembly graph. Open <code>details</code> and you see both,
-each 19,332 bp.</p>
+a tangled assembly graph. Open <strong>Details</strong> and you see
+both, each 19,332 bp.</p>
 <p>Select both and click <strong>Align</strong>.</p>
 <div class="float">
 <img src="figures/get-started/multipath-align.png" alt="Alignment of two competing assembly paths with a conflict block highlighted"><div class="figcaption">Alignment of two competing assembly paths with a
@@ -530,7 +540,7 @@ click <strong>Build joined assembly (Path 0)</strong>.</p>
 <img src="figures/get-started/scaffjoin-joined.png" alt="Assembly details after building the joined Path 0"><div class="figcaption">Assembly details after building the joined Path
 0</div>
 </div>
-<p>The joined Path 0 is 17,652 bp, the three original scaffolds are
+<p>The joined Path 0 is 16,950 bp, the three original scaffolds are
 marked ignored, and the sample is locked automatically. The note records
 how it was built, including how many N bases fill the gaps. Those Ns are
 real missing sequence, and MitoPilot warns you about them because MITOS2
@@ -559,13 +569,14 @@ glance.</p>
 <h2 id="lock-and-move-on">Lock and move on<a class="anchor" aria-label="anchor" href="#lock-and-move-on"></a>
 </h2>
 <p>Select every sample that assembled successfully, which is all of them
-except SRR22396758, and click <strong>LOCK</strong>.</p>
+except SRR22396758, and click <strong>Lock</strong>.</p>
 <div class="float">
 <img src="figures/get-started/assemble-selected.png" alt="Sample table with successful samples selected for locking"><div class="figcaption">Sample table with successful samples selected
 for locking</div>
 </div>
 <p>Locking freezes those samples in Assemble and releases them to the
-Annotate module. Switch modules with the dropdown at the top left.</p>
+Annotate module. Switch modules with the numbered buttons at the top
+left.</p>
 <p class="next-step">
 <a href="Test-Project-Annotate.html">Next: Annotate →</a>
 </p>

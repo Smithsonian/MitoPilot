@@ -10,9 +10,9 @@ sequences from GenBank, and validates the result against rules for your
 taxonomic group. It attempts to flag any issues that would cause a
 rejection during GenBank submission.
 
-Each row here is one **assembly unit**, not one sample. A sample that
-kept several scaffolds or paths will be represented by several rows, and
-each is annotated and validated on its own.
+Each row here is one **assembly**, not one sample. A sample that kept
+several scaffolds or paths will be represented by several rows, and each
+is annotated and validated on its own.
 
 ## Set the options
 
@@ -44,8 +44,9 @@ which is correct for the test fishes.
 
 For your own data, pick the closest clade from the [ruleset
 browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.md).
-The validation parameters below are the ruleset itself, laid out so you
-can see exactly which rules a sample is being judged against.
+Expand **Curation rules for this ruleset** to see the validation
+parameters, which are the ruleset itself, laid out so you can see
+exactly which rules an assembly is being judged against.
 
 **No ruleset for your samples?** If you do not see an appropriate clade
 for your samples, please post an
@@ -53,14 +54,14 @@ for your samples, please post an
 Dan MacGuigan directly at <macguigand@si.edu>. We are always looking to
 expand the taxonomic scope of MitoPilot.
 
-When ready, click **UPDATE** and run the workflow the same way you ran
+When ready, click **Update** and run the workflow the same way you ran
 Assemble.
 
 This module is slower than Assemble. MITOS2 takes a few minutes per
-unit, and curation aligns every protein-coding gene against reference
-sequences. When working on a computing cluster with your own project,
-consider running this step as a job rather than directly from the
-MitoPilot app.
+assembly, and curation aligns every protein-coding gene against
+reference sequences. When working on a computing cluster with your own
+project, consider running this step as a job rather than directly from
+the MitoPilot app.
 
 ## Read the results
 
@@ -71,29 +72,29 @@ Annotate table showing missing genes, extra genes, and warning counts
 
 Scroll right in the table for the columns that matter:
 
-- **PCGCount, tRNACount, rRNACount**: how many of each gene type were
+- **\# PCGs, \# tRNAs, \# rRNAs**: how many of each gene type were
   annotated. For a vertebrate mitogenome you expect 13, 22, and 2.
 - **Missing**: expected genes that were not found.
 - **Extra**: genes annotated more times than the ruleset expects.
 - **Warnings**: how many validation flags were raised. This is your work
   queue.
 
-A few units stand out in the test project. For example, SRR21844202 has
-an extra `trnW` and two warnings.
+A few assemblies stand out in the test project. For example, SRR21844202
+has an extra `trnW` and two warnings.
 
-SCAFFJOIN is missing `atp8` and `trnK` and carries eight warnings. This
-is a real consequence of joining scaffolds across coverage gaps. The
-sequence in those gaps is set to “N”, so the genes in those gaps cannot
-be annotated.
+SCAFFJOIN is missing `atp8`, `trnK`, and `trnL` and carries ten
+warnings. This is a real consequence of joining scaffolds across
+coverage gaps. The sequence in those gaps is set to “N”, so the genes in
+those gaps cannot be annotated.
 
 **Note.** The **Warnings column includes** dropdown menu at the top
 filters which warning types are counted. Narrow it to one warning type
-to pull out every sample with that problem and work through them as a
+to pull out every assembly with that problem and work through them as a
 batch.
 
 ## Inspect a sample
 
-Click `details` on any row. Here we’ll look at sample SRR19434536.
+Click **Details** on any row. Here we’ll look at sample SRR19434536.
 
 ![Annotation details window with the gene
 table](figures/get-started/annotate-details.png)
@@ -107,16 +108,18 @@ codon trimmed. **Warnings** shows what validation flagged. The `nt` and
 `aa` buttons copy the nucleotide or amino acid sequence to your
 clipboard.
 
-The badges along the top track the sample: topology, ID verified,
-reviewed, problematic, and partial. The buttons at the bottom toggle
-them, which is how you keep track of what you have already looked at
-across a large project.
+The badges along the top track the assembly: topology, species ID
+verified, reviewed, problematic, and partial. The **Mark …** buttons
+beside them toggle each flag, which is how you keep track of what you
+have already looked at across a large project.
 
-Below the table are three collapsible views.
+Below the table are four collapsible sections.
 
-**Coverage Map** plots read depth along the assembly with the gene
-models drawn below, zoomed to whichever gene you have selected. The gene
-bars are semi-transparent so overlapping gene models are easy to spot.
+**Sequence** shows read depth and per-base error rate along the
+assembly, the gene models drawn in lanes below them, then the
+nucleotides and translated amino acids once you zoom in. Each track can
+be hidden with its checkbox. Error rate bars turn orange above 5%, a
+sign of possible sequencing or assembly errors.
 
 ![Coverage map with gene models drawn over read
 depth](figures/get-started/annotate-coverage-map.png)
@@ -128,11 +131,12 @@ GenBank mitogenome, with a percent-identity bar between them. Click
 anywhere in this plot to show a zoomed-in base-pair level alignment of
 your sample versus the reference.
 
-The reference mitogenome shown in this plot will be exported in your
-GenBank submission files as a note: “annotation compared to GenBank
-accession XXX”. If the reference mitogenome is a poor match, you can
-flag it (remove the submission note) or use the dropdown menu to pick a
-better reference from among the top BLAST hits.
+The reference mitogenome shown in this plot is recorded in the export’s
+`sample_info.csv` in the `ref_comparison` column, as “compared sample
+XXX to GenBank accession XXX”. It is not written to the FASTA headers.
+If the reference mitogenome is a poor match, you can flag it (the CSV
+column is then left blank) or use the dropdown menu to pick a better
+reference from among the top BLAST hits.
 
 ![Gene order compared against the closest GenBank
 reference](figures/get-started/annotate-synteny.png)
@@ -152,9 +156,16 @@ gene with the codon frame marked, along with the start and stop codons
 that were called. Below it, the protein alignment shows your gene
 (“focal”) alongside the reference proteins.
 
+Below the annotation table, the **Sequence** section shows the assembly
+itself: genes as arrows in lanes, the nucleotides once you zoom in, and
+the translated amino acids of each protein-coding gene under their
+codons. Click a row in the table to jump to that gene, or use Whole
+genome to step back out. The view follows every edit you make in this
+window.
+
 ## Manually fix annotations
 
-Click **EDIT** in the alignment section to nudge the start or stop
+Click **Edit** in the alignment section to nudge the start or stop
 position and watch the alignment respond.
 
 ![Alignment-based annotation
@@ -164,9 +175,9 @@ Alignment-based annotation editing
 
 By default, the `+` and `-` buttons search for the next valid start or
 stop codon (according to the curation ruleset you selected). You can
-toggle the `single codon` button to instead nudge the position one codon
-at a time. This can lead to a **partial** gene model with undetermined
-start or stop codons.
+tick the **single codon** checkbox to instead nudge the position one
+codon at a time. This can lead to a **partial** gene model with
+undetermined start or stop codons.
 
 Clicking the `poly-A stop` button will truncate a stop codon to **TA**
 or **T**. Sometimes this is required by GenBank to avoid overlapping
@@ -196,18 +207,18 @@ Other useful editing tools:
   restricting the alignment to the top five hits, which matters because
   the alignment is recomputed on every start/stop codon nudge.
 
-You can record what you did in the **Notes** box; it saves automatically
-and is retained with the sample.
+You can record what you did in the **Notes** section; it saves
+automatically and is retained with the assembly.
 
 **Warning.** Validation warnings do not disappear when you fix the
 underlying problem. They record the state at the time the Annotate
-module ran. Use the **Reviewed** toggle to track what you have actually
-dealt with.
+module ran. Use the **Mark Reviewed** button to track what you have
+actually dealt with.
 
 ## Lock and move on
 
-When you are satisfied, select the samples and click **LOCK** to release
-them to the Export module.
+When you are satisfied, select the assemblies and click **Lock** to
+release them to the Export module.
 
 [Next: Export
 →](https://smithsonian.github.io/MitoPilot/articles/Test-Project-Export.md)

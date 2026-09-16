@@ -1,6 +1,7 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://smithsonian.github.io/MitoPilot/404.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/LICENSE.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.html</loc></url>
@@ -86,6 +87,9 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/local_blast_db_info.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/local_blast_db_note.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/make_PCG_alignments.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/map_to_ref.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/maptoref_fetch_accession.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/maptoref_prepare_ref.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/mitopilot_config_dir.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_db.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_db_userAsmb.html</loc></url>
@@ -133,6 +137,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/scaffold_join.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/select_mito_contigs.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/splice_join_cds.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/tunnel_instructions.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.html</loc></url>

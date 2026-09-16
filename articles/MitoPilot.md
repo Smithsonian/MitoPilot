@@ -138,37 +138,37 @@ This is a fresh project, so the result columns are still empty: the
 sample metadata comes from your mapping file, and everything else fills
 in as the pipeline runs.
 
-Each row is a sample. The dropdown at the top left switches between the
-three pipeline modules, **Assemble**, **Annotate**, and **Export**,
-which you work through in that order. The circular arrow refreshes the
-table.
+Each row is a sample. The numbered buttons at the top left switch
+between the three pipeline modules, **1 Assemble**, **2 Annotate**, and
+**3 Export**, which you work through in that order. The refresh button
+beside them reloads the table from the database.
 
 Clicking a column header sorts alphanumerically. The search box at the
 top right filters everything, and most columns have their own filter
 box.
 
-Two icons sit to the left of each sample ID:
+Two columns sit to the left of each sample ID, **Lock** and **State**:
 
 - **The lock** ( unlocked, locked). Unlocked samples are available for
   the next pipeline run to process. Locking a sample freezes it in the
   current module and makes it available for the next module. Select
-  samples and use the `LOCK` button to toggle.
+  samples and use the **Lock** button to toggle.
 - **The state.** Status of the sample in the current module. The
   pipeline sets these automatically, but you can override them with the
-  `STATE` button. This is how you can park samples you do not want to
+  **State** button. This is how you can park samples you do not want to
   process yet or reset samples that have already completed the pipeline.
   There are five states:
 
-| State | Meaning |
-|----|----|
-|  Hold / Waiting | Ready to be updated, but will be skipped on the next run |
-|  Ready to Run | Will be updated on the next run |
-|  In Progress | Partway through the current module |
-|  Completed Successfully | Processed without problems |
-|  Completed with Warning | Finished, but may have failed or needs manual review |
+| State         | Meaning                                                     |
+|---------------|-------------------------------------------------------------|
+|  On hold      | Skipped by the next Update until you set it to Ready to run |
+|  Ready to run | Queued: the next Update will process it                     |
+|  In progress  | Being processed by the running pipeline                     |
+|  Success      | Finished without errors                                     |
+|  Failed       | Stopped with an error; see the Notes column                 |
 
-The Annotate module has no separate half-circle state; a unit being
-worked on shows the runner icon until it finishes.
+The Annotate module has no **In progress** state; an assembly waiting to
+be processed keeps its **Ready to run** icon until the run finishes.
 
 ------------------------------------------------------------------------
 
@@ -194,6 +194,8 @@ Additional articles for you to explore:
 
 - [Building custom
   databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md)
+- [Choosing an assembly
+  method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.md)
 - [Handling difficult
   assemblies](https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.md)
 - [Curation ruleset

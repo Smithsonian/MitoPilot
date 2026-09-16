@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -72,6 +73,7 @@
 <span>  mapping_id <span class="op">=</span> <span class="st">"ID"</span>,</span>
 <span>  mapping_taxon <span class="op">=</span> <span class="st">"Taxon"</span>,</span>
 <span>  genetic_code <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dedup <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  assemble_cpus <span class="op">=</span> <span class="fl">6</span>,</span>
 <span>  assemble_memory <span class="op">=</span> <span class="fl">24</span>,</span>
 <span>  assembler <span class="op">=</span> <span class="st">"GetOrganelle"</span>,</span>
@@ -84,6 +86,10 @@
 <span>  mitofinder_db <span class="op">=</span></span>
 <span>    <span class="st">"https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb"</span>,</span>
 <span>  mitofinder <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"--megahit"</span><span class="op">)</span>,</span>
+<span>  maptoref_mapper <span class="op">=</span> <span class="st">"bowtie2"</span>,</span>
+<span>  maptoref <span class="op">=</span> <span class="va">.mtr_default_bowtie2</span>,</span>
+<span>  maptoref_consensus <span class="op">=</span> <span class="va">.mtr_default_consensus</span>,</span>
+<span>  maptoref_iter <span class="op">=</span> <span class="fl">5L</span>,</span>
 <span>  max_paths <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  max_scaffolds <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  min_assembly_length <span class="op">=</span> <span class="fl">500</span>,</span>
@@ -139,6 +145,12 @@ override on the default curate_opts set.
 https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi</p></dd>
 
 
+<dt id="arg-dedup">dedup<a class="anchor" aria-label="anchor" href="#arg-dedup"></a></dt>
+<dd><p>Run fastp with `–dedup` to drop PCR and optical duplicates
+before assembly? Default FALSE keeps `–dont_eval_duplication`, the shipped
+fastp default. Editable later in the preprocess-options modal.</p></dd>
+
+
 <dt id="arg-assemble-cpus">assemble_cpus<a class="anchor" aria-label="anchor" href="#arg-assemble-cpus"></a></dt>
 <dd><p>Default # cpus for assembly</p></dd>
 
@@ -148,7 +160,8 @@ https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi</p></dd>
 
 
 <dt id="arg-assembler">assembler<a class="anchor" aria-label="anchor" href="#arg-assembler"></a></dt>
-<dd><p>Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"</p></dd>
+<dd><p>Assembler, choice of "GetOrganelle" (default), "MitoFinder",
+or "MapToRef"</p></dd>
 
 
 <dt id="arg-seeds-db">seeds_db<a class="anchor" aria-label="anchor" href="#arg-seeds-db"></a></dt>
@@ -172,6 +185,25 @@ Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.
 
 <dt id="arg-mitofinder">mitofinder<a class="anchor" aria-label="anchor" href="#arg-mitofinder"></a></dt>
 <dd><p>Default MitoFinder command line options</p></dd>
+
+
+<dt id="arg-maptoref-mapper">maptoref_mapper<a class="anchor" aria-label="anchor" href="#arg-maptoref-mapper"></a></dt>
+<dd><p>MapToRef read mapper, "bowtie2", "bwa-mem", or
+"bwa-aln" (default = "bowtie2")</p></dd>
+
+
+<dt id="arg-maptoref">maptoref<a class="anchor" aria-label="anchor" href="#arg-maptoref"></a></dt>
+<dd><p>Default mapper options for MapToRef
+(default = "–very-sensitive-local")</p></dd>
+
+
+<dt id="arg-maptoref-consensus">maptoref_consensus<a class="anchor" aria-label="anchor" href="#arg-maptoref-consensus"></a></dt>
+<dd><p>Default samtools consensus options for MapToRef
+(default = "-d 3 –min-BQ 20")</p></dd>
+
+
+<dt id="arg-maptoref-iter">maptoref_iter<a class="anchor" aria-label="anchor" href="#arg-maptoref-iter"></a></dt>
+<dd><p>Maximum MapToRef iteration passes (default = 5)</p></dd>
 
 
 <dt id="arg-max-paths">max_paths<a class="anchor" aria-label="anchor" href="#arg-max-paths"></a></dt>

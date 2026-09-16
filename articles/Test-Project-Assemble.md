@@ -20,6 +20,12 @@ see how the reads will be cleaned.
 
 Preprocess options window
 
+Duplicate reads are kept by default. To remove them, tick **Remove
+duplicate reads** in the Preprocess options (it runs fastp with
+`--dedup`). In the test data it dropped about a fifth of the reads and
+changed almost no calls, so treat it as a depth and runtime control
+rather than an accuracy fix.
+
 The **Assembly Opts.** column works the same way, and controls the
 assembler.
 
@@ -33,34 +39,38 @@ Nothing is editable until you tick **Edit**. The important controls:
   out-of-memory errors.
 - **Assembler.**
   [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) by default,
-  or [MitoFinder](https://github.com/RemiAllio/MitoFinder). GetOrganelle
-  only assembles reads it recognizes as mitochondrial, which makes it
-  fast but dependent on good reference databases. MitoFinder assembles
-  everything, which is much slower but can work better for groups with
-  few reference mitogenomes.
-- **Seeds and Labels databases.** The reference sequences GetOrganelle
-  uses to recruit and extend mitochondrial reads. The defaults are fish;
-  for other groups, build your own with
+  [MitoFinder](https://github.com/RemiAllio/MitoFinder), or MapToRef.
+  GetOrganelle only assembles reads it recognizes as mitochondrial,
+  which makes it fast but dependent on good reference databases.
+  MitoFinder assembles everything, which is much slower but can work
+  better for groups with few reference mitogenomes. MapToRef maps your
+  reads to a reference mitogenome you supply and calls the consensus
+  from the reads. See [choosing an assembly
+  method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.md)
+  for a comparison.
+- **GetOrganelle seed and label databases.** The reference sequences
+  GetOrganelle uses to recruit and extend mitochondrial reads. The
+  defaults are fish; for other groups, build your own with
   [`custom_assembly_db()`](https://smithsonian.github.io/MitoPilot/reference/custom_assembly_db.md)
   (see [custom
   databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md)).
-- **MitoFinder reference database.** Only used when the assembler is
-  MitoFinder. A GenBank-format (`.gb`) file of one or more reference
-  mitogenomes that MitoFinder uses to identify mitochondrial contigs.
-  The default is the zebrafish mitogenome (NC_002333.2), so for anything
-  other than a fish, supply a reference from your own group.
+- **MitoFinder database.** Only used when the assembler is MitoFinder. A
+  GenBank-format (`.gb`) file of one or more reference mitogenomes that
+  MitoFinder uses to identify mitochondrial contigs. The default is the
+  zebrafish mitogenome (NC_002333.2), so for anything other than a fish,
+  supply a reference from your own group.
   [`custom_assembly_db()`](https://smithsonian.github.io/MitoPilot/reference/custom_assembly_db.md)
   can build this file too.
 - **Max assembly paths / Max scaffolds.** Samples are marked failed
   instead of continuing in the pipeline if they exceed these thresholds.
-- **Automatically join multi-scaffold assemblies.** Off by default, and
-  worth leaving off until you understand your data. See [handling
-  difficult
+- **Automatically join multi-scaffold assemblies (Path 0).** Off by
+  default, and worth leaving off until you understand your data. See
+  [handling difficult
   assemblies](https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.md).
 
 Options are saved as named, reusable sets. To make one, tick **Edit**,
 change what you want, type a new name in the **Parameter set name** box,
-and click **Update**. That name now appears in the dropdown for any
+and click **Save**. That name now appears in the dropdown for any
 sample. Different samples can use different parameter sets, which can
 allow you to selectively tweak memory usage, assembly method, etc. for
 difficult samples.
@@ -81,7 +91,7 @@ project, edit the options sets and use:
 - **Assembly Opts.** memory **80 GB**
 
 Tick **Edit**, change the memory, give the set a name such as `hydra`,
-and click **Update** so it applies to every selected sample.
+and click **Save** so it applies to every selected sample.
 
 HYDRA **CPUs and memory are per-job request.** On Hydra these values
 become the job scheduler’s resource request. The Hydra config flags
@@ -92,7 +102,7 @@ for details about the available compute nodes.
 
 ## Run the workflow
 
-Click **UPDATE** at the top of the window. MitoPilot shows the Nextflow
+Click **Update** at the top of the window. MitoPilot shows the Nextflow
 command it is about to run and how many samples it applies to.
 
 ![Update window showing the Nextflow command and Run from App
@@ -102,14 +112,15 @@ Update window showing the Nextflow command and Run from App button
 
 **Run from App** runs the pipeline in your R session (distributing
 individual tasks to compute nodes if you are working on a HPC cluster).
-The Progress window updates as samples move through the steps, and the
-spinning gears in the corner mean work is still happening. This is the
-simplest option, and the right one for a project this size.
+The **Progress** section of the same window updates as samples move
+through the steps, and the spinning gears in the corner mean work is
+still happening. This is the simplest option, and the right one for a
+project this size.
 
-![Progress window part way through an Assemble
+![Update window part way through an Assemble
 run](figures/get-started/progress-window.png)
 
-Progress window part way through an Assemble run
+Update window part way through an Assemble run
 
 Each line is a pipeline step, with a count of how many samples have
 finished it. **Stop / Interrupt** halts the run; you can resume it later
@@ -136,8 +147,8 @@ anything beyond a dozen samples, use **Submit as Job** rather than
 running from the app.
 
 Assemble runs three steps per sample: read pre-processing with
-[fastp](https://github.com/OpenGene/fastp), assembly with GetOrganelle
-or MitoFinder, and read mapping with
+[fastp](https://github.com/OpenGene/fastp), assembly with GetOrganelle,
+MitoFinder, or MapToRef, and read mapping with
 [bowtie2](https://github.com/BenLangmead/bowtie2) to compute depth and
 error rates. It then BLASTs each assembly to find its closest published
 relative, and fetches that reference’s annotations from NCBI. Nextflow
@@ -170,9 +181,9 @@ project. Two settings change the behavior:
   the local search comes up empty, MitoPilot retries that sample once
   against NCBI.
 
-You can restrict either search to particular **NCBI taxon IDs** (numeric
-IDs, not names). The **Entrez query** box applies to remote searches
-only.
+You can restrict either search with **Restrict search to taxon IDs**
+(numeric IDs, not names). The **Entrez query** box appears only once
+**Remote BLAST** is ticked.
 
 **Note.** Local BLAST does not remove the need for an NCBI API key. Only
 the *search* is local. Once a reference is chosen, MitoPilot still goes
@@ -184,7 +195,7 @@ requests are not throttled.
 ## Read the results
 
 When the run finishes, the sample table should automatically fill in. If
-not try clicking the circular arrow refresh button.
+not try clicking the refresh button in the toolbar.
 
 ![MitoPilot sample table in the Assemble
 module](figures/get-started/assemble-table.png)
@@ -192,12 +203,12 @@ module](figures/get-started/assemble-table.png)
 MitoPilot sample table in the Assemble module
 
 Useful columns: **Reads** surviving pre-processing, **Topology**
-(circular or linear), **Asmb. Length**, and **\# Paths** / **\#
+(circular or linear), **Assembly Length (bp)**, and **\# Paths** / **\#
 Scaffolds**, which tell you whether the sample came back as one clean
 sequence or something messier. The BLAST columns name the closest
-GenBank record. The `output` button opens the sample’s results folder.
+GenBank record. The **Output** button opens the sample’s results folder.
 
-The `details` button opens a new window for the assembly.
+The **Details** button opens a new window for the assembly.
 
 ![Assembly details for a sample with one clean
 assembly](figures/get-started/assemble-details.png)
@@ -213,8 +224,9 @@ clipboard.
 
 ### Coverage and error
 
-In this assembly details window, `view` opens a plot of read depth,
-error rate, and GC content along the assembly.
+In this assembly details window, the **View** button in the **Coverage**
+column opens a plot of read depth, error rate, and GC content along the
+assembly.
 
 ![Read depth, error rate, and GC content along an
 assembly](figures/get-started/coverage-plot.png)
@@ -231,12 +243,12 @@ Note that GenBank will still accept and verify partial (linear)
 mitogenomes. A linear mitogenome is not a failure and can still be
 annotated.
 
-HYDRA **Buttons that open files.** On RStudio Server, the `output`
+HYDRA **Buttons that open files.** On RStudio Server, the **Output**
 button opens that sample’s results folder in the **Files** pane at the
-bottom right of your RStudio session, and the coverage `view` plot opens
-the PDF the same way. If you reached the app through an SSH tunnel from
-a container instead, these buttons may do nothing, because the app tries
-to open them on the cluster rather than on your laptop.
+bottom right of your RStudio session, and the coverage **View** plot
+opens the PDF the same way. If you reached the app through an SSH tunnel
+from a container instead, these buttons cannot open anything on your
+laptop, so the app shows the file path in a message instead.
 
 ### Detailed troubleshooting
 
@@ -266,7 +278,8 @@ leave this sample behind when you lock the rest.
 
 SRR21844202 (*Fundulus majalis*) is flagged “Unable to resolve single
 assembly from reads”: GetOrganelle found two valid paths through a
-tangled assembly graph. Open `details` and you see both, each 19,332 bp.
+tangled assembly graph. Open **Details** and you see both, each 19,332
+bp.
 
 Select both and click **Align**.
 
@@ -324,7 +337,7 @@ joined assembly (Path 0)**.
 
 Assembly details after building the joined Path 0
 
-The joined Path 0 is 17,652 bp, the three original scaffolds are marked
+The joined Path 0 is 16,950 bp, the three original scaffolds are marked
 ignored, and the sample is locked automatically. The note records how it
 was built, including how many N bases fill the gaps. Those Ns are real
 missing sequence, and MitoPilot warns you about them because MITOS2 does
@@ -352,7 +365,7 @@ all look like “extra scaffolds” at first glance.
 ## Lock and move on
 
 Select every sample that assembled successfully, which is all of them
-except SRR22396758, and click **LOCK**.
+except SRR22396758, and click **Lock**.
 
 ![Sample table with successful samples selected for
 locking](figures/get-started/assemble-selected.png)
@@ -360,7 +373,8 @@ locking](figures/get-started/assemble-selected.png)
 Sample table with successful samples selected for locking
 
 Locking freezes those samples in Assemble and releases them to the
-Annotate module. Switch modules with the dropdown at the top left.
+Annotate module. Switch modules with the numbered buttons at the top
+left.
 
 [Next: Annotate
 →](https://smithsonian.github.io/MitoPilot/articles/Test-Project-Annotate.md)

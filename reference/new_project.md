@@ -38,7 +38,14 @@ new_project(
   \`ID\` column with a unique identifier for each sample, a \`Taxon\`
   column containing taxonomic information for each sample, and columns
   \`R1\` and \`R2\` specifying the names of the raw paired read inputs.
-  May include additional columns with other sample metadata.
+  May include additional columns with other sample metadata, and an
+  optional `Reference` column naming a per-sample MapToRef reference
+  (file path, URL, or NCBI accession). A FASTA reference also needs a
+  `Reference_topology` column (circular or linear). Both values are
+  stored on the sample and used when its parameter set assembles with
+  MapToRef. `Reference` is a reserved column name: it is never stored as
+  sample metadata, so rename the column if you use it for something
+  else.
 
 - mapping_id:
 

@@ -1,6 +1,7 @@
-# Get assembly from database
+# Get assembly from database (user-supplied assemblies)
 
-Get assembly from database
+Deprecated: identical to \[get_assembly()\], which serves both project
+types.
 
 ## Usage
 

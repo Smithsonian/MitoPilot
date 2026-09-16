@@ -29,7 +29,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,6 +55,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -103,7 +104,7 @@
 <li>
 <a href="https://github.com/OpenGene/fastp" class="external-link">fastp</a> for quality control and adapter trimming</li>
 <li>
-<a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a> (default) or <a href="https://github.com/RemiAllio/MitoFinder" class="external-link">MitoFinder</a> for mitogenome assembly</li>
+<a href="https://github.com/Kinggerm/GetOrganelle" class="external-link">GetOrganelle</a> (default), <a href="https://github.com/RemiAllio/MitoFinder" class="external-link">MitoFinder</a>, or MapToRef for mitogenome assembly (see <a href="https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html">choosing an assembly method</a>)</li>
 <li>
 <a href="https://github.com/BenLangmead/bowtie2" class="external-link">bowtie2</a> for read mapping to calculate coverage and error rates.</li>
 <li>
@@ -631,7 +632,7 @@ Untested
 <p>For groups other than fishes, make sure you build or pick the appropriate reference databases. There are three independent kinds of databases:</p>
 <ul>
 <li>
-<strong>Assembly</strong> references for GetOrganelle or MitoFinder. <code><a href="reference/custom_assembly_db.html">MitoPilot::custom_assembly_db()</a></code> builds these for a clade automatically, with no external tools required. See <a href="https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html">building custom databases</a>.</li>
+<strong>Assembly</strong> references for GetOrganelle, MitoFinder, or MapToRef. <code><a href="reference/custom_assembly_db.html">MitoPilot::custom_assembly_db()</a></code> builds a clade-wide database for GetOrganelle and MitoFinder automatically, with no external tools required; MapToRef instead uses a single reference mitogenome you supply yourself. Each sample carries its own: add a <code>Reference</code> column (and, for a FASTA, a <code>Reference_topology</code> column) to your mapping CSV, call <code><a href="reference/set_maptoref_refs.html">MitoPilot::set_maptoref_refs()</a></code>, or click the sample’s MapToRef ref cell in the Assemble table. A reference may be a file path, a URL, or an NCBI accession; the mapper and its options come from the sample’s parameter set. See <a href="https://smithsonian.github.io/MitoPilot/articles/custom_dbs.html">building custom databases</a>.</li>
 <li>
 <strong>Annotation</strong> references for MITOS2. MitoPilot includes Chordata and Metazoa databases, selectable in the <code>Annotate Opts.</code> window.</li>
 <li>

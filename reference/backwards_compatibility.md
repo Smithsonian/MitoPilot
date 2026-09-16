@@ -14,7 +14,10 @@ changes. Migrations include, among others:
   db columns.
 
 - `assemble_opts`: "assembler", "mitofinder_db"/"mitofinder",
-  "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds".
+  "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds",
+  and the MapToRef columns "maptoref_ref", "maptoref_mapper",
+  "maptoref", "maptoref_consensus", "maptoref_iter",
+  "maptoref_topology".
 
 - `curate_opts`: "max_blast_hits", "ref_dir", "ref_db",
   "linear_complete" (and rewriting the legacy in-container Mitos2 ref
@@ -23,7 +26,8 @@ changes. Migrations include, among others:
 - `assemble`: "poor_blast_ref" (migrated from `samples` and normalized
   to TEXT), BLAST result columns, "blast_opts", "join_notes",
   "join_switch", "circularize_opts"/"circularize_notes",
-  "find_mito_opts"/"find_mito_notes".
+  "find_mito_opts"/"find_mito_notes", "maptoref_ref"/"maptoref_topology"
+  (the per-sample MapToRef reference and topology).
 
 - `blast_opts`: "max_target_seqs", "taxids", "remote_blast",
   "remote_fallback" (any parameter set carrying a non-default Entrez

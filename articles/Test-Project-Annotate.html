@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -212,8 +213,8 @@ Export</a></p>
 reference sequences from GenBank, and validates the result against rules
 for your taxonomic group. It attempts to flag any issues that would
 cause a rejection during GenBank submission.</p>
-<p>Each row here is one <strong>assembly unit</strong>, not one sample.
-A sample that kept several scaffolds or paths will be represented by
+<p>Each row here is one <strong>assembly</strong>, not one sample. A
+sample that kept several scaffolds or paths will be represented by
 several rows, and each is annotated and validated on its own.</p>
 <div class="section level2">
 <h2 id="set-the-options">Set the options<a class="anchor" aria-label="anchor" href="#set-the-options"></a>
@@ -238,22 +239,23 @@ ruleset</div>
 taxonomic ruleset. It sets the expected gene content, the allowed start
 and stop codons, the naming conventions, and the genetic code. It
 defaults to Actinopterygii, which is correct for the test fishes.</p>
-<p>For your own data, pick the closest clade from the <a href="Ruleset-Browser.html">ruleset browser</a>. The validation
-parameters below are the ruleset itself, laid out so you can see exactly
-which rules a sample is being judged against.</p>
+<p>For your own data, pick the closest clade from the <a href="Ruleset-Browser.html">ruleset browser</a>. Expand <strong>Curation
+rules for this ruleset</strong> to see the validation parameters, which
+are the ruleset itself, laid out so you can see exactly which rules an
+assembly is being judged against.</p>
 <div class="alert alert-note">
 <p><strong>No ruleset for your samples?</strong> If you do not see an
 appropriate clade for your samples, please post an <a href="https://github.com/Smithsonian/MitoPilot/issues" class="external-link">issue</a> or
 reach out to Dan MacGuigan directly at <a href="mailto:macguigand@si.edu" class="email">macguigand@si.edu</a>. We
 are always looking to expand the taxonomic scope of MitoPilot.</p>
 </div>
-<p>When ready, click <strong>UPDATE</strong> and run the workflow the
+<p>When ready, click <strong>Update</strong> and run the workflow the
 same way you ran Assemble.</p>
 <p>This module is slower than Assemble. MITOS2 takes a few minutes per
-unit, and curation aligns every protein-coding gene against reference
-sequences. When working on a computing cluster with your own project,
-consider running this step as a job rather than directly from the
-MitoPilot app.</p>
+assembly, and curation aligns every protein-coding gene against
+reference sequences. When working on a computing cluster with your own
+project, consider running this step as a job rather than directly from
+the MitoPilot app.</p>
 </div>
 <div class="section level2">
 <h2 id="read-the-results">Read the results<a class="anchor" aria-label="anchor" href="#read-the-results"></a>
@@ -265,9 +267,9 @@ genes, and warning counts</div>
 <p>Scroll right in the table for the columns that matter:</p>
 <ul>
 <li>
-<strong>PCGCount, tRNACount, rRNACount</strong>: how many of each
-gene type were annotated. For a vertebrate mitogenome you expect 13, 22,
-and 2.</li>
+<strong># PCGs, # tRNAs, # rRNAs</strong>: how many of each gene
+type were annotated. For a vertebrate mitogenome you expect 13, 22, and
+2.</li>
 <li>
 <strong>Missing</strong>: expected genes that were not found.</li>
 <li>
@@ -277,23 +279,23 @@ expects.</li>
 <strong>Warnings</strong>: how many validation flags were raised.
 This is your work queue.</li>
 </ul>
-<p>A few units stand out in the test project. For example, SRR21844202
-has an extra <code>trnW</code> and two warnings.</p>
-<p>SCAFFJOIN is missing <code>atp8</code> and <code>trnK</code> and
-carries eight warnings. This is a real consequence of joining scaffolds
-across coverage gaps. The sequence in those gaps is set to “N”, so the
-genes in those gaps cannot be annotated.</p>
+<p>A few assemblies stand out in the test project. For example,
+SRR21844202 has an extra <code>trnW</code> and two warnings.</p>
+<p>SCAFFJOIN is missing <code>atp8</code>, <code>trnK</code>, and
+<code>trnL</code> and carries ten warnings. This is a real consequence
+of joining scaffolds across coverage gaps. The sequence in those gaps is
+set to “N”, so the genes in those gaps cannot be annotated.</p>
 <div class="alert alert-note">
 <p><strong>Note.</strong> The <strong>Warnings column includes</strong>
 dropdown menu at the top filters which warning types are counted. Narrow
-it to one warning type to pull out every sample with that problem and
+it to one warning type to pull out every assembly with that problem and
 work through them as a batch.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="inspect-a-sample">Inspect a sample<a class="anchor" aria-label="anchor" href="#inspect-a-sample"></a>
 </h2>
-<p>Click <code>details</code> on any row. Here we’ll look at sample
+<p>Click <strong>Details</strong> on any row. Here we’ll look at sample
 SRR19434536.</p>
 <div class="float">
 <img src="figures/get-started/annotate-details.png" alt="Annotation details window with the gene table"><div class="figcaption">Annotation details window with the gene
@@ -305,15 +307,16 @@ changes made during automatic curation, such as a start position moved
 upstream or a stop codon trimmed. <strong>Warnings</strong> shows what
 validation flagged. The <code>nt</code> and <code>aa</code> buttons copy
 the nucleotide or amino acid sequence to your clipboard.</p>
-<p>The badges along the top track the sample: topology, ID verified,
-reviewed, problematic, and partial. The buttons at the bottom toggle
-them, which is how you keep track of what you have already looked at
-across a large project.</p>
-<p>Below the table are three collapsible views.</p>
-<p><strong>Coverage Map</strong> plots read depth along the assembly
-with the gene models drawn below, zoomed to whichever gene you have
-selected. The gene bars are semi-transparent so overlapping gene models
-are easy to spot.</p>
+<p>The badges along the top track the assembly: topology, species ID
+verified, reviewed, problematic, and partial. The <strong>Mark
+…</strong> buttons beside them toggle each flag, which is how you keep
+track of what you have already looked at across a large project.</p>
+<p>Below the table are four collapsible sections.</p>
+<p><strong>Sequence</strong> shows read depth and per-base error rate
+along the assembly, the gene models drawn in lanes below them, then the
+nucleotides and translated amino acids once you zoom in. Each track can
+be hidden with its checkbox. Error rate bars turn orange above 5%, a
+sign of possible sequencing or assembly errors.</p>
 <div class="float">
 <img src="figures/get-started/annotate-coverage-map.png" alt="Coverage map with gene models drawn over read depth"><div class="figcaption">Coverage map with gene models drawn over read
 depth</div>
@@ -322,11 +325,13 @@ depth</div>
 against the closest GenBank mitogenome, with a percent-identity bar
 between them. Click anywhere in this plot to show a zoomed-in base-pair
 level alignment of your sample versus the reference.</p>
-<p>The reference mitogenome shown in this plot will be exported in your
-GenBank submission files as a note: “annotation compared to GenBank
-accession XXX”. If the reference mitogenome is a poor match, you can
-flag it (remove the submission note) or use the dropdown menu to pick a
-better reference from among the top BLAST hits.</p>
+<p>The reference mitogenome shown in this plot is recorded in the
+export’s <code>sample_info.csv</code> in the <code>ref_comparison</code>
+column, as “compared sample XXX to GenBank accession XXX”. It is not
+written to the FASTA headers. If the reference mitogenome is a poor
+match, you can flag it (the CSV column is then left blank) or use the
+dropdown menu to pick a better reference from among the top BLAST
+hits.</p>
 <div class="float">
 <img src="figures/get-started/annotate-synteny.png" alt="Gene order compared against the closest GenBank reference"><div class="figcaption">Gene order compared against the closest GenBank
 reference</div>
@@ -341,19 +346,25 @@ reference hits</div>
 the gene with the codon frame marked, along with the start and stop
 codons that were called. Below it, the protein alignment shows your gene
 (“focal”) alongside the reference proteins.</p>
+<p>Below the annotation table, the <strong>Sequence</strong> section
+shows the assembly itself: genes as arrows in lanes, the nucleotides
+once you zoom in, and the translated amino acids of each protein-coding
+gene under their codons. Click a row in the table to jump to that gene,
+or use Whole genome to step back out. The view follows every edit you
+make in this window.</p>
 </div>
 <div class="section level2">
 <h2 id="manually-fix-annotations">Manually fix annotations<a class="anchor" aria-label="anchor" href="#manually-fix-annotations"></a>
 </h2>
-<p>Click <strong>EDIT</strong> in the alignment section to nudge the
+<p>Click <strong>Edit</strong> in the alignment section to nudge the
 start or stop position and watch the alignment respond.</p>
 <div class="float">
 <img src="figures/get-started/annotation-codon-edits.png" alt="Alignment-based annotation editing"><div class="figcaption">Alignment-based annotation editing</div>
 </div>
 <p>By default, the <code>+</code> and <code>-</code> buttons search for
 the next valid start or stop codon (according to the curation ruleset
-you selected). You can toggle the <code>single codon</code> button to
-instead nudge the position one codon at a time. This can lead to a
+you selected). You can tick the <strong>single codon</strong> checkbox
+to instead nudge the position one codon at a time. This can lead to a
 <strong>partial</strong> gene model with undetermined start or stop
 codons.</p>
 <p>Clicking the <code>poly-A stop</code> button will truncate a stop
@@ -391,20 +402,20 @@ editing by restricting the alignment to the top five hits, which matters
 because the alignment is recomputed on every start/stop codon
 nudge.</li>
 </ul>
-<p>You can record what you did in the <strong>Notes</strong> box; it
-saves automatically and is retained with the sample.</p>
+<p>You can record what you did in the <strong>Notes</strong> section; it
+saves automatically and is retained with the assembly.</p>
 <div class="alert alert-warning">
 <p><strong>Warning.</strong> Validation warnings do not disappear when
 you fix the underlying problem. They record the state at the time the
-Annotate module ran. Use the <strong>Reviewed</strong> toggle to track
-what you have actually dealt with.</p>
+Annotate module ran. Use the <strong>Mark Reviewed</strong> button to
+track what you have actually dealt with.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="lock-and-move-on">Lock and move on<a class="anchor" aria-label="anchor" href="#lock-and-move-on"></a>
 </h2>
-<p>When you are satisfied, select the samples and click
-<strong>LOCK</strong> to release them to the Export module.</p>
+<p>When you are satisfied, select the assemblies and click
+<strong>Lock</strong> to release them to the Export module.</p>
 <p class="next-step">
 <a href="Test-Project-Export.html">Next: Export →</a>
 </p>

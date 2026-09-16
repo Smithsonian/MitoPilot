@@ -17,7 +17,7 @@ Four columns are required:
 
 | Column | Contents |
 |----|----|
-| `ID` | Unique identifier for the sample. Used as the SeqID at export, so keep it short and free of spaces. |
+| `ID` | Unique identifier for the sample. Used as the SeqID at export, so at most 40 characters, using only letters, digits, dashes, underscores, and colons. |
 | `Taxon` | Taxonomic information. Only included for your own benefit, so no required format. |
 | `R1` | File name of the forward reads (name only, not a path). |
 | `R2` | File name of the reverse reads (name only, not a path). |
@@ -30,6 +30,33 @@ submission needs.
     ID,Taxon,R1,R2,Voucher,BioSample
     OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN00000001
     OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,USNM:1234568,SAMN00000002
+
+Two column names are reserved for the MapToRef assembler, which maps
+reads to a reference mitogenome chosen per sample (see [choosing an
+assembly
+method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.md)).
+`Reference` holds a file path, a URL, or an NCBI nucleotide accession
+(MitoPilot will automatically download when needed) A FASTA reference
+also needs a `Reference_topology` column (`circular` or `linear`), since
+a FASTA header carries no topology.
+
+    ID,Taxon,R1,R2,Reference,Reference_topology
+    OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,ref/NC_002333.gb,
+    OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,ref/mito.fasta,circular
+
+If your reference list is not ready at project creation, leave the
+columns out and supply them later with
+[`set_maptoref_refs()`](https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.md),
+using a CSV with an ID column, a reference column, and an optional
+topology column.
+
+``` r
+
+set_maptoref_refs(refs = "my_refs.csv")   # ID, reference, and optionally topology
+```
+
+Or you can set references using the **MapToRef Ref** cell in the app’s
+Assemble table.
 
 You do not have to get the mapping file columns right the first time.
 [`update_sample_metadata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.md)
@@ -64,8 +91,10 @@ your current session.
 
 #### Arguments worth setting
 
-Many of these options can also be set in the MitoPilot app. Setting them
-at project initialization may save you time.
+Many of these can also be changed later in the MitoPilot app, but
+setting them at initialization applies them to every sample at once.
+
+##### Taxonomy and curation
 
 **`curate_target`** picks the curation and validation ruleset, which
 controls expected gene content, allowed start and stop codons, gene
@@ -75,42 +104,41 @@ browser](https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.md)
 and pass the one matching your clade, for example
 `curate_target = "octocoral_mito"`.
 
-**`genetic_code`** is normally left alone: MitoPilot takes it from the
-curation ruleset. Set it only when you need to override that, using an
-[NCBI translation table
-number](https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi).
+**`annotate_ref_db`** selects the MITOS2 reference database. The default
+is `"Chordata"`; `"Metazoa_RefSeq89"` is the general-purpose alternative
+and is the right choice for most invertebrates.
+
+**`linear_complete`** should be `TRUE` for taxa whose complete
+mitogenome is genuinely linear, so that export labels them “complete
+genome” rather than “partial”.
+
+##### Assembly
+
+**`assembler`** chooses `"GetOrganelle"` (default), `"MitoFinder"`, or
+`"MapToRef"`. See [choosing an assembly
+method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.md)
+for more info. MapToRef sets the reference per sample through the
+mapping file, as described [above](#the-mapping-file), so it has no
+database argument here.
 
 **`custom_seeds_db` and `custom_labels_db`** point GetOrganelle at
 reference sequences for your group. The defaults are for fishes, but you
-can build databases for any clade with the R function
+can build databases for any clade with
 [`custom_assembly_db()`](https://smithsonian.github.io/MitoPilot/reference/custom_assembly_db.md),
 see [building custom
 databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md).
 Give absolute paths, not paths starting with `~`.
 
-**`assembler` and `mitofinder_db`** switch the assembler to
-`"MitoFinder"` and point it at a reference database. The reference
-database must be GenBank format (`.gb`) and can be a local path or a
-URL. The default is the zebrafish mitogenome, so supply your own for
-anything that is not a fish. Leave both alone to stay on GetOrganelle.
+**`mitofinder_db`** points MitoFinder at a GenBank-format (`.gb`)
+reference database, given as a local path or a URL. The default is the
+zebrafish mitogenome, so supply your own for anything that is not a
+fish.
 
-**`annotate_ref_db`** selects the MITOS2 reference database. The default
-is `"Chordata"`; `"Metazoa_RefSeq89"` is the general-purpose alternative
-and is the right choice for most invertebrates.
+##### Data and compute
 
 **`min_depth`** is the minimum number of read pairs after pre-processing
 for a sample to continue (default 2,000,000). Lower it if your reads
 have already been filtered or baited.
-
-**`linear_complete`** should be `TRUE` for taxa whose complete
-mitogenome is genuinely linear, will cause export to label them
-“complete genome” rather than “partial”.
-
-**`ncbi_api_key`** raises your NCBI request limits. Worth setting even
-though the BLAST search itself is local, because MitoPilot fetches
-annotations and taxonomic lineage for each BLAST hit directly from NCBI.
-Get an API key from
-[NCBI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/).
 
 **`executor`** decides where the work runs: `"local"`, one of the
 generic cluster templates (`"slurm"`, `"sge"`, `"pbs"`, `"lsf"`,
@@ -120,11 +148,18 @@ profile you saved yourself with
 See [HPC cluster
 support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md).
 
-**Processing parameters** for the pipeline modules can also be set here,
-not just in the app. Anything you pass to
-[`new_project()`](https://smithsonian.github.io/MitoPilot/reference/new_project.md)
-overrides the stored default for every sample in the new project, for
-example:
+**`ncbi_api_key`** raises your NCBI request limits. Worth setting even
+though the BLAST search itself is local, because MitoPilot fetches
+annotations and taxonomic lineage for each BLAST hit directly from NCBI.
+Get an API key from
+[NCBI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/).
+
+##### Any other pipeline parameter
+
+Every processing parameter shown in the app’s options windows can also
+be passed to
+[`new_project()`](https://smithsonian.github.io/MitoPilot/reference/new_project.md),
+which overrides the stored default for every sample in the new project:
 
 ``` r
 
@@ -136,13 +171,13 @@ new_project(
 )
 ```
 
-For the complete list of parameters that can be set at initialization,
-see the
+For the complete list, see the
 [`new_db()`](https://smithsonian.github.io/MitoPilot/reference/new_db.md)
 documentation.
 
-Below is a more complete `new_project` example for an octocoral dataset
-on a SLURM cluster:
+#### A complete example
+
+An octocoral dataset on a SLURM cluster:
 
 ``` r
 

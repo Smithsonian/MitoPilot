@@ -8,13 +8,22 @@ to decide what each one represents before annotation and export.
 
 What you see depends partly on the assembler. MitoPilot can assemble
 with [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (the
-default) or [MitoFinder](https://github.com/RemiAllio/MitoFinder), set
-by the `assembler` option at project setup. GetOrganelle explores an
-assembly graph and can return several alternative **paths** through it,
-each possibly split into scaffolds. MitoFinder returns a **single
-path**, but can still report several **scaffolds** when it recovers more
-than one mitochondrial contig. The strategies below apply the same way
-regardless of which assembler produced the sequences.
+default), [MitoFinder](https://github.com/RemiAllio/MitoFinder), or
+MapToRef, set by the `assembler` option at project setup (see [choosing
+an assembly
+method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.md)).
+GetOrganelle explores an assembly graph and can return several
+alternative **paths** through it, each possibly split into scaffolds.
+MitoFinder returns a **single path**, but can still report several
+**scaffolds** when it recovers more than one mitochondrial contig.
+MapToRef, like MitoFinder, returns one path. N runs mark regions the
+reads did not cover. Against a reference from a different order, most of
+the product can be N (the test samples came out 60 to 75 percent N
+against a zebrafish reference) and a note says the reference may be too
+divergent; use a closer reference or a de novo assembler. Mapping cannot
+see rearrangements, so cross-check a MapToRef result against a de novo
+assembly before trusting gene order. The strategies below apply the same
+way regardless of which assembler produced the sequences.
 
 The right strategy depends on what the extra sequences actually are, and
 the two cases have different biological meanings:
@@ -41,13 +50,13 @@ annotation.
 
 ## Resolving multiple paths
 
-Multiple paths come only from GetOrganelle; MitoFinder always returns a
-single path. When a GetOrganelle sample assembles into more than one
-path, it is flagged in the Assemble module (“Unable to resolve single
-assembly from reads”). Open the assembly details to see each path.
-Because the paths are alternative hypotheses about one genome, you
-should reduce them to a single assembly before continuing. There are two
-ways to do this.
+Multiple paths come only from GetOrganelle; MitoFinder and MapToRef
+always return a single path. When a GetOrganelle sample assembles into
+more than one path, it is flagged in the Assemble module (“Unable to
+resolve single assembly from reads”). Open the assembly details to see
+each path. Because the paths are alternative hypotheses about one
+genome, you should reduce them to a single assembly before continuing.
+There are two ways to do this.
 
 **Ignore the extras.** If one path is clearly the correct mitogenome,
 use the ignore buttons to drop the others. Only the remaining path
@@ -79,14 +88,14 @@ scaffolds carry different BLAST hits, MitoPilot warns you, because
 joining unrelated sequences produces poor overlaps and an unreliable
 assembly.
 
-The **Join scaffolds** button in the assembly options window is a
-separate, optional convenience rather than a switch for the editor. When
-it is enabled, the pipeline builds Path 0 *automatically* during
-assembly for eligible samples, but only when their scaffolds map to the
-same reference, so you do not have to join each fragmented sample by
-hand. It is off by default. Leave it off when your samples may be
-naturally multipartite or contaminated (see below), so their scaffolds
-are kept separate rather than auto-joined.
+The **Automatically join multi-scaffold assemblies (Path 0)** checkbox
+in the assembly options window is a separate, optional convenience
+rather than a switch for the editor. When it is enabled, the pipeline
+builds Path 0 *automatically* during assembly for eligible samples, but
+only when their scaffolds map to the same reference, so you do not have
+to join each fragmented sample by hand. It is off by default. Leave it
+off when your samples may be naturally multipartite or contaminated (see
+below), so their scaffolds are kept separate rather than auto-joined.
 
 **Keep them separate.** Not every fragmented sample should be joined.
 Some mitogenomes are naturally **multipartite**, with the genes
@@ -107,8 +116,8 @@ Export behaves differently for the two cases, matching the biology.
 **Multiple scaffolds export as separate records.** A sample contributing
 more than one scaffold produces one GenBank record per scaffold. To keep
 SeqIDs unique within a submission, MitoPilot adds a suffix
-`ID_p<path>_s<scaffold>` (a single-unit sample keeps its plain `ID`).
-Because a sample split across scaffolds *could* instead be one
+`ID_p<path>_s<scaffold>` (a sample with one assembly keeps its plain
+`ID`). Because a sample split across scaffolds *could* instead be one
 fragmented genome, export asks you to confirm.
 
 **Multiple paths cannot be exported.** Exporting every path would submit

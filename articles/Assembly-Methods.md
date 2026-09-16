@@ -1,0 +1,169 @@
+# Choosing an Assembly Method
+
+MitoPilot can build a mitogenome from your reads in three ways. Two of
+them, [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) and
+[MitoFinder](https://github.com/RemiAllio/MitoFinder), assemble the
+genome *de novo* from read overlaps, with no prior model of the
+sequence. The third, **MapToRef**, aligns the reads to a reference
+mitogenome you supply and builds a consensus sequence from the read
+pileup.
+
+The method is chosen per sample in the **Assembly Opts.** window of the
+Assemble module, or for the whole project with the `assembler` argument
+of
+[`new_project()`](https://smithsonian.github.io/MitoPilot/reference/new_project.md).
+Everything downstream (annotation, curation, export) works the same
+whichever you pick.
+
+## At a glance
+
+|  | GetOrganelle (default) | MitoFinder | MapToRef |
+|----|----|----|----|
+| **How it works** | Recruits mitochondrial reads with seed sequences, then assembles them | Assembles all reads, then identifies mitochondrial contigs against a reference database | Aligns reads to one reference mitogenome, then calls a consensus from the pileup |
+| **Needs** | Seed and label databases for your group (fish defaults ship with MitoPilot) | A GenBank file of reference mitogenomes for your group (fish defaults ship with MitoPilot) | One complete mitogenome per sample, from a close relative |
+| **Speed and memory** | Fast, low memory | Slowest, highest memory | Fast, low memory |
+| **Output** | One or more assembly paths, possibly split into scaffolds | One path, possibly several scaffolds | Always one path, one sequence |
+| **Best for** | Most projects, especially clean whole-genome shotgun data | Groups with few reference mitogenomes, or when GetOrganelle fails to recruit reads | Low-coverage, short, or degraded reads; large batches of samples with a close reference |
+| **Watch out for** | Depends on good seeds; tangled graphs yield several competing paths | Runtime; can recover NUMTs or contaminants | Cannot detect rearrangements or novel sequence; a distant reference gives a gappy, reference-biased consensus |
+
+**Tip.** Start with GetOrganelle. Switch to MitoFinder when GetOrganelle
+returns nothing or fragments, and you have a decent reference database
+for your group. Use MapToRef when you already have a mitogenome from the
+same or a very closely related species and your reads are low coverage,
+short, or damaged (e.g. ancient DNA), or when you want the fastest
+processing of many similar samples.
+
+## GetOrganelle
+
+GetOrganelle starts from a **seed database** of known mitochondrial
+sequences, recruits reads that match them, extends the assembly outward,
+and iterates until the genome closes. A **label database** of reference
+genes then identifies which parts of the assembly graph are
+mitochondrial. Because it only assembles the reads it recruits, it is
+fast and light on memory, but it is only as good as its seed database.
+You can build your own with
+[`custom_assembly_db()`](https://smithsonian.github.io/MitoPilot/reference/custom_assembly_db.md)
+(see [building custom
+databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md)).
+
+The **GetOrganelle options** box carries the command-line flags. The
+defaults (`-R 10`, a k-mer series of 21 to 115, an expected genome size
+of 16.5 kb) work well for vertebrate mitogenomes. See the [GetOrganelle
+wiki](https://github.com/Kinggerm/GetOrganelle/wiki) provides helpful
+guidance on the assembly parameters. For example, you can raise `-R`
+(the number of extension rounds) if assemblies are incomplete.
+
+GetOrganelle is the only method that can return **several assembly
+paths**: alternative traversals of a tangled assembly graph, usually
+differing at a few sites. See [handling difficult
+assemblies](https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.md)
+for how to resolve them.
+
+## MitoFinder
+
+MitoFinder assembles all reads with a general-purpose assembler, then
+searches the contigs for matches to a **MitoFinder database**, which is
+a GenBank-format file of one or more reference mitogenomes. Because
+reads are not filtered up front, it can recover mitogenomes that
+GetOrganelle’s seeds miss, at the cost of assembling everything. Expect
+much longer runtimes and higher memory use. Raise **Memory** in the
+Assembly options if samples fail with out-of-memory errors.
+
+Two things to set:
+
+- **MitoFinder database.** The default is a small sampler of fish
+  mitogenomes. For anything else, supply a `.gb` file of mitogenomes
+  from your group, built with
+  [`custom_assembly_db()`](https://smithsonian.github.io/MitoPilot/reference/custom_assembly_db.md)
+  or downloaded from GenBank. It only needs to be similar enough for
+  MitoFinder to identify the mitochondrial contigs by sequence
+  similarity.
+- **MitoFinder options.** MitoFinder can use three different assemblers.
+  The default `--megahit` is the fastest; `--metaspades` is slower but
+  often yields longer, more contiguous assemblies; `--idba` (IDBA-UD) is
+  a third option. Any other MitoFinder flag can be added here too (see
+  the [MitoFinder
+  documentation](https://github.com/RemiAllio/MitoFinder)).
+
+MitoFinder returns a single path. If it recovers more than one
+mitochondrial contig, they appear as separate **scaffolds** of that
+path. Inspect them in the assembly details window: fragments of one
+genome can be joined, while a
+[NUMT](https://en.wikipedia.org/wiki/Nuclear_mitochondrial_DNA_segment)
+or contaminant should be marked ignored.
+
+## MapToRef
+
+MapToRef is not actually an assembler. It aligns the reads to a
+reference mitogenome, calls a consensus sequence from the pileup, then
+uses that consensus as the reference for the next pass, iterating (up to
+**Maximum passes**, default 5) until the sequence converges. Use more
+iterations if your reference is a distant relative. The reference only
+determines where reads are placed; every base in the consensus comes
+from your reads. Sites with fewer than three reads are called `N`, and
+mixed sites get IUPAC ambiguity codes, which can trip annotation in
+coding regions, so check flagged sites before export.
+
+This makes MapToRef the right tool when coverage is too low or reads too
+short or damaged for *de novo* assembly. MapToRef is the wrong tool when
+the sample may differ structurally from the reference: mapping cannot
+detect a gene rearrangement, a duplication, or sequence absent from the
+reference. If structure is uncertain, run a *de novo* assembly on a few
+samples and compare.
+
+**Reference.** Set per sample rather than in the assembly options. One
+complete mitogenome given as a file path (GenBank `.gb` preferred, one
+record per file), a URL, or an NCBI accession such as `NC_002333`,
+through the mapping file’s `Reference` column,
+[`set_maptoref_refs()`](https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.md),
+or the sample’s **MapToRef Ref** cell in the Assemble table. A FASTA
+reference also needs its topology info (`circular` or `linear`). See
+[starting your own
+project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.md)
+for the mapping-file format. The closer the reference the better:
+MitoPilot flags the result when more than 10% of called sites differ
+from the reference, and when more than half of the reference could not
+be called. If you change a sample’s reference after it has run, the
+sample is re-queued.
+
+**Mapper.** Three choices in the Assembly options:
+
+- **bowtie2** (default). Suits modern Illumina reads. Presets go in the
+  options box: `--very-sensitive-local` is the default; add `-N 1` for a
+  more distant reference.
+- **bwa-mem.** Also suits modern reads, particularly longer ones. Leave
+  the options empty for bwa’s defaults, or use `-B 2 -T 20` (lower
+  mismatch penalty, lower score threshold) for a distant reference.
+- **bwa-aln.** For short or damaged reads such as ancient DNA or
+  degraded museum tissue. The default options (`-l 1024 -n 0.01 -o 2`)
+  disable seeding and relax the edit distance, the standard ancient-DNA
+  settings.
+
+Whichever mapper you pick, the first pass against your reference runs
+with relaxed seeding so a distant reference still recruits reads; later
+passes use your options as given. The **samtools consensus options** box
+controls how the consensus is called from the pileup (default
+`-d 3 --min-BQ 20`: minimum depth 3, minimum base quality 20). A few
+flags are fixed by MitoPilot; adding one of them fails the sample with a
+message naming the flag.
+
+**Reading the result.** A circular reference is mapped across its
+origin, but the assembly is only published as circular if reads span the
+junction; otherwise it is published as linear with a note saying so. The
+assembly details window for a MapToRef sample opens a sequence viewer.
+It shows read depth (zero-coverage positions highlighted red), the
+reference’s gene annotations, the reference and consensus sequences,
+and, below 1,000 bp of zoom, the individual reads with mismatches,
+indels, and strand. If you change a sample’s reference after it has run,
+the window flags the change and the sample is re-queued.
+
+## Mixing methods in one project
+
+Options are saved as named sets, and each sample points at one, so a
+project can use GetOrganelle for most samples and MitoFinder or MapToRef
+for the difficult ones. Make a second set in the Assembly options (tick
+**Edit**, change the assembler, give the set a new **Parameter set
+name**, click **Save**), then assign it to the samples that need it. The
+MapToRef reference is still set per sample. See the [Assemble
+walkthrough](https://smithsonian.github.io/MitoPilot/articles/Test-Project-Assemble.html#set-the-options)
+for the options window.

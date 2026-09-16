@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -290,12 +291,13 @@ released to Annotate once you lock them here.</p>
 <li>Open the app for the project, <code><a href="../reference/MitoPilot.html">MitoPilot()</a></code> from the
 project directory. It opens on the Assemble module.</li>
 <li>If needed, change any run options.</li>
-<li>Click UPDATE, then Run from App or Submit as Job.</li>
+<li>Click <strong>Update</strong>, then <strong>Run from App</strong> or
+<strong>Submit as Job</strong>.</li>
 <li>When the run finishes, check the results. You should see Length,
 Topology, and other columns filled in.</li>
-<li>Select the samples that came through cleanly and click LOCK. That
-releases them to Annotate. Switch modules with the dropdown at the top
-left.</li>
+<li>Select the samples that came through cleanly and click
+<strong>Lock</strong>. That releases them to Annotate. Switch modules
+with the numbered buttons at the top left.</li>
 </ol>
 <p>Then continue with <a href="Test-Project-Annotate.html">Annotate</a>
 and <a href="Test-Project-Export.html">Export</a> as usual.</p>
@@ -433,7 +435,7 @@ them.</p>
 <p>A codon holding an ambiguous base is translated to the one amino acid
 it can be, or to <code>X</code> when more than one is possible, and the
 gene is flagged with an <code>&lt;n&gt; ambiguous bases in CDS</code>
-warning for review. The <strong>Ambig. Bases</strong> column of the
+warning for review. The <strong>Ambiguous Bases</strong> column of the
 Assemble table counts them per sample, and a sample’s assembly details
 window counts them per contig. When you open a gene in the annotation
 editor, the alignment says how many of its bases are ambiguous.</p>

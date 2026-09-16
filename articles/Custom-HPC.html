@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,6 +52,7 @@
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
+    <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
@@ -138,7 +139,7 @@ copy of the image. You build it once, then reuse it.</li>
 or compute node (not the login node):</p>
 <p>The image tag must match your installed MitoPilot version. Get it
 with <code>packageVersion("MitoPilot")</code>, which for this build of
-the documentation is 1.5.4.</p>
+the documentation is 1.5.5.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">singularity</span> pull mitopilot.sif docker://macguigand/mitopilot:<span class="op">&lt;</span>version<span class="op">&gt;</span></span></code></pre></div>
 <p><strong>2. Start an R session.</strong> By default a Singularity
 container can only see your <strong>home directory</strong>. Bind any
@@ -337,10 +338,10 @@ compute node reached via <code>srun --pty</code>, the printed
 session open while you use the app. This replaces the RStudio Server
 requirement for users who only need the app.</p>
 <p><strong>Caveat:</strong> in-app features that open a file or browser
-on the server side (the “Open output folder” button, the HTML annotation
-report, and the ruleset browser) will not work here, since they try to
-open on the cluster rather than your local computer. The main assemble /
-annotate / curate app is unaffected.</p>
+on the server side (the <strong>Output</strong> button, the HTML
+annotation report, and the ruleset browser) will not work here, since
+they try to open on the cluster rather than your local computer. The
+main assemble / annotate / curate app is unaffected.</p>
 </div>
 <div class="section level3">
 <h3 id="running-the-pipeline">Running the pipeline<a class="anchor" aria-label="anchor" href="#running-the-pipeline"></a>
