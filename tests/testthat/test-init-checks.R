@@ -118,3 +118,31 @@ test_that("new_db rejects a mapping with several ID problems in one report", {
   expect_match(err, "characters other than")
   expect_false(file.exists(file.path(d, ".sqlite")))
 })
+
+test_that("mapping file format problems get one clear message each", {
+  d <- withr::local_tempdir()
+  w <- function(name, lines, sep = "\n") {
+    f <- file.path(d, name)
+    writeBin(charToRaw(paste0(paste(lines, collapse = sep), sep)), f)
+    f
+  }
+  first_err <- function(f) {
+    i <- .issues()
+    m <- .read_mapping_checked(f, i)
+    list(m = m, err = i$errors[1])
+  }
+  expect_match(first_err(w("t.csv", c("ID\tTaxon", "S1\tx")))$err, "tab-separated")
+  expect_match(first_err(w("s.csv", c("ID;Taxon", "S1;x")))$err, "semicolon-separated")
+  expect_match(first_err(w("r.csv", c("ID,Taxon,R1", "S1,x", "S2,x,a,b")))$err,
+               "lines 2, 3 do not")
+  expect_match(first_err(w("q.csv", c("ID,Taxon", "S1,\"x", "S2,y")))$err, "unclosed quote")
+  expect_match(first_err(w("e.csv", character(0)))$err, "is empty")
+  expect_match(first_err(w("n.csv", "S1,x,a,b"))$err, "first line a header")
+  x <- file.path(d, "m.xlsx")
+  writeBin(as.raw(c(0x50, 0x4b, 0x03, 0x04, 1:50)), x)
+  expect_match(first_err(x)$err, "Excel workbook")
+  # still fine: CRLF, BOM, quoted comma
+  ok <- first_err(w("ok.csv", c("﻿ID,Taxon", "S1,\"Danio, rerio\""), sep = "\r\n"))
+  expect_true(is.na(ok$err))
+  expect_equal(ok$m$Taxon, "Danio, rerio")
+})

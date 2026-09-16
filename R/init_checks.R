@@ -68,6 +68,50 @@
     iss$err("mapping_fn: file not found: ", mapping_fn)
     return(NULL)
   }
+  # Format checks before read.csv(), which silently shifts fields on a ragged
+  # row and swallows the file after an unclosed quote.
+  magic <- readBin(mapping_fn, "raw", 4L)
+  if (length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x50, 0x4b)))) {
+    iss$err("mapping_fn: '", basename(mapping_fn), "' is an Excel workbook, not a ",
+            "CSV; save the sheet as CSV")
+    return(NULL)
+  }
+  if (any(magic == as.raw(0))) {
+    iss$err("mapping_fn: '", basename(mapping_fn), "' is not a text file")
+    return(NULL)
+  }
+  hdr <- sub("^\ufeff", "", readLines(mapping_fn, n = 1L, warn = FALSE))
+  if (length(hdr) == 0L || !nzchar(trimws(hdr))) {
+    iss$err("mapping_fn: the mapping file is empty")
+    return(NULL)
+  }
+  if (!grepl(",", hdr)) {
+    delim <- if (grepl("\t", hdr)) "tab" else if (grepl(";", hdr)) "semicolon" else NULL
+    if (!is.null(delim)) {
+      iss$err("mapping_fn: the header is ", delim, "-separated; the mapping file ",
+              "must be comma-separated")
+      return(NULL)
+    }
+  }
+  nf <- tryCatch(utils::count.fields(mapping_fn, sep = ",", quote = "\"",
+                                     blank.lines.skip = TRUE),
+                 error = function(e) e)
+  if (inherits(nf, "error")) {
+    iss$err("mapping_fn: could not parse as CSV (unclosed quote?): ",
+            conditionMessage(nf))
+    return(NULL)
+  }
+  if (anyNA(nf)) {
+    iss$err("mapping_fn: unclosed quote starting on line ", which(is.na(nf))[1])
+    return(NULL)
+  }
+  if (length(nf) > 1L && any(nf[-1] != nf[1])) {
+    bad <- which(nf[-1] != nf[1]) + 1L
+    iss$err("mapping_fn: header has ", nf[1], " fields but ",
+            .pl(length(bad), "line ", "lines "), .lst(bad), " ",
+            .pl(length(bad), "does", "do"), " not (missing or extra comma, or an unclosed quote?)")
+    return(NULL)
+  }
   mapping <- tryCatch(utils::read.csv(mapping_fn, stringsAsFactors = FALSE),
                       error = function(e) e)
   if (inherits(mapping, "error")) {
@@ -75,11 +119,12 @@
     return(NULL)
   }
   if (nrow(mapping) == 0L) {
-    iss$err("mapping_fn: the mapping file has no sample rows")
+    iss$err("mapping_fn: the mapping file has no sample rows (is the first line ",
+            "a header?)")
     return(NULL)
   }
   # read.csv() silently renames duplicate or non-syntactic headers.
-  raw <- strsplit(sub("\r$", "", readLines(mapping_fn, n = 1L, warn = FALSE)), ",", fixed = TRUE)[[1]]
+  raw <- strsplit(sub("\r$", "", hdr), ",", fixed = TRUE)[[1]]
   raw <- gsub("^\"|\"$", "", trimws(raw))
   if (anyDuplicated(raw)) {
     iss$warn("mapping columns: duplicate column names will be renamed by R: ",
