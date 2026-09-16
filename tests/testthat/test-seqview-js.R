@@ -4,9 +4,25 @@ sv_page <- function() {
           "no Chrome for chromote")
   b <- chromote::ChromoteSession$new()
   withr::defer(b$close(), envir = parent.frame())
-  page <- normalizePath(testthat::test_path("seqview", "index.html"))
-  b$Page$navigate(paste0("file://", page))
+  # The fixture's relative script path only resolves in the source tree; point
+  # it at the installed copy so the test also runs under R CMD check.
+  file_url <- function(p) {
+    p <- normalizePath(p, winslash = "/", mustWork = TRUE)
+    paste0(if (startsWith(p, "/")) "file://" else "file:///", p)
+  }
+  js_file <- system.file("app", "www", "seqviewer.js", package = "MitoPilot")
+  html <- readLines(testthat::test_path("seqview", "index.html"), warn = FALSE)
+  html <- sub('src="[^"]*seqviewer\\.js"', sprintf('src="%s"', file_url(js_file)), html)
+  # Next to the fixture rather than in tempdir(): a sandboxed Chrome may not
+  # be able to read /tmp.
+  page <- testthat::test_path("seqview", "index.generated.html")
+  writeLines(html, page)
+  withr::defer(unlink(page), envir = parent.frame())
+  b$Page$navigate(file_url(page))
   Sys.sleep(1)
+  if (!identical(js(b, "typeof window.mpseq"), "object")) {
+    stop("seqviewer.js did not load from ", js_file)
+  }
   b
 }
 js <- function(b, code) b$Runtime$evaluate(code, returnByValue = TRUE)$result$value
