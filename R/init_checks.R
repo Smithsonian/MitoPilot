@@ -104,8 +104,8 @@ check_sample_ids <- function(ids, iss = .issues()) {
   ids <- as.character(ids)
   blank <- is.na(ids) | !nzchar(ids)
   if (any(blank)) {
-    iss$err("mapping IDs: ", sum(blank), " row(s) have an empty ID (rows ",
-            .lst(which(blank)), ")")
+    iss$err("mapping IDs: empty ID in ", if (sum(blank) == 1L) "row " else "rows ",
+            .lst(which(blank)))
   }
   ids[blank] <- ""
   if (anyDuplicated(ids[!blank])) {
