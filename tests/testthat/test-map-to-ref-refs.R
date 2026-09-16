@@ -65,7 +65,9 @@ test_that(".mtr_validate_refs refuses shell metacharacters in a reference value"
   expect_error(.mtr_validate_refs("/data/\"q\"/ref.gb", ids = "S1"), "not allowed")
   expect_error(.mtr_validate_refs("/data/$HOME/ref.gb", ids = "S1"), "not allowed")
   expect_error(.mtr_validate_refs("/data/a`id`b/ref.gb", ids = "S1"), "not allowed")
-  expect_error(.mtr_validate_refs("/data/a\\b/ref.gb", ids = "S1"), "not allowed")
+  # On Windows a backslash is a path separator and is converted, not refused.
+  expect_error(.mtr_validate_refs("/data/a\\b/ref.gb", ids = "S1"),
+               if (.Platform$OS.type == "windows") "file not found" else "not allowed")
 })
 
 test_that(".mtr_esummary_found reads a hit, a miss, and a non-esummary body", {
