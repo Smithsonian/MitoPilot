@@ -1,8 +1,18 @@
+.sv_state <- new.env()
+
 sv_page <- function() {
   skip_if_not_installed("chromote")
   skip_if(!nzchar(Sys.getenv("CHROMOTE_CHROME")) && is.null(tryCatch(chromote::find_chrome(), error = function(e) NULL)),
           "no Chrome for chromote")
-  b <- chromote::ChromoteSession$new()
+  # A runner can have Chrome yet fail to open its debugging port (seen on the
+  # Windows CI image); skip rather than fail, and remember the outcome so the
+  # remaining tests do not each wait out the launch timeout.
+  if (isTRUE(.sv_state$chrome_failed)) skip("Chrome did not start")
+  b <- tryCatch(chromote::ChromoteSession$new(), error = function(e) e)
+  if (inherits(b, "error")) {
+    .sv_state$chrome_failed <- TRUE
+    skip(paste("Chrome did not start:", conditionMessage(b)))
+  }
   withr::defer(b$close(), envir = parent.frame())
   # The fixture's relative script path only resolves in the source tree; point
   # it at the installed copy so the test also runs under R CMD check.
