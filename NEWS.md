@@ -4,37 +4,70 @@ Released TBD. Container: `macguigand/mitopilot:1.5.5`
 
 ## New Features
 
+This release adds a third assembler, **MapToRef**, a **redesigned app interface**, and a **sequence viewer** in the annotation window.
+
 ### Map-to-reference assembly
 
-- A third assembler, **MapToRef**, maps your reads to a reference mitogenome you supply and calls the consensus from the reads alone. The reference is used to place reads, never to fill in the answer.
-- The consensus is fed back in as the mapping reference and re-mapped until it stops changing (default: up to 5 passes, editable), then every read is mapped once more against the settled reference to produce the published sequence.
-- Sites with fewer than 3 reads are called N. Mixed sites get IUPAC codes.
-- **Choice of mapper.** MapToRef can map with bowtie2 (default), bwa-mem, or bwa-aln, picked in the Assemble options or with `maptoref_mapper` in `new_project()`. The mapper options box applies to whichever is chosen. bwa-aln (aln plus sampe) is for short or damaged reads such as ancient DNA; its default options are `-l 1024 -n 0.01 -o 2`, and its relaxed first pass appends `-n 0.06 -o 2 -l 1024`.
-- **Relaxed first pass.** The first pass against your reference always appends relaxed seeding to your options (bowtie2: `-N 1 -L 15 -i S,1,0.25 --mp 4,2 --score-min G,10,6`; bwa-mem: `-k 15 -B 2 -T 20`) so a distant reference still recruits reads. Later passes and the final pass use your options as given. The flags used for each pass are written to the assembler log.
-- A circular reference is handled across its origin, and the published sequence is only labelled circular if reads actually span the junction; otherwise it is published as linear with a note saying so.
-- References can be GenBank (preferred, one record) or FASTA. A FASTA reference needs its topology set per sample.
-- **Per-sample references.** A MapToRef reference and its FASTA topology belong to the sample, not to the parameter set, so one set of mapper options serves any number of samples that each map to a different mitogenome. Add an optional `Reference` column to the mapping CSV (an absolute file path, a URL, or an NCBI nucleotide accession such as `NC_002333`) plus a `Reference_topology` column for a FASTA, set them later with `set_maptoref_refs(path, refs)` from a two- or three-column CSV, or click a sample's MapToRef ref cell in the Assemble table. The column appears only when a sample is on a MapToRef set. Values stored on a parameter set by an earlier version are moved onto its samples by `backwards_compatibility()`.
-- **Accession references are downloaded from GenBank.** An accession is fetched from NCBI as a GenBank record, so the reference carries its own topology. The reference source (`file`, `url`, or `ncbi`) is recorded in each sample's summary and assembler log. `maptoref_fetch_accession()` exposes the same lookup on its own.
-- References are validated when the project is created or when `set_maptoref_refs()` runs: missing files, unreachable URLs, and non-existent accessions are reported together, before anything is written. `Reference` is now a reserved mapping-file column name in a read-based project and is checked whatever the assembler; rename the column if you were using it for something else.
-- Upgrading changes the assemble task signature, so the first run after the upgrade re-runs any still-queued assemble task even with `-resume`. Samples already at state 2 are unaffected, because they never enter the channel.
-- **MapToRef sequence viewer.** A button on MapToRef samples opens the sequence viewer on the reference: read depth across the reference with uncovered positions marked, a gene track when the reference is a GenBank record, the reference and consensus sequences with differences outlined, and, once zoomed under 1,000 bp, the individual reads with mismatches, insertions, deletions, and strand. MapToRef now keeps its final read alignment so the reads can be drawn.
+- **MapToRef** maps your reads to a reference mitogenome you supply and builds a consensus from the read pileup. The reference only places reads; every base in the result comes from your reads. The consensus is re-used as the reference and mapping repeats until the sequence stops changing.
+- **One reference per sample.** Add a `Reference` column to the mapping file (a file path, a URL, or an NCBI accession, which is downloaded for you), set references later with `set_maptoref_refs()`, or click a sample's **MapToRef Ref** cell in the Assemble table. A FASTA reference also needs a `Reference_topology`. References are checked when they are set, and every problem is reported at once.
+- **Choice of mapper.** bowtie2 (default), bwa-mem, or bwa-aln for short or damaged reads such as ancient DNA. The first pass against your reference uses relaxed settings so a distant reference still recruits reads.
+- Uncovered sites are called `N` and mixed sites get IUPAC codes. A circular reference is only published as circular when reads span the junction; otherwise the assembly is linear and a note says so. A note also warns when the reference looks too divergent for the sample.
+- The assembly details window opens a **sequence viewer on the reference**: read depth with uncovered positions marked, the reference's genes, the reference and consensus with differences outlined, and, zoomed in, the individual reads.
+- See the new [Choosing an assembly method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html) article for a comparison of GetOrganelle, MitoFinder, and MapToRef.
+
+### Redesigned app interface
+
+- The three modules are **numbered steps** (1 Assemble, 2 Annotate, 3 Export) in a header that names the project and version, with a **Help** link.
+- **One vocabulary everywhere.** Pipeline states are On hold, Ready to run, In progress, Success, and Failed, with the same icons in every table and dialog. Lock and State are proper columns. Toolbar buttons are Lock, State, Update, Assign Group, Clear Group, and Export Data; table buttons are Output, Details, and View.
+- Every table has the same **filter row** and a "Showing N of N" line; column headers are spelled out (Assembly Length (bp), # PCGs, Ambiguous Bases); topology, state, and review flags are colored pills; long notes wrap instead of clipping; table headers stay put while you scroll.
+- Every **options window** uses one form layout with CPUs and Memory first, help beside each field, and a **Save** button that says it re-queues the sample. Options are read-only on locked rows.
+- The **annotation details window** puts the review flags and their Mark buttons in the header, has one footer with Lock & Close, and honours the lock. The assembly details window explains what the lock blocks and keeps one primary action per panel.
+- **Every action reports back**: locking, state changes, group writes, and exports confirm what they did; destructive actions ask first; errors are explained in plain language.
+- Keyboard focus is visible, a skip link and screen-reader landmarks are in place, and motion is reduced when your system asks for it.
+- Table downloads are **Download selected rows** and **Download all rows**.
 
 ### Sequence viewer in the annotation window
 
-- The annotation details window has a **Sequence** section: the assembly's nucleotides with the annotated genes drawn in lanes above them and, for each protein-coding gene, its translated amino acids lined up under their codons. Click a gene in the table to jump to it; drag, scroll, or use the zoom buttons to move around; a circular assembly wraps through its origin. Every edit in the window (deleting, merging, moving a start or stop codon, linearizing, trimming) is reflected immediately.
-- Read depth and per-base error rate are drawn as tracks above the genes, each with its own visibility checkbox. The separate **Coverage Map** section is gone; the sequence viewer replaces it.
+- The annotation details window has a **Sequence** section: read depth and error rate tracks, the annotated genes drawn in lanes, the nucleotides, and the translated amino acids of every protein-coding gene under their codons. Click a gene in the table to jump to it; drag, scroll, or zoom to move around; a circular assembly wraps through its origin. Edits in the window show immediately. It replaces the Coverage Map section.
 
 ### Export
 
-- The FASTA header no longer carries the `[note=annotation compared to GenBank accession ...]` field; GenBank no longer wants it. The reference is recorded instead in the export's `sample_info.csv`, in a new `ref_comparison` column that reads "compared sample <ID> to GenBank accession <accession>" (blank when the reference was flagged poor).
+- **Internal stop codons are flagged.** The PCG outlier review lists any protein-coding gene whose translation contains a stop codon before its end, the HTML report has an **Internal Stop Codons** section, and MitoPilot warns before writing files that would fail NCBI validation.
+- The FASTA header no longer carries the `[note=annotation compared to GenBank accession ...]` field, which GenBank no longer wants. The reference is recorded in the export's `sample_info.csv` instead, in a new `ref_comparison` column.
+
+### Project setup
+
+- **Pre-flight checks.** `new_project()` and `new_project_userAsmb()` check the mapping file, read and assembly files, reference databases, and every parameter before creating anything, and report all problems together.
+- The mapping file may be comma-, tab-, or semicolon-delimited; ragged rows, stray quotes, and Excel files are detected and explained. Sample IDs are capped at 40 characters, GenBank's limit for a SeqID.
 
 ### Preprocessing
 
-- **Remove duplicate reads** checkbox in the Preprocess options runs fastp with `--dedup` instead of `--dont_eval_duplication`. Off by default; it lowers depth and rarely changes calls.
+- **Remove duplicate reads** checkbox in the Preprocess options runs fastp with `--dedup`. Off by default; it lowers depth and rarely changes calls.
 
 ### Container
 
-- **samtools upgraded from 1.21 to 1.24**, which gives the consensus step real multi-threading.
+- samtools upgraded to 1.24 and bwa 0.7.19 added for MapToRef.
+
+## Bug Fixes
+
+- **Annotate and curate tasks are back in the Work Dirs browser**; they were missing for any sample with more than one assembly.
+- **Marking an assembly reviewed, problematic, or partial no longer clears your row selection** in the Annotate table.
+- **A joined Path 0 sets the sample to Success** instead of leaving it Failed.
+- **Annotate tasks no longer fail on Docker Desktop** with exit 125 when the project has no MitoFinder database.
+- **Copying the nucleotide sequence of a minus-strand gene** gives the reverse complement, as it should.
+- **Genes joined across scaffolds** are spliced correctly in the outlier review and the HTML report.
+- The alignment editor lets you **override the segment-overlap block** when you know the overlap is real.
+
+## Documentation
+
+- Every app screenshot is refreshed for the new interface, and the walkthroughs use the new names for buttons, columns, and states.
+- New article: [Choosing an assembly method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html).
+- The [Your Own Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.html) arguments are grouped by topic, and the MapToRef reference columns are documented with the mapping file.
+
+**Note**
+Projects created with an earlier release should be updated with [`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html), which adds the MapToRef columns; the app refuses to open an un-migrated project and tells you so. Pass `update_config = FALSE` to leave your `.config` alone, then change its `container` line to `macguigand/mitopilot:1.5.5` by hand. `Reference` is now a reserved mapping-file column; rename it if you used it for something else. The package has new R dependencies (`read.gb`, `Rsamtools`, `IRanges`), so reinstall rather than update in place.
+
+**Full Changelog**: https://github.com/Smithsonian/MitoPilot/compare/1.5.4...1.5.5
 
 # MitoPilot 1.5.4
 
