@@ -137,6 +137,5 @@ new_project <- function(
     )) |>
     writeLines(file.path(path, ".config"))
 
-  message("Project initialized successfully.")
-  message("Please open and review the .config file to ensure all required options are specified.")
+  message("Project initialized: ", path)
 }
