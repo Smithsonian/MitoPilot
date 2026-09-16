@@ -188,11 +188,11 @@ A run looks the same as any other MitoPilot project:
 1. Open the app for the project, `MitoPilot()` from the project directory. It
    opens on the Assemble module.
 2. If needed, change any run options.
-3. Click UPDATE, then Run from App or Submit as Job.
+3. Click **Update**, then **Run from App** or **Submit as Job**.
 4. When the run finishes, check the results. You should see Length, Topology, 
    and other columns filled in.
-5. Select the samples that came through cleanly and click LOCK. That releases
-   them to Annotate. Switch modules with the dropdown at the top left.
+5. Select the samples that came through cleanly and click **Lock**. That releases
+   them to Annotate. Switch modules with the numbered buttons at the top left.
 
 Then continue with [Annotate](Test-Project-Annotate.html) and
 [Export](Test-Project-Export.html) as usual.
@@ -303,7 +303,7 @@ out. MitoPilot accepts them.
 
 A codon holding an ambiguous base is translated to the one amino acid it can be,
 or to `X` when more than one is possible, and the gene is flagged with an
-`<n> ambiguous bases in CDS` warning for review. The **Ambig. Bases** column of
+`<n> ambiguous bases in CDS` warning for review. The **Ambiguous Bases** column of
 the Assemble table counts them per sample, and a sample's assembly details
 window counts them per contig. When you open a gene in the annotation editor,
 the alignment says how many of its bases are ambiguous.

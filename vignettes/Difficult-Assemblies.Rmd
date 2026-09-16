@@ -16,7 +16,8 @@ before annotation and export.
 What you see depends partly on the assembler. MitoPilot can assemble with
 [GetOrganelle](https://github.com/Kinggerm/GetOrganelle) (the default),
 [MitoFinder](https://github.com/RemiAllio/MitoFinder), or MapToRef, set by the
-`assembler` option at project setup. GetOrganelle explores an assembly graph
+`assembler` option at project setup (see
+[choosing an assembly method](Assembly-Methods.html)). GetOrganelle explores an assembly graph
 and can return several alternative **paths** through it, each possibly split
 into scaffolds. MitoFinder returns a **single path**, but can still report
 several **scaffolds** when it recovers more than one mitochondrial contig.
@@ -83,7 +84,7 @@ mark the assembly circular, then **Build joined assembly (Path 0)**. If the
 scaffolds carry different BLAST hits, MitoPilot warns you, because joining
 unrelated sequences produces poor overlaps and an unreliable assembly.
 
-The **Join scaffolds** button in the assembly options window is a separate, optional convenience rather
+The **Automatically join multi-scaffold assemblies (Path 0)** checkbox in the assembly options window is a separate, optional convenience rather
 than a switch for the editor. When it is enabled, the pipeline builds Path 0
 *automatically* during assembly for eligible samples, but only when their
 scaffolds map to the same reference, so you do not have to join each fragmented
@@ -107,7 +108,7 @@ Export behaves differently for the two cases, matching the biology.
 **Multiple scaffolds export as separate records.** A sample contributing more
 than one scaffold produces one GenBank record per scaffold. To keep SeqIDs unique
 within a submission, MitoPilot adds a suffix `ID_p<path>_s<scaffold>` (a
-single-unit sample keeps its plain `ID`). Because a sample split across scaffolds
+sample with one assembly keeps its plain `ID`). Because a sample split across scaffolds
 *could* instead be one fragmented genome, export asks you to confirm.
 
 **Multiple paths cannot be exported.** Exporting every path would submit several

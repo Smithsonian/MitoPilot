@@ -30,7 +30,8 @@ It may also be helpful to create a custom database for curation of the protein-c
 
 ## What parts of the MitoPilot pipeline use reference databases?
 
-- GetOrganelle, MitoFinder, or MapToRef (Assemble module)
+- GetOrganelle, MitoFinder, or MapToRef (Assemble module; see
+  [choosing an assembly method](Assembly-Methods.html))
 - Mitos2 (Annotate module)
 - Automatic and manual curation of protein-coding genes (Annotate module)
 
@@ -153,7 +154,7 @@ a multi-record database. GenBank format (`.gb`) is preferred because the
 record's `LOCUS` line states its topology (circular or linear) for you; a
 FASTA reference works too, but then you must give the topology yourself. The
 reference is set per sample, through the mapping CSV's `Reference` column,
-`set_maptoref_refs()`, or the sample's `MapToRef ref` cell in the app's
+`set_maptoref_refs()`, or the sample's **MapToRef Ref** cell in the app's
 Assemble table; a FASTA reference needs its topology given the same way
 (the mapping CSV's `Reference_topology` column, the third column to
 `set_maptoref_refs()`, or the topology field in that same modal).

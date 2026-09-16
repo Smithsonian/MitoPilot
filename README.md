@@ -28,7 +28,7 @@ raw input and performs the following steps.
         and adapter trimming
       - [GetOrganelle](https://github.com/Kinggerm/GetOrganelle)
         (default), [MitoFinder](https://github.com/RemiAllio/MitoFinder),
-        or MapToRef for mitogenome assembly
+        or MapToRef for mitogenome assembly (see [choosing an assembly method](https://smithsonian.github.io/MitoPilot/articles/Assembly-Methods.html))
       - [bowtie2](https://github.com/BenLangmead/bowtie2) for read
         mapping to calculate coverage and error rates.
       - [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) against a
