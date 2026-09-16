@@ -33,7 +33,7 @@ others:
     reference db columns.
   \item \code{assemble_opts}: "assembler", "mitofinder_db"/"mitofinder",
     "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds",
-    and the MapToRef columns "maptoref_ref", "maptoref",
+    and the MapToRef columns "maptoref_ref", "maptoref_mapper", "maptoref",
     "maptoref_consensus", "maptoref_iter", "maptoref_topology".
   \item \code{curate_opts}: "max_blast_hits", "ref_dir", "ref_db",
     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path

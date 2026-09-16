@@ -13,7 +13,7 @@
 #'     reference db columns.
 #'   \item \code{assemble_opts}: "assembler", "mitofinder_db"/"mitofinder",
 #'     "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds",
-#'     and the MapToRef columns "maptoref_ref", "maptoref",
+#'     and the MapToRef columns "maptoref_ref", "maptoref_mapper", "maptoref",
 #'     "maptoref_consensus", "maptoref_iter", "maptoref_topology".
 #'   \item \code{curate_opts}: "max_blast_hits", "ref_dir", "ref_db",
 #'     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
@@ -164,9 +164,18 @@ backwards_compatibility <- function(
     error = function(e) TRUE
   )
 
+  # MapToRef references left on a parameter set by an earlier 1.5.5 build still
+  # need moving onto their samples even when every column already exists.
+  set_refs_pending <- tryCatch({
+    o <- assemble_opts_table
+    any(nzchar(trimws(stats::na.omit(o$maptoref_ref)))) ||
+      any(nzchar(trimws(stats::na.omit(o$maptoref_topology))))
+  }, error = function(e) FALSE)
+
   if ((!update_config || containerVer) &&
       genetic_code_numeric &&
       !old_ref_str &&
+      !set_refs_pending &&
       "arwen_opts" %in% names(annotate_opts_table) &&
       "use_arwen" %in% names(annotate_opts_table) &&
       "start_gene" %in% names(annotate_opts_table) &&
@@ -2307,7 +2316,7 @@ schema_gaps <- function(con) {
     gaps <- c(gaps, "the 'scaffold_junctions' table is missing or out of date")
   }
   if (!is_user_asmb(con) &&
-      !has(all(c("maptoref_ref", "maptoref", "maptoref_consensus",
+      !has(all(c("maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
                  "maptoref_iter", "maptoref_topology") %in%
                DBI::dbListFields(con, "assemble_opts")))) {
     gaps <- c(gaps, "the assemble_opts table lacks the MapToRef option columns")
