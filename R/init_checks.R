@@ -22,6 +22,8 @@
   paste0(paste(x[seq_len(max)], collapse = ", "), ", ... and ", length(x) - max, " more")
 }
 
+.pl <- function(n, one, many) if (n == 1L) one else many
+
 #' Print the collected issues and stop when any error was recorded
 #' @noRd
 .report_issues <- function(iss, context = "Project initialization") {
@@ -109,17 +111,18 @@ check_sample_ids <- function(ids, iss = .issues()) {
   }
   ids[blank] <- ""
   if (anyDuplicated(ids[!blank])) {
-    iss$err("mapping IDs: duplicate IDs: ", .lst(unique(ids[duplicated(ids) & !blank])))
+    dup <- unique(ids[duplicated(ids) & !blank])
+    iss$err("mapping IDs: duplicate ", .pl(length(dup), "ID", "IDs"), ": ", .lst(dup))
   }
   long <- !blank & nchar(ids) > .max_id_chars
   if (any(long)) {
-    iss$err("mapping IDs: IDs must be at most ", .max_id_chars,
+    iss$err("mapping IDs: ", .pl(sum(long), "ID is", "IDs are"), " over ", .max_id_chars,
             " characters (NCBI SeqID limit): ", .lst(ids[long]))
   }
   badc <- !blank & !grepl("^[a-zA-Z0-9_:-]+$", ids)
   if (any(badc)) {
-    iss$err("mapping IDs: IDs may only contain letters, digits, dashes, ",
-            "underscores, and colons: ", .lst(ids[badc]))
+    iss$err("mapping IDs: ", .pl(sum(badc), "ID has", "IDs have"), " characters other ",
+            "than letters, digits, dashes, underscores, and colons: ", .lst(ids[badc]))
   }
   iss$blank <- blank
   invisible(iss)

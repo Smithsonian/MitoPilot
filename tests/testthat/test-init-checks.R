@@ -35,8 +35,8 @@ test_that("preflight reports every problem at once and touches nothing", {
   expect_match(err, "aborted")
   expect_false(dir.exists(proj))
   txt <- err
-  for (needle in c("reserved names", "empty ID", "duplicate IDs", "40 characters",
-                   "only contain", "same file", "not found in", "not FASTQ",
+  for (needle in c("reserved names", "empty ID", "duplicate ID", "over 40 characters",
+                   "characters other than", "same file", "not found in", "not FASTQ",
                    "lowercase 'circular'", "Assembly: empty", "missing.fa",
                    "LOCUS", "No config found", "genetic_code", "unknown argument",
                    "annotate_cpus", "linear_complete", "dog_mito",
@@ -114,7 +114,7 @@ test_that("new_db rejects a mapping with several ID problems in one report", {
     error = function(e) conditionMessage(e)
   )
   expect_match(err, "Mapping file aborted")
-  expect_match(err, "duplicate IDs")
-  expect_match(err, "only contain")
+  expect_match(err, "duplicate ID")
+  expect_match(err, "characters other than")
   expect_false(file.exists(file.path(d, ".sqlite")))
 })
