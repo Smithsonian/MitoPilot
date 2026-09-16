@@ -119,7 +119,7 @@ Four columns are required:
 
 | Column | Contents |
 |---|---|
-| `ID` | Unique identifier for the sample. Used as the SeqID at export, so keep it short and free of spaces. |
+| `ID` | Unique identifier for the sample. Used as the SeqID at export, so at most 40 characters, using only letters, digits, dashes, underscores, and colons. |
 | `Taxon` | Taxonomic information. Only included for your own benefit, so no required format. |
 | `R1` | File name of the forward reads (name only, not a path). |
 | `R2` | File name of the reverse reads (name only, not a path). |

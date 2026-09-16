@@ -142,16 +142,10 @@ new_db <- function(
   }
   mapping <- utils::read.csv(mapping_fn)
 
-  # convert ID column to characters
-  mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
-
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("Duplicate IDs found in mapping file")
+  if (mapping_id %in% colnames(mapping)) {
+    mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
+  .report_issues(check_mapping(mapping, mapping_id, mapping_taxon), "Mapping file")
 
   # Validate assembler choice
   if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
@@ -167,21 +161,6 @@ new_db <- function(
     stop("maptoref and maptoref_consensus must not contain quote characters")
   }
 
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must be no more than 18 characters")
-  }
-
-  # Validate IDs contain only alphanumeric characters
-  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
-    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
-  }
 
   # The optional Reference column seeds assemble.maptoref_ref. It must be taken
   # out here, before CREATE TABLE samples ({cols*}) below, and before the DB
