@@ -65,6 +65,7 @@ Imports:
     cli,
     httr2
 Suggests:
+    chromote,
     knitr,
     testthat (>= 3.0.0),
     withr

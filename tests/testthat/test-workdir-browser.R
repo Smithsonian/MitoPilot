@@ -19,5 +19,5 @@ test_that("find_workdirs keeps every workflow's tasks for a sample", {
   out <- find_workdirs(d, "S1")
   expect_setequal(out$process, c("assemble", "annotate", "curate", "blast_ref_alignment"))
   expect_equal(nrow(out), 5L)
-  expect_false(any(grepl("f1|g1|e1", out$workdir)))
+  expect_false(any(basename(out$workdir) %in% c("f1", "g1", "e1")))
 })

@@ -171,6 +171,9 @@
                        ids[i], gsub("\\s+", " ", s[i]), gsub("\\s+", " ", msg))
   }
 
+  # A Windows path separator is not a shell escape; the value is stored with
+  # forward slashes either way (normalizePath(winslash = "/")).
+  if (.Platform$OS.type == "windows") s <- gsub("\\\\", "/", s)
   bad_chars <- which(grepl(.mtr_bad_chars_re, s))
   for (i in bad_chars) {
     add(i, paste("quote, dollar, backtick, and backslash characters are not",

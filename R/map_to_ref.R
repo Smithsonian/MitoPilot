@@ -436,6 +436,9 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   if (identical(pass, 1L)) trimws(paste(user_opts, .mtr_relaxed[[mapper]])) else user_opts
 }
 
+# Commands run in the Linux container, so quote for sh even when R is on Windows.
+.mtr_q <- function(x) shQuote(x, type = "sh")
+
 #' @noRd
 .mtr_check_tools <- function(mapper) {
   bins <- if (startsWith(mapper, "bwa")) "bwa" else c("bowtie2", "bowtie2-build")
@@ -450,9 +453,9 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 #' @noRd
 .mtr_index_cmd <- function(mapper, ref_fa, idx) {
   if (startsWith(mapper, "bwa")) {
-    stringr::str_glue("bwa index -p {shQuote(idx)} {shQuote(ref_fa)}")
+    stringr::str_glue("bwa index -p {.mtr_q(idx)} {.mtr_q(ref_fa)}")
   } else {
-    stringr::str_glue("bowtie2-build -q {shQuote(ref_fa)} {shQuote(idx)}")
+    stringr::str_glue("bowtie2-build -q {.mtr_q(ref_fa)} {.mtr_q(idx)}")
   }
 }
 
@@ -462,8 +465,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 .mtr_map_cmd <- function(mapper, opts, idx, r1, r2, cpus, log_fn, drop_unal) {
   if (mapper == "bwa-mem") {
     cmd <- stringr::str_glue(
-      "bwa mem -t {cpus} {opts} {shQuote(idx)} {shQuote(r1)} {shQuote(r2)} ",
-      "2>> {shQuote(log_fn)}")
+      "bwa mem -t {cpus} {opts} {.mtr_q(idx)} {.mtr_q(r1)} {.mtr_q(r2)} ",
+      "2>> {.mtr_q(log_fn)}")
     if (drop_unal) cmd <- paste(cmd, "| samtools view -b -F 4 -")
   } else if (mapper == "bwa-aln") {
     # Two aln passes write .sai files beside the index, then sampe pairs them.
@@ -471,16 +474,16 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     sai1 <- paste0(idx, "_1.sai")
     sai2 <- paste0(idx, "_2.sai")
     cmd <- stringr::str_glue(
-      "bwa aln -t {cpus} {opts} {shQuote(idx)} {shQuote(r1)} > {shQuote(sai1)} 2>> {shQuote(log_fn)} && ",
-      "bwa aln -t {cpus} {opts} {shQuote(idx)} {shQuote(r2)} > {shQuote(sai2)} 2>> {shQuote(log_fn)} && ",
-      "bwa sampe {shQuote(idx)} {shQuote(sai1)} {shQuote(sai2)} {shQuote(r1)} {shQuote(r2)} ",
-      "2>> {shQuote(log_fn)}")
+      "bwa aln -t {cpus} {opts} {.mtr_q(idx)} {.mtr_q(r1)} > {.mtr_q(sai1)} 2>> {.mtr_q(log_fn)} && ",
+      "bwa aln -t {cpus} {opts} {.mtr_q(idx)} {.mtr_q(r2)} > {.mtr_q(sai2)} 2>> {.mtr_q(log_fn)} && ",
+      "bwa sampe {.mtr_q(idx)} {.mtr_q(sai1)} {.mtr_q(sai2)} {.mtr_q(r1)} {.mtr_q(r2)} ",
+      "2>> {.mtr_q(log_fn)}")
     if (drop_unal) cmd <- paste(cmd, "| samtools view -b -F 4 -")
   } else {
     unal <- if (drop_unal) "--no-unal " else ""
     cmd <- stringr::str_glue(
-      "bowtie2 {opts} {unal}-x {shQuote(idx)} -1 {shQuote(r1)} -2 {shQuote(r2)} ",
-      "--threads {cpus} 2>> {shQuote(log_fn)}")
+      "bowtie2 {opts} {unal}-x {.mtr_q(idx)} -1 {.mtr_q(r1)} -2 {.mtr_q(r2)} ",
+      "--threads {cpus} 2>> {.mtr_q(log_fn)}")
   }
   gsub("  +", " ", as.character(cmd))
 }
@@ -490,8 +493,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 #' @noRd
 .mtr_run <- function(cmd, log_fn) {
   .mtr_log(log_fn, "+ ", cmd)
-  full <- paste0("{ ", cmd, " ; } 2>> ", shQuote(log_fn))
-  status <- system2("bash", c("-o", "pipefail", "-c", shQuote(full)))
+  full <- paste0("{ ", cmd, " ; } 2>> ", .mtr_q(log_fn))
+  status <- system2("bash", c("-o", "pipefail", "-c", .mtr_q(full)))
   if (status != 0L) {
     stop("command failed (exit ", status, "): ", cmd)
   }
@@ -514,7 +517,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
 #' @noRd
 .mtr_count_primary <- function(bam) {
   out <- suppressWarnings(system2(
-    "samtools", c("view", "-c", "-F", "0x904", shQuote(bam)),
+    "samtools", c("view", "-c", "-F", "0x904", .mtr_q(bam)),
     stdout = TRUE, stderr = FALSE
   ))
   # A failed count must not read as "no reads mapped".
@@ -534,7 +537,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
                                 min_overhang = 30L) {
   region <- paste0(refname, ":", len, "-", len)
   sam <- suppressWarnings(system2(
-    "samtools", c("view", "-F", "0x904", shQuote(bam), shQuote(region)),
+    "samtools", c("view", "-F", "0x904", .mtr_q(bam), .mtr_q(region)),
     stdout = TRUE, stderr = FALSE
   ))
   # A failed query must not read as "no reads span the seam".
@@ -677,7 +680,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   .mtr_log(log_fn, "pass 1 (", mapper, "): ", pass1_opts)
   .mtr_run(paste(
     .mtr_map_cmd(mapper, pass1_opts, idx, reads_1, reads_2, cpus, log_fn, FALSE),
-    stringr::str_glue("| samtools view -b -G 12 - | samtools sort -@ {cpus} -o {shQuote(bam)} -")
+    stringr::str_glue("| samtools view -b -G 12 - | samtools sort -@ {cpus} -o {.mtr_q(bam)} -")
   ), log_fn)
 
   reads_pass_1 <- .mtr_count_primary(bam)
@@ -694,8 +697,8 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   sub_1 <- file.path(work, "sub_R1.fq")
   sub_2 <- file.path(work, "sub_R2.fq")
   .mtr_run(stringr::str_glue(
-    "samtools sort -n {shQuote(bam)} ",
-    "| samtools fastq -1 {shQuote(sub_1)} -2 {shQuote(sub_2)} ",
+    "samtools sort -n {.mtr_q(bam)} ",
+    "| samtools fastq -1 {.mtr_q(sub_1)} -2 {.mtr_q(sub_2)} ",
     "-0 /dev/null -s /dev/null -n"
   ), log_fn)
 
@@ -709,7 +712,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     raw <- file.path(work, paste0("raw_", k, ".fa"))
     .mtr_run(stringr::str_glue(
       "samtools consensus {fixed_cons} --show-ins no {user_cons} ",
-      "{shQuote(bam)} > {shQuote(raw)}"
+      "{.mtr_q(bam)} > {.mtr_q(raw)}"
     ), log_fn)
 
     raw_seq <- .mtr_read_seq(raw)
@@ -754,7 +757,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
     .mtr_log(log_fn, "pass ", k + 1L, " (", mapper, "): ", bowtie2_opts)
     .mtr_run(paste(
       .mtr_map_cmd(mapper, bowtie2_opts, idx, sub_1, sub_2, cpus, log_fn, TRUE),
-      stringr::str_glue("| samtools sort -@ {cpus} -o {shQuote(bam)} -")
+      stringr::str_glue("| samtools sort -@ {cpus} -o {.mtr_q(bam)} -")
     ), log_fn)
   }
   utils::write.table(iters, file.path(work, "iterations.tsv"),
@@ -771,12 +774,12 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   .mtr_log(log_fn, "final pass (", mapper, "): ", bowtie2_opts)
   .mtr_run(paste(
     .mtr_map_cmd(mapper, bowtie2_opts, final_idx, reads_1, reads_2, cpus, log_fn, TRUE),
-    stringr::str_glue("| samtools sort -@ {cpus} -o {shQuote(final_bam)} -")
+    stringr::str_glue("| samtools sort -@ {cpus} -o {.mtr_q(final_bam)} -")
   ), log_fn)
   reads_final <- .mtr_count_primary(final_bam)
   # Indexed for every reference, not just circular ones: the viewer's pileup
   # panel queries windows out of this BAM.
-  .mtr_run(stringr::str_glue("samtools index {shQuote(final_bam)}"), log_fn)
+  .mtr_run(stringr::str_glue("samtools index {.mtr_q(final_bam)}"), log_fn)
   junction_depth <- NA_integer_
   if (circular) {
     junction_depth <- .mtr_junction_depth(final_bam, len)
@@ -786,7 +789,7 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   # never has to open the BAM.
   depth_txt <- file.path(work, "final_depth.txt")
   .mtr_run(stringr::str_glue(
-    "samtools depth -a -J {shQuote(final_bam)} > {shQuote(depth_txt)}"
+    "samtools depth -a -J {.mtr_q(final_bam)} > {.mtr_q(depth_txt)}"
   ), log_fn)
   utils::write.csv(
     .mtr_depth_table(depth_txt, len),
@@ -799,11 +802,11 @@ map_to_ref <- function(id, ref, reads_1, reads_2,
   final_subs <- file.path(work, "final_subs.fa")
   .mtr_run(stringr::str_glue(
     "samtools consensus {fixed_cons} --show-ins yes --mark-ins {user_cons} ",
-    "{shQuote(final_bam)} > {shQuote(final_raw)}"
+    "{.mtr_q(final_bam)} > {.mtr_q(final_raw)}"
   ), log_fn)
   .mtr_run(stringr::str_glue(
     "samtools consensus {fixed_cons} --show-ins no {user_cons} ",
-    "{shQuote(final_bam)} > {shQuote(final_subs)}"
+    "{.mtr_q(final_bam)} > {.mtr_q(final_subs)}"
   ), log_fn)
 
   tokens <- .mtr_splice(.mtr_parse_marked(.mtr_read_seq(final_raw)), len, flank)
