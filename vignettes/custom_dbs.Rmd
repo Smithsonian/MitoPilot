@@ -150,46 +150,20 @@ Assembly of contigs with MitoFinder is completely de novo. The MitoFinder refere
 ## Reference mitogenome for MapToRef
 
 MapToRef needs exactly one complete mitogenome record to map reads against, not
-a multi-record database. GenBank format (`.gb`) is preferred because the
-record's `LOCUS` line states its topology (circular or linear) for you; a
-FASTA reference works too, but then you must give the topology yourself. The
-reference is set per sample, through the mapping CSV's `Reference` column,
+a multi-record database. The reference is set per sample, through the mapping CSV's `Reference` column,
 `set_maptoref_refs()`, or the sample's **MapToRef Ref** cell in the app's
-Assemble table; a FASTA reference needs its topology given the same way
-(the mapping CSV's `Reference_topology` column, the third column to
-`set_maptoref_refs()`, or the topology field in that same modal).
+Assemble table. 
 
-To get one:
+The best option is to provide a GenBank accession number, which
+MitoPilot will automatically download. Alternatively, you can supply a URL or path to 
+a file. GenBank format (`.gb`) is preferred because it contains annotation information. 
+FASTA formatted references are also allowed.
 
-1. Search [NCBI Nucleotide](https://www.ncbi.nlm.nih.gov/nuccore) for a
-   complete mitogenome from your target species, or the closest relative you
-   can find.
-2. Open the record, then **Send to > File**, choosing **GenBank (full)**
-   format.
-3. Save the file inside your project folder.
-
-The MitoFinder sampler database built by `custom_assembly_db()` is not a
-MapToRef reference: it packages many mitogenome records together so MitoFinder
-can label contigs against any of them, while MapToRef expects a single
-sequence to map every read against.
-
-You can skip the download entirely and give the accession instead (for example
-`NC_002333.1`). MitoPilot downloads the GenBank record from NCBI at run time, so
-the compute node needs network access. The record carries its own topology when
-its `LOCUS` line names one (mitogenome records normally do); otherwise give the
-reference topology the same way you gave the reference.
-
-If a sample's reference cannot be resolved at run time, only that sample fails:
-it is marked `failed assembly` in the Assemble table, and the reason is written
-to that sample's `assembler.log.txt`. One caveat: because a MapToRef failure
-is a normal per-sample outcome rather than a crashed task, Nextflow caches it.
-If you fix a transient network problem and re-run with the same reference, untick
-`-resume` so the sample is attempted again; changing the reference changes the
-task and re-runs on its own.
+A FASTA reference also needs topology specified using a `Reference_topology` column, 
+in the mapping file.
 
 <div class="alert alert-warning">
-  <strong>Keep the reference inside the project folder.</strong> MitoPilot runs inside a container (Docker or Singularity/Apptainer), which only sees files under the paths it is told to mount. A reference kept outside your project tree, especially one reached through a symlink, may point somewhere the container cannot read, and the run will fail as if the file were missing. Keep the reference file under the project folder, or make sure its actual directory is bound into the container if you keep it elsewhere.
-</div>
+  <strong>Keep the reference inside the project folder.</strong> MitoPilot runs inside a container (Docker or Singularity/Apptainer), which only sees files under the paths it is told to mount.
 
 ## Build custom databases for protein-coding gene curation
 
