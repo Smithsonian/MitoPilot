@@ -100,7 +100,7 @@ no threshold.
 
 # Internal Stop Codons
 
-```{r internal_stops, echo=F, message=F, warning=F}
+```{r internal_stops, echo=F, message=F, warning=F, results='asis'}
 istops <- MitoPilot:::internal_stop_records(annotations)
 
 if (nrow(istops) == 0) {
