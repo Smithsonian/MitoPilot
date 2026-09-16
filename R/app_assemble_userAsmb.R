@@ -29,52 +29,11 @@ assemble_ui_userAsmb <- function(id) {
   tagList(
     uiOutput(ns("col_css")),
     div(
-      style = "display: flex; flex-flow: row wrap; gap: 1em; align-items: flex-end;",
-      shinyWidgets::pickerInput(
-        inputId  = ns("lock_filter"),
-        width    = "140px",
-        label    = "Lock:",
-        choices  = ASSEMBLE_LOCK_CHOICES,
-        selected = ASSEMBLE_LOCK_CHOICES,
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "140px"
-        )
-      ),
-      shinyWidgets::pickerInput(
-        inputId  = ns("state_filter"),
-        width    = "140px",
-        label    = "State:",
-        choices  = ASSEMBLE_STATE_CHOICES,
-        selected = ASSEMBLE_STATE_CHOICES,
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "140px"
-        )
-      ),
-      shinyWidgets::pickerInput(
-        inputId  = ns("col_groups"),
-        width    = "150px",
-        label    = "Show columns:",
-        choices  = names(ASSEMBLE_COL_GROUPS_USERASMB),
-        selected = names(ASSEMBLE_COL_GROUPS_USERASMB),
-        multiple = TRUE,
-        options  = list(
-          `actions-box`          = TRUE,
-          `select-all-text`      = "All",
-          `deselect-all-text`    = "None",
-          `selected-text-format` = "count > 0",
-          width                  = "150px"
-        )
-      ),
+      class = "mp-filter-row",
+      mp_filter_picker(ns("lock_filter"), "Lock:", ASSEMBLE_LOCK_CHOICES,
+                       width = "140px"),
+      mp_filter_picker(ns("state_filter"), "State:", mp_state_choices("assemble"),
+                       width = "150px"),
       shinyWidgets::airDatepickerInput(
         inputId     = ns("date_filter"),
         label       = "Updated between:",
@@ -83,13 +42,16 @@ assemble_ui_userAsmb <- function(id) {
         value       = NULL,
         width       = "220px",
         placeholder = "any time"
+      ),
+      div(
+        class = "mp-filter-cols",
+        mp_filter_picker(ns("col_groups"), "Columns:",
+                         names(ASSEMBLE_COL_GROUPS_USERASMB), width = "150px")
       )
     ),
+    uiOutput(ns("n_selected")),
     div(class = "mp-table-resize", reactableOutput(ns("table"))),
-    div(
-      style = "font-size: 0.85em; color: #555; margin-top: 4px;",
-      textOutput(ns("n_selected"), inline = TRUE)
-    )
+    assemble_csv_row(ns)
   )
 }
 
@@ -159,7 +121,7 @@ assemble_server_userAsmb <- function(id) {
     observeEvent(input$lock_filter, {
       lock_filter_rv(input$lock_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    state_filter_rv <- reactiveVal(unname(ASSEMBLE_STATE_CHOICES))
+    state_filter_rv <- reactiveVal(MP_STATE_CODES[["assemble"]])
     observeEvent(input$state_filter, {
       state_filter_rv(input$state_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -181,7 +143,7 @@ assemble_server_userAsmb <- function(id) {
     output$col_css <- renderUI({
       hidden_grp   <- setdiff(names(ASSEMBLE_COL_GROUPS_USERASMB), col_groups_rv())
       hidden_lock  <- setdiff(unname(ASSEMBLE_LOCK_CHOICES), lock_filter_rv())
-      hidden_state <- setdiff(unname(ASSEMBLE_STATE_CHOICES), state_filter_rv())
+      hidden_state <- setdiff(MP_STATE_CODES[["assemble"]], state_filter_rv())
       # Scope to THIS module's table so rules don't hit the shared mp-lock /
       # mp-state / mp-grp classes on the annotate, export, and assemble tables.
       sel <- paste0("#", ns("table"), " ")
@@ -193,10 +155,16 @@ assemble_server_userAsmb <- function(id) {
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
     })
+    # Style-only output has no size, so Shiny would treat it as hidden and
+    # stop re-rendering it after the first pass.
+    outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
     # Render table ----
+    # Render order comes from the data frame, not this list. See
+    # fetch_assemble_data_userAsmb().
     output$table <- renderReactable({
-      isolate(req(filtered_data())) |>
+      tbl_data <- isolate(req(filtered_data()))
+      tbl_data |>
         reactable(
           resizable = TRUE,
           filterable = TRUE,
@@ -218,160 +186,199 @@ assemble_server_userAsmb <- function(id) {
                    ' mp-state-' + rowInfo.values['assemble_switch'];
           }"),
           theme = reactable::reactableTheme(
-            headerStyle = list(whiteSpace = "normal", lineHeight = "1.2", textAlign = "left")
+            headerStyle = list(
+              whiteSpace = "normal", lineHeight = "1.2",
+              # wrap = FALSE puts .rt-nowrap on the table, which sets nowrap on
+              # the inner div; the theme selector outranks it.
+              "& .rt-th-inner" = list(whiteSpace = "normal", textOverflow = "clip"),
+              "& .rt-text-content" = list(whiteSpace = "normal", textOverflow = "clip")
+            )
           ),
-          defaultColDef = colDef(align = "left", show = F),
+          defaultColDef = colDef(show = FALSE),
           columns = list(
-            `.selection` = colDef(show = T, sticky = "left", width = 28),
+            `.selection` = colDef(show = T, sticky = "left", width = 28, align = "center"),
             assemble_lock = colDef(
               show = TRUE,
               sticky = "left",
-              name = "",
+              name = mp_col_name("assemble_lock"),
+              header = mp_col_header("assemble_lock", tip = MP_LOCK_DEF("assemble")),
               html = TRUE,
-              width = 32,
+              width = 52,
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-lock-open",
-                  `1` = "fa fa-lock"
-                )
+                icons = c(`0` = "fa fa-lock-open", `1` = "fa fa-lock"),
+                labels = c(`0` = "Unlocked", `1` = MP_LOCK_DEF("assemble"))
               )
             ),
             assemble_switch = colDef(
               show = TRUE,
               sticky = "left",
-              name = "",
+              name = mp_col_name("assemble_switch"),
+              header = mp_col_header("assemble_switch"),
               html = TRUE,
-              width = 30,
+              width = 62,
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
-                c(
-                  `0` = "fa fa-hourglass",
-                  `1` = "fa fa-person-running",
-                  `2` = "fa fa-circle-check",
-                  `3` = "fa fa-triangle-exclamation",
-                  `4` = "fa fa-circle-half-stroke"
-                )
+                icons = assemble_state_icons("assemble"),
+                labels = assemble_state_titles("assemble")
               )
             ),
             ID = colDef(
               show = T,
-              minWidth = 120,
+              name = mp_col_name("ID"),
+              minWidth = mp_fit_width(tbl_data$ID),
               sticky = "left",
               html = T,
               cell = rt_longtext()
             ),
             Taxon = colDef(
               show = T,
+              name = mp_col_name("Taxon"),
               minWidth = 140,
               sticky = "left",
               html = T,
               cell = rt_longtext()
             ),
             topology = colDef(
-              show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
-              minWidth = 140,
-              name = "Topology"
+              show = TRUE, class = paste(.grp("topology"), "mp-note-cell"),
+              headerClass = .grp("topology"),
+              minWidth = 120,
+              align = "center",
+              name = mp_col_name("topology"),
+              header = mp_col_header("topology"),
+              html = TRUE, cell = rt_topology()
             ),
             assembly = colDef(
               show = TRUE,
               minWidth = 140,
-              name = "Input Assembly File",
+              name = mp_col_name("assembly"),
+              header = mp_col_header("assembly"),
               html = T,
               cell = rt_longtext()
             ),
             pre_opts = colDef(
               show = !no_raw, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
-              name = "Preprocess Opts.",
+              name = mp_col_name("pre_opts"),
+              header = mp_col_header("pre_opts"),
               html = T,
               width = 130,
-              cell = rt_link(ns("set_pre_opts"))
+              cell = rt_link(ns("set_pre_opts"), title = "Edit preprocessing options",
+                             lock_col = "assemble_lock")
             ),
             find_mito_opts = colDef(
               show = TRUE, class = .grp("find_mito_opts"), headerClass = .grp("find_mito_opts"),
-              name = "Find Mito Opts.",
+              name = mp_col_name("find_mito_opts"),
+              header = mp_col_header("find_mito_opts"),
               html = T,
               width = 140,
-              cell = rt_link(ns("set_find_mito_opts"))
+              cell = rt_link(ns("set_find_mito_opts"), title = "Edit mitogenome search options",
+                             lock_col = "assemble_lock")
             ),
             # The note doubles as the link to the search evidence.
             find_mito_notes = colDef(
-              show = TRUE, class = .grp("find_mito_notes"), headerClass = .grp("find_mito_notes"),
-              name = "Mito Search",
+              show = TRUE, class = paste(c(.grp("find_mito_notes"), "mp-note-cell"), collapse = " "),
+              headerClass = .grp("find_mito_notes"),
+              name = mp_col_name("find_mito_notes"),
+              header = mp_col_header("find_mito_notes"),
               minWidth = 180,
               html = T,
-              cell = rt_link(ns("show_mito_candidates"))
+              cell = rt_link(ns("show_mito_candidates"),
+                             title = "Show the contigs screened for this sample")
             ),
             circularize_opts = colDef(
               show = TRUE, class = .grp("circularize_opts"), headerClass = .grp("circularize_opts"),
-              name = "Circularize Opts.",
+              name = mp_col_name("circularize_opts"),
+              header = mp_col_header("circularize_opts"),
               html = T,
               width = 140,
-              cell = rt_link(ns("set_circularize_opts"))
+              cell = rt_link(ns("set_circularize_opts"), title = "Edit circularization options",
+                             lock_col = "assemble_lock")
             ),
             # The note doubles as the link to the circularization evidence.
             circularize_notes = colDef(
-              show = TRUE, class = .grp("circularize_notes"), headerClass = .grp("circularize_notes"),
-              name = "Circularization",
+              show = TRUE, class = paste(c(.grp("circularize_notes"), "mp-note-cell"), collapse = " "),
+              headerClass = .grp("circularize_notes"),
+              name = mp_col_name("circularize_notes"),
+              header = mp_col_header("circularize_notes"),
               minWidth = 160,
               html = T,
-              cell = rt_link(ns("show_circularize_details"))
+              cell = rt_link(ns("show_circularize_details"),
+                             title = "Show the circularization evidence for this sample")
             ),
             join_notes = colDef(
-              show = TRUE, class = .grp("join_notes"), headerClass = .grp("join_notes"),
-              name = "Scaffold Join Notes",
+              show = TRUE, class = paste(c(.grp("join_notes"), "mp-note-cell"), collapse = " "),
+              headerClass = .grp("join_notes"),
+              name = mp_col_name("join_notes"),
+              header = mp_col_header("join_notes"),
               html = TRUE,
-              align = "left",
               minWidth = 150,
               cell = rt_longtext()
             ),
             blast_opts = colDef(
               show = T, class = .grp("blast_opts"), headerClass = .grp("blast_opts"),
-              name = "BLAST Opts.",
+              name = mp_col_name("blast_opts"),
+              header = mp_col_header("blast_opts"),
               html = T,
               width = 120,
-              cell = rt_link(ns("set_blast_opts"))
+              cell = rt_link(ns("set_blast_opts"), title = "Edit BLAST options",
+                             lock_col = "assemble_lock")
             ),
             trimmed_reads = colDef(
               show = !no_raw, class = .grp("trimmed_reads"), headerClass = .grp("trimmed_reads"),
-              name = "Reads",
+              name = mp_col_name("trimmed_reads"),
+              header = mp_col_header("trimmed_reads"),
               filterable = FALSE,
+              align = "center",
               minWidth = 100
             ),
             mean_length = colDef(
               show = !no_raw, class = .grp("mean_length"), headerClass = .grp("mean_length"),
-              name = "Read Length",
+              name = mp_col_name("mean_length"),
+              header = mp_col_header("mean_length"),
               filterable = FALSE,
+              align = "center",
               minWidth = 100
             ),
             length = colDef(
               show = TRUE, class = .grp("length"), headerClass = .grp("length"),
               minWidth = 140,
-              name = "Asmb. Length (raw)",
+              align = "center",
+              name = mp_col_name("length_raw"),
+              header = mp_col_header("length_raw"),
               filterable = FALSE,
               html = TRUE,
               cell = rt_longtext()
             ),
             ambiguous_bases = colDef(
               show = TRUE, class = .grp("ambiguous_bases"), headerClass = .grp("ambiguous_bases"),
-              width = 110, name = "Ambig. Bases", align = "center",
+              width = 110,
+              align = "center",
+              name = mp_col_name("ambiguous_bases"),
+              header = mp_col_header("ambiguous_bases"),
               filterable = FALSE
             ),
             paths = colDef(
               show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
-              width = 100, name = "# Paths", align = "center",
+              width = 80,
+              align = "center",
+              name = mp_col_name("paths"),
+              header = mp_col_header("paths"),
               cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
             scaffolds = colDef(
               show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
-              width = 100, name = "# Scaffolds", align = "center"
+              width = 95,
+              align = "center",
+              name = mp_col_name("scaffolds"),
+              header = mp_col_header("scaffolds")
             ),
             blast_accession = colDef(
               show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-              name = "Top Hit",
+              name = mp_col_name("blast_accession"),
+              header = mp_col_header("blast_accession"),
               html = TRUE,
               width = 120,
               cell = rt_ncbi_link()
@@ -379,86 +386,112 @@ assemble_server_userAsmb <- function(id) {
             poor_blast_ref = colDef(show = FALSE),
             blast_ref_status = colDef(
               show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
-              name = "Ref Align",
+              name = mp_col_name("blast_ref_status"),
+              header = mp_col_header("blast_ref_status"),
               html = TRUE,
-              width = 100,
+              minWidth = 130,
+              resizable = TRUE,
               align = "center",
               filterable = TRUE,
               cell = rt_blast_ref_status()
             ),
             blast_species = colDef(
               show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
-              name = "Species",
+              name = mp_col_name("blast_species"),
+              header = mp_col_header("blast_species"),
               html = TRUE,
               minWidth = 160,
               cell = rt_longtext()
             ),
             blast_lineage = colDef(
               show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
-              name = "Lineage",
+              name = mp_col_name("blast_lineage"),
+              header = mp_col_header("blast_lineage"),
               html = TRUE,
               minWidth = 200,
               cell = rt_longtext()
             ),
+            blast_pident = colDef(
+              show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
+              name = mp_col_name("blast_pident"),
+              header = mp_col_header("blast_pident"),
+              filterable = FALSE,
+              align = "center",
+              width = 90
+            ),
+            blast_qcovs = colDef(
+              show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
+              name = mp_col_name("blast_qcovs"),
+              header = mp_col_header("blast_qcovs"),
+              filterable = FALSE,
+              align = "center",
+              width = 90
+            ),
+            time_stamp = colDef(
+              show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
+              name = mp_col_name("time_stamp"),
+              header = mp_col_header("time_stamp"),
+              filterable = FALSE,
+              html = T,
+              width = 150,
+              align = "center",
+              cell = rt_ts_date()
+            ),
+            assemble_notes = colDef(
+              show = TRUE, class = paste(c(.grp("assemble_notes"), "mp-note-cell"), collapse = " "),
+              headerClass = .grp("assemble_notes"),
+              name = mp_col_name("assemble_notes"),
+              header = mp_col_header("assemble_notes"),
+              html = TRUE,
+              minWidth = 150,
+              cell = rt_longtext()
+            ),
             blast_hits = colDef(
               show = TRUE,
-              name = "",
+              name = mp_col_name("blast_hits"),
               filterable = FALSE,
               sortable = FALSE,
               html = TRUE,
               width = 140,
               align = "center",
-              cell = rt_icon_bttn_text(ns("all_blast_hits"), "fas fa-list", "All BLAST Hits")
-            ),
-            blast_pident = colDef(
-              show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
-              name = "% Ident",
-              filterable = FALSE,
-              width = 90,
-              align = "center"
-            ),
-            blast_qcovs = colDef(
-              show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
-              name = "% Cov",
-              filterable = FALSE,
-              width = 90,
-              align = "center"
-            ),
-            time_stamp = colDef(
-              show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
-              name = "Last Updated",
-              filterable = FALSE,
-              html = T,
-              width = 150,
-              cell = rt_ts_date()
-            ),
-            assemble_notes = colDef(
-              show = TRUE, class = .grp("assemble_notes"), headerClass = .grp("assemble_notes"),
-              name = "Notes",
-              html = TRUE,
-              align = "left",
-              minWidth = 150,
-              cell = rt_longtext()
+              cell = rt_icon_bttn_text(
+                ns("all_blast_hits"), "fas fa-list", "All BLAST Hits",
+                title = "Show every BLAST hit for this sample"
+              )
             ),
             view = colDef(
               show = TRUE,
               sticky = "right",
+              class = "mp-actions-sticky",
+              headerClass = "mp-actions-sticky",
               filterable = FALSE,
-              name = "",
+              sortable = FALSE,
+              name = mp_col_name("view"),
               html = TRUE,
-              width = 80,
+              width = 90,
               align = "center",
-              cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
+              cell = rt_icon_bttn_text(
+                ns("details"), "fas fa-square-arrow-up-right fa-xs",
+                label = "Details",
+                title = "Open the details window for this sample"
+              )
             ),
             output = colDef(
               show = TRUE,
               sticky = "right",
+              class = "mp-actions-sticky",
+              headerClass = "mp-actions-sticky",
               filterable = FALSE,
-              name = "",
+              sortable = FALSE,
+              name = mp_col_name("output"),
               html = TRUE,
-              width = 80,
+              width = 90,
               align = "center",
-              cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
+              cell = rt_icon_bttn_text(
+                ns("output"), "fas fa-folder-open fa-xs",
+                label = "Output",
+                title = "Open the output folder for this sample"
+              )
             )
           )
         )
@@ -501,8 +534,24 @@ assemble_server_userAsmb <- function(id) {
       intersect(sel, which(visible))
     })
 
-    output$n_selected <- renderText({
-      paste0(length(selected()), " selected")
+    # The toolbar lives in the top-level UI, so this is scoped by container
+    # class, not by id (theme T01).
+    observe({
+      shinyjs::toggleState(
+        selector = "#asmb_ctrls .mp-needs-selection",
+        condition = length(selected()) > 0
+      )
+    })
+
+    # Rows the pickers and the date filter leave visible. reactable's own
+    # search and column filters are client-side, so they are not counted.
+    output$n_selected <- renderUI({
+      vis <- filtered_data()
+      shown <- sum(
+        as.character(vis$assemble_lock) %in% lock_filter_rv() &
+          as.character(vis$assemble_switch) %in% state_filter_rv()
+      )
+      assemble_table_status(shown, nrow(rv$data), length(selected()))
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample
@@ -531,39 +580,23 @@ assemble_server_userAsmb <- function(id) {
     init("state")
     on("state", {
       req(session$userData$mode == "Assemble")
-      req(selected())
-      req(all(rv$data$assemble_lock[req(selected())] == 0))
+      if (!need_selection(length(selected()))) return()
+      if (!need_unlocked(assemble_locked_ids(rv, selected()))) return()
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
         dplyr::slice(selected())
       current <- character(0)
       if (length(unique(rv$updating$assemble_switch)) == 1) {
-        current <- rv$updating$assemble_switch[1]
+        current <- as.character(rv$updating$assemble_switch[1])
       }
-      showModal(
-        modalDialog(
-          title = "Select New State:",
-          shinyWidgets::prettyRadioButtons(
-            ns("new_state"),
-            label = NULL,
-            choices = c("Pre-Coverage (wait)" = 0, 
-             "Ready to Calculate Coverage" = 1,
-             "In Progress" = 4, 
-             "Successful Coverage Calculation" = 2, 
-             "Failed Coverage Calculation" = 3),
-            selected = current,
-            shape = "square",
-            status = "primary"
-          ),
-          size = "m",
-          footer = tagList(
-            actionButton(ns("update_state"), "Update"),
-            modalButton("Cancel")
-          )
-        )
-      )
+      assemble_state_modal(rv$updating$ID, current)
     })
     observeEvent(input$update_state, {
+      if (!isTruthy(input$new_state)) {
+        mp_toast("Choose a state first.", type = "warning")
+        return()
+      }
+      n <- nrow(rv$updating)
       rv$updating$assemble_switch <- as.numeric(input$new_state)
       dplyr::tbl(session$userData$con, "assemble") |>
         dplyr::rows_update(
@@ -580,72 +613,29 @@ assemble_server_userAsmb <- function(id) {
         )
       trigger("update_assemble_table")
       removeModal()
+      mp_toast(paste0(
+        mp_n(n, "sample"), " set to ",
+        MP_STATE_META[[as.character(input$new_state)]]$label, "."
+      ))
     })
 
     # Toggle lock ----
     init("lock")
     on("lock", {
       req(session$userData$mode == "Assemble")
-      req(selected())
-      rv$updating <- rv$data |>
-        dplyr::select(ID, assemble_lock) |>
-        dplyr::slice(selected())
-      # Locking advances every non-ignored contig of the sample. Each contig is
-      # its own annotation unit and was seeded its own annotate row by WF1, so a
-      # fragmented user assembly no longer has to be reduced to one contig.
-      lock_current <- as.numeric(names(which.max(table(rv$updating$assemble_lock))))
-      rv$updating$assemble_lock <- as.numeric(!lock_current)
-      if (lock_current == 0) {
-        # A locked sample is never admitted by WF1 (its query requires
-        # assemble_lock = 0), so a pending join redo could never run and the
-        # flag would sit at 1 forever, keeping the Update modal reporting work
-        # that cannot be done. Locking resolves it.
-        rv$updating$join_switch <- NA_integer_
-      }
-      dplyr::tbl(session$userData$con, "assemble") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = "ID"
-        )
-      rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating, by = "ID")
-      # One click can now hand several contigs to annotation, so say how many.
-      # The lock itself is still per sample; the units are what WF2 will run.
-      if (lock_current == 0) {
-        n_units <- dplyr::tbl(session$userData$con, "assemblies") |>
-          dplyr::filter(ignore == 0 & ID %in% !!rv$updating$ID) |>
-          dplyr::count() |>
-          dplyr::pull(n)
-        shiny::showNotification(
-          paste0(
-            "Locked ", nrow(rv$updating),
-            ngettext(nrow(rv$updating), " sample", " samples"),
-            ": ", n_units, ngettext(n_units, " contig", " contigs"),
-            " will be annotated."
-          ),
-          type = "message",
-          duration = 5
-        )
-      }
-      trigger("update_assemble_table")
-      trigger("refresh_annotate")
-      trigger("refresh_export")
+      if (!need_selection(length(selected()))) return()
+      assemble_lock_begin(rv, selected(), unit = "contig")
+    })
+    observeEvent(input$lock_confirm, {
+      if (isTRUE(input$lock_confirm)) assemble_lock_finish(rv)
     })
 
 
     # Set Pre-process Opts ----
     observeEvent(input$set_pre_opts, {
-      row <- as.numeric(input$set_pre_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(rv$data$assemble_lock[selected] == 0))
-      rv$updating <- rv$data |> dplyr::slice(selected)
+      rows <- assemble_opts_rows(rv, as.numeric(input$set_pre_opts), selected())
+      if (is.null(rows)) return()
+      rv$updating <- rv$data |> dplyr::slice(rows)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       pre_opts_modal(rv)
     })
@@ -669,12 +659,17 @@ assemble_server_userAsmb <- function(id) {
           inputId = "fastp",
           value = cur$fastp
         )
+        shinyWidgets::updatePrettyCheckbox(
+          inputId = "dedup",
+          value = grepl("--dedup", cur$fastp %||% "", fixed = TRUE)
+        )
       }
     })
     observeEvent(input$edit_pre_opts, ignoreInit = T, {
       shinyjs::toggleState("pre_opts_cpus", condition = input$edit_pre_opts)
       shinyjs::toggleState("pre_opts_memory", condition = input$edit_pre_opts)
       shinyjs::toggleState("fastp", condition = input$edit_pre_opts)
+      shinyjs::toggleState("dedup", condition = input$edit_pre_opts)
       # Check if editing opts that apply beyond selection
       if (input$edit_pre_opts && input$pre_opts %in% rv$data$pre_opts) {
         rv$updating_indirect <- rv$data |>
@@ -683,9 +678,12 @@ assemble_server_userAsmb <- function(id) {
 
         # Prevent editing opts that apply to locked
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$assemble_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked samples cannot be edited",
+            text = paste(
+              "This parameter set is also used by locked samples, so its",
+              "values cannot be changed. Unlock those samples first."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -696,11 +694,15 @@ assemble_server_userAsmb <- function(id) {
         }
 
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit pre-processing options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste0(
+              "These preprocessing options also apply to ",
+              mp_n(nrow(rv$updating_indirect), "sample"),
+              " outside the current selection, which this edit will change too."
+            ),
+            action_label = "Continue"
           )
         }
       } else {
@@ -725,7 +727,7 @@ assemble_server_userAsmb <- function(id) {
               pre_opts = req(input$pre_opts),
               cpus = req(input$pre_opts_cpus),
               memory = req(input$pre_opts_memory),
-              fastp = req(input$fastp)
+              fastp = .fastp_set_dedup(req(input$fastp), isTRUE(input$dedup))
             ),
             in_place = TRUE,
             copy = TRUE,
@@ -774,6 +776,7 @@ assemble_server_userAsmb <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_assemble_table")
+      mp_opts_saved_toast(nrow(update), input$pre_opts)
     })
 
     # Set Mitogenome Search Opts ----
@@ -790,7 +793,7 @@ assemble_server_userAsmb <- function(id) {
         # refuse to save that combination rather than fail mid-run.
         db_path <- trimws(input$find_mitofinder_db %||% "")
         if (isTRUE(input$find_mitogenome) && (!nzchar(db_path) || !file.exists(db_path))) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "MitoFinder database not found",
             text = paste0(
               "The mitogenome search confirms candidates with MitoFinder, which needs ",
@@ -1099,7 +1102,7 @@ assemble_server_userAsmb <- function(id) {
           collapse = ","
         )
         if (nzchar(taxids) && !grepl("^[0-9]+(,[0-9]+)*$", taxids)) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "Invalid taxon restriction",
             text = paste0(
               "Enter comma-separated numeric NCBI taxon IDs (e.g. 7711 or ",
@@ -1169,5 +1172,32 @@ assemble_server_userAsmb <- function(id) {
       rv$updating <- rv$data |> dplyr::slice(as.numeric(input$all_blast_hits))
       blast_hits_modal(rv)
     })
+
+    # CSV Export ----
+    .export_cols_drop <- c("output", "view", "blast_hits", "poor_blast_ref")
+
+    observe({
+      shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
+    })
+
+    output$export_selected <- downloadHandler(
+      filename = function() paste0("assemble_selected_", Sys.Date(), ".csv"),
+      content = function(file) {
+        req(length(selected()) > 0)
+        rv$data |>
+          dplyr::slice(selected()) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
+
+    output$export_all <- downloadHandler(
+      filename = function() paste0("assemble_all_", Sys.Date(), ".csv"),
+      content = function(file) {
+        rv$data |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          write.csv(file, row.names = FALSE)
+      }
+    )
   })
 }

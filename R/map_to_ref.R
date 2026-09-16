@@ -1,0 +1,910 @@
+#' Read and validate a MapToRef reference mitogenome
+#'
+#' Accepts a single-record GenBank file (first non-blank line starts with
+#' LOCUS) or a single-record FASTA. Unlike the custom assembly database
+#' parser, no organelle qualifier is required.
+#'
+#' @param ref_file Path to the reference file.
+#' @param topology "circular" or "linear". Required for a FASTA reference.
+#'   For GenBank, the LOCUS line wins when it states one; otherwise this
+#'   value is used and is required.
+#' @param genetic_code The sample's genetic code, used only to warn when the
+#'   reference disagrees.
+#' @param out_dir Directory to write the `maptoref/` working files into.
+#'
+#' @return A list with seq, length, topology, accession, organism,
+#'   transl_table, and notes.
+#' @export
+maptoref_prepare_ref <- function(ref_file,
+                                 topology = NA_character_,
+                                 genetic_code = NA_integer_,
+                                 out_dir = ".") {
+  if (!file.exists(ref_file)) {
+    stop("Reference file not found: ", ref_file)
+  }
+  lines <- gsub("\r", "", readLines(ref_file, warn = FALSE), fixed = TRUE)
+  nonblank <- which(nzchar(trimws(lines)))
+  if (length(nonblank) == 0L) {
+    stop("Reference file is empty: ", ref_file)
+  }
+  first <- lines[nonblank[1]]
+
+  if (grepl("^LOCUS", first)) {
+    ref <- .mtr_read_gb(lines, topology)
+    ext <- "gb"
+  } else if (grepl("^>", first)) {
+    ref <- .mtr_read_fasta(lines, topology)
+    ext <- "fasta"
+  } else {
+    stop("Reference must be a GenBank file (first line starts with LOCUS) ",
+         "or a FASTA (first line starts with >)")
+  }
+
+  bad <- unique(strsplit(gsub("[ACGTRYSWKMBDHVN]", "", ref$seq), "")[[1]])
+  if (length(bad) > 0L) {
+    stop("Reference sequence has invalid characters: ", paste(bad, collapse = " "))
+  }
+  ref$length <- nchar(ref$seq)
+  if (ref$length < 5000L || ref$length > 50000L) {
+    stop("Reference length ", ref$length, " is outside the accepted range ",
+         "[5000, 50000]; this does not look like a mitogenome")
+  }
+
+  notes <- character(0)
+  if (ref$length < 10000L || ref$length > 25000L) {
+    notes <- c(notes, paste0(
+      "Reference length ", ref$length,
+      " is outside the usual mitogenome range [10000, 25000]."))
+  }
+  amb <- nchar(gsub("[ACGT]", "", ref$seq))
+  if (amb > 0.01 * ref$length) {
+    notes <- c(notes, paste0(
+      "Reference has ", amb, " ambiguous base(s) (", round(100 * amb / ref$length, 1),
+      "%); mapping is weaker there."))
+  }
+  gc_int <- suppressWarnings(as.integer(genetic_code))
+  if (!is.na(gc_int) && !is.na(ref$transl_table) && gc_int != ref$transl_table) {
+    notes <- c(notes, paste0(
+      "Reference genetic code ", ref$transl_table, " differs from the sample's ",
+      gc_int, "; annotation uses the sample's."))
+  }
+  ref$notes <- notes
+
+  work <- file.path(out_dir, "maptoref")
+  dir.create(work, recursive = TRUE, showWarnings = FALSE)
+  writeLines(
+    c(paste0(">", ref$accession, " ", ref$topology), ref$seq),
+    file.path(work, "ref.fasta")
+  )
+  file.copy(ref_file, file.path(work, paste0("reference.", ext)), overwrite = TRUE)
+  ref
+}
+
+#' @noRd
+.mtr_read_gb <- function(lines, topology) {
+  ends <- which(trimws(lines) == "//")
+  if (length(ends) != 1L) {
+    stop("Reference must contain exactly one record; this file has ",
+         length(ends), ". The MitoFinder database format is not accepted here.")
+  }
+  block <- lines[1:ends[1]]
+
+  locus <- grep("^LOCUS", block, value = TRUE)[1]
+  tokens <- strsplit(trimws(locus), "\\s+")[[1]]
+  locus_topology <- if (any(tolower(tokens) == "circular")) {
+    "circular"
+  } else if (any(tolower(tokens) == "linear")) {
+    "linear"
+  } else {
+    NA_character_
+  }
+  topology <- if (!is.na(locus_topology)) locus_topology else .mtr_validate_topology(topology)
+
+  accession <- .cadb_grab_version(block)
+  if (is.na(accession)) {
+    accession <- tokens[2]
+  }
+  organism <- trimws(sub("^DEFINITION\\s*", "", .cadb_grab_definition(block)))
+
+  tt <- grep("/transl_table=", block, fixed = TRUE, value = TRUE)
+  transl_table <- if (length(tt) == 0L) {
+    NA_integer_
+  } else {
+    suppressWarnings(as.integer(sub('.*/transl_table=([0-9]+).*', "\\1", tt[1])))
+  }
+
+  origin <- grep("^ORIGIN", block)
+  if (length(origin) == 0L || origin[1] >= length(block) - 1L) {
+    stop("Reference GenBank record has no ORIGIN sequence")
+  }
+  seq_lines <- block[(origin[1] + 1L):(length(block) - 1L)]
+  seq <- toupper(gsub("[^A-Za-z-]", "", paste(seq_lines, collapse = "")))
+  if (!nzchar(seq)) {
+    stop("Reference GenBank record has an empty ORIGIN sequence")
+  }
+
+  list(seq = seq, topology = topology, accession = accession,
+       organism = organism, transl_table = transl_table)
+}
+
+#' @noRd
+.mtr_validate_topology <- function(topology) {
+  if (is.na(topology) || !nzchar(trimws(topology))) {
+    stop("Set the reference topology (circular or linear); this reference does not declare one.")
+  }
+  topology <- tolower(trimws(topology))
+  if (!topology %in% c("circular", "linear")) {
+    stop("Reference topology must be circular or linear, not: ", topology)
+  }
+  topology
+}
+
+#' @noRd
+.mtr_read_fasta <- function(lines, topology) {
+  heads <- grep("^>", lines)
+  if (length(heads) != 1L) {
+    stop("Reference must contain exactly one record; this file has ",
+         length(heads), ".")
+  }
+  topology <- .mtr_validate_topology(topology)
+  header <- sub("^>", "", lines[heads[1]])
+  accession <- strsplit(trimws(header), "\\s+")[[1]][1]
+  seq <- if (heads[1] >= length(lines)) {
+    ""
+  } else {
+    toupper(gsub("[^A-Za-z-]", "",
+                 paste(lines[(heads[1] + 1L):length(lines)], collapse = "")))
+  }
+  if (!nzchar(seq)) {
+    stop("Reference FASTA record has no sequence")
+  }
+  list(seq = seq, topology = topology, accession = accession,
+       organism = trimws(header), transl_table = NA_integer_)
+}
+
+#' @noRd
+.mtr_fill <- function(raw, prev) {
+  a <- strsplit(raw, "", fixed = TRUE)[[1]]
+  b <- strsplit(prev, "", fixed = TRUE)[[1]]
+  if (length(a) != length(b)) {
+    stop("consensus and reference must be the same length: ",
+         length(a), " vs ", length(b))
+  }
+  hit <- a %in% c("N", "n", "*")
+  a[hit] <- b[hit]
+  paste(a, collapse = "")
+}
+
+# The first F/2 positions of the reference copy have structurally low depth,
+# so their calls are taken from the appended copy instead.
+#' @noRd
+.mtr_splice <- function(x, len, flank) {
+  if (length(x) != len + flank) {
+    stop("expected ", len + flank, " positions, got ", length(x))
+  }
+  if (flank %% 2L != 0L) {
+    stop("flank must be even, got ", flank)
+  }
+  if (flank %/% 2L > len) {
+    stop("flank ", flank, " exceeds reference length ", len)
+  }
+  if (flank == 0L) {
+    return(x[seq_len(len)])
+  }
+  half <- flank %/% 2L
+  c(x[(len + 1L):(len + half)], x[(half + 1L):len])
+}
+
+# samtools consensus --mark-ins prefixes an inserted base with "_". Lowercase
+# letters are base-versus-gap codes and appear at any position, so case must
+# not be used to detect insertions.
+#' @noRd
+.mtr_parse_marked <- function(s) {
+  ch <- strsplit(s, "", fixed = TRUE)[[1]]
+  n <- length(ch)
+  tokens <- character(n)
+  k <- 0L
+  i <- 1L
+  while (i <= n) {
+    if (ch[i] == "_") {
+      if (k == 0L) {
+        stop("consensus begins with an insertion mark")
+      }
+      if (i == n) {
+        stop("consensus ends with an incomplete insertion mark")
+      }
+      tokens[k] <- paste0(tokens[k], ch[i], ch[i + 1L])
+      i <- i + 2L
+    } else {
+      k <- k + 1L
+      tokens[k] <- ch[i]
+      i <- i + 1L
+    }
+  }
+  tokens[seq_len(k)]
+}
+
+#' @noRd
+.mtr_tokens_to_seq <- function(tokens) {
+  flat <- strsplit(paste(tokens, collapse = ""), "", fixed = TRUE)[[1]]
+  flat <- flat[!flat %in% c("*", "_")]
+  half <- grepl("^[a-z]$", flat)
+  flat[half] <- "N"
+  list(seq = toupper(paste(flat, collapse = "")), half_deletions = sum(half))
+}
+
+#' @noRd
+.mtr_strip_ends <- function(seq) {
+  sub("N+$", "", sub("^N+", "", seq))
+}
+
+#' @noRd
+.mtr_check_consensus_opts <- function(opts, circular) {
+  opts <- if (is.null(opts) || length(opts) == 0L || is.na(opts)) "" else trimws(opts)
+  notes <- character(0)
+  error <- NA_character_
+
+  if (grepl("['\"]", opts)) {
+    return(list(ok = FALSE, notes = notes,
+                error = "consensus options must not contain quote characters"))
+  }
+
+  tokens <- strsplit(opts, "\\s+")[[1]]
+  tokens <- tokens[nzchar(tokens)]
+
+  # samtools uses getopt_long, so "--flag=value" and attached short values
+  # ("-ovalue") are both legal; normalize every token to a flag/value pair
+  # before matching, rather than matching raw tokens.
+  recs <- list()
+  i <- 1L
+  n <- length(tokens)
+  while (i <= n) {
+    tok <- tokens[i]
+    eq <- regexpr("=", tok, fixed = TRUE)
+    if (eq > 0L) {
+      flag <- substr(tok, 1L, eq - 1L)
+      value <- substr(tok, eq + 1L, nchar(tok))
+      i <- i + 1L
+    } else if (!grepl("^--", tok) && nchar(tok) > 2L) {
+      flag <- substr(tok, 1L, 2L)
+      value <- substr(tok, 3L, nchar(tok))
+      i <- i + 1L
+    } else {
+      flag <- tok
+      value <- NA_character_
+      if (i < n && !grepl("^-", tokens[i + 1L])) {
+        value <- tokens[i + 1L]
+        i <- i + 2L
+      } else {
+        i <- i + 1L
+      }
+    }
+    recs[[length(recs) + 1L]] <- list(flag = flag, value = value)
+  }
+  flags <- vapply(recs, function(r) r$flag, character(1))
+
+  refused <- c("-a", "-A", "-T", "-o", "-f", "-r",
+               "--show-del", "--show-ins", "--mark-ins", "--no-use-MQ")
+  hit <- refused[refused %in% flags]
+  if (length(hit) > 0L) {
+    error <- paste0("Consensus options set by MitoPilot cannot be given here: ",
+                    paste(hit, collapse = " "))
+  }
+
+  mode_only <- c("-c", "-H", "-q")[c("-c", "-H", "-q") %in% flags]
+  has_m_simple <- any(vapply(recs, function(r) {
+    identical(r$flag, "-m") && identical(r$value, "simple")
+  }, logical(1)))
+  if (length(mode_only) > 0L && !has_m_simple) {
+    notes <- c(notes, paste0(
+      "Consensus options ", paste(mode_only, collapse = " "),
+      " were ignored; they only apply with -m simple."))
+  }
+
+  mq <- Filter(function(r) identical(r$flag, "--min-MQ"), recs)
+  if (length(mq) > 0L) {
+    value <- suppressWarnings(as.numeric(mq[[1]]$value))
+    if (!is.na(value) && value > 0) {
+      if (isTRUE(circular)) {
+        error <- paste0(
+          "--min-MQ above 0 blanks the origin of a circular reference; ",
+          "reads inside the duplicated block carry mapping quality 1.")
+      } else {
+        notes <- c(notes, paste0(
+          "--min-MQ ", value, " discards multi-mapping reads; ",
+          "mapping quality carries little signal against a mitogenome reference."))
+      }
+    }
+  }
+
+  list(ok = is.na(error), notes = notes, error = error)
+}
+
+# Two terms: the sequence has settled AND reads have stopped being recruited.
+#' @noRd
+.mtr_stop <- function(bases_changed, reads_now, reads_prev) {
+  denom <- max(as.numeric(reads_prev), 1)
+  isTRUE(bases_changed < 5L &&
+           abs(as.numeric(reads_now) - as.numeric(reads_prev)) / denom < 0.001)
+}
+
+#' Map-to-reference mitogenome assembly
+#'
+#' Maps a sample's reads to a reference mitogenome, feeds the consensus back in
+#' as the next mapping reference until it stops changing, then calls the
+#' published sequence from a final pass over all reads. The reference base never
+#' enters the published sequence.
+#'
+#' @param id Sample ID.
+#' @param ref Path to the reference (.gb or FASTA, one record).
+#' @param reads_1,reads_2 Preprocessed paired reads.
+#' @param bowtie2_opts Flags passed verbatim to the chosen mapper.
+#' @param mapper Read mapper: "bowtie2", "bwa-mem", or "bwa-aln" (bwa aln plus
+#'   sampe, for short or damaged reads such as ancient DNA). The first pass
+#'   against the user's reference runs with relaxed seeding appended to the
+#'   flags; later passes and the final pass use the flags as given.
+#' @param consensus_opts Flags passed to samtools consensus after validation.
+#' @param iter_cap Maximum number of iteration passes.
+#' @param topology "circular" or "linear"; required for a FASTA reference,
+#'   ignored for GenBank.
+#' @param genetic_code The sample's genetic code, used only for a warning.
+#' @param cpus Threads.
+#' @param out_dir Output directory.
+#' @param ref_value The reference exactly as the user configured it: an absolute
+#'   file path, a URL, or an NCBI nucleotide accession. An accession is
+#'   downloaded from GenBank here; anything else means \code{ref} is already
+#'   the staged reference file.
+#'
+#' @return invisibly TRUE on success, FALSE after writing the failure sentinel.
+#' @export
+map_to_ref <- function(id, ref, reads_1, reads_2,
+                       bowtie2_opts = "--very-sensitive-local",
+                       consensus_opts = "-d 3 --min-BQ 20",
+                       iter_cap = 5,
+                       topology = NA_character_,
+                       genetic_code = NA_integer_,
+                       cpus = 4,
+                       out_dir = ".",
+                       ref_value = NA_character_,
+                       mapper = "bowtie2") {
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  log_fn <- file.path(out_dir, "assembler.log.txt")
+  if (!file.exists(log_fn)) {
+    file.create(log_fn)
+  }
+  # The option strings are interpolated into an Rscript -e call, so a quote
+  # character breaks the R expression. consensus_opts is covered by
+  # .mtr_check_consensus_opts().
+  bowtie2_opts <- .mtr_opts(bowtie2_opts)
+  if (grepl("['\"]", bowtie2_opts)) {
+    .mtr_fail(id, out_dir, log_fn,
+              "mapper options must not contain quote characters")
+    return(invisible(FALSE))
+  }
+  mapper <- .mtr_opts(mapper)
+  if (!mapper %in% .mtr_mappers) {
+    .mtr_fail(id, out_dir, log_fn, paste0(
+      "mapper must be one of ", paste(.mtr_mappers, collapse = ", "),
+      ", not: ", mapper))
+    return(invisible(FALSE))
+  }
+  if (grepl(.mtr_bad_chars_re, .mtr_opts(ref_value))) {
+    .mtr_fail(id, out_dir, log_fn,
+              "reference value must not contain quote, dollar, backtick, or backslash characters")
+    return(invisible(FALSE))
+  }
+  ok <- tryCatch(
+    {
+      .mtr_assemble(id, ref, reads_1, reads_2, bowtie2_opts, consensus_opts,
+                    as.integer(iter_cap), topology, genetic_code,
+                    as.integer(cpus), out_dir, log_fn, ref_value, mapper)
+      TRUE
+    },
+    error = function(e) {
+      .mtr_fail(id, out_dir, log_fn, conditionMessage(e))
+      FALSE
+    }
+  )
+  invisible(ok)
+}
+
+#' @noRd
+.mtr_log <- function(log_fn, ...) {
+  cat(paste0(..., "\n"), file = log_fn, append = TRUE)
+}
+
+# An absent, empty, or NA option string is an empty option list.
+#' @noRd
+.mtr_opts <- function(x) {
+  if (is.null(x) || length(x) == 0L || is.na(x[1])) "" else as.character(x[1])
+}
+
+.mtr_mappers <- c("bowtie2", "bwa-mem", "bwa-aln")
+
+# Relaxed seeding for the first pass only, appended after the user's flags so
+# it wins. Later passes map to the sample's own consensus, where the user's
+# stringency is right.
+.mtr_relaxed <- c(
+  "bowtie2" = "-N 1 -L 15 -i S,1,0.25 --mp 4,2 --score-min G,10,6",
+  "bwa-mem" = "-k 15 -B 2 -T 20",
+  "bwa-aln" = "-n 0.06 -o 2 -l 1024"
+)
+
+#' @noRd
+.mtr_pass_opts <- function(mapper, user_opts, pass) {
+  user_opts <- .mtr_opts(user_opts)
+  if (identical(pass, 1L)) trimws(paste(user_opts, .mtr_relaxed[[mapper]])) else user_opts
+}
+
+# Commands run in the Linux container, so quote for sh even when R is on Windows.
+.mtr_q <- function(x) shQuote(x, type = "sh")
+
+#' @noRd
+.mtr_check_tools <- function(mapper) {
+  bins <- if (startsWith(mapper, "bwa")) "bwa" else c("bowtie2", "bowtie2-build")
+  missing <- bins[!nzchar(Sys.which(bins))]
+  if (length(missing)) {
+    stop("mapper ", mapper, " needs ", paste(missing, collapse = " and "),
+         " on PATH")
+  }
+  invisible(TRUE)
+}
+
+#' @noRd
+.mtr_index_cmd <- function(mapper, ref_fa, idx) {
+  if (startsWith(mapper, "bwa")) {
+    stringr::str_glue("bwa index -p {.mtr_q(idx)} {.mtr_q(ref_fa)}")
+  } else {
+    stringr::str_glue("bowtie2-build -q {.mtr_q(ref_fa)} {.mtr_q(idx)}")
+  }
+}
+
+# Mapper command through its stderr redirect. drop_unal mirrors bowtie2's
+# --no-unal for bwa, which has no such flag.
+#' @noRd
+.mtr_map_cmd <- function(mapper, opts, idx, r1, r2, cpus, log_fn, drop_unal) {
+  if (mapper == "bwa-mem") {
+    cmd <- stringr::str_glue(
+      "bwa mem -t {cpus} {opts} {.mtr_q(idx)} {.mtr_q(r1)} {.mtr_q(r2)} ",
+      "2>> {.mtr_q(log_fn)}")
+    if (drop_unal) cmd <- paste(cmd, "| samtools view -b -F 4 -")
+  } else if (mapper == "bwa-aln") {
+    # Two aln passes write .sai files beside the index, then sampe pairs them.
+    # The caller's pipe binds to sampe only.
+    sai1 <- paste0(idx, "_1.sai")
+    sai2 <- paste0(idx, "_2.sai")
+    cmd <- stringr::str_glue(
+      "bwa aln -t {cpus} {opts} {.mtr_q(idx)} {.mtr_q(r1)} > {.mtr_q(sai1)} 2>> {.mtr_q(log_fn)} && ",
+      "bwa aln -t {cpus} {opts} {.mtr_q(idx)} {.mtr_q(r2)} > {.mtr_q(sai2)} 2>> {.mtr_q(log_fn)} && ",
+      "bwa sampe {.mtr_q(idx)} {.mtr_q(sai1)} {.mtr_q(sai2)} {.mtr_q(r1)} {.mtr_q(r2)} ",
+      "2>> {.mtr_q(log_fn)}")
+    if (drop_unal) cmd <- paste(cmd, "| samtools view -b -F 4 -")
+  } else {
+    unal <- if (drop_unal) "--no-unal " else ""
+    cmd <- stringr::str_glue(
+      "bowtie2 {opts} {unal}-x {.mtr_q(idx)} -1 {.mtr_q(r1)} -2 {.mtr_q(r2)} ",
+      "--threads {cpus} 2>> {.mtr_q(log_fn)}")
+  }
+  gsub("  +", " ", as.character(cmd))
+}
+
+# bash -o pipefail so a failed bowtie2 stage is not masked by a later stage that
+# exits 0. The whole command is grouped so every stage's stderr reaches the log.
+#' @noRd
+.mtr_run <- function(cmd, log_fn) {
+  .mtr_log(log_fn, "+ ", cmd)
+  full <- paste0("{ ", cmd, " ; } 2>> ", .mtr_q(log_fn))
+  status <- system2("bash", c("-o", "pipefail", "-c", .mtr_q(full)))
+  if (status != 0L) {
+    stop("command failed (exit ", status, "): ", cmd)
+  }
+  invisible(TRUE)
+}
+
+# samtools consensus line-wraps its output, so every read of a consensus FASTA
+# unwraps before indexing.
+#' @noRd
+.mtr_read_seq <- function(fn) {
+  lines <- readLines(fn, warn = FALSE)
+  paste(lines[!grepl("^>", lines)], collapse = "")
+}
+
+#' @noRd
+.mtr_extend <- function(seq, flank) {
+  if (flank == 0L) seq else paste0(seq, substr(seq, 1L, flank))
+}
+
+#' @noRd
+.mtr_count_primary <- function(bam) {
+  out <- suppressWarnings(system2(
+    "samtools", c("view", "-c", "-F", "0x904", .mtr_q(bam)),
+    stdout = TRUE, stderr = FALSE
+  ))
+  # A failed count must not read as "no reads mapped".
+  status <- attr(out, "status")
+  if (!is.null(status) && status != 0L) {
+    stop("samtools view -c failed (exit ", status, ") for ", bam)
+  }
+  value <- suppressWarnings(as.integer(out[1]))
+  if (is.na(value)) 0L else value
+}
+
+# Primary alignments whose reference span crosses the seam at position len.
+# The region query keeps the whole BAM out of R; only alignments that overlap
+# the seam are returned.
+#' @noRd
+.mtr_junction_depth <- function(bam, len, refname = "mapping_ref",
+                                min_overhang = 30L) {
+  region <- paste0(refname, ":", len, "-", len)
+  sam <- suppressWarnings(system2(
+    "samtools", c("view", "-F", "0x904", .mtr_q(bam), .mtr_q(region)),
+    stdout = TRUE, stderr = FALSE
+  ))
+  # A failed query must not read as "no reads span the seam".
+  status <- attr(sam, "status")
+  if (!is.null(status) && status != 0L) {
+    stop("samtools view failed (exit ", status, ") for region ", region)
+  }
+  if (length(sam) == 0L) {
+    return(0L)
+  }
+  fields <- stringr::str_split(sam, "\t", simplify = TRUE)
+  starts <- suppressWarnings(as.integer(fields[, 4]))
+  ends <- starts + cigar_ref_length(fields[, 6]) - 1L
+  ok <- !is.na(starts) & !is.na(ends)
+  sum(ok & starts <= len - min_overhang & ends >= len + min_overhang)
+}
+
+#' Per-base depth in reference coordinates
+#'
+#' Reads `samtools depth -a` output and folds the circular flank back onto the
+#' positions it duplicates, the same operation `.coverage_reform_circular()`
+#' performs for the published-assembly frame.
+#'
+#' @param depth_txt path to samtools depth output
+#' @param len reference length
+#' @return data.frame with columns Position and Depth, one row per position
+#'
+#' @noRd
+.mtr_depth_table <- function(depth_txt, len) {
+  out <- data.frame(Position = seq_len(len), Depth = 0)
+  if (!file.exists(depth_txt) || file.info(depth_txt)$size == 0) {
+    return(out)
+  }
+  raw <- utils::read.delim(depth_txt, header = FALSE,
+                           col.names = c("SeqId", "Position", "Depth"))
+  if (nrow(raw) == 0L) {
+    return(out)
+  }
+  pos <- as.integer(raw$Position)
+  seam <- pos > len
+  pos[seam] <- pos[seam] - len
+  keep <- pos >= 1L & pos <= len
+  summed <- stats::aggregate(
+    list(Depth = as.numeric(raw$Depth)[keep]),
+    by = list(Position = pos[keep]),
+    FUN = sum
+  )
+  out$Depth[summed$Position] <- summed$Depth
+  out
+}
+
+#' @noRd
+.mtr_diff_count <- function(a, b) {
+  x <- strsplit(a, "", fixed = TRUE)[[1]]
+  y <- strsplit(b, "", fixed = TRUE)[[1]]
+  n <- min(length(x), length(y))
+  sum(x[seq_len(n)] != y[seq_len(n)]) + abs(length(x) - length(y))
+}
+
+#' @noRd
+.mtr_fail <- function(id, out_dir, log_fn, reason) {
+  .mtr_log(log_fn, "FAILED: ", reason)
+  writeLines(">No assembly found",
+             file.path(out_dir, paste0(id, "_assembly_0.fasta")))
+  # note= is the line the pipeline folds into assemble_notes, so the reason a
+  # sample produced no assembly reaches the app instead of only the log.
+  writeLines(c("assembler=MapToRef", paste0("failure=", reason),
+               paste0("note=failed: ", reason)),
+             file.path(out_dir, paste0(id, "_summary.txt")))
+  invisible(FALSE)
+}
+
+#' @noRd
+.mtr_assemble <- function(id, ref_file, reads_1, reads_2, bowtie2_opts,
+                          consensus_opts, iter_cap, topology, genetic_code,
+                          cpus, out_dir, log_fn, ref_value,
+                          mapper = "bowtie2") {
+  .mtr_check_tools(mapper)
+  src <- .mtr_ref_class(ref_value)
+  if (identical(src, "none")) {
+    # Nextflow stages an empty placeholder (0 bytes) when no reference is set on the
+    # sample or the parameter set. A direct caller passes a real path and no
+    # ref_value, so an existing non-empty file still counts as a reference.
+    if (!file.exists(ref_file) || file.size(ref_file) == 0L) {
+      stop("no MapToRef reference for this sample (", ref_file, "); set one in ",
+           "the mapping file 'Reference' column, with ",
+           "MitoPilot::set_maptoref_refs(), or in the Assemble table")
+    }
+    src <- "file"
+  }
+  if (identical(src, "accession")) {
+    got <- maptoref_fetch_accession(ref_value, out_dir = out_dir,
+                                    log_fn = log_fn)
+    ref_file <- got$file
+    src <- got$source
+  }
+  ref <- maptoref_prepare_ref(ref_file, topology = topology,
+                              genetic_code = genetic_code, out_dir = out_dir)
+  work <- file.path(out_dir, "maptoref")
+
+  # Annotation track source. Absent when the reference was a FASTA, which is
+  # the local BLAST database and bare-FASTA paths.
+  ref_gb <- file.path(work, "reference.gb")
+  if (file.exists(ref_gb)) {
+    feats <- maptoref_parse_features(ref_gb)
+    if (nrow(feats) > 0L) {
+      utils::write.csv(feats, file.path(work, "maptoref_features.csv"),
+                       row.names = FALSE, quote = TRUE)
+    }
+  }
+
+  notes <- ref$notes
+  circular <- identical(ref$topology, "circular")
+  len <- ref$length
+  flank <- if (circular) min(500L, len %/% 2L) else 0L
+  .mtr_log(log_fn, "reference ", ref$accession, " ", ref$organism,
+           " (", len, " bp, ", ref$topology, ", source=", src, ")")
+
+  check <- .mtr_check_consensus_opts(consensus_opts, circular)
+  if (!check$ok) {
+    stop(check$error)
+  }
+  notes <- c(notes, check$notes)
+  for (msg in check$notes) .mtr_log(log_fn, msg)
+  user_cons <- .mtr_opts(consensus_opts)
+  fixed_cons <- paste("-a -A --no-use-MQ --show-del yes -@", cpus)
+
+  ref_fa <- file.path(work, "ref_0.fa")
+  writeLines(c(">mapping_ref", .mtr_extend(ref$seq, flank)), ref_fa)
+  prev_ref <- .mtr_extend(ref$seq, flank)
+  prev_cons <- ref$seq
+
+  idx <- file.path(work, "idx")
+  bam <- file.path(work, "pass_1.bam")
+  .mtr_run(.mtr_index_cmd(mapper, ref_fa, idx), log_fn)
+  # Unaligned records kept: dropping them would lose the unmapped mate of a
+  # half-mapped pair, and recruitment below would then keep only fully mapped
+  # pairs.
+  pass1_opts <- .mtr_pass_opts(mapper, bowtie2_opts, 1L)
+  .mtr_log(log_fn, "pass 1 (", mapper, "): ", pass1_opts)
+  .mtr_run(paste(
+    .mtr_map_cmd(mapper, pass1_opts, idx, reads_1, reads_2, cpus, log_fn, FALSE),
+    stringr::str_glue("| samtools view -b -G 12 - | samtools sort -@ {cpus} -o {.mtr_q(bam)} -")
+  ), log_fn)
+
+  reads_pass_1 <- .mtr_count_primary(bam)
+  if (reads_pass_1 < 100L) {
+    stop(reads_pass_1, " reads mapped to the reference; use a closer reference ",
+         "or a more sensitive preset")
+  }
+  if (reads_pass_1 < 1000L) {
+    notes <- c(notes, paste0(
+      "Only ", reads_pass_1, " reads mapped; check that the reference is a ",
+      "mitogenome from a related taxon."))
+  }
+
+  sub_1 <- file.path(work, "sub_R1.fq")
+  sub_2 <- file.path(work, "sub_R2.fq")
+  .mtr_run(stringr::str_glue(
+    "samtools sort -n {.mtr_q(bam)} ",
+    "| samtools fastq -1 {.mtr_q(sub_1)} -2 {.mtr_q(sub_2)} ",
+    "-0 /dev/null -s /dev/null -n"
+  ), log_fn)
+
+  iters <- data.frame()
+  reads_prev <- reads_pass_1
+  stop_reason <- "cap"
+  passes <- 0L
+
+  for (k in seq_len(max(1L, iter_cap))) {
+    passes <- k
+    raw <- file.path(work, paste0("raw_", k, ".fa"))
+    .mtr_run(stringr::str_glue(
+      "samtools consensus {fixed_cons} --show-ins no {user_cons} ",
+      "{.mtr_q(bam)} > {.mtr_q(raw)}"
+    ), log_fn)
+
+    raw_seq <- .mtr_read_seq(raw)
+    filled <- .mtr_fill(raw_seq, prev_ref)
+    cons <- paste(
+      .mtr_splice(strsplit(filled, "", fixed = TRUE)[[1]], len, flank),
+      collapse = ""
+    )
+    writeLines(c(">cons", cons), file.path(work, paste0("cons_", k, ".fa")))
+
+    reads_now <- .mtr_count_primary(bam)
+    bases_changed <- .mtr_diff_count(cons, prev_cons)
+    done <- .mtr_stop(bases_changed, reads_now, reads_prev) || k >= iter_cap
+    if (done) {
+      stop_reason <- if (k >= iter_cap &&
+                         !.mtr_stop(bases_changed, reads_now, reads_prev)) {
+        "cap"
+      } else {
+        "converged"
+      }
+    }
+    iters <- rbind(iters, data.frame(
+      pass = k,
+      reads_mapped = reads_now,
+      bases_changed = bases_changed,
+      n_count = nchar(gsub("[^N]", "", raw_seq)),
+      stop_reason = if (done) stop_reason else NA_character_
+    ))
+
+    prev_cons <- cons
+    prev_ref <- .mtr_extend(cons, flank)
+    reads_prev <- reads_now
+    if (done) {
+      break
+    }
+
+    ref_fa <- file.path(work, paste0("ref_", k, ".fa"))
+    writeLines(c(">mapping_ref", prev_ref), ref_fa)
+    idx <- file.path(work, paste0("idx_", k))
+    bam <- file.path(work, paste0("pass_", k + 1L, ".bam"))
+    .mtr_run(.mtr_index_cmd(mapper, ref_fa, idx), log_fn)
+    .mtr_log(log_fn, "pass ", k + 1L, " (", mapper, "): ", bowtie2_opts)
+    .mtr_run(paste(
+      .mtr_map_cmd(mapper, bowtie2_opts, idx, sub_1, sub_2, cpus, log_fn, TRUE),
+      stringr::str_glue("| samtools sort -@ {cpus} -o {.mtr_q(bam)} -")
+    ), log_fn)
+  }
+  utils::write.table(iters, file.path(work, "iterations.tsv"),
+                     sep = "\t", row.names = FALSE, quote = FALSE)
+
+  # Final pass: all reads against the converged reference. Reads that only
+  # become mappable after the reference has moved are exactly the ones the
+  # loop exists to reach.
+  final_ref <- file.path(work, "ref_final.fa")
+  writeLines(c(">mapping_ref", prev_ref), final_ref)
+  final_idx <- file.path(work, "idx_final")
+  final_bam <- file.path(work, "final.bam")
+  .mtr_run(.mtr_index_cmd(mapper, final_ref, final_idx), log_fn)
+  .mtr_log(log_fn, "final pass (", mapper, "): ", bowtie2_opts)
+  .mtr_run(paste(
+    .mtr_map_cmd(mapper, bowtie2_opts, final_idx, reads_1, reads_2, cpus, log_fn, TRUE),
+    stringr::str_glue("| samtools sort -@ {cpus} -o {.mtr_q(final_bam)} -")
+  ), log_fn)
+  reads_final <- .mtr_count_primary(final_bam)
+  # Indexed for every reference, not just circular ones: the viewer's pileup
+  # panel queries windows out of this BAM.
+  .mtr_run(stringr::str_glue("samtools index {.mtr_q(final_bam)}"), log_fn)
+  junction_depth <- NA_integer_
+  if (circular) {
+    junction_depth <- .mtr_junction_depth(final_bam, len)
+  }
+
+  # Per-base depth in reference coordinates, so the viewer's coverage track
+  # never has to open the BAM.
+  depth_txt <- file.path(work, "final_depth.txt")
+  .mtr_run(stringr::str_glue(
+    "samtools depth -a -J {.mtr_q(final_bam)} > {.mtr_q(depth_txt)}"
+  ), log_fn)
+  utils::write.csv(
+    .mtr_depth_table(depth_txt, len),
+    file.path(work, "maptoref_depth.csv"),
+    row.names = FALSE, quote = FALSE
+  )
+  unlink(depth_txt)
+
+  final_raw <- file.path(work, "final_raw.fa")
+  final_subs <- file.path(work, "final_subs.fa")
+  .mtr_run(stringr::str_glue(
+    "samtools consensus {fixed_cons} --show-ins yes --mark-ins {user_cons} ",
+    "{.mtr_q(final_bam)} > {.mtr_q(final_raw)}"
+  ), log_fn)
+  .mtr_run(stringr::str_glue(
+    "samtools consensus {fixed_cons} --show-ins no {user_cons} ",
+    "{.mtr_q(final_bam)} > {.mtr_q(final_subs)}"
+  ), log_fn)
+
+  tokens <- .mtr_splice(.mtr_parse_marked(.mtr_read_seq(final_raw)), len, flank)
+  product <- .mtr_tokens_to_seq(tokens)
+  full_seq <- product$seq
+
+  published <- ref$topology
+  if (circular && !is.na(junction_depth) && junction_depth == 0L) {
+    published <- "linear"
+    notes <- c(notes, paste0(
+      "No reads span the start and end of the sequence, so this assembly is ",
+      "published as linear even though the reference is circular. Add reads or ",
+      "use a closer reference, or edit the topology if you are confident the ",
+      "molecule is circular."))
+  }
+
+  subs <- paste(
+    .mtr_splice(strsplit(.mtr_read_seq(final_subs), "", fixed = TRUE)[[1]],
+                len, flank),
+    collapse = ""
+  )
+  writeLines(c(paste0(">", id, ".1.1 subs_only"), subs),
+             file.path(work, "subs_only.fasta"))
+
+  # Judged on the untrimmed product against the reference frame, so a product
+  # that is only partly recovered still reports its uncalled fraction.
+  n_count <- nchar(gsub("[^N]", "", full_seq))
+  n_pct <- round(100 * n_count / ref$length, 1)
+  # Listed first: the uncalled fraction is the number people look for.
+  if (n_count > 0.50 * ref$length) {
+    notes <- c(paste0(
+      n_pct, "% of the reference is N; the reference may be too divergent for ",
+      "this sample."), notes)
+  } else if (n_count > 0.02 * ref$length) {
+    notes <- c(paste0(
+      n_pct, "% of the reference could not be called (N)."), notes)
+  }
+
+  # Gated on the published topology, so a downgraded assembly is trimmed too.
+  seq <- if (identical(published, "circular")) full_seq else .mtr_strip_ends(full_seq)
+  if (!nzchar(seq)) {
+    stop("no bases were called")
+  }
+  if (identical(stop_reason, "cap")) {
+    notes <- c(notes, paste0(
+      "Still changing after ", passes, " passes; raise the cap (10 to 25) and ",
+      "re-run."))
+  }
+  # Position-wise over the common length, with uncalled sites excluded, so an
+  # internal N run cannot shift the comparison frame. Lowercase is a
+  # base-versus-gap call, which is uncalled for this diagnostic.
+  a <- strsplit(subs, "", fixed = TRUE)[[1]]
+  b <- strsplit(ref$seq, "", fixed = TRUE)[[1]]
+  n <- min(length(a), length(b))
+  a <- a[seq_len(n)]
+  b <- b[seq_len(n)]
+  keep <- !(a %in% c("N", "*")) & !grepl("[a-z]", a)
+  subs_diff <- sum(toupper(a[keep]) != toupper(b[keep]))
+  if (subs_diff > 0.10 * ref$length) {
+    notes <- c(notes, paste0(
+      "Reference is more than 10% divergent; expect reference bias and missing ",
+      "regions. Use a closer reference, a more sensitive preset, or compare ",
+      "with a de novo set."))
+  }
+
+  writeLines(c(paste0(">", id, ".1.1 ", published), seq),
+             file.path(out_dir, paste0(id, "_assembly_1.fasta")))
+  writeLines(c(
+    "assembler=MapToRef",
+    paste0("reference=", .mtr_opts(ref_value)),
+    paste0("accession=", ref$accession),
+    paste0("reference_source=", src),
+    paste0("organism=", ref$organism),
+    paste0("reference_length=", len),
+    paste0("reference_topology=", ref$topology),
+    paste0("published_topology=", published),
+    paste0("transl_table=", ref$transl_table),
+    paste0("passes_run=", passes),
+    paste0("stop_reason=", stop_reason),
+    paste0("reads_mapped_pass_1=", reads_pass_1),
+    paste0("reads_mapped_final=", reads_final),
+    paste0("junction_depth=", ifelse(is.na(junction_depth), "NA", junction_depth)),
+    paste0("consensus_length=", nchar(full_seq)),
+    paste0("published_length=", nchar(seq)),
+    paste0("n_count=", n_count),
+    paste0("iupac_count=", nchar(gsub("[ACGTN]", "", full_seq))),
+    paste0("half_deletions=", product$half_deletions),
+    paste0("substitutions_vs_reference=", subs_diff),
+    if (length(notes) > 0) paste0("note=", notes)
+  ), file.path(out_dir, paste0(id, "_summary.txt")))
+
+  # Reproducible transients, dropped so the published loop record stays small.
+  # final.bam and its index are kept: the viewer's pileup panel reads them.
+  # A failed run keeps everything.
+  transients <- list.files(work, pattern = "\\.(bam|bai|bt2|bt2l|fq)$",
+                           full.names = TRUE)
+  unlink(transients[basename(transients) %nin%
+                      c("final.bam", "final.bam.bai")])
+
+  invisible(TRUE)
+}

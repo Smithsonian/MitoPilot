@@ -37,7 +37,7 @@ process coverage {
         # Concatenate unpaired reads
         cat extended_*_unpaired.fq >> unpaired.fq  
         Rscript -e "MitoPilot::coverage('!{assembly}', 'extended_1_paired.fq', 'extended_2_paired.fq', 'unpaired.fq', !{task.cpus}, '!{outDir}')"
-    elif [ !{assembler} == "MitoFinder" ]; then   
+    elif [ "!{assembler}" = "MitoFinder" ] || [ "!{assembler}" = "MapToRef" ]; then
         tar -xzf !{reads}    
         Rscript -e "MitoPilot::coverage('!{assembly}', '!{id}_preprocess_R1.fastq.gz', '!{id}_preprocess_R2.fastq.gz', 'NA', !{task.cpus}, '!{outDir}')"
     fi   

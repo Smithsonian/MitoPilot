@@ -5,7 +5,14 @@
 #' Creates a backup of the existing database prior to updating.
 #'
 #' @param path Path to the project directory (default = current working directory)
-#' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2"
+#' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID", "Taxon, "R1", and "R2".
+#'   May include additional columns with other sample metadata, and an optional
+#'   \code{Reference} column naming a per-sample MapToRef reference (file path,
+#'   URL, or NCBI accession). A FASTA reference also needs a
+#'   \code{Reference_topology} column (circular or linear). Both values are
+#'   stored on the sample and used when its parameter set assembles with
+#'   MapToRef. \code{Reference} is a reserved column name: it is never stored
+#'   as sample metadata, so rename the column if you use it for something else.
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
 #'
@@ -32,31 +39,24 @@ add_samples <- function(
   }
   mapping <- utils::read.csv(update_mapping_fn)
 
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
-    stop("Duplicate IDs found in mapping file")
-  }
-
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
-    stop("IDs must be no more than 18 characters")
-  }
-
-  # Validate IDs contain only alphanumeric characters
-  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
-    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse=", "))
-    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
-  }
+  .report_issues(check_sample_ids(mapping[[mapping_id]]), "Update mapping file")
 
   validate_declared_topology(mapping, mapping_id = mapping_id)
+
+  # Same rule as new_db(): the Reference column seeds assemble.maptoref_ref and
+  # must not become a samples column (this function ALTERs samples for every
+  # unseen mapping column below).
+  taken <- .mtr_take_ref_col(mapping, mapping_id = mapping_id)
+  mapping <- taken$mapping
+  refs <- NULL
+  topo <- NULL
+  if (!is.null(taken$refs)) {
+    refs <- .mtr_validate_refs(taken$refs, ids = names(taken$refs),
+                               context = "the mapping file 'Reference' column")
+    topo <- .mtr_validate_ref_topology(refs, taken$topology, ids = names(taken$refs),
+                                   context = "the mapping file 'Reference_topology' column")
+    names(refs) <- names(topo) <- names(taken$refs)
+  }
 
   # genetic_code auto-selects from each sample's curation ruleset; it is filled
   # in below by .sync_sample_genetic_codes() after the annotate rows (which carry
@@ -66,6 +66,13 @@ add_samples <- function(
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
   on.exit(DBI::dbDisconnect(con))
+
+  # The assemble insert below writes maptoref_ref, so the column must exist
+  # before samples and preprocess are committed.
+  if (!all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble"))) {
+    stop("This project predates the per-sample MapToRef reference columns; run ",
+         "MitoPilot::backwards_compatibility() before adding samples")
+  }
 
   # Metadata table ----
   ##############################################################################################################
@@ -182,6 +189,8 @@ add_samples <- function(
           hide_switch = 0,
           assemble_opts = "default",
           blast_opts = "default",
+          maptoref_ref = if (is.null(refs)) NA_character_ else unname(refs[mapping$ID]),
+          maptoref_topology = if (is.null(topo)) NA_character_ else unname(topo[mapping$ID]),
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -189,6 +198,8 @@ add_samples <- function(
       by = "ID",
       conflict = "ignore"
     )
+
+  .mtr_warn_refs_ignored(con, names(refs)[!is.na(refs)])
 
   # Annotate table ----
   ##############################################################################################################
@@ -217,5 +228,7 @@ add_samples <- function(
   # Fill samples.genetic_code for the new samples from their curation ruleset
   # (default curate_opts target + optional override).
   .sync_sample_genetic_codes(con, ids = mapping$ID)
+
+  .mtr_warn_missing_refs(con)
 
 }

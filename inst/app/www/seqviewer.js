@@ -1,0 +1,653 @@
+// inst/app/www/seqviewer.js
+// Sequence viewer for the annotation details window (tools/nt_viewer_spec.md).
+(function () {
+  'use strict';
+
+  // ---- geometry: pure functions, testable without a canvas ----
+  function span(f, len) {
+    return f.pos1 <= f.pos2 ? f.pos2 - f.pos1 + 1 : len - f.pos1 + 1 + f.pos2;
+  }
+  function wraps(f) { return f.pos1 > f.pos2; }
+  // Greedy interval packing on linearised coordinates; a wrapped feature also
+  // claims [1, pos2], so it is checked against both ends of the circle.
+  function lanes(feats, len) {
+    var order = feats.slice().sort(function (a, b) { return a.pos1 - b.pos1; });
+    var laneEnds = [];   // last linearised end per lane
+    var laneHeads = [];  // last [1, pos2] head per lane (wrapped features)
+    order.forEach(function (f) {
+      var end = f.pos1 + span(f, len) - 1;
+      var head = wraps(f) ? f.pos2 : 0;
+      var lane = -1;
+      for (var i = 0; i < laneEnds.length; i++) {
+        var free = laneEnds[i] < f.pos1 && laneHeads[i] < f.pos1;
+        if (free && head > 0) {
+          // the tail [1, head] must not touch anything already in this lane
+          var clash = order.some(function (g) {
+            return g.lane === i && g !== f && g.pos1 <= head;
+          });
+          free = !clash;
+        }
+        if (free) { lane = i; break; }
+      }
+      if (lane < 0) { lane = laneEnds.length; laneEnds.push(0); laneHeads.push(0); }
+      laneEnds[lane] = Math.max(laneEnds[lane], end);
+      laneHeads[lane] = Math.max(laneHeads[lane], head);
+      f.lane = lane;
+    });
+    return laneEnds.length;
+  }
+  function nCodons(f, len) { return Math.floor(span(f, len) / 3); }
+  // 1-based position of the middle base of codon i (0-based).
+  function codonCentre(f, i, len, topology) {
+    var p = f.dir === '-' ? f.pos2 - 3 * i - 1 : f.pos1 + 3 * i + 1;
+    if (topology === 'circular') p = ((p - 1) % len + len) % len + 1;
+    return p;
+  }
+  // Letter for codon i: the stored translation, "*" for a trailing stop codon
+  // the translation does not include, nothing otherwise.
+  function stopLetter(f, i, len) {
+    var tr = f.translation || '';
+    if (i < tr.length) return tr.charAt(i);
+    var n = nCodons(f, len);
+    return (i === n - 1 && tr.length === n - 1) ? '*' : '';
+  }
+
+  // Genomic side made partial by strand + partial5/partial3: 'start' (pos1
+  // end), 'end' (pos2 end), 'both', or null when both ends are real.
+  function partialEdge(f) {
+    var startOpen = f.dir === '-' ? f.partial3 : f.partial5;
+    var endOpen = f.dir === '-' ? f.partial5 : f.partial3;
+    if (startOpen && endOpen) return 'both';
+    if (startOpen) return 'start';
+    if (endOpen) return 'end';
+    return null;
+  }
+  // Whether a linearised [a, b, k] piece shows the pos1 ("start") and/or
+  // pos2 ("end") boundary at its own true edge, vs. being cut off by the
+  // visible linearised range [vs, ve).
+  function segOwns(seg, vs, ve) {
+    return { start: seg[0] >= vs, end: seg[1] <= ve };
+  }
+
+  // Per-base class of a consensus string b laid over a reference string a.
+  function diffOverlay(a, b) {
+    var out = [];
+    for (var i = 0; i < b.length; i++) {
+      var y = b.charAt(i), x = a.charAt(i);
+      out.push(y === 'N' ? 'n' : y === '-' ? 'gap' : y !== x ? 'mismatch' : 'same');
+    }
+    return out;
+  }
+  // Whether a reads reply covering `have` already covers the wanted window.
+  function readsCover(have, want) {
+    return !!have && have.start <= want.start && have.end >= want.end;
+  }
+
+  window.mpseq = window.mpseq || {};
+  window.mpseq.geom = { span: span, wraps: wraps, lanes: lanes, nCodons: nCodons,
+                        codonCentre: codonCentre, stopLetter: stopLetter,
+                        partialEdge: partialEdge, segOwns: segOwns,
+                        diffOverlay: diffOverlay, readsCover: readsCover };
+})();
+
+(function () {
+  'use strict';
+  var G = window.mpseq.geom;
+  var MAX_PPB = 14, NT_LETTER = 8, NT_BAR = 3, AA_MIN = 4;
+  var RULER_H = 22, LANE_H = 22, NT_H = 20, AA_H = 20, GUTTER = 60, PAD = 4, COV_H = 60, ERR_H = 36, GAP = 12, READ_H = 12;
+  var ERR_FLAG = 0.05;
+  // Same shades as the BLAST synteny zoom (app_annotate_details.R base_color)
+  // and msaR's zappo scheme in the alignment viewer.
+  var BASE = { A: '#4faf45', C: '#e0a53f', G: '#e0555a', T: '#4a90d9', N: '#666666' };
+  var ZAPPO = { I: '#ffafaf', L: '#ffafaf', V: '#ffafaf', A: '#ffafaf', M: '#ffafaf',
+                F: '#ffc800', W: '#ffc800', Y: '#ffc800', K: '#6464ff', R: '#6464ff', H: '#6464ff',
+                D: '#ff0000', E: '#ff0000', S: '#00ff00', T: '#00ff00', N: '#00ff00', Q: '#00ff00',
+                P: '#ff00ff', G: '#ff00ff', C: '#ffff00' };
+  var viewers = {};
+
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  function typeColor(t) { return cssVar('--mp-type-' + String(t || '').toLowerCase(), '#888888'); }
+  function niceStep(raw) {
+    var p = Math.pow(10, Math.floor(Math.log10(raw)));
+    var m = raw / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+  }
+
+  function Viewer(id) {
+    this.id = id;
+    this.canvas = document.getElementById(id);
+    this.wrap = this.canvas.parentElement;
+    this.tip = document.getElementById(id.replace(/-canvas$/, '-tip'));
+    this.section = this.canvas.closest('details, .mp-maptoref');
+    this.len = 0; this.seq = ''; this.feats = []; this.topology = 'linear';
+    this.seq2 = ''; this.seqLabel = 'nt'; this.seq2Label = 'Consensus';
+    this.showReads = true; this.readsInput = null; this.readsMaxBp = 1000;
+    this.reads = null; this.readsWindow = null; this.readsTimer = null; this.readsNonce = 0; this.readsSent = null;
+    this.version = null; this.selected = null; this.nLanes = 0;
+    this.viewStart = 1; this.ppb = 1;
+    this.showNt = true; this.showAa = true; this.showCov = true; this.showErr = true;
+    this.depth = null; this.err = null; this.depthMax = 0; this.errMax = 0;
+    this.hits = []; this.aaRows = [];
+    // Optional second canvas for the read lanes, in its own scrolling box.
+    this.readsCanvas = document.getElementById(id.replace(/-canvas$/, '-reads'));
+    this.readsWrap = this.readsCanvas ? this.readsCanvas.parentElement : null;
+    this.readHits = [];
+    this.bindControls();
+    var self = this;
+    if (window.ResizeObserver) new ResizeObserver(function () { self.draw(); }).observe(this.wrap);
+    if (this.section) this.section.addEventListener('toggle', function () { self.draw(); });
+  }
+
+  Viewer.prototype.load = function (p) {
+    var sameSeq = (this.version === p.version && this.len === p.len);
+    this.unit = p.unit; this.len = p.len; this.seq = p.seq || ''; this.topology = p.topology;
+    this.version = p.version; this.input = p.input;
+    this.seq2 = p.seq2 || ''; this.seqLabel = p.seqLabel || 'nt'; this.seq2Label = p.seq2Label || 'Consensus';
+    this.readsInput = p.readsInput || null; this.readsMaxBp = p.readsMaxBp || 1000;
+    if (!sameSeq) { this.reads = null; this.readsWindow = null; this.readsSent = null; }
+    this.feats = (p.features || []).map(function (f) { return Object.assign({}, f); });
+    this.nLanes = G.lanes(this.feats, this.len);
+    this.depth = p.depth || null; this.err = p.err || null;
+    var mx = function (a, floor) { return (a || []).reduce(function (m, d) { return d !== null && d > m ? d : m; }, floor); };
+    this.depthMax = mx(this.depth, 1); this.errMax = mx(this.err, 0);
+    this.selected = (p.selected === undefined || p.selected === null) ? null : p.selected;
+    if (!sameSeq) this.whole();
+    this.draw();
+  };
+
+  // ---- view state ----
+  Viewer.prototype.width = function () { return Math.max(200, this.wrap.clientWidth - GUTTER); };
+  Viewer.prototype.minPpb = function () { return this.width() / this.len; };
+  Viewer.prototype.viewLen = function () { return this.width() / this.ppb; };
+  Viewer.prototype.clamp = function () {
+    this.ppb = Math.min(MAX_PPB, Math.max(this.minPpb(), this.ppb));
+    if (this.topology === 'linear') {
+      this.viewStart = Math.max(1, Math.min(this.len - this.viewLen() + 1, this.viewStart));
+    } else {
+      this.viewStart = ((this.viewStart - 1) % this.len + this.len) % this.len + 1;
+    }
+  };
+  Viewer.prototype.whole = function () { this.ppb = this.minPpb(); this.viewStart = 1; this.clamp(); this.draw(); };
+  Viewer.prototype.zoom = function (factor, atPos) {
+    var centre = atPos || (this.viewStart + this.viewLen() / 2);
+    var newPpb = Math.min(MAX_PPB, Math.max(this.minPpb(), this.ppb * factor));
+    this.viewStart = centre - (centre - this.viewStart) * (this.ppb / newPpb);
+    this.ppb = newPpb; this.clamp(); this.draw();
+  };
+  Viewer.prototype.goto = function (pos) {
+    if (this.ppb < NT_LETTER) this.ppb = 10;
+    this.viewStart = pos - this.viewLen() / 2; this.clamp(); this.draw();
+  };
+  Viewer.prototype.fit = function (row) {
+    var f = this.feats.find(function (x) { return x.row === row; });
+    if (!f) return;
+    this.selected = row;
+    var s = G.span(f, this.len), margin = Math.max(3, s * 0.05);
+    this.ppb = Math.min(MAX_PPB, this.width() / (s + 2 * margin));
+    this.viewStart = f.pos1 - margin; this.clamp();
+    if (this.section && !this.section.open) this.section.open = true;
+    this.draw();
+  };
+
+  // ---- coordinate helpers (linearised: a position may exceed len when wrapped) ----
+  Viewer.prototype.x = function (lin) { return GUTTER + (lin - this.viewStart) * this.ppb; };
+  Viewer.prototype.segments = function (f) {
+    var s = G.span(f, this.len), out = [], vs = this.viewStart, ve = this.viewStart + this.viewLen();
+    var ks = this.topology === 'circular' ? [-1, 0, 1] : [0];
+    ks.forEach(function (k) {
+      var a = f.pos1 + k * this.len, b = a + s - 1;
+      if (b >= vs && a <= ve) out.push([a, b, k]);
+    }, this);
+    return out;
+  };
+  Viewer.prototype.baseAt = function (lin) {
+    lin = Math.floor(lin);
+    var p = this.topology === 'circular' ? ((lin - 1) % this.len + this.len) % this.len + 1 : lin;
+    if (p < 1 || p > this.len) return null;
+    return { pos: p, base: this.seq.charAt(p - 1) || 'N' };
+  };
+
+  // ---- drawing ----
+  Viewer.prototype.covOn = function () { return this.showCov && !!this.depth; };
+  Viewer.prototype.errOn = function () { return this.showErr && !!this.err; };
+  Viewer.prototype.ntOn = function () { return this.showNt && this.ppb >= NT_BAR; };
+  Viewer.prototype.consOn = function () { return this.ntOn() && !!this.seq2; };
+  Viewer.prototype.readsOn = function () { return this.showReads && !!this.readsInput && this.viewLen() <= this.readsMaxBp; };
+  Viewer.prototype.readRows = function () { return this.readsOn() && this.reads ? this.reads.rows : 0; };
+  // Visible window. On a circular unit it is left unclamped, so a view over the
+  // origin asks for both sides; R reads them and the reply echoes these values.
+  Viewer.prototype.viewWindow = function () {
+    var s = Math.floor(this.viewStart), e = Math.ceil(this.viewStart + this.viewLen());
+    if (this.topology === 'circular') return { start: s, end: e };
+    return { start: Math.max(1, s), end: Math.min(this.len, e) };
+  };
+  // Ask R for reads after the view settles; the request is padded to the full
+  // reads window so small pans stay inside the last reply.
+  Viewer.prototype.requestReads = function () {
+    var self = this;
+    if (G.readsCover(this.readsWindow, this.viewWindow())) return;
+    clearTimeout(this.readsTimer);
+    this.readsTimer = setTimeout(function () {
+      if (!self.readsOn() || !window.Shiny) return;
+      var w = self.viewWindow();
+      if (G.readsCover(self.readsWindow, w)) return;
+      var pad = Math.max(0, Math.floor((self.readsMaxBp - (w.end - w.start + 1)) / 2));
+      var req = self.topology === 'circular'
+        ? { start: w.start - pad, end: w.end + pad }
+        : { start: Math.max(1, w.start - pad), end: Math.min(self.len, w.end + pad) };
+      if (self.readsSent && self.readsSent.start === req.start && self.readsSent.end === req.end) return;
+      self.readsSent = req; req.nonce = ++self.readsNonce;
+      window.Shiny.setInputValue(self.readsInput, req, { priority: 'event' });
+    }, 150);
+  };
+  Viewer.prototype.loadReads = function (p) {
+    if (p.nonce !== this.readsNonce) return;
+    // R sends each frame column-wise ({row: [...], pos: [...]}); expand to
+    // one object per record. An array is already in that shape.
+    var expand = function (f) {
+      if (!f || Array.isArray(f)) return f || [];
+      var keys = Object.keys(f), n = keys.length ? f[keys[0]].length : 0, out = [];
+      for (var i = 0; i < n; i++) { var o = {}; keys.forEach(function (k) { o[k] = f[k][i]; }); out.push(o); }
+      return out;
+    };
+    var reads = expand(p.reads), rows = 0;
+    reads.forEach(function (r) { if (r.row > rows) rows = r.row; });
+    this.reads = { reads: reads, mm: expand(p.mm), del: expand(p.del), ins: expand(p.ins),
+                   rows: rows, nShown: p.nShown, nTotal: p.nTotal };
+    this.readsWindow = { start: p.start, end: p.end };
+    this.draw();
+  };
+  Viewer.prototype.topH = function () {
+    return RULER_H + PAD + (this.covOn() ? COV_H + GAP : 0) + (this.errOn() ? ERR_H + GAP : 0);
+  };
+  Viewer.prototype.laneY = function (lane) { return this.topH() + lane * LANE_H; };
+  Viewer.prototype.height = function () {
+    var pcgs = this.showAa && this.ppb >= AA_MIN ? this.aaRows.length : 0;
+    var nt = (this.ntOn() ? NT_H : 0) + (this.consOn() ? NT_H : 0);
+    var rd = this.readRows() && !this.readsCanvas ? this.readRows() * READ_H + PAD : 0;
+    return this.topH() + this.nLanes * LANE_H + PAD + nt + pcgs * AA_H + rd + PAD;
+  };
+  Viewer.prototype.draw = function () {
+    if (!this.len || !this.canvas.offsetParent) return;
+    this.clamp();
+    if (!this.readsOn()) { this.reads = null; this.readsWindow = null; this.readsSent = null; clearTimeout(this.readsTimer); }
+    // The server-rendered read count would otherwise name a window that is no
+    // longer drawn. Left alone when there is no BAM (that note is a warning).
+    var note = document.getElementById(this.id.replace(/-canvas$/, '-note'));
+    if (note && this.readsInput) note.hidden = !this.readsOn();
+    var dpr = window.devicePixelRatio || 1, W = this.wrap.clientWidth;
+    this.aaRows = this.showAa && this.ppb >= AA_MIN
+      ? this.feats.filter(function (f) { return f.type === 'PCG' && f.translation !== undefined && this.segments(f).length; }, this)
+      : [];
+    var H = this.height();
+    this.canvas.width = W * dpr; this.canvas.height = H * dpr;
+    this.canvas.style.height = H + 'px';
+    var c = this.canvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.font = '12px ' + cssVar('--mp-font-mono', 'monospace');
+    this.hits = [];
+    this.drawRuler(c, W);
+    var y = RULER_H + PAD;
+    if (this.covOn()) { this.drawTrack(c, W, y, COV_H, this.depth, this.depthMax, 'depth', false); y += COV_H + GAP; }
+    if (this.errOn()) { this.drawTrack(c, W, y, ERR_H, this.err, Math.max(this.errMax, ERR_FLAG * 2), 'error', true); y += ERR_H + GAP; }
+    this.drawJoins(c); this.drawLanes(c);
+    y = this.topH() + this.nLanes * LANE_H + PAD;
+    if (this.ntOn()) { this.drawNt(c, y, this.seq, this.seqLabel, null); y += NT_H; }
+    if (this.consOn()) { this.drawNt(c, y, this.seq2, this.seq2Label, this.seq); y += NT_H; }
+    this.aaRows.forEach(function (f) { this.drawAa(c, f, y); y += AA_H; }, this);
+    if (this.readsCanvas) this.drawReadsPanel(W, dpr);
+    else if (this.readsOn() && this.reads) this.drawReads(c, y, this.hits);
+    if (this.readsOn()) this.requestReads();
+  };
+  Viewer.prototype.drawReadsPanel = function (W, dpr) {
+    var rows = this.readRows(), H = rows * READ_H + PAD;
+    this.readsWrap.hidden = !rows;
+    this.readHits = [];
+    if (!rows) return;
+    this.readsCanvas.width = W * dpr; this.readsCanvas.height = H * dpr;
+    // same CSS width as the main canvas, so the x scale matches even though
+    // the box's scrollbar takes a strip off the right
+    this.readsCanvas.style.width = W + 'px'; this.readsCanvas.style.height = H + 'px';
+    var c = this.readsCanvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.font = '12px ' + cssVar('--mp-font-mono', 'monospace');
+    this.drawReads(c, PAD / 2, this.readHits);
+  };
+  Viewer.prototype.drawRuler = function (c, W) {
+    var step = niceStep(90 / this.ppb), vs = this.viewStart, ve = vs + this.viewLen();
+    c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a'); c.strokeStyle = cssVar('--mp-border', '#ccc');
+    c.textAlign = 'center'; c.textBaseline = 'top';
+    for (var lin = Math.ceil(vs / step) * step; lin <= ve; lin += step) {
+      var b = this.baseAt(lin); if (!b) continue;
+      var x = this.x(lin);
+      c.beginPath(); c.moveTo(x, RULER_H - 6); c.lineTo(x, RULER_H); c.stroke();
+      c.fillText(String(b.pos), x, 2);
+    }
+    if (this.topology === 'circular') {
+      [0, 1].forEach(function (k) {
+        var lin = 1 + k * this.len;
+        if (lin >= vs && lin <= ve) {
+          var x = this.x(lin); c.save(); c.strokeStyle = cssVar('--mp-primary', '#337ab7'); c.setLineDash([3, 3]);
+          c.beginPath(); c.moveTo(x, 0); c.lineTo(x, this.height()); c.stroke(); c.restore();
+        }
+      }, this);
+    }
+  };
+  // Connector between the pieces of a joined feature (notes JOIN: marker).
+  Viewer.prototype.drawJoins = function (c) {
+    var groups = {}, W = this.wrap.clientWidth;
+    this.feats.forEach(function (f) { if (f.joined) (groups[f.joined] = groups[f.joined] || []).push(f); });
+    c.lineWidth = 1; c.setLineDash([]);
+    Object.keys(groups).forEach(function (k) {
+      var g = groups[k].sort(function (a, b) { return a.pos1 - b.pos1; });
+      for (var i = 1; i < g.length; i++) {
+        var x0 = this.x(g[i - 1].pos2 + 1), x1 = this.x(g[i].pos1);
+        if (x1 < GUTTER || x0 > W) continue;
+        c.strokeStyle = typeColor(g[i].type);
+        c.beginPath();
+        c.moveTo(Math.max(GUTTER, x0), this.laneY(g[i - 1].lane) + (LANE_H - 6) / 2);
+        c.lineTo(Math.min(W, x1), this.laneY(g[i].lane) + (LANE_H - 6) / 2);
+        c.stroke();
+      }
+    }, this);
+  };
+  Viewer.prototype.drawLanes = function (c) {
+    var vs = this.viewStart, ve = this.viewStart + this.viewLen();
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    this.feats.forEach(function (f) {
+      var col = typeColor(f.type), y = this.laneY(f.lane), h = LANE_H - 6, edge = G.partialEdge(f);
+      this.segments(f).forEach(function (seg) {
+        var x0 = Math.max(GUTTER, this.x(seg[0])), x1 = Math.min(this.wrap.clientWidth, this.x(seg[1] + 1));
+        if (x1 - x0 < 1) return;
+        var fwd = f.dir !== '-', head = Math.min(8, x1 - x0);
+        // vertices in drawing order; pts[4]-pts[0] is the closing edge.
+        var pts = fwd ? [[x0, y], [x1 - head, y], [x1, y + h / 2], [x1 - head, y + h], [x0, y + h]]
+                      : [[x1, y], [x0 + head, y], [x0, y + h / 2], [x0 + head, y + h], [x1, y + h]];
+        c.beginPath();
+        c.moveTo(pts[0][0], pts[0][1]);
+        for (var i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+        c.closePath();
+        c.fillStyle = col + '55'; c.fill();
+        c.lineWidth = f.row === this.selected ? 2 : 1;
+        c.strokeStyle = f.row === this.selected ? cssVar('--mp-primary', '#337ab7') : col;
+
+        // the flat closing edge (pts[4]-pts[0]) is the pos1 side when fwd,
+        // pos2 side otherwise; the tip (pts[1..3]) is the other side.
+        var owns = edge ? G.segOwns(seg, vs, ve) : null;
+        var dashStart = !!edge && (edge === 'start' || edge === 'both') && owns.start;
+        var dashEnd = !!edge && (edge === 'end' || edge === 'both') && owns.end;
+        var dashFlat = fwd ? dashStart : dashEnd;
+        var dashTip = fwd ? dashEnd : dashStart;
+
+        c.setLineDash([]);
+        c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); c.lineTo(pts[1][0], pts[1][1]); c.stroke();
+        c.beginPath(); c.moveTo(pts[3][0], pts[3][1]); c.lineTo(pts[4][0], pts[4][1]); c.stroke();
+        c.setLineDash(dashTip ? [3, 2] : []);
+        c.beginPath(); c.moveTo(pts[1][0], pts[1][1]); c.lineTo(pts[2][0], pts[2][1]); c.lineTo(pts[3][0], pts[3][1]); c.stroke();
+        c.setLineDash(dashFlat ? [3, 2] : []);
+        c.beginPath(); c.moveTo(pts[4][0], pts[4][1]); c.lineTo(pts[0][0], pts[0][1]); c.stroke();
+        c.setLineDash([]);
+
+        if (x1 - x0 > c.measureText(f.gene).width + 8) { c.fillStyle = cssVar('--mp-text', '#333'); c.fillText(f.gene, (x0 + x1) / 2, y + h / 2); }
+        this.hits.push({ x0: x0, x1: x1, y0: y, y1: y + h, f: f, row: f.row });
+      }, this);
+    }, this);
+  };
+  // One bar per pixel column, the max of the positions under it. Depth is
+  // blue; error rate is grey with bars over the threshold in Okabe-Ito
+  // orange, which stays distinct from the blue for colour-blind viewers.
+  Viewer.prototype.drawTrack = function (c, W, y, h, vals, vmax, label, flag) {
+    var base = flag ? '#a0a0a0' : cssVar('--mp-primary', '#337ab7'), red = '#e69f00', muted = cssVar('--mp-text-muted', '#6a6a6a');
+    c.fillStyle = cssVar('--mp-surface-alt', '#f5f5f5'); c.fillRect(GUTTER, y, W - GUTTER, h);
+    for (var px = GUTTER; px < W; px++) {
+      var a = Math.floor(this.viewStart + (px - GUTTER) / this.ppb), b = Math.floor(this.viewStart + (px + 1 - GUTTER) / this.ppb);
+      var v = null, gap = false;
+      for (var lin = a; lin <= b; lin++) {
+        var bp = this.baseAt(lin); if (!bp) continue;
+        var d = vals[bp.pos - 1]; if (d === null || d === undefined) continue;
+        if (v === null || d > v) v = d;
+        if (d === 0) gap = true;
+      }
+      if (v === null) continue;
+      // a column holding any uncovered base gets a full-height red wash, so
+      // gaps survive the per-column max at whole-genome zoom
+      if (!flag && gap) { c.fillStyle = 'rgba(217, 83, 79, 0.35)'; c.fillRect(px, y, 1, h); }
+      var bh = Math.min(h, Math.round(v / vmax * h));
+      c.fillStyle = flag && v > ERR_FLAG ? red : base;
+      if (bh > 0) c.fillRect(px, y + h - bh, 1, bh);
+    }
+    c.strokeStyle = cssVar('--mp-border', '#ccc'); c.beginPath(); c.moveTo(GUTTER, y + h + 0.5); c.lineTo(W, y + h + 0.5); c.stroke();
+    if (flag) { c.save(); c.strokeStyle = red; c.setLineDash([2, 3]); var fy = y + h - ERR_FLAG / vmax * h;
+      c.beginPath(); c.moveTo(GUTTER, fy + 0.5); c.lineTo(W, fy + 0.5); c.stroke(); c.restore(); }
+    c.fillStyle = muted; c.textAlign = 'right';
+    c.textBaseline = 'top'; c.fillText(flag ? (vmax * 100).toFixed(0) + '%' : String(vmax), GUTTER - 6, y);
+    c.textBaseline = 'bottom'; c.fillText(label, GUTTER - 6, y + h, GUTTER - 10);
+  };
+  // One sequence row. With `ref`, each base is classed against the reference
+  // (diffOverlay): mismatches get an amber outline, N a grey tile, "-" a hatch.
+  Viewer.prototype.drawNt = function (c, y, seq, label, ref) {
+    var vs = Math.floor(this.viewStart), ve = Math.ceil(this.viewStart + this.viewLen());
+    var letter = this.ppb >= NT_LETTER, w = Math.max(1, this.ppb - (letter ? 1 : 0));
+    var warn = cssVar('--mp-warning', '#8a5a00');
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (var lin = vs; lin <= ve; lin++) {
+      var b = this.baseAt(lin); if (!b) continue;
+      var ch = seq.charAt(b.pos - 1) || 'N';
+      var cls = ref ? G.diffOverlay(ref.charAt(b.pos - 1), ch)[0] : 'same';
+      var x = this.x(lin), col = cls === 'n' ? BASE.N : BASE[ch] || BASE.N;
+      if (cls === 'gap') {
+        c.save(); c.beginPath(); c.rect(x, y + 2, w, NT_H - 4); c.clip();
+        c.strokeStyle = BASE.N; c.lineWidth = 1; c.beginPath();
+        for (var d = 0; d < w + NT_H; d += 4) { c.moveTo(x + d, y + 2); c.lineTo(x + d - NT_H, y + NT_H - 2); }
+        c.stroke(); c.restore();
+      } else {
+        c.fillStyle = col + (letter ? '99' : 'cc');
+        c.fillRect(x, y + 2, w, NT_H - 4);
+      }
+      if (cls === 'mismatch') { c.lineWidth = 2; c.strokeStyle = warn; c.strokeRect(x + 1, y + 3, w - 2, NT_H - 6); }
+      if (letter && cls !== 'gap') { c.fillStyle = '#000000'; c.fillText(ch, x + this.ppb / 2, y + NT_H / 2); }
+    }
+    c.lineWidth = 1;
+    c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a'); c.textAlign = 'right';
+    c.fillText(label, GUTTER - 6, y + NT_H / 2, GUTTER - 10);
+  };
+  Viewer.prototype.drawAa = function (c, f, y) {
+    var n = G.nCodons(f, this.len), vs = this.viewStart, ve = vs + this.viewLen();
+    c.textAlign = 'right'; c.textBaseline = 'middle'; c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a');
+    c.fillText(f.gene, GUTTER - 6, y + AA_H / 2, GUTTER - 10);
+    c.textAlign = 'center';
+    var ks = this.topology === 'circular' ? [-1, 0, 1] : [0];
+    for (var i = 0; i < n; i++) {
+      var letter = G.stopLetter(f, i, this.len); if (!letter) continue;
+      var centre = G.codonCentre(f, i, this.len, this.topology);
+      ks.forEach(function (k) {
+        var lin = centre + k * this.len;
+        if (lin < vs - 1 || lin > ve + 1) return;
+        var x = this.x(lin) + this.ppb / 2;
+        var stop = letter === '*', zc = ZAPPO[letter];
+        c.fillStyle = stop ? '#000000' : zc || cssVar('--mp-surface-alt', '#f5f5f5');
+        c.fillRect(x - 1.5 * this.ppb + 1, y + 2, 3 * this.ppb - 2, AA_H - 4);
+        c.fillStyle = stop ? '#ffffff' : zc ? '#222222' : cssVar('--mp-text', '#333');
+        c.fillText(letter, x, y + AA_H / 2);
+        this.hits.push({ x0: x - 1.5 * this.ppb, x1: x + 1.5 * this.ppb, y0: y, y1: y + AA_H, f: f, row: f.row, codon: i, letter: letter });
+      }, this);
+    }
+  };
+
+  Viewer.prototype.drawReads = function (c, y, hits) {
+    var W = this.wrap.clientWidth, self = this, mono = cssVar('--mp-font-mono', 'monospace');
+    var fwd = cssVar('--mp-type-rrna', '#5DA5DA') + '99', rev = cssVar('--mp-type-ctrl', '#FAA34A') + '99';
+    var letter = this.ppb >= NT_LETTER, h = READ_H - 2;
+    var top = function (row) { return y + (row - 1) * READ_H; };
+    // A circular view over the origin draws each piece at every offset in view.
+    var ks = this.topology === 'circular' ? [-1, 0, 1] : [0];
+    ks.forEach(function (k) {
+      var off = k * self.len;
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      self.reads.reads.forEach(function (r) {
+        var x0 = Math.max(GUTTER, self.x(r.start + off)), x1 = Math.min(W, self.x(r.end + 1 + off));
+        if (x1 <= x0) return;
+        c.fillStyle = r.strand === '-' ? rev : fwd;
+        c.fillRect(x0, top(r.row), x1 - x0, h);
+        hits.push({ x0: x0, x1: x1, y0: top(r.row), y1: top(r.row) + h, read: r, row: r.row });
+      });
+      self.reads.del.forEach(function (d) {
+        var x0 = Math.max(GUTTER, self.x(d.start + off)), x1 = Math.min(W, self.x(d.end + 1 + off));
+        var ym = top(d.row) + h / 2;
+        if (x1 <= x0) return;
+        c.fillStyle = cssVar('--mp-surface', '#ffffff'); c.fillRect(x0, top(d.row), x1 - x0, h);
+        c.strokeStyle = '#555555'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(x0, ym + 0.5); c.lineTo(x1, ym + 0.5); c.stroke();
+      });
+      if (self.ppb >= NT_BAR) {
+        c.font = '9px ' + mono;
+        self.reads.mm.forEach(function (m) {
+          var x = self.x(m.pos + off);
+          var x0 = Math.max(GUTTER, x), x1 = Math.min(W, x + self.ppb);
+          if (x1 <= x0) return;
+          c.fillStyle = BASE[m.base] || BASE.N; c.fillRect(x0, top(m.row), Math.max(1, x1 - x0), h);
+          if (letter) { c.fillStyle = '#000000'; c.fillText(m.base, x + self.ppb / 2, top(m.row) + h / 2); }
+        });
+      }
+      c.font = '8px ' + mono; c.textAlign = 'left'; c.textBaseline = 'top';
+      self.reads.ins.forEach(function (i) {
+        var x = self.x(i.pos + 1 + off);
+        if (x < GUTTER || x > W) return;
+        c.fillStyle = '#7b3fa0'; c.fillRect(x - 1, top(i.row), 2, h);
+        if (letter && i.len > 1) c.fillText(String(i.len), x + 2, top(i.row));
+      });
+    });
+    c.font = '12px ' + mono; c.fillStyle = cssVar('--mp-text-muted', '#6a6a6a');
+    c.textAlign = 'right'; c.textBaseline = 'middle';
+    c.fillText('reads', GUTTER - 6, y + h / 2, GUTTER - 10);
+  };
+
+  // ---- interaction ----
+  Viewer.prototype.hitTest = function (px, py, hits) {
+    hits = hits || this.hits;
+    for (var i = hits.length - 1; i >= 0; i--) {
+      var h = hits[i];
+      if (px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1) return h;
+    }
+    return null;
+  };
+  Viewer.prototype.click = function (px, py) {
+    var h = this.hitTest(px, py);
+    this.selected = h && h.f ? h.f.row : null;
+    if (h && h.f && this.input && window.Shiny) {
+      window.Shiny.setInputValue(this.input, { row: h.f.row, nonce: Date.now() }, { priority: 'event' });
+    }
+    this.draw();
+  };
+  Viewer.prototype.bindControls = function () {
+    var self = this, sec = this.section || document, prefix = this.id.replace(/-canvas$/, '');
+    var cv = this.canvas, dragging = null;
+    cv.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var rect = cv.getBoundingClientRect(), px = e.clientX - rect.left;
+      var pan = e.shiftKey ? e.deltaY : Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : 0;
+      if (pan) { self.viewStart += pan / self.ppb; self.clamp(); self.draw(); return; }
+      self.zoom(Math.pow(1.15, -e.deltaY / 100), self.viewStart + (px - GUTTER) / self.ppb);
+    }, { passive: false });
+    cv.addEventListener('mousedown', function (e) { dragging = { x: e.clientX, start: self.viewStart, moved: false }; });
+    window.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      var dx = e.clientX - dragging.x; if (Math.abs(dx) > 2) dragging.moved = true;
+      self.viewStart = dragging.start - dx / self.ppb; self.clamp(); self.draw();
+    });
+    window.addEventListener('mouseup', function (e) {
+      if (!dragging) return;
+      var rect = cv.getBoundingClientRect();
+      if (!dragging.moved) self.click(e.clientX - rect.left, e.clientY - rect.top);
+      dragging = null;
+    });
+    var hover = function (e, cv, hits) {
+      var rect = cv.getBoundingClientRect(), px = e.clientX - rect.left, py = e.clientY - rect.top;
+      var h = self.hitTest(px, py, hits), b = self.baseAt(self.viewStart + (px - GUTTER) / self.ppb);
+      if (!self.tip) return;
+      if (!b) { self.tip.hidden = true; return; }
+      var t = 'Position ' + b.pos.toLocaleString() + ', ' + b.base;
+      if (self.depth && self.depth[b.pos - 1] !== null) t += ' | depth ' + self.depth[b.pos - 1];
+      if (self.seq2) { var c2 = self.seq2.charAt(b.pos - 1); if (c2 && c2 !== b.base) t += ' | consensus ' + c2; }
+      if (self.err && self.err[b.pos - 1] !== null) t += ', error ' + (self.err[b.pos - 1] * 100).toFixed(1) + '%';
+      if (h && h.f) t += ' | ' + h.f.gene + (h.codon !== undefined ? ' codon ' + (h.codon + 1) + ' ' + h.letter : ' (' + h.f.type + ')');
+      if (h && h.f && typeof h.f.notes === 'string' && h.f.notes) t += ' | ' + h.f.notes;
+      if (h && h.read) {
+        t += ' | read ' + h.read.strand + ' ' + h.read.start.toLocaleString() + '-' + h.read.end.toLocaleString();
+        var mm = self.reads && self.reads.mm.find(function (m) { return m.row === h.row && m.pos === b.pos; });
+        if (mm) t += ' mismatch ' + mm.base;
+      }
+      self.tip.textContent = t; self.tip.hidden = false;
+      var tw = self.tip.offsetWidth, th = self.tip.offsetHeight;
+      // the tip is positioned in the shared wrapper; the reads canvas sits
+      // lower and may be scrolled inside its box
+      var yOff = cv === self.readsCanvas ? cv.offsetTop - self.readsWrap.scrollTop : 0;
+      self.tip.style.left = Math.max(0, Math.min(px + 12, cv.clientWidth - tw)) + 'px';
+      self.tip.style.top = (yOff + (py + 12 + th > cv.clientHeight ? py - th - 8 : py + 12)) + 'px';
+    };
+    var hide = function () { if (self.tip) self.tip.hidden = true; };
+    cv.addEventListener('mousemove', function (e) { hover(e, cv, self.hits); });
+    cv.addEventListener('mouseleave', hide);
+    if (this.readsCanvas) {
+      this.readsCanvas.addEventListener('mousemove', function (e) { hover(e, self.readsCanvas, self.readHits); });
+      this.readsCanvas.addEventListener('mouseleave', hide);
+    }
+    sec.querySelectorAll('[data-mpseq]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var a = btn.getAttribute('data-mpseq');
+        if (a === 'zoom_in') self.zoom(2); else if (a === 'zoom_out') self.zoom(0.5);
+        else if (a === 'whole') self.whole(); else if (a === 'fit' && self.selected !== null) self.fit(self.selected);
+      });
+    });
+    var go = document.getElementById(prefix + '-goto');
+    [['show_nt', 'showNt'], ['show_aa', 'showAa'], ['show_cov', 'showCov'], ['show_err', 'showErr'], ['show_reads', 'showReads']].forEach(function (pair) {
+      var box = document.getElementById(prefix + '-' + pair[0]);
+      if (box) { self[pair[1]] = box.checked; box.addEventListener('change', function () { self[pair[1]] = box.checked; self.draw(); }); }
+    });
+    if (go) go.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var v = parseInt(go.value, 10); if (v >= 1 && v <= self.len) self.goto(v); } });
+  };
+
+  function get(id) {
+    var el = document.getElementById(id);
+    if (!el) return null;
+    if (viewers[id] && viewers[id].canvas !== el) delete viewers[id];
+    return viewers[id] || (viewers[id] = new Viewer(id));
+  }
+  // A canvas inside a uiOutput can reach the DOM several flushes after the
+  // message that fills it, so wait for it instead of giving up.
+  function withViewer(id, fn, tries) {
+    var v = get(id);
+    if (v) { fn(v); return; }
+    if ((tries || 0) >= 40) return;
+    setTimeout(function () { withViewer(id, fn, (tries || 0) + 1); }, 250);
+  }
+  if (window.Shiny) {
+    window.Shiny.addCustomMessageHandler('mpseq', function (p) {
+      withViewer(p.id, function (v) { v.load(p); });
+    });
+    window.Shiny.addCustomMessageHandler('mpseq_select', function (p) {
+      withViewer(p.id, function (v) { v.fit(p.row); });
+    });
+    window.Shiny.addCustomMessageHandler('mpseq_reads', function (p) {
+      withViewer(p.id, function (v) { v.loadReads(p); });
+    });
+  }
+  window.mpseq.state = function (id) {
+    var v = viewers[id]; if (!v) return null;
+    return { len: v.len, version: v.version, topology: v.topology, viewStart: v.viewStart, ppb: v.ppb, selected: v.selected, height: v.height(),
+             seq2Len: v.seq2.length,
+             readsWindow: v.readsWindow, nReads: v.reads ? v.reads.reads.length : 0, readRows: v.readRows(),
+             readsPanelH: v.readsCanvas ? (v.readsWrap.hidden ? 0 : parseInt(v.readsCanvas.style.height, 10) || 0) : null,
+             nLanes: v.nLanes, features: v.feats.map(function (f) { return { row: f.row, gene: f.gene, pos1: f.pos1, pos2: f.pos2, lane: f.lane }; }) };
+  };
+  window.mpseq.zoom = function (id, f) { var v = get(id); if (v) v.zoom(f); };
+  window.mpseq.fit = function (id, row) { var v = get(id); if (v) v.fit(row); };
+  window.mpseq.whole = function (id) { var v = get(id); if (v) v.whole(); };
+  window.mpseq.goto = function (id, pos) { var v = get(id); if (v) v.goto(pos); };
+  window.mpseq.laneY = function (id, lane) { var v = get(id); return v ? v.laneY(lane) + 8 : 0; };
+  window.mpseq.hitTest = function (id, px, py) { var v = get(id); return v ? v.hitTest(px, py) : null; };
+  window.mpseq.click = function (id, px, py) { var v = get(id); if (v) v.click(px, py); };
+})();

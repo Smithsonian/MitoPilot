@@ -9,6 +9,9 @@ assembly_coverage_details_server <- function(id, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # One lock predicate for every editing control in this window (T02).
+    locked <- reactive(isTRUE(rv$updating[["assemble_lock"]] == 1))
+
     init("coverage_modal")
 
     # Reads and writes below rebuild the published output path from
@@ -23,7 +26,7 @@ assembly_coverage_details_server <- function(id, rv) {
         assemble_dirs_on_disk(session$userData$dir_out, rv$updating$ID),
         error = function(e) character(0)
       )
-      shinyWidgets::sendSweetAlert(
+      mp_alert(
         title = "Assembly output not found",
         text = tags$div(
           tags$p(
@@ -133,18 +136,28 @@ assembly_coverage_details_server <- function(id, rv) {
       )
 
       modalDialog(
-        title = tagList(
-          div(stringr::str_glue("Assembly details for ID: {rv$updating$ID}")),
-          div(
-            style = "font-size: 0.85em; font-weight: normal; color: #555; margin-top: 4px;",
-            stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
-          )
+        title = mp_modal_title(
+          stringr::str_glue("Assembly details: {rv$updating$ID}"),
+          subtitle = stringr::str_glue("Taxon: {rv$updating$Taxon %|NA|% 'NA'}")
         ),
         size = "l",
+        if (locked()) {
+          div(
+            class = "alert alert-warning mp-lock-banner", role = "status",
+            icon("lock"), tags$b(" This sample is locked."), " ",
+            MP_LOCK_DEF("assemble"), " Editing controls below are disabled.",
+            if (any(rv$focal_assembly$path == 0, na.rm = TRUE)) {
+              tagList(" Use ", tags$b("Delete consensus (Path 0)"),
+                      " to remove the edited consensus and unlock, or unlock",
+                      " from the Assemble table.")
+            } else {
+              " Unlock this sample in the Assemble table to edit it."
+            }
+          )
+        },
         if (isTRUE(rv$asmb_multiscaffold_blocked)) {
           div(
-            style = paste("margin-bottom: 12px; padding: 10px; border: 1px solid #E55330;",
-                          "border-radius: 4px; background: #fdf3f0; font-size: 0.9em;"),
+            class = "mp-panel-warning",
             tags$b("This assembly has multiple competing paths, each fragmented into multiple scaffolds."),
             div(style = "margin-top: 6px;",
                 paste("Automatic scaffold joining is only supported for a single fragmented",
@@ -159,17 +172,17 @@ assembly_coverage_details_server <- function(id, rv) {
                       rv$asmb_dir)
           )
         },
-        div(
-          style = "margin-bottom: 8px; font-size: 0.9em; color: #555;",
-          "Multiple assembly paths? ",
-          actionLink(
-            ns("help_assembly_paths"),
-            label = "How do I choose?",
-            icon = icon("circle-question")
+        # The help panel is only useful when there is a choice to make.
+        if (length(unique(rv$focal_assembly$path)) > 1) {
+          div(
+            class = "mp-coverage-caption", style = "margin-bottom: 8px;",
+            "This sample has more than one assembly path. ",
+            tool_help_icon("assembly_paths", label = "choosing an assembly path")
           )
-        ),
-        reactableOutput(ns("table"), width = "100%"),
+        },
+        div(class = "mp-coverage-table", reactableOutput(ns("table"), width = "100%")),
         uiOutput(ns("consensus_admin")),
+        maptoref_viewer_ui(ns("maptoref_viewer")),
         uiOutput(ns("scaffold_join_div")),
         uiOutput(ns("msa_div")),
         div(
@@ -179,19 +192,32 @@ assembly_coverage_details_server <- function(id, rv) {
             label = "Notes:",
             value = rv$updating$assemble_notes %|NA|% character(0),
             width = "100%"
-          )
+          ) |>
+            (\(x) if (locked()) shinyjs::disabled(x) else x)()
         ),
-        footer = tagList(
-          div(
-            style = "display: flex; justify-content: right; gap: 0.5em;",
+        footer = mp_footer(
+          dismiss = NULL,
+          extra = tagList(
             uiOutput(ns("clip")) |> shinyjs::hidden(),
-            actionButton(ns("align"), "Align", icon("align-justify")) |> shinyjs::hidden(),
-            actionButton(ns("close_modal"), "Close")
+            actionButton(ns("align"), "Align", icon("align-justify"),
+                         class = "btn-default") |> shinyjs::hidden(),
+            actionButton(ns("close_modal"), "Close", class = "btn-default")
           )
         )
       ) |>
         showModal()
+
+      # The header X dismisses client-side, which would skip the table refresh
+      # the Close button does. Route it through the same input.
+      shinyjs::runjs(sprintf(
+        "setTimeout(function(){$('#shiny-modal .modal-header .close').on('click', function(){
+           Shiny.setInputValue('%s', Date.now(), {priority: 'event'});});}, 0);",
+        ns("close_modal")
+      ))
     })
+
+    # MapToRef coverage viewer (renders only for MapToRef samples) ----
+    maptoref_viewer_server("maptoref_viewer", rv)
 
     # Render table ----
     output$table <- renderReactable({
@@ -208,6 +234,17 @@ assembly_coverage_details_server <- function(id, rv) {
           compact = TRUE,
           wrap = FALSE,
           width = "100%",
+          language = reactable::reactableLang(
+            noData = "No assembly for this sample yet."
+          ),
+          # Headers wrap instead of clipping; wrap = FALSE only governs cells.
+          theme = reactable::reactableTheme(
+            headerStyle = list(
+              whiteSpace = "normal", lineHeight = "1.2",
+              "& .rt-th-inner" = list(whiteSpace = "normal", textOverflow = "clip"),
+              "& .rt-text-content" = list(whiteSpace = "normal", textOverflow = "clip")
+            )
+          ),
           onClick = "select",
           selection = "multiple",
           defaultPageSize = 20,
@@ -216,34 +253,39 @@ assembly_coverage_details_server <- function(id, rv) {
           columns = list(
             ignore = colDef(
               name = "Ignore",
-              width = 60,
+              width = 62,
               html = TRUE, align = "center",
-              cell = rt_bool_bttn(ns("ignore"), "fa fa-circle-xmark", "far fa-circle")
+              sortable = FALSE, filterable = FALSE,
+              cell = rt_bool_bttn(
+                ns("ignore"), "fa fa-circle-xmark", "far fa-circle",
+                title_true = "Ignored - click to include this scaffold",
+                title_false = "Included - click to ignore this scaffold",
+                disabled = if (locked()) MP_LOCK_DEF("assemble") else FALSE
+              )
             ),
-            #ID = colDef(
-            #  align = "left", minWidth = 80, resizable = TRUE, html = T, cell = rt_longtext()
-            #),
+            ID = colDef(name = "ID", align = "left", minWidth = mp_fit_width(tbl$ID)),
             path = colDef(
-              name = "Path", width = 60, align = "center"
+              name = "Path", width = 45, align = "center"
             ),
             scaffold = colDef(
-              name = "Scaffold", width = 80, align = "center"
+              name = "Scaffold", width = 74, align = "center"
             ),
             path_flags = colDef(
-              name = "Flags", minWidth = 200, resizable = TRUE, align = "left",
+              name = "Flags", minWidth = 100, resizable = TRUE, align = "left",
               html = TRUE, cell = rt_longtext()
             ),
             topology = colDef(
-              name = "Topology", width = 90, align = "center"
+              name = "Topology", width = 90, align = "center", html = TRUE,
+              cell = rt_topology()
             ),
             length_raw = colDef(
-              name = "Length (raw)", width = 110, align = "center"
+              name = "Length (raw)", width = 80, align = "center"
             ),
             length = colDef(
-              name = "Length (trimmed)", width = 130, align = "center"
+              name = "Length (trimmed)", width = 90, align = "center"
             ),
             ambiguous_bases = colDef(
-              name = "Ambig. Bases", width = 110, align = "center",
+              name = "Ambiguous Bases", width = 105, align = "center",
               show = any(tbl$ambiguous_bases > 0)
             ),
             sequence = colDef(show = FALSE),
@@ -271,9 +313,17 @@ assembly_coverage_details_server <- function(id, rv) {
               name = "BLAST Lineage", minWidth = 200, resizable = TRUE, align = "left", html = TRUE,
               cell = rt_longtext()
             ),
+            # Sticky, so it needs the opaque background and edge shadow or the
+            # BLAST Species text scrolls underneath it (T09).
             view_coverage = colDef(
-              name = "", html = T, width = 70, align = "center", sticky = "right",
-              cell = rt_icon_bttn_text(ns("view_coverage"), "fas fa-eye fa-xs", "view")
+              name = MP_COL_NAMES[["view_coverage"]], html = T, width = 90,
+              align = "center", sticky = "right",
+              sortable = FALSE, filterable = FALSE,
+              class = "mp-actions-sticky", headerClass = "mp-actions-sticky",
+              cell = rt_icon_bttn_text(
+                ns("view_coverage"), "fas fa-eye fa-xs", "View",
+                title = "Open this scaffold's read-coverage plot (PDF)"
+              )
             )
           )
         )
@@ -337,6 +387,11 @@ assembly_coverage_details_server <- function(id, rv) {
 
     # Ignore bttn ----
     observeEvent(input$ignore, {
+      if (locked()) {
+        mp_alert(title = "This sample is locked", text = MP_LOCK_DEF("assemble"),
+                 type = "warning")
+        req(F)
+      }
       row <- as.numeric(input$ignore)
       rv$focal_assembly$ignore[row] <- as.numeric(!rv$focal_assembly$ignore[row])
       dplyr::tbl(session$userData$con, "assemblies") |>
@@ -377,6 +432,7 @@ assembly_coverage_details_server <- function(id, rv) {
       # scaffold assemblies this is correct because BLAST info already exists;
       # multi-path assemblies will lack BLAST info, which is a known gap.
       n_active <- sum(rv$focal_assembly$ignore == 0)
+      new_switch <- NULL
       if (n_active == 1L && isTRUE(rv$updating$assemble_switch == 3)) {
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::rows_update(
@@ -392,11 +448,7 @@ assembly_coverage_details_server <- function(id, rv) {
             data.frame(ID = rv$updating$ID, assemble_switch = 2L),
             by = "ID"
           )
-        shiny::showNotification(
-          "Auto-promoted to successful \u2014 1 scaffold/path remaining.",
-          type = "message",
-          duration = 5
-        )
+        new_switch <- 2L
       } else if (n_active > 1L && isTRUE(rv$updating$assemble_switch == 2)) {
         dplyr::tbl(session$userData$con, "assemble") |>
           dplyr::rows_update(
@@ -412,12 +464,28 @@ assembly_coverage_details_server <- function(id, rv) {
             data.frame(ID = rv$updating$ID, assemble_switch = 3L),
             by = "ID"
           )
-        shiny::showNotification(
-          "Reverted to needs attention \u2014 multiple scaffolds/paths active.",
-          type = "warning",
-          duration = 5
-        )
+        new_switch <- 3L
       }
+
+      # One report for the whole write: the scaffold, and the state if the
+      # number of active scaffolds moved it.
+      unit <- if (length(unique(rv$focal_assembly$path)) > 1) {
+        sprintf("Path %s scaffold %s", rv$focal_assembly$path[row],
+                rv$focal_assembly$scaffold[row])
+      } else {
+        sprintf("Scaffold %s", rv$focal_assembly$scaffold[row])
+      }
+      msg <- paste0(
+        unit,
+        if (rv$focal_assembly$ignore[row] == 1) " ignored." else " included.",
+        if (!is.null(new_switch)) {
+          paste0(" State is now ",
+                 MP_STATE_META[[as.character(new_switch)]]$label, ".")
+        }
+      )
+      mp_toast(msg,
+               type = if (identical(new_switch, 3L)) "warning" else "message",
+               duration = 5)
     })
 
     # Notes ----
@@ -425,6 +493,7 @@ assembly_coverage_details_server <- function(id, rv) {
       input$notes
     }) |> debounce(500)
     observeEvent(notes_update(), ignoreInit = T, ignoreNULL = T, {
+      req(!locked())
       req(input$notes != (rv$updating$assemble_notes %|NA|% ""))
       rv$updating$assemble_notes <- input$notes |>
         stringr::str_remove_all(",")
@@ -452,14 +521,24 @@ assembly_coverage_details_server <- function(id, rv) {
                rv$focal_assembly$scaffold[row], "_coverage.pdf")
       )
       req(require_assemble_output(pdf_path))
-      # browseURL() errors when no browser is configured (headless/server).
-      tryCatch(browseURL(pdf_path), error = function(e) {
-        shiny::showNotification(
-          paste0("Cannot open a PDF viewer from this session. Path: ", pdf_path),
-          type = "warning",
-          duration = 10
+      # The PDF opens on the machine running the app, which is not the user's
+      # machine over RStudio Server or a remote session. Say so either way, so
+      # a click never looks like it did nothing (T01).
+      opened <- !isTRUE(getOption("MitoPilot.headless")) &&
+        isTRUE(tryCatch({
+          browseURL(pdf_path)
+          TRUE
+        }, error = function(e) FALSE))
+      if (opened) {
+        mp_toast(paste0("Opened on the machine running MitoPilot: ", pdf_path),
+                 type = "message", duration = 5)
+      } else {
+        mp_toast(
+          paste0("This session cannot open a PDF viewer. The coverage plot is at: ",
+                 pdf_path),
+          type = "warning", duration = 10
         )
-      })
+      }
     })
 
     # Copy as fasta ----
@@ -801,17 +880,19 @@ assembly_coverage_details_server <- function(id, rv) {
           style = "display: flex; gap: 8px; margin-top: 10px;",
           actionButton(ns("trim_consensus"), "Trim to consensus",
                        icon = icon("scissors"),
-                       class = "btn-primary",
+                       class = "btn-default",
                        title = paste("Keep only the longest region where all selected paths",
-                                     "agree; discards the conflicting ends. Asks to confirm.")),
+                                     "agree; discards the conflicting ends, saves a trimmed",
+                                     "Path 0 and locks the sample. Asks to confirm.")),
           if (n_blocks > 0) {
             actionButton(ns("build_resolved"),
                          "Build resolved assembly",
                          icon = icon("wand-magic-sparkles"),
                          class = "btn-primary",
                          title = paste("Combine the per-block resolution choices and the base",
-                                       "path into a single consensus (Path 0). Blocks left unset",
-                                       "are N-masked. Confirms topology first."))
+                                       "path into a single consensus (Path 0), and lock the",
+                                       "sample. Blocks left unset are N-masked. Confirms",
+                                       "topology first."))
           }
         )
       ) |> tagList()
@@ -1283,12 +1364,9 @@ assembly_coverage_details_server <- function(id, rv) {
       n_set <- sum(vapply(made, function(d) !is.null(d), logical(1)))
 
       div(
-        style = paste(
-          "margin-top: 14px; padding: 10px; border: 1px solid #cdd;",
-          "border-radius: 4px; background: #fbfcfd;"
-        ),
+        class = "mp-panel-neutral",
         tags$b("Resolve conflicts into a single assembly (Path 0)"),
-        div(style = "font-size: 11px; color: #777; margin: 2px 0 8px 0;",
+        div(class = "mp-coverage-caption", style = "margin: 2px 0 8px 0;",
             "Set how to resolve the current block, navigate to others, then build. ",
             "Blocks left unset are N-masked."),
         radioButtons(
@@ -1307,10 +1385,10 @@ assembly_coverage_details_server <- function(id, rv) {
                     choices = labs,
                     selected = rv$base_label %||% labs[1],
                     width = "320px"),
-        div(style = "font-size: 11px; color: #777; margin: -4px 0 8px 0;",
+        div(class = "mp-coverage-caption", style = "margin: -4px 0 8px 0;",
             paste("Provides the sequence for the non-conflicting (agreed) regions.",
                   "Conflict blocks you don't resolve above are filled with N.")),
-        div(style = "font-size: 11px; color: #777; margin-bottom: 8px;",
+        div(class = "mp-coverage-caption", style = "margin-bottom: 8px;",
             sprintf("%d of %d conflict block(s) resolved; the rest will be N-masked.",
                     n_set, nrow(rv$alignment$conflicts)))
       )
@@ -1391,12 +1469,13 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$consensus_finalize <- finalize
       rv$consensus_blast_choices <- cand
       showModal(modalDialog(
-        title = "Multiple BLAST hits among paths",
+        title = mp_modal_title("Multiple BLAST hits among paths"),
         radioButtons(ns("consensus_blast_choice"),
                      "Choose a BLAST hit to assign to the consensus assembly:",
                      choiceNames = labels, choiceValues = as.character(seq_len(nrow(cand)))),
-        footer = tagList(modalButton("Cancel"),
-                         actionButton(ns("consensus_blast_confirm"), "Assign hit")),
+        footer = mp_footer(
+          primary = actionButton(ns("consensus_blast_confirm"), "Assign hit")
+        ),
         easyClose = FALSE
       ))
     }
@@ -1432,7 +1511,7 @@ assembly_coverage_details_server <- function(id, rv) {
         dplyr::pull(line)
       rv$consensus_topology_finalize <- finalize
       showModal(modalDialog(
-        title = "Confirm consensus topology",
+        title = mp_modal_title("Confirm consensus topology"),
         div(
           style = "font-size: 0.9em; color: #555; margin-bottom: 8px;",
           "Source path topologies:",
@@ -1441,8 +1520,9 @@ assembly_coverage_details_server <- function(id, rv) {
         radioButtons(ns("consensus_topology_choice"),
                      "Topology to assign to the consensus assembly:",
                      choices = c("linear", "circular"), selected = inherited),
-        footer = tagList(modalButton("Cancel"),
-                         actionButton(ns("consensus_topology_confirm"), "Confirm topology")),
+        footer = mp_footer(
+          primary = actionButton(ns("consensus_topology_confirm"), "Confirm topology")
+        ),
         easyClose = FALSE
       ))
     }
@@ -1511,9 +1591,10 @@ assembly_coverage_details_server <- function(id, rv) {
       store_scaffold_junctions(session$userData$con, ID, gap_intervals)
       # Summary now describes the consensus, not the scaffolds it replaced.
       summ <- refresh_assemble_summary(session$userData$con, ID)
+      # One active assembly now, whatever the scaffolds before it were called.
       update <- data.frame(
         ID = ID, paths = -abs(rv$updating$paths), assemble_lock = 1,
-        topology = topology,
+        assemble_switch = 2L, topology = topology,
         length = summ$length, scaffolds = summ$scaffolds,
         assemble_notes = compose_edit_notes(note)
       )
@@ -1525,6 +1606,8 @@ assembly_coverage_details_server <- function(id, rv) {
       sync_consensus_annotate(ID, nchar(seq_str), topology)
       rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
       trigger("coverage_modal")
+      mp_toast("Consensus saved as Path 0. The sample is now locked.",
+               type = "message")
     }
 
     # Multi-scaffold join editor (single-path fragmented assemblies) ----
@@ -1560,18 +1643,18 @@ assembly_coverage_details_server <- function(id, rv) {
       if (is.null(rows) || nrow(rows) <= 1) return(invisible(FALSE))
       ref_seq <- join_reference_seq(accession)
       if (is.na(ref_seq)) {
-        if (notify) shinyWidgets::sendSweetAlert(
+        if (notify) mp_alert(
           title = "No reference sequence",
-          text = "The chosen reference has no cached sequence. Run BLAST/ref-fetch first.",
+          text = "The chosen reference has no cached sequence. Run BLAST first.",
           type = "warning")
         return(invisible(FALSE))
       }
       mappings <- load_scaffold_mappings(session$userData$con, rv$updating$ID, accession)
       if (is.null(mappings)) {
-        if (notify) shinyWidgets::sendSweetAlert(
+        if (notify) mp_alert(
           title = "No precomputed mapping",
-          text = paste("No scaffold->reference mapping is cached for this reference.",
-                       "Re-run the assembly workflow (WF1) to compute it."),
+          text = paste("No scaffold-to-reference mapping is cached for this reference.",
+                       "Run Assembly again for this sample to compute it."),
           type = "warning")
         return(invisible(FALSE))
       }
@@ -1613,42 +1696,86 @@ assembly_coverage_details_server <- function(id, rv) {
       accs <- unique(rows$blast_accession[!is.na(rows$blast_accession) & nzchar(rows$blast_accession)])
       default_ref <- choose_reference(rows)
       disagree <- scaffold_hits_disagree(rows)
+      # A disabled input shows no tooltip of its own, so the reason sits on the
+      # container the user hovers (T01, T02).
+      lock_title <- if (locked()) MP_LOCK_DEF("assemble")
+      off <- function(x) if (locked()) shinyjs::disabled(x) else x
       div(
-        style = paste("margin: 8px 0; padding: 10px; border: 1px solid #b9c6d6;",
-                      "border-radius: 4px; background: #f4f8fc; font-size: 0.9em;"),
+        class = "mp-panel-info",
         tags$b("Join scaffolds into one assembly"),
-        div(style = "margin-top: 4px; color: #555;",
+        div(class = "mp-coverage-caption",
             paste("This path is fragmented into multiple scaffolds. Reference-guided",
                   "layout orders and orients them; you can override order/orientation",
                   "below, then build the joined Path 0.")),
         if (disagree) div(
-          style = paste("margin-top: 8px; padding: 8px; border: 1px solid #d9534f;",
-                        "border-radius: 4px; background: #fdf3f2; color: #a0241c;"),
+          class = "mp-panel-danger",
           tags$b("Warning: scaffolds map to different references."),
           div(style = "margin-top: 4px;",
               paste("These scaffolds carry different BLAST hits, so joining them may",
                     "produce poor overlaps and an unreliable assembly. Review the",
                     "mapping below before joining.")),
-          checkboxInput(ns("join_override_diff"),
-                        "I understand the risk; allow joining anyway", value = FALSE)
+          off(checkboxInput(ns("join_override_diff"),
+                            "I understand the risk; allow joining anyway",
+                            value = FALSE))
         ),
         div(style = "display: flex; gap: 12px; align-items: flex-end; margin-top: 8px; flex-wrap: wrap;",
-            selectInput(ns("join_reference"), "Reference",
-                        choices = accs, selected = default_ref, width = "200px"),
+            title = lock_title,
+            off(selectInput(ns("join_reference"), "Reference",
+                            choices = accs, selected = default_ref,
+                            width = "200px")),
             div(style = "padding-bottom: 6px;",
-                checkboxInput(ns("join_circular"), "Circular", value = FALSE)),
+                off(checkboxInput(ns("join_circular"), "Circular",
+                                  value = FALSE))),
             actionButton(ns("join_autolayout"), "Re-map to reference",
-                         icon = icon("wand-magic-sparkles")) |>
-              (\(b) if (length(accs) == 0) shinyjs::disabled(b) else b)()
+                         icon = icon("wand-magic-sparkles"),
+                         class = "btn-default",
+                         title = paste("Re-run the reference-guided layout for the",
+                                       "selected reference, discarding manual edits.")) |>
+              (\(b) if (length(accs) == 0 || locked()) shinyjs::disabled(b) else b)()
         ),
         uiOutput(ns("join_layout_ui")),
         uiOutput(ns("join_map_div")),
-        div(style = "margin-top: 8px;",
+        div(
+          style = "margin-top: 8px;",
+          # A disabled button fires no pointer events, so the reason for the
+          # disabled state rides on the wrapper (T01).
+          tags$span(
+            title = if (locked()) {
+              MP_LOCK_DEF("assemble")
+            } else if (disagree) {
+              "Tick 'I understand the risk' to join scaffolds that map to different references."
+            },
             actionButton(ns("join_build"), "Build joined assembly (Path 0)",
-                         icon = icon("compress"), class = "btn-primary")),
+                         icon = icon("compress"), class = "btn-primary",
+                         title = paste("Build Path 0 now from the layout above and lock",
+                                       "the sample.")) |>
+              # Rendered disabled, not left to the observer below: a toggleState
+              # in the same flush lands before this button exists. isolate()
+              # keeps the checkbox from re-rendering the whole panel.
+              (\(b) if (locked() ||
+                        (disagree && !isTRUE(isolate(input$join_override_diff)))) {
+                 shinyjs::disabled(b)
+               } else {
+                 b
+               })()
+          ),
+          div(class = "mp-coverage-caption",
+              paste("Builds Path 0 now from the layout above, replacing any existing",
+                    "Path 0. The original paths are kept, and the sample is locked."))
+        ),
         uiOutput(ns("join_redo_ui"))
       )
     })
+
+    # One enabled condition, not two observers: the lock (T02) and the
+    # disagreeing-reference risk gate (T04) both govern this button, and two
+    # racing toggleState calls would let the later one win.
+    join_build_ok <- reactive({
+      rows <- join_scaffold_rows()
+      !locked() && !is.null(rows) && nrow(rows) > 1 &&
+        (!scaffold_hits_disagree(rows) || isTRUE(input$join_override_diff))
+    })
+    observe(shinyjs::toggleState("join_build", condition = join_build_ok()))
 
     # Hand the join back to the pipeline instead of building it here. Lives beside
     # the manual build because this is where a fragmented sample is actually being
@@ -1658,31 +1785,42 @@ assembly_coverage_details_server <- function(id, rv) {
       rv$join_redo_tick
       st <- redo_join_status(session$userData$con, session$userData$dir_out,
                              rv$updating$ID)
-      note <- function(txt, colour = "#888") {
-        div(style = paste0("font-size: 11px; color: ", colour, "; margin-top: 4px;"),
-            txt)
-      }
+      # An explanation of why a control is off is information, not an error, so
+      # it reads muted rather than red (T12, T21).
+      note <- function(txt) div(class = "mp-coverage-caption", txt)
       if (st$state == "queued") {
         return(div(
           style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
           actionButton(ns("join_redo"), "Cancel queued pipeline join",
-                       icon = icon("xmark")),
+                       icon = icon("xmark"), class = "btn-default",
+                       title = "Take this sample out of the queued pipeline join."),
           note(paste("Queued. The pipeline re-runs this sample's join from its",
-                     "published assembly output on the next update."), "#0056b3")
+                     "published assembly output on the next update."))
         ))
       }
       btn <- actionButton(ns("join_redo"), "Redo join in pipeline",
-                          icon = icon("rotate"))
+                          icon = icon("rotate"), class = "btn-default",
+                          title = paste("Queue the join so the pipeline rebuilds it on",
+                                        "the next update."))
+      # redo_join_status() has no lock branch, so a locked sample would report
+      # "ready" and queue a join the pipeline can never run.
+      ready <- st$state == "ready" && !locked()
       div(
         style = "margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;",
-        if (st$state == "ready") btn else shinyjs::disabled(btn),
-        if (st$state == "ready") {
-          note(paste("Queues the join. It runs on the next pipeline update, using",
-                     "the reference and options on record rather than the layout",
-                     "above."))
-        } else {
-          note(st$message, "#a0241c")
-        }
+        title = if (locked()) MP_LOCK_DEF("assemble"),
+        if (ready) btn else shinyjs::disabled(btn),
+        note(
+          if (ready) {
+            paste("Queues the join. It runs on the next pipeline update, using",
+                  "the reference and options on record rather than the layout",
+                  "above.")
+          } else if (locked()) {
+            paste("This sample is locked, so the pipeline will not run a join",
+                  "for it. Unlock it first.")
+          } else {
+            st$message
+          }
+        )
       )
     })
 
@@ -1797,7 +1935,7 @@ assembly_coverage_details_server <- function(id, rv) {
             div(style = "flex: 1 1 auto; min-width: 0; overflow-x: auto;",
                 plotOutput(ns("join_zoom_plot"), width = paste0(plot_w, "px"),
                            height = "160px"))),
-        numericInput(ns("join_zoom_window"), "window size (bp)",
+        numericInput(ns("join_zoom_window"), "Window size (bp)",
                      value = isolate(input$join_zoom_window) %||% 60L,
                      min = 20L, max = ZOOM_WINDOW_MAX_BP, step = 20L, width = "140px")
       )
@@ -1837,24 +1975,28 @@ assembly_coverage_details_server <- function(id, rv) {
       inc_seed <- if (!is.null(lay) && "include" %in% names(lay)) lay$include else rep(TRUE, length(scaffolds))
       qcov <- if (!is.null(lay) && "qcov" %in% names(lay)) lay$qcov else rep(NA_real_, length(scaffolds))
       reason_seed <- if (!is.null(lay) && "exclude_reason" %in% names(lay)) lay$exclude_reason else rep(NA_character_, length(scaffolds))
+      off <- function(x) if (locked()) shinyjs::disabled(x) else x
       tagList(
         div(style = "margin-top: 8px; font-weight: bold; color: #555;",
             "Scaffold layout (only included scaffolds go into Path 0)"),
-        lapply(seq_along(scaffolds), function(i) {
-          s <- scaffolds[i]
-          qc <- if (!is.na(qcov[i])) sprintf(" (%.0f%% mapped)", 100 * qcov[i]) else ""
-          why <- if (!isTRUE(inc_seed[i]) && !is.na(reason_seed[i]))
-            span(style = "font-size: 11px; color: #d9534f;", reason_seed[i]) else NULL
-          div(style = "display: flex; gap: 12px; align-items: center; margin-top: 4px;",
-              checkboxInput(ns(paste0("join_inc_", s)), NULL, value = isTRUE(inc_seed[i]),
-                            width = "30px"),
-              span(style = "width: 150px;", sprintf("Scaffold %s%s", s, qc)),
-              numericInput(ns(paste0("join_order_", s)), NULL,
-                           value = order_seed[i], min = 1, width = "80px"),
-              checkboxInput(ns(paste0("join_rc_", s)), "reverse-comp",
-                            value = isTRUE(rc_seed[i])),
-              why)
-        })
+        div(
+          title = if (locked()) MP_LOCK_DEF("assemble"),
+          lapply(seq_along(scaffolds), function(i) {
+            s <- scaffolds[i]
+            qc <- if (!is.na(qcov[i])) sprintf(" (%.0f%% mapped)", 100 * qcov[i]) else ""
+            why <- if (!isTRUE(inc_seed[i]) && !is.na(reason_seed[i]))
+              span(class = "mp-coverage-caption", reason_seed[i]) else NULL
+            div(style = "display: flex; gap: 12px; align-items: center; margin-top: 4px;",
+                off(checkboxInput(ns(paste0("join_inc_", s)), NULL,
+                                  value = isTRUE(inc_seed[i]), width = "30px")),
+                span(style = "width: 150px;", sprintf("Scaffold %s%s", s, qc)),
+                off(numericInput(ns(paste0("join_order_", s)), NULL,
+                                 value = order_seed[i], min = 1, width = "80px")),
+                off(checkboxInput(ns(paste0("join_rc_", s)), "reverse-comp",
+                                  value = isTRUE(rc_seed[i]))),
+                why)
+          })
+        )
       )
     })
 
@@ -1894,10 +2036,10 @@ assembly_coverage_details_server <- function(id, rv) {
       req(!is.null(rows), nrow(rows) > 1)
       # Conflicting BLAST hits: block the join until the user explicitly overrides.
       if (scaffold_hits_disagree(rows) && !isTRUE(input$join_override_diff)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Scaffolds map to different references",
           text = paste("Joining scaffolds with different BLAST hits is risky.",
-                       "Check 'allow joining anyway' to override."),
+                       "Tick 'I understand the risk' to join them anyway."),
           type = "warning")
         req(FALSE)
       }
@@ -1915,7 +2057,7 @@ assembly_coverage_details_server <- function(id, rv) {
         if (is.null(v)) TRUE else isTRUE(v)
       }, logical(1))
       if (!any(inc)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "No scaffolds selected",
           text = "Include at least one scaffold to build the joined assembly.",
           type = "warning")
@@ -1924,9 +2066,9 @@ assembly_coverage_details_server <- function(id, rv) {
       ord[is.na(ord)] <- seq_along(ord)[is.na(ord)]
       o <- order(ord)
       if (anyDuplicated(ord)) {
-        shiny::showNotification(
+        mp_toast(
           "Duplicate scaffold order values; ties broken by the on-screen order.",
-          type = "warning", duration = 6)
+          type = "warning")
       }
       layout <- data.frame(
         scaffold = scaffolds[o], order = seq_along(o), rc = rc[o],
@@ -1999,8 +2141,7 @@ assembly_coverage_details_server <- function(id, rv) {
           # submitted, so the sample stays fragmented instead.
           unsized <- unsized_gaps(res$gap_intervals)
           if (nrow(unsized) > 0) {
-            shinyWidgets::sendSweetAlert(
-              session = session,
+            mp_alert(
               title = "Cannot join: gap length unknown",
               text = unsized_join_note(unsized),
               type = "error"
@@ -2032,17 +2173,16 @@ assembly_coverage_details_server <- function(id, rv) {
     })
 
     observeEvent(input$delete_consensus, {
-      shinyWidgets::ask_confirmation(
-        inputId = ns("delete_consensus_confirm"),
-        title = "Delete consensus (Path 0)?",
+      mp_confirm(
+        id = ns("delete_consensus_confirm"),
+        title = "Delete consensus (Path 0)",
         text = paste(
           "This deletes the edited consensus sequence (Path 0), brings back all the",
           "original assembly paths (un-ignored), unlocks the sample, and removes the",
           "edit note. The original paths themselves are not changed."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Delete consensus"),
-        btn_colors = c("#6c757d", "#d9534f")
+        action_label = "Delete consensus",
+        danger = TRUE
       )
     })
 
@@ -2087,12 +2227,16 @@ assembly_coverage_details_server <- function(id, rv) {
                            unmatched = "ignore")
       rv$updating <- rv$data |> dplyr::filter(ID == !!ID)
       trigger("coverage_modal")
+      mp_toast(paste0("Consensus deleted. The sample is unlocked and ",
+                      mp_n(n_remaining, "assembly path"), " restored."),
+               type = "message")
     })
 
     # Build resolved assembly from per-block decisions ----
     observeEvent(input$build_resolved, {
-      if (rv$updating$assemble_lock == 1) {
-        shinyWidgets::sendSweetAlert(title = "Assembly Locked!", type = "warning")
+      if (locked()) {
+        mp_alert(title = "This sample is locked", text = MP_LOCK_DEF("assemble"),
+                 type = "warning")
         req(F)
       }
       aln_mat <- rv$alignment$aln_mat
@@ -2142,11 +2286,11 @@ assembly_coverage_details_server <- function(id, rv) {
           " WARNING: contains ambiguous bases (IUPAC/N) - may cause problems in ",
           "annotation; MITOS does not handle ambiguous base calls well."
         )
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Ambiguous bases added",
           text = paste(
             "This resolved assembly contains ambiguous bases (IUPAC codes or Ns).",
-            "These can cause problems during annotation - MITOS in particular does",
+            "These can cause problems during annotation - MITOS2 in particular does",
             "not handle ambiguous base calls well. A warning has been added to the",
             "assembly notes."
           ),
@@ -2167,25 +2311,22 @@ assembly_coverage_details_server <- function(id, rv) {
     # Trim Consensus ----
     # Ask for confirmation first - "Trim Consensus" is destructive/ambiguous.
     observeEvent(input$trim_consensus, {
-      if (rv$updating$assemble_lock == 1) {
-        shinyWidgets::sendSweetAlert(
-          title = "Assembly Locked!",
-          type = "warning"
-        )
+      if (locked()) {
+        mp_alert(title = "This sample is locked", text = MP_LOCK_DEF("assemble"),
+                 type = "warning")
         req(F)
       }
-      shinyWidgets::ask_confirmation(
-        inputId = ns("trim_confirm"),
-        title = "Trim to consensus?",
+      mp_confirm(
+        id = ns("trim_confirm"),
+        title = "Trim to consensus",
         text = paste(
           "This keeps ONLY the single longest region where all selected paths agree and",
           "discards everything outside it (including the conflicting ends), saving the",
           "result as a new trimmed Path 0. The original paths are kept but ignored and the",
-          "assembly is locked. Best used only when the disagreements are at the edges."
+          "sample is locked. Best used only when the disagreements are at the edges."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Trim to consensus"),
-        btn_colors = c("#6c757d", "#E55330")
+        action_label = "Trim to consensus",
+        danger = TRUE
       )
     })
 
@@ -2305,6 +2446,8 @@ assembly_coverage_details_server <- function(id, rv) {
         dplyr::filter(ID == !!rv$updating$ID)
 
       trigger("coverage_modal")
+      mp_toast("Trimmed consensus saved as Path 0. The sample is now locked.",
+               type = "message")
       } # end finalize_trim
 
       cand_paths <- rv$focal_assembly$path[sel]

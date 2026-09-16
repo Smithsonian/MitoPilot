@@ -212,11 +212,10 @@ circ_contig_choices <- function(ov_all) {
 #' @noRd
 circ_coverage_label <- function(n_evidence, n_contigs) {
   if (length(n_contigs) != 1L || is.na(n_contigs) || n_contigs < n_evidence) {
-    return(paste0("Evidence for ", n_evidence,
-                  ngettext(n_evidence, " contig.", " contigs.")))
+    return(paste0("Evidence for ", mp_n(n_evidence, "contig"), "."))
   }
   paste0(
-    "Evidence for ", n_evidence, " of ", n_contigs, " contigs.",
+    "Evidence for ", n_evidence, " of ", mp_n(n_contigs, "contig"), ".",
     if (n_evidence < n_contigs) {
       " The rest had no end overlap to compare, so they are not listed."
     } else {
@@ -351,14 +350,15 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
     dplyr::arrange(contig)
 
   if (nrow(ov_all) == 0L) {
-    shinyWidgets::show_alert(
+    mp_alert(
       title = "No circularization evidence",
       text = paste0(
         "No end overlap was found for any contig of this sample, so there is ",
         "nothing to compare. Samples with the step switched off have no ",
         "evidence either."
       ),
-      type = "info"
+      type = "info",
+      session = session
     )
     return(invisible(NULL))
   }
@@ -377,7 +377,7 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
   circularize_load_evidence(rv, session = session)
 
   showModal(modalDialog(
-    title = stringr::str_glue("Circularization: {id}"),
+    title = mp_modal_title(stringr::str_glue("Circularization: {id}")),
     size = "l",
     easyClose = TRUE,
     opts_help(
@@ -393,7 +393,7 @@ circularize_details_modal <- function(rv, id, session = getDefaultReactiveDomain
     ),
     circ_caption(circ_coverage_label(nrow(ov_all), n_contigs), top = 0),
     uiOutput(ns("circ_body")),
-    footer = modalButton("Close")
+    footer = mp_footer(dismiss = "Close")
   ))
 
   invisible(NULL)

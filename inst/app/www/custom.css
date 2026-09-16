@@ -1,20 +1,165 @@
+/* ------------------------------------------------------------------ */
+/* Design tokens. One palette, one type scale, one geometry scale.     */
+/* Every foreground/background pair below clears WCAG 4.5:1 at 12-14px */
+/* against white, the table stripe and the selection tint.             */
+/* ------------------------------------------------------------------ */
+:root {
+  /* brand / action */
+  --mp-primary:        #337ab7;  /* THE interactive blue (BS3 primary) */
+  --mp-primary-hover:  #286090;
+  --mp-primary-soft:   #eaf1f8;  /* selection wash, info pills         */
+  --mp-action:         #0b5ed7;  /* toolbar button text, 5.8:1         */
+  --mp-link:           #1c4f7c;  /* in-table links, 7.5:1 on any row   */
+
+  /* status */
+  --mp-success:        #2d6a4f;
+  --mp-success-soft:   #d4edda;
+  --mp-warning:        #8a5a00;
+  --mp-warning-soft:   #fde8d0;
+  --mp-warning-text:   #4a3000;  /* text on a filled amber button      */
+  --mp-danger:         #b02a37;
+  --mp-danger-soft:    #f8d7da;
+  --mp-neutral:        #495057;
+  --mp-neutral-soft:   #e9ecef;
+
+  /* neutrals */
+  --mp-text:           #333333;
+  --mp-text-muted:     #6a6a6a;
+  --mp-border:         #cccccc;
+  --mp-surface:        #ffffff;
+  --mp-surface-alt:    #f5f5f5;  /* table stripe, chips, code surface  */
+  --mp-surface-dark:   #2d2d2d;  /* command/log surface                */
+  --mp-on-dark:        #dcdcdc;
+
+  /* type */
+  --mp-font-mono: Menlo, Monaco, Consolas, "Courier New", monospace;
+  --mp-fs-meta:   12px;
+  --mp-fs-body:   14px;
+  --mp-fs-head:   16px;
+  --mp-fs-title:  18px;
+
+  /* geometry */
+  --mp-radius:      4px;
+  --mp-radius-pill: 12px;
+  --mp-control-h:   34px;
+  --mp-chip-h:      24px;
+  --mp-space-1: 4px;
+  --mp-space-2: 8px;
+  --mp-space-3: 12px;
+  --mp-space-4: 16px;
+  --mp-space-5: 24px;
+
+  /* Feature types, shared by the annotation table badges (literal copies
+     today) and the sequence viewer (read at draw time). */
+  --mp-type-pcg:  #60BD68;
+  --mp-type-trna: #F17CB0;
+  --mp-type-rrna: #5DA5DA;
+  --mp-type-ctrl: #FAA34A;
+  --mp-type-orf:  #4D4D4D;
+}
+
+/* One visible focus ring, everywhere. Nothing in this app sets
+   outline: none. The second block only exists to out-specify Bootstrap's
+   .btn:focus and shinyWidgets' .bttn-no-outline:focus. */
+:focus-visible {
+  outline: 2px solid var(--mp-primary);
+  outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.bttn:focus-visible,
+.bttn-no-outline:focus-visible,
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--mp-primary);
+  outline-offset: 2px;
+}
+
+/* Toolbar buttons: shinyWidgets material-flat renders a 3.5:1 blue. */
+.bttn-material-flat.bttn-default {
+  color: var(--mp-action);
+}
+
+/* In-table links stay readable on white, on the stripe and on a
+   selected row. */
+.rt-td a {
+  color: var(--mp-link);
+}
+
+/* The shared inline help paragraph: 12.6px at 5.4:1, not 11.9px at 4.5:1. */
+p.mp-help-text {
+  font-size: 0.9em;
+  color: var(--mp-text-muted);
+}
+
+/* The grey "?" that opens a help popover. */
+.mp-help-icon {
+  color: var(--mp-text-muted);
+  margin-left: var(--mp-space-1);
+  background: none;
+  border: none;
+  padding: 0;
+  line-height: 1;
+}
+.mp-help-icon:hover,
+.mp-help-icon:focus {
+  color: var(--mp-primary);
+}
+
+/* Flag toggle buttons carry the tone of the pill they set. */
+.mp-btn-success, .mp-btn-success:hover, .mp-btn-success:focus {
+  background-color: var(--mp-success-soft);
+  border-color: var(--mp-success);
+  color: var(--mp-success);
+}
+.mp-btn-warning, .mp-btn-warning:hover, .mp-btn-warning:focus {
+  background-color: var(--mp-warning-soft);
+  border-color: var(--mp-warning);
+  color: var(--mp-warning);
+}
+
+/* Filled amber is unreadable with white text. */
+.btn-warning,
+.btn-warning:hover,
+.btn-warning:focus,
+.btn-warning:active {
+  color: var(--mp-warning-text);
+}
+
 .grow:hover {
   transition: all .1s ease-in-out;
   transform: scale(1.15);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .grow:hover {
+    transition: none;
+    transform: none;
+  }
+
+  .gears::before,
+  .gears::after {
+    animation: none;
+  }
+}
+
 .code-block {
-  background-color: #2d2d2d; /* Dark gray background */
-  color: #dcdcdc; /* Light text color */
-  font-family: "Courier New", Courier, monospace; /* Monospaced font */
-  font-size: 12px; /* Adjust font size */
-  line-height: 1.25; /* Better line spacing */
-  padding: 1em; /* Space around the code */
-  border-radius: 4px; /* Rounded corners */
-  border: 1px solid #444; /* Subtle border for structure */
+  background-color: var(--mp-surface-dark);
+  color: var(--mp-on-dark);
+  font-family: var(--mp-font-mono);
+  font-size: var(--mp-fs-meta);
+  line-height: 1.25;
+  padding: var(--mp-space-4);
+  border-radius: var(--mp-radius);
+  border: 1px solid #444;
   overflow-y: auto;
   max-height: 300px;
-  white-space: pre-wrap; /* Preserve formatting and allow wrapping */
+  white-space: pre-wrap; /* preserve formatting and allow wrapping */
 }
 
 .gears {
@@ -32,7 +177,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background-color: #2d2d2d;
+  background-color: var(--mp-surface-dark);
   background-image: radial-gradient(circle 8px at 18px 18px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 18px 0px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 0px 18px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 36px 18px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 18px 36px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 30px 5px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 30px 5px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 30px 30px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 5px 30px, var(--base-color) 100%, transparent 0), radial-gradient(circle 4px at 5px 5px, var(--base-color) 100%, transparent 0);
   background-repeat: no-repeat;
   box-sizing: border-box;
@@ -46,7 +191,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background-color: #2d2d2d;
+  background-color: var(--mp-surface-dark);
   background-image: radial-gradient(circle 5px at 12px 12px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 12px 0px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 0px 12px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 24px 12px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 12px 24px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 20px 3px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 20px 3px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 20px 20px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 3px 20px, var(--base-color) 100%, transparent 0), radial-gradient(circle 2.5px at 3px 3px, var(--base-color) 100%, transparent 0);
   background-repeat: no-repeat;
   box-sizing: border-box;
@@ -70,32 +215,42 @@ details {
   margin-bottom: 1em;
 }
 
+/* A disclosure is a section header, not a button. Filled blue is reserved
+   for primary actions. Open/closed is carried by the triangle, not colour. */
 details summary {
-    display: inline-block; /* Allows adding padding and margins like a button */
-    background-color: #007bff; /* Button-like background color */
-    color: white; /* Text color */
-    border: none; /* Remove default border */
-    border-radius: 4px; /* Rounded corners */
-    padding: 4px 8px; /* Add padding for size */
-    font-size: 14px; /* Adjust font size */
-    font-weight: bold; /* Make text bold */
-    text-align: center; /* Center the text */
-    cursor: pointer; /* Show pointer cursor on hover */
-    user-select: none; /* Prevent text selection */
-    outline: none; /* Remove focus outline */
-    margin: 8px 0; /* Add space below the button */
+  display: block;
+  list-style: none;
+  background: transparent;
+  color: var(--mp-text);
+  font-size: var(--mp-fs-head);
+  font-weight: 600;
+  padding: 6px 0;
+  border: none;
+  border-bottom: 1px solid var(--mp-border);
+  border-radius: 0;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  margin: var(--mp-space-2) 0;
+}
+
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+details summary::before {
+  content: "\25B8";
+  display: inline-block;
+  width: 1em;
+  color: var(--mp-text-muted);
+}
+
+details[open] > summary::before {
+  content: "\25BE";
 }
 
 details summary:hover {
-    background-color: #0056b3; /* Darker shade for hover effect */
-}
-
-details summary:active {
-    background-color: #004494; /* Even darker shade for active state */
-}
-
-details[open] summary {
-    background-color: #004494; /* Different color for when the details are open */
+  color: var(--mp-primary-hover);
 }
 
 .icon-circle {
@@ -103,11 +258,11 @@ details[open] summary {
   display: inline-flex; /* Aligns the icon */
   justify-content: center; /* Centers the icon horizontally */
   align-items: center; /* Centers the icon vertically */
-  width: 20px; /* Set the width of the circle */
-  height: 20px; /* Set the height of the circle */
-  border-radius: 50%; /* Makes it circular */
-  background-color: #f0f0f0; /* Background color of the circle */
-  border: 1px solid #ccc;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--mp-surface-alt);
+  border: 1px solid var(--mp-border);
 }
 
 .icon-circle i { /* Adjust for the icon inside */
@@ -117,56 +272,645 @@ details[open] summary {
   transform: translate(-50%, -50%);
 }
 
+/* ------------------------------------------------------------------ */
+/* Status pill. One component, four meanings: grey = not set / no,     */
+/* green = good, amber = needs attention, red = failed or missing.     */
+/* Colour encodes the judgement, never the raw boolean.                */
+/* ------------------------------------------------------------------ */
+.mp-pill {
+  display: inline-block;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: var(--mp-fs-meta);
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.mp-pill-success {
+  background-color: var(--mp-success-soft);
+  color: var(--mp-success);
+}
+
+.mp-pill-warning {
+  background-color: var(--mp-warning-soft);
+  color: var(--mp-warning);
+}
+
+.mp-pill-danger {
+  background-color: var(--mp-danger-soft);
+  color: var(--mp-danger);
+}
+
+.mp-pill-neutral {
+  background-color: var(--mp-neutral-soft);
+  color: var(--mp-neutral);
+}
+
+.mp-pill-info {
+  background-color: var(--mp-primary-soft);
+  color: var(--mp-link);
+}
+
+/* Same four meanings for a bare status glyph, so a state icon never needs
+   an inline hex. Append to the icon class string. */
+.mp-fg-success { color: var(--mp-success); }
+.mp-fg-warning { color: var(--mp-warning); }
+.mp-fg-danger  { color: var(--mp-danger); }
+.mp-fg-neutral { color: var(--mp-text-muted); }
+.mp-fg-info    { color: var(--mp-link); }
+
+/* "Reference set manually" marker beside an accession. */
+.mp-override {
+  color: var(--mp-warning);
+  font-weight: bold;
+  cursor: help;
+}
+
+/* The one in-table action pill. 24px is the hit-target floor. */
 .icon-bttn-text {
   display: inline-flex;
-  padding: 0;
   justify-content: center;
-  align-items: center; /* Centers the icon vertically */
-  height: 18px; /* Set the height of the circle */
-  width: 100%;
-  border-radius: 8px; /* Makes it circular */
-  background-color: #f0f0f0; /* Background color of the circle */
-  border: 1px solid #ccc; /* Optional border around the circle */
+  align-items: center;
+  height: var(--mp-chip-h);
+  width: auto;
+  max-width: 100%;
+  padding: 0 10px;
+  border-radius: var(--mp-radius-pill);
+  background-color: var(--mp-surface-alt);
+  border: 1px solid var(--mp-border);
+  color: var(--mp-text);
+  font-size: var(--mp-fs-meta);
+  line-height: 1;
 }
 
-/* Two-row modal footer (annotate details). Bootstrap gives adjacent footer
-   buttons a left margin, which double-spaces them against the flex gap and
-   also indents the first button of each row group. */
-.annotate-footer-rows .btn + .btn {
-  margin-left: 0;
+.icon-bttn-text:hover {
+  background-color: var(--mp-primary-soft);
+  border-color: var(--mp-primary);
 }
 
-.modal-lg {
-  width: auto !important;
-  min-width: 800px !important;
-  max-width: 70% !important;
+/* Two-state in-table toggle (Ignore, Resolved). */
+.mp-toggle[aria-pressed="true"] {
+  background-color: var(--mp-primary-soft);
+  border-color: var(--mp-primary);
+  color: var(--mp-primary-hover);
 }
 
-.modal-dialog {
-  width: auto !important;
-  min-width: 600px;
-  max-width: 50%;
+/* ------------------------------------------------------------------ */
+/* Nothing important is truncated or hidden off-screen.                */
+/* ------------------------------------------------------------------ */
+
+/* Truncated cell text: a visible cue that there is more, reachable
+   without a mouse. */
+.mp-abbr {
+  text-decoration: none;
+  cursor: help;
 }
 
-.rt-tr-striped:not(.rt-tr-selected) {
-  background-color: #ebebeb !important;
+/* Column header carrying a tooltip. */
+.mp-th-tip {
+  text-decoration: underline dotted;
+  cursor: help;
 }
 
+/* Note columns wrap to two lines instead of ellipsising, even though the
+   table is rendered with wrap = FALSE. */
+.mp-note-cell .rt-td-inner,
+.rt-nowrap .mp-note-cell .rt-td-inner,
+.rt-nowrap .mp-note-cell .rt-text-content {
+  white-space: normal;
+  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 15px;
+}
+
+/* Sticky right-hand action group: opaque, with a left edge shadow, so no
+   cell can render underneath it. */
+.mp-actions-sticky {
+  background-color: inherit;
+  box-shadow: -4px 0 6px -4px rgba(0, 0, 0, .15);
+}
+
+/* A permanently visible horizontal scrollbar, so "there is more to the
+   right" is never invisible. */
+.mp-table-resize .rt-table {
+  scrollbar-width: thin;
+}
+
+.mp-table-resize .rt-table::-webkit-scrollbar {
+  height: 10px;
+}
+
+.mp-table-resize .rt-table::-webkit-scrollbar-thumb {
+  background-color: var(--mp-border);
+  border-radius: 5px;
+}
+
+/* A file-system path, not Bootstrap's crimson-on-pink <code>. */
+.mp-path {
+  font-family: var(--mp-font-mono);
+  font-size: var(--mp-fs-meta);
+  background-color: var(--mp-surface-alt);
+  color: var(--mp-text);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  padding: 1px 5px;
+  word-break: break-all;
+}
+
+/* A control that looks live but is not. */
+.mp-disabled {
+  color: var(--mp-text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* A disabled in-table button reads as disabled, not merely inert. */
+.reactable button[disabled],
+.reactable button[aria-disabled="true"] {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* Wider-than-Bootstrap dialogs only where there is room for them. Below
+   820px (and at 400% zoom) Bootstrap's fluid width takes over, so a dialog
+   never forces horizontal panning. */
+@media (min-width: 820px) {
+  .modal-lg {
+    width: auto !important;
+    min-width: 800px !important;
+    max-width: 70% !important;
+  }
+
+  .modal-dialog {
+    width: auto !important;
+    min-width: 600px;
+    max-width: 50%;
+  }
+}
+
+/* Form-shaped modals scroll so the footer is never below the fold on a
+   laptop. modalDialog() has no class argument, so class = "mp-modal-form"
+   lands on .modal-body itself; cap whichever element carries the class. */
+.mp-modal-form {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Annotation details: sample name, flags, and toggles stay pinned at the top
+   and the Close / Lock buttons at the bottom while the body scrolls (the
+   .modal element is the scrollport). */
+.modal-header:has(.mp-sticky-head) {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--mp-surface);
+}
+.modal-footer:has(.mp-sticky-foot) {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  background: var(--mp-surface);
+}
+
+/* Footer sample navigation: prev, picker, next on one line, left of Close. */
+.mp-nav {
+  float: left;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mp-nav select { width: 220px; }
+
+/* Outlier review: the gene navigation and the per-gene action stay pinned
+   while the alignment scrolls (the .modal element is the scrollport). */
+.mp-review-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--mp-space-2);
+  padding: var(--mp-space-2) 0;
+  margin-bottom: var(--mp-space-2);
+  background: var(--mp-surface);
+  border-bottom: 1px solid var(--mp-border);
+}
+.mp-review-bar .mp-review-gene { font-weight: 600; }
+.mp-review-bar .mp-review-resolve { margin-left: auto; }
+
+/* Launch buttons rendered through a uiOutput span lose Bootstrap's
+   sibling spacing in the footer. */
+.modal-footer > span > .btn {
+  margin-left: 5px;
+}
+
+/* SweetAlert lays its buttons out confirm-first; the app's footer order is
+   dismiss then action. */
+
+/* Toolbar and filter row: wrap instead of clipping at narrow widths. */
+.mp-toolbar {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: var(--mp-space-2);
+  row-gap: var(--mp-space-2);
+}
+
+.mp-toolbar-btn {
+  height: var(--mp-control-h);
+  border-radius: var(--mp-radius);
+  text-transform: none;
+  font-size: var(--mp-fs-body);
+}
+
+.mp-filter-row {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: flex-end;
+  gap: var(--mp-space-2);
+  row-gap: var(--mp-space-2);
+  /* The module h1 above it is screen-reader-only now; restore the breathing
+     room its box used to give before the toolbar. */
+  margin-top: var(--mp-space-3);
+  margin-bottom: var(--mp-space-2);
+}
+
+/* Column picker sits apart from the row filters, same rule in every module. */
+.mp-filter-cols {
+  margin-left: var(--mp-space-3);
+  padding-left: var(--mp-space-4, 16px);
+  border-left: 1px solid var(--mp-border);
+}
+
+/* Step switcher lives in the toolbar as a peer of the action buttons: label
+   kept for screen readers only, form margin dropped, buttons at toolbar
+   height, a divider between navigation and actions. */
+.mp-toolbar .form-group:has(> #mode) {
+  margin-bottom: 0;
+  padding-right: var(--mp-space-3);
+  border-right: 1px solid var(--mp-border);
+}
+.mp-toolbar #mode-label {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.mp-toolbar #mode-label + br { display: none; }
+.mp-toolbar #mode .btn {
+  height: var(--mp-control-h);
+  line-height: calc(var(--mp-control-h) - 2px);
+  padding: 0 12px;
+  font-size: var(--mp-fs-body);
+}
+
+/* App / project / variant orientation line above the toolbar. */
+.mp-header {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: baseline;
+  gap: var(--mp-space-2);
+  font-size: var(--mp-fs-meta);
+  color: var(--mp-text-muted);
+  padding: var(--mp-space-1) 0;
+  border-bottom: 1px solid var(--mp-border);
+  margin-bottom: var(--mp-space-2);
+}
+
+.mp-header .mp-app-name {
+  font-size: var(--mp-fs-head);
+  font-weight: 600;
+  color: var(--mp-text);
+}
+
+/* Row-grain and count line, between the filter row and the table. */
+.mp-table-status {
+  font-size: var(--mp-fs-meta);
+  line-height: 18px;
+  color: var(--mp-text-muted);
+  margin: 0 0 var(--mp-space-1) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mp-table-status b {
+  font-weight: 600;
+  color: var(--mp-text);
+}
+
+.mp-table-status .mp-sep {
+  color: var(--mp-border);
+}
+
+/* "No rows match" line, next to the counts. */
+.mp-empty-state {
+  color: var(--mp-text-muted);
+  margin: 0 0 var(--mp-space-1) 0;
+}
+
+a.mp-link {
+  color: var(--mp-link);
+  text-decoration: none;
+}
+
+a.mp-link:hover,
+a.mp-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* One stripe value for every row, sticky columns included: a second,
+   darker stripe under the sticky columns draws a meaningless seam. */
+.rt-tr-striped:not(.rt-tr-selected),
 .rt-tr-striped-sticky:not(.rt-tr-selected) {
-  background-color: #e4e4e4 !important;
+  background-color: var(--mp-surface-alt) !important;
 }
 
-/* Sample tables: auto-fit window height, plus a drag handle to resize. */
+/* Selection is a light wash plus a left edge, so a multi-select does not
+   read as a batch of failed rows. */
+.rt-tr-selected > .rt-td:first-child {
+  box-shadow: inset 3px 0 0 var(--mp-primary);
+}
+
+/* Sample tables: hug the rows, grow to the window, never past it. A short
+   table stops leaving 300px of white space above the footer controls. The
+   container is a flex column so the widget can shrink to the available height
+   and the .rt-table keeps scrolling internally (which is what keeps its header
+   sticky). */
 .mp-table-resize {
-  height: calc(100vh - 300px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 324px);
   min-height: 240px;
   resize: vertical;
   overflow: hidden;
 }
 
-/* Make the shiny output container and reactable widget fill the wrapper so
-   height: "100%" on the table resolves against the resizable box. */
 .mp-table-resize > div,
+.mp-table-resize .html-widget,
+.mp-table-resize .Reactable,
 .mp-table-resize > div > .reactable {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto !important;
+}
+
+.mp-table-resize .rt-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* A locked row's options cell is text, not a link (T01). */
+.mp-locked-cell {
+  color: var(--mp-text-muted);
+  text-decoration: none;
+  cursor: inherit;
+}
+
+/* prettyCheckbox: a disabled box stays readable, and the parameter-set Edit
+   checkbox aligns with the input beside it without a magic margin (T18). */
+.pretty input[disabled] ~ * { opacity: 1; }
+.pretty input[disabled] ~ .state label:before {
+  border-color: var(--mp-border);
+  background: var(--mp-surface-alt);
+}
+.mp-opts-checkbox { align-self: flex-end; margin-bottom: 15px; }
+
+
+/* ------------------------------------------------------------------ */
+/* Shell: orientation header, step control, module heading (T14, T22). */
+/* Only R/app_ui*.R and R/app_workdir_browser.R use these rules.       */
+/* ------------------------------------------------------------------ */
+
+/* The app/project line reuses .mp-header from the token block above;
+   these fill in the fields it carries. */
+.mp-header .mp-app-name {
+  padding-left: var(--mp-space-2);
+}
+
+.mp-header .mp-proj {
+  font-weight: 600;
+  color: var(--mp-text);
+}
+
+.mp-header .mp-badge {
+  background-color: var(--mp-surface-alt);
+  color: var(--mp-text);
+  border-radius: var(--mp-radius);
+  padding: 1px 6px;
+}
+
+/* Help sits at the far end of the line, not in the reading path. */
+.mp-header .mp-help {
+  margin-left: auto;
+  color: var(--mp-action);
+}
+
+/* Step control: the current step is filled, and weight backs the colour
+   up so it does not depend on hue alone. */
+.radio-group-buttons .radiobtn.active {
+  background-color: var(--mp-primary);
+  color: var(--mp-surface);
+  font-weight: 600;
+}
+
+.mp-step-n {
+  opacity: .7;
+  margin-right: 2px;
+}
+
+/* The wrapper that carries the "select rows first" tooltip for a
+   disabled toolbar button, which fires no pointer events of its own. */
+.mp-needs-selection-wrap {
+  display: inline-flex;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Annotation details window (R/app_annotate_details.R).               */
+/* ------------------------------------------------------------------ */
+
+/* The annotation table hugs its rows and grows with the window instead of a
+   fixed 250px. Not .mp-table-resize: that one is sized against the viewport
+   and custom.js clears its inline height, both wrong inside a modal body
+   that is already capped at 70vh. */
+.mp-modal-table {
+  height: clamp(140px, 25vh, 320px);
+  resize: vertical;
+  overflow: hidden;
+}
+
+.mp-modal-table > div,
+.mp-modal-table > div > .reactable {
   height: 100% !important;
 }
+
+
+/* ------------------------------------------------------------------ */
+/* Assembly-details and circularization windows (W1-coverage).         */
+/* ------------------------------------------------------------------ */
+
+/* Caption under a panel action, saying what the action produces. */
+.mp-coverage-caption {
+  font-size: var(--mp-fs-meta);
+  color: var(--mp-text-muted);
+  line-height: 1.4;
+  margin-top: var(--mp-space-1);
+}
+
+/* The sample is locked: a state, not damage, so amber and not red. */
+.mp-lock-banner {
+  background: var(--mp-warning-soft);
+  color: var(--mp-warning-text);
+  border: none;
+  border-left: 3px solid var(--mp-warning);
+  border-radius: var(--mp-radius);
+  padding: var(--mp-space-2) var(--mp-space-3);
+  margin-bottom: var(--mp-space-3);
+}
+
+/* Multi-scaffold-blocked note: automatic tools do not apply here (T21). */
+.mp-panel-warning {
+  margin-bottom: var(--mp-space-3);
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-warning);
+  border-radius: var(--mp-radius);
+  background: var(--mp-warning-soft);
+  font-size: 0.9em;
+}
+
+/* Resolve-conflicts panel: a neutral grouping box, no particular tone. */
+.mp-panel-neutral {
+  margin-top: var(--mp-space-4);
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  background: var(--mp-surface-alt);
+}
+
+/* Join-scaffolds panel: informational tone. */
+.mp-panel-info {
+  margin: var(--mp-space-2) 0;
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  background: var(--mp-primary-soft);
+  font-size: 0.9em;
+}
+
+/* Scaffolds map to different references: needs explicit confirmation. */
+.mp-panel-danger {
+  margin-top: var(--mp-space-2);
+  padding: var(--mp-space-2);
+  border: 1px solid var(--mp-danger);
+  border-radius: var(--mp-radius);
+  background: var(--mp-danger-soft);
+  color: var(--mp-danger);
+}
+
+/* Scaffold table (T09): reactable already scrolls its columns internally
+   when they need more room than the modal, but the default scrollbar is
+   invisible until hovered. Force a permanent one, same treatment as
+   .mp-table-resize, so "there is more to the right" is never hidden. */
+.mp-coverage-table .rt-table {
+  scrollbar-width: thin;
+}
+
+.mp-coverage-table .rt-table::-webkit-scrollbar {
+  height: 10px;
+}
+
+.mp-coverage-table .rt-table::-webkit-scrollbar-thumb {
+  background-color: var(--mp-border);
+  border-radius: 5px;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* MapToRef sequence viewer section (R/app_assemble_maptoref_viewer.R). */
+/* ------------------------------------------------------------------ */
+
+/* One more section of the assembly-details window, separated by a rule
+   rather than by a heading in its own colour and size. */
+.mp-maptoref {
+  margin-top: var(--mp-space-5);
+  padding-top: var(--mp-space-3);
+  border-top: 1px solid var(--mp-border);
+}
+
+/* Reference facts on one line that wraps, not a column of rows. */
+.mp-maptoref-meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--mp-space-4);
+  row-gap: var(--mp-space-1);
+  font-size: var(--mp-fs-meta);
+  color: var(--mp-text);
+  margin: var(--mp-space-1) 0 var(--mp-space-2);
+}
+
+.mp-maptoref-field {
+  white-space: nowrap;
+}
+
+.mp-maptoref-nofeat {
+  color: var(--mp-text-muted);
+  white-space: normal;
+}
+
+/* The sample's reference no longer matches the one this assembly used. */
+.mp-maptoref-stale {
+  color: var(--mp-warning);
+}
+
+.mp-maptoref-tip {
+  position: absolute;
+  z-index: 100;
+  pointer-events: none;
+  background: var(--mp-surface);
+  color: var(--mp-text);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  padding: var(--mp-space-1) var(--mp-space-2);
+  font-size: var(--mp-fs-meta);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sequence viewer (R/app_annotate_seqview.R, inst/app/www/seqviewer.js). */
+/* ------------------------------------------------------------------ */
+.mp-seqview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mp-space-2);
+  margin: 0 0 var(--mp-space-2);
+}
+.mp-seqview-controls .form-group { margin-bottom: 0; }
+.mp-seqview-controls .shiny-input-container { width: auto; }
+.mp-seqview {
+  position: relative;
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius);
+  background: var(--mp-surface);
+  overflow: hidden;
+}
+.mp-seqview-canvas {
+  display: block;
+  width: 100%;
+  cursor: grab;
+}
+.mp-seqview-canvas:active { cursor: grabbing; }
+/* Read lanes scroll in their own box so the tracks above stay in view. */
+.mp-seqview-reads {
+  max-height: 320px;
+  overflow: hidden auto;
+  border-top: 1px solid var(--mp-border);
+}
+.mp-seqview-reads .mp-seqview-canvas { cursor: default; }

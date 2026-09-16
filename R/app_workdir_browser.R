@@ -9,12 +9,11 @@ workdir_browser_ui <- function(id) {
   ns <- NS(id)
   div(
     style = "margin-left: auto;",
-    shinyWidgets::actionBttn(
+    mp_toolbar_button(
       ns("open_browser"),
       label = "Work Dirs",
-      icon = icon("folder-tree"),
-      style = "material-flat",
-      size = "sm"
+      icon = mp_icon("folder-tree"),
+      title = "Browse the pipeline work directories for one sample"
     )
   )
 }
@@ -45,7 +44,7 @@ workdir_browser_server <- function(id) {
       presel <- session$userData$wd_selected[[mode]]
       presel <- if (length(presel) >= 1 && presel[1] %in% ids) presel[1] else NULL
       showModal(modalDialog(
-        title = "Sample Work Directories",
+        title = mp_modal_title("Sample work directories"),
         size = "l",
         easyClose = TRUE,
         tags$p(
@@ -56,7 +55,7 @@ workdir_browser_server <- function(id) {
         ),
         shinyWidgets::pickerInput(
           ns("sample"),
-          label = "Sample",
+          label = "Sample:",
           choices = ids,
           selected = presel,
           options = list(`live-search` = TRUE)
@@ -80,27 +79,31 @@ workdir_browser_server <- function(id) {
       actions <- vapply(seq_len(nrow(df)), function(i) {
         copy_btn <- sprintf(
           paste0(
-            "<button class='btn btn-default btn-xs' title='Copy path' ",
+            "<button type='button' class='btn btn-default btn-xs' title='Copy path' ",
+            "aria-label='Copy path' ",
             "onclick=\"navigator.clipboard.writeText('%s')\">",
-            "<i class='fa fa-copy'></i></button>"
+            "<i class='fa fa-copy' aria-hidden='true'></i></button>"
           ),
           gsub("'", "\\\\'", df$workdir[i])
         )
         open_btn <- if (df$exists[i]) {
           sprintf(
             paste0(
-              "<button class='btn btn-default btn-xs' title='Open' ",
+              "<button type='button' class='btn btn-default btn-xs' title='Open folder' ",
+              "aria-label='Open folder' ",
               "onclick=\"Shiny.setInputValue('%s', %d, {priority: 'event'})\">",
-              "<i class='fa fa-folder-open'></i></button>"
+              "<i class='fa fa-folder-open' aria-hidden='true'></i></button>"
             ),
             ns("open_row"), i
           )
         } else {
           paste0(
-            "<button class='btn btn-default btn-xs' disabled ",
-            "title='Not reachable from this host'><i class='fa fa-folder-open'></i></button>",
-            "<span style='color:#c62828; font-size:11px; margin-left:0.4em;' ",
-            "title='Not reachable from this host (e.g. purged or node-local scratch)'>(missing)</span>"
+            "<button type='button' class='btn btn-default btn-xs' disabled ",
+            "aria-label='Open folder' ",
+            "title='Not reachable from this host'>",
+            "<i class='fa fa-folder-open' aria-hidden='true'></i></button>",
+            "<span class='mp-pill mp-pill-neutral' style='margin-left:0.4em;' ",
+            "title='Not reachable from this host (e.g. purged or node-local scratch)'>missing</span>"
           )
         }
         paste0("<span style='white-space:nowrap;'>", copy_btn, " ", open_btn, "</span>")
@@ -127,19 +130,15 @@ workdir_browser_server <- function(id) {
         highlight = TRUE,
         wrap = FALSE,
         language = reactable::reactableLang(
-          noData = "No work directories found for this sample (has the pipeline run?)."
+          noData = "No work directories for this sample. Run the pipeline for it, or choose another sample."
         ),
         columns = list(
           Process = reactable::colDef(maxWidth = 160),
           `Param set` = reactable::colDef(maxWidth = 120),
           Status = reactable::colDef(
-            cell = htmlwidgets::JS(
-              "function(cellInfo) {
-                if (cellInfo.value === 'success') {
-                  return `<span style='color:#2e7d32;' title='Completed successfully'><i class='fa fa-circle-check'></i> success</span>`
-                }
-                return `<span style='color:#c62828;' title='Failed (non-zero exit)'><i class='fa fa-triangle-exclamation'></i> failed</span>`
-              }"
+            cell = rt_pill(
+              map = c(success = "success", failed = "danger"),
+              labels = c(success = "Success", failed = "Failed")
             ),
             html = TRUE,
             maxWidth = 110
@@ -148,14 +147,14 @@ workdir_browser_server <- function(id) {
             cell = htmlwidgets::JS(
               "function(cellInfo) {
                 var v = cellInfo.value ? cellInfo.value : ''
-                return `<code style='font-size:11px; word-break:break-all;'>${v}</code>`
+                return `<span class='mp-path'>${v}</span>`
               }"
             ),
             html = TRUE,
             minWidth = 220
           ),
           Actions = reactable::colDef(
-            name = "",
+            header = htmltools::tags$span(class = "sr-only", "Actions"),
             html = TRUE,
             sortable = FALSE,
             filterable = FALSE,
@@ -224,14 +223,19 @@ find_workdirs <- function(project_dir, sample_id) {
   # Stop at first whitespace or "]": grid executors (e.g. SGE) append
   # " started: ...; exited: ...; " after the path before the closing "]".
   workdir <- stringr::str_match(th, "workDir:\\s*([^\\]\\s]+)")[, 2]
-  # name is e.g. "WF1:ASSEMBLE:assemble (sample)"; tag may carry a ".<path_idx>" suffix
+  # name is e.g. "WF1:ASSEMBLE:assemble (sample)"; the tag is the sample id
+  # followed by dot-separated suffixes: ".<path>" in WF1, ".<path>.<scaffold>"
+  # in WF2, and ".<path>.<scaffold>.<accession>" for the BLAST reference tasks.
   nm      <- stringr::str_match(name, "([^:\\s]+)\\s*\\(([^)]+)\\)\\s*$")
   process <- nm[, 2]
-  sample  <- sub("\\.[0-9]+$", "", nm[, 3])
+  tag     <- nm[, 3]
+  is_sample <- !is.na(tag) &
+    (tag == sample_id | startsWith(tag, paste0(sample_id, ".")))
+  sample  <- ifelse(is_sample, sample_id, NA_character_)
 
   # Native bookkeeping tasks with no inspectable work dir (and no OS exit code).
   exclude_processes <- c("write_curated_result")
-  keep <- !is.na(workdir) & !is.na(process) & sample == sample_id &
+  keep <- !is.na(workdir) & !is.na(process) & is_sample &
           !process %in% exclude_processes
   if (!any(keep)) return(empty)
   out <- data.frame(

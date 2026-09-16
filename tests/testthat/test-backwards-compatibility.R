@@ -316,6 +316,73 @@ test_that("schema_gaps flags a legacy database and passes a migrated one", {
   expect_equal(schema_gaps(con2), character(0))
 })
 
+test_that("schema_gaps flags assemble_opts without the MapToRef columns", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.5.4")
+
+  con0 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_false("maptoref_ref" %in% DBI::dbListFields(con0, "assemble_opts"))
+  expect_true("the assemble_opts table lacks the MapToRef option columns" %in%
+                schema_gaps(con0))
+  DBI::dbDisconnect(con0)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_false("the assemble_opts table lacks the MapToRef option columns" %in%
+                 schema_gaps(con))
+})
+
+test_that("schema_gaps passes a freshly created database", {
+  td <- withr::local_tempdir()
+  mapping <- file.path(td, "mapping.csv")
+  utils::write.csv(
+    data.frame(ID = "S1", Taxon = "Danio rerio",
+               R1 = "S1_R1.fastq.gz", R2 = "S1_R2.fastq.gz"),
+    mapping, row.names = FALSE
+  )
+  db <- file.path(td, ".sqlite")
+  new_db(db_path = db, mapping_fn = mapping)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_false("the assemble_opts table lacks the MapToRef option columns" %in%
+                 schema_gaps(con))
+  expect_true("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))
+  expect_true("maptoref_topology" %in% DBI::dbListFields(con, "assemble"))
+  expect_false("the assemble table lacks the per-sample MapToRef reference columns" %in%
+                 schema_gaps(con))
+})
+
+test_that("schema_gaps flags assemble without the per-sample MapToRef reference", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+
+  create_multi_scaffold_db(td)
+  make_config(td, version = "1.5.4")
+
+  con0 <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  expect_false("maptoref_ref" %in% DBI::dbListFields(con0, "assemble"))
+  expect_true("the assemble table lacks the per-sample MapToRef reference columns" %in%
+                schema_gaps(con0))
+  DBI::dbDisconnect(con0)
+
+  MitoPilot::backwards_compatibility(path = td, update_config = FALSE)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  expect_true("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))
+  expect_true("maptoref_topology" %in% DBI::dbListFields(con, "assemble"))
+  expect_false("the assemble table lacks the per-sample MapToRef reference columns" %in%
+                 schema_gaps(con))
+})
+
 test_that("backwards_compatibility adds per-scaffold BLAST columns to a pre-existing assemblies table", {
   td <- tempfile()
   dir.create(td)
@@ -425,12 +492,15 @@ test_that("backwards_compatibility migrates a v1.0.0 database to current schema"
   # assemble
   expect_cols(con, "assemble",
               c("blast_accession", "blast_species", "blast_pident",
-                "blast_qcovs", "blast_evalue", "blast_lineage", "blast_opts"))
+                "blast_qcovs", "blast_evalue", "blast_lineage", "blast_opts",
+                "maptoref_ref"))
 
   # assemble_opts
   expect_cols(con, "assemble_opts",
               c("assembler", "mitofinder_db", "mitofinder",
-                "max_paths", "max_scaffolds"))
+                "max_paths", "max_scaffolds",
+                "maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
+                "maptoref_iter", "maptoref_topology"))
 
   # annotate_opts
   expect_cols(con, "annotate_opts",
@@ -483,14 +553,18 @@ test_that("backwards_compatibility migrates a v1.3.10 database to current schema
   # assemble - still missing blast cols in 1.3.10
   expect_cols(con, "assemble",
               c("blast_accession", "blast_species", "blast_pident",
-                "blast_qcovs", "blast_evalue", "blast_lineage", "blast_opts"))
+                "blast_qcovs", "blast_evalue", "blast_lineage", "blast_opts",
+                "maptoref_ref"))
 
   # annotate_opts - missing mitos_best / aragorn trio in 1.3.10
   expect_cols(con, "annotate_opts",
               c("use_mitos_best", "use_aragorn", "aragorn_opts"))
 
   # assemble_opts - max_paths / max_scaffolds added in this release
-  expect_cols(con, "assemble_opts", c("max_paths", "max_scaffolds"))
+  expect_cols(con, "assemble_opts",
+              c("max_paths", "max_scaffolds",
+                "maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
+                "maptoref_iter", "maptoref_topology"))
 
   # annotations
   expect_cols(con, "annotations", c("tool", "partial_start", "partial_stop"))

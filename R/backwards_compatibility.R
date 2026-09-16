@@ -12,14 +12,17 @@
 #'     tRNAscan / MITOS toggles and options, coverage/feature trimming, and
 #'     reference db columns.
 #'   \item \code{assemble_opts}: "assembler", "mitofinder_db"/"mitofinder",
-#'     "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds".
+#'     "max_paths", "max_scaffolds", "min_assembly_length", "join_scaffolds",
+#'     and the MapToRef columns "maptoref_ref", "maptoref_mapper", "maptoref",
+#'     "maptoref_consensus", "maptoref_iter", "maptoref_topology".
 #'   \item \code{curate_opts}: "max_blast_hits", "ref_dir", "ref_db",
 #'     "linear_complete" (and rewriting the legacy in-container Mitos2 ref path
 #'     to the GitHub-hosted reference db).
 #'   \item \code{assemble}: "poor_blast_ref" (migrated from \code{samples} and
 #'     normalized to TEXT), BLAST result columns, "blast_opts", "join_notes",
 #'     "join_switch", "circularize_opts"/"circularize_notes",
-#'     "find_mito_opts"/"find_mito_notes".
+#'     "find_mito_opts"/"find_mito_notes", "maptoref_ref"/"maptoref_topology"
+#'     (the per-sample MapToRef reference and topology).
 #'   \item \code{blast_opts}: "max_target_seqs", "taxids", "remote_blast",
 #'     "remote_fallback" (any parameter set carrying a non-default Entrez query is
 #'     switched to the remote search, with a warning, since the local database
@@ -161,9 +164,18 @@ backwards_compatibility <- function(
     error = function(e) TRUE
   )
 
+  # MapToRef references left on a parameter set by an earlier 1.5.5 build still
+  # need moving onto their samples even when every column already exists.
+  set_refs_pending <- tryCatch({
+    o <- assemble_opts_table
+    any(nzchar(trimws(stats::na.omit(o$maptoref_ref)))) ||
+      any(nzchar(trimws(stats::na.omit(o$maptoref_topology))))
+  }, error = function(e) FALSE)
+
   if ((!update_config || containerVer) &&
       genetic_code_numeric &&
       !old_ref_str &&
+      !set_refs_pending &&
       "arwen_opts" %in% names(annotate_opts_table) &&
       "use_arwen" %in% names(annotate_opts_table) &&
       "start_gene" %in% names(annotate_opts_table) &&
@@ -176,6 +188,12 @@ backwards_compatibility <- function(
       "assembler" %in% names(assemble_opts_table) &&
       "mitofinder_db" %in% names(assemble_opts_table) &&
       "mitofinder" %in% names(assemble_opts_table) &&
+      "maptoref_ref" %in% names(assemble_opts_table) &&
+      "maptoref_mapper" %in% names(assemble_opts_table) &&
+      "maptoref" %in% names(assemble_opts_table) &&
+      "maptoref_consensus" %in% names(assemble_opts_table) &&
+      "maptoref_iter" %in% names(assemble_opts_table) &&
+      "maptoref_topology" %in% names(assemble_opts_table) &&
       "problematic" %in% names(annotate_table) &&
       "partial" %in% names(annotate_table) &&
       "genetic_code" %in% names(samples_table) &&
@@ -243,6 +261,8 @@ backwards_compatibility <- function(
       "export_opts" %in% DBI::dbListTables(con) &&
       user_asmb_current &&
       "synteny_accession" %in% names(assemble_table) &&
+      "maptoref_ref" %in% names(assemble_table) &&
+      "maptoref_topology" %in% names(assemble_table) &&
       "blast_accession_auto" %in% names(assemble_table) &&
       "blast_ref_candidates" %in% DBI::dbListTables(con) &&
       isTRUE(tryCatch(
@@ -1312,6 +1332,120 @@ backwards_compatibility <- function(
       )
   }
 
+  # if maptoref_ref column doesn't exist, add it
+  if(!("maptoref_ref" %in% names(assemble_opts_table))){
+    message("added 'maptoref_ref' column to assemble_opts table")
+    assemble_opts_table$maptoref_ref <- rep(NA_character_, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_ref TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_mapper column doesn't exist, add it
+  if(!("maptoref_mapper" %in% names(assemble_opts_table))){
+    message("added 'maptoref_mapper' column to assemble_opts table")
+    assemble_opts_table$maptoref_mapper <- rep("bowtie2", nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_mapper TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref column doesn't exist, add it
+  if(!("maptoref" %in% names(assemble_opts_table))){
+    message("added 'maptoref' column to assemble_opts table")
+    assemble_opts_table$maptoref <- rep("--very-sensitive-local", nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_consensus column doesn't exist, add it
+  if(!("maptoref_consensus" %in% names(assemble_opts_table))){
+    message("added 'maptoref_consensus' column to assemble_opts table")
+    assemble_opts_table$maptoref_consensus <- rep("-d 3 --min-BQ 20", nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_consensus TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_iter column doesn't exist, add it
+  if(!("maptoref_iter" %in% names(assemble_opts_table))){
+    message("added 'maptoref_iter' column to assemble_opts table")
+    assemble_opts_table$maptoref_iter <- rep(5L, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_iter INTEGER",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
+  # if maptoref_topology column doesn't exist, add it
+  if(!("maptoref_topology" %in% names(assemble_opts_table))){
+    message("added 'maptoref_topology' column to assemble_opts table")
+    assemble_opts_table$maptoref_topology <- rep(NA_character_, nrow(assemble_opts_table))
+    glue::glue_sql(
+      "ALTER TABLE assemble_opts
+       ADD COLUMN maptoref_topology TEXT",
+      .con = con
+    ) |> DBI::dbExecute(con, statement = _)
+
+    dplyr::tbl(con, "assemble_opts") |>
+      dplyr::rows_upsert(
+        assemble_opts_table,
+        in_place = TRUE,
+        copy = TRUE,
+        by = "assemble_opts"
+      )
+  }
+
   # if max_paths column doesn't exist, add it
   if(!("max_paths" %in% names(assemble_opts_table))){
     message("added 'max_paths' column to assemble_opts table")
@@ -1399,6 +1533,17 @@ backwards_compatibility <- function(
     message("added 'synteny_accession' column to assemble table")
     DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN synteny_accession TEXT")
   }
+
+  # per-sample MapToRef reference and topology; set-level values move down onto samples
+  if (!("maptoref_ref" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'maptoref_ref' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_ref TEXT")
+  }
+  if (!("maptoref_topology" %in% DBI::dbListFields(con, "assemble"))) {
+    message("added 'maptoref_topology' column to assemble table")
+    DBI::dbExecute(con, "ALTER TABLE assemble ADD COLUMN maptoref_topology TEXT")
+  }
+  .mtr_copy_set_refs_down(con)
 
   # if tool column doesn't exist in annotations table, add it
   annotations_cols <- DBI::dbListFields(con, "annotations")
@@ -2102,15 +2247,6 @@ backwards_compatibility <- function(
 
 }
 
-#' Landmarks of the current project schema that an older database will lack.
-#'
-#' Returns a character vector of plain-language gaps, empty when the database is
-#' current. Lives beside the migration so the two stay in sync. Used by the app to
-#' refuse to open a stale project with a readable message rather than failing deep
-#' inside dbplyr with "no such column: path".
-#'
-#' @param con An open connection to a project database.
-#' @noRd
 #' Is this a user-assembly project?
 #'
 #' User-assembly projects take a FASTA per sample, so their mapping file (and
@@ -2127,6 +2263,15 @@ is_user_asmb <- function(con) {
   ))
 }
 
+#' Landmarks of the current project schema that an older database will lack.
+#'
+#' Returns a character vector of plain-language gaps, empty when the database is
+#' current. Lives beside the migration so the two stay in sync. Used by the app to
+#' refuse to open a stale project with a readable message rather than failing deep
+#' inside dbplyr with "no such column: path".
+#'
+#' @param con An open connection to a project database.
+#' @noRd
 schema_gaps <- function(con) {
   has <- function(expr) isTRUE(tryCatch(expr, error = function(e) FALSE))
   gaps <- character(0)
@@ -2169,6 +2314,15 @@ schema_gaps <- function(con) {
   if (!has(DBI::dbExistsTable(con, "scaffold_junctions")) ||
       !has("gap_index" %in% DBI::dbListFields(con, "scaffold_junctions"))) {
     gaps <- c(gaps, "the 'scaffold_junctions' table is missing or out of date")
+  }
+  if (!is_user_asmb(con) &&
+      !has(all(c("maptoref_ref", "maptoref_mapper", "maptoref", "maptoref_consensus",
+                 "maptoref_iter", "maptoref_topology") %in%
+               DBI::dbListFields(con, "assemble_opts")))) {
+    gaps <- c(gaps, "the assemble_opts table lacks the MapToRef option columns")
+  }
+  if (!has(all(c("maptoref_ref", "maptoref_topology") %in% DBI::dbListFields(con, "assemble")))) {
+    gaps <- c(gaps, "the assemble table lacks the per-sample MapToRef reference columns")
   }
   if (is_user_asmb(con) &&
       (!has(all(c("circularize_overlap", "circularize_depth") %in%

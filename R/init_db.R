@@ -1,3 +1,12 @@
+# MapToRef option defaults, shared by new_db() and the assemble-options modal.
+.mtr_default_bowtie2 <- "--very-sensitive-local"
+.mtr_default_consensus <- "-d 3 --min-BQ 20"
+.mtr_default_bwa <- ""
+# The usual ancient-DNA settings: no seed, relaxed edit distance, more gaps.
+.mtr_default_bwa_aln <- "-l 1024 -n 0.01 -o 2"
+.mtr_mapper_defaults <- c("bowtie2" = .mtr_default_bowtie2, "bwa-mem" = .mtr_default_bwa,
+                          "bwa-aln" = .mtr_default_bwa_aln)
+
 #' Initialize a new project database
 #'
 #' @param db_path Path to the new database file
@@ -9,6 +18,9 @@
 #'   auto-selects from the curation ruleset (`curate_target`); a number sets an
 #'   override on the default curate_opts set.
 #'   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
+#' @param dedup Run fastp with `--dedup` to drop PCR and optical duplicates
+#'   before assembly? Default FALSE keeps `--dont_eval_duplication`, the shipped
+#'   fastp default. Editable later in the preprocess-options modal.
 #' @param assemble_cpus Default # cpus for assembly
 #' @param assemble_memory default memory (GB) for assembly
 #' @param seeds_db Path to the gotOrganelle seeds database, can be a URL, cannot have same file name as labels_db.
@@ -42,10 +54,18 @@
 #' @param orf_min_len Minimal ORF length in nucleotides (default = 300)
 #' @param orf_max_overlap Maximum overlap with existing annotations, as a fraction
 #'   of the ORF length, before an ORF is discarded (default = 0.1)
-#' @param assembler Assembler, choice of "GetOrgnalle" (default) or "MitoFinder"
+#' @param assembler Assembler, choice of "GetOrganelle" (default), "MitoFinder",
+#'   or "MapToRef"
 #' @param mitofinder_db Path to MitoFinder reference db, must be GenBank format (.gb), can be a URL.
 #'   Default is a ten-species fish mitogenome sampler (https://raw.githubusercontent.com/Smithsonian/MitoPilot/refs/heads/main/ref_dbs/MitoFinder/fish_mito_sampler.gb)
 #' @param mitofinder Default MitoFinder command line options
+#' @param maptoref_mapper MapToRef read mapper, "bowtie2", "bwa-mem", or
+#'   "bwa-aln" (default = "bowtie2")
+#' @param maptoref Default mapper options for MapToRef
+#'   (default = "--very-sensitive-local")
+#' @param maptoref_consensus Default samtools consensus options for MapToRef
+#'   (default = "-d 3 --min-BQ 20")
+#' @param maptoref_iter Maximum MapToRef iteration passes (default = 5)
 #' @param max_paths Maximum number of assembly paths allowed for a sample to
 #'   continue past the Assemble step (default = 10). Samples exceeding this are
 #'   flagged as failed and skipped by downstream steps in WF1.
@@ -64,6 +84,8 @@ new_db <- function(
     mapping_id = "ID",
     mapping_taxon = "Taxon",
     genetic_code = NULL,
+    # Default preprocessing options
+    dedup = FALSE,
     # Default assembly options
     assemble_cpus = 6,
     assemble_memory = 24,
@@ -81,6 +103,10 @@ new_db <- function(
     mitofinder = paste(
       "--megahit"
     ),
+    maptoref_mapper = "bowtie2",
+    maptoref = .mtr_default_bowtie2,
+    maptoref_consensus = .mtr_default_consensus,
+    maptoref_iter = 5L,
     max_paths = 10,
     max_scaffolds = 10,
     min_assembly_length = 500,
@@ -116,36 +142,41 @@ new_db <- function(
   }
   mapping <- utils::read.csv(mapping_fn)
 
-  # convert ID column to characters
-  mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
-
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("Duplicate IDs found in mapping file")
+  if (mapping_id %in% colnames(mapping)) {
+    mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
+  .report_issues(check_mapping(mapping, mapping_id, mapping_taxon), "Mapping file")
 
   # Validate assembler choice
-  if (assembler %nin% c("GetOrganelle", "MitoFinder")) {
-    stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder]")
+  if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
+    stop("Assembler not supported, valid options: [GetOrganelle, MitoFinder, MapToRef]")
+  }
+  if (!maptoref_mapper %in% .mtr_mappers) {
+    stop("maptoref_mapper must be bowtie2, bwa-mem, or bwa-aln")
+  }
+  if (missing(maptoref)) {
+    maptoref <- .mtr_mapper_defaults[[maptoref_mapper]]
+  }
+  if (grepl("['\"]", paste0(maptoref, maptoref_consensus))) {
+    stop("maptoref and maptoref_consensus must not contain quote characters")
   }
 
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must be no more than 18 characters")
-  }
 
-  # Validate IDs contain only alphanumeric characters
-  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
-    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
+  # The optional Reference column seeds assemble.maptoref_ref. It must be taken
+  # out here, before CREATE TABLE samples ({cols*}) below, and before the DB
+  # connection is opened, so a bad reference leaves no half-built .sqlite.
+  # Reserved for every assembler: a value stored unchecked would go unguarded
+  # the moment the user switches a project to MapToRef in the app.
+  taken <- .mtr_take_ref_col(mapping, mapping_id = mapping_id)
+  mapping <- taken$mapping
+  refs <- NULL
+  topo <- NULL
+  if (!is.null(taken$refs)) {
+    refs <- .mtr_validate_refs(taken$refs, ids = names(taken$refs),
+                               context = "the mapping file 'Reference' column")
+    topo <- .mtr_validate_ref_topology(refs, taken$topology, ids = names(taken$refs),
+                                   context = "the mapping file 'Reference_topology' column")
+    names(refs) <- names(topo) <- names(taken$refs)
   }
 
   # Set GetOrganelle databases if user did not supply them with MitoPilot::new_project()
@@ -245,7 +276,10 @@ new_db <- function(
         pre_opts = "default",
         cpus = 4,
         memory = 16,
-        fastp = "--trim_poly_g --correction --detect_adapter_for_pe --dont_eval_duplication"
+        fastp = .fastp_set_dedup(
+          "--trim_poly_g --correction --detect_adapter_for_pe",
+          dedup
+        )
       ),
       in_place = TRUE,
       copy = TRUE,
@@ -275,6 +309,8 @@ new_db <- function(
       blast_evalue REAL,
       blast_lineage TEXT,
       synteny_accession TEXT,
+      maptoref_ref TEXT,
+      maptoref_topology TEXT,
       poor_blast_ref TEXT,
       join_notes TEXT,
       join_switch INTEGER,
@@ -300,6 +336,8 @@ new_db <- function(
           poor_blast_ref = NA_character_,
           join_notes = NA_character_,
           join_switch = NA_integer_,
+          maptoref_ref = if (is.null(refs)) NA_character_ else unname(refs[ID]),
+          maptoref_topology = if (is.null(topo)) NA_character_ else unname(topo[ID]),
           time_stamp = NA_integer_
         ),
       in_place = TRUE,
@@ -324,6 +362,12 @@ new_db <- function(
       max_scaffolds INTEGER,
       min_assembly_length INTEGER,
       join_scaffolds INTEGER,
+      maptoref_ref TEXT,
+      maptoref_mapper TEXT,
+      maptoref TEXT,
+      maptoref_consensus TEXT,
+      maptoref_iter INTEGER,
+      maptoref_topology TEXT,
       PRIMARY KEY (assemble_opts)
     );"
   )
@@ -342,12 +386,20 @@ new_db <- function(
         max_paths = max_paths,
         max_scaffolds = max_scaffolds,
         min_assembly_length = min_assembly_length,
-        join_scaffolds = 0L
+        join_scaffolds = 0L,
+        maptoref_ref = NA_character_,
+        maptoref_mapper = maptoref_mapper,
+        maptoref = maptoref,
+        maptoref_consensus = maptoref_consensus,
+        maptoref_iter = as.integer(maptoref_iter),
+        maptoref_topology = NA_character_
       ),
       in_place = TRUE,
       copy = TRUE,
       by = "assemble_opts"
     )
+
+  .mtr_warn_refs_ignored(con, names(refs)[!is.na(refs)])
 
   ## BLAST options ----
   DBI::dbExecute(
@@ -801,6 +853,8 @@ new_db <- function(
       PRIMARY KEY (ID, path, scaffold)
     );"
   )
+
+  .mtr_warn_missing_refs(con)
 
   invisible(return())
 }

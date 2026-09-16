@@ -175,3 +175,23 @@ modify_list_recursive <- function(l, alt) {
   })
   return(l)
 }
+
+#' Set the fastp duplicate handling flag
+#'
+#' @param fastp fastp option string
+#' @param on TRUE to run `--dedup`, FALSE to run `--dont_eval_duplication`
+#'
+#' @return the option string with exactly one of the two flags, whitespace
+#'   normalized
+#'
+#' @noRd
+.fastp_set_dedup <- function(fastp, on) {
+  fastp <- fastp %||% ""
+  if (is.na(fastp)) {
+    fastp <- ""
+  }
+  toks <- strsplit(trimws(fastp), "[[:space:]]+")[[1]]
+  toks <- toks[nzchar(toks) & toks %nin% c("--dedup", "--dont_eval_duplication")]
+  flag <- if (isTRUE(on)) "--dedup" else "--dont_eval_duplication"
+  paste(c(toks, flag), collapse = " ")
+}

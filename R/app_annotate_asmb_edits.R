@@ -252,7 +252,7 @@ trim_assembly_ends <- function(con, id, path, scaffold, dir_out) {
     params = key
   )
   if (nrow(asm) == 0 || is.na(asm$sequence[1]) || !nzchar(asm$sequence[1])) {
-    stop("No sequence on record for unit ", id, ".", path, ".", scaffold, call. = FALSE)
+    stop("No sequence on record for assembly ", id, ".", path, ".", scaffold, call. = FALSE)
   }
   if (identical(asm$topology[1], "circular")) {
     stop("Circular assemblies cannot be trimmed. Linearize first.", call. = FALSE)
@@ -261,7 +261,7 @@ trim_assembly_ends <- function(con, id, path, scaffold, dir_out) {
 
   ends <- unannotated_ends(con, id, path, scaffold)
   if (is.null(ends) || is.na(ends$from)) {
-    stop("This unit has no annotations to trim to.", call. = FALSE)
+    stop("This assembly has no annotations to trim to.", call. = FALSE)
   }
   from <- ends$from
   to <- min(ends$to, n)
@@ -279,7 +279,7 @@ trim_assembly_ends <- function(con, id, path, scaffold, dir_out) {
   )
   if (isTRUE(wrapped$n[1] > 0)) {
     stop(
-      "This unit has a feature spanning the start of the assembly, so its ends ",
+      "This assembly has a feature spanning its start, so its ends ",
       "cannot be trimmed. Rotate so no feature crosses the start, then trim.",
       call. = FALSE
     )
@@ -292,7 +292,7 @@ trim_assembly_ends <- function(con, id, path, scaffold, dir_out) {
     # Positions, so row i is not base i of this scaffold.
     if ("SeqId" %in% names(cov) && dplyr::n_distinct(cov$SeqId) > 1) {
       stop(
-        "This unit's coverage file covers more than one contig, so its depth ",
+        "This assembly's coverage file covers more than one contig, so its depth ",
         "track cannot be trimmed with the sequence. Trimming is not supported ",
         "for user-supplied multi-contig assemblies.",
         call. = FALSE
@@ -629,14 +629,14 @@ restore_assembly_unit <- function(con, id, path, scaffold, dir_out) {
   id <- as.character(id); path <- as.integer(path); scaffold <- as.integer(scaffold)
   key <- list(id, path, scaffold)
   if (!tryCatch(DBI::dbExistsTable(con, "assembly_backup"), error = function(e) FALSE)) {
-    stop("This unit has no recorded edit to undo.", call. = FALSE)
+    stop("This assembly has no recorded edit to undo.", call. = FALSE)
   }
   bak <- DBI::dbGetQuery(
     con, "SELECT * FROM assembly_backup WHERE ID = ? AND path = ? AND scaffold = ?",
     params = key
   )
   if (nrow(bak) == 0 || is.na(bak$sequence[1])) {
-    stop("This unit has no recorded edit to undo.", call. = FALSE)
+    stop("This assembly has no recorded edit to undo.", call. = FALSE)
   }
 
   DBI::dbExecute(

@@ -152,38 +152,15 @@ new_db_userAsmb <- function(
   }
   mapping <- utils::read.csv(mapping_fn)
 
-  # convert ID column to characters
-  mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
-
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    bad_IDs <- unique(mapping[[mapping_id]][duplicated(mapping[[mapping_id]])])
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("Duplicate IDs found in mapping file")
+  if (mapping_id %in% colnames(mapping)) {
+    mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
+  .report_issues(
+    check_mapping(mapping, mapping_id, mapping_taxon, need_reads = !no_raw_data,
+                  user_asmb = TRUE),
+    "Mapping file"
+  )
 
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    bad_IDs <- mapping[[mapping_id]][nchar(mapping[[mapping_id]]) > 18]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must be no more than 18 characters")
-  }
-
-  # Validate IDs contain only alphanumeric characters
-  if (any(!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]])))) {
-    bad_IDs <- mapping[[mapping_id]][!(grepl("^[a-zA-Z0-9_:-]+$", mapping[[mapping_id]]))]
-    message("problematic IDs:")
-    message(paste(bad_IDs, collapse = ", "))
-    stop("IDs must contain only alphanumeric characters, dashes, underscores, and colons")
-  }
-
-  # check for the assembly column; Topology is optional
-  if ("Assembly" %nin% colnames(mapping)) {
-    stop("Mapping file missing Assembly column")
-  }
-  validate_declared_topology(mapping, mapping_id = mapping_id)
 
   # No raw reads: R1/R2 are not needed, so tolerate their absence in the mapping.
   # Added here (before samples/preprocess are built) so both tables carry the
@@ -319,6 +296,8 @@ new_db_userAsmb <- function(
       blast_evalue REAL,
       blast_lineage TEXT,
       synteny_accession TEXT,
+      maptoref_ref TEXT,
+      maptoref_topology TEXT,
       poor_blast_ref TEXT,
       join_notes TEXT,
       join_switch INTEGER,

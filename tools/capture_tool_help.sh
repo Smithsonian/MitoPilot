@@ -40,6 +40,9 @@ TOOLS=(
     "arwen||arwen -h|true"
     "aragorn||/opt/conda/envs/aragorn/bin/aragorn -h|true"
     "blastn||blastn -help|blastn -version"
+    "bowtie2||bowtie2 --help|bowtie2 --version | head -1"
+    "bwa-mem||bwa mem 2>&1|bwa 2>&1 | grep Version"
+    "samtools-consensus||samtools consensus 2>&1|samtools --version | head -1"
 )
 
 run_in_image() {

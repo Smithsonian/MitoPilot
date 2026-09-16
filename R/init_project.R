@@ -5,8 +5,14 @@
 #' @param mapping_fn Path to a mapping file. Should be a csv that minimally
 #'   includes an `ID` column with a unique identifier for each sample, a `Taxon`
 #'   column containing taxonomic information for each sample, and columns
-#'   `R1` and `R2` specifying the names of the raw paired read inputs. May include
-#'   additional columns with other sample metadata.
+#'   `R1` and `R2` specifying the names of the raw paired read inputs.
+#'   May include additional columns with other sample metadata, and an optional
+#'   \code{Reference} column naming a per-sample MapToRef reference (file path,
+#'   URL, or NCBI accession). A FASTA reference also needs a
+#'   \code{Reference_topology} column (circular or linear). Both values are
+#'   stored on the sample and used when its parameter set assembles with
+#'   MapToRef. \code{Reference} is a reserved column name: it is never stored
+#'   as sample metadata, so rename the column if you use it for something else.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param data_path Path to the directory where the raw data is located. Can be
@@ -63,42 +69,30 @@ new_project <- function(
   # Fail early on an unsupported Nextflow (see README "Nextflow compatibility").
   check_nextflow_version("new_project")
 
+  executor <- executor[1]
+  dots <- list(...)
+  preflight_project(
+    path = path, mapping_fn = mapping_fn, mapping_id = mapping_id,
+    data_path = data_path, executor = executor, config = config,
+    profile_dir = profile_dir, container = container, min_depth = min_depth,
+    genetic_code = genetic_code, ncbi_api_key = ncbi_api_key,
+    custom_seeds_db = custom_seeds_db, custom_labels_db = custom_labels_db,
+    force = force, db_fun = new_db, dots = dots
+  )
+
   # Create directory if it doesn't exist ----
   if (!dir.exists(path)) {
     message("Creating project directory: ", path)
     dir.create(path, recursive = TRUE)
   }
   path <- normalizePath(path)
-
-  # Normalize data path (if provided)----
   if (length(data_path) == 1) {
-    data_path <- normalizePath(data_path)
-  }
-
-  # Read mapping file ----
-  if (is.null(mapping_fn) || !file.exists(mapping_fn)) {
-    stop("A mapping file is required to initialize a new project")
+    data_path <- normalizePath(data_path, mustWork = FALSE)
   }
   mapping_out <- file.path(path, "mapping.csv")
-  if (!identical(mapping_fn, mapping_out)) {
-    file.copy(mapping_fn, mapping_out)
+  if (!identical(normalizePath(mapping_fn), mapping_out)) {
+    file.copy(mapping_fn, mapping_out, overwrite = TRUE)
   }
-
-  # Validate executor ----
-  # Accepts a built-in template, a saved cluster profile (see generate_config),
-  # or an explicit `config` path. Resolution is deferred to resolve_config().
-  executor <- executor[1]
-  if (is.null(config) && (is.null(executor) || !nzchar(executor))) {
-    stop("Invalid executor.")
-  }
-
-  # Create directory if it doesn't exist ----
-  if (!dir.exists(path)) {
-    message("Creating project directory: ", path)
-    dir.create(path, recursive = TRUE)
-  }
-
-  path <- normalizePath(path)
 
   # Initialize RStudio Project ----
   # (optional & only if running form RStudio)
@@ -113,11 +107,7 @@ new_project <- function(
 
   # Initialize sqlite db ----
   db <- file.path(path, ".sqlite")
-  if (file.exists(db) && !force) {
-    message("Database already exists. Use force = TRUE to overwrite (old data will be lost).")
-    return()
-  }
-  if (file.exists(db) && force) {
+  if (file.exists(db)) {
     message("Overwriting existing database")
     file.remove(db)
   }
@@ -137,10 +127,6 @@ new_project <- function(
   # Resolve a saved profile / built-in template (or use an explicit path),
   # then fill in the per-project placeholders.
   config <- config %||% resolve_config(executor, profile_dir = profile_dir)
-  if (!file.exists(config)) {
-    stop("Config file not found.")
-    return()
-  }
   readLines(config) |>
     fill_config(list(
       CONTAINER_ID = container,
@@ -151,6 +137,6 @@ new_project <- function(
     )) |>
     writeLines(file.path(path, ".config"))
 
-  message("Project initialized successfully.")
-  message("Please open and review the .config file to ensure all required options are specified.")
+  message("Project initialized: ", path)
+  message("To open the app, run:\n  setwd(\"", path, "\")\n  MitoPilot()")
 }

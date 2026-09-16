@@ -233,7 +233,7 @@ the app. This replaces the RStudio Server requirement for users who only need
 the app.
 
 **Caveat:** in-app features that open a file or browser on the server side
-(the "Open output folder" button, the HTML annotation report, and the ruleset
+(the **Output** button, the HTML annotation report, and the ruleset
 browser) will not work here, since they try to open on the cluster rather
 than your local computer. The main assemble / annotate / curate app is unaffected.
 

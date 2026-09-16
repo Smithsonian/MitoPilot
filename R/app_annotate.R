@@ -22,14 +22,18 @@ ANNOTATE_COL_GROUP_LOOKUP <- {
 # codes; each row is tagged with mp-lock-<v> / mp-state-<v> classes so
 # unselected codes can be hidden via CSS (same mechanism as the column
 # picker, so sort order, search, other filters, page, and selection survive).
+# State labels come from mp_state_choices("annotate"); R sources constants.R
+# after this file, so they are read inside function bodies, never at top level.
 ANNOTATE_LOCK_CHOICES <- c("Unlocked" = "0", "Locked" = "1")
-ANNOTATE_STATE_CHOICES <- c(
-  "Pre-Annotate" = "0",
-  "In Progress"  = "1",
-  "Success"      = "2",
-  "Failed"       = "3"
-)
 ANNOTATE_EXPORT_CHOICES <- c("Not Exported" = "0", "Exported" = "1")
+
+# What choosing each state does to the next Update, shown under its radio.
+ANNOTATE_STATE_CONSEQUENCE <- c(
+  `0` = "Skipped by the next update.",
+  `1` = "Processed by the next update; annotations already stored are replaced.",
+  `2` = "Treated as finished; the next update skips it.",
+  `3` = "Treated as finished with an error; the next update skips it."
+)
 
 #' annotate UI Function
 #'
@@ -43,94 +47,35 @@ ANNOTATE_EXPORT_CHOICES <- c("Not Exported" = "0", "Exported" = "1")
 annotate_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    tagList(
-      uiOutput(ns("col_css")),
-      div(
-        style = "display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;",
-        shinyWidgets::pickerInput(
-          inputId  = ns("lock_filter"),
-          width    = "140px",
-          label    = "Lock:",
-          choices  = ANNOTATE_LOCK_CHOICES,
-          selected = ANNOTATE_LOCK_CHOICES,
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "140px"
-          )
-        ),
-        shinyWidgets::pickerInput(
-          inputId  = ns("state_filter"),
-          width    = "140px",
-          label    = "State:",
-          choices  = ANNOTATE_STATE_CHOICES,
-          selected = ANNOTATE_STATE_CHOICES,
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "140px"
-          )
-        ),
-        shinyWidgets::pickerInput(
-          inputId  = ns("export_filter"),
-          width    = "140px",
-          label    = "Exported:",
-          choices  = ANNOTATE_EXPORT_CHOICES,
-          selected = ANNOTATE_EXPORT_CHOICES,
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "140px"
-          )
-        ),
-        shinyWidgets::pickerInput(
-          inputId  = ns("col_groups"),
-          width    = "150px",
-          label    = "Show columns:",
-          choices  = names(ANNOTATE_COL_GROUPS),
-          selected = names(ANNOTATE_COL_GROUPS),
-          multiple = TRUE,
-          options  = list(
-            `actions-box`          = TRUE,
-            `select-all-text`      = "All",
-            `deselect-all-text`    = "None",
-            `selected-text-format` = "count > 0",
-            width                  = "150px"
-          )
-        ),
-        shinyWidgets::airDatepickerInput(
-          inputId    = ns("date_filter"),
-          label      = "Updated between:",
-          range      = TRUE,
-          clearButton = TRUE,
-          value      = NULL,
-          width      = "220px",
-          placeholder = "any time"
-        ),
-        uiOutput(ns("warnings_select"))
-      ),
-      div(class = "mp-table-resize", reactable::reactableOutput(ns("table"))),
-      div(
-        style = "font-size: 0.85em; color: #555; margin-top: 4px;",
-        textOutput(ns("n_selected"), inline = TRUE)
+    uiOutput(ns("col_css")),
+    # Row filters left to right, then the column picker last (T13).
+    div(
+      class = "mp-filter-row",
+      mp_filter_picker(ns("lock_filter"), "Lock:", ANNOTATE_LOCK_CHOICES,
+                       width = "140px"),
+      mp_filter_picker(ns("state_filter"), "State:", mp_state_choices("annotate"),
+                       width = "140px"),
+      mp_filter_picker(ns("export_filter"), "Exported:", ANNOTATE_EXPORT_CHOICES,
+                       width = "140px"),
+      uiOutput(ns("warnings_select")),
+      shinyWidgets::airDatepickerInput(
+        inputId    = ns("date_filter"),
+        label      = "Updated between:",
+        range      = TRUE,
+        clearButton = TRUE,
+        value      = NULL,
+        width      = "220px",
+        placeholder = "any time"
       ),
       div(
-        style = "margin-top: 12px; display: flex; gap: 8px;",
-        downloadButton(ns("export_selected"), "Export Selected to CSV",
-                       class = "btn-sm btn-default"),
-        downloadButton(ns("export_all"), "Export All to CSV",
-                       class = "btn-sm btn-default")
+        class = "mp-filter-cols",
+        mp_filter_picker(ns("col_groups"), "Columns:", names(ANNOTATE_COL_GROUPS),
+                         width = "150px")
       )
-    )
+    ),
+    uiOutput(ns("n_selected")),
+    div(class = "mp-table-resize", reactable::reactableOutput(ns("table"))),
+    mp_csv_download_row(ns)
   )
 }
 
@@ -146,6 +91,7 @@ annotate_server <- function(id) {
     reopen_orf <- function() orf_opts_modal(rv)
     register_tool_help("mitos", input, reopen = reopen_annotate)
     register_tool_help("trnaScan-SE", input, reopen = reopen_annotate)
+    register_tool_help("mitofinder", input, reopen = reopen_annotate)
     register_tool_help("arwen", input, reopen = reopen_annotate)
     register_tool_help("aragorn", input, reopen = reopen_annotate)
     register_tool_help("orffinder", input, reopen = reopen_orf)
@@ -172,30 +118,28 @@ annotate_server <- function(id) {
       )
     })
 
-    # Render dynamic footer with checkboxes
+    # Warning choices, normalised. "12 ambiguous bases in CDS" and "3 ambiguous
+    # bases in CDS" are one warning type; only that warning carries a count.
+    # The cell keeps the full string, the picker matches the type (T13).
+    warn_type <- function(x) sub("^[0-9]+ ", "", trimws(x))
+
     output$warnings_select <- renderUI({
       req(rv$data)
 
-      # Extract and flatten warnings_details column contains values delimited by semicolon
+      # warnings_details holds semicolon-delimited warning strings.
       warn_vals <- rv$data$warnings_details |>
         na.omit() |>
         strsplit(split = ";\\s*") |>
         unlist() |>
+        warn_type() |>
         unique() |>
         sort()
 
-      # Use pickerInput to create a dropdown with checkboxes
-      shinyWidgets::pickerInput(
-        inputId = ns("warning_filters"),
-        width = "220px",
-        label = "Warnings column includes:",
+      mp_filter_picker(
+        ns("warning_filters"), "Warnings column includes:",
         choices = warn_vals,
-        selected = isolate(input$warning_filters) %||% warn_vals, # default to all selected
-        multiple = TRUE, # enable multi-select
-        options = list(
-          `actions-box` = TRUE, # Display checkboxes in dropdown
-          `selected-text-format` = "count > 0" # Show the number of selected items when more than 0 are selected
-        )
+        selected = isolate(input$warning_filters) %||% warn_vals,
+        width = "220px"
       )
     })
 
@@ -207,7 +151,7 @@ annotate_server <- function(id) {
         warnings = purrr::map_int(warnings_details, function(wd) {
           # if (is.na(wd) || length(selected) == 0) return(0)
           wd_list <- strsplit(as.character(wd), ";")[[1]] |>
-            trimws()
+            warn_type()
           sum(wd_list %in% selected)
         })
       )
@@ -244,7 +188,7 @@ annotate_server <- function(id) {
     observeEvent(input$lock_filter, {
       lock_filter_rv(input$lock_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    state_filter_rv <- reactiveVal(unname(ANNOTATE_STATE_CHOICES))
+    state_filter_rv <- reactiveVal(MP_STATE_CODES$annotate)
     observeEvent(input$state_filter, {
       state_filter_rv(input$state_filter %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -260,6 +204,14 @@ annotate_server <- function(id) {
       if (is.na(g)) NULL else paste0("mp-grp-", g)
     }
 
+    # One name and one header tooltip per field, from the shared registry.
+    # `field` is the column name except for the two length columns, where
+    # Annotate's `length` is the trimmed length.
+    .nm <- function(field) unname(MP_COL_NAMES[[field]])
+    .hd <- function(field, tip = unname(MP_COL_TIPS[field])) {
+      rt_header(.nm(field), if (length(tip) == 0 || is.na(tip)) NULL else tip)
+    }
+
     # Inject a <style> tag that display:nones unselected column groups.
     # Hiding via CSS keeps columns mounted, so filters, sort, page, and
     # selection survive toggling.
@@ -270,7 +222,7 @@ annotate_server <- function(id) {
     output$col_css <- renderUI({
       hidden_grp   <- setdiff(names(ANNOTATE_COL_GROUPS), col_groups_rv())
       hidden_lock  <- setdiff(unname(ANNOTATE_LOCK_CHOICES), lock_filter_rv())
-      hidden_state <- setdiff(unname(ANNOTATE_STATE_CHOICES), state_filter_rv())
+      hidden_state <- setdiff(MP_STATE_CODES$annotate, state_filter_rv())
       hidden_exp   <- setdiff(unname(ANNOTATE_EXPORT_CHOICES), export_filter_rv())
       # Hide the Path / Scaffold columns when every unit shares value 1 (single
       # path/scaffold everywhere -> no extra info). Reactive on rv$data so the
@@ -292,17 +244,22 @@ annotate_server <- function(id) {
       if (length(rules) == 0) return(NULL)
       tags$style(HTML(paste(rules, collapse = "\n")))
     })
+    # The output holds only a <style>, so it has no size and Shiny would treat
+    # it as hidden and stop re-rendering it after the first pass.
+    outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
     # Render table ----
     output$table <- renderReactable({
-      # isolate(req(rv$data)) |>
-      # req(filtered_data())
+      # Rendered once; later changes arrive through updateReactable(), so
+      # nothing here may read rv$data reactively (that would re-render and
+      # drop the selection).
+      tbl_data <- isolate(filtered_data())
       reactable(
-        data = isolate(filtered_data()),
+        data = tbl_data,
         compact = TRUE,
         striped = TRUE,
         language = reactable::reactableLang(
-          noData = "No Completed / Locked Assemblies Found"
+          noData = "No assemblies are locked yet. Lock a finished sample in Assemble to see it here."
         ),
         defaultPageSize = 100,
         resizable = TRUE,
@@ -324,44 +281,53 @@ annotate_server <- function(id) {
                  ' mp-state-' + rowInfo.values['annotate_switch'] +
                  ' mp-exp-' + exp;
         }"),
-        defaultColDef = colDef(align = "left", show = FALSE),
+        # No align default: reactable then right-aligns numbers and
+        # left-aligns text on its own (T10).
+        defaultColDef = colDef(show = FALSE),
+        theme = reactable::reactableTheme(
+          headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
+        ),
         columns = list(
-          `.selection` = colDef(show = T, sticky = "left", width = 28),
+          `.selection` = colDef(show = T, sticky = "left", width = 28, align = "center"),
           annotate_lock = colDef(
             show = TRUE,
             sticky = "left",
-            name = "",
+            name = .nm("annotate_lock"),
+            header = .hd("annotate_lock", MP_LOCK_DEF("annotate")),
             html = TRUE,
             filterable = FALSE,
-            width = 32,
+            sortable = FALSE,
+            width = 50,
             align = "center",
             cell = rt_dynamicIcon(
-              c(
-                `0` = "fa fa-lock-open",
-                `1` = "fa fa-lock"
+              c(`0` = "fa fa-lock-open", `1` = "fa fa-lock"),
+              labels = c(
+                `0` = paste("Unlocked -", MP_LOCK_DEF("annotate")),
+                `1` = paste("Locked -", MP_LOCK_DEF("annotate"))
               )
             )
           ),
           annotate_switch = colDef(
             show = TRUE,
             sticky = "left",
-            name = "",
+            name = .nm("annotate_switch"),
+            header = .hd("annotate_switch"),
             html = TRUE,
             filterable = FALSE,
-            width = 30,
+            sortable = FALSE,
+            width = 62,
             align = "center",
             cell = rt_dynamicIcon(
-              c(
-                `0` = "fa fa-hourglass",
-                `1` = "fa fa-person-running",
-                `2` = "fa fa-circle-check",
-                `3` = "fa fa-triangle-exclamation"
-              )
+              icons  = mp_state_icons("annotate"),
+              labels = paste0(mp_state_labels("annotate"), " - ",
+                              mp_state_tips("annotate")) |>
+                stats::setNames(MP_STATE_CODES$annotate)
             )
           ),
           ID = colDef(
             show = TRUE,
-            minWidth = 120,
+            name = .nm("ID"),
+            minWidth = mp_fit_width(tbl_data$ID),
             sticky = "left",
             html = TRUE,
             cell = rt_longtext()
@@ -370,68 +336,84 @@ annotate_server <- function(id) {
           # lock/state/ID stay frozen). The classes let col_css hide a column when
           # every unit shares value 1 (no extra info).
           path = colDef(
-            show = TRUE, name = "Path", class = "mp-col-path",
-            headerClass = "mp-col-path", width = 55, align = "center", filterable = FALSE
+            show = TRUE, name = .nm("path"), header = .hd("path"),
+            class = "mp-col-path",
+            headerClass = "mp-col-path", width = 90, align = "center", filterable = FALSE
           ),
           scaffold = colDef(
-            show = TRUE, name = "Scaffold", class = "mp-col-scaffold",
-            headerClass = "mp-col-scaffold", width = 75, align = "center", filterable = FALSE
+            show = TRUE, name = .nm("scaffold"), header = .hd("scaffold"),
+            class = "mp-col-scaffold",
+            headerClass = "mp-col-scaffold", width = 90, align = "center", filterable = FALSE
           ),
           Taxon = colDef(
             show = TRUE,
+            name = .nm("Taxon"),
             minWidth = 140,
             html = TRUE,
             cell = rt_longtext()
           ),
           ID_verified = colDef(
             show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
-            name = "ID Verified",
+            name = .nm("ID_verified"), header = .hd("ID_verified"),
             html = TRUE,
             align = "center",
-            width = 100,
+            width = 150,
             cell = rt_bool_badge()
           ),
           annotate_opts = colDef(
             show = TRUE, class = .grp("annotate_opts"), headerClass = .grp("annotate_opts"),
-            name = "Annotate Opts.",
+            name = .nm("annotate_opts"), header = .hd("annotate_opts"),
             html = TRUE,
             width = 130,
-            cell = rt_link(ns("set_annotate_opts"))
+            cell = rt_link(ns("set_annotate_opts"),
+                           title = "Edit annotation options",
+                           lock_col = "annotate_lock")
           ),
           curate_opts = colDef(
             show = TRUE, class = .grp("curate_opts"), headerClass = .grp("curate_opts"),
-            name = "Curate Opts.",
+            name = .nm("curate_opts"), header = .hd("curate_opts"),
             html = TRUE,
             width = 110,
-            cell = rt_link(ns("set_curate_opts"))
+            cell = rt_link(ns("set_curate_opts"),
+                           title = "Edit curation options",
+                           lock_col = "annotate_lock")
           ),
           orf_opts = colDef(
             show = TRUE, class = .grp("orf_opts"), headerClass = .grp("orf_opts"),
-            name = "ORF Opts.",
+            name = .nm("orf_opts"), header = .hd("orf_opts"),
             html = TRUE,
             width = 110,
-            cell = rt_link(ns("set_orf_opts"))
+            cell = rt_link(ns("set_orf_opts"),
+                           title = "Edit ORF options",
+                           lock_col = "annotate_lock")
           ),
           length_raw = colDef(
             show = TRUE, class = .grp("length_raw"), headerClass = .grp("length_raw"),
-            name = "Asmb. Length (raw)",
+            name = .nm("length_raw"), header = .hd("length_raw"),
+            minWidth = 125,
             filterable = FALSE,
+            align = "center",
             html = TRUE,
             cell = rt_longtext()
           ),
           length = colDef(
             show = TRUE, class = .grp("length"), headerClass = .grp("length"),
-            name = "Asmb. Length (trimmed)",
+            name = .nm("length_trimmed"), header = .hd("length_trimmed"),
+            minWidth = 150,
             filterable = FALSE,
+            align = "center",
             html = TRUE,
             cell = rt_longtext()
           ),
-          topology = colDef(show = TRUE, class = .grp("topology"), headerClass = .grp("topology"), name = "Topology", align = "center"),
-          scaffolds = colDef(show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"), name = "Scaffolds", align = "center"),
+          topology = colDef(show = TRUE, class = .grp("topology"), headerClass = .grp("topology"),
+                            name = .nm("topology"), header = .hd("topology"), align = "center",
+                            html = TRUE, cell = rt_topology()),
+          scaffolds = colDef(show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
+                             name = .nm("scaffolds"), header = .hd("scaffolds"), align = "center"),
           poor_blast_ref = colDef(show = FALSE),
           blast_ref_status = colDef(
             show = TRUE, class = .grp("blast_ref_status"), headerClass = .grp("blast_ref_status"),
-            name = "BLAST Ref Align",
+            name = .nm("blast_ref_status"), header = .hd("blast_ref_status"),
             html = TRUE,
             minWidth = 130,
             resizable = TRUE,
@@ -441,7 +423,7 @@ annotate_server <- function(id) {
           ),
           blast_accession = colDef(
             show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
-            name = "BLAST Hit",
+            name = .nm("blast_accession"), header = .hd("blast_accession"),
             html = TRUE,
             width = 120,
             cell = rt_ncbi_link(auto_col = "blast_accession_auto")
@@ -449,42 +431,45 @@ annotate_server <- function(id) {
           blast_accession_auto = colDef(show = FALSE),
           blast_species = colDef(
             show = TRUE, class = .grp("blast_species"), headerClass = .grp("blast_species"),
-            name = "BLAST Species",
+            name = .nm("blast_species"), header = .hd("blast_species"),
             html = TRUE,
             minWidth = 160,
             cell = rt_longtext()
           ),
           blast_lineage = colDef(
             show = TRUE, class = .grp("blast_lineage"), headerClass = .grp("blast_lineage"),
-            name = "BLAST Lineage",
+            name = .nm("blast_lineage"), header = .hd("blast_lineage"),
             html = TRUE,
             minWidth = 200,
             cell = rt_longtext()
           ),
           blast_pident = colDef(
             show = TRUE, class = .grp("blast_pident"), headerClass = .grp("blast_pident"),
-            name = "BLAST % Ident",
+            name = .nm("blast_pident"), header = .hd("blast_pident"),
             filterable = FALSE,
-            minWidth = 90,
-            align = "center"
+            align = "center",
+            minWidth = 130
           ),
           blast_qcovs = colDef(
             show = TRUE, class = .grp("blast_qcovs"), headerClass = .grp("blast_qcovs"),
-            name = "BLAST % Cov",
+            name = .nm("blast_qcovs"), header = .hd("blast_qcovs"),
             filterable = FALSE,
-            minWidth = 90,
-            align = "center"
+            align = "center",
+            minWidth = 135
           ),
-          PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = "# PCGs", align = "center"),
-          tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = "# tRNAs", align = "center"),
-          rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = "# rRNAs", align = "center"),
-          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = "# ORFs", align = "center"),
-          missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"), name = "Missing", align = "center", html = TRUE, cell = rt_longtext()),
-          extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"), name = "Extra", align = "center", html = TRUE, cell = rt_longtext()),
-          warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"), name = "Warnings", align = "center"),
+          PCGCount = colDef(show = TRUE, class = .grp("PCGCount"), headerClass = .grp("PCGCount"), name = .nm("PCGCount"), header = .hd("PCGCount"), align = "center"),
+          tRNACount = colDef(show = TRUE, class = .grp("tRNACount"), headerClass = .grp("tRNACount"), name = .nm("tRNACount"), header = .hd("tRNACount"), align = "center"),
+          rRNACount = colDef(show = TRUE, class = .grp("rRNACount"), headerClass = .grp("rRNACount"), name = .nm("rRNACount"), header = .hd("rRNACount"), align = "center"),
+          ORFCount = colDef(show = TRUE, class = .grp("ORFCount"), headerClass = .grp("ORFCount"), name = .nm("ORFCount"), header = .hd("ORFCount"), align = "center"),
+          missing = colDef(show = TRUE, class = .grp("missing"), headerClass = .grp("missing"),
+                           name = .nm("missing"), header = .hd("missing"), html = TRUE, cell = rt_longtext()),
+          extra = colDef(show = TRUE, class = .grp("extra"), headerClass = .grp("extra"),
+                         name = .nm("extra"), header = .hd("extra"), html = TRUE, cell = rt_longtext()),
+          warnings = colDef(show = TRUE, class = .grp("warnings"), headerClass = .grp("warnings"),
+                            name = .nm("warnings"), header = .hd("warnings"), align = "center"),
           reviewed = colDef(
             show = TRUE, class = .grp("reviewed"), headerClass = .grp("reviewed"),
-            name = "Reviewed",
+            name = .nm("reviewed"), header = .hd("reviewed"),
             html = TRUE,
             align = "center",
             width = 100,
@@ -492,62 +477,63 @@ annotate_server <- function(id) {
           ),
           problematic = colDef(
             show = TRUE, class = .grp("problematic"), headerClass = .grp("problematic"),
-            name = "Problematic",
+            name = .nm("problematic"), header = .hd("problematic"),
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge(invert = TRUE, hide_no = TRUE)
+            cell = rt_bool_badge(yes_tone = "warning")
           ),
           partial = colDef(
             show = TRUE, class = .grp("partial"), headerClass = .grp("partial"),
-            name = "Partial",
+            name = .nm("partial"), header = .hd("partial"),
             html = TRUE,
             align = "center",
             width = 100,
-            cell = rt_bool_badge(invert = TRUE, hide_no = FALSE)
+            cell = rt_bool_badge(yes_tone = "warning")
           ),
           export_group = colDef(
             show = TRUE, class = .grp("export_group"), headerClass = .grp("export_group"),
-            name = "Export Group",
-            align = "left",
+            name = .nm("export_group"), header = .hd("export_group"),
             minWidth = 120,
             cell = function(value) if (is.na(value) || !nzchar(value)) "" else value
           ),
           export_time_stamp = colDef(
             show = TRUE, class = .grp("export_time_stamp"), headerClass = .grp("export_time_stamp"),
-            name = "Exported",
+            name = .nm("export_time_stamp"), header = .hd("export_time_stamp"),
             filterable = FALSE,
             html = TRUE,
             width = 170,
-            # JS cell so it re-renders on updateReactable(); shows a green check +
-            # export date + the group the sample was exported under.
+            align = "center",
+            # JS cell so it re-renders on updateReactable(); shows the exported
+            # pill + export date + the group the sample was exported under.
             cell = htmlwidgets::JS("
               function(cellInfo) {
                 var v = cellInfo.value;
                 if (v == null || v === '') return '';
                 var opts = { year: 'numeric', month: 'numeric', day: 'numeric' };
-                var date = new Date(1000*v).toLocaleDateString('en-US', opts);
+                var date = new Date(1000*v).toLocaleDateString(undefined, opts);
                 if (date === 'Invalid Date') return '';
                 var row = cellInfo.row || {};
                 var g = row.export_group;
                 var grp = (g == null || g === '' || g === 'NA') ? '' : ' (' + g + ')';
-                return '<span style=\"color:#3d9140;font-weight:bold;\">&#10003;</span> ' + date + grp;
+                return `<span class='mp-pill mp-pill-success'>exported</span> ` +
+                  date + grp;
               }
             ")
           ),
           time_stamp = colDef(
             show = TRUE, class = .grp("time_stamp"), headerClass = .grp("time_stamp"),
-            name = "Last Updated",
+            name = .nm("time_stamp"), header = .hd("time_stamp"),
             filterable = FALSE,
             html = T,
             width = 150,
+            align = "center",
             cell = rt_ts_date()
           ),
           annotate_notes = colDef(
             show = TRUE, class = .grp("annotate_notes"), headerClass = .grp("annotate_notes"),
-            name = "Notes",
+            name = .nm("annotate_notes"),
             html = TRUE,
-            align = "left",
             minWidth = 150,
             # maxWidth = 400,
             cell = rt_longtext()
@@ -556,21 +542,29 @@ annotate_server <- function(id) {
             show = TRUE,
             sticky = "right",
             filterable = FALSE,
-            name = "",
+            sortable = FALSE,
+            name = .nm("view"),
             html = TRUE,
             width = 80,
             align = "center",
-            cell = rt_icon_bttn_text(ns("details"), "fas fa-square-arrow-up-right fa-xs")
+            cell = rt_icon_bttn_text(
+              ns("details"), "fas fa-square-arrow-up-right fa-xs",
+              label = "Details", title = "Open the details window for this assembly"
+            )
           ),
           output = colDef(
             show = TRUE,
             sticky = "right",
             filterable = FALSE,
-            name = "",
+            sortable = FALSE,
+            name = .nm("output"),
             html = TRUE,
             width = 80,
             align = "center",
-            cell = rt_icon_bttn_text(ns("output"), "fas fa-folder-open fa-xs")
+            cell = rt_icon_bttn_text(
+              ns("output"), "fas fa-folder-open fa-xs",
+              label = "Output", title = "Open the output folder for this sample"
+            )
           )
         )
       )
@@ -625,8 +619,24 @@ annotate_server <- function(id) {
       intersect(sel, which(visible))
     })
 
-    output$n_selected <- renderText({
-      paste0(length(selected()), " selected")
+    # Toolbar buttons that act on the selection are dead without one (T01).
+    observe({
+      shinyjs::toggleState(
+        selector  = "#annot_ctrls .mp-needs-selection",
+        condition = length(selected()) > 0
+      )
+    })
+
+    # Row grain and counts, stated (T07). The first number counts the rows the
+    # pickers and the date filter leave visible; reactable's own search box is
+    # client-side only, so it is not reflected here.
+    output$n_selected <- renderUI({
+      d <- filtered_data()
+      exp_code <- ifelse(is.na(d$export_time_stamp), "0", "1")
+      visible <- as.character(d$annotate_lock)   %in% lock_filter_rv() &
+                 as.character(d$annotate_switch) %in% state_filter_rv() &
+                 exp_code %in% export_filter_rv()
+      assemble_table_status(sum(visible), nrow(rv$data), length(selected()), noun = "assembly")
     })
 
     # Publish current selection so the work-dir browser can pre-select this sample
@@ -657,35 +667,58 @@ annotate_server <- function(id) {
     init("state")
     on("state", {
       req(session$userData$mode == "Annotate")
-      req(selected())
-      req(all(filtered_data()$annotate_lock[req(selected())] == 0))
-      rv$updating <- filtered_data() |>
+      sel <- selected()
+      if (!need_selection(length(sel))) return()
+      d <- filtered_data()
+      if (!need_unlocked(d$ID[sel][d$annotate_lock[sel] == 1], "assembly")) return()
+      rv$updating <- d |>
         dplyr::select(ID, path, scaffold, annotate_switch) |>
-        dplyr::slice(selected())
+        dplyr::slice(sel)
       current <- character(0)
       if (length(unique(rv$updating$annotate_switch)) == 1) {
-        current <- rv$updating$annotate_switch[1]
+        current <- as.character(rv$updating$annotate_switch[1])
       }
       showModal(
         modalDialog(
-          title = "Select New State:",
+          title = mp_modal_title(
+            paste("Set state for", mp_n(nrow(rv$updating), "assembly"))
+          ),
+          tags$p(class = "text-muted", mp_id_list(unique(rv$updating$ID))),
+          if (length(current) == 0) {
+            tags$p(class = "text-muted",
+                   "The selected rows are not all in the same state.")
+          },
           shinyWidgets::prettyRadioButtons(
             ns("new_state"),
-            label = NULL,
-            choices = c("Pre-Annotate (wait)" = 0, "Ready to Annotate" = 1, "Successful Annotation" = 2),
-            selected = current,
-            shape = "square",
+            label = "New state",
+            choiceValues = MP_STATE_SETTABLE,
+            choiceNames = lapply(MP_STATE_SETTABLE, function(k) {
+              tagList(
+                tags$strong(MP_STATE_META[[k]]$label),
+                tags$span(class = "text-muted", style = "font-size: 0.85em;",
+                          paste0(" ", ANNOTATE_STATE_CONSEQUENCE[[k]]))
+              )
+            }),
+            selected = if (length(current) && current %in% MP_STATE_SETTABLE) {
+              current
+            } else {
+              character(0)
+            },
+            shape = "round",
             status = "primary"
           ),
           size = "m",
-          footer = tagList(
-            actionButton(ns("update_state"), "Update"),
-            modalButton("Cancel")
-          )
+          easyClose = TRUE,
+          footer = mp_footer(primary = actionButton(ns("update_state"), "Set state"))
         )
       )
     })
     observeEvent(input$update_state, {
+      if (!isTruthy(input$new_state)) {
+        mp_toast("Choose a state first.", type = "warning")
+        return()
+      }
+      n <- nrow(rv$updating)
       rv$updating$annotate_switch <- as.numeric(input$new_state)
       dplyr::tbl(session$userData$con, "annotate") |>
         dplyr::rows_update(
@@ -702,13 +735,44 @@ annotate_server <- function(id) {
         )
       trigger("update_annotate_table")
       removeModal()
+      mp_toast(paste0(
+        mp_n(n, "assembly"), " set to ",
+        MP_STATE_META[[as.character(input$new_state)]]$label, "."
+      ))
     })
 
     # Toggle lock ----
+    # Locking reports; unlocking asks first, because it drops the units out of
+    # Export and lets the next update overwrite curated annotations (T02).
+    write_lock <- function(upd, n = nrow(upd)) {
+      locking <- upd$annotate_lock[1] == 1
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          upd,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = c("ID", "path", "scaffold")
+        )
+      rv$data <- filtered_data() |>
+        dplyr::rows_update(upd, by = c("ID", "path", "scaffold"))
+      trigger("update_annotate_table")
+      trigger("refresh_export")
+      if (n > 0L) {
+        mp_toast(
+          if (locking) {
+            paste0(mp_n(n, "assembly"), " locked - ready to export.")
+          } else {
+            paste0(mp_n(n, "assembly"), " unlocked.")
+          }
+        )
+      }
+    }
+
     init("lock")
     on("lock", {
       req(session$userData$mode == "Annotate")
-      req(selected())
+      if (!need_selection(length(selected()))) return()
       rv$updating <- filtered_data() |>
         dplyr::select(ID, path, scaffold, annotate_lock) |>
         dplyr::slice(selected())
@@ -740,12 +804,11 @@ annotate_server <- function(id) {
           if (length(multi_path) > 8) {
             shown <- paste0(shown, ", and ", length(multi_path) - 8, " more")
           }
-          shinyWidgets::sendSweetAlert(
-            session = session,
+          mp_alert(
             title = "Only one assembly path can be locked per sample",
             text = stringr::str_glue(
-              "{length(multi_path)} sample(s) would have more than one assembly path ",
-              "locked, but a sample can export only one: {shown}.\n\n",
+              "{mp_n(length(multi_path), 'sample')} would have more than one ",
+              "assembly path locked, but a sample can export only one: {shown}.\n\n",
               "Assembly paths are alternative resolutions of the same genome. Lock ",
               "just the correct path (leave the others unlocked), or 'ignore' the ",
               "extra paths in the Assemble module."
@@ -756,144 +819,139 @@ annotate_server <- function(id) {
         }
       }
 
-      rv$updating$annotate_lock <- as.numeric(!lock_current)
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
-        )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
-      trigger("refresh_export")
-    })
-
-    # Toggle ID_verified
-    init("id_verified_top")
-    on("id_verified_top", {
-      req(session$userData$mode == "Annotate")
-      req(selected())
-      rv$updating <- filtered_data() |>
-        dplyr::select(ID, path, scaffold, ID_verified) |>
-        dplyr::slice(selected())
-      ID_current <- sort(unique(rv$updating$ID_verified))[1]
-      if (is.na(ID_current)) {
-        rv$updating$ID_verified <- "yes"
-      } else if (ID_current == "yes") {
-        rv$updating$ID_verified <- "no"
-      } else if (ID_current == "no") {
-        rv$updating$ID_verified <- "yes"
-      }
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
-        )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
-    })
-
-    # Toggle problematic
-    init("problematic_top")
-    on("problematic_top", {
-      req(session$userData$mode == "Annotate")
-      req(selected())
-      rv$updating <- filtered_data() |>
-        dplyr::select(ID, path, scaffold, problematic) |>
-        dplyr::slice(selected())
-      ID_current <- sort(unique(rv$updating$problematic))[1]
-      if (is.na(ID_current)) {
-        rv$updating$problematic <- "yes"
+      new_lock <- as.numeric(!lock_current)
+      # Rows already at the new value are rewritten but change nothing.
+      n_changed <- sum(!rv$updating$annotate_lock %in% new_lock)
+      rv$updating$annotate_lock <- new_lock
+      if (locking) {
+        write_lock(rv$updating, n_changed)
       } else {
-        rv$updating$problematic <- NA_character_
-      }
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
+        rv$lock_pending <- rv$updating
+        rv$lock_pending_n <- n_changed
+        mp_confirm(
+          "unlock_confirm",
+          title = paste("Unlock", mp_n(n_changed, "assembly")),
+          text = paste0(
+            "Unlocking removes ", mp_n(n_changed, "assembly"), " from Export. ",
+            "Any assembly whose state is Ready to run will be re-annotated by ",
+            "the next update, replacing your curated results."
+          ),
+          action_label = "Unlock",
+          danger = TRUE
         )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
+      }
+    })
+    observeEvent(input$unlock_confirm, ignoreInit = TRUE, {
+      upd <- rv$lock_pending
+      n <- rv$lock_pending_n %||% nrow(upd)
+      rv$lock_pending <- NULL
+      if (isTRUE(input$unlock_confirm) && !is.null(upd)) write_lock(upd, n)
     })
 
-    # Toggle partial
-    apply_partial_update <- function(upd) {
-      rv$updating <- upd |> dplyr::select(ID, path, scaffold, partial)
-      dplyr::tbl(session$userData$con, "annotate") |>
-        dplyr::rows_update(
-          rv$updating,
-          unmatched = "ignore",
-          in_place = TRUE,
-          copy = TRUE,
-          by = c("ID", "path", "scaffold")
-        )
-      rv$data <- filtered_data() |>
-        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
-      trigger("update_annotate_table")
+    # Review flags ----
+    # One predicate for all three: mp_flag_next() decides both what the click
+    # writes and what the toolbar button says it will do (T02).
+    REVIEW_FLAGS <- list(
+      id_verified_top = list(col = "ID_verified", off = "no",
+                             noun = "ID Verified", said = "ID verified"),
+      problematic_top = list(col = "problematic", off = NA_character_,
+                             noun = "Problematic", said = "problematic"),
+      partial_top     = list(col = "partial", off = "no",
+                             noun = "Partial", said = "partial")
+    )
+
+    flag_next <- function(key) {
+      f <- REVIEW_FLAGS[[key]]
+      sel <- selected()
+      vals <- if (length(sel) == 0) character(0) else filtered_data()[[f$col]][sel]
+      mp_flag_next(vals, on = "yes", off = f$off)
     }
-    init("partial_top")
-    on("partial_top", {
-      req(session$userData$mode == "Annotate")
-      req(selected())
-      upd <- filtered_data() |>
-        dplyr::select(ID, path, scaffold, partial, topology) |>
-        dplyr::slice(selected())
-      is_on <- any(upd$partial == "yes", na.rm = TRUE)
-      if (!is_on) {
-        # turning partial on: warn if any selected assembly is circular
-        if (any(upd$topology == "circular", na.rm = TRUE)) {
-          rv$partial_pending <- upd
-          shinyWidgets::confirmSweetAlert(
-            inputId = "partial_circular_confirm",
-            title = "Mark circular assembly as partial?",
-            text = paste(
-              "One or more selected assemblies is circular. A closed circle",
-              "represents the whole molecule, so flagging it 'partial' is",
-              "contradictory. Consider using the Linearize button (in the",
-              "annotation details view) to break the circle before submission."
-            ),
-            type = "warning",
-            btn_labels = c("Cancel", "Mark partial anyway"),
-            btn_colors = c("#6c757d", "#0056b3")
-          )
-          req(F)
-        }
-        upd$partial <- "yes"
-      } else {
-        upd$partial <- "no"
+
+    write_flag <- function(key, upd) {
+      f <- REVIEW_FLAGS[[key]]
+      rv$updating <- upd |> dplyr::select(ID, path, scaffold, dplyr::all_of(f$col))
+      dplyr::tbl(session$userData$con, "annotate") |>
+        dplyr::rows_update(
+          rv$updating,
+          unmatched = "ignore",
+          in_place = TRUE,
+          copy = TRUE,
+          by = c("ID", "path", "scaffold")
+        )
+      rv$data <- filtered_data() |>
+        dplyr::rows_update(rv$updating, by = c("ID", "path", "scaffold"))
+      trigger("update_annotate_table")
+      mp_toast(paste0(
+        mp_n(nrow(upd), "assembly"),
+        if (identical(upd[[f$col]][1], "yes")) " marked " else " cleared of ",
+        f$said, "."
+      ))
+    }
+
+    # The toolbar buttons live in the top-level UI, so their labels are updated
+    # through the root session, not this module's namespace.
+    observe({
+      root <- session$rootScope()
+      for (key in names(REVIEW_FLAGS)) {
+        f <- REVIEW_FLAGS[[key]]
+        verb <- if (identical(flag_next(key), "yes")) "Mark" else "Clear"
+        updateActionButton(root, key, label = paste(verb, f$noun))
       }
-      apply_partial_update(upd)
     })
-    observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
-      if (isTRUE(input$partial_circular_confirm) && !is.null(rv$partial_pending)) {
-        upd <- rv$partial_pending
+
+    toggle_flag <- function(key) {
+      f <- REVIEW_FLAGS[[key]]
+      req(session$userData$mode == "Annotate")
+      if (!need_selection(length(selected()))) return()
+      upd <- filtered_data() |>
+        dplyr::select(ID, path, scaffold, dplyr::all_of(f$col), topology) |>
+        dplyr::slice(selected())
+      nxt <- mp_flag_next(upd[[f$col]], on = "yes", off = f$off)
+      # Marking a closed circle "partial" contradicts itself: ask first.
+      if (key == "partial_top" && identical(nxt, "yes") &&
+          any(upd$topology == "circular", na.rm = TRUE)) {
         upd$partial <- "yes"
-        apply_partial_update(upd)
+        rv$partial_pending <- upd
+        mp_confirm(
+          "partial_circular_confirm",
+          title = "Mark a circular assembly as partial",
+          text = paste(
+            "One or more selected assemblies is circular. A closed circle",
+            "represents the whole molecule, so flagging it 'partial' is",
+            "contradictory. Consider using the Linearize button (in the",
+            "annotation details view) to break the circle before submission."
+          ),
+          action_label = "Mark partial anyway"
+        )
+        return()
       }
+      upd[[f$col]] <- nxt
+      write_flag(key, upd)
+    }
+
+    init("id_verified_top")
+    on("id_verified_top", toggle_flag("id_verified_top"))
+    init("problematic_top")
+    on("problematic_top", toggle_flag("problematic_top"))
+    init("partial_top")
+    on("partial_top", toggle_flag("partial_top"))
+
+    observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
+      upd <- rv$partial_pending
       rv$partial_pending <- NULL
+      if (isTRUE(input$partial_circular_confirm) && !is.null(upd)) {
+        write_flag("partial_top", upd)
+      }
     })
 
     # Set Annotate Options ----
     observeEvent(input$set_annotate_opts, {
       row <- as.numeric(input$set_annotate_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(filtered_data()$annotate_lock[selected] == 0))
-      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      d <- filtered_data()
+      if (!row_in_selection(row, selected(), d$ID[row], "assembly")) return()
+      selected <- c(row, selected()) |> unique()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1], "assembly")) return()
+      rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       annotate_opts_modal(rv)
     })
@@ -1054,9 +1112,14 @@ annotate_server <- function(id) {
           dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked assemblies use this parameter set",
+            text = paste0(
+              "This parameter set is also used by locked assemblies, so it ",
+              "cannot be edited: ",
+              mp_id_list(unique(rv$updating_indirect$ID[rv$updating_indirect$annotate_lock == 1])),
+              ". Unlock them, or type a new parameter set name to create a copy."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -1067,11 +1130,15 @@ annotate_server <- function(id) {
         }
         # Confirm editing opts that apply beyond selection
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_annotate_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_annotate_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste(
+              "These annotation options are also used by",
+              mp_n(nrow(rv$updating_indirect), "assembly"),
+              "outside the current selection. Editing them changes those too."
+            ),
+            action_label = "Edit anyway"
           )
         }
       } else {
@@ -1172,18 +1239,17 @@ annotate_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
+      mp_opts_saved_toast(nrow(update), input$annotate_opts, "assembly")
     })
 
     # Set Curate Options ----
     observeEvent(input$set_curate_opts, {
       row <- as.numeric(input$set_curate_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(filtered_data()$annotate_lock[selected] == 0))
-      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      d <- filtered_data()
+      if (!row_in_selection(row, selected(), d$ID[row], "assembly")) return()
+      selected <- c(row, selected()) |> unique()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1], "assembly")) return()
+      rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       curate_opts_modal(rv)
     })
@@ -1273,9 +1339,14 @@ annotate_server <- function(id) {
           dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         # Prevent editing opts that apply to locked samples
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked assemblies use this parameter set",
+            text = paste0(
+              "This parameter set is also used by locked assemblies, so it ",
+              "cannot be edited: ",
+              mp_id_list(unique(rv$updating_indirect$ID[rv$updating_indirect$annotate_lock == 1])),
+              ". Unlock them, or type a new parameter set name to create a copy."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(
@@ -1286,11 +1357,15 @@ annotate_server <- function(id) {
         }
         # Confirm editing opts that apply beyond selection
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_curate_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit assembly options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_curate_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste(
+              "These curation options are also used by",
+              mp_n(nrow(rv$updating_indirect), "assembly"),
+              "outside the current selection. Editing them changes those too."
+            ),
+            action_label = "Edit anyway"
           )
         }
       } else {
@@ -1345,9 +1420,9 @@ annotate_server <- function(id) {
         # Target must be a known ruleset (dispatches to params_<target>); block
         # save on a cleared/invalid selection rather than erroring.
         if (!isTRUE(input$target %in% names(RULESET_MAP))) {
-          shinyWidgets::show_alert(
-            title = "Invalid target",
-            text = "Please select a valid curation ruleset before saving.",
+          mp_alert(
+            title = "No curation ruleset chosen",
+            text = "Select a curation ruleset before saving these options.",
             type = "error"
           )
           return()
@@ -1413,18 +1488,17 @@ annotate_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
+      mp_opts_saved_toast(nrow(update), input$curate_opts, "assembly")
     })
 
     # Set ORF Options ----
     observeEvent(input$set_orf_opts, {
       row <- as.numeric(input$set_orf_opts)
-      if (length(selected()) > 0 && !row %in% selected()) {
-        req(F)
-      } else {
-        selected <- c(row, selected()) |> unique()
-      }
-      req(all(filtered_data()$annotate_lock[selected] == 0))
-      rv$updating <- filtered_data() |> dplyr::slice(selected)
+      d <- filtered_data()
+      if (!row_in_selection(row, selected(), d$ID[row], "assembly")) return()
+      selected <- c(row, selected()) |> unique()
+      if (!need_unlocked(d$ID[selected][d$annotate_lock[selected] == 1], "assembly")) return()
+      rv$updating <- d |> dplyr::slice(selected)
       rv$updating_indirect <- rv$updating |> dplyr::slice(0)
       orf_opts_modal(rv)
     })
@@ -1465,20 +1539,29 @@ annotate_server <- function(id) {
           dplyr::filter(orf_opts == input$orf_opts) |>
           dplyr::anti_join(rv$updating, by = c("ID", "path", "scaffold"))
         if (nrow(rv$updating_indirect) > 0L && any(rv$updating_indirect$annotate_lock == 1)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Attempting to edit locked samples",
-            text = "Processing parameters associated with locked samples can not be edited.",
+          mp_alert(
+            title = "Locked assemblies use this parameter set",
+            text = paste0(
+              "This parameter set is also used by locked assemblies, so it ",
+              "cannot be edited: ",
+              mp_id_list(unique(rv$updating_indirect$ID[rv$updating_indirect$annotate_lock == 1])),
+              ". Unlock them, or type a new parameter set name to create a copy."
+            ),
             type = "warning"
           )
           shinyWidgets::updatePrettyCheckbox(inputId = "edit_orf_opts", value = FALSE)
           req(F)
         }
         if (nrow(rv$updating_indirect) > 0L) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = "editing_orf_opts_indirect",
-            title = "Editing beyond selection",
-            text = "You are attempting to edit options that apply to samples beyond the current selection. Are you sure you want to proceed?",
-            btn_colors = c("#0056b3", "#0056b3")
+          mp_confirm(
+            "editing_orf_opts_indirect",
+            title = "Edit beyond the selection",
+            text = paste(
+              "These ORF options are also used by",
+              mp_n(nrow(rv$updating_indirect), "assembly"),
+              "outside the current selection. Editing them changes those too."
+            ),
+            action_label = "Edit anyway"
           )
         }
       } else {
@@ -1532,6 +1615,7 @@ annotate_server <- function(id) {
       rv$updating <- rv$updating_indirect <- NULL
       removeModal()
       trigger("update_annotate_table")
+      mp_opts_saved_toast(nrow(update), input$orf_opts, "assembly")
     })
     # Open output folder ----
     observeEvent(input$output, ignoreInit = T, {
@@ -1567,7 +1651,7 @@ annotate_server <- function(id) {
       trigger("annotations_modal")
     })
 
-    annotations_details_server(ns("annotations"), rv)
+    annotations_details_server(ns("annotations"), rv, table_id = ns("table"))
 
     # CSV Export ----
     .export_cols_drop <- c("output", "view", "poor_blast_ref", "warnings_details", "blast_accession_auto")

@@ -23,6 +23,16 @@ gene_type_alpha <- 0.5
 # the two pieces are far apart on a linearised layout, and labelling only the
 # longer one leaves an unidentified arrow at the opposite edge. `df` must already
 # carry numeric `xmin`/`xmax` columns (same coordinate space as `x_lo`/`x_hi`).
+#' Give a label-less Shiny input an accessible name
+#'
+#' A `label = NULL` input renders a bare `<input>` that screen readers and voice
+#' control cannot name (theme T22).
+#'
+#' @noRd
+mp_named_input <- function(x, label, sel = "input") {
+  htmltools::tagQuery(x)$find(sel)$addAttrs(`aria-label` = label)$allTags()
+}
+
 split_wrapped_genes <- function(df, x_lo, x_hi) {
   if (nrow(df) == 0 || !all(c("xmin", "xmax") %in% names(df)) ||
       !any(df$xmin > df$xmax, na.rm = TRUE)) {
@@ -131,9 +141,20 @@ gene_label_overlay <- function(df, img_w, x_lo, x_hi, track_top, track_height,
   )
 }
 
-annotations_details_server <- function(id, rv) {
+annotations_details_server <- function(id, rv, table_id = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    open_modal <- function() annotate_details_modal(rv, table_id = table_id) |> showModal()
+
+    # A locked assembly is read-only in this window, the same rule the Annotate
+    # toolbar enforces (theme T02).
+    locked <- reactive(isTRUE(rv$updating[["annotate_lock"]] == 1))
+    lock_blocked <- function() {
+      if (!locked()) return(FALSE)
+      mp_toast(paste("This assembly is locked.", MP_LOCK_DEF("annotate")),
+               type = "warning")
+      TRUE
+    }
 
     # Circular-coordinate helpers ----
     # A feature spanning the origin of a circular unit is stored pos1 > pos2, and
@@ -448,7 +469,7 @@ annotations_details_server <- function(id, rv) {
       active_ref_acc(acc0)
       load_blast_ref(acc0)
 
-      annotate_details_modal(rv) |> showModal()
+      open_modal()
       render_annotations_table(Sys.time())
 
       # Cross-tab jump from the export outlier review: auto-select the flagged
@@ -478,74 +499,53 @@ annotations_details_server <- function(id, rv) {
       }
     })
 
-    # Compact status pill renderer. `state` is one of "yes" / "no" / NA;
-    # `invert = TRUE` flips the color mapping so "yes" reads as warning.
-    # neutral_no: render a "no" value with the neutral (grey) styling rather than
-    # a coloured one. Used for the Partial badge, where "no" means a complete
-    # assembly and a green "good" colour is misleading.
-    status_badge <- function(label, state, invert = FALSE, neutral_no = FALSE) {
-      val <- if (is.na(state)) "na" else as.character(state)
-      # Colour decision separate from the displayed text so "no" can read NO but
-      # render neutral.
-      color_val <- if (neutral_no && val == "no") "na" else val
-      bg <- if (color_val == "yes") {
-        if (invert) "#fde8d0" else "#d4edda"
-      } else if (color_val == "no") {
-        if (invert) "#d4edda" else "#fde8d0"
-      } else {
-        "#e9ecef"
-      }
-      fg <- if (color_val == "yes") {
-        if (invert) "#7d4a1e" else "#2d6a4f"
-      } else if (color_val == "no") {
-        if (invert) "#2d6a4f" else "#7d4a1e"
-      } else {
-        "#6c757d"
-      }
-      span(
-        style = paste0(
-          "background:", bg, "; color:", fg,
-          "; border-radius:3px; padding:2px 8px; font-size:0.75em;",
-          " font-weight: 600; white-space: nowrap;"
-        ),
-        paste0(label, ": ", toupper(val))
-      )
+    # Header status pill. One component, one casing, and a value nobody has set
+    # reads "not set" rather than NA (theme T11).
+    status_badge <- function(label, state, yes_tone = "success") {
+      val <- if (is.na(state)) "not set" else tolower(as.character(state))
+      tone <- if (identical(val, "yes")) yes_tone else "neutral"
+      span(class = paste0("mp-pill mp-pill-", tone), paste0(label, ": ", val))
     }
 
-    # Title-area passive badges: ID verified / Reviewed / Problematic.
+    # Title-area passive badges, mirrored by the toggle group beside them.
     output$status_badges <- shiny::renderUI({
       tagList(
-        status_badge("ID verified", rv$updating$ID_verified),
-        status_badge("Reviewed",    rv$updating$reviewed),
-        status_badge("Problematic", rv$updating$problematic, invert = TRUE),
-        status_badge("Partial Mito",     rv$updating$partial, invert = TRUE, neutral_no = TRUE)
+        status_badge("Species ID verified", rv$updating$ID_verified),
+        status_badge("Reviewed", rv$updating$reviewed),
+        status_badge("Problematic", rv$updating$problematic, yes_tone = "warning"),
+        status_badge("Partial", rv$updating$partial, yes_tone = "warning")
       )
     })
 
-    # Footer toggle buttons: clicking still drives the same input$ID_verified /
-    # input$reviewed / input$problematic observers below; visual state reflects
-    # the current value so the user sees what each click will flip.
-    # neutral_no: style a "no" value as the neutral default button rather than a
-    # coloured one (for Partial, where "no" = complete and green is misleading).
-    toggle_btn <- function(id, label, state, invert = FALSE, neutral_no = FALSE) {
-      val <- if (is.na(state)) "na" else as.character(state)
-      cls_val <- if (neutral_no && val == "no") "na" else val
-      cls <- if (cls_val == "yes") {
-        if (invert) "btn btn-warning" else "btn btn-success"
-      } else if (cls_val == "no") {
-        if (invert) "btn btn-success" else "btn btn-default"
-      } else {
-        "btn btn-default"
-      }
-      ico <- if (val == "yes") {
-        shiny::icon(if (invert) "triangle-exclamation" else "check")
-      } else if (val == "no") {
-        shiny::icon("xmark")
-      } else {
-        shiny::icon("question")
-      }
-      actionButton(id, label, icon = ico, class = cls)
+    # Header toggle button. mp_flag_next() picks the value the click will write
+    # and the label that names it, so the two can never disagree (theme T02).
+    # Tone mirrors the pill beside it: coloured while the flag is set, plain
+    # otherwise, so the button reads as the flag's current state.
+    toggle_btn <- function(id, label, state, title, off = "no", tone = "success") {
+      nxt <- mp_flag_next(state, off = off)
+      set <- identical(nxt, "yes")
+      btn <- actionButton(
+        id,
+        paste(if (set) "Mark" else "Clear", label),
+        icon = icon(if (set) "check" else "minus"),
+        class = paste("btn-sm btn-default", if (!set) paste0("mp-btn-", tone)),
+        title = title
+      )
+      if (locked()) shinyjs::disabled(btn) else btn
     }
+
+    output$status_toggles <- shiny::renderUI({
+      tagList(
+        toggle_btn(ns("ID_verified"), "ID Verified", rv$updating$ID_verified,
+                   "Record whether the species identification has been checked"),
+        toggle_btn(ns("reviewed"), "Reviewed", rv$updating$reviewed,
+                   "Record whether this assembly has been reviewed"),
+        toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
+                   "Flag this assembly for another look", off = NA_character_, tone = "warning"),
+        toggle_btn(ns("partial"), "Partial", rv$updating$partial,
+                   "Flag this assembly as an incomplete mitogenome", tone = "warning")
+      )
+    })
 
     # HTML label summarizing the manual partial flags for annotation row `idx`.
     partial_label <- function(idx) {
@@ -556,15 +556,26 @@ annotations_details_server <- function(id, rv) {
       )
       if (length(tags) > 0) paste0("<b>Partial:</b> ", paste(tags, collapse = ", ")) else ""
     }
-    output$status_toggles <- shiny::renderUI({
-      tagList(
-        toggle_btn(ns("ID_verified"), "ID verified", rv$updating$ID_verified),
-        toggle_btn(ns("reviewed"),    "Reviewed",    rv$updating$reviewed),
-        toggle_btn(ns("problematic"), "Problematic", rv$updating$problematic,
-                   invert = TRUE),
-        toggle_btn(ns("partial"),     "Partial",     rv$updating$partial,
-                   invert = TRUE, neutral_no = TRUE)
-      )
+    # Feature count line above the table. Its own renderUI reading rv$annotations,
+    # so an updateReactable() after an edit cannot leave it stale (theme T04).
+    output$annotation_count <- renderUI({
+      ann <- rv$annotations
+      if (is.null(ann) || nrow(ann) == 0) {
+        return("No features on record for this assembly.")
+      }
+      deleted <- stringr::str_detect(ann$gene, "_DELETED_")
+      live <- ann[!deleted, , drop = FALSE]
+      cats <- c(PCG = "PCG", tRNA = "tRNA", rRNA = "rRNA", ORF = "ORF",
+                ctrl = "control region")
+      parts <- vapply(names(cats), function(k) {
+        n <- sum(live$type == k, na.rm = TRUE)
+        if (n == 0) "" else mp_n(n, cats[[k]])
+      }, character(1))
+      parts <- parts[nzchar(parts)]
+      out <- mp_n(nrow(live), "feature")
+      if (length(parts) > 0) out <- paste0(out, " - ", paste(parts, collapse = ", "))
+      if (any(deleted)) out <- paste0(out, ", ", sum(deleted), " deleted")
+      out
     })
 
     # Render table ----
@@ -580,7 +591,7 @@ annotations_details_server <- function(id, rv) {
           selection = "single",
           filterable = TRUE,
           defaultPageSize = 50,
-          height = 250,
+          height = "100%",
           rowStyle = rt_highlight_row(),
           defaultColDef = colDef(maxWidth = 80, align = "center", show = F),
           columns = list(
@@ -628,6 +639,8 @@ annotations_details_server <- function(id, rv) {
               html = T,
               align = "center",
               maxWidth = 90,
+              # The filter would match the stored 0/1, not the 5'/3' pills shown.
+              filterable = FALSE,
               # JS cell (re-renders on updateReactable) reading the stored 5'/3'
               # partial flags (partial_start/partial_stop are 5'/3' in the gene's
               # orientation) so partiality is visible without entering edit mode.
@@ -654,28 +667,43 @@ annotations_details_server <- function(id, rv) {
             notes = colDef(
               show = T,
               name = "Notes",
+              minWidth = 220,
               maxWidth = 1000,
               html = T,
-              cell = rt_longtext(),
+              class = "mp-note-cell",
               align = "left",
               resizable = TRUE
             ),
             warnings = colDef(
               show = T,
               name = "Warnings",
+              minWidth = 220,
               maxWidth = 1000,
               html = T,
-              cell = rt_longtext(),
+              class = "mp-note-cell",
               align = "left",
               resizable = TRUE
             ),
+            # Action columns: nothing to sort or filter, and each button names
+            # what it copies (themes T04, T05). "nt" / "aa" stay lowercase; they
+            # are the standard abbreviations and the column is 60px.
             fas = colDef(
               name = "", show = T, html = T, width = 60, sticky = "right",
-              cell = rt_icon_bttn_text(ns("copy_fas"), "fas fa-copy fa-xs")
+              sortable = FALSE, filterable = FALSE,
+              header = tags$span(class = "sr-only", "Copy nucleotide sequence"),
+              cell = rt_icon_bttn_text(
+                ns("copy_fas"), "fas fa-copy fa-xs",
+                title = "Copy nucleotide sequence (FASTA)"
+              )
             ),
             faa = colDef(
               name = "", show = T, html = T, width = 60, sticky = "right",
-              cell = rt_icon_bttn_text(ns("copy_faa"), "fas fa-copy fa-xs")
+              sortable = FALSE, filterable = FALSE,
+              header = tags$span(class = "sr-only", "Copy amino-acid sequence"),
+              cell = rt_icon_bttn_text(
+                ns("copy_faa"), "fas fa-copy fa-xs",
+                title = "Copy amino-acid sequence (FASTA)"
+              )
             )
           )
         )
@@ -698,7 +726,10 @@ annotations_details_server <- function(id, rv) {
       # Check for unsaved edits
       isolate({
         req(rv$annotations)
-        shinyjs::toggle("aln_div", condition = length(sel) > 0 && rv$annotations$type[sel] %in% c("PCG", "ORF", "rRNA"))
+        can_align <- length(sel) > 0 &&
+          rv$annotations$type[sel] %in% c("PCG", "ORF", "rRNA")
+        shinyjs::toggle("aln_div", condition = can_align)
+        shinyjs::toggle("aln_empty", condition = !can_align)
         is_deleted <- length(sel) > 0 && stringr::str_detect(rv$annotations$gene[sel], "_DELETED_")
         is_orf <- length(sel) > 0 && rv$annotations$type[sel] == "ORF"
         # An assigned ORF keeps tool == "ORFfinder" but a non-ORF type; offer the
@@ -738,7 +769,7 @@ annotations_details_server <- function(id, rv) {
             if (length(focal_idx) > 0) {
               focal_idx <- focal_idx[[1]]
               if (!identical(sel, focal_idx)) {
-                shinyWidgets::sendSweetAlert(
+                mp_alert(
                   title = "Review mode",
                   text = paste0(
                     "Only ", toupper(info$gene),
@@ -766,9 +797,10 @@ annotations_details_server <- function(id, rv) {
           return(sel)
         }
         if (!is.null(rv$editing) && editing_unsaved(rv$editing$idx)) {
-          shinyWidgets::sendSweetAlert(
-            title = "Unsaved Edits!",
-            text = "Discard or save edits before selecting a new annotation"
+          mp_alert(
+            title = "Unsaved edits",
+            text = "Save or discard your edits before selecting another annotation.",
+            type = "warning"
           )
           reactable::updateReactable(
             "table",
@@ -821,7 +853,8 @@ annotations_details_server <- function(id, rv) {
         dplyr::collect() |>
         dplyr::pull(sequence) |>
         Biostrings::DNAString() |>
-        extract_circ_region(rv$annotations$pos1[idx], rv$annotations$pos2[idx]) |>
+        feature_nt(rv$annotations$pos1[idx], rv$annotations$pos2[idx],
+                   rv$annotations$direction[idx]) |>
         as.character()
       session$sendCustomMessage(
         "copy_to_clipboard", list(text = paste(name, seq, sep = "\n"))
@@ -875,15 +908,71 @@ annotations_details_server <- function(id, rv) {
       ))
     }
 
+    # Sample navigation ----
+    # The order is whatever the Annotate table shows when the window opens:
+    # server filters, column filters, search, and sort, read from the widget
+    # by the modal's script. A switch goes through Close so the unsaved-edit
+    # guard and the count write-back still run, then opens the target.
+    unit_key <- function(d) paste(d$ID, d$path, d$scaffold, sep = "|")
+    nav_order <- reactive({
+      o <- input$nav_order
+      if (length(o$ID) == 0) return(NULL)
+      data.frame(ID = as.character(o$ID), path = as.character(o$path),
+                 scaffold = as.character(o$scaffold), stringsAsFactors = FALSE)
+    })
+    nav_target <- NULL
+    output$nav <- renderUI({
+      o <- nav_order(); u <- rv$updating
+      req(o, u, !isTRUE(session$userData$in_outlier_review))
+      keys <- unit_key(o); cur <- unit_key(u); i <- match(cur, keys)
+      req(!is.na(i))
+      multi <- any(duplicated(o$ID))
+      labels <- if (multi) paste0(o$ID, " (", o$path, ".", o$scaffold, ")") else o$ID
+      arrow <- function(id, dir, off, title) {
+        b <- actionButton(ns(id), NULL, icon = icon(paste0("chevron-", dir)), class = "btn-sm", title = title)
+        if (off) shinyjs::disabled(b) else b
+      }
+      # A plain select, reported only on a user change: a bound input would
+      # re-send the old sample while the outgoing and incoming modals overlap.
+      picker <- tags$select(
+        class = "form-control input-sm", `aria-label` = "Open another sample",
+        onchange = sprintf("Shiny.setInputValue('%s', this.value, {priority: 'event'})", ns("nav_pick")),
+        lapply(seq_len(nrow(o)), function(k) {
+          tags$option(value = keys[k], selected = if (k == i) NA, labels[k])
+        })
+      )
+      div(
+        class = "mp-nav", title = sprintf("%d of %d in the table", i, nrow(o)),
+        arrow("nav_prev", "left", i == 1, "Previous sample in the table"),
+        picker,
+        arrow("nav_next", "right", i == nrow(o), "Next sample in the table")
+      )
+    })
+    nav_to <- function(key) {
+      if (is.null(key) || identical(key, unit_key(rv$updating))) return()
+      nav_target <<- key
+      close_modal()
+    }
+    nav_step <- function(by) {
+      o <- nav_order(); i <- match(unit_key(rv$updating), unit_key(o)) + by
+      if (!is.na(i) && i >= 1 && i <= nrow(o)) nav_to(unit_key(o[i, ]))
+    }
+    observeEvent(input$nav_prev, nav_step(-1L))
+    observeEvent(input$nav_next, nav_step(1L))
+    observeEvent(input$nav_pick, nav_to(input$nav_pick))
+
     # Close Modal ----
-    observeEvent(input$close, {
+    # The body lives in a function because Back to Review reaches it without a
+    # Close button on screen.
+    close_modal <- function() {
       # Nothing to do if the modal state is already cleared (e.g. a second/spurious
       # close after rv$annotations was nulled below) - avoids filter() on NULL.
       req(!is.null(rv$annotations))
       if (editing_unsaved()) {
-        shinyWidgets::sendSweetAlert(
-          title = "Unsaved Edits!",
-          text = "Discard or save edits before closing"
+        mp_alert(
+          title = "Unsaved edits",
+          text = "Save or discard your edits before closing this window.",
+          type = "warning"
         )
         req(F)
       }
@@ -909,13 +998,20 @@ annotations_details_server <- function(id, rv) {
       # in-place rv$data writes above are per-ID and cannot roll up sibling units).
       trigger("refresh_annotate")
       removeModal()
+      if (!is.null(nav_target)) {
+        hit <- rv$data[unit_key(rv$data) == nav_target, ]
+        nav_target <<- NULL
+        if (nrow(hit) == 1) { rv$updating <- hit; trigger("annotations_modal") }
+        return()
+      }
       # If we arrived here from the export outlier review, hop back to it
       if (isTRUE(session$userData$return_to_review)) {
         session$userData$return_to_review <- FALSE
         session$userData$in_outlier_review <- FALSE
         trigger("reopen_outlier_review")
       }
-    })
+    }
+    observeEvent(input$close, close_modal())
 
     # Return to the export outlier review (saves via the standard close path).
     # Which unit/gene was reviewed, and whether it changed, is tracked by the
@@ -923,14 +1019,15 @@ annotations_details_server <- function(id, rv) {
     # from here, so a rejected close or a modal reload cannot corrupt it.
     observeEvent(input$back_to_review, {
       session$userData$return_to_review <- TRUE
-      shinyjs::click("close")
+      close_modal()
     })
     ## Lock and Close ----
     observeEvent(input$lock, {
       if (editing_unsaved()) {
-        shinyWidgets::sendSweetAlert(
-          title = "Unsaved Edits!",
-          text = "Discard or save edits before locking"
+        mp_alert(
+          title = "Unsaved edits",
+          text = "Save or discard your edits before locking this assembly.",
+          type = "warning"
         )
         req(F)
       }
@@ -939,8 +1036,9 @@ annotations_details_server <- function(id, rv) {
         update_annotate_unit("annotate_lock")
         rv$data <- rv$data |>
           dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "annotate_lock")], by = c("ID", "path", "scaffold"))
+        mp_toast("1 assembly locked - ready to export.", type = "message")
       }
-      shinyjs::click("close")
+      close_modal()
     })
 
     # Snapshot of the sample fields the figures actually use. Updated only when one
@@ -967,177 +1065,6 @@ annotations_details_server <- function(id, rv) {
       if (!identical(ctx, fig_ctx())) fig_ctx(ctx)
     })
 
-    # Coverage Map ----
-    output$coverage_map <- renderUI({
-      req(rv$coverage, fig_ctx())
-      # Split features that wrap the circular origin (pos1 > pos2) into two arrows.
-      cov_seq_len <- max(rv$coverage$Position)
-      # 1 kb axis ticks; empty for short scaffolds (seq(1000, <1000, by=1000)
-      # errors "wrong sign in 'by'").
-      xbreaks <- if (cov_seq_len >= 1000) seq(1000, cov_seq_len, by = 1000) else numeric(0)
-      genes_df <- rv$annotations |>
-        dplyr::filter(pos1 > 0) |>
-        dplyr::mutate(
-          type = factor(type, levels = c("ctrl", "PCG", "rRNA", "tRNA", "ORF")),
-          xmin = pos1, xmax = pos2
-        ) |>
-        split_wrapped_genes(x_lo = 1, x_hi = cov_seq_len)
-      rv$genes_plot <- genes_df |>
-        ggplot2::ggplot() +
-        ggplot2::aes(xmin = xmin, xmax = xmax, forward = direction == "+", fill = type, y = scaffold, label = gene) +
-        gggenes::geom_gene_arrow(
-          arrow_body_height = ggplot2::unit(6, "mm"),
-          arrowhead_height = ggplot2::unit(6, "mm"),
-          arrowhead_width = ggplot2::unit(1, "mm"),
-          alpha = gene_type_alpha
-        ) +
-        ggplot2::scale_fill_manual(values = gene_type_fill) +
-        ggplot2::scale_x_continuous(
-          expand = c(0, 0),
-          limits = c(
-            1,
-            max(c(rv$coverage$Position, rv$annotations$pos2))
-          ),
-          breaks = xbreaks,
-          labels = format(xbreaks, big.mark = ",")
-        ) +
-        ggplot2::coord_cartesian(clip = "off") +
-        ggthemes::theme_tufte() +
-        ggplot2::theme(
-          legend.position = "none",
-          axis.title  = ggplot2::element_blank(),
-          axis.text.y = ggplot2::element_blank(),
-          # Match coverage plot's bottom-axis bounding box (invisible) so cowplot
-          # align="lr" doesn't pad either panel.
-          axis.text.x = ggplot2::element_text(size = 7, color = NA),
-          axis.ticks.y = ggplot2::element_blank(),
-          axis.ticks.x = ggplot2::element_line(color = NA, linewidth = 0.4),
-          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
-          plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
-        )
-
-      y_breaks <- scales::pretty_breaks()(range(rv$coverage$Depth))
-      cov_max  <- cov_seq_len
-      minor_tick_x <- setdiff(
-        if (cov_max >= 50) seq(50, cov_max, by = 50) else numeric(0), xbreaks
-      )
-      major_tick_x <- xbreaks
-      depth_rng    <- range(rv$coverage$Depth)
-      y_bottom     <- depth_rng[1]
-      y_tick_minor <- depth_rng[1] + diff(depth_rng) * 0.04
-      major_tick_labels <- format(major_tick_x, big.mark = ",")
-
-      # Bin coverage to ~one point per output pixel (max-depth per bin) to
-      # cut geom_line vertex count on huge mitogenomes - visually lossless
-      # at 1px/bp display, ~10x faster path stroke.
-      target_pts  <- min(nrow(rv$coverage), 4000L)
-      bin_size    <- max(1L, ceiling(cov_max / target_pts))
-      cov_line_df <- rv$coverage |>
-        dplyr::mutate(.bin = ((Position - 1L) %/% bin_size) * bin_size + 1L) |>
-        dplyr::summarise(Depth = max(Depth), .by = .bin) |>
-        dplyr::rename(Position = .bin) |>
-        dplyr::arrange(Position)
-
-      # Only positions flagged as Errors get a red vline; everything else is
-      # invisible so emit no geom for them (drawing 16k transparent vlines was
-      # the dominant render cost).
-      err_df <- rv$coverage |>
-        dplyr::filter(!is.na(ErrorRate) & ErrorRate > 0.05) |>
-        dplyr::select(Position)
-
-      rv$coverage_plot <- ggplot2::ggplot(cov_line_df) +
-        ggplot2::aes(x = Position, y = Depth) +
-        ggplot2::geom_vline(
-          data = err_df,
-          ggplot2::aes(xintercept = Position),
-          inherit.aes = FALSE,
-          color = "#FF667040", linewidth = 1
-        ) +
-        ggplot2::geom_label(
-          data = data.frame(
-            x = rep(major_tick_x, length(y_breaks)),
-            y = rep(y_breaks, each = length(major_tick_x)),
-            label = rep(y_breaks, each = length(major_tick_x))
-          ),
-          ggplot2::aes(x = x, y = y, label = label),
-          inherit.aes = FALSE,
-          fill = "#FFFFFF50",
-          color = "#00000050",
-          label.size = 0,
-          size = 3
-        ) +
-        ggplot2::geom_segment(
-          data = data.frame(x = minor_tick_x),
-          ggplot2::aes(x = x, xend = x, y = y_bottom, yend = y_tick_minor),
-          inherit.aes = FALSE,
-          color = "#00000060", linewidth = 0.3
-        ) +
-        ggplot2::geom_line() +
-        ggplot2::scale_y_continuous(breaks = y_breaks) +
-        ggplot2::scale_x_continuous(
-          expand = c(0, 0),
-          limits = c(
-            1,
-            max(c(rv$coverage$Position, rv$annotations$pos2))
-          ),
-          breaks = major_tick_x,
-          labels = major_tick_labels
-        ) +
-        ggplot2::coord_cartesian(clip = "off") +
-        ggthemes::theme_tufte() +
-        ggplot2::theme(
-          legend.position = "none",
-          axis.title = ggplot2::element_blank(),
-          axis.text.y = ggplot2::element_blank(),
-          axis.text.x = ggplot2::element_text(size = 7, color = "#000000B0"),
-          axis.ticks.y = ggplot2::element_blank(),
-          axis.ticks.x = ggplot2::element_line(color = "#000000B0", linewidth = 0.4),
-          axis.ticks.length.x = ggplot2::unit(1.5, "mm"),
-          panel.grid.major.y = ggplot2::element_line(
-            linetype = "dotted", color = "#00000050"
-          ),
-          plot.margin = ggplot2::margin(0, 0, 0, 0, "mm")
-        )
-      # plot with dynamic width
-      #plotOutput(ns("coverage_plot"), width = paste0(rv$updating$length, "px"), height = "125px")  # OLD CODE, problems with Cairo
-      img_w <- fig_ctx()$length
-      x_hi  <- max(c(rv$coverage$Position, rv$annotations$pos2))
-      div(
-        style = sprintf("position:relative; width:%dpx; height:125px;", as.integer(img_w)),
-        shiny::imageOutput(ns("coverage_plot"), width = paste0(img_w, "px"), height = "125px"),
-        # Block = measured gene-arrow band (px 96-112 in the 125px cowplot image).
-        gene_label_overlay(genes_df, img_w = img_w, x_lo = 1, x_hi = x_hi,
-                           track_top = 96, track_height = 16, scale_y = 1.6,
-                           arrow_w = 0.6)
-      )
-    })
-    # Use renderImage + ragg::agg_png to bypass Cairo's per-dimension image
-    # surface limit (~16384 px on common libcairo builds), which silently
-    # truncated the right edge of large mitogenome plots under renderPlot.
-    output$coverage_plot <- shiny::renderImage(
-      {
-        req(rv$coverage_plot, rv$coverage, fig_ctx())
-        w <- fig_ctx()$length
-        h <- 125L
-        outfile <- tempfile(fileext = ".png")
-        ragg::agg_png(outfile, width = w, height = h, units = "px", res = 72)
-        combined_plot <- cowplot::plot_grid(
-          rv$coverage_plot, rv$genes_plot,
-          ncol = 1, align = "v", axis = "lr",
-          rel_heights = c(3, 1)
-        )
-        print(combined_plot)
-        dev.off()
-        list(
-          src = outfile,
-          contentType = "image/png",
-          width = w,
-          height = h,
-          alt = "Coverage map"
-        )
-      },
-      deleteFile = TRUE
-    )
     # BLAST Reference Synteny ----
     # Gene-block coords (alignment-space %) stashed by the synteny image render,
     # consumed by the sticky-label overlay (output$synteny_labels).
@@ -1185,9 +1112,18 @@ annotations_details_server <- function(id, rv) {
       # rendered even when the active reference has no annotations, so the user can
       # switch away from an unannotated top hit.
       cand <- rv$blast_ref_candidates
-      req(!is.null(cand), nrow(cand) > 0)
+      none <- div(
+        class = "mp-table-status",
+        "No BLAST reference is on record for this assembly, so there is nothing ",
+        "to compare it against."
+      )
+      if (is.null(cand) || nrow(cand) == 0) {
+        return(none)
+      }
       active_acc <- active_ref_acc() %||% ctx$blast_accession
-      req(!is.null(active_acc), !is.na(active_acc), nzchar(active_acc))
+      if (is.null(active_acc) || is.na(active_acc) || !nzchar(active_acc)) {
+        return(none)
+      }
 
       has_ref    <- !is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0
       w          <- synteny_plot_w()
@@ -1275,12 +1211,12 @@ annotations_details_server <- function(id, rv) {
             if (nzchar(active_acc) && !identical(active_acc, cur_ref)) {
               div(
                 style = "margin-top: 2px;",
-                shinyWidgets::actionBttn(
+                (\(b) if (locked()) shinyjs::disabled(b) else b)(actionButton(
                   ns("synteny_set_ref"),
                   label = paste0("Set ", active_acc, " as best reference"),
-                  style = "material-flat", size = "xs", color = "primary",
-                  icon = shiny::icon("check")
-                ),
+                  icon = shiny::icon("check"),
+                  class = "btn-sm btn-default"
+                )),
                 div(style = "font-size: 11px; color: #888; margin-top: 3px;",
                     "Overwrites the sample's best reference, shown in the Annotate/Export ",
                     "tables and used in the .tbl reference-comparison note.")
@@ -1302,17 +1238,20 @@ annotations_details_server <- function(id, rv) {
       tagList(
         div(
           style = "display: flex; justify-content: start; margin-bottom: 6px;",
-          shinyWidgets::prettyToggle(
-            ns("poor_blast_ref_toggle"),
-            label_on  = "Best reference flagged as poor",
-            label_off = "Flag best reference as poor",
-            icon_on   = shiny::icon("flag"),
-            icon_off  = shiny::icon("flag"),
-            status_on  = "warning",
-            status_off = "default",
-            value = is_poor,
-            inline = TRUE
-          )
+          local({
+            tg <- shinyWidgets::prettyToggle(
+              ns("poor_blast_ref_toggle"),
+              label_on  = "Best reference flagged as poor",
+              label_off = "Flag best reference as poor",
+              icon_on   = shiny::icon("flag"),
+              icon_off  = shiny::icon("flag"),
+              status_on  = "warning",
+              status_off = "default",
+              value = is_poor,
+              inline = TRUE
+            )
+            if (locked()) shinyjs::disabled(tg) else tg
+          })
         ),
         picker,
         no_ref_msg,
@@ -1706,15 +1645,18 @@ annotations_details_server <- function(id, rv) {
               "  display: flex !important; flex-direction: row;",
               "  align-items: center; gap: 6px;",
               "  width: auto !important; margin-bottom: 0; }",
-              "#%s.shiny-input-container label { margin-bottom: 0; font-weight: normal; white-space: nowrap; }",
-              "#%s.shiny-input-container input { width: 70px !important; }"
+              "#%s.shiny-input-container input { width: 120px !important; }"
             ),
-            ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
+            ns("synteny_zoom_window"), ns("synteny_zoom_window")
           ))),
-          numericInput(ns("synteny_zoom_window"), label = "window size (bp)",
-                       value = isolate(input$synteny_zoom_window) %||% 200L,
-                       min = 30L, max = 2000L, step = 50L,
-                       width = "auto")
+          htmltools::tagQuery(numericInput(
+            ns("synteny_zoom_window"), label = NULL,
+            value = isolate(input$synteny_zoom_window) %||% 200L,
+            min = 30L, max = 2000L, step = 50L, width = "auto"
+          ))$find("input")$addAttrs(
+            placeholder = "Window size (bp)", title = "Window size (bp)",
+            `aria-label` = "Window size (bp)"
+          )$allTags()
         )
       )
     })
@@ -2014,9 +1956,6 @@ annotations_details_server <- function(id, rv) {
       req(selected())
       # New gene selection overrides any prior click anchor
       zoom_click_col(NULL)
-      session$sendCustomMessage(
-        "hScroll", list(id = ns("coverageDiv"), px = as.numeric(rv$annotations$pos1[selected()]))
-      )
       if (!is.null(rv$blast_ref) && nrow(rv$blast_ref) > 0 && !is.null(rv$coverage)) {
         scroll_px <- synteny_proj()(rv$annotations$pos1[selected()])
         session$sendCustomMessage(
@@ -2089,9 +2028,8 @@ annotations_details_server <- function(id, rv) {
         scaffold = rv$annotations$scaffold[sel], con = session$userData$con
       ), error = function(e) NULL)
       focal_seq <- tryCatch({
-        s <- extract_circ_region(asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel])
-        if (rv$annotations$direction[sel] == "-") s <- Biostrings::reverseComplement(s)
-        as.character(s)
+        as.character(feature_nt(asm, rv$annotations$pos1[sel], rv$annotations$pos2[sel],
+                                rv$annotations$direction[sel]))
       }, error = function(e) NA_character_)
 
       if (is.na(focal_seq) || !nzchar(focal_seq)) {
@@ -2633,6 +2571,7 @@ annotations_details_server <- function(id, rv) {
       # so clearing notes back to empty still persists.
       saved <- (rv$data$annotate_notes[rv$data$ID == rv$updating$ID])[1]
       req(cleaned != (saved %|NA|% ""))
+      if (lock_blocked()) req(F)
       # Persist without mutating rv$updating: writing notes into rv$updating would
       # invalidate every figure that reads it (coverage/synteny), reloading them on
       # each keystroke.
@@ -2653,18 +2592,21 @@ annotations_details_server <- function(id, rv) {
 
     # Delete Annotation ----
     observeEvent(input$delete, {
-      if (length(selected()) == 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "No annotation selected"
-        )
+      if (lock_blocked()) req(F)
+      if (!need_selection(length(selected()))) {
         req(F)
       }
-      req(selected())
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("confirm_delete"),
+      idx <- selected()
+      mp_confirm(
+        ns("confirm_delete"),
         title = "Delete annotation",
-        text = "This will completely remove the selected annotation. Details of the gene name and position of the deleted annotation will be added to the notes section.",
-        btn_colors = c("#0056b3", "#0056b3")
+        text = stringr::str_glue(
+          "Delete {rv$annotations$gene[idx]} at {rv$annotations$pos1[idx]}-",
+          "{rv$annotations$pos2[idx]}? The gene name and position are recorded ",
+          "in this feature's notes. This cannot be undone from this window."
+        ),
+        action_label = "Delete",
+        danger = TRUE
       )
     })
     observeEvent(input$confirm_delete, {
@@ -2696,28 +2638,26 @@ annotations_details_server <- function(id, rv) {
 
     # Linearize ----
     observeEvent(input$linearize, {
+      if (lock_blocked()) req(F)
       if (rv$updating$topology != "circular") {
-        shinyWidgets::sendSweetAlert(
-          title = "Assembly is already linear."
-        )
+        mp_toast("This assembly is already linear.", type = "warning")
         req(F)
       }
       if (length(selected()) != 1) {
-        shinyWidgets::sendSweetAlert(
-          title = "Select an annotation to set the break point (before/after)."
+        mp_toast(
+          "Select one annotation to set the break point before or after it.",
+          type = "warning"
         )
         req(F)
       }
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("linearize_loc"),
-        title = "Linearize Assembly!",
+      # mp_choice, not mp_confirm: both buttons are answers, not accept-or-cancel.
+      mp_choice(
+        ns("linearize_loc"),
+        title = "Linearize assembly",
         text = stringr::str_glue(
-          "Do you want to set the breakpoint before or after the selected gene ({rv$annotations$gene[selected()]})?"
+          "Set the break point before or after {rv$annotations$gene[selected()]}?"
         ),
-        btn_labels = c("After", "Before"),
-        btn_colors = c("#0056b3", "#0056b3"),
-        cancelOnDismiss = FALSE,
-        showCloseButton = TRUE
+        labels = c("After", "Before")
       )
     })
     ## Confirm linearize cut ----
@@ -2743,12 +2683,13 @@ annotations_details_server <- function(id, rv) {
           circ_overlap(before_cut, before_cut, rv$annotations$pos1, rv$annotations$pos2),
       ]
       if (nrow(chk) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "Operation failed",
+        mp_alert(
+          title = "Cannot break here",
           text = stringr::str_glue(
             "The selected break point would split the ",
             "{paste(unique(chk$gene), collapse = ', ')} annotation."
-          )
+          ),
+          type = "warning"
         )
         req(F)
       }
@@ -2889,6 +2830,16 @@ annotations_details_server <- function(id, rv) {
     asmb_edit_tick <- reactiveVal(0)
     bump_asmb_edit <- function() asmb_edit_tick(isolate(asmb_edit_tick()) + 1)
 
+    # Sequence viewer under the table: follows every edit through rv$annotations
+    # and the assembly tick; a click on a gene arrow selects its table row.
+    # Built here, not in the call: a lazily forced argument would capture the
+    # child module's session and look up the table in the wrong namespace.
+    seqview_sel <- reactive(reactable::getReactableState("table", "selected"))
+    sv <- seqview_server("seqview", rv, asmb_edit_tick, seqview_sel)
+    observeEvent(sv$pick(), {
+      reactable::updateReactable("table", selected = as.integer(sv$pick()$row))
+    })
+
     # Everything the controls need, read from the DB rather than tracked in a
     # reactiveVal: a manually refreshed value would depend on gargoyle observer
     # ordering to be correct at first render. Topology comes from `assemblies`,
@@ -2912,12 +2863,14 @@ annotations_details_server <- function(id, rv) {
     output$asmb_edit_controls <- renderUI({
       st <- asmb_state()
       e <- st$ends
-      reason <- if (is.null(e)) {
-        "This unit has no assembly on record."
+      reason <- if (locked()) {
+        "This assembly is locked. Unlock it in the Annotate table to edit it."
+      } else if (is.null(e)) {
+        "This assembly has no sequence on record."
       } else if (!isTRUE(e$topology == "linear")) {
         "Only linear assemblies can be trimmed. Linearize a circular assembly first."
       } else if (is.na(e$from)) {
-        "This unit has no annotations to trim to."
+        "This assembly has no annotations to trim to."
       } else if (e$lead + e$trail == 0L) {
         "The annotations already span the whole assembly; nothing to trim."
       } else {
@@ -2941,31 +2894,32 @@ annotations_details_server <- function(id, rv) {
           )
         },
         if (isTRUE(st$edited)) {
-          actionButton(ns("restore_asmb"), "Restore assembly", icon = icon("rotate-left"))
+          b <- actionButton(ns("restore_asmb"), "Restore assembly", icon = icon("rotate-left"))
+          if (locked()) shinyjs::disabled(b) else b
         }
       )
     })
 
     observeEvent(input$trim_ends, {
+      if (lock_blocked()) req(F)
       req(rv$updating$ID)
       e <- asmb_state()$ends
       if (is.null(e) || !isTRUE(e$topology == "linear") || is.na(e$from) ||
           (e$lead + e$trail) == 0L) {
-        shinyWidgets::sendSweetAlert(title = "Nothing to trim.")
+        mp_toast("There is nothing to trim on this assembly.", type = "warning")
         req(F)
       }
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("trim_ends_confirm"),
-        title = "Trim unannotated ends?",
+      mp_confirm(
+        ns("trim_ends_confirm"),
+        title = "Trim unannotated ends",
         text = stringr::str_glue(
           "Removes {e$lead} bp before the first annotation and {e$trail} bp after ",
           "the last, leaving {format(e$to - e$from + 1, big.mark = ',')} bp. ",
           "Feature coordinates and the coverage track shift to match. ",
           "Use \"Restore assembly\" to undo."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Trim"),
-        btn_colors = c("#6c757d", "#d9534f")
+        action_label = "Trim",
+        danger = TRUE
       )
     })
 
@@ -2977,7 +2931,7 @@ annotations_details_server <- function(id, rv) {
           session$userData$con, u$ID, u$path, u$scaffold, session$userData$dir_out
         ),
         error = function(e) {
-          shinyWidgets::sendSweetAlert(title = "Trim failed", text = conditionMessage(e))
+          mp_alert(title = "Trim failed", text = conditionMessage(e), type = "error")
           NULL
         }
       )
@@ -3003,7 +2957,7 @@ annotations_details_server <- function(id, rv) {
       # Full reload: annotations, coverage and every figure come off the trimmed
       # record, and the reopened modal shows the new coordinates.
       trigger("annotations_modal")
-      showNotification(
+      mp_toast(
         stringr::str_glue(
           "Trimmed {res$removed_lead + res$removed_trail} bp of unannotated ends; ",
           "assembly is now {format(res$length, big.mark = ',')} bp."
@@ -3013,21 +2967,21 @@ annotations_details_server <- function(id, rv) {
     })
 
     observeEvent(input$restore_asmb, {
+      if (lock_blocked()) req(F)
       ops <- assembly_backup_ops(
         session$userData$con, rv$updating$ID, rv$updating$path, rv$updating$scaffold
       )
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("restore_asmb_confirm"),
-        title = "Restore assembly?",
+      mp_confirm(
+        ns("restore_asmb_confirm"),
+        title = "Restore assembly",
         text = paste0(
-          "This undoes the in-app assembly edits for this unit (",
+          "This undoes the in-app assembly edits for this assembly (",
           paste(ops, collapse = ", "),
           ") and puts back the sequence and feature model as the pipeline left ",
           "them. Annotation edits made since then are lost."
         ),
-        type = "warning",
-        btn_labels = c("Cancel", "Restore"),
-        btn_colors = c("#6c757d", "#0056b3")
+        action_label = "Restore",
+        danger = TRUE
       )
     })
 
@@ -3039,7 +2993,7 @@ annotations_details_server <- function(id, rv) {
           session$userData$con, u$ID, u$path, u$scaffold, session$userData$dir_out
         ),
         error = function(e) {
-          shinyWidgets::sendSweetAlert(title = "Restore failed", text = conditionMessage(e))
+          mp_alert(title = "Restore failed", text = conditionMessage(e), type = "error")
           NULL
         }
       )
@@ -3076,7 +3030,7 @@ annotations_details_server <- function(id, rv) {
       trigger("update_annotate_table")
       trigger("refresh_export")
       trigger("annotations_modal")
-      showNotification(
+      mp_toast(
         stringr::str_glue(
           "Assembly restored ({format(res$length, big.mark = ',')} bp, ",
           "{res$topology %|NA|% 'unknown'})."
@@ -3085,103 +3039,72 @@ annotations_details_server <- function(id, rv) {
       )
     })
 
-    # Mark ID verified ----
-    observeEvent(input$ID_verified, {
-      if(is.na(rv$updating$ID_verified)) {
-        updateActionButton(session, "ID_verified")
-        rv$updating$ID_verified <- "yes"
-        update_annotate_unit("ID_verified")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
-      } else if(as.character(rv$updating$ID_verified) == "no"){
-        updateActionButton(session, "ID_verified")
-        rv$updating$ID_verified <- "yes"
-        update_annotate_unit("ID_verified")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
-      } else {
-        updateActionButton(session, "ID_verified")
-        rv$updating$ID_verified <- "no"
-        update_annotate_unit("ID_verified")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "ID_verified")], by = c("ID", "path", "scaffold"))
-      }
-    }) # END ID VERIFIED
-
-    # Mark as reviewed ----
-    observeEvent(input$reviewed, {
-      if (as.character(rv$updating$reviewed) == "no") {
-        updateActionButton(session, "reviewed")
-        rv$updating$reviewed <- "yes"
-        update_annotate_unit("reviewed")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
-      } else {
-        updateActionButton(session, "reviewed")
-        rv$updating$reviewed <- "no"
-        update_annotate_unit("reviewed")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "reviewed")], by = c("ID", "path", "scaffold"))
-      }
-    }) # END REVIEWED
-
-    # Mark as problematic ----
-    observeEvent(input$problematic, {
-      if (is.na(rv$updating$problematic)) {
-        updateActionButton(session, "problematic")
-        rv$updating$problematic <- "yes"
-        update_annotate_unit("problematic")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
-      } else {
-        updateActionButton(session, "problematic")
-        rv$updating$problematic <- NA_character_
-        update_annotate_unit("problematic")
-        rv$data <- rv$data |>
-          dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "problematic")], by = c("ID", "path", "scaffold"))
-      }
-    }) # END PROBLEMATIC
-
-    # Mark as partial ----
-    apply_partial <- function(value) {
-      updateActionButton(session, "partial")
-      rv$updating$partial <- value
-      update_annotate_unit("partial")
+    # Review flags ----
+    # One write path for all four flags: mp_flag_next() decides the value, the
+    # same rows_update carries it, and every write says what it did (theme T02).
+    write_flag <- function(field, label, value) {
+      if (lock_blocked()) return(invisible(NULL))
+      rv$updating[[field]] <- value
+      update_annotate_unit(field)
       rv$data <- rv$data |>
-        dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "partial")], by = c("ID", "path", "scaffold"))
+        dplyr::rows_update(
+          rv$updating[, c("ID", "path", "scaffold", field)],
+          by = c("ID", "path", "scaffold")
+        )
+      # Same voice as the Annotate toolbar write, and the unit is an assembly.
+      mp_toast(
+        paste0(
+          mp_n(1L, "assembly"),
+          if (identical(value, "yes")) " marked " else " cleared of ",
+          label, "."
+        ),
+        type = "message"
+      )
     }
-    observeEvent(input$partial, {
-      if (!isTRUE(rv$updating$partial == "yes")) {
-        # turning partial on: warn first if the assembly is circular
-        if (isTRUE(rv$updating$topology == "circular")) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = ns("partial_circular_confirm"),
-            title = "Mark circular assembly as partial?",
-            text = paste(
-              "This assembly is circular. A closed circle represents the whole",
-              "molecule, so flagging it 'partial' is contradictory. Use the",
-              "Linearize button to break the circle before submission, or mark",
-              "it partial anyway."
-            ),
-            type = "warning",
-            btn_labels = c("Cancel", "Mark partial anyway"),
-            btn_colors = c("#6c757d", "#0056b3")
-          )
-          req(F)
-        }
-        apply_partial("yes")
-      } else {
-        apply_partial("no")
-      }
+
+    observeEvent(input$ID_verified, {
+      write_flag("ID_verified", "ID verified",
+                 mp_flag_next(rv$updating$ID_verified))
     })
+
+    observeEvent(input$reviewed, {
+      write_flag("reviewed", "reviewed", mp_flag_next(rv$updating$reviewed))
+    })
+
+    observeEvent(input$problematic, {
+      write_flag("problematic", "problematic",
+                 mp_flag_next(rv$updating$problematic, off = NA_character_))
+    })
+
+    observeEvent(input$partial, {
+      nxt <- mp_flag_next(rv$updating$partial)
+      # Turning partial on: a closed circle is the whole molecule, so say so
+      # before flagging it incomplete.
+      if (identical(nxt, "yes") && isTRUE(rv$updating$topology == "circular")) {
+        mp_confirm(
+          ns("partial_circular_confirm"),
+          title = "Mark circular assembly as partial",
+          text = paste(
+            "This assembly is circular. A closed circle represents the whole",
+            "molecule, so flagging it partial is contradictory. Use Linearize",
+            "to break the circle before submission, or mark it partial anyway."
+          ),
+          action_label = "Mark partial anyway"
+        )
+        req(F)
+      }
+      write_flag("partial", "partial", nxt)
+    })
+
     observeEvent(input$partial_circular_confirm, ignoreInit = TRUE, {
       if (isTRUE(input$partial_circular_confirm)) {
-        apply_partial("yes")
+        write_flag("partial", "partial", "yes")
       }
-    }) # END PARTIAL
+    })
 
     # Poor BLAST reference toggle ----
     observeEvent(input$poor_blast_ref_toggle, ignoreInit = TRUE, {
+      req(!locked())
       val <- if (isTRUE(input$poor_blast_ref_toggle)) "poor" else "good"
       rv$updating$poor_blast_ref  <- val
       rv$updating$blast_ref_status <- val
@@ -3225,6 +3148,7 @@ annotations_details_server <- function(id, rv) {
     # accession. Drives the Annotate/Export tables, the export note and the synteny
     # default. Does not re-curate.
     observeEvent(input$synteny_set_ref, ignoreInit = TRUE, {
+      if (lock_blocked()) req(F)
       acc <- active_ref_acc()
       req(acc, !is.na(acc), nzchar(acc))
       cur <- (rv$updating[["blast_accession"]] %||% NA) %|NA|% ""
@@ -3269,7 +3193,7 @@ annotations_details_server <- function(id, rv) {
           )
         }
         TRUE
-      }, error = function(e) { showNotification(paste("Failed to set reference:", conditionMessage(e)), type = "error"); FALSE })
+      }, error = function(e) { mp_toast(paste("Could not set the reference:", conditionMessage(e)), type = "error"); FALSE })
       req(ok)
 
       # Reflect in the modal (fig_ctx / picker) and the Annotate table (rv$data), for
@@ -3289,7 +3213,7 @@ annotations_details_server <- function(id, rv) {
                      stringsAsFactors = FALSE),
           by = c("ID", "path", "scaffold"), unmatched = "ignore"
         )
-      showNotification(paste0("Reference set to ", acc, " for ", rv$updating$ID), type = "message")
+      mp_toast(paste0("Reference set to ", acc, " for ", rv$updating$ID), type = "message")
     })
 
     # Join-group editing helpers ----
@@ -3408,6 +3332,7 @@ annotations_details_server <- function(id, rv) {
 
     # Edit Annotation ----
     observeEvent(input$edit_mode, {
+      if (lock_blocked()) req(F)
       shinyjs::show("edit_mode_ctrls")
       shinyjs::show("save_edits")
       shinyjs::show("discard_edits")
@@ -3507,7 +3432,7 @@ annotations_details_server <- function(id, rv) {
         shiny.silent.error = function(e) NULL,
         error = function(e) {
           waiter::waiter_hide()
-          showNotification(
+          mp_toast(
             paste("Edit failed:", conditionMessage(e)),
             type = "error",
             duration = 10
@@ -4015,16 +3940,15 @@ annotations_details_server <- function(id, rv) {
         pending_seg_move <<- list(
           sel = sel, end = end, pos1 = pos1, pos2 = pos2, is_rrna = is_rrna
         )
-        shinyWidgets::confirmSweetAlert(
-          inputId = ns("seg_overlap_confirm"),
+        mp_confirm(
+          ns("seg_overlap_confirm"),
           title = "Segments would overlap",
           text = paste(
             "That move would overlap another segment of this gene.",
             "You can continue if you are working the segments apart."
           ),
-          type = "warning",
-          btn_labels = c("Cancel", "Move anyway"),
-          btn_colors = c("#6c757d", "#d9534f")
+          action_label = "Move anyway",
+          danger = TRUE
         )
         return(invisible(NULL))
       }
@@ -4072,16 +3996,16 @@ annotations_details_server <- function(id, rv) {
       req(rv$annotations$type[selected()] == "PCG")
       stop_codon <- rv$annotations$stop_codon[selected()]
       if (is.na(stop_codon) || nchar(stop_codon) <= 1) {
-        shinyWidgets::sendSweetAlert(
-          session, title = "Stop already minimal",
-          text = "Stop codon is already a single base (T).", type = "info"
+        mp_alert(
+          title = "Stop codon is already minimal",
+          text = "The stop codon is already a single base (T).", type = "info"
         )
         req(FALSE)
       }
       new_stop <- stringr::str_sub(stop_codon, 1, nchar(stop_codon) - 1)
       if (new_stop %nin% rv$editing$params$stop_codons) {
-        shinyWidgets::sendSweetAlert(
-          session, title = "Invalid partial stop",
+        mp_alert(
+          title = "Invalid partial stop",
           text = paste0("'", new_stop, "' is not an allowed stop for this gene."),
           type = "warning"
         )
@@ -4160,6 +4084,7 @@ annotations_details_server <- function(id, rv) {
 
     # Save edits ----
     observeEvent(input$save_edits, {
+      if (lock_blocked()) req(F)
       # Show overlay first, then defer the (blocking) stat recompute + DB writes
       # one tick so the "hold tight" message paints before work starts.
       show_edit_waiter("Saving, hold tight...")
@@ -4204,9 +4129,10 @@ annotations_details_server <- function(id, rv) {
       # Check for local blast db
       rv$local_db <- rv$local_db %||% getOption("MitoPilot.local.db")
       if (length(rv$local_db) == 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "No local database found!",
-          text = "Run options('MitoPilot.local.db' = '/path/to/local/blastp/db') - add to .Rprofile for persistence."
+        mp_alert(
+          title = "No local BLAST database found",
+          text = "Run options('MitoPilot.local.db' = '/path/to/local/blastp/db') - add to .Rprofile for persistence.",
+          type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "local_blast",
@@ -4216,8 +4142,10 @@ annotations_details_server <- function(id, rv) {
       }
       # Check for edit mode
       if (length(rv$editing) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "In edit mode!"
+        mp_alert(
+          title = "Edits in progress",
+          text = "Save or discard your edits before changing the BLAST source.",
+          type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "local_blast",
@@ -4243,8 +4171,10 @@ annotations_details_server <- function(id, rv) {
         dplyr::pull(max_blast_hits)
       # Check for edit mode
       if (length(rv$editing) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "In edit mode!"
+        mp_alert(
+          title = "Edits in progress",
+          text = "Save or discard your edits before changing the BLAST source.",
+          type = "warning"
         )
         shinyWidgets::updatePrettyCheckbox(
           inputId = "local_blast",
@@ -4268,15 +4198,17 @@ annotations_details_server <- function(id, rv) {
 
     # Merge Annotations ----
     observeEvent(input$merge, {
+      if (lock_blocked()) req(F)
       if (length(selected()) == 0) {
-        shinyWidgets::sendSweetAlert(title = "No annotation selected")
+        mp_toast("Select an annotation in the table first.", type = "warning")
         req(F)
       }
       sel_type <- rv$annotations$type[selected()]
       if (!sel_type %in% c("PCG", "rRNA")) {
-        shinyWidgets::sendSweetAlert(
-          title = "Merge only available for PCGs and rRNAs",
-          text = "Select a protein-coding gene or ribosomal RNA annotation to merge."
+        mp_alert(
+          title = "Merge is only available for PCGs and rRNAs",
+          text = "Select a protein-coding gene or ribosomal RNA annotation to merge.",
+          type = "info"
         )
         req(F)
       }
@@ -4287,9 +4219,10 @@ annotations_details_server <- function(id, rv) {
         !stringr::str_detect(rv$annotations$gene, "_DELETED_")
       )
       if (length(dup_idx) < 2) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Nothing to merge",
-          text = stringr::str_glue("Only one non-deleted {sel_gene} annotation exists.")
+          text = stringr::str_glue("Only one non-deleted {sel_gene} annotation exists."),
+          type = "info"
         )
         req(F)
       }
@@ -4353,16 +4286,17 @@ annotations_details_server <- function(id, rv) {
     observeEvent(input$confirm_merge, {
       rows_to_merge <- as.integer(req(input$merge_selected_rows))
       if (length(rows_to_merge) < 2) {
-        shinyWidgets::sendSweetAlert(title = "Select at least 2 annotations to merge")
+        mp_toast("Select at least two annotations to merge.", type = "warning")
         req(F)
       }
       merge_anns <- rv$annotations[rows_to_merge, ]
       if (length(unique(merge_anns$path)) > 1 ||
           length(unique(merge_anns$scaffold)) > 1 ||
           length(unique(merge_anns$direction)) > 1) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot merge",
-          text = "All selected annotations must be on the same path, scaffold, and strand direction."
+          text = "All selected annotations must be on the same path, scaffold, and strand direction.",
+          type = "warning"
         )
         req(F)
       }
@@ -4373,7 +4307,7 @@ annotations_details_server <- function(id, rv) {
         # Block joining features that are already part of a join; the user must
         # un-join them first (nested/overlapping join groups are not supported).
         if (any(stringr::str_detect(dplyr::coalesce(merge_anns$notes, ""), "^JOIN: "))) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "Already joined",
             text = "One or more selected features are already part of a joined gene. Un-join them first before creating a new join.",
             type = "warning"
@@ -4397,12 +4331,12 @@ annotations_details_server <- function(id, rv) {
         slip_note <- if (identical(join_mode, "frameshift")) input$slippage_note else NULL
         pending_join(list(rows = rows_to_merge, anns = merge_anns, mode = join_mode, slip_note = slip_note))
         if (length(warn_msgs) > 0) {
-          shinyWidgets::confirmSweetAlert(
-            inputId = ns("confirm_join"),
-            title = "Proceed with join?",
+          mp_confirm(
+            ns("confirm_join"),
+            title = "Proceed with join",
             text = paste(warn_msgs, collapse = " "),
-            type = "warning",
-            btn_labels = c("Cancel", "Join anyway")
+            action_label = "Join anyway",
+            danger = TRUE
           )
         } else {
           do_join_merge(rows_to_merge, merge_anns, join_mode, slip_note)
@@ -4414,7 +4348,7 @@ annotations_details_server <- function(id, rv) {
       # yields the complementary arc - silently discarding the real gene. There
       # is no unambiguous "span" across an origin, so refuse instead of guessing.
       if (any(merge_anns$pos1 > merge_anns$pos2)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot span the origin",
           text = paste(
             "One of these annotations crosses the start of the assembly, so a",
@@ -4544,6 +4478,7 @@ annotations_details_server <- function(id, rv) {
     })
 
     observeEvent(input$unjoin, {
+      if (lock_blocked()) req(F)
       req(length(selected()) > 0)
       sel_notes <- rv$annotations$notes[selected()] %|NA|% ""
       grp <- stringr::str_match(sel_notes, "^JOIN: mode=\\w+ group=(\\d+)")[, 2]
@@ -4572,7 +4507,7 @@ annotations_details_server <- function(id, rv) {
     # current rv$annotations (the render isolates rv$annotations, gated on
     # render_annotations_table; see the normal open path).
     reopen_details <- function() {
-      annotate_details_modal(rv) |> showModal()
+      open_modal()
       render_annotations_table(Sys.time())
     }
 
@@ -4677,6 +4612,7 @@ annotations_details_server <- function(id, rv) {
     # name, sets the corresponding feature type, flags it as edited, and records
     # a note. Does NOT re-run curation (start/stop trimming, refHit rules).
     observeEvent(input$assign_gene, {
+      if (lock_blocked()) req(F)
       req(length(selected()) > 0)
       sel_type <- rv$annotations$type[selected()]
       is_assigned <- isTRUE(rv$annotations$tool[selected()] == "ORFfinder") &&
@@ -4707,7 +4643,9 @@ annotations_details_server <- function(id, rv) {
       }
 
       showModal(modalDialog(
-        title = if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF",
+        title = mp_modal_title(
+          if (is_assigned) "Edit ORF gene assignment" else "Assign gene name to ORF"
+        ),
         selectizeInput(
           ns("assign_gene_choice"),
           label = "Gene name (pick a standard mitochondrial PCG or type a custom name):",
@@ -4716,12 +4654,32 @@ annotations_details_server <- function(id, rv) {
           options = list(create = TRUE, maxItems = 1, placeholder = "e.g. nad6 or a custom name")
         ),
         suggestion_ui,
-        footer = tagList(
-          actionButton(ns("confirm_assign_gene"), "Assign"),
-          if (is_assigned) actionButton(ns("remove_assign_gene"), "Remove assignment"),
-          actionButton(ns("cancel_assign_gene"), "Cancel")
+        # Cancel is a server button, not modalButton(): dismissing this dialog has
+        # to reopen the details window it replaced.
+        footer = mp_footer(
+          primary = actionButton(ns("confirm_assign_gene"), "Assign"),
+          dismiss = NULL,
+          extra = tagList(
+            if (is_assigned) {
+              actionButton(ns("remove_assign_gene"), "Remove assignment",
+                           class = "btn-danger")
+            },
+            actionButton(ns("cancel_assign_gene"), "Cancel")
+          )
         ),
-        easyClose = TRUE
+        easyClose = FALSE
+      ))
+      # Same reason: the header X returns to the details window rather than
+      # dismissing to the bare table.
+      shinyjs::runjs(sprintf(
+        "setTimeout(function(){
+           var b = document.querySelector('#shiny-modal .modal-header .close');
+           if (b) { b.removeAttribute('data-dismiss');
+             b.addEventListener('click', function() {
+               Shiny.setInputValue('%s', Date.now(), {priority: 'event'});
+             }); }
+         }, 0);",
+        ns("cancel_assign_gene")
       ))
     })
     observeEvent(input$confirm_assign_gene, {
@@ -4734,12 +4692,13 @@ annotations_details_server <- function(id, rv) {
       # attributes, FASTA headers, and the export's shell/file paths (which embed
       # the gene name via system("cat ...") and file paths).
       if (!grepl("^[A-Za-z0-9_.-]+$", gene)) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Invalid gene name",
           text = paste(
             "Gene names may only contain letters, numbers, underscores, dots,",
             "and hyphens (no spaces or other special characters)."
-          )
+          ),
+          type = "warning"
         )
         req(F)
       }
@@ -4752,9 +4711,10 @@ annotations_details_server <- function(id, rv) {
       )
       collision <- setdiff(collision, idx)
       if (length(collision) > 0) {
-        shinyWidgets::sendSweetAlert(
-          title = "Cannot assign",
-          text = stringr::str_glue("An annotation named '{gene}' already exists at this position.")
+        mp_alert(
+          title = "Cannot assign this name",
+          text = stringr::str_glue("An annotation named '{gene}' already exists at this position."),
+          type = "warning"
         )
         req(F)
       }
@@ -4771,9 +4731,10 @@ annotations_details_server <- function(id, rv) {
       # Recover the original ORF.N name recorded in the assignment note.
       orig <- stringr::str_match(notes_cur, "(ORF\\.\\d+) assigned to")[, 2]
       if (is.na(orig)) {
-        shinyWidgets::sendSweetAlert(
-          title = "Cannot remove assignment",
-          text = "Could not determine the original ORF name from the annotation notes."
+        mp_alert(
+          title = "Cannot remove this assignment",
+          text = "The original ORF name could not be read from the annotation notes.",
+          type = "warning"
         )
         req(F)
       }
@@ -4796,28 +4757,30 @@ annotations_details_server <- function(id, rv) {
     # Bulk auto-assign: confirm, then apply BLAST-based guesses to every
     # unassigned ORF whose top hit clears the similarity threshold.
     observeEvent(input$auto_assign_orfs, {
+      if (lock_blocked()) req(F)
       req(rv$annotations)
       orf_idx <- which(
         rv$annotations$type == "ORF" &
           !stringr::str_detect(dplyr::coalesce(rv$annotations$gene, ""), "_DELETED_")
       )
       if (length(orf_idx) == 0) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "No ORFs to assign",
-          text = "There are no unassigned ORF annotations in this sample."
+          text = "There are no unassigned ORF annotations in this assembly.",
+          type = "info"
         )
         return()
       }
-      shinyWidgets::confirmSweetAlert(
-        inputId = ns("confirm_auto_assign_orfs"),
-        title = "Auto-assign ORF gene names?",
+      mp_confirm(
+        ns("confirm_auto_assign_orfs"),
+        title = "Auto-assign ORF gene names",
         text = stringr::str_glue(
           "Each unassigned ORF with a confident BLAST match (>= {ORF_ASSIGN_SIM_THRESHOLD}% ",
           "similarity to a standard mitochondrial gene) will be relabeled. ",
           "Low-confidence ORFs are left unchanged. You can undo any assignment ",
           "individually via 'Remove assignment'."
         ),
-        btn_colors = c("#6c757d", "#0056b3")
+        action_label = "Assign"
       )
     })
     observeEvent(input$confirm_auto_assign_orfs, {
@@ -4839,22 +4802,26 @@ annotations_details_server <- function(id, rv) {
         restore_do_save()
       }
       reopen_details()
-      shinyWidgets::sendSweetAlert(
+      mp_alert(
         title = "Auto-assign complete",
-        text = stringr::str_glue("Assigned {assigned} ORF{ifelse(assigned == 1, '', 's')}; {left} left unassigned."),
+        text = stringr::str_glue(
+          "Assigned {mp_n(assigned, 'ORF')}; {left} left unassigned."
+        ),
         type = if (assigned > 0L) "success" else "info"
       )
     })
 
     observeEvent(input$restore, {
+      if (lock_blocked()) req(F)
       req(length(selected()) > 0)
       sel_row <- rv$annotations[selected(), ]
       req(stringr::str_detect(sel_row$gene, "_DELETED_"))
       orig_range <- stringr::str_match(sel_row$notes, "DELETED: from (\\d+)-(\\d+)")
       if (is.na(orig_range[1])) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot restore",
-          text = "Could not determine original position from annotation notes."
+          text = "The original position could not be read from the annotation notes.",
+          type = "warning"
         )
         req(F)
       }
@@ -4864,13 +4831,14 @@ annotations_details_server <- function(id, rv) {
         stringr::str_detect(dplyr::coalesce(rv$annotations$notes, ""), "^MERGED:")
       )
       if (length(merged_idx) > 0) {
-        shinyWidgets::confirmSweetAlert(
-          inputId = ns("confirm_restore_merged"),
-          title = stringr::str_glue("Un-merge {orig_gene}?"),
+        mp_confirm(
+          ns("confirm_restore_merged"),
+          title = stringr::str_glue("Un-merge {orig_gene}"),
           text = stringr::str_glue(
             "This annotation was deleted during a merge. Restoring will undo the entire merge: all deleted {orig_gene} annotations will be restored and the merged annotation will be reverted to its original bounds."
           ),
-          btn_colors = c("#0056b3", "#0056b3")
+          action_label = "Un-merge",
+          danger = TRUE
         )
       } else {
         orig_pos1 <- as.integer(orig_range[2])
@@ -4882,11 +4850,12 @@ annotations_details_server <- function(id, rv) {
             !stringr::str_detect(gene, "_DELETED_")
           )
         if (nrow(conflict) > 0) {
-          shinyWidgets::sendSweetAlert(
+          mp_alert(
             title = "Cannot restore",
             text = stringr::str_glue(
               "An active annotation for {orig_gene} at {orig_pos1}-{orig_pos2} already exists."
-            )
+            ),
+            type = "warning"
           )
           req(F)
         }
@@ -4922,9 +4891,10 @@ annotations_details_server <- function(id, rv) {
         merged_row$notes, "\\(from (\\d+)-(\\d+)\\)"
       )
       if (is.na(merged_orig_range[1])) {
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Cannot un-merge",
-          text = "Original bounds of the merged annotation could not be determined."
+          text = "The original bounds of the merged annotation could not be determined.",
+          type = "warning"
         )
         req(F)
       }
@@ -5013,46 +4983,130 @@ annotations_details_server <- function(id, rv) {
 #' @param session shiny session
 #'
 #' @noRd
-annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
+annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), table_id = NULL) {
   ns <- session$ns
 
+  # Topology reads like every other header badge: shared pill, same casing, no
+  # inline hex (theme T11).
   topo      <- rv$updating$topology %||% "unknown"
   topo_icon <- switch(topo, circular = "\u21ba", linear = "\u2194", "?")
   topo_badge <- span(
-    style = paste0(
-      "background:", if (topo == "circular") "#cce5ff" else if (topo == "linear") "#fff3cd" else "#e9ecef", ";",
-      "color:",      if (topo == "circular") "#004085" else if (topo == "linear") "#856404" else "#6c757d", ";",
-      "border-radius:3px;padding:2px 8px;font-size:0.75em;font-weight:600;white-space:nowrap;"
-    ),
-    paste(topo_icon, toupper(topo))
+    class = paste0("mp-pill mp-pill-", if (topo == "circular") "info" else "neutral"),
+    paste(topo_icon, topo)
   )
+  is_locked <- isTRUE(rv$updating[["annotate_lock"]] == 1)
+  off <- function(x) if (is_locked) shinyjs::disabled(x) else x
 
   modalDialog(
-    title = div(
-      style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
-      span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
-      topo_badge,
-      uiOutput(ns("status_badges"), inline = TRUE)
-    ),
+    # The four review flags sit in the header beside the badges they mirror, so
+    # a metadata click is never one mis-click from a sequence edit (theme T16).
+    title = mp_modal_title(div(
+      class = "mp-sticky-head",
+      div(
+        style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
+        span(stringr::str_glue("Annotations: {rv$updating$ID} - {rv$updating$Taxon}")),
+        topo_badge
+      ),
+      div(
+        style = paste(
+          "display: flex; align-items: center; gap: 8px;",
+          "flex-wrap: wrap; margin-top: 8px;"
+        ),
+        uiOutput(ns("status_badges"), inline = TRUE, style = "display: contents;"),
+        uiOutput(ns("status_toggles"), inline = TRUE, style = "display: contents;")
+      )
+    )),
     size = "l",
     easyClose = F,
+    # The header X dismisses client-side, which would skip the unsaved-edit
+    # guard and the feature-count write Close does. Route it through Close.
+    # Snapshot the table's displayed row order for the footer navigation. The
+    # lock / state / export dropdowns hide rows with CSS rather than removing
+    # them, so each row's class is probed against those rules (rowClass in
+    # app_annotate.R names the classes).
+    if (!is.null(table_id)) tags$script(HTML(sprintf(
+      "setTimeout(function(){
+         var tbl = document.getElementById('%s');
+         var st = window.Reactable ? Reactable.getState('%s') : null;
+         var rows = (st && st.sortedData) || [];
+         if (tbl) {
+           var probe = document.createElement('div'); tbl.appendChild(probe);
+           rows = rows.filter(function(r){
+             var ets = r.export_time_stamp, exp = (ets != null && ets !== '') ? '1' : '0';
+             probe.className = 'mp-lock-' + r.annotate_lock + ' mp-state-' + r.annotate_switch + ' mp-exp-' + exp;
+             return getComputedStyle(probe).display !== 'none';
+           });
+           probe.remove();
+         }
+         var col = function(k){ return rows.map(function(r){ return String(r[k]); }); };
+         Shiny.setInputValue('%s', {ID: col('ID'), path: col('path'), scaffold: col('scaffold')}, {priority: 'event'});
+       }, 0);",
+      table_id, table_id, ns("nav_order")
+    ))),
+    tags$script(HTML(sprintf(
+      "setTimeout(function(){
+         var b = document.querySelector('#shiny-modal .modal-header .close');
+         if (b) { b.removeAttribute('data-dismiss');
+           b.addEventListener('click', function() {
+             Shiny.setInputValue('%s', Date.now(), {priority: 'event'});
+           }); }
+       }, 0);",
+      ns("close")
+    ))),
+    if (is_locked) {
+      div(
+        class = "alert alert-warning mp-lock-banner", role = "status",
+        icon("lock"), tags$b(" This assembly is locked."), " ",
+        MP_LOCK_DEF("annotate"), " Editing controls below are disabled.",
+        " Unlock this assembly in the Annotate table to edit it."
+      )
+    },
     uiOutput(ns("outlier_flag_banner")),
+    # Assembly-level sequence edits: above the table they rewrite, each with a
+    # one-line caption saying what it does (theme T16, C10).
+    div(
+      style = paste(
+        "display: flex; flex-wrap: wrap; align-items: flex-start;",
+        "gap: 24px; margin: 4px 0 8px 0;"
+      ),
+      div(
+        off(actionButton(ns("linearize"), "Linearize",
+                         icon = icon("arrows-left-right-to-line"))),
+        div(
+          class = "mp-table-status", style = "margin: 2px 0 0 0;",
+          "Breaks a circular assembly before or after the selected feature."
+        )
+      ),
+      div(
+        uiOutput(ns("asmb_edit_controls"), inline = TRUE, style = "display: contents;"),
+        div(
+          class = "mp-table-status", style = "margin: 2px 0 0 0;",
+          "Removes sequence before the first and after the last annotation."
+        )
+      )
+    ),
     tags$details(
       id = ns("annotation_table_details"),
       open = TRUE,
       tags$summary("Annotation Table"),
-      reactableOutput(ns("table"), width = "100%")
+      uiOutput(ns("annotation_count"), class = "mp-table-status"),
+      # Fluid height: the table hugs its rows and grows with the window instead
+      # of always being 250px of scroll (theme T04).
+      div(
+        class = "mp-modal-table",
+        reactableOutput(ns("table"), width = "100%")
+      )
     ),
     div(
       id = ns("annotation_btns_wrapper"),
       div(
         style = "display: flex; align-items: center; gap: 8px; margin: 6px 0;",
-        actionButton(
+        off(actionButton(
           ns("auto_assign_orfs"),
           "Auto-assign ORFs",
           icon = icon("wand-magic-sparkles")
-        ),
-        shinyjs::hidden(
+        )),
+        off(shinyjs::hidden(
           div(
             id = ns("annotation_action_btns"),
             style = "display: contents;",
@@ -5072,14 +5126,14 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               )
             )
           )
-        ),
-        shinyjs::hidden(
+        )),
+        off(shinyjs::hidden(
           div(
             id = ns("annotation_restore_btn"),
             style = "display: contents;",
             actionButton(ns("restore"), "Restore")
           )
-        )
+        ))
       ),
       shinyjs::hidden(
         div(
@@ -5122,19 +5176,17 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         ),
         div(
           style = "display: flex; gap: 8px; margin-top: 8px;",
-          shinyWidgets::actionBttn(
+          actionButton(
             ns("confirm_merge"),
             label = "Confirm Merge",
-            style = "material-flat",
-            size = "xs",
-            icon = icon("object-group")
+            icon = icon("object-group"),
+            class = "btn-sm btn-default"
           ),
-          shinyWidgets::actionBttn(
+          actionButton(
             ns("cancel_merge"),
             label = "Cancel",
-            style = "material-flat",
-            size = "xs",
-            icon = icon("times")
+            icon = icon("xmark"),
+            class = "btn-sm btn-default"
           )
         )
       )
@@ -5162,22 +5214,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
     ),
     ns("synteny_zoom_window"), ns("synteny_zoom_window"), ns("synteny_zoom_window")
   ))),
-    tags$hr(style = "margin: 4px 0; border: none; border-top: 1px solid #e0e0e0;"),
-    tags$details(
-      tags$summary("Coverage Map"),
-      div(
-        style = "padding: 2px 5mm 0 5mm; font-size: 0.85em; color: #555;",
-        tags$span(
-          style = "display: inline-block; width: 10px; height: 10px; background: #FF667040; vertical-align: middle; margin-right: 4px;"
-        ),
-        "mean error rate > 5% (possible sequencing or assembly errors)."
-      ),
-      div(
-        id = ns("coverageDiv"),
-        style = "width: 100%; overflow-x: auto; padding: 5mm;",
-        uiOutput(ns("coverage_map"))
-      )
-    ),
+    seqview_ui(ns("seqview")),
     tags$details(
       id = ns("blast_synteny_details"),
       tags$summary("BLAST Reference Synteny"),
@@ -5194,32 +5231,38 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         onclick = sprintf("Shiny.onInputChange('%s', Math.random())", ns("align"))
       ),
       div(
+        id = ns("aln_empty"),
+        class = "mp-table-status",
+        "Select a protein-coding gene, ORF or rRNA in the annotation table to ",
+        "align it against the reference sequences."
+      ),
+      div(
         id = ns("aln_div"),
         div(
           id = ns("aln_ctlr_div"),
           style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 2em; margin-top: 0.5em; height: 50px;",
           div(
             style = "gap: 0.5em;",
-            shinyWidgets::actionBttn(
+            off(actionButton(
               ns("edit_mode"),
               label = "Edit",
-              style = "material-flat",
-              size = "xs",
-              icon = icon("edit")
-            ),
-            shinyWidgets::actionBttn(
+              icon = icon("pen-to-square"),
+              class = "btn-sm btn-default",
+              title = "Edit the start and stop positions of the selected feature"
+            )),
+            actionButton(
               ns("save_edits"),
               label = "Save",
-              style = "material-flat",
-              size = "xs",
-              icon = icon("save")
+              icon = icon("floppy-disk"),
+              class = "btn-sm btn-default",
+              title = "Save the edits to the selected feature"
             ) |> shinyjs::hidden(),
-            shinyWidgets::actionBttn(
+            actionButton(
               ns("discard_edits"),
               label = "Reset",
-              style = "material-flat",
-              size = "xs",
-              icon = icon("rotate-left")
+              icon = icon("rotate-left"),
+              class = "btn-sm btn-default",
+              title = "Discard the edits to the selected feature"
             ) |> shinyjs::hidden()
           ),
           div(
@@ -5253,15 +5296,24 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               id = ns("start_search_ctrl"),
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "START"),
+              # + grows the feature and - shrinks it, in both rows; the grow
+              # button sits on the outer edge of each pair, so each button
+              # points the way the boundary moves (theme T04).
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the start codon upstream (longer feature)",
+                `aria-label` = "Move the start codon upstream (longer feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-add')}', 'plus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "+")
+                icon("plus")
               ),
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the start codon downstream (shorter feature)",
+                `aria-label` = "Move the start codon downstream (shorter feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('start-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "\u2212")
+                icon("minus")
               ),
               div(
                 class = "mp-step-box",
@@ -5274,7 +5326,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                   max = 50,
                   step = 1,
                   width = "48px"
-                )
+                ) |> mp_named_input("Codons per click")
               )
             ),
             tags$label(
@@ -5296,14 +5348,20 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
               style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 0.4em;",
               tags$span(style = "font-weight: bold;", "STOP"),
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the stop codon upstream (shorter feature)",
+                `aria-label` = "Move the stop codon upstream (shorter feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-minus')}', 'minus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "\u2212")
+                icon("minus")
               ),
               tags$button(
+                type = "button",
                 class = "icon-circle grow",
+                title = "Move the stop codon downstream (longer feature)",
+                `aria-label` = "Move the stop codon downstream (longer feature)",
                 onclick = stringr::str_glue("Shiny.setInputValue('{ns('stop-add')}', 'plus', {{priority: 'event'}})"),
-                tags$span(style = "font-size: 0.75em;", "+")
+                icon("plus")
               ),
               div(
                 class = "mp-step-box",
@@ -5316,7 +5374,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
                   max = 50,
                   step = 1,
                   width = "48px"
-                )
+                ) |> mp_named_input("Codons per click")
               )
             )
             ),
@@ -5342,7 +5400,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
           div(
             shinyWidgets::prettyCheckbox(
               ns("local_blast"),
-              label = "Local blast",
+              label = "Local BLAST",
               status = "primary",
               inline = TRUE
             ),
@@ -5370,45 +5428,37 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain()) {
         ns("notes"),
         label = NULL,
         value = rv$updating$annotate_notes %|NA|% "",
-        width = "100%"
-      )
+        width = "100%",
+        placeholder = "Notes for this assembly, saved as you type."
+      ) |> mp_named_input("Notes for this assembly", sel = "textarea") |> off()
     ),
-    # Two-row footer: up to ten controls no longer fit on one line once the trim
-    # button carries its bp count. Row 1 is the assembly-level edits, row 2 the
-    # unit's status flags (left) and the ways out (right). The uiOutputs use
-    # display:contents so their buttons are flex items of the row rather than one
-    # lump, and so the row's gap applies between them.
-    footer = div(
-      class = "annotate-footer-rows",
-      style = "display:flex; flex-direction:column; gap:6px; width:100%;",
-      div(
-        style = "display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-start;",
-        actionButton(ns("linearize"), "Linearize",
-                     icon = icon("arrows-left-right-to-line")),
-        uiOutput(ns("asmb_edit_controls"), inline = TRUE, style = "display:contents;")
+    # One footer row: the two ways out plus the one recommended action. Anything
+    # that does not end the dialog lives in the body beside what it acts on
+    # (theme T16). `close` stays a server button - it guards unsaved edits and
+    # writes the feature counts back before the modal is removed.
+    footer = tagList(
+      uiOutput(ns("nav"), inline = TRUE),
+      # From the export outlier review the only way out is back to it; the
+      # header X still routes through the same close path.
+      if (isTRUE(session$userData$in_outlier_review)) {
+        mp_footer(
+          primary = actionButton(ns("back_to_review"), "Back to Review", icon = icon("arrow-left")),
+          dismiss = NULL
+        )
+      } else mp_footer(
+        # Already locked: there is nothing left to lock, so Close is the action.
+        primary = if (is_locked) {
+          actionButton(ns("close"), "Close")
+        } else {
+          actionButton(ns("lock"), "Lock & Close", icon = icon("lock"))
+        },
+        dismiss = NULL,
+        extra = if (is_locked) NULL else actionButton(ns("close"), "Close")
       ),
       div(
-        style = paste(
-          "display:flex; flex-wrap:wrap; gap:6px;",
-          "justify-content:space-between; align-items:center;"
-        ),
-        div(
-          style = "display:flex; flex-wrap:wrap; gap:6px;",
-          uiOutput(ns("status_toggles"), inline = TRUE, style = "display:contents;")
-        ),
-        div(
-          style = "display:flex; flex-wrap:wrap; gap:6px;",
-          if (isTRUE(session$userData$in_outlier_review)) {
-            actionButton(
-              ns("back_to_review"), "Back to Review",
-              icon = icon("arrow-left"),
-              class = "btn-success"
-            )
-          },
-          actionButton(ns("lock"), "Lock & Close", icon = icon("lock"),
-                       class = "btn-primary"),
-          actionButton(ns("close"), "Close")
-        )
+        class = "mp-table-status mp-sticky-foot",
+        style = "justify-content: flex-end; margin: 6px 0 0 0; clear: both;",
+        MP_LOCK_DEF("annotate")
       )
     )
   )

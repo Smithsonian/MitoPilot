@@ -1,5 +1,12 @@
 include {assemble} from './assemble.nf'
 
+// An NCBI nucleotide accession is downloaded from GenBank inside the task, so
+// it must not be staged as a file. Keep this pattern identical to .mtr_acc_re
+// in R/map_to_ref_refs.R.
+def isMaptorefAccession(v) {
+    (v ?: '').toString().trim() ==~ '(?i)^[A-Z]{1,2}_?[0-9]{5,9}(\\.[0-9]{1,3})?$'
+}
+
 // LEFT JOIN so a missing/NULL blast_opts still flows through (coalesced to
 // run_blast=1 below). ASSEMBLE uses run_blast to finalize state=2 directly
 // for run_blast=0 samples.
@@ -8,7 +15,11 @@ params.sqlRead =  'SELECT a.ID, a.assemble_opts, opts.cpus, opts.memory, ' +
                   'opts.mitofinder_db, opts.mitofinder, s.genetic_code, ' +
                   'opts.max_paths, opts.max_scaffolds, opts.min_assembly_length, ' +
                   'b.run_blast, opts.join_scaffolds, ' +
-                  'a.join_switch, a.assemble_switch, a.blast_accession ' +
+                  'a.join_switch, a.assemble_switch, a.blast_accession, ' +
+                  // Per-sample reference; a value on the set is not read.
+                  "NULLIF(TRIM(a.maptoref_ref), ''), " +
+                  'opts.maptoref, opts.maptoref_consensus, ' +
+                  'opts.maptoref_iter, a.maptoref_topology, opts.maptoref_mapper ' +
                   'FROM assemble a ' +
                   'JOIN assemble_opts opts ' +
                   'ON a.assemble_opts = opts.assemble_opts ' +
@@ -89,6 +100,11 @@ params.sqlWriteAssemble =   'UPDATE assemble SET paths=?, scaffolds=?, length=?,
 
 
 workflow ASSEMBLE {
+    // Placeholder for a sample without a MapToRef reference (0 bytes, which
+    // map_to_ref() reads as "none"). Under launchDir so it adds no bind mount.
+    def maptoref_placeholder = file("${launchDir}/.MitoPilot_NO_FILE")
+    if (!maptoref_placeholder.exists()) { maptoref_placeholder.text = '' }
+
     take:
         input
 
@@ -104,7 +120,13 @@ workflow ASSEMBLE {
                         memory: it[3],                                          // memory
                         getOrganelle: it[6],                                    // getOrganelle options
                         mitofinder: it[9],                                      // mitofinder options
-                        assembler: it[7]                                        // assembler
+                        assembler: it[7],                                       // assembler
+                        maptoref: (it[20] ?: ""),                               // MapToRef bowtie2 options
+                        maptoref_consensus: (it[21] ?: ""),                     // MapToRef samtools consensus options
+                        maptoref_iter: (it[22] == null ? 5 : (it[22] as Integer)), // MapToRef iteration cap
+                        maptoref_topology: (it[23] ?: ""),                      // MapToRef reference topology (per sample)
+                        maptoref_value: ((it[19] ?: "").toString().trim()),     // raw reference: path, URL, or accession
+                        maptoref_mapper: (it[24] ?: "bowtie2")                  // MapToRef read mapper
                     ],
                     [
                         it[4],                                                  // getOrganelle seeds_db
@@ -113,7 +135,8 @@ workflow ASSEMBLE {
                     it[8],                                                      // mitofinder .gb reference database
                     it[10],                                                     // genetic code
                     (it[11] == null ? Integer.MAX_VALUE : (it[11] as Integer)), // max_paths
-                    (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer))  // max_scaffolds
+                    (it[12] == null ? Integer.MAX_VALUE : (it[12] as Integer)), // max_scaffolds
+                    file((it[7] == 'MapToRef' && it[19] != null && it[19].toString().trim() && !isMaptorefAccession(it[19])) ? it[19].toString().trim() : maptoref_placeholder)  // MapToRef reference (accessions resolve in-task)
                 )
                 min_len_scaffolds: tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-scaffold ignore flag)
                 min_len_summary:   tuple(it[0], it[13] == null ? 500 : (it[13] as Integer)) // ID, min_assembly_length (for per-sample all-short check)
@@ -190,7 +213,8 @@ workflow ASSEMBLE {
                     it[1][4],                                                   // mitofinder .gb reference db
                     it[1][5],                                                   // genetic code
                     it[1][6],                                                   // max_paths
-                    it[1][7]                                                    // max_scaffolds
+                    it[1][7],                                                   // max_scaffolds
+                    it[1][8]                                                    // MapToRef reference
                 )
             }
             .set { assemble_in_full }
@@ -287,6 +311,19 @@ workflow ASSEMBLE {
                 if (max_len < min_assembly_length) {
                     status = '3'
                     notes  = "All scaffolds below min assembly length (${min_assembly_length} bp)"
+                }
+                // MapToRef writes its warnings as note= lines in the summary
+                // file, tagged [maptoref] per spec 5.3. Folded into the same
+                // notes string so there is only one write to assemble_notes.
+                def summary = raw[3]
+                if (summary && summary.exists()) {
+                    def mtr = summary.readLines()
+                        .findAll { it.startsWith('note=') && it.length() > 5 }
+                        .collect { "[maptoref] " + it.substring(5).trim() }
+                    if (mtr) {
+                        def msg = mtr.join('; ')
+                        notes = notes ? "${notes}; ${msg}" : msg
+                    }
                 }
                 // no_blast samples: if assembly succeeded (status '4') and BLAST is
                 // not requested, write state=2 directly here.

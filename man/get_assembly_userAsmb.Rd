@@ -2,7 +2,7 @@
 % Please edit documentation in R/app_assemble_utils_userAsmb.R
 \name{get_assembly_userAsmb}
 \alias{get_assembly_userAsmb}
-\title{Get assembly from database}
+\title{Get assembly from database (user-supplied assemblies)}
 \usage{
 get_assembly_userAsmb(ID, path, scaffold = NULL, con)
 }
@@ -16,5 +16,5 @@ get_assembly_userAsmb(ID, path, scaffold = NULL, con)
 \item{con}{database connection}
 }
 \description{
-Get assembly from database
+Deprecated: identical to [get_assembly()], which serves both project types.
 }

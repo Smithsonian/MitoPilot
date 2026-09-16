@@ -47,7 +47,6 @@ pipeline_server <- function(id) {
 
     nf_cmd <- reactiveVal()
     process <- reactiveVal()
-    process_out <- reactiveVal()
     job_submitting <- reactiveVal(FALSE)
 
     # Headless submission state (set when the run modal opens in headless mode)
@@ -85,11 +84,11 @@ pipeline_server <- function(id) {
       job_submitting(FALSE)
       # Generate Nextflow params ----
       nf_cmd(nextflow_cmd(session$userData$mode))
-      message(nf_cmd())
 
       # Count what the run will update: samples in Assemble, one row per
       # sequence (path/scaffold unit) in Annotate.
       unit_label <- "samples"
+      unit_noun <- "sample"
       if (session$userData$mode == "Assemble") {
         samples <- dplyr::tbl(session$userData$con, "assemble") |>
           # join_switch = 1 is a join-only redo: WF1 admits it on its own
@@ -100,7 +99,8 @@ pipeline_server <- function(id) {
           dplyr::pull(ID)
       }
       if (session$userData$mode == "Annotate") {
-        unit_label <- "sequences"
+        unit_label <- "assemblies"
+        unit_noun <- "assembly"
         samples <- dplyr::left_join(
           dplyr::tbl(session$userData$con, "assemble"),
           dplyr::tbl(session$userData$con, "annotate"),
@@ -111,19 +111,19 @@ pipeline_server <- function(id) {
           dplyr::pull(ID)
       }
       if (length(samples) == 0) {
+        why_txt <- if (session$userData$mode == "Assemble") {
+          "No samples are queued. Locked or already-successful samples are skipped. Unlock a sample, or set its state to Ready to run, then press Update."
+        } else {
+          "No assemblies are queued. An assembly needs its sample locked in Assemble and its own state set to Ready to run. Lock the sample, or set the assembly's state to Ready to run, then press Update."
+        }
         modalDialog(
-          title = div(
-            style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
-            span(
-              stringr::str_glue("{session$userData$mode} - nothing to update")
-            ),
-            span(id = ns("gears"), class = "gears paused")
-          ),
+          title = stringr::str_glue("{session$userData$mode}: nothing to update"),
           size = "l",
-          h5("Nextflow Command:"),
-          div(class = "code-block", paste(
-            c("nextflow", nf_cmd()), collapse = " "
-          )),
+          p(why_txt),
+          tags$details(
+            tags$summary("Show Nextflow command"),
+            div(class = "code-block", paste(c("nextflow", nf_cmd()), collapse = " "))
+          ),
           footer = tagList(actionButton(ns("close"), "Close"))
         ) |> showModal()
         req(F)
@@ -158,7 +158,7 @@ pipeline_server <- function(id) {
           style = "display: flex; justify-content: space-between; align-items: center; height: 42px;",
           span(
             stringr::str_glue(
-              "{session$userData$mode}: updating {length(samples)} {unit_label}"
+              "{session$userData$mode}: updating {mp_n(length(samples), unit_noun)}"
             )
           ),
           span(id = ns("gears"), class = "gears paused")
@@ -174,14 +174,14 @@ pipeline_server <- function(id) {
           )
         ),
         size = "l",
-        if (!headless) h5("Nextflow Command:"),
+        if (!headless) h5("Nextflow command"),
         if (!headless) div(style = "display: flex; justify-content: space-between; align-items: left;", class = "code-block", textOutput(ns(
           "nf_code_block"
         ))),
         headless_ui,
         div(
           id = ns("progress_div"),
-          h5("Progress:"),
+          h5("Progress"),
           div(
             id = ns("progress_div_text"),
             style = "max-height: 300px; overflow-y: auto;",
@@ -193,11 +193,9 @@ pipeline_server <- function(id) {
           )
         ) |> shinyjs::hidden(),
         footer = tagList(
-          tags$div(style = "margin-bottom: 10px;", uiOutput(ns(
-            "start_button_ui"
-          ))),
           actionButton(ns("stop"), "Stop / Interrupt") |> shinyjs::hidden(),
-          actionButton(ns("close"), "Close")
+          actionButton(ns("close"), "Close"),
+          uiOutput(ns("start_button_ui"), inline = TRUE)
         )
       ) |> showModal()
     })
@@ -207,14 +205,14 @@ pipeline_server <- function(id) {
       if (isTRUE(getOption("MitoPilot.headless"))) {
         cmd <- submit_command(headless_exec())
         submit_btn <- if (is.null(cmd)) {
-          shinyjs::disabled(actionButton(ns("submit_headless"), "Submit to Cluster"))
+          shinyjs::disabled(actionButton(ns("submit_headless"), "Submit to Cluster", class = "btn-primary"))
         } else {
           actionButton(ns("submit_headless"),
-                       paste0("Submit to Cluster (", cmd, ")"), class = "btn-success")
+                       paste0("Submit to Cluster (", cmd, ")"), class = "btn-primary")
         }
         return(tagList(
           submit_btn,
-          actionButton(ns("save_script"), "Save Script Only")
+          actionButton(ns("save_script"), "Save Script Only", class = "btn-default")
         ))
       }
 
@@ -236,21 +234,15 @@ pipeline_server <- function(id) {
         is_sedna_cluster <- TRUE
       }
 
-      if (is_hydra_cluster) {
-        # If hydra is found, render a list containing both buttons
+      if (is_hydra_cluster || is_sedna_cluster) {
+        # Recommended launch path on a detected cluster is submitting a job.
         tagList(
-          actionButton(ns("start"), "Run from App"),
-          actionButton(ns("submit_job"), "Submit as Job", class = "btn-success")
-        )
-      } else if (is_sedna_cluster) {
-        # If hydra is found, render a list containing both buttons
-        tagList(
-          actionButton(ns("start"), "Run from App"),
-          actionButton(ns("submit_job"), "Submit as Job", class = "btn-success")
+          actionButton(ns("start"), "Run from App", class = "btn-default"),
+          actionButton(ns("submit_job"), "Submit as Job", class = "btn-primary")
         )
       } else {
-        # Otherwise, render only the default start button
-        actionButton(ns("start"), "Run from App", class = "btn-success")
+        # No cluster: running from the app is the only, recommended path.
+        actionButton(ns("start"), "Run from App", class = "btn-primary")
       }
     })
 
@@ -339,7 +331,7 @@ pipeline_server <- function(id) {
     observeEvent(input$save_script, {
       tryCatch({
         script_path <- write_headless_script()
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Submission script saved",
           text = paste0(
             "Wrote ", basename(script_path), " to your project directory and ",
@@ -350,10 +342,7 @@ pipeline_server <- function(id) {
         )
         removeModal()
       }, error = function(e) {
-        shinyWidgets::sendSweetAlert(
-          title = "Failed to save submission script:",
-          text = e$message, type = "error"
-        )
+        mp_alert(title = "Submission script failed to save", text = e$message, type = "error")
       })
     })
 
@@ -365,7 +354,7 @@ pipeline_server <- function(id) {
         if (!isTRUE(res$success)) {
           stop(res$output)
         }
-        shinyWidgets::sendSweetAlert(
+        mp_alert(
           title = "Job submitted",
           text = paste0(res$command, ": ", res$output,
                         "\nLog: ", basename(headless_log_file())),
@@ -373,10 +362,7 @@ pipeline_server <- function(id) {
         )
         removeModal()
       }, error = function(e) {
-        shinyWidgets::sendSweetAlert(
-          title = "Failed to submit job:",
-          text = e$message, type = "error"
-        )
+        mp_alert(title = "Job submission failed", text = e$message, type = "error")
       })
     })
 
@@ -389,13 +375,7 @@ pipeline_server <- function(id) {
       # Let the user know submission is underway. The qsub/sbatch call below
       # blocks the R thread, so defer it to the next event-loop tick to let
       # this message render first.
-      shinyWidgets::sendSweetAlert(
-        title = "Submitting job...",
-        text = "Hold tight, handing your job off to the scheduler. This can take a moment.",
-        type = "info",
-        btn_labels = NA,
-        closeOnClickOutside = FALSE
-      )
+      mp_toast("Submitting job to the scheduler - this can take a moment.", type = "message", duration = 4)
 
       later::later(function() {
        shiny::withReactiveDomain(session, {
@@ -450,8 +430,8 @@ pipeline_server <- function(id) {
           )
 
           if (any(grepl("Your job", submit_output, ignore.case = TRUE))) {
-            shinyWidgets::sendSweetAlert(
-              title = "Success!",
+            mp_alert(
+              title = "Job submitted",
               text = paste0(
                 submit_output,
                 ". You can monitor your job on Hydra with the `qstat` command or see `",
@@ -468,9 +448,7 @@ pipeline_server <- function(id) {
         }, error = function(e) {
           job_submitting(FALSE)
           shinyjs::enable(ns("submit_job"))
-          shinyWidgets::sendSweetAlert(title = "Failed to submit job:",
-                                       text = e$message,
-                                       type = "error")
+          mp_alert(title = "Job submission failed", text = e$message, type = "error")
         })
       } else if (is_sedna_cluster) {
         tryCatch({
@@ -530,8 +508,8 @@ pipeline_server <- function(id) {
           )
 
           if (any(grepl("[0-9]", submit_output, ignore.case = TRUE))) {
-            shinyWidgets::sendSweetAlert(
-              title = "Success!",
+            mp_alert(
+              title = "Job submitted",
               text = paste0(
                 "Job ID: ",
                 submit_output,
@@ -549,9 +527,7 @@ pipeline_server <- function(id) {
         }, error = function(e) {
           job_submitting(FALSE)
           shinyjs::enable(ns("submit_job"))
-          shinyWidgets::sendSweetAlert(title = "Failed to submit job:",
-                                       text = e$message,
-                                       type = "error")
+          mp_alert(title = "Job submission failed", text = e$message, type = "error")
         })
       }
        })
@@ -643,19 +619,6 @@ pipeline_server <- function(id) {
         prog_footer = prog_footer
       )
     }
-    collapse_empty_lines <- function(x) {
-      is_empty <- grepl("^\\s*$", x)
-      if (all(is_empty)) {
-        return(character(0))
-      }
-      first_nonempty <- which(!is_empty)[1]
-      last_nonempty <- which(!is_empty)[length(which(!is_empty))]
-      x <- x[first_nonempty:last_nonempty]
-      is_empty <- is_empty[first_nonempty:last_nonempty]
-      keep <- !is_empty |
-        (is_empty & c(TRUE, !is_empty[-length(is_empty)]))
-      x[keep]
-    }
     apply_progress <- function(new_output) {
       if (length(new_output) == 0) return(invisible())
       update <- progress_update(
@@ -723,7 +686,6 @@ pipeline_server <- function(id) {
         process()$kill()
       }
       process(NULL)
-      process_out("")
       removeModal()
     })
   })

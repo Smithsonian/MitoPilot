@@ -32,15 +32,7 @@ update_sample_metadata <- function(
   }
   mapping <- utils::read.csv(update_mapping_fn)
 
-  # Validate ID col
-  if (any(duplicated(mapping[[mapping_id]]))) {
-    stop("Duplicate IDs found in mapping file")
-  }
-
-  # Validate ID length
-  if (any(nchar(mapping[[mapping_id]]) > 18)) {
-    stop("IDs must be no more than 18 characters")
-  }
+  .report_issues(check_sample_ids(mapping[[mapping_id]]), "Update mapping file")
 
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
@@ -68,6 +60,13 @@ update_sample_metadata <- function(
     mapping = mapping[,-which(colnames(mapping) %in% c("Assembly", "Topology"))]
     message("Update mapping file contains user assembly information (Assembly and/or Topology)")
     message("These columns will not be updated in the database")
+  }
+
+  # remove Reference column from updated mapping
+  if("Reference" %in% colnames(mapping)){
+    mapping = mapping[,-which(colnames(mapping) == "Reference"), drop = FALSE]
+    message("Update mapping file contains a MapToRef reference column (Reference)")
+    message("Use MitoPilot::set_maptoref_refs() to change per-sample references")
   }
 
   # read existing sample table

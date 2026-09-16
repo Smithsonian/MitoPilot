@@ -100,69 +100,43 @@ new_project_userAsmb <- function(
   # Fail early on an unsupported Nextflow (see README "Nextflow compatibility").
   check_nextflow_version("new_project_userAsmb")
 
-  # Create directory if it doesn't exist ----
-  if (!dir.exists(path)) {
-    message("Creating project directory: ", path)
-    dir.create(path, recursive = TRUE)
-  }
-  path <- normalizePath(path)
-
-  # No raw data mode: skip reads/coverage. data_path is not needed; RAW_DIR is
-  # pinned to the "NA" sentinel so the pipeline runs the no-reads coverage path.
+  executor <- executor[1]
+  dots <- list(...)
   if (no_raw_data) {
     data_path <- "NA"
     message("no_raw_data = TRUE: skipping read mapping and coverage calculation.")
   }
-
-  # Normalize data path (if provided)----
-  if(!no_raw_data && length(data_path)==1){
-    data_path <- normalizePath(data_path)
-  }
-
-  # Normalize assembly path (if provided)----
-  if(length(assembly_path)==1){
-    assembly_path <- normalizePath(assembly_path)
-  }
-
-  # The mitogenome search cannot confirm anything without a MitoFinder
-  # reference, so refuse at project creation rather than at the end of a run.
-  if (isTRUE(find_mitogenome)) {
-    if (is.null(mitofinder_db) || !nzchar(mitofinder_db) || !file.exists(mitofinder_db)) {
-      stop(
-        "find_mitogenome = TRUE requires a MitoFinder reference database.\n",
-        "Build one for your clade with:\n",
-        "  custom_assembly_db(clade = \"<your clade>\", db_type = \"mitofinder\")\n",
-        "then pass its .gb file as mitofinder_db.",
-        call. = FALSE
-      )
-    }
-    mitofinder_db <- normalizePath(mitofinder_db)
-  }
-
-  # Read mapping file ----
-  if (is.null(mapping_fn) || !file.exists(mapping_fn)) {
-    stop("A mapping file is required to initialize a new project")
-  }
-  mapping_out <- file.path(path, "mapping.csv")
-  if (!identical(mapping_fn, mapping_out)) {
-    file.copy(mapping_fn, mapping_out)
-  }
-
-  # Validate executor ----
-  # Accepts a built-in template, a saved cluster profile (see generate_config),
-  # or an explicit `config` path. Resolution is deferred to resolve_config().
-  executor <- executor[1]
-  if (is.null(config) && (is.null(executor) || !nzchar(executor))) {
-    stop("Invalid executor.")
-  }
+  preflight_project(
+    path = path, mapping_fn = mapping_fn, mapping_id = mapping_id,
+    data_path = data_path, no_raw_data = no_raw_data, user_asmb = TRUE,
+    assembly_path = assembly_path, find_mitogenome = find_mitogenome,
+    mitofinder_db = mitofinder_db, executor = executor, config = config,
+    profile_dir = profile_dir, container = container, genetic_code = genetic_code,
+    ncbi_api_key = ncbi_api_key, force = force, db_fun = new_db_userAsmb,
+    dots = c(dots, list(attempt_circularization = attempt_circularization,
+                        join_scaffolds = join_scaffolds,
+                        find_mitogenome = find_mitogenome))
+  )
 
   # Create directory if it doesn't exist ----
   if (!dir.exists(path)) {
     message("Creating project directory: ", path)
     dir.create(path, recursive = TRUE)
   }
-
   path <- normalizePath(path)
+  if (!no_raw_data && length(data_path) == 1) {
+    data_path <- normalizePath(data_path, mustWork = FALSE)
+  }
+  if (length(assembly_path) == 1 && !identical(assembly_path, "NA")) {
+    assembly_path <- normalizePath(assembly_path, mustWork = FALSE)
+  }
+  if (!is.null(mitofinder_db)) {
+    mitofinder_db <- normalizePath(mitofinder_db, mustWork = FALSE)
+  }
+  mapping_out <- file.path(path, "mapping.csv")
+  if (!identical(normalizePath(mapping_fn), mapping_out)) {
+    file.copy(mapping_fn, mapping_out, overwrite = TRUE)
+  }
 
   # Initialize RStudio Project ----
   # (optional & only if running form RStudio)
@@ -177,11 +151,7 @@ new_project_userAsmb <- function(
 
   # Initialize sqlite db ----
   db <- file.path(path, ".sqlite")
-  if (file.exists(db) && !force) {
-    message("Database already exists. Use force = TRUE to overwrite (old data will be lost).")
-    return()
-  }
-  if (file.exists(db) && force) {
+  if (file.exists(db)) {
     message("Overwriting existing database")
     file.remove(db)
   }
@@ -205,10 +175,6 @@ new_project_userAsmb <- function(
   # Resolve a saved profile / built-in template (or use an explicit path),
   # then fill in the per-project placeholders.
   config <- config %||% resolve_config(executor, profile_dir = profile_dir)
-  if (!file.exists(config)) {
-    stop("Config file not found.")
-    return()
-  }
   readLines(config) |>
     fill_config(list(
       CONTAINER_ID = container,
@@ -219,6 +185,6 @@ new_project_userAsmb <- function(
     )) |>
     writeLines(file.path(path, ".config"))
 
-  message("Project initialized successfully.")
-  message("Please open and review the .config file to ensure all required options are specified.")
+  message("Project initialized: ", path)
+  message("To open the app, run:\n  setwd(\"", path, "\")\n  MitoPilot()")
 }
