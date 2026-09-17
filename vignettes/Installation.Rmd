@@ -66,7 +66,7 @@ Everything on this page happens once per machine. When it is done, go to
 | [R](https://www.r-project.org/) >= 4.4.0 | RStudio is recommended but not required |
 | [Java](https://www.oracle.com/java/technologies/downloads/) 17 or newer | Required by Nextflow. Must be visible in the same shell that runs Nextflow |
 | [Nextflow](https://www.nextflow.io/docs/latest/install.html) 24.10.x - 25.10.x | See the version note below |
-| [Docker](https://docs.docker.com/engine/install/) or [Singularity / Apptainer](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html), **or** a [native install](Native-Install.html) | Docker for a local machine, Singularity or Apptainer on most HPC clusters. Clusters that forbid containers can use the native install instead |
+| [Docker](https://docs.docker.com/engine/install/) or [Singularity / Apptainer](https://docs.sylabs.io/guides/latest/user-guide/quick_start.html) | Docker for a local machine, Singularity or Apptainer on nearly every HPC cluster |
 | Disk space | About 15 GB for the container image, plus room for your data and the Nextflow `work/` directory |
 | Internet access | Reference annotations and taxonomy are fetched from NCBI |
 
@@ -75,9 +75,14 @@ GetOrganelle, MitoFinder, bowtie2, BLAST+, MITOS2, tRNAscan-SE, ARWEN, ARAGORN,
 and ORFfinder all live inside the container image, which Nextflow pulls for you
 on the first run.
 
-If your cluster does not allow containers at all, follow
-[Installing without containers](Native-Install.html); the same tools are
-installed into a folder you own instead of an image.
+<div class="alert alert-note">
+<strong>No containers allowed?</strong> There is a second route that needs
+none of the table above except disk space and internet access: the
+<a href="Native-Install.html">native install</a> puts R, Java, Nextflow, every
+pipeline tool, and the reference database into one folder you own, with a
+conda-style package manager and no root access. Use it on clusters that forbid
+Docker, Singularity, and Apptainer.
+</div>
 
 We provide cluster-specific instructions for two sites:
 
