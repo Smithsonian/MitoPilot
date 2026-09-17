@@ -89,7 +89,7 @@ cd MitoPilot-${ver}/inst/native
 ```
 
 Choose an install location on a large filesystem that allows executables (a
-project or scratch directory, not usually your home directory) and pass it as
+project or scratch directory is usually better than your home directory) and pass it as
 `--prefix`. Everything MitoPilot needs goes inside that one directory:
 
 ```{bash eval=FALSE}
@@ -141,21 +141,41 @@ native_check("/scratch/<user>/mitopilot_native")
 Every core tool should show `found TRUE`. Optional tools are only present after
 `--with-optional`.
 
-## 3. Save a cluster config
+## 3. Save a config profile (once)
+
+This step is needed for both a single workstation and a cluster. Without it,
+`new_project(executor = "local")` uses the built-in template, which runs the
+pipeline in Docker. The profile tells MitoPilot to use the install directory
+instead, and it is saved so every later project can reuse it by name.
+
+**Workstation or a single node, no scheduler:**
+
+```{r eval=FALSE}
+library(MitoPilot)
+generate_config(
+  name             = "local_native",
+  scheduler        = "local",
+  container_engine = "none",
+  native_prefix    = "/path/to/mitopilot_native"   # the install location
+)
+```
+
+**Cluster with a scheduler:**
 
 ```{r eval=FALSE}
 generate_config(
   name             = "my_cluster",
-  scheduler        = "slurm",             # or sge, pbs, lsf, local
+  scheduler        = "slurm",             # or sge, pbs, lsf
   queue            = "general",
   account          = "my_allocation",
   container_engine = "none",
-  native_prefix    = "/scratch/<user>/mitopilot_native"   # the install location
+  native_prefix    = "/scratch/<user>/mitopilot_native"
 )
 ```
 
-Then create projects with `new_project(..., executor = "my_cluster")` exactly as
-in [HPC cluster support](Custom-HPC.html). The config makes every pipeline task
+Then create projects with `new_project(..., executor = "local_native")` or
+`executor = "my_cluster"`, exactly as in
+[HPC cluster support](Custom-HPC.html). The profile makes every pipeline task
 source `<install_dir>/activate.sh` before it runs, so no module loads or conda
 activation are needed on compute nodes.
 
