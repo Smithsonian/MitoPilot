@@ -84,7 +84,7 @@ release you want (the script and the R package must be the same version):
 
 ```{bash eval=FALSE}
 ver=1.5.5
-curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/v${ver}.tar.gz | tar -xz
+curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/${ver}.tar.gz | tar -xz
 cd MitoPilot-${ver}/inst/native
 ```
 
@@ -103,10 +103,14 @@ Options:
 | `--manager pixi` | Use pixi instead of micromamba; `mamba` and `conda` also accepted |
 | `--with-optional` | Also build MitoFinder, ARWEN, and NCBI ORFfinder (off by default in projects) |
 | `--skip-blast-db` | Skip the 289 MB database; reference search falls back to NCBI over the network |
-| `--mitopilot-ref v1.5.5` | Install a different MitoPilot tag |
+| `--mitopilot-ref 1.5.5` | Install a different MitoPilot tag |
 | `--dry-run` | Show what would happen |
 
 Re-running the script is safe; finished steps are skipped.
+
+The bootstrap sets strict channel priority (conda-forge over bioconda). If you
+build the environments by hand from `inst/native/envs/*.yml`, pass
+`--channel-priority strict` or set `CONDA_CHANNEL_PRIORITY=strict`.
 
 ## 2. Check the environment
 
@@ -175,7 +179,7 @@ run `nextflow` from the R console.
 ## Updating
 
 Update the R package inside the bundled R with
-`<prefix>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@v<version>")'`,
+`<prefix>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@<version>")'`,
 and in any other R you use for the app. When a release changes tool pins (see
 `inst/native/VERSIONS.md` in the release), delete `<prefix>/envs` and re-run the
 bootstrap.

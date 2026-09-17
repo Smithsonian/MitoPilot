@@ -19,9 +19,12 @@ test_that("bootstrap rejects an unknown manager and a missing prefix", {
   skip_on_os(c("windows", "mac"))
   skip_if(!nzchar(bootstrap_path()))
   expect_false(identical(
-    system2("bash", c(bootstrap_path(), "--prefix", tempdir(), "--manager", "uv", "--dry-run")),
+    system2("bash", c(bootstrap_path(), "--prefix", tempdir(), "--manager", "uv", "--dry-run"),
+            stdout = FALSE, stderr = FALSE),
     0L))
-  expect_false(identical(system2("bash", c(bootstrap_path(), "--dry-run")), 0L))
+  expect_false(identical(
+    system2("bash", c(bootstrap_path(), "--dry-run"), stdout = FALSE, stderr = FALSE),
+    0L))
 })
 
 test_that(".mp_condaenv maps empty, none, NULL, and the no-conda env var to NULL", {
@@ -61,6 +64,13 @@ test_that("native_env captures PATH and exports from an activate script", {
 
 test_that("native_env errors clearly on a missing script", {
   expect_error(native_env("/nope/activate.sh"), "activate")
+})
+
+test_that("native_env errors clearly when the script produces no environment", {
+  skip_on_os(c("windows", "mac"))
+  act <- withr::local_tempfile(fileext = ".sh")
+  writeLines("exit 1", act)
+  expect_error(native_env(act), "produced no environment")
 })
 
 fake_prefix <- function(tools) {
@@ -123,4 +133,27 @@ test_that("run_tool with NULL condaenv never touches conda", {
   fake <- function(command, args) { seen <<- command; 0L }
   run_tool("aragorn", "-h", condaenv = NULL, runner = fake)
   expect_equal(seen, "aragorn")
+})
+
+fake_prefix_nf <- function(version) {
+  prefix <- withr::local_tempdir(.local_envir = parent.frame())
+  bin <- file.path(prefix, "envs", "mitopilot", "bin")
+  dir.create(bin, recursive = TRUE)
+  nf <- file.path(bin, "nextflow")
+  writeLines(c("#!/bin/sh", paste0("echo 'nextflow version ", version, "'")), nf)
+  Sys.chmod(nf, "0755")
+  writeLines(c(paste0("export PATH=", bin, ":$PATH"), "export MITOPILOT_NO_CONDA=1"),
+             file.path(prefix, "activate.sh"))
+  prefix
+}
+
+test_that("native_nf_pin uses the native launcher's version, then restores PATH/NXF_VER", {
+  skip_on_os(c("windows", "mac"))
+  prefix <- fake_prefix_nf("25.10.4")
+  withr::local_envvar(c(NXF_VER = "25.10.6"))
+  old_path <- Sys.getenv("PATH")
+  nat_env <- native_env(file.path(prefix, "activate.sh"))
+  expect_equal(native_nf_pin(nat_env), "25.10.4")
+  expect_equal(Sys.getenv("NXF_VER"), "25.10.6")
+  expect_equal(Sys.getenv("PATH"), old_path)
 })

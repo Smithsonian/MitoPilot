@@ -177,7 +177,8 @@ new_project_userAsmb <- function(
   config <- config %||% resolve_config(executor, profile_dir = profile_dir)
   readLines(config) |>
     fill_config(list(
-      CONTAINER_ENGINE = container_engine_block("docker"),
+      CONTAINER_ENGINE = container_engine_block(
+        if (executor %in% c("local", "awsbatch")) "docker" else "singularity"),
       CONTAINER_ID = container,
       RAW_DIR = data_path,
       ASMB_DIR = assembly_path,

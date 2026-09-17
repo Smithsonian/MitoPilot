@@ -39,10 +39,27 @@ native_env <- function(activate) {
   script <- paste0("source ", shQuote(activate), " >/dev/null 2>&1; ",
                    "for k in ", paste(keys, collapse = " "),
                    "; do [ -n \"${!k-}\" ] && printf '%s=%s\\n' \"$k\" \"${!k}\"; done; true")
-  out <- system2("bash", c("-c", shQuote(script)), stdout = TRUE, stderr = FALSE)
+  out <- suppressWarnings(system2("bash", c("-c", shQuote(script)), stdout = TRUE, stderr = FALSE))
   out <- out[nzchar(out)]
   vals <- sub("^[A-Z_]+=", "", out)
-  stats::setNames(vals, sub("=.*$", "", out))
+  result <- stats::setNames(vals, sub("=.*$", "", out))
+  if (!"PATH" %in% names(result)) {
+    stop("Sourcing ", activate, " produced no environment; run it in a shell to see the error.", call. = FALSE)
+  }
+  result
+}
+
+#' Nextflow pin computed with the native env's launcher on PATH
+#' @noRd
+native_nf_pin <- function(nat_env) {
+  old <- Sys.getenv(c("PATH", "NXF_VER"), unset = NA)
+  on.exit({
+    Sys.setenv(PATH = old[["PATH"]])
+    if (is.na(old[["NXF_VER"]])) Sys.unsetenv("NXF_VER") else Sys.setenv(NXF_VER = old[["NXF_VER"]])
+  }, add = TRUE)
+  Sys.setenv(PATH = nat_env[["PATH"]])
+  Sys.unsetenv("NXF_VER")
+  nf_pin_version()
 }
 
 #' Use a native (no-container) MitoPilot environment in this R session

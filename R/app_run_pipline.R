@@ -284,12 +284,12 @@ pipeline_server <- function(id) {
         process()$kill()
       }
 
-      # Pin the Nextflow engine to a MitoPilot-compatible version for this run.
-      nxf_pin <- nf_pin_version()
-
       wd <- dirname(getOption("MitoPilot.db") %||% ".")
       nat <- read_config_executor(file.path(wd, ".config"))$native_activate
       nat_env <- if (!is.null(nat)) native_env(nat) else character()
+
+      # Pin the Nextflow engine to a MitoPilot-compatible version for this run.
+      nxf_pin <- if (length(nat_env)) native_nf_pin(nat_env) else nf_pin_version()
 
       p <- processx::process$new(
         "nextflow",

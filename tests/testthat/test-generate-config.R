@@ -129,6 +129,13 @@ test_that("built-in local template still yields a docker block via new_project f
   expect_true(any(grepl("docker {", filled, fixed = TRUE)))
 })
 
+test_that("built-in slurm template yields a singularity block via new_project fill", {
+  lines <- readLines(app_sys("config.slurm"))
+  expect_true(any(grepl("<<CONTAINER_ENGINE>>", lines, fixed = TRUE)))
+  filled <- fill_config(lines, list(CONTAINER_ENGINE = container_engine_block("singularity")))
+  expect_true(any(grepl("singularity {", filled, fixed = TRUE)))
+})
+
 test_that("migrate_config keeps native mode when regenerating from a built-in template", {
   pdir <- tempfile(); proj <- tempfile(); dir.create(proj)
   prof <- generate_config("natmig", scheduler = "local", container_engine = "none",

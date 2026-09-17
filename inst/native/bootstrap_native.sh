@@ -28,7 +28,7 @@ arwen_src="$here/../../docker/arwen/arwen1.2.3.c"
 [ -f "$arwen_src" ] || arwen_src="$here/arwen1.2.3.c"
 
 prefix=""; manager="micromamba"; with_optional=0; skip_blast=0; dry=0
-blast_url="$BLAST_DB_URL_DEFAULT"; mp_ref="v${MITOPILOT_VERSION}"; mp_source=""; skip_mp=0
+blast_url="$BLAST_DB_URL_DEFAULT"; mp_ref="${MITOPILOT_VERSION}"; mp_source=""; skip_mp=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -70,7 +70,7 @@ case "$manager" in
   micromamba)
     if [ ! -x "$prefix/bin/micromamba" ]; then
       say "downloading micromamba"
-      curl -Ls "$MICROMAMBA_URL" | tar -xj -C "$prefix" bin/micromamba
+      curl -fLs --retry 3 "$MICROMAMBA_URL" | tar -xj -C "$prefix" bin/micromamba
     fi
     export MAMBA_ROOT_PREFIX="$prefix/mamba_root"
     mm="$prefix/bin/micromamba"
@@ -83,7 +83,7 @@ case "$manager" in
   pixi)
     if ! command -v pixi >/dev/null && [ ! -x "$prefix/bin/pixi" ]; then
       say "downloading pixi"
-      curl -fsSL "$PIXI_INSTALL_URL" | PIXI_HOME="$prefix" PIXI_NO_PATH_UPDATE=1 bash
+      curl -fsSL --retry 3 "$PIXI_INSTALL_URL" | PIXI_HOME="$prefix" PIXI_NO_PATH_UPDATE=1 bash
     fi
     pixi_bin="$(command -v pixi || echo "$prefix/bin/pixi")"
     mkdir -p "$prefix/pixi"
@@ -130,7 +130,7 @@ WRAP
   chmod +x "$prefix/opt/mitofinder_bin/mitofinder"
   if [ ! -x "$prefix/envs/orffinder/bin/ORFfinder" ]; then
     say "installing ORFfinder"
-    curl -sSL "$ORFFINDER_URL" | gunzip > "$prefix/envs/orffinder/bin/ORFfinder"
+    curl -fsSL --retry 3 "$ORFFINDER_URL" | gunzip > "$prefix/envs/orffinder/bin/ORFfinder"
     chmod +x "$prefix/envs/orffinder/bin/ORFfinder"
     "$prefix/envs/orffinder/bin/patchelf" --set-rpath '$ORIGIN/../lib' "$prefix/envs/orffinder/bin/ORFfinder"
   fi
@@ -140,7 +140,7 @@ fi
 if [ "$skip_blast" = 0 ] && [ ! -s "$prefix/ref_dbs/mito_metazoa/taxonomy4blast.sqlite3" ]; then
   say "downloading BLAST DB"
   mkdir -p "$prefix/ref_dbs"
-  curl -L "$blast_url" | tar -xz -C "$prefix/ref_dbs"
+  curl -fL --retry 3 "$blast_url" | tar -xz -C "$prefix/ref_dbs" || { echo "BLAST DB download failed from $blast_url (use --blast-db-url or --skip-blast-db)" >&2; exit 1; }
   BLASTDB="$prefix/ref_dbs/mito_metazoa" "$main/bin/blastdbcmd" -db "$prefix/ref_dbs/mito_metazoa/mito_metazoa" -info >/dev/null
   [ -s "$prefix/ref_dbs/mito_metazoa/taxonomy4blast.sqlite3" ] || { echo "taxonomy4blast.sqlite3 missing" >&2; exit 1; }
 fi

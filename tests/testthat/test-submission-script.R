@@ -159,8 +159,16 @@ test_that("submission_script sources the native env instead of commented example
 
 test_that("build_submit_script reads native_activate from the project config", {
   wd <- withr::local_tempdir()
-  writeLines(c("params.native_activate = '/opt/mp/activate.sh'",
+  prefix <- withr::local_tempdir()
+  bin <- file.path(prefix, "bin")
+  dir.create(bin, recursive = TRUE)
+  nf <- file.path(bin, "nextflow")
+  writeLines(c("#!/bin/sh", "echo 'nextflow version 25.10.4'"), nf)
+  Sys.chmod(nf, "0755")
+  act <- file.path(prefix, "activate.sh")
+  writeLines(paste0("export PATH=", bin, ":$PATH"), act)
+  writeLines(c(paste0("params.native_activate = '", act, "'"),
                "process { executor = 'slurm' }"), file.path(wd, ".config"))
   lines <- build_submit_script(wd, "slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
-  expect_true(any(lines == "source '/opt/mp/activate.sh'"))
+  expect_true(any(lines == paste0("source '", act, "'")))
 })

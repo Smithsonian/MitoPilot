@@ -317,6 +317,11 @@ build_submit_script <- function(work_dir, executor, queue, full_nf_cmd, job_name
     return(hydra_submission_script(full_nf_cmd, job_name, log_file))
   }
   env_setup <- read_config_executor(file.path(work_dir, ".config"))$native_activate
+  if (!is.null(env_setup)) {
+    nxf_ver <- native_nf_pin(native_env(env_setup))
+    return(submission_script(executor, queue, full_nf_cmd, job_name, log_file,
+                             nxf_ver = nxf_ver, env_setup = env_setup))
+  }
   submission_script(executor, queue, full_nf_cmd, job_name, log_file, env_setup = env_setup)
 }
 
