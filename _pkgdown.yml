@@ -58,6 +58,7 @@ articles:
   navbar: Computing Environments
   contents:
   - 'Custom-HPC'
+  - 'Native-Install'
   - 'NMNH-Hydra'
   - 'NOAA-SEDNA'
 

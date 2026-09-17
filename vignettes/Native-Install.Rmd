@@ -1,0 +1,190 @@
+---
+title: "Installing without containers"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Installing without containers}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<style>
+.alert {
+  border-left: 5px solid;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.alert-tip { border-color: #28A745; background-color: #E9F7EF; }
+.alert-note { border-color: #007BFF; background-color: #EBF5FF; }
+.alert-warning { border-color: #FFC107; background-color: #FFF9E6; }
+.alert-danger { border-color: #DC3545; background-color: #F8D7DA; }
+/* Smithsonian palette: blue #009CDE, yellow #FFCD00, black #101820 */
+.alert-hydra {
+  border-color: #101820;
+  background-color: #E7F6FC;
+  color: #101820;
+}
+.alert-hydra .hydra-tag {
+  display: inline-block;
+  background-color: #FFCD00;
+  color: #101820;
+  font-size: 0.75em;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-right: 6px;
+  vertical-align: 2px;
+}
+strong { font-weight: bold; }
+img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+.figure { margin: 1.2em 0; }
+.figure .caption, p.caption {
+  font-size: 0.82em;
+  line-height: 1.35;
+  color: #6c757d;
+  font-style: italic;
+  margin-top: 0.4em;
+}
+.part-break {
+  border: none;
+  border-top: 3px solid #c9d1d6;
+  margin: 2.2em 0 1.6em;
+}
+</style>
+
+# Installing without containers
+
+Some clusters do not allow Docker, Singularity, or Apptainer. MitoPilot can run
+without them: every tool the pipeline needs installs into a folder you own with
+a conda-style package manager, and no root access is required. This page sets
+that up once per cluster.
+
+<div class="alert alert-note">
+<strong>What you get.</strong> The same pinned tool versions as the MitoPilot
+container (R 4.5.2, Nextflow, GetOrganelle, MITOS2, BLAST+, and the rest), a
+local copy of the metazoan BLAST database, and the MitoPilot R package, all under
+one directory. Nothing uses user namespaces, ptrace, FUSE, or setuid binaries.
+</div>
+
+## Requirements
+
+| Requirement | Notes |
+|---|---|
+| Linux x86_64, glibc 2.17 or newer | RHEL/Rocky/Alma 7+, Ubuntu 18.04+, Debian 10+ |
+| About 20 GB of disk on a filesystem that allows executables | Home directories are often small or `noexec`; a project or scratch space is usually better |
+| Outbound HTTPS from the node where you run the bootstrap | conda-forge, bioconda, GitHub, and NCBI are contacted once |
+| `curl`, `tar`, `bash` | Present on every cluster |
+| Optional: an existing `conda`, `mamba`, or `pixi` | If absent, the bootstrap downloads `micromamba` (a single binary) for you |
+
+## 1. Run the bootstrap
+
+Download the bootstrap script and the environment definitions from the MitoPilot
+release you want (the script and the R package must be the same version):
+
+```{bash eval=FALSE}
+ver=1.5.5
+curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/v${ver}.tar.gz | tar -xz
+cd MitoPilot-${ver}/inst/native
+```
+
+Choose a prefix on a large, executable filesystem and run:
+
+```{bash eval=FALSE}
+bash bootstrap_native.sh --prefix /scratch/$USER/mitopilot_native
+```
+
+That builds the core environments (30 to 90 minutes, mostly downloads), fetches
+the BLAST database, and installs the MitoPilot R package into the bundled R.
+Options:
+
+| Flag | Effect |
+|---|---|
+| `--manager pixi` | Use pixi instead of micromamba; `mamba` and `conda` also accepted |
+| `--with-optional` | Also build MitoFinder, ARWEN, and NCBI ORFfinder (off by default in projects) |
+| `--skip-blast-db` | Skip the 289 MB database; reference search falls back to NCBI over the network |
+| `--mitopilot-ref v1.5.5` | Install a different MitoPilot tag |
+| `--dry-run` | Show what would happen |
+
+Re-running the script is safe; finished steps are skipped.
+
+## 2. Check the environment
+
+From any R that has MitoPilot installed (the bundled one is at
+`<prefix>/envs/mitopilot/bin/R`):
+
+```{r eval=FALSE}
+library(MitoPilot)
+native_check("/scratch/<user>/mitopilot_native")
+```
+
+Every core tool should show `found TRUE`. Optional tools are only present after
+`--with-optional`.
+
+## 3. Save a cluster config
+
+```{r eval=FALSE}
+generate_config(
+  name             = "my_cluster",
+  scheduler        = "slurm",             # or sge, pbs, lsf, local
+  queue            = "general",
+  account          = "my_allocation",
+  container_engine = "none",
+  native_prefix    = "/scratch/<user>/mitopilot_native"
+)
+```
+
+Then create projects with `new_project(..., executor = "my_cluster")` exactly as
+in [HPC cluster support](Custom-HPC.html). The config makes every pipeline task
+source `<prefix>/activate.sh` before it runs, so no module loads or conda
+activation are needed on compute nodes.
+
+## 4. Launch the app
+
+Which R runs the **app** does not matter, as long as MitoPilot is installed in it
+and it is version 4.4 or newer. Pipeline tasks always use the bundled R.
+
+**From a terminal (SSH tunnel).** Source the environment, start R, and follow
+[Accessing the MitoPilot app over an SSH tunnel](Custom-HPC.html#accessing-the-mitopilot-app-over-an-ssh-tunnel):
+
+```{bash eval=FALSE}
+source /scratch/$USER/mitopilot_native/activate.sh
+cd /scratch/$USER/my_runs/project01
+R -e "MitoPilot::MitoPilot(host='0.0.0.0', port=7591, launch.browser=FALSE)"
+```
+
+**From RStudio Server or Open OnDemand.** Install MitoPilot in that R once
+(`BiocManager::install("Smithsonian/MitoPilot")`), then in each session:
+
+```{r eval=FALSE}
+library(MitoPilot)
+native_setup("/scratch/<user>/mitopilot_native")
+```
+
+`native_setup()` puts the bundled Nextflow and Java on this session's PATH. To
+make it automatic, add `MITOPILOT_NATIVE_PREFIX=/scratch/<user>/mitopilot_native`
+to `~/.Renviron` and call `native_setup()` with no arguments, or add the call to
+`~/.Rprofile`. The **Start** button in the app reads the project config and finds
+the environment on its own, so it works even without `native_setup()`; the setup
+is what makes `library(MitoPilot)` report the right Nextflow version and lets you
+run `nextflow` from the R console.
+
+**Batch submission.** When the app offers a cluster submission script, the line
+`source <prefix>/activate.sh` is already filled in.
+
+## Updating
+
+Update the R package inside the bundled R with
+`<prefix>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@v<version>")'`,
+and in any other R you use for the app. When a release changes tool pins (see
+`inst/native/VERSIONS.md` in the release), delete `<prefix>/envs` and re-run the
+bootstrap.
+
+## Troubleshooting
+
+- **Solver errors during bootstrap**: run again with `--manager mamba` if you have
+  one, or copy the failing `envs/*.yml` name into an issue.
+- **`Could not find nextflow` in RStudio Server**: call `native_setup()`.
+- **Jobs fail with `runmitos: command not found`**: the task did not source
+  `activate.sh`; check the project `.config` has `process.beforeScript`.
+- **Home quota exceeded**: set `--prefix` on scratch; the environments are large.

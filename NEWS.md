@@ -1,3 +1,13 @@
+# MitoPilot (development version)
+
+## New Features
+
+- **Install without containers.** `inst/native/bootstrap_native.sh` builds every
+  pipeline tool into a user-owned prefix with micromamba, mamba, conda, or pixi,
+  and `generate_config(container_engine = "none", native_prefix = ...)` writes a
+  config whose tasks use it. `native_setup()` and `native_check()` wire up and
+  verify an R session. See the new article *Installing without containers*.
+
 # MitoPilot 1.5.5
 
 Released 2026-09-16. Container: `macguigand/mitopilot:1.5.5`
