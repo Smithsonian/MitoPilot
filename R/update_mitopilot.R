@@ -67,7 +67,8 @@ read_config_executor <- function(path) {
     queue <- NULL
   }
 
-  list(executor = executor, queue = queue)
+  list(executor = executor, queue = queue,
+       native_activate = grab("params.native_activate"))
 }
 
 #' Build a cluster submission script for a headless Nextflow run
@@ -83,11 +84,13 @@ read_config_executor <- function(path) {
 #' @param full_nf_cmd The full `nextflow ...` command string to run.
 #' @param job_name Job name for the scheduler.
 #' @param log_file Path to the combined stdout/stderr log file.
+#' @param env_setup Path to a native activate.sh; when given it is sourced in
+#'   place of the commented examples.
 #'
 #' @return Character vector of script lines, ready for `writeLines()`.
 #' @noRd
 submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
-                              nxf_ver = nf_pin_version()) {
+                              nxf_ver = nf_pin_version(), env_setup = NULL) {
   executor <- tolower(executor %||% "local")
   if (executor == "pbspro") executor <- "pbs"
 
@@ -135,10 +138,15 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
     "",
     'echo "--- MitoPilot job started: `date` ---"',
     "",
-    "# EDIT: load your cluster environment below (uncomment / adjust as needed)",
-    "# source ~/.bashrc",
-    "# module load java",
-    "# mamba activate MitoPilot_deps",
+    if (is.null(env_setup)) c(
+      "# EDIT: load your cluster environment below (uncomment / adjust as needed)",
+      "# source ~/.bashrc",
+      "# module load java",
+      "# mamba activate MitoPilot_deps"
+    ) else c(
+      "# Native MitoPilot environment (from the project .config)",
+      paste0("source ", env_setup)
+    ),
     "",
     # Pin the Nextflow engine to a MitoPilot-compatible version.
     if (!is.na(nxf_ver)) paste0("export NXF_VER=", nxf_ver),
@@ -308,7 +316,8 @@ build_submit_script <- function(work_dir, executor, queue, full_nf_cmd, job_name
   if (is_hydra_cluster()) {
     return(hydra_submission_script(full_nf_cmd, job_name, log_file))
   }
-  submission_script(executor, queue, full_nf_cmd, job_name, log_file)
+  env_setup <- read_config_executor(file.path(work_dir, ".config"))$native_activate
+  submission_script(executor, queue, full_nf_cmd, job_name, log_file, env_setup = env_setup)
 }
 
 #' Save a user-edited submission script as a reusable project template

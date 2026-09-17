@@ -287,6 +287,10 @@ pipeline_server <- function(id) {
       # Pin the Nextflow engine to a MitoPilot-compatible version for this run.
       nxf_pin <- nf_pin_version()
 
+      wd <- dirname(getOption("MitoPilot.db") %||% ".")
+      nat <- read_config_executor(file.path(wd, ".config"))$native_activate
+      nat_env <- if (!is.null(nat)) native_env(nat) else character()
+
       p <- processx::process$new(
         "nextflow",
         args = c(nf_cmd(), "-ansi-log"),
@@ -294,6 +298,7 @@ pipeline_server <- function(id) {
         stderr = "|",
         env = c(
           "current",
+          nat_env,
           if (!is.na(nxf_pin)) c(NXF_VER = nxf_pin),
           NXF_ANSI_SUMMARY = TRUE,
           # Keep Nextflow's ANSI log from truncating process names; stable, full
@@ -304,7 +309,7 @@ pipeline_server <- function(id) {
           SGE_CELL = "age",
           SGE_ROOT = "/cm/shared/apps/uge/8.8.1"
         ),
-        wd = dirname(getOption("MitoPilot.db") %||% ".")
+        wd = wd
       )
       process(p)
     }

@@ -44,3 +44,20 @@ test_that("bam_readcount_cmd drops conda run in native mode", {
   expect_match(bam_readcount_cmd("a.fa", "m.bam", "c.tsv"),
                "^bam-readcount -w1 -f a.fa m.bam > c.tsv$")
 })
+
+test_that("native_env captures PATH and exports from an activate script", {
+  skip_on_os(c("windows", "mac"))
+  act <- withr::local_tempfile(fileext = ".sh")
+  writeLines(c("export PATH=/opt/mp/envs/mitopilot/bin:$PATH",
+               "export MITOPILOT_NO_CONDA=1",
+               "export NXF_HOME=/opt/mp/nextflow_home"), act)
+  env <- native_env(act)
+  expect_true(startsWith(env[["PATH"]], "/opt/mp/envs/mitopilot/bin:"))
+  expect_equal(env[["MITOPILOT_NO_CONDA"]], "1")
+  expect_equal(env[["NXF_HOME"]], "/opt/mp/nextflow_home")
+  expect_false("JAVA_HOME" %in% names(env))
+})
+
+test_that("native_env errors clearly on a missing script", {
+  expect_error(native_env("/nope/activate.sh"), "activate")
+})

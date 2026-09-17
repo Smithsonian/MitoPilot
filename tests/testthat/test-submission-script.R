@@ -137,3 +137,30 @@ test_that("submission_script falls back to a comment for unknown executors", {
   expect_true(any(grepl("No HPC scheduler resource block", lines)))
   expect_true(any(grepl("nextflow run foo", lines, fixed = TRUE)))
 })
+
+test_that("read_config_executor returns native_activate when present", {
+  cfg <- tempfile()
+  writeLines(c("params.native_activate = '/opt/mp/activate.sh'",
+               "process {", "  executor = 'slurm'", "}"), cfg)
+  out <- read_config_executor(cfg)
+  expect_equal(out$native_activate, "/opt/mp/activate.sh")
+  cfg2 <- tempfile(); writeLines("process { executor = 'local' }", cfg2)
+  expect_null(read_config_executor(cfg2)$native_activate)
+})
+
+test_that("submission_script sources the native env instead of commented examples", {
+  lines <- submission_script("slurm", NULL, "nextflow run foo", "j", "/tmp/j.log",
+                             env_setup = "/opt/mp/activate.sh")
+  expect_true(any(lines == "source /opt/mp/activate.sh"))
+  expect_false(any(grepl("# mamba activate MitoPilot_deps", lines, fixed = TRUE)))
+  plain <- submission_script("slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
+  expect_true(any(grepl("# mamba activate MitoPilot_deps", plain, fixed = TRUE)))
+})
+
+test_that("build_submit_script reads native_activate from the project config", {
+  wd <- withr::local_tempdir()
+  writeLines(c("params.native_activate = '/opt/mp/activate.sh'",
+               "process { executor = 'slurm' }"), file.path(wd, ".config"))
+  lines <- build_submit_script(wd, "slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
+  expect_true(any(lines == "source /opt/mp/activate.sh"))
+})
