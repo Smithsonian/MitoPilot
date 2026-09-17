@@ -41,19 +41,19 @@ while [ $# -gt 0 ]; do
     --mitopilot-source) mp_source="$2"; shift 2;;
     --skip-mitopilot) skip_mp=1; shift;;
     --dry-run) dry=1; shift;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0;;
+    -h|--help) sed -n '2,/^set -e/p' "$0" | grep '^#'; exit 0;;
     *) echo "unknown option: $1" >&2; exit 2;;
   esac
 done
 [ -n "$prefix" ] || { echo "--prefix is required" >&2; exit 2; }
 case "$manager" in micromamba|mamba|conda|pixi) ;; *) echo "unknown --manager: $manager" >&2; exit 2;; esac
-prefix="$(cd "$(dirname "$prefix")" 2>/dev/null && pwd)/$(basename "$prefix")" || prefix="$prefix"
+if [ "$dry" = 0 ]; then mkdir -p "$prefix"; fi
+if [ -d "$prefix" ]; then prefix="$(cd "$prefix" && pwd)"; fi
 
 envs="mitopilot mitos trnascan aragorn bamreadcount"
 [ "$with_optional" = 1 ] && envs="$envs orffinder mitofinder"
 
 say() { printf '==> %s\n' "$*"; }
-run() { if [ "$dry" = 1 ]; then printf '    [dry-run] %s\n' "$*"; else "$@"; fi; }
 
 say "prefix: $prefix"
 say "manager: $manager"
@@ -106,9 +106,11 @@ main="$prefix/envs/mitopilot"
 
 # 3. optional tools ------------------------------------------------------------
 if [ "$with_optional" = 1 ]; then
-  cc="$prefix/envs/mitofinder/bin/cc"; [ -x "$cc" ] || cc="$(ls "$prefix/envs/mitofinder/bin/"*-gcc | head -1)"
   if [ ! -x "$prefix/opt/arwen/arwen" ]; then
     say "building ARWEN"
+    cc="$prefix/envs/mitofinder/bin/cc"
+    if [ ! -x "$cc" ]; then cc="$(ls "$prefix/envs/mitofinder/bin/"*-gcc 2>/dev/null | head -1 || true)"; fi
+    [ -n "$cc" ] && [ -x "$cc" ] || { echo "no C compiler in the mitofinder env" >&2; exit 1; }
     mkdir -p "$prefix/opt/arwen"
     "$cc" -O2 -ffast-math -o "$prefix/opt/arwen/arwen" "$arwen_src" -lm
   fi
@@ -117,6 +119,7 @@ if [ "$with_optional" = 1 ]; then
     rm -rf "$prefix/opt/MitoFinder"
     "$prefix/envs/mitofinder/bin/git" clone --depth 1 "$MITOFINDER_REPO" "$prefix/opt/MitoFinder"
     ( cd "$prefix/opt/MitoFinder" && PATH="$prefix/envs/mitofinder/bin:$PATH" ./install.sh )
+    [ -f "$prefix/opt/MitoFinder/install.sh.ok" ] || { echo "MitoFinder install.sh did not finish" >&2; exit 1; }
   fi
   # wrapper pins python2 regardless of which python is first on PATH
   mkdir -p "$prefix/opt/mitofinder_bin"
