@@ -158,11 +158,16 @@ cat > "$prefix/activate.sh" <<ACT
 # MitoPilot $MITOPILOT_VERSION native environment, written by bootstrap_native.sh ($manager)
 MITOPILOT_NATIVE_PREFIX='$prefix'
 $act
+# conda-style activation swaps the env into the previous env's PATH slot, so
+# force the main env to the front; satellites append once.
+mp_path_add() { case ":\$PATH:" in *":\$1:"*) ;; *) PATH="\$PATH:\$1";; esac; }
+PATH="\$MITOPILOT_NATIVE_PREFIX/envs/mitopilot/bin:\$PATH"
 for e in mitos trnascan aragorn bamreadcount orffinder mitofinder; do
-  [ -d "\$MITOPILOT_NATIVE_PREFIX/envs/\$e/bin" ] && PATH="\$PATH:\$MITOPILOT_NATIVE_PREFIX/envs/\$e/bin"
+  [ -d "\$MITOPILOT_NATIVE_PREFIX/envs/\$e/bin" ] && mp_path_add "\$MITOPILOT_NATIVE_PREFIX/envs/\$e/bin"
 done
-[ -d "\$MITOPILOT_NATIVE_PREFIX/opt/mitofinder_bin" ] && PATH="\$PATH:\$MITOPILOT_NATIVE_PREFIX/opt/mitofinder_bin"
-[ -d "\$MITOPILOT_NATIVE_PREFIX/opt/arwen" ] && PATH="\$PATH:\$MITOPILOT_NATIVE_PREFIX/opt/arwen"
+[ -d "\$MITOPILOT_NATIVE_PREFIX/opt/mitofinder_bin" ] && mp_path_add "\$MITOPILOT_NATIVE_PREFIX/opt/mitofinder_bin"
+[ -d "\$MITOPILOT_NATIVE_PREFIX/opt/arwen" ] && mp_path_add "\$MITOPILOT_NATIVE_PREFIX/opt/arwen"
+unset -f mp_path_add
 export PATH MITOPILOT_NATIVE_PREFIX
 export MITOPILOT_NO_CONDA=1
 export NXF_HOME="\${NXF_HOME:-\$MITOPILOT_NATIVE_PREFIX/nextflow_home}"
