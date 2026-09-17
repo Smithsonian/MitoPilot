@@ -57,8 +57,10 @@ apply_native_overrides <- function(lines, native_prefix) {
   # Matches both the unfilled '<<CONTAINER_ID>>' token (generate_config path)
   # and the already-substituted image string (migrate_config fills CONTAINER_ID
   # first); never matches the per-process 'container = process.container' refs,
-  # which have no leading quote.
-  lines <- lines[!grepl("^\\s*container\\s*=\\s*'", lines)]
+  # which have no leading quote. Null it out rather than deleting it: Nextflow's
+  # strict config parser errors on the per-process `process.container` refs if
+  # process.container is never defined at all.
+  lines <- sub("^(\\s*)container\\s*=\\s*'[^']*'.*$", "\\1container = null", lines)
   db <- file.path(native_prefix, "ref_dbs", "mito_metazoa")
   sub("db_dir = '/ref_dbs/mito_metazoa'.*$",
       paste0("db_dir = '", db, "'    // local BLAST database from the native install"),
