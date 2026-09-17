@@ -1,11 +1,11 @@
-bootstrap_path <- function() system.file("native", "bootstrap_native.sh", package = "MitoPilot")
+installer_path <- function() system.file("native", "install_mitopilot_native.sh", package = "MitoPilot")
 
-test_that("bootstrap script parses and --dry-run lists every step without writing", {
+test_that("install script parses and --dry-run lists every step without writing", {
   skip_on_os(c("windows", "mac"))
-  skip_if(!nzchar(bootstrap_path()))
-  expect_equal(system2("bash", c("-n", bootstrap_path())), 0L)
+  skip_if(!nzchar(installer_path()))
+  expect_equal(system2("bash", c("-n", installer_path())), 0L)
   prefix <- withr::local_tempdir()
-  out <- system2("bash", c(bootstrap_path(), "--prefix", prefix, "--dry-run",
+  out <- system2("bash", c(installer_path(), "--prefix", prefix, "--dry-run",
                            "--with-optional"), stdout = TRUE, stderr = TRUE)
   for (step in c("mitopilot", "mitos", "trnascan", "aragorn", "bamreadcount",
                  "orffinder", "mitofinder", "ARWEN", "MitoFinder", "ORFfinder",
@@ -15,15 +15,15 @@ test_that("bootstrap script parses and --dry-run lists every step without writin
   expect_false(file.exists(file.path(prefix, "activate.sh")))
 })
 
-test_that("bootstrap rejects an unknown manager and a missing prefix", {
+test_that("install script rejects an unknown manager and a missing prefix", {
   skip_on_os(c("windows", "mac"))
-  skip_if(!nzchar(bootstrap_path()))
+  skip_if(!nzchar(installer_path()))
   expect_false(identical(
-    system2("bash", c(bootstrap_path(), "--prefix", tempdir(), "--manager", "uv", "--dry-run"),
+    system2("bash", c(installer_path(), "--prefix", tempdir(), "--manager", "uv", "--dry-run"),
             stdout = FALSE, stderr = FALSE),
     0L))
   expect_false(identical(
-    system2("bash", c(bootstrap_path(), "--dry-run"), stdout = FALSE, stderr = FALSE),
+    system2("bash", c(installer_path(), "--dry-run"), stdout = FALSE, stderr = FALSE),
     0L))
 })
 

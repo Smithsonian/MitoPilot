@@ -30,7 +30,7 @@ generate_config(
 \item{container_engine}{Container runtime. "auto" picks docker for
 local/awsbatch and singularity for HPC schedulers; or set explicitly to
 "singularity", "apptainer", or "docker"; or "none" for a native
-(no-container) install built by inst/native/bootstrap_native.sh, which
+(no-container) install built by inst/native/install_mitopilot_native.sh, which
 requires native_prefix.}
 
 \item{container_cache}{Optional cacheDir for singularity/apptainer.}
@@ -38,7 +38,7 @@ requires native_prefix.}
 \item{container_run_options}{Optional runOptions for singularity/apptainer
 (e.g. bind mounts).}
 
-\item{native_prefix}{Directory passed to `bootstrap_native.sh --prefix`
+\item{native_prefix}{Directory passed to `install_mitopilot_native.sh --prefix`
 (contains `activate.sh` and `ref_dbs/`). Required when
 `container_engine = "none"`, ignored otherwise.}
 

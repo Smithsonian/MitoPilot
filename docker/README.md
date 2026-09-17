@@ -143,8 +143,8 @@ gh release create blastdb-2026-08-14 docker/mito_metazoa_blastdb.tar.gz --latest
   --title "mito_metazoa BLAST DB 2026-08-14" --notes "Local BLAST database for MitoPilot native installs."
 ```
 
-Then update `BLAST_DB_TAG` in `inst/native/bootstrap_native.sh` and the tag in
+Then update `BLAST_DB_TAG` in `inst/native/install_mitopilot_native.sh` and the tag in
 `inst/native/VERSIONS.md`. The 2 GB per-asset limit is far above the 289 MB tarball.
 
-`MITOPILOT_VERSION` at the top of `inst/native/bootstrap_native.sh` must be
+`MITOPILOT_VERSION` at the top of `inst/native/install_mitopilot_native.sh` must be
 bumped with every release alongside `BLAST_DB_TAG`.

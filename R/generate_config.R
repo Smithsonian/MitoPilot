@@ -339,12 +339,12 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 #' @param container_engine Container runtime. "auto" picks docker for
 #'   local/awsbatch and singularity for HPC schedulers; or set explicitly to
 #'   "singularity", "apptainer", or "docker"; or "none" for a native
-#'   (no-container) install built by inst/native/bootstrap_native.sh, which
+#'   (no-container) install built by inst/native/install_mitopilot_native.sh, which
 #'   requires native_prefix.
 #' @param container_cache Optional cacheDir for singularity/apptainer.
 #' @param container_run_options Optional runOptions for singularity/apptainer
 #'   (e.g. bind mounts).
-#' @param native_prefix Directory passed to `bootstrap_native.sh --prefix`
+#' @param native_prefix Directory passed to `install_mitopilot_native.sh --prefix`
 #'   (contains `activate.sh` and `ref_dbs/`). Required when
 #'   `container_engine = "none"`, ignored otherwise.
 #' @param queue Partition / queue name. If `NULL`, the queue directive is

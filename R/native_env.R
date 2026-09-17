@@ -65,14 +65,14 @@ native_nf_pin <- function(nat_env) {
 #' Use a native (no-container) MitoPilot environment in this R session
 #'
 #' Applies the PATH and variables from `<prefix>/activate.sh` (written by
-#' `inst/native/bootstrap_native.sh`) to the current session, so `nextflow`,
+#' `inst/native/install_mitopilot_native.sh`) to the current session, so `nextflow`,
 #' `java`, and every pipeline tool resolve here exactly as they do inside
 #' pipeline tasks. Call it once after `library(MitoPilot)` when running the app
 #' from RStudio Server or any R session that was not started from a shell where
 #' `activate.sh` was already sourced. The app itself reads the same file from the
 #' project `.config`, so this is only needed for console use.
 #'
-#' @param prefix Directory given to `bootstrap_native.sh --prefix`. Defaults to
+#' @param prefix Directory given to `install_mitopilot_native.sh --prefix`. Defaults to
 #'   `MITOPILOT_NATIVE_PREFIX` if set.
 #' @return (invisibly) `TRUE`.
 #' @export
@@ -96,7 +96,7 @@ native_setup <- function(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX")) {
 #' Sources `<prefix>/activate.sh` and looks up every pipeline tool. Core tools
 #' are needed for the default workflow; optional tools back the MitoFinder,
 #' ARWEN, and ORFfinder options and are only present after
-#' `bootstrap_native.sh --with-optional`.
+#' `install_mitopilot_native.sh --with-optional`.
 #'
 #' @inheritParams native_setup
 #' @param strict Error if any core tool is missing (default `TRUE`).

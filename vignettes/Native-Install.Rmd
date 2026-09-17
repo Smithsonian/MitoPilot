@@ -73,13 +73,13 @@ one directory. Nothing uses user namespaces, ptrace, FUSE, or setuid binaries.
 |---|---|
 | Linux x86_64, glibc 2.17 or newer | RHEL/Rocky/Alma 7+, Ubuntu 18.04+, Debian 10+ |
 | About 20 GB of disk on a filesystem that allows executables | Home directories are often small or `noexec`; a project or scratch space is usually better |
-| Outbound HTTPS from the node where you run the bootstrap | conda-forge, bioconda, GitHub, and NCBI are contacted once |
+| Outbound HTTPS from the node where you run the install script | conda-forge, bioconda, GitHub, and NCBI are contacted once |
 | `curl`, `tar`, `bash` | Present on every cluster |
-| Optional: an existing `conda`, `mamba`, or `pixi` | If absent, the bootstrap downloads `micromamba` (a single binary) for you |
+| Optional: an existing `conda`, `mamba`, or `pixi` | If absent, the install script downloads `micromamba` (a single binary) for you |
 
-## 1. Run the bootstrap
+## 1. Run the install script
 
-Download the bootstrap script and the environment definitions from the MitoPilot
+Download the install script and the environment definitions from the MitoPilot
 release you want (the script and the R package must be the same version):
 
 ```{bash eval=FALSE}
@@ -91,7 +91,7 @@ cd MitoPilot-${ver}/inst/native
 Choose a prefix on a large, executable filesystem and run:
 
 ```{bash eval=FALSE}
-bash bootstrap_native.sh --prefix /scratch/$USER/mitopilot_native
+bash install_mitopilot_native.sh --prefix /scratch/$USER/mitopilot_native
 ```
 
 That builds the core environments (30 to 90 minutes, mostly downloads), fetches
@@ -108,7 +108,7 @@ Options:
 
 Re-running the script is safe; finished steps are skipped.
 
-The bootstrap sets strict channel priority (conda-forge over bioconda). If you
+The install script sets strict channel priority (conda-forge over bioconda). If you
 build the environments by hand from `inst/native/envs/*.yml`, pass
 `--channel-priority strict` or set `CONDA_CHANNEL_PRIORITY=strict`.
 
@@ -206,7 +206,7 @@ download it. Remove the setting on a cluster that uses the native install.
 
 ## Shared install by an administrator
 
-The bootstrap needs no root, only a writable directory, so an administrator can
+The install script needs no root, only a writable directory, so an administrator can
 run it once into shared space and every user sources the same `activate.sh`.
 Three adjustments for a read-only prefix:
 
@@ -214,7 +214,7 @@ Three adjustments for a read-only prefix:
    `NXF_HOME` when it is unset, so users export their own (for example
    `~/.nextflow`) before sourcing, or the administrator edits that line.
    Nextflow writes plugins and engine downloads there.
-2. **Permissions.** After the bootstrap, `chmod -R a+rX <prefix>`. At run
+2. **Permissions.** After the install, `chmod -R a+rX <prefix>`. At run
    time everything writes into the project and the Nextflow work directory,
    never into the prefix. Prefer `micromamba`, `mamba`, or `conda` for a
    shared prefix: pixi's activation may try to repair an environment it
@@ -241,11 +241,11 @@ Update the R package inside the bundled R with
 `<prefix>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@<version>")'`,
 and in any other R you use for the app. When a release changes tool pins (see
 `inst/native/VERSIONS.md` in the release), delete `<prefix>/envs` and re-run the
-bootstrap.
+install script.
 
 ## Troubleshooting
 
-- **Solver errors during bootstrap**: run again with `--manager mamba` if you have
+- **Solver errors during install**: run again with `--manager mamba` if you have
   one, or copy the failing `envs/*.yml` name into an issue.
 - **`Could not find nextflow` in RStudio Server**: call `native_setup()`.
 - **Jobs fail with `runmitos: command not found`**: the task did not source

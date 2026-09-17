@@ -74,7 +74,7 @@ The rest of this guide works the same in either R session.
 ### Option C: no containers at all
 
 If your cluster forbids Docker, Singularity, and Apptainer, install the tools
-natively with the bootstrap in [Installing without containers](Native-Install.html),
+natively with the install script in [Installing without containers](Native-Install.html),
 then use `generate_config(..., container_engine = "none", native_prefix = ...)`
 below. Everything else on this page is the same.
 

@@ -19,9 +19,9 @@ Mirrors docker/Dockerfile for MitoPilot 1.5.5. Update both together.
 | tRNAscan-SE | 2.0.12 | trnascan | bioconda |
 | ARAGORN | 1.2.41 | aragorn | bioconda |
 | bam-readcount | 1.0.1 | bamreadcount | bioconda |
-| NCBI ORFfinder | current linux-i64 | orffinder | ftp.ncbi.nlm.nih.gov (bootstrap) |
-| MitoFinder | upstream master (1.4.2) | mitofinder | github.com/RemiAllio/MitoFinder (bootstrap) |
-| ARWEN | 1.2.3 | opt/arwen | docker/arwen/arwen1.2.3.c (bootstrap) |
+| NCBI ORFfinder | current linux-i64 | orffinder | ftp.ncbi.nlm.nih.gov (install script) |
+| MitoFinder | upstream master (1.4.2) | mitofinder | github.com/RemiAllio/MitoFinder (install script) |
+| ARWEN | 1.2.3 | opt/arwen | docker/arwen/arwen1.2.3.c (install script) |
 | mito_metazoa BLAST DB | see tag below | ref_dbs | GitHub Release asset |
 
 BLAST DB release tag: `blastdb-2026-08-14` (asset `mito_metazoa_blastdb.tar.gz`, 289 MB).

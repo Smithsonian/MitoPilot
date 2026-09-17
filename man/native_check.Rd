@@ -7,7 +7,7 @@
 native_check(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"), strict = TRUE)
 }
 \arguments{
-\item{prefix}{Directory given to `bootstrap_native.sh --prefix`. Defaults to
+\item{prefix}{Directory given to `install_mitopilot_native.sh --prefix`. Defaults to
 `MITOPILOT_NATIVE_PREFIX` if set.}
 
 \item{strict}{Error if any core tool is missing (default `TRUE`).}
@@ -20,5 +20,5 @@ native_check(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"), strict = TRUE)
 Sources `<prefix>/activate.sh` and looks up every pipeline tool. Core tools
 are needed for the default workflow; optional tools back the MitoFinder,
 ARWEN, and ORFfinder options and are only present after
-`bootstrap_native.sh --with-optional`.
+`install_mitopilot_native.sh --with-optional`.
 }

@@ -7,7 +7,7 @@
 native_setup(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"))
 }
 \arguments{
-\item{prefix}{Directory given to `bootstrap_native.sh --prefix`. Defaults to
+\item{prefix}{Directory given to `install_mitopilot_native.sh --prefix`. Defaults to
 `MITOPILOT_NATIVE_PREFIX` if set.}
 }
 \value{
@@ -15,7 +15,7 @@ native_setup(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"))
 }
 \description{
 Applies the PATH and variables from `<prefix>/activate.sh` (written by
-`inst/native/bootstrap_native.sh`) to the current session, so `nextflow`,
+`inst/native/install_mitopilot_native.sh`) to the current session, so `nextflow`,
 `java`, and every pipeline tool resolve here exactly as they do inside
 pipeline tasks. Call it once after `library(MitoPilot)` when running the app
 from RStudio Server or any R session that was not started from a shell where

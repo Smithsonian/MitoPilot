@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# MitoPilot native (no-container) bootstrap. No root required.
-# Usage: bash bootstrap_native.sh --prefix DIR [options]
+# MitoPilot native (no-container) installer. No root required.
+# Usage: bash install_mitopilot_native.sh --prefix DIR [options]
 #   --manager micromamba|mamba|conda|pixi   (default: micromamba, downloaded into DIR/bin)
 #   --with-optional        also build MitoFinder, ARWEN, ORFfinder
 #   --skip-blast-db        do not download the local BLAST database
@@ -162,7 +162,7 @@ $manager activate '$main'"
   pixi) act="eval \"\$('$pixi_bin' shell-hook --manifest-path '$prefix/pixi/pixi.toml' -e default)\"";;
 esac
 cat > "$prefix/activate.sh" <<ACT
-# MitoPilot $MITOPILOT_VERSION native environment, written by bootstrap_native.sh ($manager)
+# MitoPilot $MITOPILOT_VERSION native environment, written by install_mitopilot_native.sh ($manager)
 MITOPILOT_NATIVE_PREFIX='$prefix'
 $act
 # conda-style activation swaps the env into the previous env's PATH slot, so
