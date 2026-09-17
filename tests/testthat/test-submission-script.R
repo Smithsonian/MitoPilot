@@ -151,7 +151,7 @@ test_that("read_config_executor returns native_activate when present", {
 test_that("submission_script sources the native env instead of commented examples", {
   lines <- submission_script("slurm", NULL, "nextflow run foo", "j", "/tmp/j.log",
                              env_setup = "/opt/mp/activate.sh")
-  expect_true(any(lines == "source /opt/mp/activate.sh"))
+  expect_true(any(lines == "source '/opt/mp/activate.sh'"))
   expect_false(any(grepl("# mamba activate MitoPilot_deps", lines, fixed = TRUE)))
   plain <- submission_script("slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
   expect_true(any(grepl("# mamba activate MitoPilot_deps", plain, fixed = TRUE)))
@@ -162,5 +162,5 @@ test_that("build_submit_script reads native_activate from the project config", {
   writeLines(c("params.native_activate = '/opt/mp/activate.sh'",
                "process { executor = 'slurm' }"), file.path(wd, ".config"))
   lines <- build_submit_script(wd, "slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
-  expect_true(any(lines == "source /opt/mp/activate.sh"))
+  expect_true(any(lines == "source '/opt/mp/activate.sh'"))
 })

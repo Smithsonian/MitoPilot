@@ -28,7 +28,7 @@ native_env <- function(activate) {
   keys <- c("PATH", "JAVA_HOME", "NXF_HOME", "MITOPILOT_NO_CONDA", "MITOPILOT_NATIVE_PREFIX")
   script <- paste0("source ", shQuote(activate), " >/dev/null 2>&1; ",
                    "for k in ", paste(keys, collapse = " "),
-                   "; do [ -n \"${!k-}\" ] && printf '%s=%s\\n' \"$k\" \"${!k}\"; done")
+                   "; do [ -n \"${!k-}\" ] && printf '%s=%s\\n' \"$k\" \"${!k}\"; done; true")
   out <- system2("bash", c("-c", shQuote(script)), stdout = TRUE, stderr = FALSE)
   out <- out[nzchar(out)]
   vals <- sub("^[A-Z_]+=", "", out)

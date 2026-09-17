@@ -47,6 +47,7 @@ test_that("bam_readcount_cmd drops conda run in native mode", {
 
 test_that("native_env captures PATH and exports from an activate script", {
   skip_on_os(c("windows", "mac"))
+  withr::local_envvar(c(JAVA_HOME = NA))
   act <- withr::local_tempfile(fileext = ".sh")
   writeLines(c("export PATH=/opt/mp/envs/mitopilot/bin:$PATH",
                "export MITOPILOT_NO_CONDA=1",

@@ -53,7 +53,7 @@ nextflow_cmd <- function(
 #'   or `NULL` if absent / still an unfilled `<<QUEUE>>` placeholder).
 #' @noRd
 read_config_executor <- function(path) {
-  lines <- tryCatch(readLines(path), error = function(e) character(0))
+  lines <- if (file.exists(path)) readLines(path) else character(0)
 
   grab <- function(key) {
     m <- stringr::str_match(lines, paste0("^\\s*", key, "\\s*=\\s*['\"]([^'\"]+)['\"]"))
@@ -145,7 +145,7 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
       "# mamba activate MitoPilot_deps"
     ) else c(
       "# Native MitoPilot environment (from the project .config)",
-      paste0("source ", env_setup)
+      paste0("source ", shQuote(env_setup))
     ),
     "",
     # Pin the Nextflow engine to a MitoPilot-compatible version.
