@@ -88,8 +88,8 @@ curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/${ver}.tar.gz
 cd MitoPilot-${ver}/inst/native
 ```
 
-Choose an install location on a large filesystem that allows executables (a
-project or scratch directory is usually better than your home directory) and pass it as
+Choose an install location on a large filesystem that allows executables. If on a cluster, a
+project or scratch directory is usually better than your home directory. Pass the install location as
 `--prefix`. Everything MitoPilot needs goes inside that one directory:
 
 ```{bash eval=FALSE}
@@ -169,7 +169,7 @@ generate_config(
   queue            = "general",
   account          = "my_allocation",
   container_engine = "none",
-  native_prefix    = "/scratch/<user>/mitopilot_native"
+  native_prefix    = "/scratch/<user>/mitopilot_native" # the install location
 )
 ```
 
@@ -201,7 +201,12 @@ library(MitoPilot)
 native_setup("/scratch/<user>/mitopilot_native")
 ```
 
-`native_setup()` puts the bundled Nextflow and Java on this session's PATH. To
+`native_setup()` puts the bundled Nextflow and Java on this session's PATH,
+together with the job scheduler commands (`sbatch`, `qsub`, or `bsub`) and
+their environment variables as they were when the install script ran, since
+RStudio Server sessions do not inherit a login shell's PATH. If the scheduler
+lives somewhere else on your cluster, edit the "job scheduler" lines near the
+end of `activate.sh`. To
 make it automatic, add `MITOPILOT_NATIVE_PREFIX=/scratch/<user>/mitopilot_native`
 to `~/.Renviron` and call `native_setup()` with no arguments, or add the call to
 `~/.Rprofile`. The **Start** button in the app reads the project config and finds
@@ -279,3 +284,8 @@ install script.
   after any `module load`; it puts the bundled environment first.
 - **`native_check()` shows the wrong Nextflow version**: look for an
   `NXF_VER` in `~/.Renviron` or your shell profile.
+- **`sbatch: command not found` from the Start button in RStudio Server**: the
+  install script did not see the scheduler when it ran (for example it ran on a
+  node without one). Add `mp_path_add '/path/to/scheduler/bin'` to the job
+  scheduler block in `activate.sh`, or run the install script again from a
+  login node.

@@ -157,3 +157,14 @@ test_that("native_nf_pin uses the native launcher's version, then restores PATH/
   expect_equal(Sys.getenv("NXF_VER"), "25.10.6")
   expect_equal(Sys.getenv("PATH"), old_path)
 })
+
+test_that("native_env forwards scheduler variables set by activate.sh", {
+  skip_on_os(c("windows", "mac"))
+  act <- withr::local_tempfile(fileext = ".sh")
+  writeLines(c("export PATH=/opt/mp/envs/mitopilot/bin:$PATH",
+               "export SGE_ROOT=/cm/shared/apps/uge", "export SGE_CELL=age"), act)
+  env <- native_env(act)
+  expect_equal(env[["SGE_ROOT"]], "/cm/shared/apps/uge")
+  expect_equal(env[["SGE_CELL"]], "age")
+  expect_false("LSF_ENVDIR" %in% names(env))
+})

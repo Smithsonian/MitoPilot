@@ -162,6 +162,19 @@ $manager activate '$main'"
     fi;;
   pixi) act="eval \"\$('$pixi_bin' shell-hook --manifest-path '$prefix/pixi/pixi.toml' -e default)\"";;
 esac
+# Record where the job scheduler lives, so sessions with a bare PATH (RStudio
+# Server, Open OnDemand) can still submit jobs.
+sched_bin=""
+for b in sbatch qsub bsub; do
+  d="$(command -v "$b" 2>/dev/null || true)"
+  [ -n "$d" ] && { sched_bin="$(dirname "$d")"; break; }
+done
+sched_lines=""
+[ -n "$sched_bin" ] && sched_lines="mp_path_add '$sched_bin'"
+for v in SGE_ROOT SGE_CELL SGE_ARCH SGE_EXECD_PORT SGE_QMASTER_PORT LSF_ENVDIR LSF_SERVERDIR LSF_LIBDIR LSF_BINDIR SLURM_CONF PBS_HOME; do
+  [ -n "${!v-}" ] && sched_lines="$sched_lines
+export $v='${!v}'"
+done
 cat > "$prefix/activate.sh" <<ACT
 # MitoPilot $MITOPILOT_VERSION native environment, written by install_mitopilot_native.sh ($manager)
 MITOPILOT_NATIVE_PREFIX='$prefix'
@@ -175,6 +188,8 @@ for e in mitos trnascan aragorn bamreadcount orffinder mitofinder; do
 done
 [ -d "\$MITOPILOT_NATIVE_PREFIX/opt/mitofinder_bin" ] && mp_path_add "\$MITOPILOT_NATIVE_PREFIX/opt/mitofinder_bin"
 [ -d "\$MITOPILOT_NATIVE_PREFIX/opt/arwen" ] && mp_path_add "\$MITOPILOT_NATIVE_PREFIX/opt/arwen"
+# job scheduler seen when the installer ran (edit if your cluster differs)
+$sched_lines
 unset -f mp_path_add
 export PATH MITOPILOT_NATIVE_PREFIX
 export MITOPILOT_NO_CONDA=1

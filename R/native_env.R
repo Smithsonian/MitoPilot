@@ -35,7 +35,9 @@ native_env <- function(activate) {
   if (!file.exists(activate)) {
     stop("Native activate script not found: ", activate, call. = FALSE)
   }
-  keys <- c("PATH", "JAVA_HOME", "NXF_HOME", "MITOPILOT_NO_CONDA", "MITOPILOT_NATIVE_PREFIX")
+  keys <- c("PATH", "JAVA_HOME", "NXF_HOME", "MITOPILOT_NO_CONDA", "MITOPILOT_NATIVE_PREFIX",
+            "SGE_ROOT", "SGE_CELL", "SGE_ARCH", "SGE_EXECD_PORT", "SGE_QMASTER_PORT",
+            "LSF_ENVDIR", "LSF_SERVERDIR", "LSF_LIBDIR", "LSF_BINDIR", "SLURM_CONF", "PBS_HOME")
   script <- paste0("source ", shQuote(activate), " >/dev/null 2>&1; ",
                    "for k in ", paste(keys, collapse = " "),
                    "; do [ -n \"${!k-}\" ] && printf '%s=%s\\n' \"$k\" \"${!k}\"; done; true")
