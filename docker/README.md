@@ -139,7 +139,7 @@ GitHub Release instead of finding it in the image. After rebuilding the database
 (part 1), attach the tarball to a release tagged `blastdb-<YYYY-MM-DD>`:
 
 ```bash
-gh release create blastdb-2026-08-14 docker/mito_metazoa_blastdb.tar.gz \
+gh release create blastdb-2026-08-14 docker/mito_metazoa_blastdb.tar.gz --latest=false \
   --title "mito_metazoa BLAST DB 2026-08-14" --notes "Local BLAST database for MitoPilot native installs."
 ```
 
