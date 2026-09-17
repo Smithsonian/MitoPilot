@@ -28,3 +28,6 @@ BLAST DB release tag: `blastdb-2026-08-14` (asset `mito_metazoa_blastdb.tar.gz`,
 
 Note: nextflow=25.10.6 is not published on bioconda as of 2026-09-17; pinned to
 25.10.4, the highest 25.10.x build available at solve time.
+
+MITOS entry point: runmitos (confirmed via micromamba smoke build, 2026-09-17;
+no runmitos.py shipped by this bioconda build).
