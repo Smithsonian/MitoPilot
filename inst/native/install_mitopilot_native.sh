@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # MitoPilot native (no-container) installer. No root required.
 # Usage: bash install_mitopilot_native.sh --prefix DIR [options]
+#   --prefix DIR           install location; everything goes under this directory
 #   --manager micromamba|mamba|conda|pixi   (default: micromamba, downloaded into DIR/bin)
 #   --with-optional        also build MitoFinder, ARWEN, ORFfinder
 #   --skip-blast-db        do not download the local BLAST database

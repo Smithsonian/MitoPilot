@@ -255,7 +255,7 @@ the update window shows a ready-to-edit **cluster submission script**:
 - Edit the resources, and add your environment setup where indicated (for
   example `module load java`, `mamba activate ...`, or
   `export NXF_SINGULARITY_CACHEDIR=...`). Those lines are pre-filled as
-  commented examples. On a native install the `source <prefix>/activate.sh`
+  commented examples. On a native install the `source <install_dir>/activate.sh`
   line is filled in for you.
 - Click **"Submit to Cluster"** to submit it with your scheduler's command
   (`sbatch` / `qsub` / `bsub`), or **"Save Script Only"** to write the script

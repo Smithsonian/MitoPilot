@@ -3,7 +3,7 @@
 ## New Features
 
 - **Install without containers.** `inst/native/install_mitopilot_native.sh` builds every
-  pipeline tool into a user-owned prefix with micromamba, mamba, conda, or pixi,
+  pipeline tool into a user-owned install directory with micromamba, mamba, conda, or pixi,
   and `generate_config(container_engine = "none", native_prefix = ...)` writes a
   config whose tasks use it. `native_setup()` and `native_check()` wire up and
   verify an R session. Works for a single user or as a shared install by a

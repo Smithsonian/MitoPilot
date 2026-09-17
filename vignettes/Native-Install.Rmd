@@ -88,7 +88,9 @@ curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/${ver}.tar.gz
 cd MitoPilot-${ver}/inst/native
 ```
 
-Choose a prefix on a large, executable filesystem and run:
+Choose an install location on a large filesystem that allows executables (a
+project or scratch directory, not usually your home directory) and pass it as
+`--prefix`. Everything MitoPilot needs goes inside that one directory:
 
 ```{bash eval=FALSE}
 bash install_mitopilot_native.sh --prefix /scratch/$USER/mitopilot_native
@@ -112,7 +114,7 @@ The install script sets strict channel priority (conda-forge over bioconda). If 
 build the environments by hand from `inst/native/envs/*.yml`, pass
 `--channel-priority strict` or set `CONDA_CHANNEL_PRIORITY=strict`.
 
-**What the prefix contains.** `envs/` holds one environment per tool group
+**What the install directory contains.** `envs/` holds one environment per tool group
 (`mitopilot` for R, Java, Nextflow, and the assembly tools, plus `mitos`,
 `trnascan`, `aragorn`, `bamreadcount`, and with `--with-optional` `orffinder`
 and `mitofinder`), `ref_dbs/` the BLAST database, `opt/` the hand-built
@@ -123,13 +125,13 @@ stays under one directory you can move or delete, and nothing lands among
 your own named environments. You never activate them yourself;
 `activate.sh` does.
 
-This is a one-time install. Nothing in the prefix is rebuilt at run time,
+This is a one-time install. Nothing in the install directory is rebuilt at run time,
 and only a release that changes tool pins needs a re-run (see Updating).
 
 ## 2. Check the environment
 
 From any R that has MitoPilot installed (the bundled one is at
-`<prefix>/envs/mitopilot/bin/R`):
+`<install_dir>/envs/mitopilot/bin/R`):
 
 ```{r eval=FALSE}
 library(MitoPilot)
@@ -148,13 +150,13 @@ generate_config(
   queue            = "general",
   account          = "my_allocation",
   container_engine = "none",
-  native_prefix    = "/scratch/<user>/mitopilot_native"
+  native_prefix    = "/scratch/<user>/mitopilot_native"   # the install location
 )
 ```
 
 Then create projects with `new_project(..., executor = "my_cluster")` exactly as
 in [HPC cluster support](Custom-HPC.html). The config makes every pipeline task
-source `<prefix>/activate.sh` before it runs, so no module loads or conda
+source `<install_dir>/activate.sh` before it runs, so no module loads or conda
 activation are needed on compute nodes.
 
 ## 4. Launch the app
@@ -188,7 +190,7 @@ is what makes `library(MitoPilot)` report the right Nextflow version and lets yo
 run `nextflow` from the R console.
 
 **Batch submission.** When the app offers a cluster submission script, the line
-`source <prefix>/activate.sh` is already filled in.
+`source <install_dir>/activate.sh` is already filled in.
 
 **On a workstation.** With `activate.sh` sourced, `MitoPilot()` from the bundled
 R opens your browser through `xdg-open`, which the bundled R uses because it
@@ -208,16 +210,16 @@ download it. Remove the setting on a cluster that uses the native install.
 
 The install script needs no root, only a writable directory, so an administrator can
 run it once into shared space and every user sources the same `activate.sh`.
-Three adjustments for a read-only prefix:
+Three adjustments for a read-only install directory:
 
 1. **Nextflow home must be writable per user.** `activate.sh` only sets
    `NXF_HOME` when it is unset, so users export their own (for example
    `~/.nextflow`) before sourcing, or the administrator edits that line.
    Nextflow writes plugins and engine downloads there.
-2. **Permissions.** After the install, `chmod -R a+rX <prefix>`. At run
+2. **Permissions.** After the install, `chmod -R a+rX <install_dir>`. At run
    time everything writes into the project and the Nextflow work directory,
-   never into the prefix. Prefer `micromamba`, `mamba`, or `conda` for a
-   shared prefix: pixi's activation may try to repair an environment it
+   never into the install directory. Prefer `micromamba`, `mamba`, or `conda`
+   for a shared install: pixi's activation may try to repair an environment it
    considers stale, which fails on a read-only tree.
 3. **The R package.** The administrator updates MitoPilot inside the bundled
    R; users may also install it in their own R for the app.
@@ -238,9 +240,9 @@ is unchanged for everyone.
 ## Updating
 
 Update the R package inside the bundled R with
-`<prefix>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@<version>")'`,
+`<install_dir>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@<version>")'`,
 and in any other R you use for the app. When a release changes tool pins (see
-`inst/native/VERSIONS.md` in the release), delete `<prefix>/envs` and re-run the
+`inst/native/VERSIONS.md` in the release), delete `<install_dir>/envs` and re-run the
 install script.
 
 ## Troubleshooting
@@ -250,7 +252,7 @@ install script.
 - **`Could not find nextflow` in RStudio Server**: call `native_setup()`.
 - **Jobs fail with `runmitos: command not found`**: the task did not source
   `activate.sh`; check the project `.config` has `process.beforeScript`.
-- **Home quota exceeded**: set `--prefix` on scratch; the environments are large.
+- **Home quota exceeded**: choose an install location on scratch; the environments are large.
 - **`'browser' must be a non-empty character string`**: an older MitoPilot in the
   bundled R; update it, or pass `launch.browser = FALSE`.
 - **A different Java or Nextflow wins on PATH**: source `activate.sh` last,
