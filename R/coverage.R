@@ -77,9 +77,7 @@ coverage <- function(
   }
 
   # Get coverage stats
-  stringr::str_glue(
-    "conda run -n bam-readcount bam-readcount -w1 -f {assembly_working} {mapped_fn} > {coverage_fn}"
-  ) |> system()
+  bam_readcount_cmd(assembly_working, mapped_fn, coverage_fn) |> system()
 
   # Load mapping results ----
   coverage <- readr::read_delim(

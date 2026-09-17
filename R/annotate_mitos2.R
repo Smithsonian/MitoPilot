@@ -236,6 +236,7 @@ annotate_mitos2 <- function(
       ) |>
         stringr::str_squish()
     )
+    condaenv <- .mp_condaenv(condaenv)
     if (!is.null(condaenv)) {
       process <- reticulate::conda_run2
       process_args$envname <- condaenv

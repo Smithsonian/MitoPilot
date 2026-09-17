@@ -37,6 +37,7 @@ annotate_aragorn <- function(
       fasta
     )
   )
+  condaenv <- .mp_condaenv(condaenv)
   if (!is.null(condaenv)) {
     process <- reticulate::conda_run2
     process_args$envname <- condaenv
