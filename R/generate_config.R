@@ -51,6 +51,20 @@ native_config_block <- function(prefix) {
   )
 }
 
+#' Post-fill edits for a native (no-container) config
+#' @noRd
+apply_native_overrides <- function(lines, native_prefix) {
+  # Matches both the unfilled '<<CONTAINER_ID>>' token (generate_config path)
+  # and the already-substituted image string (migrate_config fills CONTAINER_ID
+  # first); never matches the per-process 'container = process.container' refs,
+  # which have no leading quote.
+  lines <- lines[!grepl("^\\s*container\\s*=\\s*'", lines)]
+  db <- file.path(native_prefix, "ref_dbs", "mito_metazoa")
+  sub("db_dir = '/ref_dbs/mito_metazoa'.*$",
+      paste0("db_dir = '", db, "'    // local BLAST database from the native install"),
+      lines)
+}
+
 #' Substitute `<<PLACEHOLDER>>` tokens in config template lines
 #'
 #' Shared by [generate_config()] and the project-init functions so the
@@ -153,6 +167,7 @@ migrate_config <- function(path, executor, con = NULL,
                            profile_dir = mitopilot_config_dir()) {
   conf_path <- file.path(path, ".config")
   old <- readLines(conf_path)
+  native_act <- config_get_param(old, "params.native_activate")
 
   template <- resolve_config(executor, profile_dir = profile_dir)
   lines <- readLines(template)
@@ -206,6 +221,10 @@ migrate_config <- function(path, executor, con = NULL,
     CLUSTER_OPTIONS  = cluster_options %||% "",
     CONTAINER_ENGINE = engine_repl
   ))
+
+  if (!is.null(native_act)) {
+    lines <- apply_native_overrides(lines, dirname(native_act))
+  }
 
   # Fail safe: never write a config that still has unfilled placeholders.
   if (any(grepl("<<[A-Z_]+>>", lines))) {
@@ -421,12 +440,7 @@ generate_config <- function(
     PENV = if (scheduler == "sge") penv else NULL
   ))
 
-  if (container_engine == "none") {
-    lines <- lines[!grepl("^\\s*container\\s*=\\s*'<<CONTAINER_ID>>'", lines)]
-    lines <- sub("db_dir = '/ref_dbs/mito_metazoa'",
-                 paste0("db_dir = '", file.path(native_prefix, "ref_dbs", "mito_metazoa"), "'"),
-                 lines, fixed = TRUE)
-  }
+  if (container_engine == "none") lines <- apply_native_overrides(lines, native_prefix)
 
   # Write the profile ----
   if (!dir.exists(profile_dir)) {

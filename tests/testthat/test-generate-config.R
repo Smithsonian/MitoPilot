@@ -127,3 +127,19 @@ test_that("built-in local template still yields a docker block via new_project f
   filled <- fill_config(lines, list(CONTAINER_ENGINE = container_engine_block("docker")))
   expect_true(any(grepl("docker {", filled, fixed = TRUE)))
 })
+
+test_that("migrate_config keeps native mode when regenerating from a built-in template", {
+  pdir <- tempfile(); proj <- tempfile(); dir.create(proj)
+  prof <- generate_config("natmig", scheduler = "local", container_engine = "none",
+                          native_prefix = "/opt/mp", profile_dir = pdir)
+  old <- fill_config(readLines(prof), list(RAW_DIR = "/data", ASMB_DIR = "NA",
+                                           MIN_DEPTH = "100", NCBI_API_KEY = ""))
+  writeLines(old, file.path(proj, ".config"))
+  expect_true(suppressMessages(migrate_config(proj, executor = "local", profile_dir = pdir)))
+  txt <- readLines(file.path(proj, ".config"))
+  expect_true(any(grepl("params.native_activate = '/opt/mp/activate.sh'", txt, fixed = TRUE)))
+  expect_true(any(grepl("db_dir = '/opt/mp/ref_dbs/mito_metazoa'", txt, fixed = TRUE)))
+  expect_false(any(grepl("^\\s*container\\s*=\\s*'", txt)))
+  expect_false(any(grepl("docker {", txt, fixed = TRUE)))
+  expect_false(any(grepl("baked into the container", txt, fixed = TRUE)))
+})
