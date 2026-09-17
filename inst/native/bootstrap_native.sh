@@ -150,8 +150,15 @@ case "$manager" in
   micromamba) act="export MAMBA_ROOT_PREFIX='$prefix/mamba_root'
 eval \"\$('$prefix/bin/micromamba' shell hook -s bash)\"
 micromamba activate '$main'";;
-  mamba|conda) base="$("$manager" info --base)"; act="source '$base/etc/profile.d/conda.sh'
-conda activate '$main'";;
+  mamba|conda)
+    # mamba 2 prints a labelled `info --base`; conda prints the bare path
+    if command -v conda >/dev/null && [ -f "$(conda info --base)/etc/profile.d/conda.sh" ]; then
+      act="source '$(conda info --base)/etc/profile.d/conda.sh'
+conda activate '$main'"
+    else
+      act="eval \"\$('$(command -v "$manager")' shell hook -s bash)\"
+$manager activate '$main'"
+    fi;;
   pixi) act="eval \"\$('$pixi_bin' shell-hook --manifest-path '$prefix/pixi/pixi.toml' -e default)\"";;
 esac
 cat > "$prefix/activate.sh" <<ACT
