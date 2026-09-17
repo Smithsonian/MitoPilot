@@ -112,6 +112,20 @@ The bootstrap sets strict channel priority (conda-forge over bioconda). If you
 build the environments by hand from `inst/native/envs/*.yml`, pass
 `--channel-priority strict` or set `CONDA_CHANNEL_PRIORITY=strict`.
 
+**What the prefix contains.** `envs/` holds one environment per tool group
+(`mitopilot` for R, Java, Nextflow, and the assembly tools, plus `mitos`,
+`trnascan`, `aragorn`, `bamreadcount`, and with `--with-optional` `orffinder`
+and `mitofinder`), `ref_dbs/` the BLAST database, `opt/` the hand-built
+optional tools, `nextflow_home/` Nextflow's plugin and engine cache, and
+`activate.sh`. The environments are created by path, not by name, so
+`conda env list` shows them without names. That is deliberate: everything
+stays under one directory you can move or delete, and nothing lands among
+your own named environments. You never activate them yourself;
+`activate.sh` does.
+
+This is a one-time install. Nothing in the prefix is rebuilt at run time,
+and only a release that changes tool pins needs a re-run (see Updating).
+
 ## 2. Check the environment
 
 From any R that has MitoPilot installed (the bundled one is at
@@ -176,6 +190,51 @@ run `nextflow` from the R console.
 **Batch submission.** When the app offers a cluster submission script, the line
 `source <prefix>/activate.sh` is already filled in.
 
+**On a workstation.** With `activate.sh` sourced, `MitoPilot()` from the bundled
+R opens your browser through `xdg-open`, which the bundled R uses because it
+ships with no browser setting of its own. On a headless machine there is
+nothing to open; pass `launch.browser = FALSE` and use the tunnel above.
+
+<div class="alert alert-warning">
+<strong>Warning.</strong> A user-level <code>NXF_VER</code> (for example in
+<code>~/.Renviron</code> or <code>~/.bashrc</code>) overrides the bundled
+Nextflow in every R session. The <strong>Start</strong> button and the submit
+script pin the bundled version themselves, but <code>library(MitoPilot)</code>
+will report the other version and console calls to <code>nextflow</code> will
+download it. Remove the setting on a cluster that uses the native install.
+</div>
+
+## Shared install by an administrator
+
+The bootstrap needs no root, only a writable directory, so an administrator can
+run it once into shared space and every user sources the same `activate.sh`.
+Three adjustments for a read-only prefix:
+
+1. **Nextflow home must be writable per user.** `activate.sh` only sets
+   `NXF_HOME` when it is unset, so users export their own (for example
+   `~/.nextflow`) before sourcing, or the administrator edits that line.
+   Nextflow writes plugins and engine downloads there.
+2. **Permissions.** After the bootstrap, `chmod -R a+rX <prefix>`. At run
+   time everything writes into the project and the Nextflow work directory,
+   never into the prefix. Prefer `micromamba`, `mamba`, or `conda` for a
+   shared prefix: pixi's activation may try to repair an environment it
+   considers stale, which fails on a read-only tree.
+3. **The R package.** The administrator updates MitoPilot inside the bundled
+   R; users may also install it in their own R for the app.
+
+A module file is the natural wrapper. With Lmod:
+
+```{bash eval=FALSE}
+-- /apps/modulefiles/mitopilot/1.5.5.lua
+setenv("MITOPILOT_NATIVE_PREFIX", "/apps/mitopilot_native")
+setenv("NXF_HOME", pathJoin(os.getenv("HOME"), ".nextflow"))
+execute { cmd = "source /apps/mitopilot_native/activate.sh", modeA = { "load" } }
+```
+
+Users then `module load mitopilot`, and `native_setup()` needs no argument.
+`generate_config(container_engine = "none", native_prefix = "/apps/mitopilot_native")`
+is unchanged for everyone.
+
 ## Updating
 
 Update the R package inside the bundled R with
@@ -192,3 +251,9 @@ bootstrap.
 - **Jobs fail with `runmitos: command not found`**: the task did not source
   `activate.sh`; check the project `.config` has `process.beforeScript`.
 - **Home quota exceeded**: set `--prefix` on scratch; the environments are large.
+- **`'browser' must be a non-empty character string`**: an older MitoPilot in the
+  bundled R; update it, or pass `launch.browser = FALSE`.
+- **A different Java or Nextflow wins on PATH**: source `activate.sh` last,
+  after any `module load`; it puts the bundled environment first.
+- **`native_check()` shows the wrong Nextflow version**: look for an
+  `NXF_VER` in `~/.Renviron` or your shell profile.

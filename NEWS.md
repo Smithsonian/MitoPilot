@@ -6,7 +6,10 @@
   pipeline tool into a user-owned prefix with micromamba, mamba, conda, or pixi,
   and `generate_config(container_engine = "none", native_prefix = ...)` writes a
   config whose tasks use it. `native_setup()` and `native_check()` wire up and
-  verify an R session. See the new article *Installing without containers*.
+  verify an R session. Works for a single user or as a shared install by a
+  cluster administrator. See the new article *Installing without containers*.
+- The app opens a browser from a conda-built R, which has no browser setting,
+  by falling back to `xdg-open`.
 
 # MitoPilot 1.5.5
 
