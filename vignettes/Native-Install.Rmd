@@ -53,7 +53,7 @@ img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 }
 </style>
 
-# Installing without containers
+# Running MitoPilot without Docker or Singularity
 
 Some clusters do not allow Docker, Singularity, or Apptainer. MitoPilot can run
 without them: every tool the pipeline needs installs into a folder you own with
