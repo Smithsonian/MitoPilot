@@ -1,0 +1,6 @@
+name: bamreadcount
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bam-readcount=1.0.1

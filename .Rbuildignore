@@ -23,3 +23,5 @@ $run_dev.*
 ^\.claude$
 ^vignettes_OLD$
 ^CITATION\.cff$
+^inst/native/pixi\.lock$
+^inst/native/\.pixi$

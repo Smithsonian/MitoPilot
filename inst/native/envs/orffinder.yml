@@ -1,0 +1,8 @@
+name: orffinder
+channels:
+  - conda-forge
+dependencies:
+  - libuv
+  - elfutils
+  - patchelf
+  - curl

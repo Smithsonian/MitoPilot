@@ -1,0 +1,96 @@
+# MitoPilot native install, pixi form. Must carry the same exact pins as envs/*.yml
+# (tests/testthat/test-native-pins.R enforces it).
+[workspace]
+name = "mitopilot-native"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+r-base = "=4.5.2"
+r-biocmanager = "*"
+r-remotes = "*"
+r-ragg = "*"
+r-xml2 = "*"
+r-curl = "*"
+r-openssl = "*"
+r-rsqlite = "*"
+r-httr2 = "*"
+r-reticulate = "*"
+r-dplyr = "*"
+r-stringi = "*"
+r-readr = "*"
+r-tidyr = "*"
+r-processx = "*"
+bioconductor-biostrings = "*"
+bioconductor-rsamtools = "*"
+bioconductor-decipher = "*"
+bioconductor-pwalign = "*"
+openjdk = "=21"
+nextflow = "=25.10.4"
+fastp = "=0.23.4"
+spades = "=4.1.0"
+getorganelle = "=1.7.7.1"
+bowtie2 = "=2.5.4"
+bwa = "=0.7.19"
+samtools = "=1.24"
+minimap2 = "=2.28"
+blast = "=2.16.0"
+parallel = "*"
+file = "*"
+curl = "*"
+git = "*"
+c-compiler = "*"
+cxx-compiler = "*"
+fortran-compiler = "*"
+make = "*"
+pkg-config = "*"
+zlib = "*"
+bzip2 = "*"
+xz = "*"
+libxml2 = "*"
+libcurl = "*"
+openssl = "*"
+cairo = "*"
+freetype = "*"
+harfbuzz = "*"
+fribidi = "*"
+libtiff = "*"
+libpng = "*"
+libjpeg-turbo = "*"
+
+[feature.mitos.dependencies]
+mitos = "=2.1.10"
+
+[feature.trnascan.dependencies]
+trnascan-se = "=2.0.12"
+
+[feature.aragorn.dependencies]
+aragorn = "=1.2.41"
+
+[feature.bamreadcount.dependencies]
+bam-readcount = "=1.0.1"
+
+[feature.orffinder.dependencies]
+libuv = "*"
+elfutils = "*"
+patchelf = "*"
+curl = "*"
+
+[feature.mitofinder.dependencies]
+python = "=2.7"
+c-compiler = "*"
+cxx-compiler = "*"
+make = "*"
+automake = "*"
+autoconf = "*"
+git = "*"
+zlib = "*"
+
+[environments]
+default = { solve-group = "main" }
+mitos = { features = ["mitos"], no-default-feature = true }
+trnascan = { features = ["trnascan"], no-default-feature = true }
+aragorn = { features = ["aragorn"], no-default-feature = true }
+bamreadcount = { features = ["bamreadcount"], no-default-feature = true }
+orffinder = { features = ["orffinder"], no-default-feature = true }
+mitofinder = { features = ["mitofinder"], no-default-feature = true }
