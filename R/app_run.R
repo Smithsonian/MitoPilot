@@ -53,6 +53,11 @@ run_app <- function(
   if (is.null(launch.browser)) {
     launch.browser <- interactive()
   }
+  # conda-built R ships with no browser option; borrow the desktop opener
+  if (isTRUE(launch.browser) && !nzchar(getOption("browser", "")) &&
+      nzchar(Sys.which("xdg-open"))) {
+    options(browser = unname(Sys.which("xdg-open")))
+  }
   # shinyApp(options=) expects the key "launch.browser" (not the global R option
   # name). Set the global option too so shiny's interactive() default is also
   # overridden when this list is bypassed.
