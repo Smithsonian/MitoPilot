@@ -101,6 +101,8 @@ reference:
   - nextflow_cmd
   - tunnel_instructions
   - hydra_setup
+  - native_setup
+  - native_check
 
 - title: "Reference databases"
   desc: >

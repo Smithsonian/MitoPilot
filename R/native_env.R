@@ -34,3 +34,86 @@ native_env <- function(activate) {
   vals <- sub("^[A-Z_]+=", "", out)
   stats::setNames(vals, sub("=.*$", "", out))
 }
+
+#' Use a native (no-container) MitoPilot environment in this R session
+#'
+#' Applies the PATH and variables from `<prefix>/activate.sh` (written by
+#' `inst/native/bootstrap_native.sh`) to the current session, so `nextflow`,
+#' `java`, and every pipeline tool resolve here exactly as they do inside
+#' pipeline tasks. Call it once after `library(MitoPilot)` when running the app
+#' from RStudio Server or any R session that was not started from a shell where
+#' `activate.sh` was already sourced. The app itself reads the same file from the
+#' project `.config`, so this is only needed for console use.
+#'
+#' @param prefix Directory given to `bootstrap_native.sh --prefix`. Defaults to
+#'   `MITOPILOT_NATIVE_PREFIX` if set.
+#' @return (invisibly) `TRUE`.
+#' @export
+native_setup <- function(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX")) {
+  if (!nzchar(prefix)) stop("Give `prefix`, or set MITOPILOT_NATIVE_PREFIX.", call. = FALSE)
+  env <- native_env(file.path(prefix, "activate.sh"))
+  env[["MITOPILOT_NATIVE_PREFIX"]] <- prefix
+  do.call(Sys.setenv, as.list(env))
+  check_nextflow_version("native_setup", on_too_old = "warn")
+  pin <- nf_pin_version()
+  if (!is.na(pin)) {
+    Sys.setenv(NXF_VER = pin)
+    message("Pinned NXF_VER=", pin, " for this session.")
+  }
+  message("Native MitoPilot environment active: ", prefix)
+  invisible(TRUE)
+}
+
+#' Check a native (no-container) MitoPilot environment
+#'
+#' Sources `<prefix>/activate.sh` and looks up every pipeline tool. Core tools
+#' are needed for the default workflow; optional tools back the MitoFinder,
+#' ARWEN, and ORFfinder options and are only present after
+#' `bootstrap_native.sh --with-optional`.
+#'
+#' @inheritParams native_setup
+#' @param strict Error if any core tool is missing (default `TRUE`).
+#' @return (invisibly) a data.frame with columns `tool`, `required`, `found`,
+#'   `path`, `version`.
+#' @export
+native_check <- function(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"), strict = TRUE) {
+  if (!nzchar(prefix)) stop("Give `prefix`, or set MITOPILOT_NATIVE_PREFIX.", call. = FALSE)
+  env <- native_env(file.path(prefix, "activate.sh"))
+  old_path <- Sys.getenv("PATH")
+  on.exit(Sys.setenv(PATH = old_path), add = TRUE)
+  Sys.setenv(PATH = env[["PATH"]])
+
+  core <- c("R", "Rscript", "nextflow", "java", "fastp", "get_organelle_from_reads.py",
+            "bowtie2", "bwa", "samtools", "minimap2", "blastn", "blastdbcmd",
+            "makeblastdb", "runmitos", "tRNAscan-SE", "aragorn", "bam-readcount",
+            "parallel", "file")
+  optional <- c("mitofinder", "arwen", "ORFfinder")
+  version_flag <- c(R = "--version", Rscript = "--version", nextflow = "-version",
+                    java = "-version", fastp = "--version", bowtie2 = "--version",
+                    samtools = "--version", minimap2 = "--version", blastn = "-version",
+                    "tRNAscan-SE" = "--version", aragorn = "-h")
+  tools <- c(core, optional)
+  path <- vapply(tools, function(t) unname(Sys.which(t)), character(1))
+  version <- vapply(tools, function(t) {
+    if (!nzchar(path[[t]])) return(NA_character_)
+    flag <- version_flag[t]
+    if (is.na(flag)) return("")
+    out <- tryCatch(suppressWarnings(system2(t, flag, stdout = TRUE, stderr = TRUE)),
+                    error = function(e) character())
+    out <- out[nzchar(out)]
+    if (length(out)) substr(out[1], 1, 60) else ""
+  }, character(1))
+  res <- data.frame(tool = tools, required = tools %in% core, found = nzchar(path),
+                    path = unname(path), version = unname(version),
+                    stringsAsFactors = FALSE, row.names = NULL)
+  db <- file.path(prefix, "ref_dbs", "mito_metazoa", "taxonomy4blast.sqlite3")
+  res <- rbind(res, data.frame(tool = "mito_metazoa BLAST DB", required = FALSE,
+                               found = file.exists(db), path = if (file.exists(db)) dirname(db) else "",
+                               version = "", stringsAsFactors = FALSE))
+  print(res[, c("tool", "required", "found", "version")], row.names = FALSE)
+  missing <- res$tool[res$required & !res$found]
+  if (strict && length(missing)) {
+    stop("Missing core tools: ", paste(missing, collapse = ", "), call. = FALSE)
+  }
+  invisible(res)
+}
