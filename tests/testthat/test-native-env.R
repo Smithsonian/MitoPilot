@@ -103,7 +103,7 @@ test_that("native_setup applies PATH and the no-conda flag to the session", {
   prefix <- fake_prefix(core_tools)
   withr::local_envvar(c(PATH = Sys.getenv("PATH"), MITOPILOT_NO_CONDA = "",
                         MITOPILOT_NATIVE_PREFIX = ""))
-  suppressMessages(native_setup(prefix))
+  expect_warning(suppressMessages(native_setup(prefix)), "version")
   expect_true(startsWith(Sys.getenv("PATH"), file.path(prefix, "envs", "mitopilot", "bin")))
   expect_equal(Sys.getenv("MITOPILOT_NO_CONDA"), "1")
 })
