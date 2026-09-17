@@ -116,9 +116,13 @@ native_check <- function(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"), strict 
             "parallel", "file")
   optional <- c("mitofinder", "arwen", "ORFfinder")
   version_flag <- c(R = "--version", Rscript = "--version", nextflow = "-version",
-                    java = "-version", fastp = "--version", bowtie2 = "--version",
-                    samtools = "--version", minimap2 = "--version", blastn = "-version",
-                    "tRNAscan-SE" = "--version", aragorn = "-h")
+                    java = "-version", fastp = "--version",
+                    "get_organelle_from_reads.py" = "--version", bowtie2 = "--version",
+                    bwa = "", samtools = "--version", minimap2 = "--version",
+                    blastn = "-version", blastdbcmd = "-version", makeblastdb = "-version",
+                    runmitos = "--version", "tRNAscan-SE" = "-h", aragorn = "-h",
+                    "bam-readcount" = "--version", parallel = "--version", file = "--version",
+                    mitofinder = "--version", arwen = "-h")
   tools <- c(core, optional)
   path <- vapply(tools, function(t) unname(Sys.which(t)), character(1))
   version <- vapply(tools, function(t) {
@@ -127,8 +131,10 @@ native_check <- function(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"), strict 
     if (is.na(flag)) return("")
     out <- tryCatch(suppressWarnings(system2(t, flag, stdout = TRUE, stderr = TRUE)),
                     error = function(e) character())
-    out <- out[nzchar(out)]
-    if (length(out)) substr(out[1], 1, 60) else ""
+    out <- trimws(out[grepl("[0-9]+[.][0-9]+", out)])
+    hit <- out[grepl("version|v[0-9]", out, ignore.case = TRUE)]
+    out <- if (length(hit)) hit[1] else out[1]
+    if (length(out) && !is.na(out)) substr(out, 1, 60) else ""
   }, character(1))
   res <- data.frame(tool = tools, required = tools %in% core, found = nzchar(path),
                     path = unname(path), version = unname(version),
