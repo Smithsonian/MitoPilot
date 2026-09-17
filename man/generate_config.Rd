@@ -7,9 +7,10 @@
 generate_config(
   name,
   scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch"),
-  container_engine = c("auto", "singularity", "apptainer", "docker"),
+  container_engine = c("auto", "singularity", "apptainer", "docker", "none"),
   container_cache = NULL,
   container_run_options = NULL,
+  native_prefix = NULL,
   queue = NULL,
   account = NULL,
   cluster_options = NULL,
@@ -28,12 +29,18 @@ generate_config(
 
 \item{container_engine}{Container runtime. "auto" picks docker for
 local/awsbatch and singularity for HPC schedulers; or set explicitly to
-"singularity", "apptainer", or "docker".}
+"singularity", "apptainer", or "docker"; or "none" for a native
+(no-container) install built by inst/native/bootstrap_native.sh, which
+requires native_prefix.}
 
 \item{container_cache}{Optional cacheDir for singularity/apptainer.}
 
 \item{container_run_options}{Optional runOptions for singularity/apptainer
 (e.g. bind mounts).}
+
+\item{native_prefix}{Directory passed to `bootstrap_native.sh --prefix`
+(contains `activate.sh` and `ref_dbs/`). Required when
+`container_engine = "none"`, ignored otherwise.}
 
 \item{queue}{Partition / queue name. If `NULL`, the queue directive is
 omitted (cluster default is used).}

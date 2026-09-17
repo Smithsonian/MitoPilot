@@ -35,6 +35,22 @@ container_engine_block <- function(engine, cache = NULL, run_options = NULL) {
   paste(lines, collapse = "\n")
 }
 
+#' Nextflow config lines for a native (no-container) install
+#'
+#' Tasks source `<prefix>/activate.sh` instead of running in an image, and
+#' `MITOPILOT_NO_CONDA=1` stops R from invoking `conda run`.
+#' @noRd
+native_config_block <- function(prefix) {
+  act <- file.path(prefix, "activate.sh")
+  paste(
+    "// Native (no-container) install: tasks source the MitoPilot environment.",
+    paste0("process.beforeScript = 'source ", act, "'"),
+    "env.MITOPILOT_NO_CONDA = '1'",
+    paste0("params.native_activate = '", act, "'"),
+    sep = "\n"
+  )
+}
+
 #' Substitute `<<PLACEHOLDER>>` tokens in config template lines
 #'
 #' Shared by [generate_config()] and the project-init functions so the
@@ -85,6 +101,8 @@ config_get_param <- function(lines, key) {
 #' @return A single string for the `<<CONTAINER_ENGINE>>` placeholder.
 #' @noRd
 extract_container_engine <- function(lines) {
+  act <- config_get_param(lines, "params.native_activate")
+  if (!is.null(act)) return(native_config_block(dirname(act)))
   for (eng in c("singularity", "apptainer", "docker")) {
     start <- grep(paste0("^\\s*", eng, "\\s*\\{"), lines)
     if (length(start) == 0) next
@@ -299,10 +317,15 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 #'   "lsf", "local", or "awsbatch".
 #' @param container_engine Container runtime. "auto" picks docker for
 #'   local/awsbatch and singularity for HPC schedulers; or set explicitly to
-#'   "singularity", "apptainer", or "docker".
+#'   "singularity", "apptainer", or "docker"; or "none" for a native
+#'   (no-container) install built by inst/native/bootstrap_native.sh, which
+#'   requires native_prefix.
 #' @param container_cache Optional cacheDir for singularity/apptainer.
 #' @param container_run_options Optional runOptions for singularity/apptainer
 #'   (e.g. bind mounts).
+#' @param native_prefix Directory passed to `bootstrap_native.sh --prefix`
+#'   (contains `activate.sh` and `ref_dbs/`). Required when
+#'   `container_engine = "none"`, ignored otherwise.
 #' @param queue Partition / queue name. If `NULL`, the queue directive is
 #'   omitted (cluster default is used).
 #' @param account Optional accounting / project string. Folded into
@@ -323,9 +346,10 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 generate_config <- function(
     name,
     scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch"),
-    container_engine = c("auto", "singularity", "apptainer", "docker"),
+    container_engine = c("auto", "singularity", "apptainer", "docker", "none"),
     container_cache = NULL,
     container_run_options = NULL,
+    native_prefix = NULL,
     queue = NULL,
     account = NULL,
     cluster_options = NULL,
@@ -338,6 +362,10 @@ generate_config <- function(
   }
   scheduler <- match.arg(scheduler)
   container_engine <- match.arg(container_engine)
+
+  if (container_engine == "none" && (is.null(native_prefix) || !nzchar(native_prefix))) {
+    stop("container_engine = 'none' requires `native_prefix`.", call. = FALSE)
+  }
 
   if (container_engine == "auto") {
     container_engine <- if (scheduler %in% c("local", "awsbatch")) "docker" else "singularity"
@@ -386,11 +414,19 @@ generate_config <- function(
 
   # Substitute cluster-level placeholders (per-project tokens left intact) ----
   lines <- fill_config(lines, list(
-    CONTAINER_ENGINE = container_engine_block(container_engine, container_cache, container_run_options),
+    CONTAINER_ENGINE = if (container_engine == "none") native_config_block(native_prefix)
+                       else container_engine_block(container_engine, container_cache, container_run_options),
     QUEUE = queue,
     CLUSTER_OPTIONS = cluster_options,
     PENV = if (scheduler == "sge") penv else NULL
   ))
+
+  if (container_engine == "none") {
+    lines <- lines[!grepl("^\\s*container\\s*=\\s*'<<CONTAINER_ID>>'", lines)]
+    lines <- sub("db_dir = '/ref_dbs/mito_metazoa'",
+                 paste0("db_dir = '", file.path(native_prefix, "ref_dbs", "mito_metazoa"), "'"),
+                 lines, fixed = TRUE)
+  }
 
   # Write the profile ----
   if (!dir.exists(profile_dir)) {

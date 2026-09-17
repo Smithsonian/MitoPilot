@@ -129,6 +129,7 @@ new_project <- function(
   config <- config %||% resolve_config(executor, profile_dir = profile_dir)
   readLines(config) |>
     fill_config(list(
+      CONTAINER_ENGINE = container_engine_block("docker"),
       CONTAINER_ID = container,
       RAW_DIR = data_path,
       ASMB_DIR = "NA",
