@@ -77,7 +77,7 @@ on the first run.
 
 <div class="alert alert-note">
 <strong>No containers allowed?</strong> There is a second route that needs
-none of the table above except disk space and internet access: the
+none of the requirements above except disk space and internet access: the
 <a href="Native-Install.html">native install</a> puts R, Java, Nextflow, every
 pipeline tool, and the reference database into one folder you own, with a
 conda-style package manager and no root access. Use it on clusters that forbid

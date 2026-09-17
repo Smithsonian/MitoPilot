@@ -231,6 +231,34 @@ will report the other version and console calls to <code>nextflow</code> will
 download it. Remove the setting on a cluster that uses the native install.
 </div>
 
+## Updating
+
+Update the R package inside the bundled R with
+`<install_dir>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@<version>")'`,
+and in any other R you use for the app. When a release changes tool pins (see
+`inst/native/VERSIONS.md` in the release), delete `<install_dir>/envs` and re-run the
+install script.
+
+## Troubleshooting
+
+- **Solver errors during install**: run again with `--manager mamba` if you have
+  one, or copy the failing `envs/*.yml` name into an issue.
+- **`Could not find nextflow` in RStudio Server**: call `native_setup()`.
+- **Jobs fail with `runmitos: command not found`**: the task did not source
+  `activate.sh`; check the project `.config` has `process.beforeScript`.
+- **Home quota exceeded**: choose an install location on scratch; the environments are large.
+- **`'browser' must be a non-empty character string`**: an older MitoPilot in the
+  bundled R; update it, or pass `launch.browser = FALSE`.
+- **A different Java or Nextflow wins on PATH**: source `activate.sh` last,
+  after any `module load`; it puts the bundled environment first.
+- **`native_check()` shows the wrong Nextflow version**: look for an
+  `NXF_VER` in `~/.Renviron` or your shell profile.
+- **`sbatch: command not found` from the Start button in RStudio Server**: the
+  install script did not see the scheduler when it ran (for example it ran on a
+  node without one). Add `mp_path_add '/path/to/scheduler/bin'` to the job
+  scheduler block in `activate.sh`, or run the install script again from a
+  login node.
+
 ## Shared install by an administrator
 
 The install script needs no root, only a writable directory, so an administrator can
@@ -261,31 +289,3 @@ execute { cmd = "source /apps/mitopilot_native/activate.sh", modeA = { "load" } 
 Users then `module load mitopilot`, and `native_setup()` needs no argument.
 `generate_config(container_engine = "none", native_prefix = "/apps/mitopilot_native")`
 is unchanged for everyone.
-
-## Updating
-
-Update the R package inside the bundled R with
-`<install_dir>/envs/mitopilot/bin/Rscript -e 'BiocManager::install("Smithsonian/MitoPilot@<version>")'`,
-and in any other R you use for the app. When a release changes tool pins (see
-`inst/native/VERSIONS.md` in the release), delete `<install_dir>/envs` and re-run the
-install script.
-
-## Troubleshooting
-
-- **Solver errors during install**: run again with `--manager mamba` if you have
-  one, or copy the failing `envs/*.yml` name into an issue.
-- **`Could not find nextflow` in RStudio Server**: call `native_setup()`.
-- **Jobs fail with `runmitos: command not found`**: the task did not source
-  `activate.sh`; check the project `.config` has `process.beforeScript`.
-- **Home quota exceeded**: choose an install location on scratch; the environments are large.
-- **`'browser' must be a non-empty character string`**: an older MitoPilot in the
-  bundled R; update it, or pass `launch.browser = FALSE`.
-- **A different Java or Nextflow wins on PATH**: source `activate.sh` last,
-  after any `module load`; it puts the bundled environment first.
-- **`native_check()` shows the wrong Nextflow version**: look for an
-  `NXF_VER` in `~/.Renviron` or your shell profile.
-- **`sbatch: command not found` from the Start button in RStudio Server**: the
-  install script did not see the scheduler when it ran (for example it ran on a
-  node without one). Add `mp_path_add '/path/to/scheduler/bin'` to the job
-  scheduler block in `activate.sh`, or run the install script again from a
-  login node.
