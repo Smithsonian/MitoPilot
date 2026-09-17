@@ -131,10 +131,12 @@ native_check <- function(prefix = Sys.getenv("MITOPILOT_NATIVE_PREFIX"), strict 
     if (is.na(flag)) return("")
     out <- tryCatch(suppressWarnings(system2(t, flag, stdout = TRUE, stderr = TRUE)),
                     error = function(e) character())
-    out <- trimws(out[grepl("[0-9]+[.][0-9]+", out)])
-    hit <- out[grepl("version|v[0-9]", out, ignore.case = TRUE)]
+    out <- trimws(out[grepl("[0-9]", out)])
+    hit <- out[grepl(paste0("version|", sub("[.].*$", "", t)), out, ignore.case = TRUE)]
     out <- if (length(hit)) hit[1] else out[1]
-    if (length(out) && !is.na(out)) substr(out, 1, 60) else ""
+    if (!length(out) || is.na(out)) return("")
+    out <- sub("^.*?(version)", "\\1", out, ignore.case = TRUE)
+    substr(out, 1, 60)
   }, character(1))
   res <- data.frame(tool = tools, required = tools %in% core, found = nzchar(path),
                     path = unname(path), version = unname(version),
