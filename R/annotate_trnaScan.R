@@ -23,22 +23,13 @@ annotate_trnaScan <- function(
   fasta <- tempfile(fileext = ".fa")
   Biostrings::writeXStringSet(assembly, fasta)
 
-  process_args <- list(
+  run_tool(
     cmd = "tRNAscan-SE",
     args = stringr::str_glue(
       "{trnaScan_opts} -o {out} --thread {cpus} --forceow --quiet {fasta}"
-    )
+    ),
+    condaenv = condaenv
   )
-  condaenv <- .mp_condaenv(condaenv)
-  if (!is.null(condaenv)) {
-    process <- reticulate::conda_run2
-    process_args$envname <- condaenv
-    process_args$echo <- FALSE
-  } else {
-    process <- "system2"
-  }
-
-  do.call(process, process_args)
 
   # Format output
   annotations <- read.delim(

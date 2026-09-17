@@ -27,7 +27,7 @@ annotate_aragorn <- function(
   topology_flag <- if (circular) "-c" else "-l"
   out <- tempfile(fileext = ".txt")
 
-  process_args <- list(
+  run_tool(
     cmd = "aragorn",
     args = c(
       strsplit(aragorn_opts, "\\s+")[[1]],
@@ -35,18 +35,9 @@ annotate_aragorn <- function(
       topology_flag,
       "-w", "-o", out,
       fasta
-    )
+    ),
+    condaenv = condaenv
   )
-  condaenv <- .mp_condaenv(condaenv)
-  if (!is.null(condaenv)) {
-    process <- reticulate::conda_run2
-    process_args$envname <- condaenv
-    process_args$echo <- FALSE
-  } else {
-    process <- "system2"
-  }
-
-  do.call(process, process_args)
 
   raw <- readLines(out)
 

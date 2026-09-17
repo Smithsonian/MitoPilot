@@ -107,3 +107,20 @@ test_that("native_setup applies PATH and the no-conda flag to the session", {
   expect_true(startsWith(Sys.getenv("PATH"), file.path(prefix, "envs", "mitopilot", "bin")))
   expect_equal(Sys.getenv("MITOPILOT_NO_CONDA"), "1")
 })
+
+test_that("run_tool calls the runner directly when conda is off", {
+  withr::local_envvar(c(MITOPILOT_NO_CONDA = "1"))
+  seen <- NULL
+  fake <- function(command, args) { seen <<- list(command = command, args = args); 0L }
+  expect_equal(run_tool("tRNAscan-SE", c("-M", "vert"), condaenv = "trnascan", runner = fake), 0L)
+  expect_equal(seen$command, "tRNAscan-SE")
+  expect_equal(seen$args, c("-M", "vert"))
+})
+
+test_that("run_tool with NULL condaenv never touches conda", {
+  withr::local_envvar(c(MITOPILOT_NO_CONDA = ""))
+  seen <- NULL
+  fake <- function(command, args) { seen <<- command; 0L }
+  run_tool("aragorn", "-h", condaenv = NULL, runner = fake)
+  expect_equal(seen, "aragorn")
+})

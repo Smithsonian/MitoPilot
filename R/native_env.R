@@ -10,6 +10,16 @@
   x
 }
 
+#' Run a pipeline tool, through conda when an env name is given
+#' @noRd
+run_tool <- function(cmd, args, condaenv = NULL, runner = system2) {
+  condaenv <- .mp_condaenv(condaenv)
+  if (is.null(condaenv)) {
+    return(runner(cmd, args))
+  }
+  reticulate::conda_run2(cmd = cmd, args = args, envname = condaenv, echo = FALSE)
+}
+
 #' @noRd
 bam_readcount_cmd <- function(assembly, bam, out) {
   runner <- if (is.null(.mp_condaenv("bam-readcount"))) "" else "conda run -n bam-readcount "
