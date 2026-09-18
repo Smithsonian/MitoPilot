@@ -204,6 +204,8 @@ if [ "$skip_mp" = 0 ]; then
   else
     PATH="$main/bin:$PATH" USE_BUNDLED_LIBUV=1 "$main/bin/Rscript" -e "options(repos = BiocManager::repositories()); remotes::install_github('Smithsonian/MitoPilot@$mp_ref', upgrade = 'never')"
   fi
+  "$main/bin/Rscript" -e "quit(status = !requireNamespace('MitoPilot', quietly = TRUE))" \
+    || { echo "MitoPilot did not install into $main; see errors above" >&2; exit 1; }
 fi
 
 say "done"

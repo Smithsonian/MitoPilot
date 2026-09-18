@@ -19,6 +19,7 @@ dependencies:
   - r-readr
   - r-tidyr
   - r-processx
+  - r-fs
   - bioconductor-biostrings
   - bioconductor-rsamtools
   - bioconductor-decipher
