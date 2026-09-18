@@ -173,6 +173,21 @@ generate_config(
 )
 ```
 
+**NMNH Hydra or NOAA SEDNA:** pass the built-in cluster template as
+`scheduler` to keep its tuned resource settings (parallel environment,
+memory flags, himem selection). This form is only for
+`container_engine = "none"`; with containers, use
+`new_project(executor = "NMNH_Hydra")` as before.
+
+```{r eval=FALSE}
+generate_config(
+  name             = "hydra_native",
+  scheduler        = "NMNH_Hydra",         # or NOAA_SEDNA
+  container_engine = "none",
+  native_prefix    = "/scratch/<user>/mitopilot_native"
+)
+```
+
 Then create projects with `new_project(..., executor = "local_native")` or
 `executor = "my_cluster"`, exactly as in
 [HPC cluster support](Custom-HPC.html). The profile makes every pipeline task
