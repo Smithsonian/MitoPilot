@@ -132,14 +132,37 @@ run_app <- function(
 #' @export
 tunnel_instructions <- function(port) {
   node <- Sys.info()[["nodename"]]
+  login <- login_host()
+  user <- Sys.getenv("USER", "<user>")
   message(
     "\n",
     "MitoPilot GUI running headless on node: ", node, "\n",
-    "To reach it from your laptop, open a tunnel (substitute <cluster> with\n",
-    "your login host and <user> with your username):\n\n",
-    "  ssh -N -L ", port, ":", node, ":", port, " <user>@<cluster>\n\n",
+    if (is.null(login)) paste0(
+      "To reach it from your laptop, open a tunnel (substitute <cluster> with\n",
+      "the login host you ssh to):\n\n",
+      "  ssh -N -L ", port, ":", node, ":", port, " ", user, "@<cluster>\n\n")
+    else paste0(
+      "To reach it from your laptop, open a tunnel:\n\n",
+      "  ssh -N -L ", port, ":", node, ":", port, " ", user, "@", login, "\n\n"),
     "Then open in your browser:\n\n",
-    "  http://localhost:", port, "\n"
+    "  http://localhost:", port, "\n",
+    "Keep this R session (and any interactive job it runs in) alive while you use the app.\n"
   )
   invisible(NULL)
+}
+
+#' Best guess at the cluster login host for the tunnel command
+#'
+#' Known clusters are named outright. Otherwise the address this shell was
+#' ssh'ed into (SSH_CONNECTION) is used, which is right on a login node but is
+#' unset or stale inside many interactive jobs, so NULL falls back to a placeholder.
+#' @noRd
+login_host <- function() {
+  if (is_hydra_cluster()) return("hydra-login01.si.edu")
+  if (is_sedna_cluster()) return("sedna.nwfsc2.noaa.gov")
+  ip <- strsplit(Sys.getenv("SSH_CONNECTION"), " ")[[1]][3]
+  if (is.na(ip) || !nzchar(ip)) return(NULL)
+  host <- tryCatch(system2("getent", c("hosts", ip), stdout = TRUE, stderr = FALSE),
+                   error = function(e) character(), warning = function(w) character())
+  if (length(host)) strsplit(trimws(host[1]), "\\s+")[[1]][2] else ip
 }

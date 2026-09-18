@@ -163,13 +163,19 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
 #'
 #' @return `TRUE` if running on Hydra, otherwise `FALSE`.
 #' @noRd
-is_hydra_cluster <- function() {
+is_hydra_cluster <- function() hosts_mention("hydra")
+
+#' @rdname is_hydra_cluster
+#' @noRd
+is_sedna_cluster <- function() hosts_mention("sedna")
+
+hosts_mention <- function(name) {
   motd_output <- try(
     system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE),
     silent = TRUE
   )
   !inherits(motd_output, "try-error") &&
-    any(grepl("hydra", motd_output, ignore.case = TRUE))
+    any(grepl(name, motd_output, ignore.case = TRUE))
 }
 
 #' Configure the R session environment for the Smithsonian Hydra cluster
