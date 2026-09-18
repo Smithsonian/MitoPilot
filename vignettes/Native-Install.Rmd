@@ -1,8 +1,8 @@
 ---
-title: "Installing without containers"
+title: "Installing Without Containers"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Installing without containers}
+  %\VignetteIndexEntry{Installing Without Containers}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
