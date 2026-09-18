@@ -372,7 +372,7 @@ pipeline_server_userAsmb <- function(id) {
           log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
           script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
 
-          script_content <- hydra_submission_script(full_nf_cmd, job_name, log_file_path)
+          script_content <- build_submit_script(work_dir, "sge", NULL, full_nf_cmd, job_name, log_file_path)
 
           # Write the script to the unique, timestamped file path.
           writeLines(script_content, script_path)

@@ -172,3 +172,23 @@ test_that("build_submit_script reads native_activate from the project config", {
   lines <- build_submit_script(wd, "slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
   expect_true(any(lines == paste0("source '", act, "'")))
 })
+
+test_that("build_submit_script on Hydra sources activate.sh for a native project", {
+  wd <- withr::local_tempdir()
+  prefix <- withr::local_tempdir()
+  bin <- file.path(prefix, "bin")
+  dir.create(bin, recursive = TRUE)
+  nf <- file.path(bin, "nextflow")
+  writeLines(c("#!/bin/sh", "echo 'nextflow version 25.10.4'"), nf)
+  Sys.chmod(nf, "0755")
+  act <- file.path(prefix, "activate.sh")
+  writeLines(paste0("export PATH=", bin, ":$PATH"), act)
+  writeLines(c(paste0("params.native_activate = '", act, "'"),
+               "process { executor = 'sge' }"), file.path(wd, ".config"))
+  local_mocked_bindings(is_hydra_cluster = function() TRUE)
+  lines <- build_submit_script(wd, "sge", NULL, "nextflow run foo", "j", "/tmp/j.log")
+  expect_true(any(lines == "#$ -q lTWFM.sq"))
+  expect_true(any(lines == paste0("source '", act, "'")))
+  expect_false(any(grepl("module load", lines)))
+  expect_true(any(lines == "export NXF_VER=25.10.4"))
+})

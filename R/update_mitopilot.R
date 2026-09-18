@@ -223,7 +223,7 @@ hydra_setup <- function() {
 #' @return Character vector of script lines.
 #' @noRd
 hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
-                                    nxf_ver = nf_pin_version()) {
+                                    nxf_ver = nf_pin_version(), env_setup = NULL) {
   c(
     "#!/bin/sh",
     paste0("#$ -N ", job_name),
@@ -240,7 +240,8 @@ hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
     'echo "---"',
     "",
     "source ~/.bashrc",
-    "module load tools/java/21.0.2",
+    if (is.null(env_setup)) "module load tools/java/21.0.2"
+    else paste0("source ", shQuote(env_setup)),
     "",
     "export NXF_OPTS=\"-Xms512m -Xmx20g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
     # Pin the Nextflow engine to a MitoPilot-compatible version.
@@ -313,16 +314,14 @@ build_submit_script <- function(work_dir, executor, queue, full_nf_cmd, job_name
   if (file.exists(tmpl)) {
     return(fill_submit_template(readLines(tmpl), full_nf_cmd, job_name, log_file))
   }
-  if (is_hydra_cluster()) {
-    return(hydra_submission_script(full_nf_cmd, job_name, log_file))
-  }
   env_setup <- read_config_executor(file.path(work_dir, ".config"))$native_activate
-  if (!is.null(env_setup)) {
-    nxf_ver <- native_nf_pin(native_env(env_setup))
-    return(submission_script(executor, queue, full_nf_cmd, job_name, log_file,
-                             nxf_ver = nxf_ver, env_setup = env_setup))
+  nxf_ver <- if (is.null(env_setup)) nf_pin_version() else native_nf_pin(native_env(env_setup))
+  if (is_hydra_cluster()) {
+    return(hydra_submission_script(full_nf_cmd, job_name, log_file,
+                                   nxf_ver = nxf_ver, env_setup = env_setup))
   }
-  submission_script(executor, queue, full_nf_cmd, job_name, log_file, env_setup = env_setup)
+  submission_script(executor, queue, full_nf_cmd, job_name, log_file,
+                    nxf_ver = nxf_ver, env_setup = env_setup)
 }
 
 #' Save a user-edited submission script as a reusable project template
