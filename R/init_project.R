@@ -140,5 +140,25 @@ new_project <- function(
     writeLines(file.path(path, ".config"))
 
   message("Project initialized: ", path)
-  message("To open the app, run:\n  setwd(\"", path, "\")\n  MitoPilot()")
+  message(open_app_hint(path))
+}
+
+#' How to open the app, worded for the session at hand
+#'
+#' No browser can open on a Linux box with no display or reached over SSH, so
+#' point those users at the tunnel form.
+#' @noRd
+open_app_hint <- function(path) {
+  headless <- Sys.info()[["sysname"]] == "Linux" &&
+    (nzchar(Sys.getenv("SSH_CONNECTION")) || !nzchar(Sys.getenv("DISPLAY"))) &&
+    !nzchar(Sys.getenv("RSTUDIO"))
+  if (headless) {
+    paste0("To open the app from this cluster session, run:\n",
+           "  setwd(\"", path, "\")\n",
+           "  MitoPilot(host = \"0.0.0.0\", port = 7591, launch.browser = FALSE)\n",
+           "then open the SSH tunnel it prints and visit http://localhost:7591 ",
+           "(see vignette(\"Custom-HPC\")).")
+  } else {
+    paste0("To open the app, run:\n  setwd(\"", path, "\")\n  MitoPilot()")
+  }
 }

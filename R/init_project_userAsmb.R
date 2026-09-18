@@ -188,5 +188,5 @@ new_project_userAsmb <- function(
     writeLines(file.path(path, ".config"))
 
   message("Project initialized: ", path)
-  message("To open the app, run:\n  setwd(\"", path, "\")\n  MitoPilot()")
+  message(open_app_hint(path))
 }
