@@ -151,3 +151,17 @@ test_that("migrate_config keeps native mode when regenerating from a built-in te
   expect_false(any(grepl("docker {", txt, fixed = TRUE)))
   expect_false(any(grepl("baked into the container", txt, fixed = TRUE)))
 })
+
+test_that("generate_config builds a native profile from a named cluster template", {
+  pdir <- tempfile()
+  out <- generate_config("hydra_native", scheduler = "NMNH_Hydra",
+                         container_engine = "none", native_prefix = "/x/mp", profile_dir = pdir)
+  txt <- readLines(out)
+  expect_false(any(grepl("^singularity", txt)))
+  expect_true(any(grepl("source /x/mp/activate.sh", txt, fixed = TRUE)))
+  expect_true(any(grepl("container = null", txt, fixed = TRUE)))
+  expect_true(any(grepl("penv = 'mthread'", txt, fixed = TRUE)))
+  expect_true(any(grepl("himem", txt, fixed = TRUE)))
+  expect_true(any(grepl("db_dir = '/x/mp/ref_dbs/mito_metazoa'", txt, fixed = TRUE)))
+  expect_error(generate_config("h2", scheduler = "NMNH_Hydra", profile_dir = pdir), "only for")
+})

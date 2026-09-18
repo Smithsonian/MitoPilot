@@ -6,7 +6,8 @@
 \usage{
 generate_config(
   name,
-  scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch"),
+  scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch", "NMNH_Hydra",
+    "NOAA_SEDNA"),
   container_engine = c("auto", "singularity", "apptainer", "docker", "none"),
   container_cache = NULL,
   container_run_options = NULL,
@@ -25,7 +26,10 @@ generate_config(
 `executor` argument to `new_project()`.}
 
 \item{scheduler}{Base template to build on. One of "slurm", "sge", "pbs",
-"lsf", "local", or "awsbatch".}
+"lsf", "local", or "awsbatch"; or a named cluster template ("NMNH_Hydra",
+"NOAA_SEDNA"), allowed only with `container_engine = "none"`, which keeps
+that cluster's tuned resource settings and swaps its container block for
+the native install.}
 
 \item{container_engine}{Container runtime. "auto" picks docker for
 local/awsbatch and singularity for HPC schedulers; or set explicitly to

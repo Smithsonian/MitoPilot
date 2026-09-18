@@ -335,7 +335,10 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 #' @param name Profile name. Saved as `config.<name>`; pass this as the
 #'   `executor` argument to `new_project()`.
 #' @param scheduler Base template to build on. One of "slurm", "sge", "pbs",
-#'   "lsf", "local", or "awsbatch".
+#'   "lsf", "local", or "awsbatch"; or a named cluster template ("NMNH_Hydra",
+#'   "NOAA_SEDNA"), allowed only with `container_engine = "none"`, which keeps
+#'   that cluster's tuned resource settings and swaps its container block for
+#'   the native install.
 #' @param container_engine Container runtime. "auto" picks docker for
 #'   local/awsbatch and singularity for HPC schedulers; or set explicitly to
 #'   "singularity", "apptainer", or "docker"; or "none" for a native
@@ -366,7 +369,7 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 #' @export
 generate_config <- function(
     name,
-    scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch"),
+    scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
     container_engine = c("auto", "singularity", "apptainer", "docker", "none"),
     container_cache = NULL,
     container_run_options = NULL,
@@ -386,6 +389,11 @@ generate_config <- function(
 
   if (container_engine == "none" && (is.null(native_prefix) || !nzchar(native_prefix))) {
     stop("container_engine = 'none' requires `native_prefix`.", call. = FALSE)
+  }
+  named_cluster <- scheduler %in% c("NMNH_Hydra", "NOAA_SEDNA")
+  if (named_cluster && container_engine != "none") {
+    stop("scheduler = '", scheduler, "' is only for container_engine = 'none'; ",
+         "with containers use new_project(executor = '", scheduler, "') directly.", call. = FALSE)
   }
 
   if (container_engine == "auto") {
@@ -427,6 +435,13 @@ generate_config <- function(
     stop("Base template not found for scheduler '", scheduler, "'.", call. = FALSE)
   }
   lines <- readLines(template)
+
+  # Named cluster templates hardcode a singularity block; swap it for the native one ----
+  if (named_cluster) {
+    s <- grep("^singularity \\{", lines)[1]
+    e <- s + grep("^\\}", lines[s:length(lines)])[1] - 1
+    lines <- c(lines[seq_len(s - 1)], native_config_block(native_prefix), lines[-seq_len(e)])
+  }
 
   # Drop the queue directive if no queue requested ----
   if (is.null(queue) || !nzchar(queue)) {
