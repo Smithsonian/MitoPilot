@@ -202,7 +202,7 @@ if [ "$skip_mp" = 0 ]; then
   if [ -n "$mp_source" ]; then
     PATH="$main/bin:$PATH" USE_BUNDLED_LIBUV=1 "$main/bin/Rscript" -e "options(repos = BiocManager::repositories()); remotes::install_local('$mp_source', upgrade = 'never')"
   else
-    PATH="$main/bin:$PATH" USE_BUNDLED_LIBUV=1 "$main/bin/Rscript" -e "BiocManager::install('Smithsonian/MitoPilot@$mp_ref', ask = FALSE, upgrade = 'never')"
+    PATH="$main/bin:$PATH" USE_BUNDLED_LIBUV=1 "$main/bin/Rscript" -e "options(repos = BiocManager::repositories()); remotes::install_github('Smithsonian/MitoPilot@$mp_ref', upgrade = 'never')"
   fi
 fi
 
