@@ -177,6 +177,8 @@ export $v='${!v}'"
 done
 cat > "$prefix/activate.sh" <<ACT
 # MitoPilot $MITOPILOT_VERSION native environment, written by install_mitopilot_native.sh ($manager)
+# already active in this shell: sourcing again would stack the prompt and PATH
+[ "\${MITOPILOT_NATIVE_PREFIX-}" = '$prefix' ] && return 0 2>/dev/null
 MITOPILOT_NATIVE_PREFIX='$prefix'
 $act
 # conda-style activation swaps the env into the previous env's PATH slot, so
