@@ -221,7 +221,7 @@ assemble_server_userAsmb <- function(id) {
               align = "center",
               filterable = FALSE,
               cell = rt_dynamicIcon(
-                icons = assemble_state_icons("assemble"),
+                icons = mp_state_icons("assemble"),
                 labels = assemble_state_titles("assemble")
               )
             ),
