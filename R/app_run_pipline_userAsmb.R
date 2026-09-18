@@ -167,8 +167,8 @@ pipeline_server_userAsmb <- function(id) {
                        paste0("Submit to Cluster (", cmd, ")"), class = "btn-primary")
         }
         return(tagList(
-          submit_btn,
-          actionButton(ns("save_script"), "Save Script Only", class = "btn-default")
+          actionButton(ns("save_script"), "Save Script Only", class = "btn-default"),
+          submit_btn
         ))
       }
 
