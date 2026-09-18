@@ -99,8 +99,8 @@ esac
 
 # 2. environments ---------------------------------------------------------------
 for e in $envs; do
-  if [ -e "$prefix/envs/$e/bin" ]; then say "env $e exists, skipping"; continue; fi
-  say "creating env $e"
+  if [ -e "$prefix/envs/$e/bin" ] && [ "$manager" != pixi ]; then say "env $e exists, skipping"; continue; fi
+  say "syncing env $e"
   create_env "$e"
 done
 main="$prefix/envs/mitopilot"
