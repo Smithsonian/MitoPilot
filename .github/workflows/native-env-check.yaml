@@ -33,7 +33,7 @@ jobs:
         run: |
           bash inst/native/install_mitopilot_native.sh \
             --prefix "$RUNNER_TEMP/mp" --manager ${{ matrix.manager }} \
-            --skip-blast-db --mitopilot-source "$GITHUB_WORKSPACE"
+            --skip-blast-db --no-optional --mitopilot-source "$GITHUB_WORKSPACE"
 
       - name: native_check
         run: |

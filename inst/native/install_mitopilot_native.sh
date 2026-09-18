@@ -3,7 +3,7 @@
 # Usage: bash install_mitopilot_native.sh --prefix DIR [options]
 #   --prefix DIR           install location; everything goes under this directory
 #   --manager micromamba|mamba|conda|pixi   (default: micromamba, downloaded into DIR/bin)
-#   --with-optional        also build MitoFinder, ARWEN, ORFfinder
+#   --no-optional          skip MitoFinder, ARWEN, ORFfinder (built by default)
 #   --skip-blast-db        do not download the local BLAST database
 #   --blast-db-url URL     override the BLAST DB tarball URL
 #   --mitopilot-ref REF    GitHub ref to install (default: tag matching this script)
@@ -28,7 +28,7 @@ envs_dir="$here/envs"
 arwen_src="$here/../../docker/arwen/arwen1.2.3.c"
 [ -f "$arwen_src" ] || arwen_src="$here/arwen1.2.3.c"
 
-prefix=""; manager="micromamba"; with_optional=0; skip_blast=0; dry=0
+prefix=""; manager="micromamba"; with_optional=1; skip_blast=0; dry=0
 blast_url="$BLAST_DB_URL_DEFAULT"; mp_ref="${MITOPILOT_VERSION}"; mp_source=""; skip_mp=0
 
 while [ $# -gt 0 ]; do
@@ -36,6 +36,7 @@ while [ $# -gt 0 ]; do
     --prefix) prefix="$2"; shift 2;;
     --manager) manager="$2"; shift 2;;
     --with-optional) with_optional=1; shift;;
+    --no-optional) with_optional=0; shift;;
     --skip-blast-db) skip_blast=1; shift;;
     --blast-db-url) blast_url="$2"; shift 2;;
     --mitopilot-ref) mp_ref="$2"; shift 2;;
