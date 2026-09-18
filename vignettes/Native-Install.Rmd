@@ -88,12 +88,15 @@ curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/${ver}.tar.gz
 cd MitoPilot-${ver}/inst/native
 ```
 
-Choose an install location on a large filesystem that allows executables. If on a cluster, a
-project or scratch directory is usually better than your home directory. Pass the install location as
-`--prefix`. Everything MitoPilot needs goes inside that one directory:
+Choose an install location on a large filesystem that allows executables. Where
+that is depends on the cluster: a project, group, work, or scratch directory is
+usually better than your home directory, and your cluster's documentation will
+say where large software belongs. The examples on this page write `<install_dir>`
+for that path. Pass it as `--prefix`; everything MitoPilot needs goes inside that
+one directory:
 
 ```{bash eval=FALSE}
-bash install_mitopilot_native.sh --prefix /scratch/$USER/mitopilot_native
+bash install_mitopilot_native.sh --prefix <install_dir>
 ```
 
 That builds the core environments (30 to 90 minutes, mostly downloads), fetches
@@ -135,7 +138,7 @@ From any R that has MitoPilot installed (the bundled one is at
 
 ```{r eval=FALSE}
 library(MitoPilot)
-native_check("/scratch/<user>/mitopilot_native")
+native_check("<install_dir>")
 ```
 
 Every core tool should show `found TRUE`. Optional tools are only present after
@@ -169,7 +172,7 @@ generate_config(
   queue            = "general",
   account          = "my_allocation",
   container_engine = "none",
-  native_prefix    = "/scratch/<user>/mitopilot_native" # the install location
+  native_prefix    = "<install_dir>" # the install location
 )
 ```
 
@@ -184,7 +187,7 @@ generate_config(
   name             = "hydra_native",
   scheduler        = "NMNH_Hydra",         # or NOAA_SEDNA
   container_engine = "none",
-  native_prefix    = "/scratch/<user>/mitopilot_native"
+  native_prefix    = "<install_dir>"
 )
 ```
 
@@ -203,8 +206,8 @@ and it is version 4.4 or newer. Pipeline tasks always use the bundled R.
 [Accessing the MitoPilot app over an SSH tunnel](Custom-HPC.html#accessing-the-mitopilot-app-over-an-ssh-tunnel):
 
 ```{bash eval=FALSE}
-source /scratch/$USER/mitopilot_native/activate.sh
-cd /scratch/$USER/my_runs/project01
+source <install_dir>/activate.sh
+cd /path/to/my_project
 R -e "MitoPilot::MitoPilot(host='0.0.0.0', port=7591, launch.browser=FALSE)"
 ```
 
@@ -213,7 +216,7 @@ R -e "MitoPilot::MitoPilot(host='0.0.0.0', port=7591, launch.browser=FALSE)"
 
 ```{r eval=FALSE}
 library(MitoPilot)
-native_setup("/scratch/<user>/mitopilot_native")
+native_setup("<install_dir>")
 ```
 
 `native_setup()` puts the bundled Nextflow and Java on this session's PATH,
@@ -222,7 +225,7 @@ their environment variables as they were when the install script ran, since
 RStudio Server sessions do not inherit a login shell's PATH. If the scheduler
 lives somewhere else on your cluster, edit the "job scheduler" lines near the
 end of `activate.sh`. To
-make it automatic, add `MITOPILOT_NATIVE_PREFIX=/scratch/<user>/mitopilot_native`
+make it automatic, add `MITOPILOT_NATIVE_PREFIX=<install_dir>`
 to `~/.Renviron` and call `native_setup()` with no arguments, or add the call to
 `~/.Rprofile`. The **Start** button in the app reads the project config and finds
 the environment on its own, so it works even without `native_setup()`; the setup
@@ -261,7 +264,7 @@ install script.
 - **`Could not find nextflow` in RStudio Server**: call `native_setup()`.
 - **Jobs fail with `runmitos: command not found`**: the task did not source
   `activate.sh`; check the project `.config` has `process.beforeScript`.
-- **Home quota exceeded**: choose an install location on scratch; the environments are large.
+- **Home quota exceeded**: choose an install location on a larger filesystem; the environments are large.
 - **`'browser' must be a non-empty character string`**: an older MitoPilot in the
   bundled R; update it, or pass `launch.browser = FALSE`.
 - **A different Java or Nextflow wins on PATH**: source `activate.sh` last,
