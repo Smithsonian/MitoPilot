@@ -300,7 +300,7 @@ export_db <- function(scaffold_topology, annotate_topology) {
   ))
   DBI::dbWriteTable(con, "samples", data.frame(
     ID = "s1", Taxon = "Testus testus", topology = "linear",
-    R1 = NA_character_, R2 = NA_character_, stringsAsFactors = FALSE
+    R1 = NA_character_, R2 = NA_character_, Donors = "SRR1", stringsAsFactors = FALSE
   ))
   DBI::dbWriteTable(con, "assemble", data.frame(
     ID = "s1", assemble_lock = 1L, poor_blast_ref = NA_character_,
@@ -312,6 +312,14 @@ export_db <- function(scaffold_topology, annotate_topology) {
   ))
   con
 }
+
+test_that("fetch_export_data carries extra mapping-file columns through", {
+  con <- export_db("linear")
+  withr::defer(DBI::dbDisconnect(con))
+  out <- fetch_export_data(con = con)
+  expect_true("Donors" %in% names(out))
+  expect_equal(unique(out$Donors), "SRR1")
+})
 
 test_that("the Export table reports each contig's own topology", {
   con <- export_db(c("circular", "linear"), annotate_topology = "fragmented")

@@ -390,3 +390,20 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::relocate(annotate_switch, .before = ID) |>
     dplyr::relocate(export_group, .after = dplyr::last_col())
 }
+
+#' Mapping-file columns to show in the Export table
+#'
+#' Everything the user put in the mapping file that MitoPilot does not own or
+#' already display. fetch_export_data() carries every `samples` column, so the
+#' `samples` schema alone decides the set. Read paths and the user-assembly
+#' inputs are MitoPilot's.
+#'
+#' @param sample_cols Column names of the `samples` table.
+#' @param declared Column names the table already defines.
+#' @return Character vector, in `samples` order.
+#' @noRd
+export_metadata_cols <- function(sample_cols, declared) {
+  owned <- c("ID", "Taxon", "genetic_code", "topology", "R1", "R2", "assembly",
+             "Assembly", "Topology", "Reference", "Reference_topology")
+  sample_cols[!sample_cols %in% c(owned, declared)]
+}

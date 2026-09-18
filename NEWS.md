@@ -1,3 +1,12 @@
+# MitoPilot (development version)
+
+## Bug Fixes
+
+- **Mapping-file metadata is back in the Export table.** The 1.5.5 redesign
+  hid every column it did not declare, which dropped the user's own mapping-file
+  columns from the Export table. They now render as a **Metadata** column group,
+  shown by default and toggled together from the Columns picker.
+
 # MitoPilot 1.5.5
 
 Released 2026-09-16. Container: `macguigand/mitopilot:1.5.5`
