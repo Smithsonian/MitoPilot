@@ -261,9 +261,13 @@ export_seqid <- function(ID, path, scaffold, n_units) {
 #'
 #' @param db database connection
 #' @param session reactive session
+#' @param locked_only keep only units whose assembly and annotation are locked
+#'   (the Export tab's view). `FALSE` returns every non-ignored unit, for callers
+#'   that describe units they have already exported.
 #'
 #' @noRd
-fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) {
+fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
+                              locked_only = TRUE) {
   db <- con %||% session$userData$con
 
   samples <- dplyr::tbl(db, "samples") |>
@@ -302,11 +306,13 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain()) 
     dplyr::select(ID, path, scaffold, scaffold_topology = topology) |>
     dplyr::collect()
 
-  out <- dplyr::tbl(db, "assemble") |>
-    dplyr::filter(assemble_lock == 1) |>
+  out <- dplyr::tbl(db, "assemble")
+  if (locked_only) out <- dplyr::filter(out, assemble_lock == 1)
+  out <- out |>
     dplyr::select(ID, dplyr::any_of("poor_blast_ref")) |>
-    dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID") |>
-    dplyr::filter(annotate_lock == 1) |>
+    dplyr::left_join(dplyr::tbl(db, "annotate"), by = "ID")
+  if (locked_only) out <- dplyr::filter(out, annotate_lock == 1)
+  out <- out |>
     dplyr::select(
       ID, path, scaffold, curate_opts, topology,
       length, structure, PCGCount, tRNACount, rRNACount, missing, extra, warnings,

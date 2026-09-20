@@ -1314,8 +1314,11 @@ export_files <- function(
               "structure", "PCGCount", "tRNACount", "rRNACount", "ORFCount",
               "missing", "extra", "warnings", "blast_accession", "blast_species",
               "blast_lineage", "export_group")
-    summary_df <- fetch_export_data(con = con) |>
-      dplyr::filter(ID %in% !!IDs)
+    # The units written above, not the Export tab's locked view: a direct
+    # caller can export units that were never locked, and the CSV must
+    # describe what was written.
+    summary_df <- fetch_export_data(con = con, locked_only = FALSE) |>
+      dplyr::semi_join(units, by = c("ID", "path", "scaffold"))
     # Reference resolved per unit via the same helper the synteny view and both
     # tables use, so the sentence names the reference the user was shown.
     summary_df$ref_comparison <- vapply(seq_len(nrow(summary_df)), function(i) {

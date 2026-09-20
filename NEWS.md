@@ -2,6 +2,10 @@
 
 ## Bug Fixes
 
+- **`export_files()` summary CSV covers every exported unit.** The per-sample
+  `sample_info` CSV was built from the Export tab's locked view, so a direct
+  call that exported samples never locked in Annotate wrote the files but a
+  header-only CSV. The summary now describes exactly the units written.
 - **Mapping-file metadata is back in the Export table.** The 1.5.5 redesign
   hid every column it did not declare, which dropped the user's own mapping-file
   columns from the Export table. They now render as a **Metadata** column group,
