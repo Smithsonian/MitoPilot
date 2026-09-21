@@ -6,7 +6,8 @@
 #   --no-optional          skip MitoFinder, ARWEN, ORFfinder (built by default)
 #   --skip-blast-db        do not download the local BLAST database
 #   --blast-db-url URL     override the BLAST DB tarball URL
-#   --mitopilot-ref REF    GitHub ref to install (default: tag matching this script)
+#   --mitopilot-ref REF    GitHub ref to install instead of the source tree this
+#                          script sits in (falls back to the tag matching this script)
 #   --mitopilot-source P   install MitoPilot from a local dir or tarball instead
 #   --skip-mitopilot       do not install the MitoPilot R package
 #   --dry-run              print the plan, write nothing
@@ -29,7 +30,7 @@ arwen_src="$here/../../docker/arwen/arwen1.2.3.c"
 [ -f "$arwen_src" ] || arwen_src="$here/arwen1.2.3.c"
 
 prefix=""; manager="micromamba"; with_optional=1; skip_blast=0; dry=0
-blast_url="$BLAST_DB_URL_DEFAULT"; mp_ref="${MITOPILOT_VERSION}"; mp_source=""; skip_mp=0
+blast_url="$BLAST_DB_URL_DEFAULT"; mp_ref="${MITOPILOT_VERSION}"; ref_set=0; mp_source=""; skip_mp=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -39,7 +40,7 @@ while [ $# -gt 0 ]; do
     --no-optional) with_optional=0; shift;;
     --skip-blast-db) skip_blast=1; shift;;
     --blast-db-url) blast_url="$2"; shift 2;;
-    --mitopilot-ref) mp_ref="$2"; shift 2;;
+    --mitopilot-ref) mp_ref="$2"; ref_set=1; shift 2;;
     --mitopilot-source) mp_source="$2"; shift 2;;
     --skip-mitopilot) skip_mp=1; shift;;
     --dry-run) dry=1; shift;;
@@ -48,6 +49,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$prefix" ] || { echo "--prefix is required" >&2; exit 2; }
+# running from a checkout or unpacked tarball: install that tree, not the tag
+if [ -z "$mp_source" ] && [ "$ref_set" = 0 ] && [ -f "$here/../../DESCRIPTION" ]; then mp_source="$(cd "$here/../.." && pwd)"; fi
 case "$manager" in micromamba|mamba|conda|pixi) ;; *) echo "unknown --manager: $manager" >&2; exit 2;; esac
 if [ "$dry" = 0 ]; then mkdir -p "$prefix"; fi
 if [ -d "$prefix" ]; then prefix="$(cd "$prefix" && pwd)"; fi
@@ -62,6 +65,7 @@ say "manager: $manager"
 say "envs: $envs"
 [ "$with_optional" = 1 ] && say "optional tools: ARWEN, MitoFinder, ORFfinder"
 [ "$skip_blast" = 1 ] || say "BLAST DB: $blast_url"
+[ "$skip_mp" = 1 ] || say "MitoPilot R package: ${mp_source:-github Smithsonian/MitoPilot@$mp_ref}"
 say "activate.sh: $prefix/activate.sh"
 if [ "$dry" = 1 ]; then say "dry run, nothing written"; exit 0; fi
 

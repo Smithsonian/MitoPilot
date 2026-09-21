@@ -108,7 +108,7 @@ Options:
 | `--manager pixi` | Use pixi instead of micromamba; `mamba` and `conda` also accepted |
 | `--no-optional` | Skip MitoFinder, ARWEN, and NCBI ORFfinder (saves about 2 GB; these are off by default in projects anyway) |
 | `--skip-blast-db` | Skip the 289 MB database; reference search falls back to NCBI over the network |
-| `--mitopilot-ref 1.5.5` | Install a different MitoPilot tag |
+| `--mitopilot-ref 1.5.5` | Install a MitoPilot tag from GitHub instead of the source tree the script came from |
 | `--dry-run` | Show what would happen |
 
 Re-running the script is safe; finished steps are skipped.
