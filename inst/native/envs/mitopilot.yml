@@ -9,6 +9,7 @@ dependencies:
   - r-remotes
   - r-ragg
   - r-xml2
+  - r-xml
   - r-curl
   - r-openssl
   - r-rsqlite
@@ -47,6 +48,7 @@ dependencies:
   - bzip2
   - xz
   - libxml2
+  - libxml2-devel
   - libcurl
   - openssl
   - cairo
