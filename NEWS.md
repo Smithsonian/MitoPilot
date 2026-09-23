@@ -13,6 +13,13 @@ Released 2026-09-23. Container: `macguigand/mitopilot:1.5.6`
 - The app opens a browser from a conda-built R, which has no browser setting,
   by falling back to `xdg-open`.
 
+## Bug Fixes
+
+- **Mapping-file metadata is back in the Export table.** The 1.5.5 redesign
+  hid every column it did not declare, which dropped the user's own mapping-file
+  columns from the Export table. They now render as a **Metadata** column group,
+  shown by default and toggled together from the Columns picker.
+
 **Note**
 Projects created with 1.5.5 need no migration; run [`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html) or edit the `container` line in `.config` to `macguigand/mitopilot:1.5.6`. Native-install configs are kept as they are by `backwards_compatibility()`.
 

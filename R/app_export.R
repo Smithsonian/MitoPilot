@@ -1,10 +1,12 @@
 # Togglable column groups for the Export table. Cols not listed here
 # (sticky cols, action buttons) are always shown.
 EXPORT_COL_GROUPS <- list(
-  Options = c("curate_opts"),
-  Stats   = c("topology", "structure"),
-  BLAST   = c("blast_accession", "blast_ref_status", "blast_species",
-              "blast_lineage")
+  Options  = c("curate_opts"),
+  Stats    = c("topology", "structure"),
+  BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
+               "blast_lineage"),
+  # filled at render time from the user's mapping file (export_metadata_cols)
+  Metadata = character(0)
 )
 EXPORT_COL_GROUP_LOOKUP <- {
   out <- character()
@@ -206,8 +208,24 @@ export_server <- function(id) {
     # stop re-rendering it after the first pass.
     outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
+    # colDefs for the user's mapping-file columns, toggled as one group. Read
+    # from the samples schema, not rv$data, so the render stays isolated from
+    # data refreshes (updateReactable keeps page and selection).
+    metadata_col_defs <- function(declared) {
+      sample_cols <- tryCatch(colnames(dplyr::tbl(session$userData$con, "samples")),
+                              error = function(e) character(0))
+      cols <- export_metadata_cols(sample_cols, declared)
+      stats::setNames(lapply(cols, function(col) {
+        colDef(show = TRUE, name = col, header = rt_header(col, "From your mapping file"),
+               class = "mp-grp-Metadata", headerClass = "mp-grp-Metadata",
+               html = TRUE, cell = rt_longtext(), minWidth = 120)
+      }), cols)
+    }
+
     # Render table ----
     output$table <- reactable::renderReactable({
+      declared_cols <- declared_cols_fn()
+      metadata_cols <- metadata_col_defs(names(declared_cols))
       reactable::reactable(
         isolate(rv$data),
         compact = TRUE,
@@ -240,12 +258,18 @@ export_server <- function(id) {
         theme = reactable::reactableTheme(
           headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
         ),
-        # A column shows only if it is declared below, so nothing a user put in
-        # their mapping file leaks into the table (T08).
+        # A column shows only if it is declared below; the user's mapping-file
+        # columns are added as the Metadata group (see cols after this list).
         defaultColDef = colDef(show = FALSE),
         # Render order comes from the data frame, not this list. See
         # fetch_export_data().
-        columns = list(
+        columns = c(declared_cols, metadata_cols)
+      )
+    })
+
+    # Declared MitoPilot columns; metadata_col_defs() appends the user's own.
+    declared_cols_fn <- function() {
+        list(
           `.selection` = colDef(show = TRUE, sticky = "left", width = 28, align = "center"),
           # Wide enough for a 16-character ID; the tooltip covers longer ones.
           ID = .cd("ID", minWidth = 160, sticky = "left", html = TRUE,
@@ -298,8 +322,7 @@ export_server <- function(id) {
                                   filterable = FALSE, align = "center", cell = rt_ts_date()),
           export_group = .cd("export_group", sticky = "right", minWidth = 140)
         )
-      )
-    })
+    }
 
     # update table ----
     init("update_export_table")
