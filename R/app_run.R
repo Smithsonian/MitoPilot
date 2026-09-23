@@ -54,7 +54,7 @@ run_app <- function(
     launch.browser <- interactive()
   }
   # conda-built R ships with no browser option; borrow the desktop opener
-  if (isTRUE(launch.browser) && !nzchar(getOption("browser", "")) &&
+  if (isTRUE(launch.browser) && identical(getOption("browser", ""), "") &&
       nzchar(Sys.which("xdg-open"))) {
     options(browser = unname(Sys.which("xdg-open")))
   }
