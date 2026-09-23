@@ -1,0 +1,6 @@
+name: mitos
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - mitos=2.1.10

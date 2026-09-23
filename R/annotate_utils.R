@@ -291,6 +291,7 @@ get_top_hits <- function(
     query,
     max_blast_hits = 10,
     condaenv = "base") {
+  condaenv <- .mp_condaenv(condaenv)
   ref_db <- ref_db[nzchar(ref_db) & file.exists(ref_db)]
   if (length(ref_db) == 0L) {
     stop("get_top_hits: no reference database found", call. = FALSE)
@@ -396,6 +397,7 @@ get_top_hits <- function(
 #'
 #' @noRd
 build_combined_orf_db <- function(feature_dir, out_fasta, condaenv = "base") {
+  condaenv <- .mp_condaenv(condaenv)
   feature_dir <- feature_dir[nzchar(feature_dir) & dir.exists(feature_dir)]
   fas <- unlist(lapply(
     feature_dir,
@@ -450,6 +452,7 @@ get_top_hits_orf <- function(
     query,
     max_blast_hits = 10,
     condaenv = "base") {
+  condaenv <- .mp_condaenv(condaenv)
   ref_seqs <- Biostrings::readAAStringSet(ref_db)
 
   if (!is.null(condaenv)) {
@@ -574,6 +577,7 @@ get_top_hits_nuc <- function(
     query,
     max_blast_hits = 10,
     condaenv = "base") {
+  condaenv <- .mp_condaenv(condaenv)
   ref_seqs <- Biostrings::readDNAStringSet(ref_db)
 
   if (!is.null(condaenv)) {

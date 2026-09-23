@@ -134,7 +134,7 @@ new_project_userAsmb <- function(
     mitofinder_db <- normalizePath(mitofinder_db, mustWork = FALSE)
   }
   mapping_out <- file.path(path, "mapping.csv")
-  if (!identical(normalizePath(mapping_fn), mapping_out)) {
+  if (!identical(normalizePath(mapping_fn), normalizePath(mapping_out, mustWork = FALSE))) {
     file.copy(mapping_fn, mapping_out, overwrite = TRUE)
   }
 
@@ -177,6 +177,8 @@ new_project_userAsmb <- function(
   config <- config %||% resolve_config(executor, profile_dir = profile_dir)
   readLines(config) |>
     fill_config(list(
+      CONTAINER_ENGINE = container_engine_block(
+        if (executor %in% c("local", "awsbatch")) "docker" else "singularity"),
       CONTAINER_ID = container,
       RAW_DIR = data_path,
       ASMB_DIR = assembly_path,
@@ -186,5 +188,5 @@ new_project_userAsmb <- function(
     writeLines(file.path(path, ".config"))
 
   message("Project initialized: ", path)
-  message("To open the app, run:\n  setwd(\"", path, "\")\n  MitoPilot()")
+  message(open_app_hint(path))
 }

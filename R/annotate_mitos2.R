@@ -220,7 +220,7 @@ annotate_mitos2 <- function(
   # configured mitos_opts.
   run_mitos <- function(out_dir, extra_opts = "") {
     dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-    process_args <- list(
+    run_tool(
       cmd = "runmitos",
       args = stringr::str_glue(
         "--input {fasta}",
@@ -234,16 +234,9 @@ annotate_mitos2 <- function(
         "--noplots",
         .sep = " "
       ) |>
-        stringr::str_squish()
+        stringr::str_squish(),
+      condaenv = condaenv
     )
-    if (!is.null(condaenv)) {
-      process <- reticulate::conda_run2
-      process_args$envname <- condaenv
-      process_args$echo <- FALSE
-    } else {
-      process <- "system2"
-    }
-    do.call(process, process_args)
   }
 
   message("starting MITOS2")

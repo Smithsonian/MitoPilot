@@ -1,0 +1,50 @@
+# Verifies the native (no-container) install definitions still solve and that
+# the install script produces a working core environment.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'inst/native/**'
+      - 'R/native_env.R'
+      - 'R/generate_config.R'
+      - '.github/workflows/native-env-check.yaml'
+  schedule:
+    - cron: '0 6 1 * *'
+
+name: native-env-check.yaml
+
+permissions: read-all
+
+jobs:
+  solve:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        manager: [micromamba, pixi]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+
+      - name: Bootstrap core envs
+        timeout-minutes: 90
+        run: |
+          bash inst/native/install_mitopilot_native.sh \
+            --prefix "$RUNNER_TEMP/mp" --manager ${{ matrix.manager }} \
+            --skip-blast-db --no-optional --mitopilot-source "$GITHUB_WORKSPACE"
+
+      - name: native_check
+        run: |
+          "$RUNNER_TEMP/mp/envs/mitopilot/bin/Rscript" -e \
+            'MitoPilot::native_check("'"$RUNNER_TEMP"'/mp", strict = TRUE)'
+
+      - name: Native config parses
+        run: |
+          source "$RUNNER_TEMP/mp/activate.sh"
+          Rscript -e 'MitoPilot::generate_config("ci", scheduler = "local", container_engine = "none", native_prefix = "'"$RUNNER_TEMP"'/mp", profile_dir = "'"$RUNNER_TEMP"'", overwrite = TRUE)'
+          sed -e "s#<<RAW_DIR>>#/tmp#; s#<<ASMB_DIR>>#NA#; s#<<MIN_DEPTH>>#100#; s#<<NCBI_API_KEY>>##" \
+            "$RUNNER_TEMP/config.ci" > "$RUNNER_TEMP/ci.config"
+          export NXF_VER=25.10.4
+          nextflow -C "$RUNNER_TEMP/ci.config" config -flat "$GITHUB_WORKSPACE/inst/nextflow/main.nf" | grep -q "params.native_activate"

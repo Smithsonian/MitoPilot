@@ -58,6 +58,7 @@ articles:
   navbar: Computing Environments
   contents:
   - 'Custom-HPC'
+  - 'Native-Install'
   - 'NMNH-Hydra'
   - 'NOAA-SEDNA'
 
@@ -101,6 +102,8 @@ reference:
   - nextflow_cmd
   - tunnel_instructions
   - hydra_setup
+  - native_setup
+  - native_check
 
 - title: "Reference databases"
   desc: >

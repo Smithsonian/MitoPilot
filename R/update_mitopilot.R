@@ -53,7 +53,7 @@ nextflow_cmd <- function(
 #'   or `NULL` if absent / still an unfilled `<<QUEUE>>` placeholder).
 #' @noRd
 read_config_executor <- function(path) {
-  lines <- tryCatch(readLines(path), error = function(e) character(0))
+  lines <- if (file.exists(path)) readLines(path) else character(0)
 
   grab <- function(key) {
     m <- stringr::str_match(lines, paste0("^\\s*", key, "\\s*=\\s*['\"]([^'\"]+)['\"]"))
@@ -67,7 +67,8 @@ read_config_executor <- function(path) {
     queue <- NULL
   }
 
-  list(executor = executor, queue = queue)
+  list(executor = executor, queue = queue,
+       native_activate = grab("params.native_activate"))
 }
 
 #' Build a cluster submission script for a headless Nextflow run
@@ -83,11 +84,13 @@ read_config_executor <- function(path) {
 #' @param full_nf_cmd The full `nextflow ...` command string to run.
 #' @param job_name Job name for the scheduler.
 #' @param log_file Path to the combined stdout/stderr log file.
+#' @param env_setup Path to a native activate.sh; when given it is sourced in
+#'   place of the commented examples.
 #'
 #' @return Character vector of script lines, ready for `writeLines()`.
 #' @noRd
 submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
-                              nxf_ver = nf_pin_version()) {
+                              nxf_ver = nf_pin_version(), env_setup = NULL) {
   executor <- tolower(executor %||% "local")
   if (executor == "pbspro") executor <- "pbs"
 
@@ -135,10 +138,15 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
     "",
     'echo "--- MitoPilot job started: `date` ---"',
     "",
-    "# EDIT: load your cluster environment below (uncomment / adjust as needed)",
-    "# source ~/.bashrc",
-    "# module load java",
-    "# mamba activate MitoPilot_deps",
+    if (is.null(env_setup)) c(
+      "# EDIT: load your cluster environment below (uncomment / adjust as needed)",
+      "# source ~/.bashrc",
+      "# module load java",
+      "# mamba activate MitoPilot_deps"
+    ) else c(
+      "# Native MitoPilot environment (from the project .config)",
+      paste0("source ", shQuote(env_setup, type = "sh"))
+    ),
     "",
     # Pin the Nextflow engine to a MitoPilot-compatible version.
     if (!is.na(nxf_ver)) paste0("export NXF_VER=", nxf_ver),
@@ -155,13 +163,19 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
 #'
 #' @return `TRUE` if running on Hydra, otherwise `FALSE`.
 #' @noRd
-is_hydra_cluster <- function() {
+is_hydra_cluster <- function() hosts_mention("hydra")
+
+#' @rdname is_hydra_cluster
+#' @noRd
+is_sedna_cluster <- function() hosts_mention("sedna")
+
+hosts_mention <- function(name) {
   motd_output <- try(
     system2("cat", "/etc/hosts", stdout = TRUE, stderr = FALSE),
     silent = TRUE
   )
   !inherits(motd_output, "try-error") &&
-    any(grepl("hydra", motd_output, ignore.case = TRUE))
+    any(grepl(name, motd_output, ignore.case = TRUE))
 }
 
 #' Configure the R session environment for the Smithsonian Hydra cluster
@@ -215,7 +229,7 @@ hydra_setup <- function() {
 #' @return Character vector of script lines.
 #' @noRd
 hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
-                                    nxf_ver = nf_pin_version()) {
+                                    nxf_ver = nf_pin_version(), env_setup = NULL) {
   c(
     "#!/bin/sh",
     paste0("#$ -N ", job_name),
@@ -232,7 +246,8 @@ hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
     'echo "---"',
     "",
     "source ~/.bashrc",
-    "module load tools/java/21.0.2",
+    if (is.null(env_setup)) "module load tools/java/21.0.2"
+    else paste0("source ", shQuote(env_setup, type = "sh")),
     "",
     "export NXF_OPTS=\"-Xms512m -Xmx20g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
     # Pin the Nextflow engine to a MitoPilot-compatible version.
@@ -305,10 +320,14 @@ build_submit_script <- function(work_dir, executor, queue, full_nf_cmd, job_name
   if (file.exists(tmpl)) {
     return(fill_submit_template(readLines(tmpl), full_nf_cmd, job_name, log_file))
   }
+  env_setup <- read_config_executor(file.path(work_dir, ".config"))$native_activate
+  nxf_ver <- if (is.null(env_setup)) nf_pin_version() else native_nf_pin(native_env(env_setup))
   if (is_hydra_cluster()) {
-    return(hydra_submission_script(full_nf_cmd, job_name, log_file))
+    return(hydra_submission_script(full_nf_cmd, job_name, log_file,
+                                   nxf_ver = nxf_ver, env_setup = env_setup))
   }
-  submission_script(executor, queue, full_nf_cmd, job_name, log_file)
+  submission_script(executor, queue, full_nf_cmd, job_name, log_file,
+                    nxf_ver = nxf_ver, env_setup = env_setup)
 }
 
 #' Save a user-edited submission script as a reusable project template

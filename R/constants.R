@@ -120,10 +120,17 @@ mp_state_choices <- function(module) {
   mp_state_field(module, "label", named = TRUE)
 }
 
-#' Icon classes for a state column, in module code order.
+#' Icon classes for a state column, in module code order, tone class included.
+#' Colour is redundant with shape: the three tones are the shared status
+#' colours from custom.css, keyed to the state codes (theme T06).
 #' @param module "assemble" or "annotate"
 #' @noRd
-mp_state_icons <- function(module) mp_state_field(module, "icon")
+mp_state_icons <- function(module) {
+  codes <- MP_STATE_CODES[[module]]
+  tone <- c(`0` = "mp-fg-neutral", `1` = "mp-fg-neutral", `4` = "mp-fg-neutral",
+            `2` = "mp-fg-success", `3` = "mp-fg-danger")
+  stats::setNames(paste(mp_state_field(module, "icon"), tone[codes]), codes)
+}
 
 #' State labels, in module code order.
 #' @param module "assemble" or "annotate"

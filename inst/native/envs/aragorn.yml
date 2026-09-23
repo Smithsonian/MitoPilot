@@ -1,0 +1,6 @@
+name: aragorn
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - aragorn=1.2.41

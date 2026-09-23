@@ -129,3 +129,22 @@ export) before pointing users at it.
 - **Running dedup twice in the same working directory fails** at the final
   directory swap. The tarball it writes is still valid. Clean up with
   `rm -rf "$WD/db_prededup"` and rerun, or start from a fresh build.
+
+---
+
+## 3. Publish the BLAST database for native installs
+
+Native (no-container) installs download `mito_metazoa_blastdb.tar.gz` from a
+GitHub Release instead of finding it in the image. After rebuilding the database
+(part 1), attach the tarball to a release tagged `blastdb-<YYYY-MM-DD>`:
+
+```bash
+gh release create blastdb-2026-08-14 docker/mito_metazoa_blastdb.tar.gz --latest=false \
+  --title "mito_metazoa BLAST DB 2026-08-14" --notes "Local BLAST database for MitoPilot native installs."
+```
+
+Then update `BLAST_DB_TAG` in `inst/native/install_mitopilot_native.sh` and the tag in
+`inst/native/VERSIONS.md`. The 2 GB per-asset limit is far above the 289 MB tarball.
+
+`MITOPILOT_VERSION` at the top of `inst/native/install_mitopilot_native.sh` must be
+bumped with every release alongside `BLAST_DB_TAG`.
