@@ -396,7 +396,7 @@ annotate <- function(
   if (!is.null(coverage) && !is.null(rotate) && rotate > 0) {
     coverage <- dplyr::bind_rows(
       coverage[rotate:nrow(coverage), ],
-      coverage[1:(rotate - 1), ]
+      coverage[seq_len(rotate - 1), ]
     ) |>
       dplyr::mutate(
         Position = dplyr::row_number()
@@ -405,7 +405,7 @@ annotate <- function(
   if (!is.null(coverage) && !is.null(rotate) && rotate < 0) {
     coverage <- dplyr::bind_rows(
       coverage[abs(rotate):1, ],
-      coverage[nrow(coverage):(abs(rotate) + 1), ]
+      coverage[rev(seq_len(nrow(coverage))[-seq_len(abs(rotate))]), ]
     ) |>
       dplyr::mutate(
         Position = dplyr::row_number(),
