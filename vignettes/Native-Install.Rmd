@@ -83,7 +83,7 @@ Download the install script and the environment definitions from the MitoPilot
 release you want (the script and the R package must be the same version):
 
 ```{bash eval=FALSE}
-ver=1.5.5
+ver=1.5.6
 curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/${ver}.tar.gz | tar -xz
 cd MitoPilot-${ver}/inst/native
 ```
@@ -108,7 +108,10 @@ Options:
 | `--manager pixi` | Use pixi instead of micromamba; `mamba` and `conda` also accepted |
 | `--no-optional` | Skip MitoFinder, ARWEN, and NCBI ORFfinder (saves about 2 GB; these are off by default in projects anyway) |
 | `--skip-blast-db` | Skip the 289 MB database; reference search falls back to NCBI over the network |
-| `--mitopilot-ref 1.5.5` | Install a MitoPilot tag from GitHub instead of the source tree the script came from |
+| `--blast-db-url URL` | Download the database from another location (for example a mirror inside your cluster) |
+| `--mitopilot-ref 1.5.6` | Install a MitoPilot tag from GitHub instead of the source tree the script came from |
+| `--mitopilot-source PATH` | Install the R package from a local directory or tarball instead |
+| `--skip-mitopilot` | Do not install the MitoPilot R package (you install it yourself, see step 4) |
 | `--dry-run` | Show what would happen |
 
 Re-running the script is safe; finished steps are skipped.
@@ -297,7 +300,7 @@ Three adjustments for a read-only install directory:
 A module file is the natural wrapper. With Lmod:
 
 ```{bash eval=FALSE}
--- /apps/modulefiles/mitopilot/1.5.5.lua
+-- /apps/modulefiles/mitopilot/1.5.6.lua
 setenv("MITOPILOT_NATIVE_PREFIX", "/apps/mitopilot_native")
 setenv("NXF_HOME", pathJoin(os.getenv("HOME"), ".nextflow"))
 execute { cmd = "source /apps/mitopilot_native/activate.sh", modeA = { "load" } }

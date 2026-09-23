@@ -1,4 +1,6 @@
-# MitoPilot (development version)
+# MitoPilot 1.5.6
+
+Released 2026-09-23. Container: `macguigand/mitopilot:1.5.6`
 
 ## New Features
 
@@ -10,6 +12,11 @@
   cluster administrator. See the new article *Installing without containers*.
 - The app opens a browser from a conda-built R, which has no browser setting,
   by falling back to `xdg-open`.
+
+**Note**
+Projects created with 1.5.5 need no migration; run [`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html) or edit the `container` line in `.config` to `macguigand/mitopilot:1.5.6`. Native-install configs are kept as they are by `backwards_compatibility()`.
+
+**Full Changelog**: https://github.com/Smithsonian/MitoPilot/compare/1.5.5...1.5.6
 
 # MitoPilot 1.5.5
 

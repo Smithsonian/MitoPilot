@@ -1,6 +1,6 @@
 # Native install pins
 
-Mirrors docker/Dockerfile for MitoPilot 1.5.5. Update both together.
+Mirrors docker/Dockerfile for MitoPilot 1.5.6. Update both together.
 
 | Component | Version | Env | Source |
 |---|---|---|---|

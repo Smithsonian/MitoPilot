@@ -16,7 +16,7 @@
 set -euo pipefail
 export CONDA_CHANNEL_PRIORITY=strict
 
-MITOPILOT_VERSION="1.5.5"
+MITOPILOT_VERSION="1.5.6"
 BLAST_DB_TAG="blastdb-2026-08-14"
 BLAST_DB_URL_DEFAULT="https://github.com/Smithsonian/MitoPilot/releases/download/${BLAST_DB_TAG}/mito_metazoa_blastdb.tar.gz"
 ORFFINDER_URL="https://ftp.ncbi.nlm.nih.gov/genomes/TOOLS/ORFfinder/linux-i64/ORFfinder.gz"
