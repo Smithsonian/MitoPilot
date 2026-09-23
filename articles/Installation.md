@@ -21,6 +21,15 @@ fastp, GetOrganelle, MitoFinder, bowtie2, BLAST+, MITOS2, tRNAscan-SE,
 ARWEN, ARAGORN, and ORFfinder all live inside the container image, which
 Nextflow pulls for you on the first run.
 
+**No containers allowed?** There is a second route that needs none of
+the requirements above except disk space and internet access: the
+[native
+install](https://smithsonian.github.io/MitoPilot/articles/Native-Install.md)
+puts R, Java, Nextflow, every pipeline tool, and the reference database
+into one folder you own, with a conda-style package manager and no root
+access. Use it on clusters that forbid Docker, Singularity, and
+Apptainer.
+
 We provide cluster-specific instructions for two sites:
 
 - [Smithsonian

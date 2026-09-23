@@ -35,6 +35,8 @@
 
 - [HPC Cluster
   Support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md):
+- [Installing Without
+  Containers](https://smithsonian.github.io/MitoPilot/articles/Native-Install.md):
 - [Smithsonian Hydra
   Setup](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.md):
 - [NOAA SEDNA

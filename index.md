@@ -59,7 +59,9 @@ function.
 
 MitoPilot needs R (\>= 4.4.0), Java 17+, Nextflow (24.10.x - 25.10.x),
 and a container runtime (Docker locally, or Singularity/Apptainer on a
-cluster).
+cluster). Clusters that forbid containers can use the [native
+install](https://smithsonian.github.io/MitoPilot/articles/Native-Install.html)
+instead.
 
 ``` r
 

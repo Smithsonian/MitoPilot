@@ -1,5 +1,49 @@
 # Changelog
 
+## MitoPilot 1.5.6
+
+Released 2026-09-23. Container: `macguigand/mitopilot:1.5.6`
+
+### New Features
+
+- **Install without containers.**
+  `inst/native/install_mitopilot_native.sh` builds every pipeline tool
+  into a user-owned install directory with micromamba, mamba, conda, or
+  pixi, and
+  `generate_config(container_engine = "none", native_prefix = ...)`
+  writes a config whose tasks use it.
+  [`native_setup()`](https://smithsonian.github.io/MitoPilot/reference/native_setup.md)
+  and
+  [`native_check()`](https://smithsonian.github.io/MitoPilot/reference/native_check.md)
+  wire up and verify an R session. Works for a single user or as a
+  shared install by a cluster administrator. See the new article
+  *Installing without containers*.
+- The app opens a browser from a conda-built R, which has no browser
+  setting, by falling back to `xdg-open`.
+
+### Bug Fixes
+
+- **[`export_files()`](https://smithsonian.github.io/MitoPilot/reference/export_files.md)
+  summary CSV covers every exported unit.** The per-sample `sample_info`
+  CSV was built from the Export tab’s locked view, so a direct call that
+  exported samples never locked in Annotate wrote the files but a
+  header-only CSV. The summary now describes exactly the units written.
+- **Mapping-file metadata is back in the Export table.** The 1.5.5
+  redesign hid every column it did not declare, which dropped the user’s
+  own mapping-file columns from the Export table. They now render as a
+  **Metadata** column group, shown by default and toggled together from
+  the Columns picker.
+
+**Note** Projects created with 1.5.5 need no migration; run
+[`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html)
+or edit the `container` line in `.config` to
+`macguigand/mitopilot:1.5.6`. Native-install configs are kept as they
+are by
+[`backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.md).
+
+**Full Changelog**:
+<https://github.com/Smithsonian/MitoPilot/compare/1.5.5>…1.5.6
+
 ## MitoPilot 1.5.5
 
 Released 2026-09-16. Container: `macguigand/mitopilot:1.5.5`

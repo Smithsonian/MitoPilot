@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,6 +60,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
+    <li><a class="dropdown-item" href="../articles/Native-Install.html">Installing Without Containers</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">Smithsonian Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -197,6 +198,14 @@ Nextflow <code>work/</code> directory</td>
 fastp, GetOrganelle, MitoFinder, bowtie2, BLAST+, MITOS2, tRNAscan-SE,
 ARWEN, ARAGORN, and ORFfinder all live inside the container image, which
 Nextflow pulls for you on the first run.</p>
+<div class="alert alert-note">
+<p><strong>No containers allowed?</strong> There is a second route that
+needs none of the requirements above except disk space and internet
+access: the <a href="Native-Install.html">native install</a> puts R,
+Java, Nextflow, every pipeline tool, and the reference database into one
+folder you own, with a conda-style package manager and no root access.
+Use it on clusters that forbid Docker, Singularity, and Apptainer.</p>
+</div>
 <p>We provide cluster-specific instructions for two sites:</p>
 <ul>
 <li><a href="NMNH-Hydra.html">Smithsonian Hydra</a></li>

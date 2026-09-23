@@ -59,7 +59,9 @@ function.
 
 MitoPilot needs R (\>= 4.4.0), Java 17+, Nextflow (24.10.x - 25.10.x),
 and a container runtime (Docker locally, or Singularity/Apptainer on a
-cluster).
+cluster). Clusters that forbid containers can use the [native
+install](https://smithsonian.github.io/MitoPilot/articles/Native-Install.html)
+instead.
 
 ``` r
 
@@ -242,6 +244,10 @@ Nextflow executor profiles and remote access.
 - [`hydra_setup()`](https://smithsonian.github.io/MitoPilot/reference/hydra_setup.md)
   : Configure the R session environment for the Smithsonian Hydra
   cluster
+- [`native_setup()`](https://smithsonian.github.io/MitoPilot/reference/native_setup.md)
+  : Use a native (no-container) MitoPilot environment in this R session
+- [`native_check()`](https://smithsonian.github.io/MitoPilot/reference/native_check.md)
+  : Check a native (no-container) MitoPilot environment
 
 ## Reference databases
 
@@ -590,6 +596,8 @@ Called by the Nextflow workflows. Not intended for direct use.
 
 - [HPC Cluster
   Support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md):
+- [Installing Without
+  Containers](https://smithsonian.github.io/MitoPilot/articles/Native-Install.md):
 - [Smithsonian Hydra
   Setup](https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.md):
 - [NOAA SEDNA

@@ -10,6 +10,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Native-Install.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Annotate.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Assemble.html</loc></url>
@@ -91,6 +92,8 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/maptoref_fetch_accession.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/maptoref_prepare_ref.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/mitopilot_config_dir.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/native_check.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/native_setup.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_db.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_db_userAsmb.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_project.html</loc></url>

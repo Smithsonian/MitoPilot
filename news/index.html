@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,6 +39,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
+    <li><a class="dropdown-item" href="../articles/Native-Install.html">Installing Without Containers</a></li>
     <li><a class="dropdown-item" href="../articles/NMNH-Hydra.html">Smithsonian Hydra Setup</a></li>
     <li><a class="dropdown-item" href="../articles/NOAA-SEDNA.html">NOAA SEDNA Setup</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -60,6 +61,25 @@
       <small>Source: <a href="https://github.com/Smithsonian/MitoPilot/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.5.6" id="mitopilot-156">MitoPilot 1.5.6<a class="anchor" aria-label="anchor" href="#mitopilot-156"></a></h2>
+<p>Released 2026-09-23. Container: <code>macguigand/mitopilot:1.5.6</code></p>
+<div class="section level3">
+<h3 id="new-features-1-5-6">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5-6"></a></h3>
+<ul><li>
+<strong>Install without containers.</strong> <code>inst/native/install_mitopilot_native.sh</code> builds every pipeline tool into a user-owned install directory with micromamba, mamba, conda, or pixi, and <code>generate_config(container_engine = "none", native_prefix = ...)</code> writes a config whose tasks use it. <code><a href="../reference/native_setup.html">native_setup()</a></code> and <code><a href="../reference/native_check.html">native_check()</a></code> wire up and verify an R session. Works for a single user or as a shared install by a cluster administrator. See the new article <em>Installing without containers</em>.</li>
+<li>The app opens a browser from a conda-built R, which has no browser setting, by falling back to <code>xdg-open</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-1-5-6">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-5-6"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/export_files.html">export_files()</a></code> summary CSV covers every exported unit.</strong> The per-sample <code>sample_info</code> CSV was built from the Export tab’s locked view, so a direct call that exported samples never locked in Annotate wrote the files but a header-only CSV. The summary now describes exactly the units written.</li>
+<li>
+<strong>Mapping-file metadata is back in the Export table.</strong> The 1.5.5 redesign hid every column it did not declare, which dropped the user’s own mapping-file columns from the Export table. They now render as a <strong>Metadata</strong> column group, shown by default and toggled together from the Columns picker.</li>
+</ul><p><strong>Note</strong> Projects created with 1.5.5 need no migration; run <a href="https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html"><code>MitoPilot::backwards_compatibility()</code></a> or edit the <code>container</code> line in <code>.config</code> to <code>macguigand/mitopilot:1.5.6</code>. Native-install configs are kept as they are by <code><a href="../reference/backwards_compatibility.html">backwards_compatibility()</a></code>.</p>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/Smithsonian/MitoPilot/compare/1.5.5" class="external-link uri">https://github.com/Smithsonian/MitoPilot/compare/1.5.5</a>…1.5.6</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.5.5" id="mitopilot-155">MitoPilot 1.5.5<a class="anchor" aria-label="anchor" href="#mitopilot-155"></a></h2>
 <p>Released 2026-09-16. Container: <code>macguigand/mitopilot:1.5.5</code></p>

@@ -54,6 +54,10 @@ Nextflow executor profiles and remote access.
 - [`hydra_setup()`](https://smithsonian.github.io/MitoPilot/reference/hydra_setup.md)
   : Configure the R session environment for the Smithsonian Hydra
   cluster
+- [`native_setup()`](https://smithsonian.github.io/MitoPilot/reference/native_setup.md)
+  : Use a native (no-container) MitoPilot environment in this R session
+- [`native_check()`](https://smithsonian.github.io/MitoPilot/reference/native_check.md)
+  : Check a native (no-container) MitoPilot environment
 
 ## Reference databases
 

@@ -13,10 +13,12 @@ automatically, filling in the remaining per-project values.
 ``` r
 generate_config(
   name,
-  scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch"),
-  container_engine = c("auto", "singularity", "apptainer", "docker"),
+  scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch", "NMNH_Hydra",
+    "NOAA_SEDNA"),
+  container_engine = c("auto", "singularity", "apptainer", "docker", "none"),
   container_cache = NULL,
   container_run_options = NULL,
+  native_prefix = NULL,
   queue = NULL,
   account = NULL,
   cluster_options = NULL,
@@ -37,13 +39,18 @@ generate_config(
 - scheduler:
 
   Base template to build on. One of "slurm", "sge", "pbs", "lsf",
-  "local", or "awsbatch".
+  "local", or "awsbatch"; or a named cluster template ("NMNH_Hydra",
+  "NOAA_SEDNA"), allowed only with \`container_engine = "none"\`, which
+  keeps that cluster's tuned resource settings and swaps its container
+  block for the native install.
 
 - container_engine:
 
   Container runtime. "auto" picks docker for local/awsbatch and
   singularity for HPC schedulers; or set explicitly to "singularity",
-  "apptainer", or "docker".
+  "apptainer", or "docker"; or "none" for a native (no-container)
+  install built by inst/native/install_mitopilot_native.sh, which
+  requires native_prefix.
 
 - container_cache:
 
@@ -52,6 +59,12 @@ generate_config(
 - container_run_options:
 
   Optional runOptions for singularity/apptainer (e.g. bind mounts).
+
+- native_prefix:
+
+  Directory passed to \`install_mitopilot_native.sh –prefix\` (contains
+  \`activate.sh\` and \`ref_dbs/\`). Required when \`container_engine =
+  "none"\`, ignored otherwise.
 
 - queue:
 

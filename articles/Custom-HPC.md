@@ -43,7 +43,7 @@ A quick vocabulary primer if containers are new to you:
 
 The image tag must match your installed MitoPilot version. Get it with
 `packageVersion("MitoPilot")`, which for this build of the documentation
-is 1.5.5.
+is 1.5.6.
 
 ``` bash
 singularity pull mitopilot.sif docker://macguigand/mitopilot:<version>
@@ -70,6 +70,15 @@ RStudio Server, you can launch the app normally and skip the SSH-tunnel
 section.
 
 The rest of this guide works the same in either R session.
+
+#### Option C: no containers at all
+
+If your cluster forbids Docker, Singularity, and Apptainer, install the
+tools natively with the install script in [Installing without
+containers](https://smithsonian.github.io/MitoPilot/articles/Native-Install.md),
+then use
+`generate_config(..., container_engine = "none", native_prefix = ...)`
+below. Everything else on this page is the same.
 
 ### Configure MitoPilot for your cluster
 
@@ -267,7 +276,8 @@ shows a ready-to-edit **cluster submission script**:
 - Edit the resources, and add your environment setup where indicated
   (for example `module load java`, `mamba activate ...`, or
   `export NXF_SINGULARITY_CACHEDIR=...`). Those lines are pre-filled as
-  commented examples.
+  commented examples. On a native install the
+  `source <install_dir>/activate.sh` line is filled in for you.
 - Click **“Submit to Cluster”** to submit it with your scheduler’s
   command (`sbatch` / `qsub` / `bsub`), or **“Save Script Only”** to
   write the script and submit it yourself.
