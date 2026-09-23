@@ -174,8 +174,7 @@ namespaces, ptrace, FUSE, or setuid binaries.</p>
 </tr>
 <tr class="even">
 <td>About 20 GB of disk on a filesystem that allows executables</td>
-<td>Home directories are often small or <code>noexec</code>; a project
-or scratch space is usually better</td>
+<td>This becomes <code>&lt;install_dir&gt;</code> below</td>
 </tr>
 <tr class="odd">
 <td>Outbound HTTPS from the node where you run the install script</td>
@@ -206,13 +205,14 @@ same version):</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="va">ver</span><span class="op">=</span>1.5.6</span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-L</span> https://github.com/Smithsonian/MitoPilot/archive/refs/tags/<span class="va">${ver}</span>.tar.gz <span class="kw">|</span> <span class="fu">tar</span> <span class="at">-xz</span></span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="bu">cd</span> MitoPilot-<span class="va">${ver}</span>/inst/native</span></code></pre></div>
-<p>Choose an install location on a large filesystem that allows
-executables. Where that is depends on the cluster: a project, group,
-work, or scratch directory is usually better than your home directory,
-and your cluster’s documentation will say where large software belongs.
-The examples on this page write <code>&lt;install_dir&gt;</code> for
-that path. Pass it as <code>--prefix</code>; everything MitoPilot needs
-goes inside that one directory:</p>
+<div class="alert alert-tip">
+<p><strong>Pick your install directory first.</strong> Everything on
+this page refers to it as <code>&lt;install_dir&gt;</code>, for example
+<code>/scratch/genomics/jsmith/mitopilot_native</code>. It needs about
+20 GB on a filesystem that allows executables. Pass it as
+<code>–prefix</code>; everything MitoPilot needs goes inside that one
+directory.</p>
+</div>
 <div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">bash</span> install_mitopilot_native.sh <span class="at">--prefix</span> <span class="op">&lt;</span>install_dir<span class="op">&gt;</span></span></code></pre></div>
 <p>That builds the core environments (30 to 90 minutes, mostly
 downloads), fetches the BLAST database, and installs the MitoPilot R
@@ -316,7 +316,7 @@ later project can reuse it by name.</p>
 <span>  name             <span class="op">=</span> <span class="st">"local_native"</span>,</span>
 <span>  scheduler        <span class="op">=</span> <span class="st">"local"</span>,</span>
 <span>  container_engine <span class="op">=</span> <span class="st">"none"</span>,</span>
-<span>  native_prefix    <span class="op">=</span> <span class="st">"/path/to/mitopilot_native"</span>   <span class="co"># the install location</span></span>
+<span>  native_prefix    <span class="op">=</span> <span class="st">"&lt;install_dir&gt;"</span>      <span class="co"># the install location</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><strong>Cluster with a scheduler:</strong></p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
@@ -326,7 +326,7 @@ later project can reuse it by name.</p>
 <span>  queue            <span class="op">=</span> <span class="st">"general"</span>,</span>
 <span>  account          <span class="op">=</span> <span class="st">"my_allocation"</span>,</span>
 <span>  container_engine <span class="op">=</span> <span class="st">"none"</span>,</span>
-<span>  native_prefix    <span class="op">=</span> <span class="st">"&lt;install_dir&gt;"</span> <span class="co"># the install location</span></span>
+<span>  native_prefix    <span class="op">=</span> <span class="st">"&lt;install_dir&gt;"</span>      <span class="co"># the install location</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><strong>NMNH Hydra or NOAA SEDNA:</strong> pass the built-in cluster
 template as <code>scheduler</code> to keep its tuned resource settings
@@ -427,8 +427,8 @@ Server</strong>: call <code><a href="../reference/native_setup.html">native_setu
 source <code>activate.sh</code>; check the project <code>.config</code>
 has <code>process.beforeScript</code>.</li>
 <li>
-<strong>Home quota exceeded</strong>: choose an install location on
-a larger filesystem; the environments are large.</li>
+<strong>Disk quota exceeded</strong>: the environments are large;
+<code>&lt;install_dir&gt;</code> needs about 20 GB.</li>
 <li>
 <strong><code>'browser' must be a non-empty character string</code></strong>:
 an older MitoPilot in the bundled R; update it, or pass
@@ -479,12 +479,12 @@ app.</li>
 </ol>
 <p>A module file is the natural wrapper. With Lmod:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="ex">--</span> /apps/modulefiles/mitopilot/1.5.6.lua</span>
-<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="ex">setenv</span><span class="er">(</span><span class="st">"MITOPILOT_NATIVE_PREFIX"</span><span class="ex">,</span> <span class="st">"/apps/mitopilot_native"</span><span class="kw">)</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="ex">setenv</span><span class="er">(</span><span class="st">"MITOPILOT_NATIVE_PREFIX"</span><span class="ex">,</span> <span class="st">"&lt;install_dir&gt;"</span><span class="kw">)</span></span>
 <span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="ex">setenv</span><span class="er">(</span><span class="st">"NXF_HOME"</span><span class="ex">,</span> pathJoin<span class="er">(</span><span class="ex">os.getenv</span><span class="er">(</span><span class="st">"HOME"</span><span class="kw">)</span><span class="ex">,</span> <span class="st">".nextflow"</span><span class="kw">))</span></span>
-<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="ex">execute</span> { cmd = <span class="st">"source /apps/mitopilot_native/activate.sh"</span>, modeA = { <span class="st">"load"</span> } }</span></code></pre></div>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="ex">execute</span> { cmd = <span class="st">"source &lt;install_dir&gt;/activate.sh"</span>, modeA = { <span class="st">"load"</span> } }</span></code></pre></div>
 <p>Users then <code>module load mitopilot</code>, and
 <code><a href="../reference/native_setup.html">native_setup()</a></code> needs no argument.
-<code>generate_config(container_engine = "none", native_prefix = "/apps/mitopilot_native")</code>
+<code>generate_config(container_engine = "none", native_prefix = "&lt;install_dir&gt;")</code>
 is unchanged for everyone.</p>
 </div>
 </div>

@@ -18,7 +18,7 @@ FUSE, or setuid binaries.
 | Requirement | Notes |
 |----|----|
 | Linux x86_64, glibc 2.17 or newer | RHEL/Rocky/Alma 7+, Ubuntu 18.04+, Debian 10+ |
-| About 20 GB of disk on a filesystem that allows executables | Home directories are often small or `noexec`; a project or scratch space is usually better |
+| About 20 GB of disk on a filesystem that allows executables | This becomes `<install_dir>` below |
 | Outbound HTTPS from the node where you run the install script | conda-forge, bioconda, GitHub, and NCBI are contacted once |
 | `curl`, `tar`, `bash` | Present on every cluster |
 | Optional: an existing `conda`, `mamba`, or `pixi` | If absent, the install script downloads `micromamba` (a single binary) for you |
@@ -35,13 +35,11 @@ curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/${ver}.tar.gz
 cd MitoPilot-${ver}/inst/native
 ```
 
-Choose an install location on a large filesystem that allows
-executables. Where that is depends on the cluster: a project, group,
-work, or scratch directory is usually better than your home directory,
-and your cluster’s documentation will say where large software belongs.
-The examples on this page write `<install_dir>` for that path. Pass it
-as `--prefix`; everything MitoPilot needs goes inside that one
-directory:
+**Pick your install directory first.** Everything on this page refers to
+it as `<install_dir>`, for example
+`/scratch/genomics/jsmith/mitopilot_native`. It needs about 20 GB on a
+filesystem that allows executables. Pass it as `–prefix`; everything
+MitoPilot needs goes inside that one directory.
 
 ``` bash
 bash install_mitopilot_native.sh --prefix <install_dir>
@@ -115,7 +113,7 @@ generate_config(
   name             = "local_native",
   scheduler        = "local",
   container_engine = "none",
-  native_prefix    = "/path/to/mitopilot_native"   # the install location
+  native_prefix    = "<install_dir>"      # the install location
 )
 ```
 
@@ -129,7 +127,7 @@ generate_config(
   queue            = "general",
   account          = "my_allocation",
   container_engine = "none",
-  native_prefix    = "<install_dir>" # the install location
+  native_prefix    = "<install_dir>"      # the install location
 )
 ```
 
@@ -235,8 +233,8 @@ and in any other R you use for the app. When a release changes tool pins
 - **Jobs fail with `runmitos: command not found`**: the task did not
   source `activate.sh`; check the project `.config` has
   `process.beforeScript`.
-- **Home quota exceeded**: choose an install location on a larger
-  filesystem; the environments are large.
+- **Disk quota exceeded**: the environments are large; `<install_dir>`
+  needs about 20 GB.
 - **`'browser' must be a non-empty character string`**: an older
   MitoPilot in the bundled R; update it, or pass
   `launch.browser = FALSE`.
@@ -275,13 +273,13 @@ A module file is the natural wrapper. With Lmod:
 
 ``` bash
 -- /apps/modulefiles/mitopilot/1.5.6.lua
-setenv("MITOPILOT_NATIVE_PREFIX", "/apps/mitopilot_native")
+setenv("MITOPILOT_NATIVE_PREFIX", "<install_dir>")
 setenv("NXF_HOME", pathJoin(os.getenv("HOME"), ".nextflow"))
-execute { cmd = "source /apps/mitopilot_native/activate.sh", modeA = { "load" } }
+execute { cmd = "source <install_dir>/activate.sh", modeA = { "load" } }
 ```
 
 Users then `module load mitopilot`, and
 [`native_setup()`](https://smithsonian.github.io/MitoPilot/reference/native_setup.md)
 needs no argument.
-`generate_config(container_engine = "none", native_prefix = "/apps/mitopilot_native")`
+`generate_config(container_engine = "none", native_prefix = "<install_dir>")`
 is unchanged for everyone.
