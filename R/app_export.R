@@ -991,32 +991,45 @@ export_server <- function(id) {
         # Review BEFORE writing files: edits made during review must land in the
         # DB first, otherwise the exported .fasta/.tbl/.gff would be stale.
         # Files are written on "Done" (see finalize_export).
-        review_res <- flag_PCG_outliers(
-          group = group,
-          db = file.path(session$userData$dir, ".sqlite"),
-          start_aa = rv$review_start,
-          stop_aa = rv$review_stop,
-          ident_pct = rv$review_ident
+        waiter::waiter_show(
+          html = tagList(
+            waiter::spin_fading_circles(),
+            tags$h4(style = "color:white; margin-top:1em;", "Preparing PCG outlier review, hold tight...")
+          ),
+          color = "rgba(40,40,40,0.85)"
         )
-        if (on_screen) {
-          rv$exporting <- FALSE
-          shinyjs::enable("export_data")
-        }
-        # An internal stop means the record will fail NCBI validation, so warn
-        # before the outlier review rather than after the files are written.
-        if (nrow(review_res$internal_stops) > 0) {
-          pending_review <<- review_res
-          mp_confirm(
-            ns("internal_stop_confirm"),
-            title = "Internal stop codons",
-            text = internal_stop_alert_text(review_res$internal_stops),
-            action_label = "Continue to review",
-            danger = TRUE,
-            html = TRUE
+        # Defer one tick so the overlay paints before the blocking review.
+        shinyjs::delay(100, {
+          review_res <- tryCatch(
+            flag_PCG_outliers(
+              group = group,
+              db = file.path(session$userData$dir, ".sqlite"),
+              start_aa = rv$review_start,
+              stop_aa = rv$review_stop,
+              ident_pct = rv$review_ident
+            ),
+            finally = waiter::waiter_hide()
           )
-        } else {
-          present_review(review_res)
-        }
+          if (on_screen) {
+            rv$exporting <- FALSE
+            shinyjs::enable("export_data")
+          }
+          # An internal stop means the record will fail NCBI validation, so warn
+          # before the outlier review rather than after the files are written.
+          if (nrow(review_res$internal_stops) > 0) {
+            pending_review <<- review_res
+            mp_confirm(
+              ns("internal_stop_confirm"),
+              title = "Internal stop codons",
+              text = internal_stop_alert_text(review_res$internal_stops),
+              action_label = "Continue to review",
+              danger = TRUE,
+              html = TRUE
+            )
+          } else {
+            present_review(review_res)
+          }
+        })
       } else {
         # No review: write files immediately, then announce.
         write_export_files()

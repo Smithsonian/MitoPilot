@@ -1,3 +1,10 @@
+# MitoPilot (development version)
+
+## Bug Fixes
+
+- **Circular user assemblies no longer gain a base.** In a no-reads user-assembly project, a circular assembly that already started at the start gene came out of annotation one base longer, with base 1 copied onto the end. The stored sequence, its length, and every export carried the extra base. Reads-based projects could hit the same bug when an assembly happened to start exactly at the start gene. Re-run annotation on affected samples to correct them.
+- **The app launches from RStudio Server.** 1.5.6 stopped with `cannot coerce type 'closure' to vector of type 'character'` when `MitoPilot()` was run inside RStudio, which sets its own browser handler.
+
 # MitoPilot 1.5.6
 
 Released 2026-09-23. Container: `macguigand/mitopilot:1.5.6`
