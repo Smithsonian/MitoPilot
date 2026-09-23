@@ -891,21 +891,6 @@ count_annotate_units <- function(con, ids) {
   if (length(out) != 1 || is.na(out)) NA_integer_ else as.integer(out)
 }
 
-#' State glyphs for a table icon column, tone class included
-#'
-#' Colour is redundant with shape: the three tones are the shared status
-#' colours from custom.css, keyed to the state codes (theme T06).
-#'
-#' @param module "assemble" or "annotate"
-#'
-#' @noRd
-assemble_state_icons <- function(module) {
-  codes <- MP_STATE_CODES[[module]]
-  tone <- c(`0` = "mp-fg-neutral", `1` = "mp-fg-neutral", `4` = "mp-fg-neutral",
-            `2` = "mp-fg-success", `3` = "mp-fg-danger")
-  stats::setNames(paste(mp_state_icons(module), tone[codes]), codes)
-}
-
 #' Accessible name for each state glyph: the label plus its meaning.
 #'
 #' @param module "assemble" or "annotate"

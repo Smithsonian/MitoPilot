@@ -167,8 +167,8 @@ pipeline_server_userAsmb <- function(id) {
                        paste0("Submit to Cluster (", cmd, ")"), class = "btn-primary")
         }
         return(tagList(
-          submit_btn,
-          actionButton(ns("save_script"), "Save Script Only", class = "btn-default")
+          actionButton(ns("save_script"), "Save Script Only", class = "btn-default"),
+          submit_btn
         ))
       }
 
@@ -236,8 +236,12 @@ pipeline_server_userAsmb <- function(id) {
         process()$kill()
       }
 
+      wd <- dirname(getOption("MitoPilot.db") %||% ".")
+      nat <- read_config_executor(file.path(wd, ".config"))$native_activate
+      nat_env <- if (!is.null(nat)) native_env(nat) else character()
+
       # Pin the Nextflow engine to a MitoPilot-compatible version for this run.
-      nxf_pin <- nf_pin_version()
+      nxf_pin <- if (length(nat_env)) native_nf_pin(nat_env) else nf_pin_version()
 
       p <- processx::process$new(
         "nextflow",
@@ -245,6 +249,7 @@ pipeline_server_userAsmb <- function(id) {
         stdout = "|",
         stderr = "|",
         env = c("current",
+                nat_env,
                 if (!is.na(nxf_pin)) c(NXF_VER = nxf_pin),
                 NXF_ANSI_SUMMARY = TRUE,
                 # Keep Nextflow's ANSI log from truncating process names; stable,
@@ -255,7 +260,7 @@ pipeline_server_userAsmb <- function(id) {
                 SGE_CELL = "age",
                 SGE_ROOT = "/cm/shared/apps/uge/8.8.1"
         ),
-        wd = dirname(getOption("MitoPilot.db") %||% ".")
+        wd = wd
       )
       process(p)
     }
@@ -367,7 +372,7 @@ pipeline_server_userAsmb <- function(id) {
           log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
           script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
 
-          script_content <- hydra_submission_script(full_nf_cmd, job_name, log_file_path)
+          script_content <- build_submit_script(work_dir, "sge", NULL, full_nf_cmd, job_name, log_file_path)
 
           # Write the script to the unique, timestamped file path.
           writeLines(script_content, script_path)

@@ -137,3 +137,60 @@ test_that("submission_script falls back to a comment for unknown executors", {
   expect_true(any(grepl("No HPC scheduler resource block", lines)))
   expect_true(any(grepl("nextflow run foo", lines, fixed = TRUE)))
 })
+
+test_that("read_config_executor returns native_activate when present", {
+  cfg <- tempfile()
+  writeLines(c("params.native_activate = '/opt/mp/activate.sh'",
+               "process {", "  executor = 'slurm'", "}"), cfg)
+  out <- read_config_executor(cfg)
+  expect_equal(out$native_activate, "/opt/mp/activate.sh")
+  cfg2 <- tempfile(); writeLines("process { executor = 'local' }", cfg2)
+  expect_null(read_config_executor(cfg2)$native_activate)
+})
+
+test_that("submission_script sources the native env instead of commented examples", {
+  lines <- submission_script("slurm", NULL, "nextflow run foo", "j", "/tmp/j.log",
+                             env_setup = "/opt/mp/activate.sh")
+  expect_true(any(lines == "source '/opt/mp/activate.sh'"))
+  expect_false(any(grepl("# mamba activate MitoPilot_deps", lines, fixed = TRUE)))
+  plain <- submission_script("slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
+  expect_true(any(grepl("# mamba activate MitoPilot_deps", plain, fixed = TRUE)))
+})
+
+test_that("build_submit_script reads native_activate from the project config", {
+  skip_on_os("windows")
+  wd <- withr::local_tempdir()
+  prefix <- withr::local_tempdir()
+  bin <- file.path(prefix, "bin")
+  dir.create(bin, recursive = TRUE)
+  nf <- file.path(bin, "nextflow")
+  writeLines(c("#!/bin/sh", "echo 'nextflow version 25.10.4'"), nf)
+  Sys.chmod(nf, "0755")
+  act <- file.path(prefix, "activate.sh")
+  writeLines(paste0("export PATH=", bin, ":$PATH"), act)
+  writeLines(c(paste0("params.native_activate = '", act, "'"),
+               "process { executor = 'slurm' }"), file.path(wd, ".config"))
+  lines <- build_submit_script(wd, "slurm", NULL, "nextflow run foo", "j", "/tmp/j.log")
+  expect_true(any(lines == paste0("source '", act, "'")))
+})
+
+test_that("build_submit_script on Hydra sources activate.sh for a native project", {
+  skip_on_os("windows")
+  wd <- withr::local_tempdir()
+  prefix <- withr::local_tempdir()
+  bin <- file.path(prefix, "bin")
+  dir.create(bin, recursive = TRUE)
+  nf <- file.path(bin, "nextflow")
+  writeLines(c("#!/bin/sh", "echo 'nextflow version 25.10.4'"), nf)
+  Sys.chmod(nf, "0755")
+  act <- file.path(prefix, "activate.sh")
+  writeLines(paste0("export PATH=", bin, ":$PATH"), act)
+  writeLines(c(paste0("params.native_activate = '", act, "'"),
+               "process { executor = 'sge' }"), file.path(wd, ".config"))
+  local_mocked_bindings(is_hydra_cluster = function() TRUE)
+  lines <- build_submit_script(wd, "sge", NULL, "nextflow run foo", "j", "/tmp/j.log")
+  expect_true(any(lines == "#$ -q lTWFM.sq"))
+  expect_true(any(lines == paste0("source '", act, "'")))
+  expect_false(any(grepl("module load", lines)))
+  expect_true(any(lines == "export NXF_VER=25.10.4"))
+})

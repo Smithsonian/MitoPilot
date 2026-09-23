@@ -82,3 +82,86 @@ test_that("each scheduler template produces the right executor", {
   expect_equal(nf_executor(generate_config("p", "pbs", profile_dir = pdir)), "pbspro")
   expect_equal(nf_executor(generate_config("l", "lsf", profile_dir = pdir)), "lsf")
 })
+
+test_that("container_engine = 'none' writes a native block and drops the container", {
+  pdir <- tempfile()
+  out <- generate_config("nat", scheduler = "slurm", queue = "q",
+                         container_engine = "none", native_prefix = "/opt/mp",
+                         profile_dir = pdir)
+  txt <- readLines(out)
+  expect_true(any(grepl("process.beforeScript = 'source /opt/mp/activate.sh'", txt, fixed = TRUE)))
+  expect_true(any(grepl("env.MITOPILOT_NO_CONDA = '1'", txt, fixed = TRUE)))
+  expect_true(any(grepl("params.native_activate = '/opt/mp/activate.sh'", txt, fixed = TRUE)))
+  expect_true(any(grepl("db_dir = '/opt/mp/ref_dbs/mito_metazoa'", txt, fixed = TRUE)))
+  expect_false(any(grepl("<<CONTAINER_ID>>", txt, fixed = TRUE)))
+  expect_true(any(grepl("^\\s*container = null$", txt)))
+  expect_false(any(grepl("singularity {", txt, fixed = TRUE)))
+  expect_false(any(grepl("docker {", txt, fixed = TRUE)))
+  expect_false(any(grepl("<<CONTAINER_ENGINE>>", txt, fixed = TRUE)))
+})
+
+test_that("native mode works for the local scheduler too", {
+  pdir <- tempfile()
+  out <- generate_config("natloc", scheduler = "local", container_engine = "none",
+                         native_prefix = "/opt/mp", profile_dir = pdir)
+  txt <- readLines(out)
+  expect_false(any(grepl("docker {", txt, fixed = TRUE)))
+  expect_true(any(grepl("params.native_activate", txt, fixed = TRUE)))
+})
+
+test_that("native mode requires native_prefix", {
+  expect_error(generate_config("x", scheduler = "slurm", container_engine = "none",
+                               profile_dir = tempfile()), "native_prefix")
+})
+
+test_that("extract_container_engine preserves a native block on migration", {
+  old <- c("process.beforeScript = 'source /opt/mp/activate.sh'",
+           "env.MITOPILOT_NO_CONDA = '1'",
+           "params.native_activate = '/opt/mp/activate.sh'",
+           "process {", "  executor = 'slurm'", "}")
+  expect_equal(extract_container_engine(old), native_config_block("/opt/mp"))
+})
+
+test_that("built-in local template still yields a docker block via new_project fill", {
+  lines <- readLines(app_sys("config.local"))
+  expect_true(any(grepl("<<CONTAINER_ENGINE>>", lines, fixed = TRUE)))
+  filled <- fill_config(lines, list(CONTAINER_ENGINE = container_engine_block("docker")))
+  expect_true(any(grepl("docker {", filled, fixed = TRUE)))
+})
+
+test_that("built-in slurm template yields a singularity block via new_project fill", {
+  lines <- readLines(app_sys("config.slurm"))
+  expect_true(any(grepl("<<CONTAINER_ENGINE>>", lines, fixed = TRUE)))
+  filled <- fill_config(lines, list(CONTAINER_ENGINE = container_engine_block("singularity")))
+  expect_true(any(grepl("singularity {", filled, fixed = TRUE)))
+})
+
+test_that("migrate_config keeps native mode when regenerating from a built-in template", {
+  pdir <- tempfile(); proj <- tempfile(); dir.create(proj)
+  prof <- generate_config("natmig", scheduler = "local", container_engine = "none",
+                          native_prefix = "/opt/mp", profile_dir = pdir)
+  old <- fill_config(readLines(prof), list(RAW_DIR = "/data", ASMB_DIR = "NA",
+                                           MIN_DEPTH = "100", NCBI_API_KEY = ""))
+  writeLines(old, file.path(proj, ".config"))
+  expect_true(suppressMessages(migrate_config(proj, executor = "local", profile_dir = pdir)))
+  txt <- readLines(file.path(proj, ".config"))
+  expect_true(any(grepl("params.native_activate = '/opt/mp/activate.sh'", txt, fixed = TRUE)))
+  expect_true(any(grepl("db_dir = '/opt/mp/ref_dbs/mito_metazoa'", txt, fixed = TRUE)))
+  expect_true(any(grepl("^\\s*container = null$", txt)))
+  expect_false(any(grepl("docker {", txt, fixed = TRUE)))
+  expect_false(any(grepl("baked into the container", txt, fixed = TRUE)))
+})
+
+test_that("generate_config builds a native profile from a named cluster template", {
+  pdir <- tempfile()
+  out <- generate_config("hydra_native", scheduler = "NMNH_Hydra",
+                         container_engine = "none", native_prefix = "/x/mp", profile_dir = pdir)
+  txt <- readLines(out)
+  expect_false(any(grepl("^singularity", txt)))
+  expect_true(any(grepl("source /x/mp/activate.sh", txt, fixed = TRUE)))
+  expect_true(any(grepl("container = null", txt, fixed = TRUE)))
+  expect_true(any(grepl("penv = 'mthread'", txt, fixed = TRUE)))
+  expect_true(any(grepl("himem", txt, fixed = TRUE)))
+  expect_true(any(grepl("db_dir = '/x/mp/ref_dbs/mito_metazoa'", txt, fixed = TRUE)))
+  expect_error(generate_config("h2", scheduler = "NMNH_Hydra", profile_dir = pdir), "only for")
+})

@@ -102,6 +102,7 @@ orf_finder <- function(
     "-outfmt", "0",
     "-out", out
   )
+  orffinder_condaenv <- .mp_condaenv(orffinder_condaenv)
   if (!is.null(orffinder_condaenv)) {
     reticulate::conda_run2(
       cmd = "ORFfinder", args = orf_args, envname = orffinder_condaenv, echo = FALSE
@@ -239,6 +240,7 @@ orf_finder <- function(
   }
   feature_dir <- file.path(ref_dir, "featureProt")
   orfs$refHits <- NA_character_
+  blast_condaenv <- .mp_condaenv(blast_condaenv)
   # Combined DB with gene-labeled, unique headers so get_top_hits_orf can recover
   # each hit's gene + correct target from the gene-less per-gene FASTAs.
   combined <- build_combined_orf_db(

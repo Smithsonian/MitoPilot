@@ -100,6 +100,7 @@ annotate_mitofinder <- function(
   message("starting MitoFinder")
   message(paste("MitoFinder work dir:", workdir))
 
+  condaenv <- .mp_condaenv(condaenv)
   if (!is.null(condaenv)) {
     reticulate::conda_run2(
       cmd = "mitofinder",

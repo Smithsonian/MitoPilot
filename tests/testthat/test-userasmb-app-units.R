@@ -271,7 +271,7 @@ test_that("a locked fragmented sample hands every contig to WF2", {
 
 # --- 4. the Export table and summary CSV -------------------------------------
 
-export_db <- function(scaffold_topology, annotate_topology) {
+export_db <- function(scaffold_topology, annotate_topology = scaffold_topology[1]) {
   scafs <- seq_along(scaffold_topology)
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   DBI::dbWriteTable(con, "assemblies", data.frame(

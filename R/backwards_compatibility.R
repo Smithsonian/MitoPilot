@@ -117,7 +117,8 @@ backwards_compatibility <- function(
     stop("Error reading .config file: ", e$message)
   })
   new_container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot"))
-  containerVer <- any(grep(new_container, conf, fixed = TRUE))
+  containerVer <- any(grepl(new_container, conf, fixed = TRUE)) ||
+    any(grepl("params.native_activate", conf, fixed = TRUE))
 
   # genetic_code must be a plain INTEGER: assemble.nf calls genetic_code.intValue()
   # and MITOS2's -c argparse rejects a float like '2.0'. Older projects stored it as

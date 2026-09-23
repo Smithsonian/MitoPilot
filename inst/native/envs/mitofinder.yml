@@ -1,0 +1,12 @@
+name: mitofinder
+channels:
+  - conda-forge
+dependencies:
+  - python=2.7
+  - c-compiler
+  - cxx-compiler
+  - make
+  - automake
+  - autoconf
+  - git
+  - zlib

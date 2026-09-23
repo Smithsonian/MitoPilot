@@ -35,6 +35,38 @@ container_engine_block <- function(engine, cache = NULL, run_options = NULL) {
   paste(lines, collapse = "\n")
 }
 
+#' Nextflow config lines for a native (no-container) install
+#'
+#' Tasks source `<prefix>/activate.sh` instead of running in an image, and
+#' `MITOPILOT_NO_CONDA=1` stops R from invoking `conda run`.
+#' @noRd
+native_config_block <- function(prefix) {
+  act <- file.path(prefix, "activate.sh")
+  paste(
+    "// Native (no-container) install: tasks source the MitoPilot environment.",
+    paste0("process.beforeScript = 'source ", act, "'"),
+    "env.MITOPILOT_NO_CONDA = '1'",
+    paste0("params.native_activate = '", act, "'"),
+    sep = "\n"
+  )
+}
+
+#' Post-fill edits for a native (no-container) config
+#' @noRd
+apply_native_overrides <- function(lines, native_prefix) {
+  # Matches both the unfilled '<<CONTAINER_ID>>' token (generate_config path)
+  # and the already-substituted image string (migrate_config fills CONTAINER_ID
+  # first); never matches the per-process 'container = process.container' refs,
+  # which have no leading quote. Null it out rather than deleting it: Nextflow's
+  # strict config parser errors on the per-process `process.container` refs if
+  # process.container is never defined at all.
+  lines <- sub("^(\\s*)container\\s*=\\s*'[^']*'.*$", "\\1container = null", lines)
+  db <- file.path(native_prefix, "ref_dbs", "mito_metazoa")
+  sub("db_dir = '/ref_dbs/mito_metazoa'.*$",
+      paste0("db_dir = '", db, "'    // local BLAST database from the native install"),
+      lines)
+}
+
 #' Substitute `<<PLACEHOLDER>>` tokens in config template lines
 #'
 #' Shared by [generate_config()] and the project-init functions so the
@@ -85,6 +117,8 @@ config_get_param <- function(lines, key) {
 #' @return A single string for the `<<CONTAINER_ENGINE>>` placeholder.
 #' @noRd
 extract_container_engine <- function(lines) {
+  act <- config_get_param(lines, "params.native_activate")
+  if (!is.null(act)) return(native_config_block(dirname(act)))
   for (eng in c("singularity", "apptainer", "docker")) {
     start <- grep(paste0("^\\s*", eng, "\\s*\\{"), lines)
     if (length(start) == 0) next
@@ -135,6 +169,7 @@ migrate_config <- function(path, executor, con = NULL,
                            profile_dir = mitopilot_config_dir()) {
   conf_path <- file.path(path, ".config")
   old <- readLines(conf_path)
+  native_act <- config_get_param(old, "params.native_activate")
 
   template <- resolve_config(executor, profile_dir = profile_dir)
   lines <- readLines(template)
@@ -188,6 +223,10 @@ migrate_config <- function(path, executor, con = NULL,
     CLUSTER_OPTIONS  = cluster_options %||% "",
     CONTAINER_ENGINE = engine_repl
   ))
+
+  if (!is.null(native_act)) {
+    lines <- apply_native_overrides(lines, dirname(native_act))
+  }
 
   # Fail safe: never write a config that still has unfilled placeholders.
   if (any(grepl("<<[A-Z_]+>>", lines))) {
@@ -296,13 +335,21 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 #' @param name Profile name. Saved as `config.<name>`; pass this as the
 #'   `executor` argument to `new_project()`.
 #' @param scheduler Base template to build on. One of "slurm", "sge", "pbs",
-#'   "lsf", "local", or "awsbatch".
+#'   "lsf", "local", or "awsbatch"; or a named cluster template ("NMNH_Hydra",
+#'   "NOAA_SEDNA"), allowed only with `container_engine = "none"`, which keeps
+#'   that cluster's tuned resource settings and swaps its container block for
+#'   the native install.
 #' @param container_engine Container runtime. "auto" picks docker for
 #'   local/awsbatch and singularity for HPC schedulers; or set explicitly to
-#'   "singularity", "apptainer", or "docker".
+#'   "singularity", "apptainer", or "docker"; or "none" for a native
+#'   (no-container) install built by inst/native/install_mitopilot_native.sh, which
+#'   requires native_prefix.
 #' @param container_cache Optional cacheDir for singularity/apptainer.
 #' @param container_run_options Optional runOptions for singularity/apptainer
 #'   (e.g. bind mounts).
+#' @param native_prefix Directory passed to `install_mitopilot_native.sh --prefix`
+#'   (contains `activate.sh` and `ref_dbs/`). Required when
+#'   `container_engine = "none"`, ignored otherwise.
 #' @param queue Partition / queue name. If `NULL`, the queue directive is
 #'   omitted (cluster default is used).
 #' @param account Optional accounting / project string. Folded into
@@ -322,10 +369,11 @@ list_configs <- function(profile_dir = mitopilot_config_dir()) {
 #' @export
 generate_config <- function(
     name,
-    scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch"),
-    container_engine = c("auto", "singularity", "apptainer", "docker"),
+    scheduler = c("slurm", "sge", "pbs", "lsf", "local", "awsbatch", "NMNH_Hydra", "NOAA_SEDNA"),
+    container_engine = c("auto", "singularity", "apptainer", "docker", "none"),
     container_cache = NULL,
     container_run_options = NULL,
+    native_prefix = NULL,
     queue = NULL,
     account = NULL,
     cluster_options = NULL,
@@ -338,6 +386,15 @@ generate_config <- function(
   }
   scheduler <- match.arg(scheduler)
   container_engine <- match.arg(container_engine)
+
+  if (container_engine == "none" && (is.null(native_prefix) || !nzchar(native_prefix))) {
+    stop("container_engine = 'none' requires `native_prefix`.", call. = FALSE)
+  }
+  named_cluster <- scheduler %in% c("NMNH_Hydra", "NOAA_SEDNA")
+  if (named_cluster && container_engine != "none") {
+    stop("scheduler = '", scheduler, "' is only for container_engine = 'none'; ",
+         "with containers use new_project(executor = '", scheduler, "') directly.", call. = FALSE)
+  }
 
   if (container_engine == "auto") {
     container_engine <- if (scheduler %in% c("local", "awsbatch")) "docker" else "singularity"
@@ -379,6 +436,13 @@ generate_config <- function(
   }
   lines <- readLines(template)
 
+  # Named cluster templates hardcode a singularity block; swap it for the native one ----
+  if (named_cluster) {
+    s <- grep("^singularity \\{", lines)[1]
+    e <- s + grep("^\\}", lines[s:length(lines)])[1] - 1
+    lines <- c(lines[seq_len(s - 1)], native_config_block(native_prefix), lines[-seq_len(e)])
+  }
+
   # Drop the queue directive if no queue requested ----
   if (is.null(queue) || !nzchar(queue)) {
     lines <- lines[!grepl("<<QUEUE>>", lines, fixed = TRUE)]
@@ -386,11 +450,14 @@ generate_config <- function(
 
   # Substitute cluster-level placeholders (per-project tokens left intact) ----
   lines <- fill_config(lines, list(
-    CONTAINER_ENGINE = container_engine_block(container_engine, container_cache, container_run_options),
+    CONTAINER_ENGINE = if (container_engine == "none") native_config_block(native_prefix)
+                       else container_engine_block(container_engine, container_cache, container_run_options),
     QUEUE = queue,
     CLUSTER_OPTIONS = cluster_options,
     PENV = if (scheduler == "sge") penv else NULL
   ))
+
+  if (container_engine == "none") lines <- apply_native_overrides(lines, native_prefix)
 
   # Write the profile ----
   if (!dir.exists(profile_dir)) {

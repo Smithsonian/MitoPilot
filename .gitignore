@@ -30,3 +30,5 @@ dev
 .serena
 ~$*
 tests/testthat/seqview/index.generated.html
+inst/native/pixi.lock
+inst/native/.pixi/

@@ -2,9 +2,7 @@ plugins {
 	id 'nf-sqldb@0.5.0'
 }
 
-docker {
-  enabled = true
-}
+<<CONTAINER_ENGINE>>
 
 process {
   executor = 'local'
