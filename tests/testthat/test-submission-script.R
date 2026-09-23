@@ -158,6 +158,7 @@ test_that("submission_script sources the native env instead of commented example
 })
 
 test_that("build_submit_script reads native_activate from the project config", {
+  skip_on_os("windows")
   wd <- withr::local_tempdir()
   prefix <- withr::local_tempdir()
   bin <- file.path(prefix, "bin")
@@ -174,6 +175,7 @@ test_that("build_submit_script reads native_activate from the project config", {
 })
 
 test_that("build_submit_script on Hydra sources activate.sh for a native project", {
+  skip_on_os("windows")
   wd <- withr::local_tempdir()
   prefix <- withr::local_tempdir()
   bin <- file.path(prefix, "bin")

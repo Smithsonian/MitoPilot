@@ -145,7 +145,7 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
       "# mamba activate MitoPilot_deps"
     ) else c(
       "# Native MitoPilot environment (from the project .config)",
-      paste0("source ", shQuote(env_setup))
+      paste0("source ", shQuote(env_setup, type = "sh"))
     ),
     "",
     # Pin the Nextflow engine to a MitoPilot-compatible version.
@@ -247,7 +247,7 @@ hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
     "",
     "source ~/.bashrc",
     if (is.null(env_setup)) "module load tools/java/21.0.2"
-    else paste0("source ", shQuote(env_setup)),
+    else paste0("source ", shQuote(env_setup, type = "sh")),
     "",
     "export NXF_OPTS=\"-Xms512m -Xmx20g -XX:MaxMetaspaceSize=512m -Xss256k\" # Java memory limits for 16G RSS constraint",
     # Pin the Nextflow engine to a MitoPilot-compatible version.

@@ -90,7 +90,7 @@ new_project <- function(
     data_path <- normalizePath(data_path, mustWork = FALSE)
   }
   mapping_out <- file.path(path, "mapping.csv")
-  if (!identical(normalizePath(mapping_fn), mapping_out)) {
+  if (!identical(normalizePath(mapping_fn), normalizePath(mapping_out, mustWork = FALSE))) {
     file.copy(mapping_fn, mapping_out, overwrite = TRUE)
   }
 
