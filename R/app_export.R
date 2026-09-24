@@ -230,57 +230,65 @@ export_server <- function(id) {
       }), cols)
     }
 
-    # colDefs for the GEOME fields ticked in the export field picker, toggled
-    # as one group. Bumped by geome_fields_ver() after a save so the table
-    # re-renders with the new columns.
-    geome_fields_ver <- reactiveVal(0L)
-    geome_col_defs <- function() {
+    # colDefs for the GEOME and GBIF fields ticked in the Specimen Fields
+    # picker, toggled as one group.
+    meta_fields_ver <- reactiveVal(0L)
+    meta_col_defs <- function() {
       keys <- tryCatch(
         DBI::dbGetQuery(session$userData$con, "SELECT key FROM meta_export_fields")$key,
         error = function(e) character(0))
       cols <- vapply(keys, .meta_key_col, character(1), USE.NAMES = FALSE)
-      stats::setNames(lapply(cols, function(col) {
-        colDef(show = TRUE, name = col, header = rt_header(col, "From GEOME"),
+      tips <- paste("From", toupper(sub(":.*", "", keys)))
+      stats::setNames(lapply(seq_along(cols), function(i) {
+        colDef(show = TRUE, name = cols[i], header = rt_header(cols[i], tips[i]),
                class = "mp-grp-Specimen", headerClass = "mp-grp-Specimen",
                html = TRUE, cell = rt_longtext(), minWidth = 120)
       }), cols)
     }
 
-    # GEOME field picker ----
-    init("geome_fields")
-    on("geome_fields", {
-      s <- meta_field_summary(session$userData$con, "GEOME")
-      showModal(geome_fields_modal(ns, s))
-      raw <- s[s$kind == "raw", ]
-      output$geome_raw <- reactable::renderReactable(reactable::reactable(
+    # Specimen field picker ----
+    raw_fields_table <- function(raw) {
+      reactable::reactable(
         raw[, c("level", "field", "n_samples", "example", "col")],
         selection = "multiple", onClick = "select", compact = TRUE, searchable = TRUE,
-        defaultSelected = which(raw$selected), defaultPageSize = 15,
+        defaultSelected = which(raw$selected), defaultPageSize = 10,
         columns = list(
           level = colDef(name = "Level"), field = colDef(name = "Field"),
           n_samples = colDef(name = "Samples", width = 80),
           example = colDef(name = "Example", cell = rt_longtext(), html = TRUE),
           col = colDef(name = "Template token", cell = function(v) paste0("{", v, "}"))
         )
-      ))
+      )
+    }
+    init("specimen_fields")
+    on("specimen_fields", {
+      con <- session$userData$con
+      g <- meta_field_summary(con, "GEOME")
+      b <- meta_field_summary(con, "GBIF")
+      showModal(specimen_fields_modal(ns, g, b))
+      output$geome_raw <- reactable::renderReactable(raw_fields_table(g[g$kind == "raw", ]))
+      output$gbif_raw <- reactable::renderReactable(raw_fields_table(b[b$kind == "raw", ]))
     })
 
-    observeEvent(input$geome_fields_save, {
-      s <- meta_field_summary(session$userData$con, "GEOME")
-      raw <- s[s$kind == "raw", ]
-      picked <- raw$key[reactable::getReactableState("geome_raw", "selected") %||% integer(0)]
-      .meta_save_fields(session$userData$con, c(input$geome_combos, picked))
+    observeEvent(input$specimen_fields_save, {
+      con <- session$userData$con
+      picked <- unlist(lapply(c("GEOME", "GBIF"), function(src) {
+        s <- meta_field_summary(con, src)
+        raw <- s[s$kind == "raw", ]
+        raw$key[reactable::getReactableState(paste0(tolower(src), "_raw"), "selected") %||% integer(0)]
+      }))
+      .meta_save_fields(con, c(input$geome_combos, input$gbif_combos, picked))
       removeModal()
-      geome_fields_ver(geome_fields_ver() + 1L)
+      meta_fields_ver(meta_fields_ver() + 1L)
       rv$data <- fetch_export_data()
     })
 
     # Render table ----
     output$table <- reactable::renderReactable({
-      geome_fields_ver()
+      meta_fields_ver()
       declared_cols <- declared_cols_fn()
       metadata_cols <- metadata_col_defs(names(declared_cols))
-      geome_cols <- geome_col_defs()
+      meta_cols <- meta_col_defs()
       reactable::reactable(
         isolate(rv$data),
         compact = TRUE,
@@ -318,7 +326,7 @@ export_server <- function(id) {
         defaultColDef = colDef(show = FALSE),
         # Render order comes from the data frame, not this list. See
         # fetch_export_data().
-        columns = c(declared_cols, metadata_cols, geome_cols)
+        columns = c(declared_cols, metadata_cols, meta_cols)
       )
     })
 

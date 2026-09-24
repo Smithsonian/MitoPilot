@@ -22,11 +22,14 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
   DBI::dbAppendTable(con, "meta_records", data.frame(
     ID = id1, source = "GEOME", level = "Event", depth = 0L, ref = NA_character_,
     field = "country", value = "Peru"))
+  DBI::dbAppendTable(con, "meta_records", data.frame(
+    ID = id1, source = "GBIF", level = "Occurrence", depth = 0L, ref = "1",
+    field = "sex", value = "Female"))
   # Fields ticked ahead of time, as the picker's Save handler would leave them
   # (session$setInputValue + observeEvent(input$x) does not fire reliably
   # under shiny::testServer in this environment, even for a bare module with
   # no MitoPilot code involved; see task-9-report.md).
-  .meta_save_fields(con, c("geome:combo:lat_lon", "geome:raw:Event:country"))
+  .meta_save_fields(con, c("geome:combo:lat_lon", "geome:raw:Event:country", "gbif:combo:sex"))
 
   expect_true("Specimen" %in% names(EXPORT_COL_GROUPS))
 
@@ -44,33 +47,31 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
     id <- vapply(cols, function(c) c$id, character(1))
     cls <- vapply(cols, function(c) c$className %||% "", character(1))
     shown <- vapply(cols, function(c) !isFALSE(c$show), logical(1))
-    expect_true(all(c("geome_lat_lon", "geome_Event_country") %in% id[shown]))
-    expect_setequal(id[grepl("mp-grp-Specimen", cls)], c("specimen", "geome_lat_lon", "geome_Event_country"))
+    expect_true(all(c("geome_lat_lon", "geome_Event_country", "gbif_sex") %in% id[shown]))
+    expect_setequal(id[grepl("mp-grp-Specimen", cls)],
+                    c("specimen", "geome_lat_lon", "geome_Event_country", "gbif_sex"))
   })
 })
 
-test_that("geome_fields_modal builds a checkbox list and a raw-fields reactable", {
+test_that("specimen_fields_modal has a GEOME and a GBIF section", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
   DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
   .meta_ensure_tables(con)
   DBI::dbAppendTable(con, "meta_records", data.frame(
-    ID = "s1", source = "GEOME", level = "Event", depth = 0L, ref = NA_character_,
-    field = "country", value = "Peru"))
-  .meta_save_fields(con, "geome:combo:lat_lon")
-
-  s <- meta_field_summary(con, "GEOME")
-  modal_html <- as.character(geome_fields_modal(NS("exp"), s))
-  expect_match(modal_html, "GEOME fields for export", fixed = TRUE)
-  expect_match(modal_html, "lat_lon", fixed = TRUE)
-
-  raw <- s[s$kind == "raw", ]
-  rt <- reactable::reactable(
-    raw[, c("level", "field", "n_samples", "example", "col")],
-    selection = "multiple", defaultSelected = which(raw$selected)
-  )
-  rt_html <- as.character(htmltools::as.tags(rt))
-  expect_match(rt_html, "country", fixed = TRUE)
+    ID = "s1", source = c("GEOME", "GBIF"), level = c("Event", "Occurrence"), depth = 0L,
+    ref = "r", field = c("country", "countryCode"), value = c("Peru", "PE")))
+  .meta_save_fields(con, c("geome:combo:lat_lon", "gbif:combo:sex"))
+  html <- as.character(specimen_fields_modal(NS("exp"), meta_field_summary(con, "GEOME"),
+                                              meta_field_summary(con, "GBIF")))
+  expect_match(html, "Specimen fields for export", fixed = TRUE)
+  expect_match(html, "exp-geome_combos", fixed = TRUE)
+  expect_match(html, "exp-gbif_combos", fixed = TRUE)
+  expect_match(html, "exp-geome_raw", fixed = TRUE)
+  expect_match(html, "exp-gbif_raw", fixed = TRUE)
+  expect_match(html, "{gbif_specimen_voucher}", fixed = TRUE)
+  expect_match(html, "value=\"gbif:combo:sex\" checked", fixed = TRUE)
+  expect_lt(regexpr("exp-geome_combos", html), regexpr("exp-gbif_combos", html))
 })
 
 status_db <- function() {

@@ -239,31 +239,39 @@ specimen_csv_map_ui <- function(ns, current, overrides, choices) {
   )
 }
 
-#' Modal listing GEOME fields available at export
+#' Modal listing GEOME and GBIF fields available at export
 #'
 #' @param ns module namespace function
-#' @param s `meta_field_summary()` output
+#' @param geome,gbif `meta_field_summary()` output for each source
 #' @noRd
-geome_fields_modal <- function(ns, s) {
-  combos <- s[s$kind == "combo", ]
-  raw <- s[s$kind == "raw", ]
+specimen_fields_modal <- function(ns, geome, gbif) {
+  section <- function(source, s) {
+    key <- tolower(source)
+    combos <- s[s$kind == "combo", ]
+    tagList(
+      h4(source),
+      h5("GenBank-ready combinations"),
+      checkboxGroupInput(
+        ns(paste0(key, "_combos")), NULL, width = "100%",
+        choiceValues = combos$key, selected = combos$key[combos$selected],
+        choiceNames = lapply(seq_len(nrow(combos)), function(i) tagList(
+          code(paste0("{", combos$col[i], "}")), " from ", combos$field[i], ": ",
+          if (is.na(combos$example[i])) em("no samples") else
+            tagList(tags$samp(combos$example[i]), sprintf(" (%d samples)", combos$n_samples[i]))
+        ))
+      ),
+      h5(paste("All", source, "fields")),
+      reactable::reactableOutput(ns(paste0(key, "_raw")))
+    )
+  }
   modalDialog(
-    title = mp_modal_title("GEOME fields for export",
+    title = mp_modal_title("Specimen fields for export",
                            "Ticked fields become columns you can use in header templates"),
     size = "l", easyClose = TRUE,
-    h5("GenBank-ready combinations"),
-    checkboxGroupInput(
-      ns("geome_combos"), NULL, width = "100%",
-      choiceValues = combos$key, selected = combos$key[combos$selected],
-      choiceNames = lapply(seq_len(nrow(combos)), function(i) tagList(
-        code(paste0("{", combos$col[i], "}")), " from ", combos$field[i], ": ",
-        if (is.na(combos$example[i])) em("no samples") else
-          tagList(tags$samp(combos$example[i]), sprintf(" (%d samples)", combos$n_samples[i]))
-      ))
-    ),
-    h5("All GEOME fields"),
-    reactable::reactableOutput(ns("geome_raw")),
-    footer = mp_footer(primary = actionButton(ns("geome_fields_save"), "Save"), dismiss = "Cancel")
+    section("GEOME", geome),
+    tags$hr(),
+    section("GBIF", gbif),
+    footer = mp_footer(primary = actionButton(ns("specimen_fields_save"), "Save"), dismiss = "Cancel")
   )
 }
 
