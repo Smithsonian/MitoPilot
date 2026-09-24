@@ -134,7 +134,9 @@ the table above is the target mapping.
 ## App
 
 ### GEOME column (Assemble, userAsmb Assemble, Annotate, Export tables)
-- Always shown, placed immediately after Taxon.
+- Placed immediately after Taxon. Part of a `GEOME` group in each table's
+  Columns picker: on by default when any sample has a BCID, off by default
+  otherwise (user can switch it on to add BCIDs in the app).
 - Icon states: filled = fetched OK; warning = BCID present but fetch failed
   (tooltip gives reason); blank = no BCID.
 - Click on any state opens the GEOME viewer for that sample. Annotate rows of the

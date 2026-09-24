@@ -1773,3 +1773,118 @@ In the scratch project: tick `geo_loc_name`, `lat_lon`, `collection_date`; expor
 git add vignettes/GEOME-Metadata.Rmd vignettes/figures/geome_*.png _pkgdown.yml vignettes/Your-Own-Project.Rmd vignettes/Test-Project-Export.Rmd NEWS.md man/
 git commit -m "GEOME Metadata vignette and docs"
 ```
+
+---
+
+### Task 11: GEOME column toggle in each table's Columns picker (runs after Task 9, before Task 10)
+
+User decision (2026-09-24): the GEOME icon column must be hideable through each table's existing "Columns:" picker, and default to OFF for projects where no sample has a BCID. Supersedes "always shown" for the icon column.
+
+**Files:**
+- Modify: `R/app_assemble.R` (`ASSEMBLE_COL_GROUPS` ~L3; `col_groups_rv` ~L134; `geome` colDef)
+- Modify: `R/app_assemble_userAsmb.R` (`ASSEMBLE_COL_GROUPS_USERASMB` ~L5; `col_groups_rv` ~L118; `geome` colDef)
+- Modify: `R/app_annotate.R` (`ANNOTATE_COL_GROUPS` ~L3; `col_groups_rv` ~L183; `geome` colDef)
+- Modify: `R/app_export.R` (`EXPORT_COL_GROUPS`; `col_groups_rv`; `geome` colDef)
+- Modify: `R/app_geome.R` (`geome_col_def()` gains a `class` arg; new `.geome_project_has_bcids(con)`)
+- Test: `tests/testthat/test-geome-app.R` (append)
+
+**Interfaces:**
+- Consumes: `geome_col_def(inputId, sticky = NULL)` (Task 7), the Export `GEOME` column group added in Task 9, `.geome_ensure_tables(con)`.
+- Produces:
+  - `.geome_project_has_bcids(con)`: TRUE when any `samples.GEOME_BCID` is non-NA and non-empty (ensures tables first, so it works on pre-branch DBs).
+  - `.geome_default_groups(groups, con)`: `groups` minus `"GEOME"` when `.geome_project_has_bcids(con)` is FALSE, else `groups` unchanged.
+  - `geome_col_def(inputId, sticky = NULL, class = NULL)`: `class` applied to both `class` and `headerClass`.
+
+- [ ] **Step 1: Write failing tests (append to `test-geome-app.R`)**
+
+```r
+test_that(".geome_project_has_bcids and .geome_default_groups follow the samples table", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b"), Taxon = "x"))
+  grp <- c("Options", "GEOME", "Metadata")
+  expect_false(.geome_project_has_bcids(con))
+  expect_equal(.geome_default_groups(grp, con), c("Options", "Metadata"))
+  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = '' WHERE ID = 'a'")
+  expect_false(.geome_project_has_bcids(con))
+  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/1/A' WHERE ID = 'b'")
+  expect_true(.geome_project_has_bcids(con))
+  expect_equal(.geome_default_groups(grp, con), grp)
+})
+
+test_that("geome_col_def applies the group class to cell and header", {
+  cd <- geome_col_def("x-geome_open", class = "mp-grp-GEOME")
+  expect_equal(cd$class, "mp-grp-GEOME")
+  expect_equal(cd$headerClass, "mp-grp-GEOME")
+})
+
+test_that("every table's column groups include GEOME holding the geome column", {
+  for (g in list(ASSEMBLE_COL_GROUPS, ASSEMBLE_COL_GROUPS_USERASMB, ANNOTATE_COL_GROUPS)) {
+    expect_true("geome" %in% g$GEOME)
+  }
+  expect_true("GEOME" %in% names(EXPORT_COL_GROUPS))
+})
+```
+
+- [ ] **Step 2: Run, verify fail**
+
+Run: `Rscript -e 'devtools::load_all(); testthat::test_file("tests/testthat/test-geome-app.R")'`
+Expected: FAIL, `could not find function ".geome_project_has_bcids"`.
+
+- [ ] **Step 3: Helpers in `R/app_geome.R`**
+
+```r
+.geome_project_has_bcids <- function(con) {
+  .geome_ensure_tables(con)
+  DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM samples
+                        WHERE GEOME_BCID IS NOT NULL AND TRIM(GEOME_BCID) != ''")$n > 0
+}
+
+.geome_default_groups <- function(groups, con) {
+  if (.geome_project_has_bcids(con)) groups else setdiff(groups, "GEOME")
+}
+```
+
+Add `class = NULL` to `geome_col_def()` and pass `class = class, headerClass = class` to `reactable::colDef()`.
+
+- [ ] **Step 4: Add the group and default in each table**
+
+In `ASSEMBLE_COL_GROUPS`, `ASSEMBLE_COL_GROUPS_USERASMB`, and `ANNOTATE_COL_GROUPS` add `GEOME = c("geome")` as the last entry. In `R/app_export.R`, put `"geome"` into the `GEOME` group Task 9 created (so it becomes `GEOME = c("geome")` with the ticked `geome_*` columns still added at render time); check that Task 9's `geome_col_defs()` still tags the field columns `mp-grp-GEOME`.
+
+In each module server, replace the `col_groups_rv <- reactiveVal(names(<GROUPS>))` initial value with:
+
+```r
+    col_groups_rv <- reactiveVal(.geome_default_groups(names(<GROUPS>), session$userData$con))
+```
+
+and right after it:
+
+```r
+    if (!"GEOME" %in% col_groups_rv()) {
+      shinyWidgets::updatePickerInput(session, "col_groups", selected = col_groups_rv())
+    }
+```
+
+(The picker UI is built without DB access and starts with every group selected; this syncs it to the server-side default. The existing `observeEvent(input$col_groups, ...)` keeps working because the user can still turn GEOME back on.)
+
+Pass the group class to the column: `geome = geome_col_def(ns("geome_open"), sticky = ..., class = "mp-grp-GEOME")` in all four tables (keep the Task 7 sticky arguments unchanged).
+
+- [ ] **Step 5: Run tests, verify pass**
+
+```bash
+Rscript -e 'devtools::load_all(); for (f in c("test-geome-app.R","test-userasmb-app-units.R","test-ui-reactable-helpers.R")) testthat::test_file(file.path("tests/testthat", f))'
+```
+Expected: all PASS.
+
+- [ ] **Step 6: Verify the default in a running module**
+
+Using `shiny::testServer()` on `assemble_server` (or the lightest module that accepts a `session$userData$con`), confirm `col_groups_rv()` excludes `"GEOME"` for a DB with no BCIDs and includes it once a BCID exists. If `testServer` setup is impractical for these modules, say so in the report and rely on the Step 1 tests; the real-app check in Task 10 covers the rendered picker.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add R/app_geome.R R/app_assemble.R R/app_assemble_userAsmb.R R/app_annotate.R R/app_export.R tests/testthat/test-geome-app.R
+git commit -m "GEOME column toggle, off by default without BCIDs"
+```
+
+Task 10 addendum: the vignette's app section says the GEOME column can be turned on or off with each table's Columns picker and starts off for projects without BCIDs; the real-app check confirms both states.
