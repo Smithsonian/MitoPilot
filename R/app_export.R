@@ -1535,7 +1535,10 @@ export_server <- function(id) {
         )
         return()
       }
-      sp <- tryCatch(specimen_conflict_rows(input$export_group), error = function(e) NULL)
+      sp <- tryCatch(specimen_conflict_rows(input$export_group), error = function(e) {
+        message("Specimen conflict check failed: ", conditionMessage(e))
+        NULL
+      })
       if (!is.null(sp) && nrow(sp) > 0) {
         mp_confirm(
           ns("specimen_confirm"),
@@ -1543,7 +1546,8 @@ export_server <- function(id) {
           text = specimen_warning_html(sp),
           action_label = "Export anyway",
           danger = TRUE,
-          html = TRUE
+          html = TRUE,
+          width = "700px"
         )
         return()
       }

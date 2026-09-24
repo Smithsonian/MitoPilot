@@ -20,7 +20,7 @@ mp_alert <- function(title, text = NULL, type, html = FALSE,
 #' render that order left to right, so the verb sits right-most.
 #' @noRd
 mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FALSE,
-                       session = getDefaultReactiveDomain()) {
+                       width = NULL, session = getDefaultReactiveDomain()) {
   accent <- if (isTRUE(danger)) "danger" else "primary"
   shinyWidgets::confirmSweetAlert(
     session = session, inputId = id, title = title, text = text,
@@ -28,7 +28,8 @@ mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FAL
     btn_labels = c("Cancel", action_label),
     btn_colors = unname(MP_COLORS[c("grey", accent)]),
     html = html,
-    reverseButtons = TRUE
+    reverseButtons = TRUE,
+    width = width
   )
 }
 
