@@ -84,12 +84,20 @@ geome_col_def <- function(inputId, sticky = NULL, class = NULL) {
 #' Render one sample's GEOME records as level cards, root first
 #'
 #' @param recs `geome_records` rows for one sample (level, depth, bcid, field, value)
-#' @return a `tagList` of `<details>` cards
+#' @param box_id DOM id of the scroll box holding the cards
+#' @return Expand/Collapse all buttons and a scroll box of `<details>` cards
 #' @noRd
-geome_record_view <- function(recs) {
+geome_record_view <- function(recs, box_id = "geome-records") {
   if (!nrow(recs)) return(p(class = "text-muted", "No GEOME data stored for this sample yet."))
+  toggle <- function(label, open) {
+    tags$button(
+      type = "button", class = "btn btn-default btn-sm", label,
+      onclick = sprintf("document.querySelectorAll('#%s details').forEach(function(d) { d.open = %s; });",
+                        box_id, tolower(open))
+    )
+  }
   lv <- unique(recs[order(-recs$depth), c("level", "depth", "bcid")])
-  tagList(lapply(seq_len(nrow(lv)), function(i) {
+  cards <- lapply(seq_len(nrow(lv)), function(i) {
     r <- recs[recs$depth == lv$depth[i], ]
     tags$details(
       open = NA, class = "mp-geome-level",
@@ -105,7 +113,11 @@ geome_record_view <- function(recs) {
         }))
       )
     )
-  }))
+  })
+  tagList(
+    div(style = "margin-bottom: 6px;", toggle("Expand all", TRUE), " ", toggle("Collapse all", FALSE)),
+    div(id = box_id, style = "max-height: 60vh; overflow-y: auto;", cards)
+  )
 }
 
 #' Replace the set of GEOME fields available at export
@@ -163,7 +175,7 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
     bump <- function() { rv$ver <- rv$ver + 1L; on_change() }
 
     samples <- function() {
-      DBI::dbGetQuery(con, "SELECT s.ID, s.GEOME_BCID, g.status, g.message, g.fetched_at
+      DBI::dbGetQuery(con, "SELECT s.ID, s.Taxon, s.GEOME_BCID, g.status, g.message, g.fetched_at
                             FROM samples s LEFT JOIN geome_status g ON s.ID = g.ID ORDER BY s.ID")
     }
 
@@ -172,7 +184,10 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
       s <- samples()
       lab <- paste0(s$ID, ifelse(is.na(s$status), "", ifelse(s$status == "failed", " (failed)", "")))
       modalDialog(
-        title = mp_modal_title("GEOME metadata", "Records fetched from geome-db.org"),
+        title = mp_modal_title(
+          tagList("GEOME metadata: ", textOutput(ns("hdr_id"), inline = TRUE)),
+          subtitle = tagList("Taxon: ", textOutput(ns("hdr_taxon"), inline = TRUE))
+        ),
         size = "l", easyClose = TRUE,
         fluidRow(
           column(3,
@@ -191,6 +206,13 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
     })
 
     observeEvent(input$sample, rv$id <- input$sample, ignoreInit = TRUE)
+
+    output$hdr_id <- renderText(rv$id)
+    output$hdr_taxon <- renderText({
+      req(rv$id)
+      s <- samples()
+      s$Taxon[s$ID == rv$id] %|NA|% "NA"
+    })
 
     output$failed <- renderUI({
       rv$ver
@@ -220,7 +242,7 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
         if (is.na(s$GEOME_BCID) && !nrow(recs)) p(class = "text-muted",
           "This sample has no GEOME BCID. Paste one above and click Fetch, or add a GEOME_BCID ",
           "column to your mapping file (see the GEOME Metadata article)."),
-        geome_record_view(recs)
+        geome_record_view(recs, box_id = ns("records"))
       )
     })
 

@@ -39,6 +39,18 @@ test_that("geome_record_view orders levels root first and links BCIDs", {
   expect_match(html, "Peru", fixed = TRUE)
 })
 
+test_that("geome_record_view puts cards in a scroll box with expand/collapse all", {
+  recs <- data.frame(level = "Event", depth = 2L, bcid = "ark:/1/E",
+                     field = "country", value = "Peru")
+  html <- as.character(geome_record_view(recs, box_id = "m-geome-records"))
+  expect_match(html, "id=\"m-geome-records\"[^>]*overflow-y: auto")
+  expect_lt(regexpr("m-geome-records", html), regexpr("<details", html))
+  expect_match(html, "Expand all", fixed = TRUE)
+  expect_match(html, "Collapse all", fixed = TRUE)
+  expect_match(html, "#m-geome-records details", fixed = TRUE)
+  expect_false(grepl("Expand all", as.character(geome_record_view(recs[0, ]))))
+})
+
 test_that(".geome_save_fields replaces the selection", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
