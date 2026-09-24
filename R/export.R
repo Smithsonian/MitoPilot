@@ -535,7 +535,8 @@ export_files <- function(
     if (file.exists(tbl_fn)) {
       file.remove(tbl_fn)
     }
-    if ("GenBankAccession" %in% names(dat) && length(dat$GenBankAccession) > 0 && nchar(dat$GenBankAccession) > 4) {
+    # GenBankAccession check disabled for now
+    if (FALSE && "GenBankAccession" %in% names(dat) && length(dat$GenBankAccession) > 0 && nchar(dat$GenBankAccession) > 4) {
       cat(paste(">Feature", paste0("gb|", dat$GenBankAccession, "|")), file = tbl_fn, sep = "\n")
     } else {
       cat(paste(">Feature", .seqid), file = tbl_fn, sep = "\n")
