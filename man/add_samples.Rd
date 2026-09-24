@@ -10,7 +10,9 @@ add_samples(
   mapping_id = "ID",
   mapping_taxon = "Taxon",
   mapping_geome = "GEOME_BCID",
-  fetch_geome = TRUE
+  fetch_geome = TRUE,
+  mapping_gbif = "GBIF_ID",
+  fetch_gbif = TRUE
 )
 }
 \arguments{
@@ -33,6 +35,11 @@ as sample metadata, so rename the column if you use it for something else.}
 
 \item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
 (default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
+
+\item{mapping_gbif}{Name of the mapping-file column holding GBIF occurrence IDs}
+
+\item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.}
 }
 \description{
 Add new samples to an existing project database.

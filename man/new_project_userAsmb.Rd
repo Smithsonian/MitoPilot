@@ -10,6 +10,8 @@ new_project_userAsmb(
   mapping_id = "ID",
   mapping_geome = "GEOME_BCID",
   fetch_geome = TRUE,
+  mapping_gbif = "GBIF_ID",
+  fetch_gbif = TRUE,
   data_path = NULL,
   no_raw_data = FALSE,
   assembly_path = "NA",
@@ -51,6 +53,14 @@ Passed to `new_db_userAsmb()`.}
 
 \item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
 (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+Passed to `new_db_userAsmb()`.}
+
+\item{mapping_gbif}{Name of the mapping-file column holding GBIF occurrence
+IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.
+Passed to `new_db_userAsmb()`.}
+
+\item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID during setup
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 Passed to `new_db_userAsmb()`.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be

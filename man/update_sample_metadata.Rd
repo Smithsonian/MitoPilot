@@ -10,7 +10,9 @@ update_sample_metadata(
   mapping_id = "ID",
   mapping_taxon = "Taxon",
   mapping_geome = "GEOME_BCID",
-  fetch_geome = TRUE
+  fetch_geome = TRUE,
+  mapping_gbif = "GBIF_ID",
+  fetch_gbif = TRUE
 )
 }
 \arguments{
@@ -26,6 +28,11 @@ update_sample_metadata(
 
 \item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
 (default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
+
+\item{mapping_gbif}{Name of the mapping-file column holding GBIF occurrence IDs}
+
+\item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.}
 }
 \description{
 Update the metadata for an existing project database.

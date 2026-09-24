@@ -89,6 +89,7 @@ reference:
   - add_samples
   - update_sample_metadata
   - fetch_geome
+  - fetch_gbif
   - geome_normalize_bcid
   - gbif_normalize_id
   - update_sample_seqdata

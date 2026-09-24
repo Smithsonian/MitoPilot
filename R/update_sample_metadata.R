@@ -11,6 +11,9 @@
 #' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
 #' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+#' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence IDs
+#' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID
+#'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #'
 #' @export
 #'
@@ -20,7 +23,9 @@ update_sample_metadata <- function(
     mapping_id = "ID",
     mapping_taxon = "Taxon",
     mapping_geome = "GEOME_BCID",
-    fetch_geome = TRUE
+    fetch_geome = TRUE,
+    mapping_gbif = "GBIF_ID",
+    fetch_gbif = TRUE
     ){
 
   # Check if project directory exists ----
@@ -49,10 +54,7 @@ update_sample_metadata <- function(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]]
     )
-  if (mapping_geome %in% colnames(mapping)) {
-    mapping$GEOME_BCID <- .meta_store_value("GEOME", mapping[[mapping_geome]])
-    if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
-  }
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
   # convert everything to characters
   mapping <- mapping |>
     dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
@@ -83,12 +85,6 @@ update_sample_metadata <- function(
   # convert everything to characters
   sample_table <- sample_table |>
     dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
-
-  old_bcid <- if ("GEOME_BCID" %in% colnames(sample_table)) {
-    stats::setNames(sample_table$GEOME_BCID, sample_table$ID)
-  } else {
-    character()
-  }
 
   # check to make sure there are no new samples in the update database
   new_samples <- mapping$ID[which(!(mapping$ID %in% sample_table$ID))]
@@ -135,15 +131,5 @@ update_sample_metadata <- function(
       by = "ID"
     )
 
-  if ("GEOME_BCID" %in% colnames(mapping)) {
-    .meta_ensure_tables(con)
-    new <- mapping$GEOME_BCID
-    old <- unname(old_bcid[mapping$ID])
-    changed <- xor(is.na(new), is.na(old)) | (!is.na(new) & !is.na(old) & new != old)
-    if (any(changed)) .meta_drop(con, "GEOME", mapping$ID[changed])
-    refetch <- changed & !is.na(new)
-    if (fetch_geome && any(refetch)) {
-      .meta_fetch_into(con, "GEOME", mapping$ID[refetch], new[refetch])
-    }
-  }
+  .meta_sync_changed(con, mapping, sample_table, list(GEOME = fetch_geome, GBIF = fetch_gbif))
 }

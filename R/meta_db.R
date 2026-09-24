@@ -4,6 +4,12 @@ META_SOURCES <- list(
     normalize = function(x) geome_normalize_bcid(x),
     invalid = function(x) paste0("'", x, "' is not a GEOME BCID (expected ark:/NNNNN/...)"),
     chain = function(ref, cache) .geome_fetch_chain(ref, cache)
+  ),
+  GBIF = list(
+    col = "GBIF_ID", label = "GBIF", id_label = "ID", arg = "gbifs",
+    normalize = function(x) gbif_normalize_id(x),
+    invalid = function(x) paste0("'", x, "' is not a GBIF occurrence ID (expected digits)"),
+    chain = function(ref, cache) .gbif_fetch_chain(ref, cache)
   )
 )
 
@@ -150,4 +156,48 @@ META_SOURCES <- list(
     return(invisible(data.frame(ID = character(), status = character(), message = character())))
   }
   .meta_fetch_into(con, source, target$ID, target$ref)
+}
+
+.meta_take_cols <- function(mapping, cols) {
+  for (src in names(cols)) {
+    col <- cols[[src]]
+    std <- META_SOURCES[[src]]$col
+    if (col %in% colnames(mapping)) {
+      mapping[[std]] <- .meta_store_value(src, mapping[[col]])
+      if (col != std) mapping[[col]] <- NULL
+    }
+  }
+  mapping
+}
+
+.meta_fetch_new <- function(con, mapping, fetch) {
+  .meta_ensure_tables(con)
+  for (src in names(fetch)) {
+    col <- META_SOURCES[[src]]$col
+    if (!isTRUE(fetch[[src]]) || !col %in% colnames(mapping)) next
+    has <- !is.na(mapping[[col]])
+    if (any(has)) .meta_fetch_into(con, src, mapping$ID[has], mapping[[col]][has])
+  }
+  invisible(NULL)
+}
+
+.meta_sync_changed <- function(con, mapping, old, fetch) {
+  for (src in names(fetch)) {
+    col <- META_SOURCES[[src]]$col
+    if (!col %in% colnames(mapping)) next
+    .meta_ensure_tables(con)
+    new <- mapping[[col]]
+    prev <- if (col %in% colnames(old)) {
+      unname(stats::setNames(old[[col]], old$ID)[mapping$ID])
+    } else {
+      rep(NA_character_, length(new))
+    }
+    changed <- xor(is.na(new), is.na(prev)) | (!is.na(new) & !is.na(prev) & new != prev)
+    if (any(changed)) .meta_drop(con, src, mapping$ID[changed])
+    refetch <- changed & !is.na(new)
+    if (isTRUE(fetch[[src]]) && any(refetch)) {
+      .meta_fetch_into(con, src, mapping$ID[refetch], new[refetch])
+    }
+  }
+  invisible(NULL)
 }

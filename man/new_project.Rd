@@ -10,6 +10,8 @@ new_project(
   mapping_id = "ID",
   mapping_geome = "GEOME_BCID",
   fetch_geome = TRUE,
+  mapping_gbif = "GBIF_ID",
+  fetch_gbif = TRUE,
   data_path = NULL,
   min_depth = 2e+06,
   genetic_code = NULL,
@@ -51,6 +53,14 @@ Passed to `new_db()`.}
 
 \item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
 (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+Passed to `new_db()`.}
+
+\item{mapping_gbif}{Name of the mapping-file column holding GBIF occurrence
+IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.
+Passed to `new_db()`.}
+
+\item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID during setup
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 Passed to `new_db()`.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be

@@ -18,6 +18,10 @@
 #'   (optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.
 #' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+#' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence
+#'   IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.
+#' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset (`curate_target`); a number sets an
 #'   override on the default curate_opts set.
@@ -89,6 +93,8 @@ new_db <- function(
     mapping_taxon = "Taxon",
     mapping_geome = "GEOME_BCID",
     fetch_geome = TRUE,
+    mapping_gbif = "GBIF_ID",
+    fetch_gbif = TRUE,
     genetic_code = NULL,
     # Default preprocessing options
     dedup = FALSE,
@@ -152,7 +158,8 @@ new_db <- function(
     mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
   .report_issues(check_mapping(mapping, mapping_id, mapping_taxon,
-                               mapping_geome = mapping_geome), "Mapping file")
+                               mapping_geome = mapping_geome,
+                               mapping_gbif = mapping_gbif), "Mapping file")
 
   # Validate assembler choice
   if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
@@ -219,10 +226,7 @@ new_db <- function(
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code
     )
-  if (mapping_geome %in% colnames(mapping)) {
-    mapping$GEOME_BCID <- .meta_store_value("GEOME", mapping[[mapping_geome]])
-    if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
-  }
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},
@@ -865,11 +869,7 @@ new_db <- function(
     );"
   )
 
-  .meta_ensure_tables(con)
-  if (fetch_geome && "GEOME_BCID" %in% colnames(mapping) && any(!is.na(mapping$GEOME_BCID))) {
-    has <- !is.na(mapping$GEOME_BCID)
-    .meta_fetch_into(con, "GEOME", mapping$ID[has], mapping$GEOME_BCID[has])
-  }
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif))
 
   .mtr_warn_missing_refs(con)
 

@@ -18,6 +18,9 @@
 #' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
 #' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+#' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence IDs
+#' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID
+#'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #'
 #' @export
 #'
@@ -27,7 +30,9 @@ add_samples <- function(
     mapping_id = "ID",
     mapping_taxon = "Taxon",
     mapping_geome = "GEOME_BCID",
-    fetch_geome = TRUE)
+    fetch_geome = TRUE,
+    mapping_gbif = "GBIF_ID",
+    fetch_gbif = TRUE)
 {
 
   # Check if project directory exists ----
@@ -102,10 +107,7 @@ add_samples <- function(
       )
   }
 
-  if (mapping_geome %in% colnames(mapping)) {
-    mapping$GEOME_BCID <- .meta_store_value("GEOME", mapping[[mapping_geome]])
-    if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
-  }
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
 
   # convert everything to characters
   mapping <- mapping |>
@@ -239,11 +241,7 @@ add_samples <- function(
   # (default curate_opts target + optional override).
   .sync_sample_genetic_codes(con, ids = mapping$ID)
 
-  .meta_ensure_tables(con)
-  if (fetch_geome && "GEOME_BCID" %in% colnames(mapping)) {
-    has <- !is.na(mapping$GEOME_BCID)
-    if (any(has)) .meta_fetch_into(con, "GEOME", mapping$ID[has], mapping$GEOME_BCID[has])
-  }
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif))
 
   .mtr_warn_missing_refs(con)
 

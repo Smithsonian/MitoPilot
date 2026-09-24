@@ -11,6 +11,8 @@ new_db_userAsmb(
   mapping_taxon = "Taxon",
   mapping_geome = "GEOME_BCID",
   fetch_geome = TRUE,
+  mapping_gbif = "GBIF_ID",
+  fetch_gbif = TRUE,
   assembly_path = NULL,
   genetic_code = NULL,
   annotate_cpus = 6,
@@ -75,6 +77,12 @@ identifier (eg, species name)}
 
 \item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
 (default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
+
+\item{mapping_gbif}{Name of the mapping-file column holding GBIF occurrence
+IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.}
+
+\item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID during setup
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.}
 
 \item{assembly_path}{Directory holding the user-supplied assembly files. Used
 to count each assembly's contigs so a multi-contig assembly is recorded with
