@@ -2,6 +2,7 @@
 
 .spec_norm_name <- function(x) {
   x <- iconv(as.character(x), "UTF-8", "ASCII//TRANSLIT", sub = "")
+  x <- gsub("[\"'`^~]", "", x)
   x <- gsub("[^a-z0-9]+", " ", tolower(x))
   trimws(x)
 }
@@ -207,11 +208,20 @@ specimen_conflicts <- function(con, ids = NULL) {
   for (i in seq_len(nrow(s))) {
     row <- s[i, , drop = FALSE]
     r <- by_id[[s$ID[i]]] %||% empty
+    no_meta <- !nrow(r)
     g <- r[r$source == "GEOME", , drop = FALSE]
     b <- r[r$source == "GBIF", , drop = FALSE]
     for (k in SPECIMEN_CONCEPTS) {
       j <- j + 1L
-      v <- c(.spec_csv_value(row, cols[[k]]), .spec_source_value(k, "GEOME", g),
+      cv <- .spec_csv_value(row, cols[[k]])
+      if (no_meta) {
+        # no GEOME/GBIF records for this sample: only the CSV value can exist,
+        # so status can only be "single" or NA, skip the source comparisons
+        csv_v[j] <- cv
+        status[j] <- if (!is.na(cv) && nzchar(cv)) "single" else NA_character_
+        next
+      }
+      v <- c(cv, .spec_source_value(k, "GEOME", g),
              .spec_source_value(k, "GBIF", b))
       csv_v[j] <- v[1]
       geome_v[j] <- v[2]

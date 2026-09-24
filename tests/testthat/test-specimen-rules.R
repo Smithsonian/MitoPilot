@@ -1,6 +1,10 @@
 test_that(".spec_norm_name folds case, accents, and punctuation", {
   expect_equal(.spec_norm_name(c("C\u00f4te d\u2019Ivoire", "  United  States of America ", "U.S.A.")),
-               c("cote d ivoire", "united states of america", "u s a"))
+               c("cote divoire", "united states of america", "u s a"))
+})
+
+test_that(".spec_norm_name is stable across platform-dependent transliteration marks", {
+  expect_equal(.spec_norm_name("C^ote d'Ivoire"), .spec_norm_name("Cote dIvoire"))
 })
 
 test_that("country names, aliases, and codes map to ISO2", {
