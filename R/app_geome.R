@@ -226,14 +226,16 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
 
     observeEvent(input$fetch, {
       req(rv$id)
-      val <- .geome_set_bcid(con, rv$id, input$bcid)
-      if (!is.na(val)) {
-        withProgress(message = "Fetching from GEOME", {
-          res <- suppressWarnings(.geome_fetch_into(con, rv$id, val))
-        })
-        if (res$status == "failed") showNotification(res$message, type = "warning")
-      }
-      bump()
+      tryCatch({
+        val <- .geome_set_bcid(con, rv$id, input$bcid)
+        if (!is.na(val)) {
+          withProgress(message = "Fetching from GEOME", {
+            res <- suppressWarnings(.geome_fetch_into(con, rv$id, val))
+          })
+          if (res$status == "failed") showNotification(res$message, type = "warning")
+        }
+        bump()
+      }, error = function(e) showNotification(conditionMessage(e), type = "error"))
     })
 
     observeEvent(input$refresh_all, {
@@ -241,13 +243,15 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
       s <- s[!is.na(s$GEOME_BCID), ]
       if (!nrow(s)) return(showNotification("No samples have a GEOME BCID", type = "message"))
       cache <- new.env()
-      withProgress(message = "Fetching from GEOME", value = 0, {
-        for (i in seq_len(nrow(s))) {
-          suppressWarnings(.geome_fetch_into(con, s$ID[i], s$GEOME_BCID[i], cache))
-          incProgress(1 / nrow(s), detail = s$ID[i])
-        }
-      })
-      bump()
+      tryCatch({
+        withProgress(message = "Fetching from GEOME", value = 0, {
+          for (i in seq_len(nrow(s))) {
+            suppressWarnings(.geome_fetch_into(con, s$ID[i], s$GEOME_BCID[i], cache))
+            incProgress(1 / nrow(s), detail = s$ID[i])
+          }
+        })
+        bump()
+      }, error = function(e) showNotification(conditionMessage(e), type = "error"))
     })
   })
 }
