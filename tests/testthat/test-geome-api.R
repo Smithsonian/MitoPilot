@@ -66,3 +66,14 @@ test_that("live GEOME walk works", {
   out <- .geome_fetch_chain("ark:/21547/CYC2CMPI38181.1")
   expect_true(all(c("Tissue", "Sample", "Event") %in% out$level))
 })
+
+test_that(".geome_get maps HTTP status to readable errors", {
+  msg <- function(st) {
+    httr2::local_mocked_responses(function(req) httr2::response(status_code = st))
+    tryCatch(.geome_get("records/ark:/1/X"), error = conditionMessage)
+  }
+  expect_equal(msg(400), "BCID not recognized by GEOME")
+  expect_equal(msg(500), "BCID not found in GEOME")
+  expect_equal(msg(403), "record is private or needs a GEOME login")
+  expect_equal(msg(418), "GEOME returned HTTP 418")
+})

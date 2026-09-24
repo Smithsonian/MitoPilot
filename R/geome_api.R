@@ -27,6 +27,7 @@ geome_normalize_bcid <- function(x) {
   })
   st <- httr2::resp_status(resp)
   if (st %in% c(401, 403)) stop("record is private or needs a GEOME login", call. = FALSE)
+  if (st == 400) stop("BCID not recognized by GEOME", call. = FALSE)
   if (st %in% c(404, 500)) stop("BCID not found in GEOME", call. = FALSE)
   if (st >= 400) stop("GEOME returned HTTP ", st, call. = FALSE)
   jsonlite::fromJSON(httr2::resp_body_string(resp), simplifyVector = FALSE)
