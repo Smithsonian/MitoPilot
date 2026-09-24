@@ -72,7 +72,7 @@ assemble_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    geome_viewer_server("geome", open = reactive(input$specimen_open),
+    specimen_viewer_server("specimen", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_assemble"))
 
     # Help-doc icons (one observer per tool, registered once at module init).

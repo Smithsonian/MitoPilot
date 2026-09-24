@@ -113,14 +113,16 @@ specimen_col_def <- function(inputId, sticky = NULL, class = NULL) {
   if (.specimen_project_has_ids(con)) groups else setdiff(groups, "Specimen")
 }
 
-#' Render one sample's GEOME records as level cards, root first
+#' Render one sample's records from one source as level cards
 #'
-#' @param recs `geome_records` rows for one sample (level, depth, bcid, field, value)
+#' GEOME levels run root first; GBIF runs Occurrence, Dataset, Organization.
+#'
+#' @param recs `meta_records` rows for one sample and source (level, depth, ref, field, value)
+#' @param source "GEOME" or "GBIF"
 #' @param box_id DOM id of the scroll box holding the cards
-#' @return Expand/Collapse all buttons and a scroll box of `<details>` cards
 #' @noRd
-geome_record_view <- function(recs, box_id = "geome-records") {
-  if (!nrow(recs)) return(p(class = "text-muted", "No GEOME data stored for this sample yet."))
+meta_record_view <- function(recs, source, box_id) {
+  if (!nrow(recs)) return(p(class = "text-muted", paste("No", source, "data stored for this sample yet.")))
   toggle <- function(label, open) {
     tags$button(
       type = "button", class = "btn btn-default btn-sm", label,
@@ -128,27 +130,112 @@ geome_record_view <- function(recs, box_id = "geome-records") {
                         box_id, tolower(open))
     )
   }
-  lv <- unique(recs[order(-recs$depth), c("level", "depth", "bcid")])
+  link <- function(level, ref) {
+    if (is.na(ref)) return(NULL)
+    if (source == "GEOME") return(paste0("https://geome-db.org/record/", ref))
+    switch(level,
+      Occurrence = paste0("https://www.gbif.org/occurrence/", ref),
+      Dataset = paste0("https://www.gbif.org/dataset/", ref),
+      Organization = paste0("https://www.gbif.org/publisher/", ref),
+      NULL)
+  }
+  cell <- function(field, value) {
+    if (field != "issues") return(value)
+    lapply(strsplit(value, ",", fixed = TRUE)[[1]], function(x) {
+      tagList(span(class = "mp-pill mp-pill-warning", x), " ")
+    })
+  }
+  ord <- if (source == "GEOME") -recs$depth else recs$depth
+  lv <- unique(recs[order(ord), c("level", "depth", "ref")])
+  lv <- lv[!duplicated(lv$depth), ]
   cards <- lapply(seq_len(nrow(lv)), function(i) {
     r <- recs[recs$depth == lv$depth[i], ]
+    url <- link(lv$level[i], lv$ref[i])
+    cit <- r$value[r$field == "citation"]
     tags$details(
-      open = NA, class = "mp-geome-level",
+      open = NA, class = "mp-meta-level",
       tags$summary(
         strong(lv$level[i]),
-        if (!is.na(lv$bcid[i])) tagList(" ", tags$a(
-          href = paste0("https://geome-db.org/record/", lv$bcid[i]),
-          target = "_blank", rel = "noopener", lv$bcid[i]))
+        if (!is.null(url)) tagList(" ", tags$a(href = url, target = "_blank", rel = "noopener", lv$ref[i]))
       ),
+      if (length(cit)) p(class = "mp-meta-citation", em(cit[1])),
       tags$table(class = "table table-sm",
         tags$tbody(lapply(seq_len(nrow(r)), function(j) {
-          tags$tr(tags$th(r$field[j]), tags$td(r$value[j]))
+          tags$tr(tags$th(r$field[j]), tags$td(cell(r$field[j], r$value[j])))
         }))
       )
     )
   })
   tagList(
     div(style = "margin-bottom: 6px;", toggle("Expand all", TRUE), " ", toggle("Collapse all", FALSE)),
-    div(id = box_id, style = "max-height: 60vh; overflow-y: auto;", cards)
+    div(id = box_id, style = "max-height: 50vh; overflow-y: auto;", cards)
+  )
+}
+
+#' Compare tab table: one row per concept across CSV, GEOME, and GBIF
+#'
+#' @param cf `specimen_conflicts()` rows for one sample
+#' @noRd
+specimen_compare_view <- function(cf) {
+  if (!nrow(cf)) return(p(class = "text-muted", "No sample selected."))
+  dash <- function(x) if (is.na(x)) "-" else x
+  tags$table(
+    class = "table table-sm mp-spec-compare",
+    tags$thead(tags$tr(tags$th("Item"), tags$th("CSV (column)"), tags$th("GEOME"),
+                       tags$th("GBIF"), tags$th("Status"))),
+    tags$tbody(lapply(seq_len(nrow(cf)), function(i) {
+      r <- cf[i, ]
+      cls <- if (identical(r$status, "conflict")) "mp-spec-conflict" else
+        if (identical(r$status, "note")) "text-muted" else NULL
+      tags$tr(
+        class = cls,
+        tags$td(r$concept),
+        tags$td(dash(r$csv_value),
+                if (!is.na(r$csv_column)) span(class = "text-muted", paste0(" (", r$csv_column, ")"))),
+        tags$td(dash(r$geome_value)),
+        tags$td(dash(r$gbif_value)),
+        tags$td(dash(r$status))
+      )
+    }))
+  )
+}
+
+#' "CSV columns..." control: pick the mapping-file column per concept
+#'
+#' @param ns module namespace function
+#' @param current `specimen_csv_columns()` result
+#' @param overrides named character vector from `meta_csv_map` (concept -> column(s))
+#' @param choices mapping-file column names
+#' @noRd
+specimen_csv_map_ui <- function(ns, current, overrides, choices) {
+  concepts <- setdiff(SPECIMEN_CONCEPTS, "taxon")
+  tags$details(
+    class = "mp-spec-map",
+    tags$summary("CSV columns..."),
+    opts_help(
+      "Pick the mapping-file column MitoPilot compares for each item. Leave a ",
+      "box empty to detect the column automatically, or pick (none) to skip ",
+      "that item. Coordinates take one combined column, or latitude then longitude.",
+      nested = TRUE
+    ),
+    lapply(concepts, function(k) {
+      set <- k %in% names(overrides)
+      sel <- if (!set) character() else if (nzchar(overrides[[k]])) {
+        strsplit(overrides[[k]], ",", fixed = TRUE)[[1]]
+      } else {
+        "__none__"
+      }
+      auto <- if (length(current[[k]])) paste(current[[k]], collapse = " + ") else "none"
+      selectizeInput(
+        ns(paste0("map_", k)),
+        label = if (set) k else paste0(k, " (auto: ", auto, ")"),
+        choices = c("(none)" = "__none__", choices), selected = sel,
+        multiple = TRUE, width = "100%",
+        options = list(maxItems = if (k == "coordinates") 2 else 1,
+                       placeholder = "detect automatically")
+      )
+    }),
+    actionButton(ns("map_save"), "Save columns")
   )
 }
 
@@ -180,32 +267,39 @@ geome_fields_modal <- function(ns, s) {
   )
 }
 
-#' GEOME viewer modal: view records, add/edit a BCID, fetch/refresh
+#' Specimen metadata viewer: GEOME, GBIF, and Compare tabs
 #'
 #' @param id module id
 #' @param open reactive yielding the sample ID to open (from a `specimen_open` input)
 #' @param on_change function called after any DB write, so the caller can refresh its table
 #' @noRd
-geome_viewer_server <- function(id, open, on_change = function() NULL) {
+specimen_viewer_server <- function(id, open, on_change = function() NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     con <- session$userData$con
     rv <- reactiveValues(id = NULL, ver = 0L)
     bump <- function() { rv$ver <- rv$ver + 1L; on_change() }
+    empty_msg <- list(
+      GEOME = paste("This sample has no GEOME BCID. Paste one above and click Fetch, or add a",
+                    "GEOME_BCID column to your mapping file (see the Specimen Metadata article)."),
+      GBIF = paste("This sample has no GBIF ID. Paste a gbifID or a gbif.org/occurrence link above",
+                   "and click Fetch, or add a GBIF_ID column to your mapping file.")
+    )
 
     samples <- function() {
-      DBI::dbGetQuery(con, "SELECT s.ID, s.Taxon, s.GEOME_BCID, g.status, g.message, g.fetched_at
-                            FROM samples s LEFT JOIN meta_status g ON s.ID = g.ID AND g.source = 'GEOME'
-                            ORDER BY s.ID")
+      DBI::dbGetQuery(con, "SELECT ID, Taxon, GEOME_BCID, GBIF_ID FROM samples ORDER BY ID")
     }
 
     observeEvent(open(), {
       rv$id <- open()
       s <- samples()
-      lab <- paste0(s$ID, ifelse(is.na(s$status), "", ifelse(s$status == "failed", " (failed)", "")))
+      st <- specimen_status(con)
+      mark <- st$specimen[match(s$ID, st$ID)]
+      lab <- paste0(s$ID, ifelse(mark %in% "failed", " (failed)",
+                                 ifelse(mark %in% "conflict", " (conflict)", "")))
       modalDialog(
         title = mp_modal_title(
-          tagList("GEOME metadata: ", textOutput(ns("hdr_id"), inline = TRUE)),
+          tagList("Specimen metadata: ", textOutput(ns("hdr_id"), inline = TRUE)),
           subtitle = tagList("Taxon: ", textOutput(ns("hdr_taxon"), inline = TRUE))
         ),
         size = "l", easyClose = TRUE,
@@ -215,11 +309,18 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
                         selected = rv$id, width = "100%", selectize = FALSE, size = 15),
             uiOutput(ns("failed"))
           ),
-          column(9, uiOutput(ns("detail")))
+          column(9,
+            tabsetPanel(
+              id = ns("tab"),
+              tabPanel("GEOME", uiOutput(ns("geome_detail"))),
+              tabPanel("GBIF", uiOutput(ns("gbif_detail"))),
+              tabPanel("Compare", uiOutput(ns("compare")))
+            )
+          )
         ),
         footer = mp_footer(
           extra = actionButton(ns("refresh_all"), "Refresh all",
-                               title = "Fetch every sample with a BCID again"),
+                               title = "Fetch every sample's GEOME and GBIF records again"),
           dismiss = "Close"
         )
       ) |> showModal()
@@ -236,60 +337,99 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
 
     output$failed <- renderUI({
       rv$ver
-      s <- samples()
-      bad <- s$ID[!is.na(s$status) & s$status == "failed"]
+      st <- specimen_status(con)
+      bad <- st$ID[st$specimen == "failed"]
       if (!length(bad)) return(NULL)
       div(class = "mp-fg-warning", icon("triangle-exclamation"), " Failed: ",
           paste(bad, collapse = ", "))
     })
 
-    output$detail <- renderUI({
+    source_detail <- function(source) {
       rv$ver
       req(rv$id)
-      s <- samples()
-      s <- s[s$ID == rv$id, ]
-      recs <- DBI::dbGetQuery(con, "SELECT level, depth, ref AS bcid, field, value FROM meta_records
-                                    WHERE ID = ? AND source = 'GEOME'", params = list(rv$id))
+      src <- META_SOURCES[[source]]
+      key <- tolower(source)
+      ref <- DBI::dbGetQuery(con, paste0("SELECT ", src$col, " AS v FROM samples WHERE ID = ?"),
+                             params = list(rv$id))$v
+      ref <- if (length(ref)) ref[1] else NA_character_
+      st <- DBI::dbGetQuery(con, "SELECT status, message, fetched_at FROM meta_status
+                                  WHERE ID = ? AND source = ?", params = list(rv$id, source))
+      recs <- DBI::dbGetQuery(con, "SELECT level, depth, ref, field, value FROM meta_records
+                                    WHERE ID = ? AND source = ?", params = list(rv$id, source))
       tagList(
-        div(class = "mp-geome-bcid",
-          textInput(ns("bcid"), "GEOME BCID", value = s$GEOME_BCID %|NA|% "",
-                    placeholder = "ark:/21547/...", width = "420px"),
-          actionButton(ns("fetch"), "Fetch", icon = icon("arrows-rotate"))
+        div(class = "mp-meta-ref",
+          textInput(ns(paste0(key, "_ref")), paste(source, src$id_label), value = ref %|NA|% "",
+                    placeholder = if (source == "GEOME") "ark:/21547/..." else "6186461308",
+                    width = "420px"),
+          actionButton(ns(paste0(key, "_fetch")), "Fetch", icon = icon("arrows-rotate"))
         ),
-        if (!is.na(s$status)) p(class = if (s$status == "failed") "mp-fg-warning" else "text-muted",
-          if (s$status == "failed") paste("Last fetch failed:", s$message) else "Fetched",
-          " ", format(as.POSIXct(s$fetched_at, origin = "1970-01-01"), "%Y-%m-%d %H:%M")),
-        if (is.na(s$GEOME_BCID) && !nrow(recs)) p(class = "text-muted",
-          "This sample has no GEOME BCID. Paste one above and click Fetch, or add a GEOME_BCID ",
-          "column to your mapping file (see the GEOME Metadata article)."),
-        geome_record_view(recs, box_id = ns("records"))
+        if (nrow(st)) p(class = if (st$status == "failed") "mp-fg-warning" else "text-muted",
+          if (st$status == "failed") paste("Last fetch failed:", st$message) else "Fetched",
+          " ", format(as.POSIXct(st$fetched_at, origin = "1970-01-01"), "%Y-%m-%d %H:%M")),
+        if (is.na(ref) && !nrow(recs)) p(class = "text-muted", empty_msg[[source]]),
+        meta_record_view(recs, source, box_id = ns(paste0(key, "_records")))
+      )
+    }
+    output$geome_detail <- renderUI(source_detail("GEOME"))
+    output$gbif_detail <- renderUI(source_detail("GBIF"))
+
+    output$compare <- renderUI({
+      rv$ver
+      req(rv$id)
+      m <- DBI::dbGetQuery(con, "SELECT concept, column FROM meta_csv_map")
+      tagList(
+        specimen_compare_view(specimen_conflicts(con, rv$id)),
+        specimen_csv_map_ui(ns, specimen_csv_columns(con), stats::setNames(m$column, m$concept),
+                            export_metadata_cols(DBI::dbListFields(con, "samples"), character()))
       )
     })
 
-    observeEvent(input$fetch, {
+    fetch_one <- function(source) {
       req(rv$id)
       tryCatch({
-        val <- .meta_set_ref(con, "GEOME", rv$id, input$bcid)
+        val <- .meta_set_ref(con, source, rv$id, input[[paste0(tolower(source), "_ref")]])
         if (!is.na(val)) {
-          withProgress(message = "Fetching from GEOME", {
-            res <- suppressWarnings(.meta_fetch_into(con, "GEOME", rv$id, val))
+          withProgress(message = paste("Fetching from", source), {
+            res <- suppressWarnings(.meta_fetch_into(con, source, rv$id, val))
           })
           if (res$status == "failed") showNotification(res$message, type = "warning")
         }
         bump()
       }, error = function(e) showNotification(conditionMessage(e), type = "error"))
+    }
+    observeEvent(input$geome_fetch, fetch_one("GEOME"))
+    observeEvent(input$gbif_fetch, fetch_one("GBIF"))
+
+    observeEvent(input$map_save, {
+      concepts <- setdiff(SPECIMEN_CONCEPTS, "taxon")
+      map <- lapply(stats::setNames(nm = concepts), function(k) {
+        v <- input[[paste0("map_", k)]]
+        if (!length(v)) NA_character_ else if ("__none__" %in% v) "" else v
+      })
+      tryCatch({
+        .spec_set_csv_map(con, map)
+        bump()
+        showNotification("CSV columns saved", type = "message")
+      }, error = function(e) showNotification(conditionMessage(e), type = "error"))
     })
 
     observeEvent(input$refresh_all, {
       s <- samples()
-      s <- s[!is.na(s$GEOME_BCID), ]
-      if (!nrow(s)) return(showNotification("No samples have a GEOME BCID", type = "message"))
-      cache <- new.env()
+      jobs <- do.call(rbind, lapply(names(META_SOURCES), function(src) {
+        ref <- s[[META_SOURCES[[src]]$col]]
+        keep <- !is.na(ref) & nzchar(ref)
+        data.frame(ID = s$ID[keep], source = rep(src, sum(keep)), ref = ref[keep])
+      }))
+      if (!nrow(jobs)) {
+        return(showNotification("No samples have a GEOME BCID or GBIF ID", type = "message"))
+      }
+      caches <- lapply(META_SOURCES, function(x) new.env())
       tryCatch({
-        withProgress(message = "Fetching from GEOME", value = 0, {
-          for (i in seq_len(nrow(s))) {
-            suppressWarnings(.meta_fetch_into(con, "GEOME", s$ID[i], s$GEOME_BCID[i], cache))
-            incProgress(1 / nrow(s), detail = s$ID[i])
+        withProgress(message = "Fetching specimen records", value = 0, {
+          for (i in seq_len(nrow(jobs))) {
+            suppressWarnings(.meta_fetch_into(con, jobs$source[i], jobs$ID[i], jobs$ref[i],
+                                              caches[[jobs$source[i]]]))
+            incProgress(1 / nrow(jobs), detail = paste(jobs$ID[i], jobs$source[i]))
           }
         })
         bump()

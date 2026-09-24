@@ -1,27 +1,3 @@
-test_that("geome_record_view orders levels root first and links BCIDs", {
-  recs <- data.frame(
-    level = c("Tissue", "Event", "Project"), depth = c(0L, 2L, 3L),
-    bcid = c("ark:/1/T", "ark:/1/E", NA), field = c("tissueID", "country", "projectTitle"),
-    value = c("T1", "Peru", "My proj"))
-  html <- as.character(geome_record_view(recs))
-  expect_lt(regexpr("Project", html), regexpr("Event", html))
-  expect_lt(regexpr("Event", html), regexpr("Tissue", html))
-  expect_match(html, "https://geome-db.org/record/ark:/1/E", fixed = TRUE)
-  expect_match(html, "Peru", fixed = TRUE)
-})
-
-test_that("geome_record_view puts cards in a scroll box with expand/collapse all", {
-  recs <- data.frame(level = "Event", depth = 2L, bcid = "ark:/1/E",
-                     field = "country", value = "Peru")
-  html <- as.character(geome_record_view(recs, box_id = "m-geome-records"))
-  expect_match(html, "id=\"m-geome-records\"[^>]*overflow-y: auto")
-  expect_lt(regexpr("m-geome-records", html), regexpr("<details", html))
-  expect_match(html, "Expand all", fixed = TRUE)
-  expect_match(html, "Collapse all", fixed = TRUE)
-  expect_match(html, "#m-geome-records details", fixed = TRUE)
-  expect_false(grepl("Expand all", as.character(geome_record_view(recs[0, ]))))
-})
-
 test_that(".meta_save_fields replaces the selection", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
@@ -216,4 +192,68 @@ test_that("panel module servers start outside a reactive context, with specimen 
   }
   start(function(...) new_test_project(n = 2, ...), c("assemble_server", "annotate_server", "export_server"))
   start(new_test_project_userAsmb, "assemble_server_userAsmb")
+})
+
+test_that("meta_record_view orders GEOME root first and links BCIDs", {
+  recs <- data.frame(
+    level = c("Tissue", "Event", "Project"), depth = c(0L, 2L, 3L),
+    ref = c("ark:/1/T", "ark:/1/E", NA), field = c("tissueID", "country", "projectTitle"),
+    value = c("T1", "Peru", "My proj"))
+  html <- as.character(meta_record_view(recs, "GEOME", "m-geome_records"))
+  expect_lt(regexpr("Project", html), regexpr("Event", html))
+  expect_lt(regexpr("Event", html), regexpr("Tissue", html))
+  expect_match(html, "https://geome-db.org/record/ark:/1/E", fixed = TRUE)
+  expect_match(html, "id=\"m-geome_records\"[^>]*overflow-y: auto")
+  expect_match(html, "#m-geome_records details", fixed = TRUE)
+  expect_match(html, "Expand all", fixed = TRUE)
+  expect_false(grepl("Expand all", as.character(meta_record_view(recs[0, ], "GEOME", "x"))))
+})
+
+test_that("meta_record_view shows GBIF occurrence first, issues as badges, and the citation", {
+  recs <- data.frame(
+    level = c("Occurrence", "Occurrence", "Dataset", "Dataset", "Organization"),
+    depth = c(0L, 0L, 1L, 1L, 2L), ref = c("61", "61", "ds1", "ds1", "org1"),
+    field = c("issues", "country", "title", "citation", "title"),
+    value = c("ZERO_COORDINATE,COORDINATE_ROUNDED", "Peru", "UF Fish",
+              "Robins R (2026). UF Fish.", "Florida Museum"))
+  html <- as.character(meta_record_view(recs, "GBIF", "b2"))
+  expect_lt(regexpr(">Occurrence<", html), regexpr(">Dataset<", html))
+  expect_lt(regexpr(">Dataset<", html), regexpr(">Organization<", html))
+  expect_match(html, "https://www.gbif.org/occurrence/61", fixed = TRUE)
+  expect_match(html, "https://www.gbif.org/dataset/ds1", fixed = TRUE)
+  expect_match(html, "https://www.gbif.org/publisher/org1", fixed = TRUE)
+  expect_match(html, "mp-pill mp-pill-warning\">ZERO_COORDINATE<", fixed = TRUE)
+  expect_match(html, "mp-pill mp-pill-warning\">COORDINATE_ROUNDED<", fixed = TRUE)
+  expect_match(html, "class=\"mp-meta-citation\"", fixed = TRUE)
+})
+
+test_that("specimen_compare_view marks conflicts and notes and names the CSV column", {
+  cf <- data.frame(ID = "s1", concept = c("country", "collector", "sex", "voucher"),
+                   csv_column = c("geo_loc_name", NA, NA, NA),
+                   csv_value = c("USA: Florida", NA, NA, NA),
+                   geome_value = c("Canada", "A. B", NA, NA),
+                   gbif_value = c(NA, "Ann B", "male", NA),
+                   status = c("conflict", "note", "single", NA))
+  html <- as.character(specimen_compare_view(cf))
+  expect_match(html, "<tr class=\"mp-spec-conflict\">", fixed = TRUE)
+  expect_match(html, "<tr class=\"text-muted\">", fixed = TRUE)
+  expect_match(html, "(geo_loc_name)", fixed = TRUE)
+  expect_match(html, "Canada", fixed = TRUE)
+  expect_match(html, "CSV (column)", fixed = TRUE)
+})
+
+test_that("specimen_csv_map_ui offers every concept but taxon, with auto and none", {
+  current <- list(coordinates = c("Latitude", "Longitude"), collection_date = character(),
+                  country = "Where", locality = character(), voucher = character(),
+                  collector = character(), sex = character(), dev_stage = character(),
+                  taxon = "Taxon")
+  html <- as.character(specimen_csv_map_ui(NS("v"), current, c(country = "Where", sex = ""),
+                                           c("Latitude", "Longitude", "Where")))
+  expect_match(html, "CSV columns...", fixed = TRUE)
+  expect_match(html, "v-map_coordinates", fixed = TRUE)
+  expect_false(grepl("v-map_taxon", html, fixed = TRUE))
+  expect_match(html, "auto: Latitude + Longitude", fixed = TRUE)
+  expect_match(html, "__none__", fixed = TRUE)
+  expect_match(html, "\"maxItems\":2", fixed = TRUE)
+  expect_match(html, "v-map_save", fixed = TRUE)
 })

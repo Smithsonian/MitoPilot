@@ -914,3 +914,7 @@ a.mp-link:focus-visible {
   border-top: 1px solid var(--mp-border);
 }
 .mp-seqview-reads .mp-seqview-canvas { cursor: default; }
+
+/* Specimen viewer Compare tab */
+.mp-spec-compare tr.mp-spec-conflict > td { background: var(--mp-warning-soft); }
+.mp-meta-citation { margin: 4px 0 6px; font-size: var(--mp-fs-meta); }

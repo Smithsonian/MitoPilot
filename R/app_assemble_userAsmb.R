@@ -63,7 +63,7 @@ assemble_server_userAsmb <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    geome_viewer_server("geome", open = reactive(input$specimen_open),
+    specimen_viewer_server("specimen", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_assemble"))
 
     register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
