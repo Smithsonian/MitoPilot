@@ -53,6 +53,7 @@ articles:
   - 'Ruleset-Browser'
   - 'Curation-and-Validation'
   - 'custom_dbs'
+  - 'GEOME-Metadata'
 
 - title: "Computing Environments"
   navbar: Computing Environments

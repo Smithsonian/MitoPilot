@@ -182,6 +182,9 @@ appends the scaffold/path number if that sample is exporting multiple sequences.
 Templates are validated as you type and can be saved by name with
 **Save template** for reuse.
 
+Samples linked to GEOME records can also use `{geome_...}` tokens, such as
+`{geome_lat_lon}` and `{geome_collection_date}`; see [GEOME Metadata](GEOME-Metadata.html).
+
 Other options in the Export Data window:
 
 - **Generate group-level PCG alignment summary** aligns every protein-coding gene

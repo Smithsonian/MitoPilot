@@ -1,5 +1,9 @@
 # MitoPilot (development version)
 
+## New Features
+
+- GEOME integration: link samples to GEOME BCIDs (`mapping_geome`, `fetch_geome()`), browse the full record in the app, and choose GEOME fields, including GenBank-ready `lat_lon`, `collection_date`, `geo_loc_name`, and `specimen_voucher`, for export header templates.
+
 ## Bug Fixes
 
 - **Circular user assemblies no longer gain a base.** In a no-reads user-assembly project, a circular assembly that already started at the start gene came out of annotation one base longer, with base 1 copied onto the end. The stored sequence, its length, and every export carried the extra base. Reads-based projects could hit the same bug when an assembly happened to start exactly at the start gene. Re-run annotation on affected samples to correct them.

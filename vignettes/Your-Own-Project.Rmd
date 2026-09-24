@@ -130,6 +130,8 @@ can be pulled into GenBank FASTA headers at export, so this is the place to put
 voucher numbers, BioSample accessions, collection data, and anything else your
 submission needs.
 
+To link samples to GEOME records, add a column of GEOME BCIDs; see [GEOME Metadata](GEOME-Metadata.html).
+
 ```
 ID,Taxon,R1,R2,Voucher,BioSample
 OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN00000001
