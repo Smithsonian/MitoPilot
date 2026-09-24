@@ -8,7 +8,9 @@ add_samples(
   path = ".",
   update_mapping_fn = NULL,
   mapping_id = "ID",
-  mapping_taxon = "Taxon"
+  mapping_taxon = "Taxon",
+  mapping_geome = "GEOME_BCID",
+  fetch_geome = TRUE
 )
 }
 \arguments{
@@ -26,6 +28,11 @@ as sample metadata, so rename the column if you use it for something else.}
 \item{mapping_id}{Column name of the update mapping file to use as the primary key}
 
 \item{mapping_taxon}{Column name of the update mapping file containing a Taxonomic identifier (eg, species name)}
+
+\item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs}
+
+\item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
+(default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
 }
 \description{
 Add new samples to an existing project database.

@@ -8,6 +8,9 @@
 #' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID" and "Taxon"
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
+#' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
+#' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
 #'
 #' @export
 #'
@@ -15,7 +18,9 @@ update_sample_metadata <- function(
     path = ".",
     update_mapping_fn = NULL,
     mapping_id = "ID",
-    mapping_taxon = "Taxon"
+    mapping_taxon = "Taxon",
+    mapping_geome = "GEOME_BCID",
+    fetch_geome = TRUE
     ){
 
   # Check if project directory exists ----
@@ -44,6 +49,10 @@ update_sample_metadata <- function(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]]
     )
+  if (mapping_geome %in% colnames(mapping)) {
+    mapping$GEOME_BCID <- .geome_store_value(mapping[[mapping_geome]])
+    if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
+  }
   # convert everything to characters
   mapping <- mapping |>
     dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
@@ -74,6 +83,12 @@ update_sample_metadata <- function(
   # convert everything to characters
   sample_table <- sample_table |>
     dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
+
+  old_bcid <- if ("GEOME_BCID" %in% colnames(sample_table)) {
+    stats::setNames(sample_table$GEOME_BCID, sample_table$ID)
+  } else {
+    character()
+  }
 
   # check to make sure there are no new samples in the update database
   new_samples <- mapping$ID[which(!(mapping$ID %in% sample_table$ID))]
@@ -119,4 +134,16 @@ update_sample_metadata <- function(
       copy = TRUE,
       by = "ID"
     )
+
+  if ("GEOME_BCID" %in% colnames(mapping)) {
+    .geome_ensure_tables(con)
+    new <- mapping$GEOME_BCID
+    old <- unname(old_bcid[mapping$ID])
+    changed <- xor(is.na(new), is.na(old)) | (!is.na(new) & !is.na(old) & new != old)
+    if (any(changed & is.na(new))) .geome_drop(con, mapping$ID[changed & is.na(new)])
+    refetch <- changed & !is.na(new)
+    if (fetch_geome && any(refetch)) {
+      .geome_fetch_into(con, mapping$ID[refetch], new[refetch])
+    }
+  }
 }

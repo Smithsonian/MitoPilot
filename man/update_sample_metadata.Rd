@@ -8,7 +8,9 @@ update_sample_metadata(
   path = ".",
   update_mapping_fn = NULL,
   mapping_id = "ID",
-  mapping_taxon = "Taxon"
+  mapping_taxon = "Taxon",
+  mapping_geome = "GEOME_BCID",
+  fetch_geome = TRUE
 )
 }
 \arguments{
@@ -19,6 +21,11 @@ update_sample_metadata(
 \item{mapping_id}{Column name of the update mapping file to use as the primary key}
 
 \item{mapping_taxon}{Column name of the update mapping file containing a Taxonomic identifier (eg, species name)}
+
+\item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs}
+
+\item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
+(default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
 }
 \description{
 Update the metadata for an existing project database.
