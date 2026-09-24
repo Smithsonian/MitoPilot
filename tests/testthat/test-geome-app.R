@@ -12,6 +12,14 @@ test_that(".geome_status_join labels ok, failed, and none", {
   expect_equal(out$geome_message[2], "BCID not found in GEOME")
 })
 
+test_that(".geome_status_join ensures GEOME tables on a pre-branch DB with no geome tables", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b"), Taxon = "x"))
+  out <- dplyr::tbl(con, "samples") |> .geome_status_join(con) |> dplyr::collect()
+  expect_equal(out$geome, c("none", "none"))
+})
+
 test_that("rt_geome sends the row ID to the given input", {
   js <- as.character(rt_geome("assemble-geome_open"))
   expect_match(js, "assemble-geome_open", fixed = TRUE)

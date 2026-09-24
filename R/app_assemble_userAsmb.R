@@ -241,7 +241,7 @@ assemble_server_userAsmb <- function(id) {
               html = T,
               cell = rt_longtext()
             ),
-            geome = geome_col_def(ns("geome_open")),
+            geome = geome_col_def(ns("geome_open"), sticky = "left"),
             topology = colDef(
               show = TRUE, class = paste(.grp("topology"), "mp-note-cell"),
               headerClass = .grp("topology"),

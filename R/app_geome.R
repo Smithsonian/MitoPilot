@@ -5,6 +5,7 @@
 #' @return `tbl` with `geome` ("ok" | "failed" | "none") and `geome_message` added
 #' @noRd
 .geome_status_join <- function(tbl, db) {
+  .geome_ensure_tables(db)
   tbl |>
     dplyr::left_join(
       dplyr::tbl(db, "geome_status") |>
@@ -50,9 +51,9 @@ rt_geome <- function(inputId) {
 #'
 #' @param inputId namespaced Shiny input id to receive the clicked row's ID
 #' @noRd
-geome_col_def <- function(inputId) {
+geome_col_def <- function(inputId, sticky = NULL) {
   reactable::colDef(
-    show = TRUE, name = "GEOME", sticky = "left", width = 70, align = "center",
+    show = TRUE, name = "GEOME", sticky = sticky, width = 70, align = "center",
     html = TRUE, filterable = FALSE, sortable = TRUE,
     header = rt_header("GEOME", "GEOME metadata for this sample. Click an icon to view, add, or refresh."),
     cell = rt_geome(inputId)
