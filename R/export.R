@@ -1307,7 +1307,8 @@ export_files <- function(
 
   # Per-sample summary CSV, dropped into the export directory
   if (isTRUE(summary_csv)) {
-    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts", "annotate_switch")
+    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts", "annotate_switch",
+              "geome", "geome_message")
     # seqid/path/scaffold lead: a sample can contribute several records, so the row
     # identity is the unit, not the ID.
     core <- c("ID", "seqid", "path", "scaffold",

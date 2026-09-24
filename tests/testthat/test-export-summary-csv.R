@@ -87,3 +87,8 @@ test_that("the summary CSV is unchanged for a locked unit", {
   expect_equal(nrow(res$summary), 1L)
   expect_equal(res$summary$completeness, "complete genome")
 })
+
+test_that("the summary CSV leaves out the app-only GEOME status columns", {
+  res <- run_summary_export(annotate_lock = 1L, assemble_lock = 1L)
+  expect_false(any(c("geome", "geome_message") %in% names(res$summary)))
+})
