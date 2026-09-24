@@ -12,6 +12,10 @@
 #' @param assembly_path Directory holding the user-supplied assembly files. Used
 #'   to count each assembly's contigs so a multi-contig assembly is recorded with
 #'   topology "multi".
+#' @param mapping_genbank Column name of the mapping file containing existing
+#'   GenBank accessions (e.g. "Accession"). Values are stored in the
+#'   `GenBankAccession` sample column, and export flags samples that already
+#'   have one. Default `NULL` uses a `GenBankAccession` column when present.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset; a number sets an override on the
 #'   default curate_opts set. https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi
@@ -91,6 +95,7 @@ new_db_userAsmb <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    mapping_genbank = NULL,
     assembly_path = NULL,
     genetic_code = NULL,
     # Default annotation options
@@ -156,7 +161,7 @@ new_db_userAsmb <- function(
     mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
   .report_issues(
-    check_mapping(mapping, mapping_id, mapping_taxon, need_reads = !no_raw_data,
+    check_mapping(mapping, mapping_id, mapping_taxon, mapping_genbank, need_reads = !no_raw_data,
                   user_asmb = TRUE),
     "Mapping file"
   )
@@ -185,6 +190,7 @@ new_db_userAsmb <- function(
   on.exit(DBI::dbDisconnect(con))
 
   # Metadata table ----
+  mapping <- .take_genbank_col(mapping, mapping_genbank)
   # Resolved outside the mutate so a warning reaches the user as itself, not
   # wrapped in dplyr's "there was 1 warning in mutate()" report.
   sample_topology <- resolve_sample_topology(mapping, assembly_path, mapping_id)

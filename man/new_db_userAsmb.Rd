@@ -9,6 +9,7 @@ new_db_userAsmb(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  mapping_genbank = NULL,
   assembly_path = NULL,
   genetic_code = NULL,
   annotate_cpus = 6,
@@ -67,6 +68,11 @@ multi-contig assembly is always recorded as "multi".}
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{mapping_genbank}{Column name of the mapping file containing existing
+GenBank accessions (e.g. "Accession"). Values are stored in the
+`GenBankAccession` sample column, and export flags samples that already
+have one. Default `NULL` uses a `GenBankAccession` column when present.}
 
 \item{assembly_path}{Directory holding the user-supplied assembly files. Used
 to count each assembly's contigs so a multi-contig assembly is recorded with

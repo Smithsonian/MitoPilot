@@ -136,6 +136,14 @@ OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN0
 OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,USNM:1234568,SAMN00000002
 ```
 
+If some samples are already on GenBank, add a column with their accessions and
+name it with `mapping_genbank` (for example
+`new_project(..., mapping_genbank = "Accession")`); a column named
+`GenBankAccession` is picked up without it. Leave the value blank for samples
+that have no accession. At export, MitoPilot warns about samples that already
+have one, and their feature tables point at the existing record. `add_samples()`
+and `update_sample_metadata()` take the same argument.
+
 Two column names are reserved for the MapToRef assembler, which maps reads to a
 reference mitogenome chosen per sample (see
 [choosing an assembly method](Assembly-Methods.html)). `Reference` holds a file

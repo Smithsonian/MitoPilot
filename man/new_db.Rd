@@ -9,6 +9,7 @@ new_db(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  mapping_genbank = NULL,
   genetic_code = NULL,
   dedup = FALSE,
   assemble_cpus = 6,
@@ -62,6 +63,11 @@ new_db(
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{mapping_genbank}{Column name of the mapping file containing existing
+GenBank accessions (e.g. "Accession"). Values are stored in the
+`GenBankAccession` sample column, and export flags samples that already
+have one. Default `NULL` uses a `GenBankAccession` column when present.}
 
 \item{genetic_code}{Optional NCBI translation table override. Default `NULL`
 auto-selects from the curation ruleset (`curate_target`); a number sets an

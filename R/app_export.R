@@ -1032,12 +1032,12 @@ export_server <- function(id) {
         })
       } else {
         # No review: write files immediately, then announce.
-        write_export_files()
+        ok <- write_export_files()
         if (on_screen) {
           rv$exporting <- FALSE
           shinyjs::enable("export_data")
         }
-        show_export_done_alert()
+        if (isTRUE(ok)) show_export_done_alert()
       }
     }
 
@@ -1072,9 +1072,10 @@ export_server <- function(id) {
         )
         FALSE
       })
-      if (!isTRUE(ok)) return(invisible(NULL))
+      if (!isTRUE(ok)) return(invisible(FALSE))
       # Refresh the table so the newly-written export_time_stamp shows up.
       trigger("refresh_export")
+      invisible(TRUE)
     }
 
     # Finish a reviewed export: write files (now that all edits are committed to
@@ -1089,8 +1090,7 @@ export_server <- function(id) {
         color = "rgba(40,40,40,0.85)"
       )
       on.exit(waiter::waiter_hide())
-      write_export_files()
-      show_export_done_alert(extra = extra)
+      if (isTRUE(write_export_files())) show_export_done_alert(extra = extra)
     }
 
     # Popup announcing where files were written. `extra` adds a second line
@@ -1389,6 +1389,47 @@ export_server <- function(id) {
     }
 
 
+    # Non-blocking notes on the group's metadata: samples already on GenBank,
+    # and header fields that would be written as "NA".
+    metadata_notes <- function(group) {
+      d <- rv$data[!is.na(rv$data$export_group) & rv$data$export_group == group, ]
+      if (nrow(d) == 0) return(character(0))
+      out <- character(0)
+      if ("GenBankAccession" %in% names(d)) {
+        acc <- .clean_accession(d$GenBankAccession)
+        bad <- unique(paste0(d$ID, " (", acc, ")")[!is.na(acc) & !.is_accession(acc)])
+        if (length(bad) > 0) {
+          out <- c(out, stringr::str_glue(
+            "GenBankAccession values that are not GenBank accessions will be ignored: ",
+            "{paste(bad, collapse = ', ')}."
+          ))
+        }
+        acc[!.is_accession(acc)] <- NA
+        has <- unique(paste0(d$ID[!is.na(acc)], " (", acc[!is.na(acc)], ")"))
+        if (length(has) > 0) {
+          shown <- paste(utils::head(has, 8), collapse = ", ")
+          if (length(has) > 8) shown <- paste0(shown, ", and ", length(has) - 8, " more")
+          out <- c(out, stringr::str_glue(
+            "{mp_n(length(has), 'sample')} already have a GenBank accession: {shown}. ",
+            "Their .tbl files reference the existing record. Submitting them as ",
+            "new records would duplicate what is already on GenBank."
+          ))
+        }
+      }
+      empty <- lapply(seq_len(nrow(d)), function(i) header_missing_fields(input$fasta_header, d[i, ]))
+      fields <- unique(unlist(empty))
+      for (f in fields) {
+        ids <- unique(d$ID[vapply(empty, function(e) f %in% e, logical(1))])
+        shown <- paste(utils::head(ids, 5), collapse = ", ")
+        if (length(ids) > 5) shown <- paste0(shown, ", and ", length(ids) - 5, " more")
+        out <- c(out, stringr::str_glue(
+          "The FASTA header uses {{{f}}}, which is empty for ",
+          "{mp_n(length(ids), 'sample')}: {shown}. It will be written as 'NA'."
+        ))
+      }
+      out
+    }
+
     check_overwrite_then_export <- function() {
       group <- exp_val("export_group")
       export_path <- file.path(session$userData$dir_out, "export", group)
@@ -1433,7 +1474,27 @@ export_server <- function(id) {
         )
         return()
       }
-      frag <- fragmented_samples(input$export_group)
+      notes <- metadata_notes(input$export_group)
+      if (length(notes) > 0) {
+        mp_confirm(
+          ns("metadata_confirm"),
+          title = "Check sample metadata",
+          text = paste(notes, collapse = "\n\n"),
+          action_label = "Export anyway",
+          danger = TRUE
+        )
+        return()
+      }
+      check_fragmented_then_export()
+    })
+
+    observeEvent(input$metadata_confirm, ignoreInit = T, {
+      req(input$metadata_confirm)
+      check_fragmented_then_export()
+    })
+
+    check_fragmented_then_export <- function() {
+      frag <- fragmented_samples(exp_val("export_group"))
       if (length(frag) > 0) {
         shown <- paste(utils::head(frag, 5), collapse = ", ")
         if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
@@ -1455,7 +1516,7 @@ export_server <- function(id) {
         return()
       }
       check_overwrite_then_export()
-    })
+    }
 
     observeEvent(input$fragmented_confirm, ignoreInit = T, {
       req(input$fragmented_confirm)

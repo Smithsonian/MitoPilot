@@ -8,6 +8,7 @@ new_project(
   path = ".",
   mapping_fn = NULL,
   mapping_id = "ID",
+  mapping_genbank = NULL,
   data_path = NULL,
   min_depth = 2e+06,
   genetic_code = NULL,
@@ -42,6 +43,12 @@ as sample metadata, so rename the column if you use it for something else.}
 
 \item{mapping_id}{The name of the column in the mapping file that contains
 the unique sample identifiers (default = "ID").}
+
+\item{mapping_genbank}{The name of the column in the mapping file that
+contains existing GenBank accessions, if any (e.g. "Accession"). Stored as
+the `GenBankAccession` sample column; export warns about samples that
+already have one. Default `NULL` uses a `GenBankAccession` column when
+present.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be
 a AWS s3 bucket even if not using AWS for pipeline execution..}

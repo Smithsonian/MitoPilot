@@ -153,6 +153,20 @@ find_unmatched_brace <- function(template) {
   NULL
 }
 
+#' Header template columns that are empty for a row
+#'
+#' str_glue_data() writes a missing value as the text "NA", so these would
+#' reach the FASTA defline silently.
+#' @noRd
+header_missing_fields <- function(template, row) {
+  fields <- unique(stringr::str_match_all(template, "\\{([A-Za-z._][A-Za-z0-9._]*)\\}")[[1]][, 2])
+  fields <- intersect(fields, names(row))
+  fields[vapply(fields, function(f) {
+    v <- trimws(as.character(row[[f]][1]))
+    is.na(v) || !nzchar(v)
+  }, logical(1))]
+}
+
 #' Validate a glue-syntax FASTA header template
 #'
 #' Checks brace balance, then dry-runs the template through

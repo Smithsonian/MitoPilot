@@ -14,6 +14,10 @@
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
+#' @param mapping_genbank Column name of the mapping file containing existing
+#'   GenBank accessions (e.g. "Accession"). Values are stored in the
+#'   `GenBankAccession` sample column, and export flags samples that already
+#'   have one. Default `NULL` uses a `GenBankAccession` column when present.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset (`curate_target`); a number sets an
 #'   override on the default curate_opts set.
@@ -83,6 +87,7 @@ new_db <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    mapping_genbank = NULL,
     genetic_code = NULL,
     # Default preprocessing options
     dedup = FALSE,
@@ -145,7 +150,7 @@ new_db <- function(
   if (mapping_id %in% colnames(mapping)) {
     mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
-  .report_issues(check_mapping(mapping, mapping_id, mapping_taxon), "Mapping file")
+  .report_issues(check_mapping(mapping, mapping_id, mapping_taxon, mapping_genbank), "Mapping file")
 
   # Validate assembler choice
   if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
@@ -206,6 +211,7 @@ new_db <- function(
   on.exit(DBI::dbDisconnect(con))
 
   # Metadata table ----
+  mapping <- .take_genbank_col(mapping, mapping_genbank)
   mapping <- mapping |>
     dplyr::mutate(
       ID = .data[[mapping_id]],

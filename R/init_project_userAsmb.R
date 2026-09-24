@@ -12,6 +12,11 @@
 #'   is ignored. May include additional columns with other sample metadata.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
+#' @param mapping_genbank The name of the column in the mapping file that
+#'   contains existing GenBank accessions, if any (e.g. "Accession"). Stored as
+#'   the `GenBankAccession` sample column; export warns about samples that
+#'   already have one. Default `NULL` uses a `GenBankAccession` column when
+#'   present.
 #' @param data_path Path to the directory where the raw data is located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution. Not required
 #'   when `no_raw_data = TRUE`.
@@ -80,6 +85,7 @@ new_project_userAsmb <- function(
     path = ".",
     mapping_fn = NULL,
     mapping_id = "ID",
+    mapping_genbank = NULL,
     data_path = NULL,
     no_raw_data = FALSE,
     assembly_path = "NA",
@@ -108,6 +114,7 @@ new_project_userAsmb <- function(
   }
   preflight_project(
     path = path, mapping_fn = mapping_fn, mapping_id = mapping_id,
+    mapping_genbank = mapping_genbank,
     data_path = data_path, no_raw_data = no_raw_data, user_asmb = TRUE,
     assembly_path = assembly_path, find_mitogenome = find_mitogenome,
     mitofinder_db = mitofinder_db, executor = executor, config = config,
@@ -161,6 +168,7 @@ new_project_userAsmb <- function(
     genetic_code = genetic_code,
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
+    mapping_genbank = mapping_genbank,
     assembly_path = assembly_path,
     no_raw_data = no_raw_data,
     attempt_circularization = attempt_circularization,

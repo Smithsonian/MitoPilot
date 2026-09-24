@@ -8,6 +8,10 @@
 #' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID" and "Taxon"
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
+#' @param mapping_genbank Column name of the update mapping file containing
+#'   GenBank accessions (e.g. "Accession"). Stored as the `GenBankAccession`
+#'   sample column; export warns about samples that already have one. Default
+#'   `NULL` uses a `GenBankAccession` column when present.
 #'
 #' @export
 #'
@@ -15,7 +19,8 @@ update_sample_metadata <- function(
     path = ".",
     update_mapping_fn = NULL,
     mapping_id = "ID",
-    mapping_taxon = "Taxon"
+    mapping_taxon = "Taxon",
+    mapping_genbank = NULL
     ){
 
   # Check if project directory exists ----
@@ -33,6 +38,7 @@ update_sample_metadata <- function(
   mapping <- utils::read.csv(update_mapping_fn)
 
   .report_issues(check_sample_ids(mapping[[mapping_id]]), "Update mapping file")
+  mapping <- .take_genbank_col(mapping, mapping_genbank)
 
   # Create sqlite connection
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))

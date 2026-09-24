@@ -180,6 +180,7 @@ check_sample_ids <- function(ids, iss = .issues()) {
 #' built where the data is not mounted.
 #'
 #' @param mapping data.frame from read.csv()
+#' @param mapping_genbank GenBank accession column; NULL uses GenBankAccession if present
 #' @param need_reads R1/R2 columns are required
 #' @param user_asmb Assembly column is required
 #' @param data_path NULL skips read-file checks
@@ -188,7 +189,7 @@ check_sample_ids <- function(ids, iss = .issues()) {
 #' @param check_assemblies run assembly-file checks at all (the pre-flight only)
 #' @noRd
 check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
-                          need_reads = TRUE, user_asmb = FALSE,
+                          mapping_genbank = NULL, need_reads = TRUE, user_asmb = FALSE,
                           data_path = NULL, assembly_path = NULL,
                           check_assemblies = FALSE, find_mitogenome = FALSE,
                           iss = .issues()) {
@@ -215,6 +216,9 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
   reserved <- c("genetic_code", if (user_asmb) c("topology", "assembly"))
   if (mapping_id != "ID") reserved <- c(reserved, "ID")
   if (mapping_taxon != "Taxon") reserved <- c(reserved, "Taxon")
+  if (!is.null(mapping_genbank) && mapping_genbank != "GenBankAccession") {
+    reserved <- c(reserved, "GenBankAccession")
+  }
   hit <- intersect(reserved, cols)
   if (length(hit) > 0L) {
     iss$err("mapping columns: reserved names that MitoPilot fills in itself: ",
@@ -236,6 +240,19 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
     miss <- is.na(tx) | !nzchar(tx)
     if (any(miss)) {
       iss$warn("mapping Taxon: empty for ", .lst(lab[miss]))
+    }
+  }
+
+  # GenBank accessions ----
+  gb_col <- mapping_genbank %||% "GenBankAccession"
+  if (!is.null(mapping_genbank) && gb_col %nin% cols) {
+    iss$err("mapping columns: GenBank accession column '", gb_col, "' not found")
+  } else if (gb_col %in% cols) {
+    acc <- .clean_accession(mapping[[gb_col]])
+    bad <- !is.na(acc) & !.is_accession(acc)
+    if (any(bad)) {
+      iss$warn("mapping GenBank accession: values that do not look like a GenBank ",
+               "accession for ", .lst(paste0(lab[bad], " [", acc[bad], "]")))
     }
   }
 
@@ -283,6 +300,34 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
     }
   }
   iss
+}
+
+#' GenBank accessions with blanks, whitespace, and "NA" as missing
+#' @noRd
+.clean_accession <- function(x) {
+  x <- trimws(as.character(x))
+  x[is.na(x) | !nzchar(x) | toupper(x) == "NA"] <- NA_character_
+  x
+}
+
+#' Nucleotide accession shape, e.g. MN123456, MN123456.1, NC_012345.1
+#' @noRd
+.is_accession <- function(x) grepl("^[A-Z]{1,2}_?[0-9]{5,8}(\\.[0-9]+)?$", x)
+
+#' Copy the GenBank accession column into the canonical GenBankAccession column
+#'
+#' `mapping_genbank` NULL uses a GenBankAccession column when one is present.
+#' @noRd
+.take_genbank_col <- function(mapping, mapping_genbank = NULL) {
+  col <- mapping_genbank %||% "GenBankAccession"
+  if (col %nin% colnames(mapping)) {
+    if (!is.null(mapping_genbank)) {
+      stop("GenBank accession column '", col, "' not found in the mapping file")
+    }
+    return(mapping)
+  }
+  mapping$GenBankAccession <- .clean_accession(mapping[[col]])
+  mapping
 }
 
 #' Every read file must exist and start like FASTQ (first record header)
@@ -486,6 +531,7 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
 #' @param dots list of `...` destined for `db_fun`
 #' @noRd
 preflight_project <- function(path, mapping_fn, mapping_id, data_path, no_raw_data = FALSE,
+                              mapping_genbank = NULL,
                               user_asmb = FALSE, assembly_path = NULL,
                               find_mitogenome = FALSE, mitofinder_db = NULL,
                               executor = NULL, config = NULL, profile_dir = mitopilot_config_dir(),
@@ -535,6 +581,7 @@ preflight_project <- function(path, mapping_fn, mapping_id, data_path, no_raw_da
   if (!is.null(mapping)) {
     check_mapping(mapping, mapping_id = mapping_id,
                   mapping_taxon = dots$mapping_taxon %||% "Taxon",
+                  mapping_genbank = mapping_genbank,
                   need_reads = !no_raw_data, user_asmb = user_asmb,
                   data_path = if (no_raw_data) NULL else data_path,
                   assembly_path = assembly_path, check_assemblies = user_asmb,

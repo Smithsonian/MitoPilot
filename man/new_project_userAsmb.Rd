@@ -8,6 +8,7 @@ new_project_userAsmb(
   path = ".",
   mapping_fn = NULL,
   mapping_id = "ID",
+  mapping_genbank = NULL,
   data_path = NULL,
   no_raw_data = FALSE,
   assembly_path = "NA",
@@ -42,6 +43,12 @@ is ignored. May include additional columns with other sample metadata.}
 
 \item{mapping_id}{The name of the column in the mapping file that contains
 the unique sample identifiers (default = "ID").}
+
+\item{mapping_genbank}{The name of the column in the mapping file that
+contains existing GenBank accessions, if any (e.g. "Accession"). Stored as
+the `GenBankAccession` sample column; export warns about samples that
+already have one. Default `NULL` uses a `GenBankAccession` column when
+present.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be
 a AWS s3 bucket even if not using AWS for pipeline execution. Not required

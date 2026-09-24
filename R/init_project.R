@@ -15,6 +15,11 @@
 #'   as sample metadata, so rename the column if you use it for something else.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
+#' @param mapping_genbank The name of the column in the mapping file that
+#'   contains existing GenBank accessions, if any (e.g. "Accession"). Stored as
+#'   the `GenBankAccession` sample column; export warns about samples that
+#'   already have one. Default `NULL` uses a `GenBankAccession` column when
+#'   present.
 #' @param data_path Path to the directory where the raw data is located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution..
 #' @param min_depth Minimum number of paired sequences after pre-processing to proceed
@@ -53,6 +58,7 @@ new_project <- function(
     path = ".",
     mapping_fn = NULL,
     mapping_id = "ID",
+    mapping_genbank = NULL,
     data_path = NULL,
     min_depth = 2000000,
     genetic_code = NULL,
@@ -73,6 +79,7 @@ new_project <- function(
   dots <- list(...)
   preflight_project(
     path = path, mapping_fn = mapping_fn, mapping_id = mapping_id,
+    mapping_genbank = mapping_genbank,
     data_path = data_path, executor = executor, config = config,
     profile_dir = profile_dir, container = container, min_depth = min_depth,
     genetic_code = genetic_code, ncbi_api_key = ncbi_api_key,
@@ -117,6 +124,7 @@ new_project <- function(
     genetic_code = genetic_code,
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
+    mapping_genbank = mapping_genbank,
     seeds_db = custom_seeds_db,
     labels_db = custom_labels_db,
     ...

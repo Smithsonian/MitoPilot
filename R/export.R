@@ -490,6 +490,11 @@ export_files <- function(
     }
     dat$completeness <- if (is_partial) "partial genome" else "complete genome"
     header <- stringr::str_glue_data(dat, fasta_header)
+    empty_fields <- header_missing_fields(fasta_header, dat)
+    if (length(empty_fields) > 0) {
+      message(.seqid, ": WARNING empty FASTA header field(s) written as 'NA': ",
+              paste(empty_fields, collapse = ", "))
+    }
     # Safety net for saved templates that hardcode "complete genome"
     if (is_partial) {
       header <- stringr::str_replace(header, "complete genome$", "partial genome")
@@ -535,8 +540,16 @@ export_files <- function(
     if (file.exists(tbl_fn)) {
       file.remove(tbl_fn)
     }
-    if ("GenBankAccession" %in% names(dat) && length(dat$GenBankAccession) > 0 && nchar(dat$GenBankAccession) > 4) {
-      cat(paste(">Feature", paste0("gb|", dat$GenBankAccession, "|")), file = tbl_fn, sep = "\n")
+    acc <- .clean_accession(dat[["GenBankAccession"]] %||% NA)[1]
+    if (!is.na(acc) && !.is_accession(acc)) {
+      message(.seqid, ": WARNING GenBankAccession '", acc,
+              "' is not a GenBank accession and was ignored.")
+      acc <- NA_character_
+    }
+    if (!is.na(acc)) {
+      message(.seqid, ": WARNING already has GenBank accession ", acc,
+              "; its .tbl references that record (gb|", acc, "|).")
+      cat(paste(">Feature", paste0("gb|", acc, "|")), file = tbl_fn, sep = "\n")
     } else {
       cat(paste(">Feature", .seqid), file = tbl_fn, sep = "\n")
     }

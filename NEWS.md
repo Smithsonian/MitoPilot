@@ -1,6 +1,14 @@
 # MitoPilot (development version)
 
+## New Features
+
+- **Name your GenBank accession column.** `new_project()`, `new_project_userAsmb()`, `add_samples()`, and `update_sample_metadata()` take `mapping_genbank`, the mapping-file column holding existing GenBank accessions (e.g. `mapping_genbank = "Accession"`). Values are stored as the `GenBankAccession` sample column. Without it, a column named exactly `GenBankAccession` is used, as before. Values that do not look like an accession are flagged when the project is created.
+- **Export warns about samples already on GenBank.** Before writing files, the Export tab lists samples in the group that already have an accession, accession values it will ignore, and FASTA header fields that are empty for some samples (they would be written as "NA"). `export_files()` prints the same warnings.
+
 ## Bug Fixes
+
+- **Export no longer stops on an empty GenBankAccession column.** A mapping file with a `GenBankAccession` column left blank for some or all samples made export fail on the first sample. Blank values now mean "no accession".
+- **A failed export no longer reports success.** The app showed "Export complete" after an export error, replacing the error message.
 
 - **Circular user assemblies no longer gain a base.** In a no-reads user-assembly project, a circular assembly that already started at the start gene came out of annotation one base longer, with base 1 copied onto the end. The stored sequence, its length, and every export carried the extra base. Reads-based projects could hit the same bug when an assembly happened to start exactly at the start gene. Re-run annotation on affected samples to correct them.
 - **The app launches from RStudio Server.** 1.5.6 stopped with `cannot coerce type 'closure' to vector of type 'character'` when `MitoPilot()` was run inside RStudio, which sets its own browser handler.
