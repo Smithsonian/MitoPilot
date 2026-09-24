@@ -215,6 +215,7 @@ status:
 | note | A minor difference worth a look (shown in grey). |
 | conflict | A real disagreement (shown in orange). |
 | single | Only one source has a value. |
+| - | No source has a value. |
 
 Blanks never conflict: only sources that both have a value are compared.
 
@@ -331,7 +332,7 @@ can use: **Basics**, **Your CSV columns**, **GEOME**, **GBIF**, **Reference
 cursor of the header box you last clicked (the mitogenome FASTA header box if
 you have not clicked one). A GenBank-ready combination inserts the whole source
 modifier, for example `[lat_lon={geome_lat_lon}]`. Hover over a column to see its
-value for the first record in the export group, and type in the filter box to
+value for the first row of any export group, and type in the filter box to
 find one. **Choose fields** next to GEOME or GBIF opens the Specimen Fields
 window (this closes the Export Data window, so save your template first).
 
