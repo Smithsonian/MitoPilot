@@ -918,3 +918,16 @@ a.mp-link:focus-visible {
 /* Specimen viewer Compare tab */
 .mp-spec-compare tr.mp-spec-conflict > td { background: var(--mp-warning-soft); }
 .mp-meta-citation { margin: 4px 0 6px; font-size: var(--mp-fs-meta); }
+
+/* Export Data token chips */
+.mp-token-list { margin: 6px 0; }
+.mp-token-filter { max-width: 260px; margin-bottom: 6px; }
+.mp-token-group > summary { cursor: pointer; font-weight: 600; }
+.mp-token-hint { margin: 2px 0 4px; font-size: var(--mp-fs-meta); }
+.mp-token-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.mp-token-chip {
+  height: var(--mp-chip-h); padding: 0 8px; border: 1px solid var(--mp-border);
+  border-radius: 12px; background: var(--mp-surface-alt); font-family: monospace;
+  font-size: var(--mp-fs-meta); cursor: pointer;
+}
+.mp-token-chip:hover, .mp-token-chip:focus { border-color: var(--mp-primary); }

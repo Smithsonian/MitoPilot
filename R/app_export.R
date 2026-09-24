@@ -261,6 +261,8 @@ export_server <- function(id) {
       )
     }
     init("specimen_fields")
+    observeEvent(input$token_fields_geome, trigger("specimen_fields"))
+    observeEvent(input$token_fields_gbif, trigger("specimen_fields"))
     on("specimen_fields", {
       con <- session$userData$con
       g <- meta_field_summary(con, "GEOME")
@@ -696,20 +698,21 @@ export_server <- function(id) {
       sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
       rv$export_template <- sel_tmpl
       opts <- get_export_opts(con, sel_tmpl)
-      # One collapsed list of usable tokens, split by where the column came
-      # from. Bookkeeping fields are not offered (T23).
-      bookkeeping <- c("annotate_switch", "blast_accession_auto",
-                       "poor_blast_ref", "export_time_stamp")
+      # Usable tokens as grouped chips; bookkeeping fields are never offered (T23).
       sample_cols <- tryCatch(
         colnames(dplyr::tbl(con, "samples")),
         error = function(e) character(0)
       )
-      avail <- setdiff(names(rv$data), bookkeeping)
-      yours <- sort(intersect(avail, sample_cols))
-      ours <- sort(setdiff(avail, yours))
+      ticked <- tryCatch(DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key,
+                         error = function(e) character(0))
+      token_groups <- export_token_groups(
+        rv$data[!is.na(rv$data$export_group), , drop = FALSE], sample_cols, ticked
+      )
       cols_help <- tags$details(
+        open = NA,
         tags$summary("Available columns"),
         opts_help(
+          "Click a column to insert it at the cursor of the header box you last clicked. ",
           "Write a column name in braces to use its value, for example ",
           tags$code("{Taxon}"), ". ", tags$code("{seqid}"), " is the record ",
           "name MitoPilot gives this assembly: the sample ID, or ",
@@ -718,8 +721,7 @@ export_server <- function(id) {
           "when the table does not show them.",
           nested = TRUE
         ),
-        p(tags$b("Your columns: "), paste(yours, collapse = ", ")),
-        p(tags$b("MitoPilot columns: "), paste(ours, collapse = ", ")),
+        export_token_ui(token_groups, target_id = ns("fasta_header"), ns = ns),
         opts_help(
           tags$code("{completeness}"),
           " expands to \"complete genome\" or \"partial genome\", derived from ",

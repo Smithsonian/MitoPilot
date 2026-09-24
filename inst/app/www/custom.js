@@ -202,3 +202,29 @@ $(document).on('shiny:inputchanged', function(e) {
 $(document).on('shiny:connected', function() {
   document.title = 'MitoPilot - ' + ($('#mode input:checked').val() || 'Assemble');
 });
+
+// Export Data token chips: a chip inserts its text at the cursor of the header
+// box last focused in the same modal (the FASTA header box by default).
+$(document).on('focusin', 'textarea', function() {
+  var list = $(this).closest('.modal').find('.mp-token-list');
+  if (list.length) list.attr('data-target', this.id);
+});
+$(document).on('click', '.mp-token-chip', function(e) {
+  e.preventDefault();
+  var box = document.getElementById($(this).closest('.mp-token-list').attr('data-target'));
+  if (!box) return;
+  var ins = this.getAttribute('data-insert');
+  var s = box.selectionStart, t = box.selectionEnd, v = box.value;
+  box.value = v.slice(0, s) + ins + v.slice(t);
+  box.selectionStart = box.selectionEnd = s + ins.length;
+  box.focus();
+  $(box).trigger('input').trigger('change');
+});
+$(document).on('input', '.mp-token-filter', function() {
+  var q = this.value.toLowerCase();
+  var list = $(this).closest('.mp-token-list');
+  list.find('.mp-token-chip').each(function() {
+    $(this).toggle($(this).text().toLowerCase().indexOf(q) !== -1);
+  });
+  if (q) list.find('details').attr('open', '');
+});
