@@ -105,6 +105,10 @@ app_ui <- function(request) {
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
+                "geome_fields", "GEOME Fields",
+                title = "Choose which GEOME fields are available at export"
+              ),
+              mp_toolbar_button(
                 "export", "Export Data",
                 emphasis = "primary",
                 title = "Open the export window for the selected assemblies"

@@ -87,6 +87,47 @@ geome_record_view <- function(recs) {
   }))
 }
 
+#' Replace the set of GEOME fields available at export
+#'
+#' @param con database connection
+#' @param keys character vector of `combo:<name>` / `raw:<level>:<field>` keys
+#' @noRd
+.geome_save_fields <- function(con, keys) {
+  DBI::dbWithTransaction(con, {
+    DBI::dbExecute(con, "DELETE FROM geome_export_fields")
+    if (length(keys)) DBI::dbAppendTable(con, "geome_export_fields", data.frame(key = unique(keys)))
+  })
+  invisible(keys)
+}
+
+#' Modal listing GEOME fields available at export
+#'
+#' @param ns module namespace function
+#' @param s `geome_field_summary()` output
+#' @noRd
+geome_fields_modal <- function(ns, s) {
+  combos <- s[s$kind == "combo", ]
+  raw <- s[s$kind == "raw", ]
+  modalDialog(
+    title = mp_modal_title("GEOME fields for export",
+                           "Ticked fields become columns you can use in header templates"),
+    size = "xl", easyClose = TRUE,
+    h5("GenBank-ready combinations"),
+    checkboxGroupInput(
+      ns("geome_combos"), NULL, width = "100%",
+      choiceValues = combos$key, selected = combos$key[combos$selected],
+      choiceNames = lapply(seq_len(nrow(combos)), function(i) tagList(
+        code(paste0("{", combos$col[i], "}")), " from ", combos$field[i], ": ",
+        if (is.na(combos$example[i])) em("no samples") else
+          tagList(tags$samp(combos$example[i]), sprintf(" (%d samples)", combos$n_samples[i]))
+      ))
+    ),
+    h5("All GEOME fields"),
+    reactable::reactableOutput(ns("geome_raw")),
+    footer = mp_footer(primary = actionButton(ns("geome_fields_save"), "Save"), dismiss = "Cancel")
+  )
+}
+
 #' GEOME viewer modal: view records, add/edit a BCID, fetch/refresh
 #'
 #' @param id module id

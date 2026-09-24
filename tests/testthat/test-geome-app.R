@@ -38,3 +38,78 @@ test_that("geome_record_view orders levels root first and links BCIDs", {
   expect_match(html, "https://geome-db.org/record/ark:/1/E", fixed = TRUE)
   expect_match(html, "Peru", fixed = TRUE)
 })
+
+test_that(".geome_save_fields replaces the selection", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
+  .geome_ensure_tables(con)
+  .geome_save_fields(con, c("combo:lat_lon", "raw:Event:country"))
+  .geome_save_fields(con, "combo:lat_lon")
+  expect_equal(DBI::dbGetQuery(con, "SELECT key FROM geome_export_fields")$key, "combo:lat_lon")
+  .geome_save_fields(con, character())
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_export_fields")$n, 0L)
+})
+
+test_that("the Export column picker offers a GEOME group, and ticked GEOME
+          fields render as a GEOME column group in the Export table", {
+  proj <- withr::local_tempdir()
+  suppressMessages(new_test_project_userAsmb(path = proj, executor = "local", Rproj = FALSE))
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(proj, ".sqlite"))
+  withr::defer(DBI::dbDisconnect(con))
+  withr::local_options(MitoPilot.db = file.path(proj, ".sqlite"))
+  .geome_ensure_tables(con)
+  id1 <- DBI::dbGetQuery(con, "SELECT ID FROM samples LIMIT 1")$ID
+  DBI::dbAppendTable(con, "geome_records", data.frame(
+    ID = id1, level = "Event", depth = 0L, bcid = NA_character_,
+    field = "country", value = "Peru"))
+  # Fields ticked ahead of time, as the picker's Save handler would leave them
+  # (session$setInputValue + observeEvent(input$x) does not fire reliably
+  # under shiny::testServer in this environment, even for a bare module with
+  # no MitoPilot code involved; see task-9-report.md).
+  .geome_save_fields(con, c("combo:lat_lon", "raw:Event:country"))
+
+  expect_true("GEOME" %in% names(EXPORT_COL_GROUPS))
+
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  ms$userData$mode <- "annotate"
+  for (f in c("goto_annotate", "reopen_outlier_review", "run_modal")) gargoyle::init(f, session = ms)
+
+  shiny::testServer(export_server, args = list(id = "exp"), session = ms, {
+    gargoyle::trigger("refresh_export")
+
+    w <- jsonlite::fromJSON(output$table, simplifyVector = FALSE)
+    cols <- w$x$tag$attribs$columns
+    if (is.character(cols)) cols <- jsonlite::fromJSON(cols, simplifyVector = FALSE)
+    id <- vapply(cols, function(c) c$id, character(1))
+    cls <- vapply(cols, function(c) c$className %||% "", character(1))
+    shown <- vapply(cols, function(c) !isFALSE(c$show), logical(1))
+    expect_true(all(c("geome_lat_lon", "geome_Event_country") %in% id[shown]))
+    expect_setequal(id[grepl("mp-grp-GEOME", cls)], c("geome_lat_lon", "geome_Event_country"))
+  })
+})
+
+test_that("geome_fields_modal builds a checkbox list and a raw-fields reactable", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
+  .geome_ensure_tables(con)
+  DBI::dbAppendTable(con, "geome_records", data.frame(
+    ID = "s1", level = "Event", depth = 0L, bcid = NA_character_,
+    field = "country", value = "Peru"))
+  .geome_save_fields(con, "combo:lat_lon")
+
+  s <- geome_field_summary(con)
+  modal_html <- as.character(geome_fields_modal(NS("exp"), s))
+  expect_match(modal_html, "GEOME fields for export", fixed = TRUE)
+  expect_match(modal_html, "lat_lon", fixed = TRUE)
+
+  raw <- s[s$kind == "raw", ]
+  rt <- reactable::reactable(
+    raw[, c("level", "field", "n_samples", "example", "col")],
+    selection = "multiple", defaultSelected = which(raw$selected)
+  )
+  rt_html <- as.character(htmltools::as.tags(rt))
+  expect_match(rt_html, "country", fixed = TRUE)
+})
