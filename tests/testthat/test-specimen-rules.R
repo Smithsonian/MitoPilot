@@ -1,11 +1,11 @@
 test_that(".spec_norm_name folds case, accents, and punctuation", {
-  expect_equal(.spec_norm_name(c("Côte d’Ivoire", "  United  States of America ", "U.S.A.")),
+  expect_equal(.spec_norm_name(c("C\u00f4te d\u2019Ivoire", "  United  States of America ", "U.S.A.")),
                c("cote d ivoire", "united states of america", "u s a"))
 })
 
 test_that("country names, aliases, and codes map to ISO2", {
   x <- c("USA", "United States", "united states of america", "US", "USA: Florida",
-         "Côte d’Ivoire", "Ivory Coast", "Namibia", "NA", "Atlantis", "", NA)
+         "C\u00f4te d\u2019Ivoire", "Ivory Coast", "Namibia", "NA", "Atlantis", "", NA)
   expect_equal(vapply(x, .spec_country_iso2, "", USE.NAMES = FALSE),
                c(rep("US", 5), "CI", "CI", "NA", "NA", NA, NA, NA))
 })
