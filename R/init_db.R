@@ -14,6 +14,10 @@
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
+#' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
+#'   (optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.
+#' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset (`curate_target`); a number sets an
 #'   override on the default curate_opts set.
@@ -83,6 +87,8 @@ new_db <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    mapping_geome = "GEOME_BCID",
+    fetch_geome = TRUE,
     genetic_code = NULL,
     # Default preprocessing options
     dedup = FALSE,
@@ -145,7 +151,8 @@ new_db <- function(
   if (mapping_id %in% colnames(mapping)) {
     mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
-  .report_issues(check_mapping(mapping, mapping_id, mapping_taxon), "Mapping file")
+  .report_issues(check_mapping(mapping, mapping_id, mapping_taxon,
+                               mapping_geome = mapping_geome), "Mapping file")
 
   # Validate assembler choice
   if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
@@ -212,6 +219,10 @@ new_db <- function(
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code
     )
+  if (mapping_geome %in% colnames(mapping)) {
+    mapping$GEOME_BCID <- .geome_store_value(mapping[[mapping_geome]])
+    if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
+  }
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},
@@ -853,6 +864,12 @@ new_db <- function(
       PRIMARY KEY (ID, path, scaffold)
     );"
   )
+
+  .geome_ensure_tables(con)
+  if (fetch_geome && "GEOME_BCID" %in% colnames(mapping) && any(!is.na(mapping$GEOME_BCID))) {
+    has <- !is.na(mapping$GEOME_BCID)
+    .geome_fetch_into(con, mapping$ID[has], mapping$GEOME_BCID[has])
+  }
 
   .mtr_warn_missing_refs(con)
 

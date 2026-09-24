@@ -8,6 +8,8 @@ new_project(
   path = ".",
   mapping_fn = NULL,
   mapping_id = "ID",
+  mapping_geome = "GEOME_BCID",
+  fetch_geome = TRUE,
   data_path = NULL,
   min_depth = 2e+06,
   genetic_code = NULL,
@@ -42,6 +44,14 @@ as sample metadata, so rename the column if you use it for something else.}
 
 \item{mapping_id}{The name of the column in the mapping file that contains
 the unique sample identifiers (default = "ID").}
+
+\item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs
+(optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.
+Passed to `new_db()`.}
+
+\item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
+(default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+Passed to `new_db()`.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be
 a AWS s3 bucket even if not using AWS for pipeline execution..}

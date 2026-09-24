@@ -9,6 +9,8 @@ new_db_userAsmb(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  mapping_geome = "GEOME_BCID",
+  fetch_geome = TRUE,
   assembly_path = NULL,
   genetic_code = NULL,
   annotate_cpus = 6,
@@ -67,6 +69,12 @@ multi-contig assembly is always recorded as "multi".}
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs
+(optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.}
+
+\item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
+(default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
 
 \item{assembly_path}{Directory holding the user-supplied assembly files. Used
 to count each assembly's contigs so a multi-contig assembly is recorded with

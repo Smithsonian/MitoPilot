@@ -9,6 +9,8 @@ new_db(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  mapping_geome = "GEOME_BCID",
+  fetch_geome = TRUE,
   genetic_code = NULL,
   dedup = FALSE,
   assemble_cpus = 6,
@@ -62,6 +64,12 @@ new_db(
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs
+(optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.}
+
+\item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
+(default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
 
 \item{genetic_code}{Optional NCBI translation table override. Default `NULL`
 auto-selects from the curation ruleset (`curate_target`); a number sets an
