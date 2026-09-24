@@ -56,6 +56,16 @@ test_that("update_sample_metadata with fetch_geome = FALSE drops stale records f
   expect_equal(geome_q(d, "SELECT COUNT(*) n FROM meta_status WHERE ID='s1'")$n, 0L)
 })
 
+test_that("update_sample_metadata keeps genetic_code an integer in SQLite", {
+  local_mocked_bindings(.geome_get = geome_fixture_get)
+  d <- geome_project()
+  up <- data.frame(ID = "s1", Taxon = "y")
+  utils::write.csv(up, file.path(d, "up.csv"), row.names = FALSE)
+  update_sample_metadata(d, file.path(d, "up.csv"))
+  expect_equal(geome_q(d, "SELECT typeof(genetic_code) t FROM samples WHERE ID='s1'")$t,
+               "integer")
+})
+
 test_that("update CSV without a BCID column leaves GEOME data alone", {
   local_mocked_bindings(.geome_get = geome_fixture_get)
   d <- geome_project()

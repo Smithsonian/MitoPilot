@@ -122,6 +122,10 @@ update_sample_metadata <- function(
   # join tables, using updated values from new table
   updated_table <- dplyr::rows_update(sample_table, mapping, by="ID")
 
+  if ("genetic_code" %in% names(updated_table)) {
+    updated_table$genetic_code <- as.integer(updated_table$genetic_code)
+  }
+
   # update SQL database
   dplyr::tbl(con, "samples") |>
     dplyr::rows_upsert(
