@@ -85,6 +85,7 @@ assemble_db <- function(assemblies) {
     topology = "linear", assembly = "in.fasta", stringsAsFactors = FALSE
   ))
   DBI::dbWriteTable(con, "assemblies", assemblies)
+  .geome_ensure_tables(con)
   con
 }
 
@@ -310,6 +311,7 @@ export_db <- function(scaffold_topology, annotate_topology = scaffold_topology[1
     ID = "s1", path = 1L, scaffold = as.integer(scafs), export_group = "g1",
     stringsAsFactors = FALSE
   ))
+  .geome_ensure_tables(con)
   con
 }
 

@@ -262,6 +262,7 @@ assemble_server <- function(id) {
               html = T,
               cell = rt_longtext()
             ),
+            geome = geome_col_def(ns("geome_open")),
             pre_opts = colDef(
               show = TRUE, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
               name = mp_col_name("pre_opts"),

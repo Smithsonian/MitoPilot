@@ -54,6 +54,7 @@ summary_fixture <- function(d, annotate_lock, assemble_lock) {
     ID = "s1", assemble_lock = assemble_lock, blast_accession = "NC_000001",
     blast_accession_auto = 0L, poor_blast_ref = "ok", stringsAsFactors = FALSE
   ))
+  .geome_ensure_tables(con)
   DBI::dbDisconnect(con)
 }
 

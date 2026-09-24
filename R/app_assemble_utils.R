@@ -13,7 +13,8 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
   assemble <- dplyr::tbl(db, "assemble")
 
   taxa <- dplyr::tbl(db, "samples") |>
-    dplyr::select(ID, Taxon)
+    dplyr::select(ID, Taxon) |>
+    .geome_status_join(db)
 
   assemble_opts_tbl <- dplyr::tbl(db, "assemble_opts") |>
     dplyr::select(assemble_opts, min_assembly_length, assembler)
@@ -127,7 +128,8 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
       )
     ) |>
     # The three action columns render last and adjacent (theme T19).
-    dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col())
+    dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col()) |>
+    dplyr::relocate(dplyr::any_of(c("geome", "geome_message")), .after = Taxon)
 }
 
 #' Update the preprocessing options

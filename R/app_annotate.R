@@ -352,6 +352,7 @@ annotate_server <- function(id) {
             html = TRUE,
             cell = rt_longtext()
           ),
+          geome = geome_col_def(ns("geome_open")),
           ID_verified = colDef(
             show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
             name = .nm("ID_verified"), header = .hd("ID_verified"),

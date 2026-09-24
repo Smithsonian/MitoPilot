@@ -284,6 +284,7 @@ export_server <- function(id) {
           # the ID (no fragmented sample in the project).
           seqid = .cd("seqid", extra_class = "mp-col-seqid", minWidth = 130),
           Taxon = .cd("Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
+          geome = geome_col_def(ns("geome_open")),
           curate_opts = .cd("curate_opts", width = 110),
           genetic_code = .cd("genetic_code", width = 110, align = "center"),
           blast_ref_status = .cd(

@@ -18,7 +18,8 @@ fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID, dplyr::any_of("poor_blast_ref"))
 
   taxa <- dplyr::tbl(db, "samples") |>
-    dplyr::select(ID, Taxon)
+    dplyr::select(ID, Taxon) |>
+    .geome_status_join(db)
 
   # Export state is per unit, so a fragmented sample's scaffolds can legitimately
   # carry different groups / export times rather than one broadcast sample value.
@@ -74,6 +75,7 @@ fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
       path,
       scaffold,
       Taxon,
+      dplyr::any_of(c("geome", "geome_message")),
       ID_verified,
       annotate_opts,
       curate_opts,
@@ -157,6 +159,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(
       dplyr::any_of(c(
         "annotate_lock", "annotate_switch", "ID", "path", "scaffold", "Taxon",
+        "geome", "geome_message",
         "ID_verified", "annotate_opts", "curate_opts", "orf_opts", "length_raw",
         "length", "topology", "scaffolds", "blast_accession", "blast_ref_status",
         "blast_accession_auto", "blast_species", "blast_lineage", "blast_pident",

@@ -1398,6 +1398,7 @@ test_that("redo_join_no_ref_ids reads the stored accession, not the blanked disp
     blast_accession = c("NC_000001", "NC_000001"), blast_species = "sp",
     blast_pident = 99, blast_qcovs = 99, blast_evalue = 0,
     blast_lineage = "x", stringsAsFactors = FALSE))
+  .geome_ensure_tables(con)
 
   display <- fetch_assemble_data(session = list(userData = list(con = con)))
   stored <- DBI::dbGetQuery(con, "SELECT ID, blast_accession FROM assemble")
