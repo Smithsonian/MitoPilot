@@ -271,8 +271,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
   db <- con %||% session$userData$con
 
   samples <- dplyr::tbl(db, "samples") |>
-    dplyr::select(-dplyr::any_of("topology")) |>
-    .geome_status_join(db)
+    dplyr::select(-dplyr::any_of("topology"))
 
   # ORF count per annotate unit, blanked when ORF finding is disabled. annotate and
   # annotations are keyed (ID, path, scaffold), so both the grouping and the joins
@@ -330,13 +329,14 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
     dplyr::left_join(dplyr::tbl(db, "export"), by = unit_key) |>
     dplyr::select(-R1, -R2) |>
     dplyr::relocate(Taxon, .after = ID) |>
-    dplyr::relocate(geome, .after = Taxon) |>
     dplyr::collect() |>
+    .specimen_status_join(db) |>
+    dplyr::relocate(specimen, .after = Taxon) |>
     # inner_join: gates rows to a non-ignored assembly, as assemblies_unit is
     # already filtered on ignore.
     dplyr::inner_join(assemblies_unit, by = unit_key) |>
     dplyr::relocate(blast_accession, blast_accession_auto, blast_species,
-                    blast_lineage, .after = geome) |>
+                    blast_lineage, .after = specimen) |>
     dplyr::left_join(orf_counts, by = unit_key) |>
     dplyr::left_join(orf_enabled, by = unit_key) |>
     dplyr::left_join(unit_topology, by = unit_key)
@@ -415,6 +415,6 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
 export_metadata_cols <- function(sample_cols, declared) {
   owned <- c("ID", "Taxon", "genetic_code", "topology", "R1", "R2", "assembly",
              "Assembly", "Topology", "Reference", "Reference_topology", "GEOME_BCID", "GBIF_ID",
-             "geome", "geome_message")
+             "specimen", "specimen_message")
   sample_cols[!sample_cols %in% c(owned, declared)]
 }

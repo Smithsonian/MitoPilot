@@ -10,7 +10,7 @@ ASSEMBLE_COL_GROUPS_USERASMB <- list(
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
                "find_mito_notes", "join_notes"),
-  GEOME    = c("geome")
+  Specimen = c("specimen")
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -63,7 +63,7 @@ assemble_server_userAsmb <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    geome_viewer_server("geome", open = reactive(input$geome_open),
+    geome_viewer_server("geome", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_assemble"))
 
     register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
@@ -116,8 +116,8 @@ assemble_server_userAsmb <- function(id) {
 
     # Column-group / status filters. Mirror the pickers so NULL (= user cleared
     # all) is distinguishable from the pre-init state. Defaults: everything on.
-    col_groups_rv <- reactiveVal(.geome_default_groups(names(ASSEMBLE_COL_GROUPS_USERASMB), session$userData$con))
-    if (!"GEOME" %in% isolate(col_groups_rv())) {
+    col_groups_rv <- reactiveVal(.specimen_default_groups(names(ASSEMBLE_COL_GROUPS_USERASMB), session$userData$con))
+    if (!"Specimen" %in% isolate(col_groups_rv())) {
       shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
     }
     observeEvent(input$col_groups, {
@@ -248,7 +248,7 @@ assemble_server_userAsmb <- function(id) {
               html = T,
               cell = rt_longtext()
             ),
-            geome = geome_col_def(ns("geome_open"), sticky = "left", class = "mp-grp-GEOME"),
+            specimen = specimen_col_def(ns("specimen_open"), sticky = "left", class = "mp-grp-Specimen"),
             topology = colDef(
               show = TRUE, class = paste(.grp("topology"), "mp-note-cell"),
               headerClass = .grp("topology"),

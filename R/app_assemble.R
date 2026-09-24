@@ -7,7 +7,7 @@ ASSEMBLE_COL_GROUPS <- list(
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Metadata = c("time_stamp", "assemble_notes", "join_notes"),
-  GEOME    = c("geome")
+  Specimen = c("specimen")
 )
 # Reverse lookup col -> group, used to tag colDefs with a CSS class so the
 # column-group picker can show/hide columns via CSS without re-rendering
@@ -72,7 +72,7 @@ assemble_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    geome_viewer_server("geome", open = reactive(input$geome_open),
+    geome_viewer_server("geome", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_assemble"))
 
     # Help-doc icons (one observer per tool, registered once at module init).
@@ -132,8 +132,8 @@ assemble_server <- function(id) {
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(.geome_default_groups(names(ASSEMBLE_COL_GROUPS), session$userData$con))
-    if (!"GEOME" %in% isolate(col_groups_rv())) {
+    col_groups_rv <- reactiveVal(.specimen_default_groups(names(ASSEMBLE_COL_GROUPS), session$userData$con))
+    if (!"Specimen" %in% isolate(col_groups_rv())) {
       shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
     }
     observeEvent(input$col_groups, {
@@ -269,7 +269,7 @@ assemble_server <- function(id) {
               html = T,
               cell = rt_longtext()
             ),
-            geome = geome_col_def(ns("geome_open"), sticky = "left", class = "mp-grp-GEOME"),
+            specimen = specimen_col_def(ns("specimen_open"), sticky = "left", class = "mp-grp-Specimen"),
             pre_opts = colDef(
               show = TRUE, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
               name = mp_col_name("pre_opts"),

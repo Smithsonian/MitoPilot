@@ -13,8 +13,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
   assemble <- dplyr::tbl(db, "assemble")
 
   taxa <- dplyr::tbl(db, "samples") |>
-    dplyr::select(ID, Taxon) |>
-    .geome_status_join(db)
+    dplyr::select(ID, Taxon)
 
   assemble_opts_tbl <- dplyr::tbl(db, "assemble_opts") |>
     dplyr::select(assemble_opts, min_assembly_length, assembler)
@@ -72,6 +71,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::left_join(assemble_opts_tbl, by = "assemble_opts") |>
     dplyr::collect() |>
+    .specimen_status_join(db) |>
     dplyr::left_join(total_counts, by = "ID") |>
     dplyr::left_join(kept_counts, by = "ID") |>
     dplyr::left_join(kept_single, by = "ID") |>
@@ -129,7 +129,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     ) |>
     # The three action columns render last and adjacent (theme T19).
     dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col()) |>
-    dplyr::relocate(dplyr::any_of(c("geome", "geome_message")), .after = Taxon)
+    dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message")), .after = Taxon)
 }
 
 #' Update the preprocessing options

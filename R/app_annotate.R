@@ -9,7 +9,7 @@ ANNOTATE_COL_GROUPS <- list(
   Review   = c("ID_verified", "reviewed", "problematic", "partial", "warnings"),
   Export   = c("export_group", "export_time_stamp"),
   Metadata = c("time_stamp", "annotate_notes"),
-  GEOME    = c("geome")
+  Specimen = c("specimen")
 )
 ANNOTATE_COL_GROUP_LOOKUP <- {
   out <- character()
@@ -87,7 +87,7 @@ annotate_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    geome_viewer_server("geome", open = reactive(input$geome_open),
+    geome_viewer_server("geome", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_annotate"))
 
     # Help-doc icons (one observer per tool, registered once at module init).
@@ -181,8 +181,8 @@ annotate_server <- function(id) {
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(.geome_default_groups(names(ANNOTATE_COL_GROUPS), session$userData$con))
-    if (!"GEOME" %in% isolate(col_groups_rv())) {
+    col_groups_rv <- reactiveVal(.specimen_default_groups(names(ANNOTATE_COL_GROUPS), session$userData$con))
+    if (!"Specimen" %in% isolate(col_groups_rv())) {
       shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
     }
     observeEvent(input$col_groups, {
@@ -359,7 +359,7 @@ annotate_server <- function(id) {
             html = TRUE,
             cell = rt_longtext()
           ),
-          geome = geome_col_def(ns("geome_open"), class = "mp-grp-GEOME"),
+          specimen = specimen_col_def(ns("specimen_open"), class = "mp-grp-Specimen"),
           ID_verified = colDef(
             show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
             name = .nm("ID_verified"), header = .hd("ID_verified"),

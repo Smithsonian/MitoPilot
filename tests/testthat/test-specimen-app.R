@@ -1,32 +1,3 @@
-test_that(".geome_status_join labels ok, failed, and none", {
-  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-  on.exit(DBI::dbDisconnect(con))
-  DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b", "c"), Taxon = "x"))
-  .meta_ensure_tables(con)
-  DBI::dbAppendTable(con, "meta_status", data.frame(
-    ID = c("a", "b"), source = "GEOME", ref = "ark:/1/A", status = c("ok", "failed"),
-    message = c(NA, "BCID not found in GEOME"), fetched_at = 1L))
-  out <- dplyr::tbl(con, "samples") |> .geome_status_join(con) |> dplyr::collect()
-  out <- out[order(out$ID), ]
-  expect_equal(out$geome, c("ok", "failed", "none"))
-  expect_equal(out$geome_message[2], "BCID not found in GEOME")
-})
-
-test_that(".geome_status_join ensures GEOME tables on a pre-branch DB with no geome tables", {
-  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-  on.exit(DBI::dbDisconnect(con))
-  DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b"), Taxon = "x"))
-  out <- dplyr::tbl(con, "samples") |> .geome_status_join(con) |> dplyr::collect()
-  expect_equal(out$geome, c("none", "none"))
-})
-
-test_that("rt_geome sends the row ID to the given input", {
-  js <- as.character(rt_geome("assemble-geome_open"))
-  expect_match(js, "assemble-geome_open", fixed = TRUE)
-  expect_match(js, "setInputValue", fixed = TRUE)
-  expect_match(js, "dataset.id", fixed = TRUE)
-})
-
 test_that("geome_record_view orders levels root first and links BCIDs", {
   recs <- data.frame(
     level = c("Tissue", "Event", "Project"), depth = c(0L, 2L, 3L),
@@ -81,7 +52,7 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
   # no MitoPilot code involved; see task-9-report.md).
   .meta_save_fields(con, c("geome:combo:lat_lon", "geome:raw:Event:country"))
 
-  expect_true("GEOME" %in% names(EXPORT_COL_GROUPS))
+  expect_true("Specimen" %in% names(EXPORT_COL_GROUPS))
 
   ms <- shiny::MockShinySession$new()
   ms$userData$con <- con
@@ -98,7 +69,7 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
     cls <- vapply(cols, function(c) c$className %||% "", character(1))
     shown <- vapply(cols, function(c) !isFALSE(c$show), logical(1))
     expect_true(all(c("geome_lat_lon", "geome_Event_country") %in% id[shown]))
-    expect_setequal(id[grepl("mp-grp-GEOME", cls)], c("geome", "geome_lat_lon", "geome_Event_country"))
+    expect_setequal(id[grepl("mp-grp-Specimen", cls)], c("specimen", "geome_lat_lon", "geome_Event_country"))
   })
 })
 
@@ -126,40 +97,114 @@ test_that("geome_fields_modal builds a checkbox list and a raw-fields reactable"
   expect_match(rt_html, "country", fixed = TRUE)
 })
 
-test_that(".geome_project_has_bcids and .geome_default_groups follow the samples table", {
+status_db <- function() {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  DBI::dbWriteTable(con, "samples", data.frame(
+    ID = c("a", "b", "c", "d"), Taxon = "x",
+    GEOME_BCID = c("ark:/1/A", NA, "ark:/1/C", NA), GBIF_ID = c(NA, "2", "3", NA)))
+  .meta_ensure_tables(con)
+  DBI::dbAppendTable(con, "meta_status", data.frame(
+    ID = c("a", "b", "c", "c"), source = c("GEOME", "GBIF", "GEOME", "GBIF"),
+    ref = c("ark:/1/A", "2", "ark:/1/C", "3"), status = c("ok", "failed", "ok", "ok"),
+    message = c(NA, "GBIF returned HTTP 503", NA, NA), fetched_at = 1L))
+  DBI::dbAppendTable(con, "meta_records", data.frame(
+    ID = "c", source = c("GEOME", "GBIF", "GEOME", "GBIF"),
+    level = c("Event", "Occurrence", "Event", "Occurrence"), depth = 0L, ref = "r",
+    field = c("country", "countryCode", "collectorList", "recordedBy"),
+    value = c("Peru", "CL", "A. B", "Ann B")))
+  con
+}
+
+test_that("specimen_status: failed beats conflict beats ok beats none", {
+  con <- status_db()
+  on.exit(DBI::dbDisconnect(con))
+  s <- specimen_status(con)
+  s <- s[order(s$ID), ]
+  expect_equal(s$specimen, c("ok", "failed", "conflict", "none"))
+  expect_equal(s$specimen_message[1], "GEOME: fetched")
+  expect_equal(s$specimen_message[2], "GBIF: failed (GBIF returned HTTP 503)")
+  expect_equal(s$specimen_message[3],
+               "GEOME: fetched\nGBIF: fetched\nConflicts: country\nNotes: collector")
+  expect_equal(s$specimen_message[4], "No GEOME BCID or GBIF ID")
+})
+
+test_that("a set but never fetched ID says so", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "a", Taxon = "x", GBIF_ID = "5"))
+  s <- specimen_status(con)
+  expect_equal(s$specimen, "none")
+  expect_equal(s$specimen_message, "GBIF: not fetched yet")
+})
+
+test_that(".specimen_status_join adds specimen columns to a collected table", {
+  con <- status_db()
+  on.exit(DBI::dbDisconnect(con))
+  out <- .specimen_status_join(data.frame(ID = c("c", "a", "zz")), con)
+  expect_equal(out$specimen, c("conflict", "ok", "none"))
+  expect_true(is.na(out$specimen_message[3]))
+})
+
+test_that("rt_specimen sends the row ID and knows all four states", {
+  js <- as.character(rt_specimen("assemble-specimen_open"))
+  expect_match(js, "assemble-specimen_open", fixed = TRUE)
+  expect_match(js, "setInputValue", fixed = TRUE)
+  expect_match(js, "dataset.id", fixed = TRUE)
+  expect_match(js, "specimen_message", fixed = TRUE)
+  for (cls in c("fa-earth-americas", "fa-triangle-exclamation", "fa-flag", "fa-square-plus")) {
+    expect_match(js, cls, fixed = TRUE)
+  }
+})
+
+test_that("specimen_col_def applies the group class to cell and header", {
+  cd <- specimen_col_def("x-specimen_open", class = "mp-grp-Specimen")
+  expect_equal(cd$class, "mp-grp-Specimen")
+  expect_equal(cd$headerClass, "mp-grp-Specimen")
+  expect_equal(cd$name, "Specimen")
+})
+
+test_that(".specimen_default_groups drops Specimen only when no sample has any ID", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
   DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b"), Taxon = "x"))
-  grp <- c("Options", "GEOME", "Metadata")
-  expect_false(.geome_project_has_bcids(con))
-  expect_equal(.geome_default_groups(grp, con), c("Options", "Metadata"))
+  grp <- c("Options", "Specimen", "Metadata")
+  expect_false(.specimen_project_has_ids(con))
+  expect_equal(.specimen_default_groups(grp, con), c("Options", "Metadata"))
   DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = '' WHERE ID = 'a'")
-  expect_false(.geome_project_has_bcids(con))
-  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/1/A' WHERE ID = 'b'")
-  expect_true(.geome_project_has_bcids(con))
-  expect_equal(.geome_default_groups(grp, con), grp)
+  expect_false(.specimen_project_has_ids(con))
+  DBI::dbExecute(con, "UPDATE samples SET GBIF_ID = '6186461308' WHERE ID = 'b'")
+  expect_true(.specimen_project_has_ids(con))
+  expect_equal(.specimen_default_groups(grp, con), grp)
 })
 
-test_that("geome_col_def applies the group class to cell and header", {
-  cd <- geome_col_def("x-geome_open", class = "mp-grp-GEOME")
-  expect_equal(cd$class, "mp-grp-GEOME")
-  expect_equal(cd$headerClass, "mp-grp-GEOME")
-})
-
-test_that("every table's column groups include GEOME holding the geome column", {
-  for (g in list(ASSEMBLE_COL_GROUPS, ASSEMBLE_COL_GROUPS_USERASMB, ANNOTATE_COL_GROUPS)) {
-    expect_true("geome" %in% g$GEOME)
+test_that("every table's column groups include Specimen holding the specimen column", {
+  for (g in list(ASSEMBLE_COL_GROUPS, ASSEMBLE_COL_GROUPS_USERASMB, ANNOTATE_COL_GROUPS, EXPORT_COL_GROUPS)) {
+    expect_true("specimen" %in% g$Specimen)
+    expect_false("GEOME" %in% names(g))
   }
-  expect_true("GEOME" %in% names(EXPORT_COL_GROUPS))
 })
 
-test_that("panel module servers start outside a reactive context", {
+test_that("export_metadata_cols treats the specimen status columns as owned", {
+  expect_equal(export_metadata_cols(c("ID", "specimen", "specimen_message", "site"), character()), "site")
+})
+
+test_that("panel module servers start outside a reactive context, with specimen data", {
   start <- function(maker, servers) {
     proj <- withr::local_tempdir()
     suppressMessages(maker(path = proj, executor = "local", Rproj = FALSE))
     con <- DBI::dbConnect(RSQLite::SQLite(), file.path(proj, ".sqlite"))
     withr::defer(DBI::dbDisconnect(con))
     withr::local_options(MitoPilot.db = file.path(proj, ".sqlite"))
+    .meta_ensure_tables(con)
+    id1 <- DBI::dbGetQuery(con, "SELECT ID FROM samples LIMIT 1")$ID
+    DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/1/A', GBIF_ID = '1' WHERE ID = ?",
+                   params = list(id1))
+    DBI::dbAppendTable(con, "meta_status", data.frame(
+      ID = id1, source = c("GEOME", "GBIF"), ref = c("ark:/1/A", "1"), status = "ok",
+      message = NA_character_, fetched_at = 1L))
+    DBI::dbAppendTable(con, "meta_records", data.frame(
+      ID = id1, source = c("GEOME", "GBIF"), level = c("Event", "Occurrence"), depth = 0L,
+      ref = c("ark:/1/A", "1"), field = c("country", "countryCode"), value = c("Peru", "CL")))
     for (srv in servers) {
       ms <- shiny::MockShinySession$new()
       ms$userData$con <- con

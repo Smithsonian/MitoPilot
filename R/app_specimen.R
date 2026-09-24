@@ -1,45 +1,73 @@
-#' Left-join GEOME fetch status onto a lazy samples-keyed table
+#' Specimen metadata state per sample: worst of fetch status and conflicts
 #'
-#' @param tbl a lazy dplyr table keyed by `ID`
-#' @param db database connection (source of `meta_status`)
-#' @return `tbl` with `geome` ("ok" | "failed" | "none") and `geome_message` added
+#' @param con database connection
+#' @return data.frame `ID`, `specimen` ("ok" | "failed" | "conflict" | "none"),
+#'   `specimen_message` (tooltip text, one line per source then conflicts and notes)
 #' @noRd
-.geome_status_join <- function(tbl, db) {
-  .meta_ensure_tables(db)
-  tbl |>
-    dplyr::left_join(
-      dplyr::tbl(db, "meta_status") |>
-        dplyr::filter(source == "GEOME") |>
-        dplyr::select(ID, geome_status = status, geome_message = message),
-      by = "ID"
-    ) |>
-    dplyr::mutate(geome = dplyr::case_when(
-      geome_status == "ok" ~ "ok",
-      geome_status == "failed" ~ "failed",
-      TRUE ~ "none"
-    )) |>
-    dplyr::select(-geome_status)
+specimen_status <- function(con) {
+  .meta_ensure_tables(con)
+  cols <- vapply(META_SOURCES, function(s) s$col, character(1))
+  s <- DBI::dbGetQuery(con, paste0("SELECT ID, ", paste(cols, collapse = ", "), " FROM samples"))
+  st <- DBI::dbGetQuery(con, "SELECT ID, source, status, message FROM meta_status")
+  cf <- specimen_conflicts(con)
+  state <- msg <- character(nrow(s))
+  for (i in seq_len(nrow(s))) {
+    id <- s$ID[i]
+    lines <- states <- character()
+    for (src in names(META_SOURCES)) {
+      ref <- s[[META_SOURCES[[src]]$col]][i]
+      r <- st[st$ID == id & st$source == src, , drop = FALSE]
+      if (nrow(r)) {
+        states <- c(states, r$status[1])
+        lines <- c(lines, if (r$status[1] == "ok") paste0(src, ": fetched") else
+          paste0(src, ": failed (", r$message[1] %|NA|% "unknown error", ")"))
+      } else if (!is.na(ref) && nzchar(ref)) {
+        lines <- c(lines, paste0(src, ": not fetched yet"))
+      }
+    }
+    k <- cf[cf$ID == id, , drop = FALSE]
+    conf <- k$concept[k$status %in% "conflict"]
+    note <- k$concept[k$status %in% "note"]
+    if (length(conf)) lines <- c(lines, paste("Conflicts:", paste(conf, collapse = ", ")))
+    if (length(note)) lines <- c(lines, paste("Notes:", paste(note, collapse = ", ")))
+    state[i] <- if ("failed" %in% states) "failed" else if (length(conf)) "conflict" else
+      if ("ok" %in% states) "ok" else "none"
+    msg[i] <- if (length(lines)) paste(lines, collapse = "\n") else "No GEOME BCID or GBIF ID"
+  }
+  data.frame(ID = s$ID, specimen = state, specimen_message = msg)
 }
 
-#' reactable cell renderer for the GEOME status column
+#' Left-join specimen status onto a collected, ID-keyed data frame
 #'
-#' Renders a clickable icon; clicking sends the row's ID to `inputId`.
+#' @param df data frame with an `ID` column
+#' @param con database connection
+#' @noRd
+.specimen_status_join <- function(df, con) {
+  out <- dplyr::left_join(df, specimen_status(con), by = "ID")
+  out$specimen[is.na(out$specimen)] <- "none"
+  out
+}
+
+#' reactable cell renderer for the Specimen column
 #'
 #' @param inputId namespaced Shiny input id to receive the clicked row's ID
 #' @noRd
-rt_geome <- function(inputId) {
+rt_specimen <- function(inputId) {
   sprintf(
     "function(cellInfo) {
       var st = cellInfo.value || 'none';
       var row = cellInfo.row || {};
       var esc = function(s) { return String(s).replace(/&/g, '&amp;').replace(/'/g, '&#39;')
         .replace(/\"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
-      var cls = st === 'ok' ? 'fa-solid fa-earth-americas' :
-        (st === 'failed' ? 'fa-solid fa-triangle-exclamation mp-fg-warning' : 'fa-regular fa-square-plus text-muted');
-      var tip = st === 'ok' ? 'GEOME record fetched. Click to view.' :
-        (st === 'failed' ? 'GEOME fetch failed: ' + (row['geome_message'] || 'unknown error') + '. Click to fix or retry.' :
-        'No GEOME BCID. Click to add one.');
-      return `<a href='#' class='mp-geome-cell' data-id='${esc(row['ID'])}' title='${esc(tip)}' aria-label='${esc(tip)}' ` +
+      var cls = {
+        ok: 'fa-solid fa-earth-americas',
+        failed: 'fa-solid fa-triangle-exclamation mp-fg-warning',
+        conflict: 'fa-solid fa-flag mp-fg-warning',
+        none: 'fa-regular fa-square-plus text-muted'
+      }[st] || 'fa-regular fa-square-plus text-muted';
+      var tip = (row['specimen_message'] || 'No GEOME BCID or GBIF ID') +
+        (st === 'none' ? '. Click to add one.' : '\\nClick to view.');
+      return `<a href='#' class='mp-specimen-cell' data-id='${esc(row['ID'])}' title='${esc(tip)}' aria-label='${esc(tip)}' ` +
         `onclick=\"event.preventDefault(); event.stopPropagation(); Shiny.setInputValue('%s', this.dataset.id, {priority: 'event'})\">` +
         `<i class='${cls}' aria-hidden='true'></i></a>`;
     }",
@@ -48,38 +76,41 @@ rt_geome <- function(inputId) {
     htmlwidgets::JS()
 }
 
-#' Shared colDef for the GEOME status column
+#' Shared colDef for the Specimen column
 #'
 #' @param inputId namespaced Shiny input id to receive the clicked row's ID
 #' @noRd
-geome_col_def <- function(inputId, sticky = NULL, class = NULL) {
+specimen_col_def <- function(inputId, sticky = NULL, class = NULL) {
   reactable::colDef(
-    show = TRUE, name = "GEOME", sticky = sticky, width = 70, align = "center",
+    show = TRUE, name = "Specimen", sticky = sticky, width = 80, align = "center",
     html = TRUE, filterable = FALSE, sortable = TRUE,
     class = class, headerClass = class,
-    header = rt_header("GEOME", "GEOME metadata for this sample. Click an icon to view, add, or refresh."),
-    cell = rt_geome(inputId)
+    header = rt_header("Specimen", paste(
+      "GEOME and GBIF metadata for this sample. Click an icon to view, add,",
+      "compare, or refresh.")),
+    cell = rt_specimen(inputId)
   )
 }
 
-#' TRUE when any sample in the project has a non-blank GEOME BCID
+#' TRUE when any sample has a non-blank GEOME BCID or GBIF ID
 #'
 #' @param con database connection
 #' @noRd
-.geome_project_has_bcids <- function(con) {
+.specimen_project_has_ids <- function(con) {
   .meta_ensure_tables(con)
   DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM samples
-                        WHERE GEOME_BCID IS NOT NULL AND TRIM(GEOME_BCID) != ''")$n > 0
+                        WHERE (GEOME_BCID IS NOT NULL AND TRIM(GEOME_BCID) != '')
+                           OR (GBIF_ID IS NOT NULL AND TRIM(GBIF_ID) != '')")$n > 0
 }
 
-#' Drop the GEOME group from a default column-group selection when the
-#' project has no GEOME BCIDs
+#' Drop the Specimen group from a default column-group selection when no
+#' sample has a GEOME BCID or GBIF ID
 #'
 #' @param groups character vector of group names
 #' @param con database connection
 #' @noRd
-.geome_default_groups <- function(groups, con) {
-  if (.geome_project_has_bcids(con)) groups else setdiff(groups, "GEOME")
+.specimen_default_groups <- function(groups, con) {
+  if (.specimen_project_has_ids(con)) groups else setdiff(groups, "Specimen")
 }
 
 #' Render one sample's GEOME records as level cards, root first
@@ -152,7 +183,7 @@ geome_fields_modal <- function(ns, s) {
 #' GEOME viewer modal: view records, add/edit a BCID, fetch/refresh
 #'
 #' @param id module id
-#' @param open reactive yielding the sample ID to open (from a `geome_open` input)
+#' @param open reactive yielding the sample ID to open (from a `specimen_open` input)
 #' @param on_change function called after any DB write, so the caller can refresh its table
 #' @noRd
 geome_viewer_server <- function(id, open, on_change = function() NULL) {

@@ -41,8 +41,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(-topology) # we only want user-supplied topology, from the samples table
 
   taxa <- dplyr::tbl(db, "samples") |>
-    dplyr::select(ID, Taxon, topology, assembly) |>
-    .geome_status_join(db)
+    dplyr::select(ID, Taxon, topology, assembly)
 
   # Topology is decided per contig. Summarise the sample's non-ignored contigs.
   # A sample with none (never run, or every contig ignored) has no measured
@@ -67,6 +66,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
   out <- dplyr::left_join(assemble, preprocess, by = "ID") |>
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::collect() |>
+    .specimen_status_join(db) |>
     dplyr::left_join(unit_topology, by = "ID") |>
     dplyr::mutate(topology = dplyr::case_when(
       !is.na(unit_topology) ~ unit_topology,
@@ -126,7 +126,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     ) |>
     # The three action columns render last and adjacent (theme T19).
     dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col()) |>
-    dplyr::relocate(dplyr::any_of(c("geome", "geome_message")), .after = Taxon)
+    dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message")), .after = Taxon)
 }
 
 #' Wire up the shared behaviour of an Assemble options modal

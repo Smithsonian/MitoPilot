@@ -7,8 +7,8 @@ EXPORT_COL_GROUPS <- list(
                "blast_lineage"),
   # filled at render time from the user's mapping file (export_metadata_cols)
   Metadata = character(0),
-  # geome + the fields ticked in meta_export_fields, filled at render time
-  GEOME = c("geome")
+  # specimen + the fields ticked in meta_export_fields, filled at render time
+  Specimen = c("specimen")
 )
 EXPORT_COL_GROUP_LOOKUP <- {
   out <- character()
@@ -113,7 +113,7 @@ export_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    geome_viewer_server("geome", open = reactive(input$geome_open),
+    geome_viewer_server("geome", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_export"))
 
     # Prepare data ----
@@ -155,8 +155,8 @@ export_server <- function(id) {
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(.geome_default_groups(names(EXPORT_COL_GROUPS), session$userData$con))
-    if (!"GEOME" %in% isolate(col_groups_rv())) {
+    col_groups_rv <- reactiveVal(.specimen_default_groups(names(EXPORT_COL_GROUPS), session$userData$con))
+    if (!"Specimen" %in% isolate(col_groups_rv())) {
       shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
     }
     observeEvent(input$col_groups, {
@@ -241,7 +241,7 @@ export_server <- function(id) {
       cols <- vapply(keys, .meta_key_col, character(1), USE.NAMES = FALSE)
       stats::setNames(lapply(cols, function(col) {
         colDef(show = TRUE, name = col, header = rt_header(col, "From GEOME"),
-               class = "mp-grp-GEOME", headerClass = "mp-grp-GEOME",
+               class = "mp-grp-Specimen", headerClass = "mp-grp-Specimen",
                html = TRUE, cell = rt_longtext(), minWidth = 120)
       }), cols)
     }
@@ -339,7 +339,7 @@ export_server <- function(id) {
           # the ID (no fragmented sample in the project).
           seqid = .cd("seqid", extra_class = "mp-col-seqid", minWidth = 130),
           Taxon = .cd("Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
-          geome = geome_col_def(ns("geome_open"), class = "mp-grp-GEOME"),
+          specimen = specimen_col_def(ns("specimen_open"), class = "mp-grp-Specimen"),
           curate_opts = .cd("curate_opts", width = 110),
           genetic_code = .cd("genetic_code", width = 110, align = "center"),
           blast_ref_status = .cd(
@@ -431,7 +431,7 @@ export_server <- function(id) {
 
     # CSV Export ----
     .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto",
-                           "annotate_switch")
+                           "annotate_switch", "specimen", "specimen_message")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
