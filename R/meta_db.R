@@ -26,7 +26,7 @@ META_SOURCES <- list(
   x <- x[keep]
   if (!length(x)) return(NULL)
   data.frame(level = level, depth = as.integer(depth), ref = ref,
-             field = names(x), value = vapply(x, as.character, ""),
+             field = names(x), value = vapply(x, .meta_chr, ""),
              row.names = NULL)
 }
 
