@@ -182,8 +182,8 @@ appends the scaffold/path number if that sample is exporting multiple sequences.
 Templates are validated as you type and can be saved by name with
 **Save template** for reuse.
 
-Samples linked to GEOME records can also use `{geome_...}` tokens, such as
-`{geome_lat_lon}` and `{geome_collection_date}`; see [GEOME Metadata](GEOME-Metadata.html).
+Samples linked to GEOME or GBIF records can also use `{geome_...}` and `{gbif_...}` tokens,
+such as `{geome_lat_lon}` and `{gbif_collection_date}`; see [Specimen metadata](Specimen-Metadata.html).
 
 Other options in the Export Data window:
 

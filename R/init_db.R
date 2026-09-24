@@ -15,7 +15,7 @@
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
 #' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
-#'   (optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.
+#'   (optional). Stored as `GEOME_BCID`. See `vignette("Specimen-Metadata")`.
 #' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
 #' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence

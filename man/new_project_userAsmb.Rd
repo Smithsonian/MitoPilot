@@ -48,7 +48,7 @@ is ignored. May include additional columns with other sample metadata.}
 the unique sample identifiers (default = "ID").}
 
 \item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs
-(optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.
+(optional). Stored as `GEOME_BCID`. See `vignette("Specimen-Metadata")`.
 Passed to `new_db_userAsmb()`.}
 
 \item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup

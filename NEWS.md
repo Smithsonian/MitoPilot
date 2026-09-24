@@ -2,7 +2,7 @@
 
 ## New Features
 
-- GEOME integration: link samples to GEOME BCIDs (`mapping_geome`, `fetch_geome()`), browse the full record in the app, and choose GEOME fields, including GenBank-ready `lat_lon`, `collection_date`, `geo_loc_name`, and `specimen_voucher`, for export header templates.
+- Specimen metadata from GEOME and GBIF: link samples to GEOME BCIDs and GBIF occurrences (`mapping_geome`, `mapping_gbif`, `fetch_geome()`, `fetch_gbif()`), browse the records in the app, and choose fields, including GenBank-ready `lat_lon`, `collection_date`, `geo_loc_name`, and `specimen_voucher`, for export header templates. MitoPilot compares your mapping file, GEOME, and GBIF and flags disagreements (Compare tab, Specimen column, and a warning at export) without ever merging values; `set_metadata_columns()` picks which mapping-file columns are compared. The Export Data window now lists usable columns as grouped chips that insert at the cursor.
 
 ## Bug Fixes
 

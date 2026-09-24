@@ -13,7 +13,7 @@
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
 #' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
-#'   (optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.
+#'   (optional). Stored as `GEOME_BCID`. See `vignette("Specimen-Metadata")`.
 #'   Passed to `new_db_userAsmb()`.
 #' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.

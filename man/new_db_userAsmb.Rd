@@ -73,7 +73,7 @@ multi-contig assembly is always recorded as "multi".}
 identifier (eg, species name)}
 
 \item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs
-(optional). Stored as `GEOME_BCID`. See `vignette("GEOME-Metadata")`.}
+(optional). Stored as `GEOME_BCID`. See `vignette("Specimen-Metadata")`.}
 
 \item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
 (default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
