@@ -86,7 +86,7 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
     cls <- vapply(cols, function(c) c$className %||% "", character(1))
     shown <- vapply(cols, function(c) !isFALSE(c$show), logical(1))
     expect_true(all(c("geome_lat_lon", "geome_Event_country") %in% id[shown]))
-    expect_setequal(id[grepl("mp-grp-GEOME", cls)], c("geome_lat_lon", "geome_Event_country"))
+    expect_setequal(id[grepl("mp-grp-GEOME", cls)], c("geome", "geome_lat_lon", "geome_Event_country"))
   })
 })
 
@@ -112,4 +112,31 @@ test_that("geome_fields_modal builds a checkbox list and a raw-fields reactable"
   )
   rt_html <- as.character(htmltools::as.tags(rt))
   expect_match(rt_html, "country", fixed = TRUE)
+})
+
+test_that(".geome_project_has_bcids and .geome_default_groups follow the samples table", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b"), Taxon = "x"))
+  grp <- c("Options", "GEOME", "Metadata")
+  expect_false(.geome_project_has_bcids(con))
+  expect_equal(.geome_default_groups(grp, con), c("Options", "Metadata"))
+  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = '' WHERE ID = 'a'")
+  expect_false(.geome_project_has_bcids(con))
+  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/1/A' WHERE ID = 'b'")
+  expect_true(.geome_project_has_bcids(con))
+  expect_equal(.geome_default_groups(grp, con), grp)
+})
+
+test_that("geome_col_def applies the group class to cell and header", {
+  cd <- geome_col_def("x-geome_open", class = "mp-grp-GEOME")
+  expect_equal(cd$class, "mp-grp-GEOME")
+  expect_equal(cd$headerClass, "mp-grp-GEOME")
+})
+
+test_that("every table's column groups include GEOME holding the geome column", {
+  for (g in list(ASSEMBLE_COL_GROUPS, ASSEMBLE_COL_GROUPS_USERASMB, ANNOTATE_COL_GROUPS)) {
+    expect_true("geome" %in% g$GEOME)
+  }
+  expect_true("GEOME" %in% names(EXPORT_COL_GROUPS))
 })

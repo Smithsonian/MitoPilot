@@ -8,7 +8,8 @@ ANNOTATE_COL_GROUPS <- list(
   Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
   Review   = c("ID_verified", "reviewed", "problematic", "partial", "warnings"),
   Export   = c("export_group", "export_time_stamp"),
-  Metadata = c("time_stamp", "annotate_notes")
+  Metadata = c("time_stamp", "annotate_notes"),
+  GEOME    = c("geome")
 )
 ANNOTATE_COL_GROUP_LOOKUP <- {
   out <- character()
@@ -180,7 +181,10 @@ annotate_server <- function(id) {
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(names(ANNOTATE_COL_GROUPS))
+    col_groups_rv <- reactiveVal(.geome_default_groups(names(ANNOTATE_COL_GROUPS), session$userData$con))
+    if (!"GEOME" %in% col_groups_rv()) {
+      shinyWidgets::updatePickerInput(session, "col_groups", selected = col_groups_rv())
+    }
     observeEvent(input$col_groups, {
       col_groups_rv(input$col_groups %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -355,7 +359,7 @@ annotate_server <- function(id) {
             html = TRUE,
             cell = rt_longtext()
           ),
-          geome = geome_col_def(ns("geome_open")),
+          geome = geome_col_def(ns("geome_open"), class = "mp-grp-GEOME"),
           ID_verified = colDef(
             show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
             name = .nm("ID_verified"), header = .hd("ID_verified"),

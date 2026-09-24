@@ -51,13 +51,34 @@ rt_geome <- function(inputId) {
 #'
 #' @param inputId namespaced Shiny input id to receive the clicked row's ID
 #' @noRd
-geome_col_def <- function(inputId, sticky = NULL) {
+geome_col_def <- function(inputId, sticky = NULL, class = NULL) {
   reactable::colDef(
     show = TRUE, name = "GEOME", sticky = sticky, width = 70, align = "center",
     html = TRUE, filterable = FALSE, sortable = TRUE,
+    class = class, headerClass = class,
     header = rt_header("GEOME", "GEOME metadata for this sample. Click an icon to view, add, or refresh."),
     cell = rt_geome(inputId)
   )
+}
+
+#' TRUE when any sample in the project has a non-blank GEOME BCID
+#'
+#' @param con database connection
+#' @noRd
+.geome_project_has_bcids <- function(con) {
+  .geome_ensure_tables(con)
+  DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM samples
+                        WHERE GEOME_BCID IS NOT NULL AND TRIM(GEOME_BCID) != ''")$n > 0
+}
+
+#' Drop the GEOME group from a default column-group selection when the
+#' project has no GEOME BCIDs
+#'
+#' @param groups character vector of group names
+#' @param con database connection
+#' @noRd
+.geome_default_groups <- function(groups, con) {
+  if (.geome_project_has_bcids(con)) groups else setdiff(groups, "GEOME")
 }
 
 #' Render one sample's GEOME records as level cards, root first
