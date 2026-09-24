@@ -285,3 +285,66 @@ set_metadata_columns <- function(path = ".", ...) {
                     character(1), USE.NAMES = FALSE)
   ))
 }
+
+.SPEC_COMBO_CONCEPTS <- list(
+  lat_lon = "coordinates", collection_date = "collection_date",
+  geo_loc_name = c("country", "locality"), specimen_voucher = "voucher",
+  collected_by = "collector", sex = "sex", dev_stage = "dev_stage"
+)
+.SPEC_FIELD_CONCEPTS <- c(
+  decimalLatitude = "coordinates", decimalLongitude = "coordinates",
+  yearCollected = "collection_date", monthCollected = "collection_date",
+  dayCollected = "collection_date", eventDate = "collection_date", year = "collection_date",
+  month = "collection_date", day = "collection_date",
+  country = "country", countryCode = "country", locality = "locality",
+  catalogNumber = "voucher", institutionCode = "voucher", collectionCode = "voucher",
+  collectorList = "collector", recordedBy = "collector", sex = "sex", lifeStage = "dev_stage",
+  scientificName = "taxon"
+)
+
+# Concepts an exported header template touches: through a {geome_*}/{gbif_*}
+# combo or raw token, or through a CSV column mapped in csv_cols.
+specimen_template_concepts <- function(templates, csv_cols) {
+  templates <- templates[!is.na(templates)]
+  toks <- unlist(regmatches(templates, gregexpr("\\{[^{}]+\\}", templates)))
+  toks <- unique(trimws(gsub("^\\{|\\}$", "", toks)))
+  out <- character()
+  for (t in toks) {
+    m <- regmatches(t, regexec("^(geome|gbif)_(.+)$", t))[[1]]
+    if (length(m)) {
+      if (m[3] %in% names(.SPEC_COMBO_CONCEPTS)) {
+        out <- c(out, .SPEC_COMBO_CONCEPTS[[m[3]]])
+      } else {
+        f <- sub("^[A-Za-z0-9]+_", "", m[3])
+        if (f %in% names(.SPEC_FIELD_CONCEPTS)) out <- c(out, .SPEC_FIELD_CONCEPTS[[f]])
+      }
+      next
+    }
+    out <- c(out, names(csv_cols)[vapply(csv_cols, function(cc) t %in% cc, logical(1))])
+  }
+  unique(out)
+}
+
+specimen_export_warnings <- function(conflicts, concepts, ids) {
+  keep <- conflicts$status %in% "conflict" & conflicts$concept %in% concepts & conflicts$ID %in% ids
+  out <- conflicts[keep, c("ID", "concept", "csv_value", "geome_value", "gbif_value"), drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+specimen_warning_html <- function(rows) {
+  cell <- function(x) ifelse(is.na(x), "-", htmltools::htmlEscape(as.character(x)))
+  body <- paste0("<tr><td>", cell(rows$ID), "</td><td>", cell(rows$concept), "</td><td>",
+                 cell(rows$csv_value), "</td><td>", cell(rows$geome_value), "</td><td>",
+                 cell(rows$gbif_value), "</td></tr>", collapse = "")
+  n <- length(unique(rows$ID))
+  htmltools::HTML(paste0(
+    "<p>", mp_n(n, "sample"), " in this group ", if (n == 1) "has" else "have",
+    " specimen details that disagree between sources, on items your header template uses. ",
+    "MitoPilot does not pick a value; check which one is right before submitting.</p>",
+    "<div style=\"max-height: 260px; overflow-y: auto;\">",
+    "<table class=\"table table-sm\" style=\"text-align: left; font-size: var(--mp-fs-meta);\">",
+    "<thead><tr><th>Sample</th><th>Item</th><th>CSV</th><th>GEOME</th><th>GBIF</th></tr></thead>",
+    "<tbody>", body, "</tbody></table></div>"
+  ))
+}

@@ -104,3 +104,47 @@ test_that("set_metadata_columns writes overrides and reports the result", {
   res <- set_metadata_columns(d)
   expect_equal(res$column[res$concept == "taxon"], "Taxon")
 })
+
+csv_map <- function() {
+  list(coordinates = c("Latitude", "Longitude"), collection_date = "Date",
+       country = "geo_loc_name", locality = character(), voucher = character(),
+       collector = character(), sex = character(), dev_stage = character(), taxon = "Taxon")
+}
+
+test_that("specimen_template_concepts maps combo, raw, and CSV tokens to concepts", {
+  f <- function(t) specimen_template_concepts(t, csv_map())
+  expect_setequal(f("{seqid} [lat_lon={geome_lat_lon}] [geo_loc_name={gbif_geo_loc_name}]"),
+                  c("coordinates", "country", "locality"))
+  expect_setequal(f("{gbif_Occurrence_decimalLatitude} {geome_Event_yearCollected}"),
+                  c("coordinates", "collection_date"))
+  expect_setequal(f("[collection_date={Date}] {Taxon}"), c("collection_date", "taxon"))
+  expect_equal(f("{seqid} [mgcode={genetic_code}] {completeness}"), character())
+  expect_equal(f(c("{seqid}", NA, "[sex={geome_sex}]")), "sex")
+  expect_equal(f("{geome_tissue_type} {gbif_identified_by} {gbif_Dataset_title}"), character())
+})
+
+test_that("specimen_export_warnings keeps only conflicts on used concepts for exported samples", {
+  cf <- data.frame(ID = c("s1", "s1", "s2", "s3"), concept = c("country", "sex", "country", "country"),
+                   csv_column = NA, csv_value = c("USA", "m", "Peru", "Chile"),
+                   geome_value = c("Canada", "f", "Peru", "Peru"), gbif_value = NA,
+                   status = c("conflict", "note", "agree", "conflict"))
+  w <- specimen_export_warnings(cf, c("country", "sex"), c("s1", "s2"))
+  expect_equal(w$ID, "s1")
+  expect_equal(w$concept, "country")
+  expect_equal(names(w), c("ID", "concept", "csv_value", "geome_value", "gbif_value"))
+  expect_equal(nrow(specimen_export_warnings(cf, "sex", c("s1", "s2", "s3"))), 0L)
+  html <- as.character(specimen_warning_html(w))
+  expect_match(html, "<td>s1</td><td>country</td><td>USA</td><td>Canada</td><td>-</td>", fixed = TRUE)
+  expect_match(html, "1 sample", fixed = TRUE)
+})
+
+test_that("a raw-token template triggers the warning end to end", {
+  con <- spec_db()
+  cf <- specimen_conflicts(con)
+  concepts <- specimen_template_concepts("{seqid} [country={geome_Event_country}]", specimen_csv_columns(con))
+  w <- specimen_export_warnings(cf, concepts, c("s1", "s2"))
+  expect_equal(unique(w$ID), "s2")
+  expect_equal(w$concept, "country")
+  expect_equal(nrow(specimen_export_warnings(
+    cf, specimen_template_concepts("{seqid} {completeness}", specimen_csv_columns(con)), "s2")), 0L)
+})

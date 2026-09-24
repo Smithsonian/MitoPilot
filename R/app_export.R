@@ -1472,6 +1472,42 @@ export_server <- function(id) {
       run_export()
     }
 
+    # Conflicts on the specimen items the active header templates use. Notes
+    # never count, and a template without specimen tokens never warns.
+    specimen_conflict_rows <- function(group) {
+      ids <- unique(rv$data$ID[!is.na(rv$data$export_group) & rv$data$export_group == group])
+      con <- session$userData$con
+      tmpl <- c(input$fasta_header, if (isTRUE(input$export_genes)) input$fasta_header_gene)
+      concepts <- specimen_template_concepts(tmpl, specimen_csv_columns(con))
+      if (!length(concepts)) return(NULL)
+      specimen_export_warnings(specimen_conflicts(con, ids), concepts, ids)
+    }
+
+    fragmented_then_export <- function() {
+      frag <- fragmented_samples(input$export_group)
+      if (length(frag) > 0) {
+        shown <- paste(utils::head(frag, 5), collapse = ", ")
+        if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
+        mp_confirm(
+          ns("fragmented_confirm"),
+          title = "Some samples export as multiple records",
+          text = stringr::str_glue(
+            "{mp_n(length(frag), 'sample')} have more than one assembly and will each ",
+            "produce a SEPARATE GenBank record: {shown}.\n\n",
+            "That is correct when the scaffolds really are different genomes. If a ",
+            "sample is instead ONE genome broken into fragments, each record will ",
+            "be submitted as an incomplete genome. Cancel and use consensus ",
+            "trimming / scaffold joining to combine them, or 'ignore' all but one ",
+            "scaffold."
+          ),
+          action_label = "Export anyway",
+          danger = TRUE
+        )
+        return()
+      }
+      check_overwrite_then_export()
+    }
+
     observeEvent(input$export_data, ignoreInit = T, {
       req(input$export_group)
       # Block export if either header template is invalid (would crash str_glue_data)
@@ -1497,33 +1533,29 @@ export_server <- function(id) {
         )
         return()
       }
-      frag <- fragmented_samples(input$export_group)
-      if (length(frag) > 0) {
-        shown <- paste(utils::head(frag, 5), collapse = ", ")
-        if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
+      sp <- tryCatch(specimen_conflict_rows(input$export_group), error = function(e) NULL)
+      if (!is.null(sp) && nrow(sp) > 0) {
         mp_confirm(
-          ns("fragmented_confirm"),
-          title = "Some samples export as multiple records",
-          text = stringr::str_glue(
-            "{mp_n(length(frag), 'sample')} have more than one assembly and will each ",
-            "produce a SEPARATE GenBank record: {shown}.\n\n",
-            "That is correct when the scaffolds really are different genomes. If a ",
-            "sample is instead ONE genome broken into fragments, each record will ",
-            "be submitted as an incomplete genome. Cancel and use consensus ",
-            "trimming / scaffold joining to combine them, or 'ignore' all but one ",
-            "scaffold."
-          ),
+          ns("specimen_confirm"),
+          title = "Specimen metadata disagrees",
+          text = specimen_warning_html(sp),
           action_label = "Export anyway",
-          danger = TRUE
+          danger = TRUE,
+          html = TRUE
         )
         return()
       }
-      check_overwrite_then_export()
+      fragmented_then_export()
     })
 
     observeEvent(input$fragmented_confirm, ignoreInit = T, {
       req(input$fragmented_confirm)
       check_overwrite_then_export()
+    })
+
+    observeEvent(input$specimen_confirm, ignoreInit = TRUE, {
+      req(input$specimen_confirm)
+      fragmented_then_export()
     })
 
     observeEvent(input$overwrite_confirm, ignoreInit = T, {
