@@ -111,6 +111,9 @@ export_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    geome_viewer_server("geome", open = reactive(input$geome_open),
+                        on_change = function() trigger("update_export_table"))
+
     # Prepare data ----
     rv <- reactiveValues(
       # curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>

@@ -26,3 +26,15 @@ test_that("rt_geome sends the row ID to the given input", {
   expect_match(js, "setInputValue", fixed = TRUE)
   expect_match(js, "dataset.id", fixed = TRUE)
 })
+
+test_that("geome_record_view orders levels root first and links BCIDs", {
+  recs <- data.frame(
+    level = c("Tissue", "Event", "Project"), depth = c(0L, 2L, 3L),
+    bcid = c("ark:/1/T", "ark:/1/E", NA), field = c("tissueID", "country", "projectTitle"),
+    value = c("T1", "Peru", "My proj"))
+  html <- as.character(geome_record_view(recs))
+  expect_lt(regexpr("Project", html), regexpr("Event", html))
+  expect_lt(regexpr("Event", html), regexpr("Tissue", html))
+  expect_match(html, "https://geome-db.org/record/ark:/1/E", fixed = TRUE)
+  expect_match(html, "Peru", fixed = TRUE)
+})

@@ -71,6 +71,9 @@ assemble_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    geome_viewer_server("geome", open = reactive(input$geome_open),
+                        on_change = function() trigger("update_assemble_table"))
+
     # Help-doc icons (one observer per tool, registered once at module init).
     register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
     register_tool_help("getOrganelle", input, reopen = function() assemble_opts_modal(rv))

@@ -59,3 +59,133 @@ geome_col_def <- function(inputId, sticky = NULL) {
     cell = rt_geome(inputId)
   )
 }
+
+#' Render one sample's GEOME records as level cards, root first
+#'
+#' @param recs `geome_records` rows for one sample (level, depth, bcid, field, value)
+#' @return a `tagList` of `<details>` cards
+#' @noRd
+geome_record_view <- function(recs) {
+  if (!nrow(recs)) return(p(class = "text-muted", "No GEOME data stored for this sample yet."))
+  lv <- unique(recs[order(-recs$depth), c("level", "depth", "bcid")])
+  tagList(lapply(seq_len(nrow(lv)), function(i) {
+    r <- recs[recs$depth == lv$depth[i], ]
+    tags$details(
+      open = NA, class = "mp-geome-level",
+      tags$summary(
+        strong(lv$level[i]),
+        if (!is.na(lv$bcid[i])) tagList(" ", tags$a(
+          href = paste0("https://geome-db.org/record/", lv$bcid[i]),
+          target = "_blank", rel = "noopener", lv$bcid[i]))
+      ),
+      tags$table(class = "table table-sm",
+        tags$tbody(lapply(seq_len(nrow(r)), function(j) {
+          tags$tr(tags$th(r$field[j]), tags$td(r$value[j]))
+        }))
+      )
+    )
+  }))
+}
+
+#' GEOME viewer modal: view records, add/edit a BCID, fetch/refresh
+#'
+#' @param id module id
+#' @param open reactive yielding the sample ID to open (from a `geome_open` input)
+#' @param on_change function called after any DB write, so the caller can refresh its table
+#' @noRd
+geome_viewer_server <- function(id, open, on_change = function() NULL) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    con <- session$userData$con
+    rv <- reactiveValues(id = NULL, ver = 0L)
+    bump <- function() { rv$ver <- rv$ver + 1L; on_change() }
+
+    samples <- function() {
+      DBI::dbGetQuery(con, "SELECT s.ID, s.GEOME_BCID, g.status, g.message, g.fetched_at
+                            FROM samples s LEFT JOIN geome_status g ON s.ID = g.ID ORDER BY s.ID")
+    }
+
+    observeEvent(open(), {
+      rv$id <- open()
+      s <- samples()
+      lab <- paste0(s$ID, ifelse(is.na(s$status), "", ifelse(s$status == "failed", " (failed)", "")))
+      modalDialog(
+        title = mp_modal_title("GEOME metadata", "Records fetched from geome-db.org"),
+        size = "xl", easyClose = TRUE,
+        fluidRow(
+          column(3,
+            selectInput(ns("sample"), "Sample", choices = stats::setNames(s$ID, lab),
+                        selected = rv$id, width = "100%", selectize = FALSE, size = 15),
+            uiOutput(ns("failed"))
+          ),
+          column(9, uiOutput(ns("detail")))
+        ),
+        footer = mp_footer(
+          extra = actionButton(ns("refresh_all"), "Refresh all",
+                               title = "Fetch every sample with a BCID again"),
+          dismiss = "Close"
+        )
+      ) |> showModal()
+    })
+
+    observeEvent(input$sample, rv$id <- input$sample, ignoreInit = TRUE)
+
+    output$failed <- renderUI({
+      rv$ver
+      s <- samples()
+      bad <- s$ID[!is.na(s$status) & s$status == "failed"]
+      if (!length(bad)) return(NULL)
+      div(class = "mp-fg-warning", icon("triangle-exclamation"), " Failed: ",
+          paste(bad, collapse = ", "))
+    })
+
+    output$detail <- renderUI({
+      rv$ver
+      req(rv$id)
+      s <- samples()
+      s <- s[s$ID == rv$id, ]
+      recs <- DBI::dbGetQuery(con, "SELECT level, depth, bcid, field, value FROM geome_records WHERE ID = ?",
+                              params = list(rv$id))
+      tagList(
+        div(class = "mp-geome-bcid",
+          textInput(ns("bcid"), "GEOME BCID", value = s$GEOME_BCID %|NA|% "",
+                    placeholder = "ark:/21547/...", width = "420px"),
+          actionButton(ns("fetch"), "Fetch", icon = icon("arrows-rotate"))
+        ),
+        if (!is.na(s$status)) p(class = if (s$status == "failed") "mp-fg-warning" else "text-muted",
+          if (s$status == "failed") paste("Last fetch failed:", s$message) else "Fetched",
+          " ", format(as.POSIXct(s$fetched_at, origin = "1970-01-01"), "%Y-%m-%d %H:%M")),
+        if (is.na(s$GEOME_BCID) && !nrow(recs)) p(class = "text-muted",
+          "This sample has no GEOME BCID. Paste one above and click Fetch, or add a GEOME_BCID ",
+          "column to your mapping file (see the GEOME Metadata article)."),
+        geome_record_view(recs)
+      )
+    })
+
+    observeEvent(input$fetch, {
+      req(rv$id)
+      val <- .geome_set_bcid(con, rv$id, input$bcid)
+      if (!is.na(val)) {
+        withProgress(message = "Fetching from GEOME", {
+          res <- suppressWarnings(.geome_fetch_into(con, rv$id, val))
+        })
+        if (res$status == "failed") showNotification(res$message, type = "warning")
+      }
+      bump()
+    })
+
+    observeEvent(input$refresh_all, {
+      s <- samples()
+      s <- s[!is.na(s$GEOME_BCID), ]
+      if (!nrow(s)) return(showNotification("No samples have a GEOME BCID", type = "message"))
+      cache <- new.env()
+      withProgress(message = "Fetching from GEOME", value = 0, {
+        for (i in seq_len(nrow(s))) {
+          suppressWarnings(.geome_fetch_into(con, s$ID[i], s$GEOME_BCID[i], cache))
+          incProgress(1 / nrow(s), detail = s$ID[i])
+        }
+      })
+      bump()
+    })
+  })
+}
