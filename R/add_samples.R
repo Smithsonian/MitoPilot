@@ -103,7 +103,7 @@ add_samples <- function(
   }
 
   if (mapping_geome %in% colnames(mapping)) {
-    mapping$GEOME_BCID <- .geome_store_value(mapping[[mapping_geome]])
+    mapping$GEOME_BCID <- .meta_store_value("GEOME", mapping[[mapping_geome]])
     if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
   }
 
@@ -239,10 +239,10 @@ add_samples <- function(
   # (default curate_opts target + optional override).
   .sync_sample_genetic_codes(con, ids = mapping$ID)
 
-  .geome_ensure_tables(con)
+  .meta_ensure_tables(con)
   if (fetch_geome && "GEOME_BCID" %in% colnames(mapping)) {
     has <- !is.na(mapping$GEOME_BCID)
-    if (any(has)) .geome_fetch_into(con, mapping$ID[has], mapping$GEOME_BCID[has])
+    if (any(has)) .meta_fetch_into(con, "GEOME", mapping$ID[has], mapping$GEOME_BCID[has])
   }
 
   .mtr_warn_missing_refs(con)

@@ -2,9 +2,9 @@ test_that(".geome_status_join labels ok, failed, and none", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
   DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b", "c"), Taxon = "x"))
-  .geome_ensure_tables(con)
-  DBI::dbAppendTable(con, "geome_status", data.frame(
-    ID = c("a", "b"), bcid = "ark:/1/A", status = c("ok", "failed"),
+  .meta_ensure_tables(con)
+  DBI::dbAppendTable(con, "meta_status", data.frame(
+    ID = c("a", "b"), source = "GEOME", ref = "ark:/1/A", status = c("ok", "failed"),
     message = c(NA, "BCID not found in GEOME"), fetched_at = 1L))
   out <- dplyr::tbl(con, "samples") |> .geome_status_join(con) |> dplyr::collect()
   out <- out[order(out$ID), ]
@@ -51,16 +51,16 @@ test_that("geome_record_view puts cards in a scroll box with expand/collapse all
   expect_false(grepl("Expand all", as.character(geome_record_view(recs[0, ]))))
 })
 
-test_that(".geome_save_fields replaces the selection", {
+test_that(".meta_save_fields replaces the selection", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
   DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
-  .geome_ensure_tables(con)
-  .geome_save_fields(con, c("combo:lat_lon", "raw:Event:country"))
-  .geome_save_fields(con, "combo:lat_lon")
-  expect_equal(DBI::dbGetQuery(con, "SELECT key FROM geome_export_fields")$key, "combo:lat_lon")
-  .geome_save_fields(con, character())
-  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_export_fields")$n, 0L)
+  .meta_ensure_tables(con)
+  .meta_save_fields(con, c("geome:combo:lat_lon", "geome:raw:Event:country"))
+  .meta_save_fields(con, "geome:combo:lat_lon")
+  expect_equal(DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key, "geome:combo:lat_lon")
+  .meta_save_fields(con, character())
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_export_fields")$n, 0L)
 })
 
 test_that("the Export column picker offers a GEOME group, and ticked GEOME
@@ -70,16 +70,16 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(proj, ".sqlite"))
   withr::defer(DBI::dbDisconnect(con))
   withr::local_options(MitoPilot.db = file.path(proj, ".sqlite"))
-  .geome_ensure_tables(con)
+  .meta_ensure_tables(con)
   id1 <- DBI::dbGetQuery(con, "SELECT ID FROM samples LIMIT 1")$ID
-  DBI::dbAppendTable(con, "geome_records", data.frame(
-    ID = id1, level = "Event", depth = 0L, bcid = NA_character_,
+  DBI::dbAppendTable(con, "meta_records", data.frame(
+    ID = id1, source = "GEOME", level = "Event", depth = 0L, ref = NA_character_,
     field = "country", value = "Peru"))
   # Fields ticked ahead of time, as the picker's Save handler would leave them
   # (session$setInputValue + observeEvent(input$x) does not fire reliably
   # under shiny::testServer in this environment, even for a bare module with
   # no MitoPilot code involved; see task-9-report.md).
-  .geome_save_fields(con, c("combo:lat_lon", "raw:Event:country"))
+  .meta_save_fields(con, c("geome:combo:lat_lon", "geome:raw:Event:country"))
 
   expect_true("GEOME" %in% names(EXPORT_COL_GROUPS))
 
@@ -106,13 +106,13 @@ test_that("geome_fields_modal builds a checkbox list and a raw-fields reactable"
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
   DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
-  .geome_ensure_tables(con)
-  DBI::dbAppendTable(con, "geome_records", data.frame(
-    ID = "s1", level = "Event", depth = 0L, bcid = NA_character_,
+  .meta_ensure_tables(con)
+  DBI::dbAppendTable(con, "meta_records", data.frame(
+    ID = "s1", source = "GEOME", level = "Event", depth = 0L, ref = NA_character_,
     field = "country", value = "Peru"))
-  .geome_save_fields(con, "combo:lat_lon")
+  .meta_save_fields(con, "geome:combo:lat_lon")
 
-  s <- geome_field_summary(con)
+  s <- meta_field_summary(con, "GEOME")
   modal_html <- as.character(geome_fields_modal(NS("exp"), s))
   expect_match(modal_html, "GEOME fields for export", fixed = TRUE)
   expect_match(modal_html, "lat_lon", fixed = TRUE)

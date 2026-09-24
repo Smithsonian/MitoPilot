@@ -28,7 +28,7 @@ test_that("new_db stores a renamed BCID column and fetches it", {
   s <- DBI::dbGetQuery(con, "SELECT * FROM samples ORDER BY ID")
   expect_false("Bcid" %in% names(s))
   expect_equal(s$GEOME_BCID, c("ark:/21547/CYB2REEDY", NA))
-  expect_equal(DBI::dbGetQuery(con, "SELECT ID, status FROM geome_status")$ID, "s1")
+  expect_equal(DBI::dbGetQuery(con, "SELECT ID, status FROM meta_status")$ID, "s1")
 })
 
 test_that("new_db fetch_geome = FALSE stores BCIDs without calling GEOME", {
@@ -37,8 +37,8 @@ test_that("new_db fetch_geome = FALSE stores BCIDs without calling GEOME", {
   new_db(db_path = file.path(d, ".sqlite"), mapping_fn = geome_mapping(d), fetch_geome = FALSE)
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
   on.exit(DBI::dbDisconnect(con))
-  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_status")$n, 0L)
-  expect_true("geome_export_fields" %in% DBI::dbListTables(con))
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_status")$n, 0L)
+  expect_true("meta_export_fields" %in% DBI::dbListTables(con))
 })
 
 test_that("new_db_userAsmb stores a renamed BCID column and fetches it", {
@@ -59,7 +59,7 @@ test_that("new_db_userAsmb stores a renamed BCID column and fetches it", {
   s <- DBI::dbGetQuery(con, "SELECT * FROM samples ORDER BY ID")
   expect_false("Bcid" %in% names(s))
   expect_equal(s$GEOME_BCID, c("ark:/21547/CYB2REEDY", NA))
-  expect_equal(DBI::dbGetQuery(con, "SELECT ID, status FROM geome_status")$ID, "s1")
+  expect_equal(DBI::dbGetQuery(con, "SELECT ID, status FROM meta_status")$ID, "s1")
 })
 
 test_that("new_db_userAsmb fetch_geome = FALSE stores BCIDs without calling GEOME", {
@@ -77,8 +77,8 @@ test_that("new_db_userAsmb fetch_geome = FALSE stores BCIDs without calling GEOM
                   fetch_geome = FALSE)
   con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
   on.exit(DBI::dbDisconnect(con))
-  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_status")$n, 0L)
-  expect_true("geome_export_fields" %in% DBI::dbListTables(con))
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_status")$n, 0L)
+  expect_true("meta_export_fields" %in% DBI::dbListTables(con))
   expect_equal(DBI::dbGetQuery(con, "SELECT GEOME_BCID FROM samples ORDER BY ID")$GEOME_BCID,
                c("ark:/21547/CYB2REEDY", NA))
 })

@@ -341,7 +341,7 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
     dplyr::left_join(orf_enabled, by = unit_key) |>
     dplyr::left_join(unit_topology, by = unit_key)
 
-  out <- .geome_join(out, db)
+  out <- .meta_join(out, db)
 
   # these columns are absent on un-migrated DBs
   if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_

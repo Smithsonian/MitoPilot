@@ -204,7 +204,7 @@ new_db_userAsmb <- function(
     ) |>
     dplyr::select(-dplyr::any_of("Topology"), -Assembly)
   if (mapping_geome %in% colnames(mapping)) {
-    mapping$GEOME_BCID <- .geome_store_value(mapping[[mapping_geome]])
+    mapping$GEOME_BCID <- .meta_store_value("GEOME", mapping[[mapping_geome]])
     if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
   }
   glue::glue_sql(
@@ -957,10 +957,10 @@ new_db_userAsmb <- function(
     );"
   )
 
-  .geome_ensure_tables(con)
+  .meta_ensure_tables(con)
   if (fetch_geome && "GEOME_BCID" %in% colnames(mapping) && any(!is.na(mapping$GEOME_BCID))) {
     has <- !is.na(mapping$GEOME_BCID)
-    .geome_fetch_into(con, mapping$ID[has], mapping$GEOME_BCID[has])
+    .meta_fetch_into(con, "GEOME", mapping$ID[has], mapping$GEOME_BCID[has])
   }
 
   invisible(return())

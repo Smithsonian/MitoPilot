@@ -18,7 +18,7 @@ test_that(".geome_fetch_chain walks Tissue -> Sample -> Event -> Expedition -> P
   expect_equal(lv$depth, 0:4)
   expect_equal(out$value[out$level == "Event" & out$field == "country"], "French Polynesia")
   expect_equal(out$value[out$level == "Project" & out$field == "projectTitle"], "Moorea Biocode")
-  expect_equal(unique(out$bcid[out$level == "Sample"]), "ark:/21547/CYA2Reedy01")
+  expect_equal(unique(out$ref[out$level == "Sample"]), "ark:/21547/CYA2Reedy01")
   expect_false(any(out$field %in% c("user", "project", "entityIdentifiers")))
   expect_type(out$depth, "integer")
 })

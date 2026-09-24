@@ -7,7 +7,7 @@ EXPORT_COL_GROUPS <- list(
                "blast_lineage"),
   # filled at render time from the user's mapping file (export_metadata_cols)
   Metadata = character(0),
-  # geome + the fields ticked in geome_export_fields, filled at render time
+  # geome + the fields ticked in meta_export_fields, filled at render time
   GEOME = c("geome")
 )
 EXPORT_COL_GROUP_LOOKUP <- {
@@ -236,9 +236,9 @@ export_server <- function(id) {
     geome_fields_ver <- reactiveVal(0L)
     geome_col_defs <- function() {
       keys <- tryCatch(
-        DBI::dbGetQuery(session$userData$con, "SELECT key FROM geome_export_fields")$key,
+        DBI::dbGetQuery(session$userData$con, "SELECT key FROM meta_export_fields")$key,
         error = function(e) character(0))
-      cols <- vapply(keys, .geome_key_col, character(1), USE.NAMES = FALSE)
+      cols <- vapply(keys, .meta_key_col, character(1), USE.NAMES = FALSE)
       stats::setNames(lapply(cols, function(col) {
         colDef(show = TRUE, name = col, header = rt_header(col, "From GEOME"),
                class = "mp-grp-GEOME", headerClass = "mp-grp-GEOME",
@@ -249,7 +249,7 @@ export_server <- function(id) {
     # GEOME field picker ----
     init("geome_fields")
     on("geome_fields", {
-      s <- geome_field_summary(session$userData$con)
+      s <- meta_field_summary(session$userData$con, "GEOME")
       showModal(geome_fields_modal(ns, s))
       raw <- s[s$kind == "raw", ]
       output$geome_raw <- reactable::renderReactable(reactable::reactable(
@@ -266,10 +266,10 @@ export_server <- function(id) {
     })
 
     observeEvent(input$geome_fields_save, {
-      s <- geome_field_summary(session$userData$con)
+      s <- meta_field_summary(session$userData$con, "GEOME")
       raw <- s[s$kind == "raw", ]
       picked <- raw$key[reactable::getReactableState("geome_raw", "selected") %||% integer(0)]
-      .geome_save_fields(session$userData$con, c(input$geome_combos, picked))
+      .meta_save_fields(session$userData$con, c(input$geome_combos, picked))
       removeModal()
       geome_fields_ver(geome_fields_ver() + 1L)
       rv$data <- fetch_export_data()

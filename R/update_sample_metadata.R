@@ -50,7 +50,7 @@ update_sample_metadata <- function(
       Taxon = .data[[mapping_taxon]]
     )
   if (mapping_geome %in% colnames(mapping)) {
-    mapping$GEOME_BCID <- .geome_store_value(mapping[[mapping_geome]])
+    mapping$GEOME_BCID <- .meta_store_value("GEOME", mapping[[mapping_geome]])
     if (mapping_geome != "GEOME_BCID") mapping[[mapping_geome]] <- NULL
   }
   # convert everything to characters
@@ -136,14 +136,14 @@ update_sample_metadata <- function(
     )
 
   if ("GEOME_BCID" %in% colnames(mapping)) {
-    .geome_ensure_tables(con)
+    .meta_ensure_tables(con)
     new <- mapping$GEOME_BCID
     old <- unname(old_bcid[mapping$ID])
     changed <- xor(is.na(new), is.na(old)) | (!is.na(new) & !is.na(old) & new != old)
-    if (any(changed)) .geome_drop(con, mapping$ID[changed])
+    if (any(changed)) .meta_drop(con, "GEOME", mapping$ID[changed])
     refetch <- changed & !is.na(new)
     if (fetch_geome && any(refetch)) {
-      .geome_fetch_into(con, mapping$ID[refetch], new[refetch])
+      .meta_fetch_into(con, "GEOME", mapping$ID[refetch], new[refetch])
     }
   }
 }

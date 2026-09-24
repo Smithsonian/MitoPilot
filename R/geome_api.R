@@ -33,17 +33,6 @@ geome_normalize_bcid <- function(x) {
   jsonlite::fromJSON(httr2::resp_body_string(resp), simplifyVector = FALSE)
 }
 
-.geome_flatten <- function(x, level, depth, bcid) {
-  keep <- vapply(x, function(v) {
-    length(v) == 1L && !is.list(v) && !is.na(v) && nzchar(as.character(v))
-  }, logical(1))
-  x <- x[keep]
-  if (!length(x)) return(NULL)
-  data.frame(level = level, depth = as.integer(depth), bcid = bcid,
-             field = names(x), value = vapply(x, as.character, ""),
-             row.names = NULL)
-}
-
 .geome_fetch_chain <- function(bcid, cache = new.env()) {
   get <- function(key, path, query = list()) {
     if (is.null(cache[[key]])) cache[[key]] <- .geome_get(path, query)
@@ -61,7 +50,7 @@ geome_normalize_bcid <- function(x) {
     seen <- c(seen, cur)
     resp <- get(cur, paste0("records/", cur), list(includeParent = "true"))
     top <- resp$record
-    out[[length(out) + 1L]] <- .geome_flatten(top, top$entity %||% "Record", depth, cur)
+    out[[length(out) + 1L]] <- .meta_flatten(top, top$entity %||% "Record", depth, cur)
     cur <- resp$parent$bcid
     depth <- depth + 1L
   }
@@ -70,11 +59,11 @@ geome_normalize_bcid <- function(x) {
   if (!is.null(pid) && !is.null(exp)) {
     tryCatch({
       e <- get(paste0("exp:", pid, ":", exp), paste0("projects/", pid, "/expeditions/", exp))
-      out[[length(out) + 1L]] <- .geome_flatten(e, "Expedition", depth, e$identifier %||% NA_character_)
+      out[[length(out) + 1L]] <- .meta_flatten(e, "Expedition", depth, e$identifier %||% NA_character_)
       projects <- get("projects", "projects", list(includePublic = "true"))
       p <- Filter(function(x) identical(as.character(x$projectId), as.character(pid)), projects)
       if (length(p)) {
-        out[[length(out) + 1L]] <- .geome_flatten(p[[1]], "Project", depth + 1L, NA_character_)
+        out[[length(out) + 1L]] <- .meta_flatten(p[[1]], "Project", depth + 1L, NA_character_)
       }
     }, error = function(e) NULL)
   }

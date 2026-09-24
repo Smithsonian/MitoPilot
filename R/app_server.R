@@ -16,7 +16,7 @@ app_server <- function(input, output, session) {
     )
   }
   session$userData$con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
-  .geome_ensure_tables(session$userData$con)
+  .meta_ensure_tables(session$userData$con)
   session$onSessionEnded(function() {
     message("Session ended. Closing DB connection.")
     DBI::dbDisconnect(session$userData$con)

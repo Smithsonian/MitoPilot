@@ -1,14 +1,15 @@
 #' Left-join GEOME fetch status onto a lazy samples-keyed table
 #'
 #' @param tbl a lazy dplyr table keyed by `ID`
-#' @param db database connection (source of `geome_status`)
+#' @param db database connection (source of `meta_status`)
 #' @return `tbl` with `geome` ("ok" | "failed" | "none") and `geome_message` added
 #' @noRd
 .geome_status_join <- function(tbl, db) {
-  .geome_ensure_tables(db)
+  .meta_ensure_tables(db)
   tbl |>
     dplyr::left_join(
-      dplyr::tbl(db, "geome_status") |>
+      dplyr::tbl(db, "meta_status") |>
+        dplyr::filter(source == "GEOME") |>
         dplyr::select(ID, geome_status = status, geome_message = message),
       by = "ID"
     ) |>
@@ -66,7 +67,7 @@ geome_col_def <- function(inputId, sticky = NULL, class = NULL) {
 #' @param con database connection
 #' @noRd
 .geome_project_has_bcids <- function(con) {
-  .geome_ensure_tables(con)
+  .meta_ensure_tables(con)
   DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM samples
                         WHERE GEOME_BCID IS NOT NULL AND TRIM(GEOME_BCID) != ''")$n > 0
 }
@@ -120,23 +121,10 @@ geome_record_view <- function(recs, box_id = "geome-records") {
   )
 }
 
-#' Replace the set of GEOME fields available at export
-#'
-#' @param con database connection
-#' @param keys character vector of `combo:<name>` / `raw:<level>:<field>` keys
-#' @noRd
-.geome_save_fields <- function(con, keys) {
-  DBI::dbWithTransaction(con, {
-    DBI::dbExecute(con, "DELETE FROM geome_export_fields")
-    if (length(keys)) DBI::dbAppendTable(con, "geome_export_fields", data.frame(key = unique(keys)))
-  })
-  invisible(keys)
-}
-
 #' Modal listing GEOME fields available at export
 #'
 #' @param ns module namespace function
-#' @param s `geome_field_summary()` output
+#' @param s `meta_field_summary()` output
 #' @noRd
 geome_fields_modal <- function(ns, s) {
   combos <- s[s$kind == "combo", ]
@@ -176,7 +164,8 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
 
     samples <- function() {
       DBI::dbGetQuery(con, "SELECT s.ID, s.Taxon, s.GEOME_BCID, g.status, g.message, g.fetched_at
-                            FROM samples s LEFT JOIN geome_status g ON s.ID = g.ID ORDER BY s.ID")
+                            FROM samples s LEFT JOIN meta_status g ON s.ID = g.ID AND g.source = 'GEOME'
+                            ORDER BY s.ID")
     }
 
     observeEvent(open(), {
@@ -228,8 +217,8 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
       req(rv$id)
       s <- samples()
       s <- s[s$ID == rv$id, ]
-      recs <- DBI::dbGetQuery(con, "SELECT level, depth, bcid, field, value FROM geome_records WHERE ID = ?",
-                              params = list(rv$id))
+      recs <- DBI::dbGetQuery(con, "SELECT level, depth, ref AS bcid, field, value FROM meta_records
+                                    WHERE ID = ? AND source = 'GEOME'", params = list(rv$id))
       tagList(
         div(class = "mp-geome-bcid",
           textInput(ns("bcid"), "GEOME BCID", value = s$GEOME_BCID %|NA|% "",
@@ -249,10 +238,10 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
     observeEvent(input$fetch, {
       req(rv$id)
       tryCatch({
-        val <- .geome_set_bcid(con, rv$id, input$bcid)
+        val <- .meta_set_ref(con, "GEOME", rv$id, input$bcid)
         if (!is.na(val)) {
           withProgress(message = "Fetching from GEOME", {
-            res <- suppressWarnings(.geome_fetch_into(con, rv$id, val))
+            res <- suppressWarnings(.meta_fetch_into(con, "GEOME", rv$id, val))
           })
           if (res$status == "failed") showNotification(res$message, type = "warning")
         }
@@ -268,7 +257,7 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
       tryCatch({
         withProgress(message = "Fetching from GEOME", value = 0, {
           for (i in seq_len(nrow(s))) {
-            suppressWarnings(.geome_fetch_into(con, s$ID[i], s$GEOME_BCID[i], cache))
+            suppressWarnings(.meta_fetch_into(con, "GEOME", s$ID[i], s$GEOME_BCID[i], cache))
             incProgress(1 / nrow(s), detail = s$ID[i])
           }
         })
