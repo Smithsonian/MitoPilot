@@ -441,7 +441,8 @@ export_files <- function(
                         dplyr::any_of(c("blast_accession_auto", "poor_blast_ref"))),
         by = "ID"
       ) |>
-      dplyr::collect()
+      dplyr::collect() |>
+      .geome_join(con)
     # SeqID for glue templates; the FASTA defline and the .tbl >Feature line must
     # agree exactly or table2asn rejects the submission.
     dat$seqid <- .seqid
@@ -1498,7 +1499,8 @@ get_export_PCG_annotations <- function(con, group) {
     dat <- dplyr::tbl(con, "samples") |>
       dplyr::select(-dplyr::any_of("topology")) |>
       dplyr::filter(ID == !!u$ID) |>
-      dplyr::collect()
+      dplyr::collect() |>
+      .geome_join(con)
 
     seq <- get_assembly(
       ID = u$ID,

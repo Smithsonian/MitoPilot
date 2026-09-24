@@ -94,6 +94,12 @@ geome_export_cols <- function(con, ids = NULL) {
   out
 }
 
+.geome_join <- function(dat, con) {
+  g <- geome_export_cols(con, ids = unique(dat$ID))
+  if (is.null(g)) return(dat)
+  dplyr::left_join(dat, g, by = "ID")
+}
+
 geome_field_summary <- function(con) {
   .geome_ensure_tables(con)
   recs <- DBI::dbGetQuery(con, "SELECT ID, level, depth, field, value FROM geome_records")

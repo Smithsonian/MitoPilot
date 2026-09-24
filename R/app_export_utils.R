@@ -339,6 +339,8 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
     dplyr::left_join(orf_enabled, by = unit_key) |>
     dplyr::left_join(unit_topology, by = unit_key)
 
+  out <- .geome_join(out, db)
+
   # these columns are absent on un-migrated DBs
   if (!"linear_complete" %in% names(out)) out$linear_complete <- NA_integer_
   if (!"partial" %in% names(out)) out$partial <- NA_character_
@@ -410,6 +412,6 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
 #' @noRd
 export_metadata_cols <- function(sample_cols, declared) {
   owned <- c("ID", "Taxon", "genetic_code", "topology", "R1", "R2", "assembly",
-             "Assembly", "Topology", "Reference", "Reference_topology")
+             "Assembly", "Topology", "Reference", "Reference_topology", "GEOME_BCID")
   sample_cols[!sample_cols %in% c(owned, declared)]
 }

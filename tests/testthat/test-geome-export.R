@@ -86,3 +86,26 @@ test_that("geome_field_summary lists combos and raw fields with counts", {
   expect_equal(raw$col, "geome_Event_country")
   expect_true(all(paste0("combo:", names(GEOME_COMBOS)) %in% s$key))
 })
+
+test_that("export_metadata_cols treats GEOME_BCID as owned", {
+  expect_equal(export_metadata_cols(c("ID", "Taxon", "GEOME_BCID", "site"), character()), "site")
+})
+
+test_that(".geome_join adds ticked columns and is a no-op otherwise", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
+  dat <- data.frame(ID = "s1", Taxon = "x")
+  expect_identical(.geome_join(dat, con), dat)
+  .geome_ensure_tables(con)
+  DBI::dbAppendTable(con, "geome_records", data.frame(
+    ID = "s1", level = "Event", depth = 2L, bcid = "ark:/1/E", field = "country", value = "Peru"))
+  DBI::dbAppendTable(con, "geome_export_fields", data.frame(key = "raw:Event:country"))
+  expect_equal(.geome_join(dat, con)$geome_Event_country, "Peru")
+})
+
+test_that("a ticked GEOME column resolves in a header template", {
+  dat <- data.frame(ID = "s1", geome_lat_lon = "17.5 S 149.8 W")
+  expect_equal(as.character(stringr::str_glue_data(dat, "{ID} [lat_lon={geome_lat_lon}]")),
+               "s1 [lat_lon=17.5 S 149.8 W]")
+})
