@@ -88,6 +88,8 @@ reference:
   - new_db_userAsmb
   - add_samples
   - update_sample_metadata
+  - fetch_geome
+  - geome_normalize_bcid
   - update_sample_seqdata
   - set_maptoref_refs
   - backwards_compatibility
