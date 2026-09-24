@@ -201,7 +201,7 @@ sample ID and its Taxon; **Sample** on the left lists every sample, with
 identifier box and clicking **Fetch** removes that link. **Refresh all**
 fetches every sample's GEOME and GBIF records again.
 
-![Specimen viewer, GBIF tab, with occurrence issues and the dataset citation](figures/specimen_viewer_gbif.png)
+![Specimen viewer, GBIF tab, with the occurrence issues shown as badges](figures/specimen_viewer_gbif.png)
 
 ## Comparing sources
 
