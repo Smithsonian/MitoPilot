@@ -140,3 +140,23 @@ test_that("every table's column groups include GEOME holding the geome column", 
   }
   expect_true("GEOME" %in% names(EXPORT_COL_GROUPS))
 })
+
+test_that("panel module servers start outside a reactive context", {
+  start <- function(maker, servers) {
+    proj <- withr::local_tempdir()
+    suppressMessages(maker(path = proj, executor = "local", Rproj = FALSE))
+    con <- DBI::dbConnect(RSQLite::SQLite(), file.path(proj, ".sqlite"))
+    withr::defer(DBI::dbDisconnect(con))
+    withr::local_options(MitoPilot.db = file.path(proj, ".sqlite"))
+    for (srv in servers) {
+      ms <- shiny::MockShinySession$new()
+      ms$userData$con <- con
+      ms$userData$mode <- "annotate"
+      for (f in c("goto_annotate", "reopen_outlier_review", "run_modal")) gargoyle::init(f, session = ms)
+      # not testServer: it runs the module inside isolate(), hiding reads that crash the real app
+      expect_no_error(shiny::withReactiveDomain(ms, get(srv)("m")), message = srv)
+    }
+  }
+  start(function(...) new_test_project(n = 2, ...), c("assemble_server", "annotate_server", "export_server"))
+  start(new_test_project_userAsmb, "assemble_server_userAsmb")
+})

@@ -182,8 +182,8 @@ annotate_server <- function(id) {
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
     col_groups_rv <- reactiveVal(.geome_default_groups(names(ANNOTATE_COL_GROUPS), session$userData$con))
-    if (!"GEOME" %in% col_groups_rv()) {
-      shinyWidgets::updatePickerInput(session, "col_groups", selected = col_groups_rv())
+    if (!"GEOME" %in% isolate(col_groups_rv())) {
+      shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
     }
     observeEvent(input$col_groups, {
       col_groups_rv(input$col_groups %||% character(0))
