@@ -31,9 +31,12 @@
 
 .geome_set_bcid <- function(con, id, raw) {
   .geome_ensure_tables(con)
+  old <- DBI::dbGetQuery(con, "SELECT GEOME_BCID FROM samples WHERE ID = ?", params = list(id))$GEOME_BCID
+  old <- if (length(old)) old[1] else NA_character_
   val <- .geome_store_value(raw)
+  changed <- xor(is.na(old), is.na(val)) || (!is.na(old) && !is.na(val) && old != val)
   DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = ? WHERE ID = ?", params = list(val, id))
-  if (is.na(val)) .geome_drop(con, id)
+  if (changed) .geome_drop(con, id)
   val
 }
 

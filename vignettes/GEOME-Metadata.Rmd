@@ -163,7 +163,8 @@ Clicking the icon does not select or deselect the row.
   **Fetch** removes the sample's GEOME link.
 - **Refresh all** fetches every sample with a BCID again.
 
-The table icons update when the viewer changes a sample.
+The current table's GEOME icons refresh when the viewer changes a sample;
+other panels' tables update the next time they reload.
 
 ## Using GEOME fields at export
 
@@ -239,9 +240,11 @@ The ticked columns are also written to the group's `sample_info` CSV.
 - **Internet access is needed** by the machine running R or the app, since
   that is where GEOME is contacted. Compute nodes running the pipeline never
   contact GEOME.
-- **A failed refresh keeps the previous data.** If a sample was fetched before
-  and a later fetch fails, its old records stay in place and remain usable at
-  export; only the status changes to failed.
+- **A failed refresh of the same BCID keeps the previous data.** If a sample
+  was fetched before and a later fetch of the same BCID fails, its old
+  records stay in place and remain usable at export; only the status changes
+  to failed. Changing a sample to a different BCID clears its old record
+  right away, even if the new fetch then fails.
 
 Messages you may see in the viewer, on a warning icon, or in the
 `fetch_geome()` warning:

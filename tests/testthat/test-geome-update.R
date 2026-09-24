@@ -45,6 +45,17 @@ test_that("update_sample_metadata refetches changed, drops cleared, skips unchan
   expect_true("Tissue" %in% lv)
 })
 
+test_that("update_sample_metadata with fetch_geome = FALSE drops stale records for a changed BCID", {
+  local_mocked_bindings(.geome_get = geome_fixture_get)
+  d <- geome_project(bcids = c("ark:/21547/CYB2REEDY", ""))
+  up <- data.frame(ID = c("s1", "s2"), Taxon = "x",
+                   GEOME_BCID = c("ark:/21547/CYA2Reedy01", ""))
+  utils::write.csv(up, file.path(d, "up.csv"), row.names = FALSE)
+  update_sample_metadata(d, file.path(d, "up.csv"), fetch_geome = FALSE)
+  expect_equal(geome_q(d, "SELECT COUNT(*) n FROM geome_records WHERE ID='s1'")$n, 0L)
+  expect_equal(geome_q(d, "SELECT COUNT(*) n FROM geome_status WHERE ID='s1'")$n, 0L)
+})
+
 test_that("update CSV without a BCID column leaves GEOME data alone", {
   local_mocked_bindings(.geome_get = geome_fixture_get)
   d <- geome_project()

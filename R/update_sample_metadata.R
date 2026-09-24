@@ -140,7 +140,7 @@ update_sample_metadata <- function(
     new <- mapping$GEOME_BCID
     old <- unname(old_bcid[mapping$ID])
     changed <- xor(is.na(new), is.na(old)) | (!is.na(new) & !is.na(old) & new != old)
-    if (any(changed & is.na(new))) .geome_drop(con, mapping$ID[changed & is.na(new)])
+    if (any(changed)) .geome_drop(con, mapping$ID[changed])
     refetch <- changed & !is.na(new)
     if (fetch_geome && any(refetch)) {
       .geome_fetch_into(con, mapping$ID[refetch], new[refetch])

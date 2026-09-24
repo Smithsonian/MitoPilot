@@ -19,6 +19,38 @@ test_that(".geome_store_value keeps bad input visible and blanks as NA", {
                c("ark:/21547/X", "junk", NA, NA))
 })
 
+test_that(".geome_set_bcid drops old records on a changed BCID, keeps them on same BCID", {
+  con <- geome_test_db()
+  .geome_ensure_tables(con)
+  .geome_set_bcid(con, "s1", "ark:/21547/A")
+  DBI::dbExecute(con, "INSERT INTO geome_records VALUES ('s1', 'Tissue', 0, 'ark:/21547/A', 'f', 'v')")
+  DBI::dbExecute(con, "INSERT INTO geome_status VALUES ('s1', 'ark:/21547/A', 'ok', NULL, 1)")
+
+  # same BCID: keep data
+  .geome_set_bcid(con, "s1", "ark:/21547/A")
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_records WHERE ID='s1'")$n, 1L)
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_status WHERE ID='s1'")$n, 1L)
+
+  # different BCID: drop old data
+  .geome_set_bcid(con, "s1", "ark:/21547/B")
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_records WHERE ID='s1'")$n, 0L)
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_status WHERE ID='s1'")$n, 0L)
+})
+
+test_that(".geome_set_bcid then a failing fetch leaves no stale records", {
+  local_mocked_bindings(.geome_get = geome_fixture_get)
+  con <- geome_test_db()
+  .geome_ensure_tables(con)
+  DBI::dbExecute(con, "INSERT INTO geome_records VALUES ('s1', 'Tissue', 0, 'ark:/21547/A', 'f', 'v')")
+  DBI::dbExecute(con, "INSERT INTO geome_status VALUES ('s1', 'ark:/21547/A', 'ok', NULL, 1)")
+
+  val <- .geome_set_bcid(con, "s1", "ark:/21547/NOPE")
+  suppressWarnings(.geome_fetch_into(con, "s1", val))
+
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM geome_records WHERE ID='s1'")$n, 0L)
+  expect_equal(DBI::dbGetQuery(con, "SELECT status FROM geome_status WHERE ID='s1'")$status, "failed")
+})
+
 test_that(".geome_fetch_into stores records and ok status", {
   local_mocked_bindings(.geome_get = geome_fixture_get)
   con <- geome_test_db()
