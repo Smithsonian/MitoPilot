@@ -114,7 +114,7 @@ export_server <- function(id) {
     ns <- session$ns
 
     geome_viewer_server("geome", open = reactive(input$geome_open),
-                        on_change = function() trigger("update_export_table"))
+                        on_change = function() trigger("refresh_export"))
 
     # Prepare data ----
     rv <- reactiveValues(

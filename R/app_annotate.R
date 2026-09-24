@@ -88,7 +88,7 @@ annotate_server <- function(id) {
     ns <- session$ns
 
     geome_viewer_server("geome", open = reactive(input$geome_open),
-                        on_change = function() trigger("update_annotate_table"))
+                        on_change = function() trigger("refresh_annotate"))
 
     # Help-doc icons (one observer per tool, registered once at module init).
     reopen_annotate <- function() annotate_opts_modal(rv)

@@ -64,7 +64,7 @@ assemble_server_userAsmb <- function(id) {
     ns <- session$ns
 
     geome_viewer_server("geome", open = reactive(input$geome_open),
-                        on_change = function() trigger("update_assemble_table"))
+                        on_change = function() trigger("refresh_assemble"))
 
     register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
     register_tool_help("blastn", input, reopen = function() blast_opts_modal(rv))
