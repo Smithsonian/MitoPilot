@@ -196,8 +196,9 @@ needs at least a four-digit year.
 Below that, **All GEOME fields** lists every raw field found in the project's
 records, with its level, the number of samples that have it, and an example.
 Raw fields become columns named `geome_<Level>_<field>`, for example
-`geome_Tissue_tissueType` or `geome_Event_depthOfBottomInMeters`. Use the
-search box to find a field, and click rows to tick them.
+`geome_Tissue_tissueType` or `geome_Event_depthOfBottomInMeters`; the
+**Template token** column shows the exact `{...}` token to paste into a header
+template. Use the search box to find a field, and click rows to tick them.
 
 Nothing is ticked by default. Click **Save** and each ticked field becomes a
 column in the Export table. These columns are part of the **GEOME** entry in
@@ -221,8 +222,8 @@ three GEOME tokens writes a header like:
 
 <div class="alert alert-warning">
 <strong>Empty values stay in the header.</strong> If a sample has no value for
-a field, the header still gets the modifier, filled with <code>NA</code>:
-<code>[lat_lon=NA]</code>, which GenBank rejects. Only add a GEOME modifier to a
+a field, the header still gets the modifier with nothing after it, such as
+<code>[lat_lon=]</code>, which GenBank rejects. Only add a GEOME modifier to a
 template when every sample in the export group has a value for it. The sample
 counts in the GEOME Fields window and the columns in the Export table show
 which samples are missing one. MitoPilot never changes your templates on its
@@ -251,4 +252,5 @@ Messages you may see in the viewer, on a warning icon, or in the
 | `record is private or needs a GEOME login` | The record belongs to a private GEOME project. |
 | `could not reach GEOME (...)` | No connection to `api.geome-db.org`: offline, a firewall, or GEOME is down. The details in brackets come from the connection error. Try again later with `fetch_geome()` or **Refresh all**. |
 | `'x' is not a GEOME BCID (expected ark:/NNNNN/...)` | The value does not look like a BCID. Copy the `ark:/...` identifier from the record page. |
-| `GEOME returned HTTP ...` | Any other error from GEOME. Some malformed identifiers are rejected this way. |
+| `BCID not recognized by GEOME` | GEOME rejected the identifier as malformed, even though it starts with `ark:/`. Check it against the record page. |
+| `GEOME returned HTTP ...` | Any other error from GEOME. Try again later. |
