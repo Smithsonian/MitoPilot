@@ -132,7 +132,7 @@ geome_fields_modal <- function(ns, s) {
   modalDialog(
     title = mp_modal_title("GEOME fields for export",
                            "Ticked fields become columns you can use in header templates"),
-    size = "xl", easyClose = TRUE,
+    size = "l", easyClose = TRUE,
     h5("GenBank-ready combinations"),
     checkboxGroupInput(
       ns("geome_combos"), NULL, width = "100%",
@@ -173,7 +173,7 @@ geome_viewer_server <- function(id, open, on_change = function() NULL) {
       lab <- paste0(s$ID, ifelse(is.na(s$status), "", ifelse(s$status == "failed", " (failed)", "")))
       modalDialog(
         title = mp_modal_title("GEOME metadata", "Records fetched from geome-db.org"),
-        size = "xl", easyClose = TRUE,
+        size = "l", easyClose = TRUE,
         fluidRow(
           column(3,
             selectInput(ns("sample"), "Sample", choices = stats::setNames(s$ID, lab),
