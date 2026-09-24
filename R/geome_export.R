@@ -28,13 +28,8 @@ GEOME_COMBOS <- list(
   collection_date = list(
     label = "collection_date", sources = c("yearCollected", "monthCollected", "dayCollected"),
     fn = function(recs) {
-      y <- .geome_pick(recs, "yearCollected")
-      if (is.na(y) || !grepl("^[0-9]{4}$", y)) return(NA_character_)
-      m <- suppressWarnings(as.integer(.geome_pick(recs, "monthCollected")))
-      d <- suppressWarnings(as.integer(.geome_pick(recs, "dayCollected")))
-      if (is.na(m) || m < 1 || m > 12) return(y)
-      if (is.na(d) || d < 1 || d > 31) return(sprintf("%s-%02d", y, m))
-      sprintf("%s-%02d-%02d", y, m, d)
+      .meta_ymd(.geome_pick(recs, "yearCollected"), .geome_pick(recs, "monthCollected"),
+                .geome_pick(recs, "dayCollected"))
     }
   ),
   geo_loc_name = list(

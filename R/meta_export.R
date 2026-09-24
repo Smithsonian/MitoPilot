@@ -1,5 +1,14 @@
 .meta_combos <- function(prefix) {
-  switch(tolower(prefix), geome = GEOME_COMBOS, NULL)
+  switch(tolower(prefix), geome = GEOME_COMBOS, gbif = GBIF_COMBOS, NULL)
+}
+
+.meta_ymd <- function(y, m, d) {
+  if (is.na(y) || !grepl("^[0-9]{4}$", y)) return(NA_character_)
+  m <- suppressWarnings(as.integer(m))
+  d <- suppressWarnings(as.integer(d))
+  if (is.na(m) || m < 1 || m > 12) return(y)
+  if (is.na(d) || d < 1 || d > 31) return(sprintf("%s-%02d", y, m))
+  sprintf("%s-%02d-%02d", y, m, d)
 }
 
 .meta_key_col <- function(key) {
