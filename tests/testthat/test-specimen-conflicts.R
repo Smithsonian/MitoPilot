@@ -70,6 +70,17 @@ test_that("specimen_conflicts flags agree, note, conflict, single, and empty", {
   expect_equal(unique(specimen_conflicts(con, ids = "s2")$ID), "s2")
 })
 
+test_that("samples with no meta_records rows short-circuit to CSV-only single/NA status", {
+  con <- spec_db()
+  DBI::dbExecute(con, "DELETE FROM meta_records WHERE ID = 's1'")
+  cf <- specimen_conflicts(con, ids = "s1")
+  csv_only <- cf$concept[!is.na(cf$csv_value) & nzchar(cf$csv_value)]
+  expect_true(all(cf$status[cf$concept %in% csv_only] == "single"))
+  expect_true(all(is.na(cf$status[!cf$concept %in% csv_only])))
+  expect_true(all(is.na(cf$geome_value)))
+  expect_true(all(is.na(cf$gbif_value)))
+})
+
 test_that("stored CSV overrides change what is compared, NA restores detection", {
   con <- spec_db()
   .spec_set_csv_map(con, list(collection_date = ""))
