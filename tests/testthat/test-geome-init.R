@@ -41,6 +41,27 @@ test_that("new_db fetch_geome = FALSE stores BCIDs without calling GEOME", {
   expect_true("geome_export_fields" %in% DBI::dbListTables(con))
 })
 
+test_that("new_db_userAsmb stores a renamed BCID column and fetches it", {
+  local_mocked_bindings(.geome_get = geome_fixture_get)
+  d <- withr::local_tempdir()
+  mapping_fn <- file.path(d, "mapping.csv")
+  utils::write.csv(
+    data.frame(ID = c("s1", "s2"), Taxon = c("Danio rerio", "Danio rerio"),
+               Assembly = c("s1.fasta", "s2.fasta"), Topology = c("linear", "circular"),
+               Bcid = c("ark:/21547/CYB2REEDY", "")),
+    mapping_fn, row.names = FALSE
+  )
+  db_path <- file.path(d, ".sqlite")
+  new_db_userAsmb(db_path = db_path, mapping_fn = mapping_fn, no_raw_data = TRUE,
+                  mapping_geome = "Bcid")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
+  on.exit(DBI::dbDisconnect(con))
+  s <- DBI::dbGetQuery(con, "SELECT * FROM samples ORDER BY ID")
+  expect_false("Bcid" %in% names(s))
+  expect_equal(s$GEOME_BCID, c("ark:/21547/CYB2REEDY", NA))
+  expect_equal(DBI::dbGetQuery(con, "SELECT ID, status FROM geome_status")$ID, "s1")
+})
+
 test_that("new_db_userAsmb fetch_geome = FALSE stores BCIDs without calling GEOME", {
   local_mocked_bindings(.geome_get = function(...) stop("should not be called"))
   d <- withr::local_tempdir()
