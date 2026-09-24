@@ -97,7 +97,10 @@ geome_export_cols <- function(con, ids = NULL) {
 .geome_join <- function(dat, con) {
   g <- geome_export_cols(con, ids = unique(dat$ID))
   if (is.null(g)) return(dat)
-  dplyr::left_join(dat, g, by = "ID")
+  out <- dplyr::left_join(dat, g, by = "ID")
+  cols <- setdiff(names(g), "ID")
+  out[cols] <- lapply(out[cols], function(x) ifelse(is.na(x), "", x))
+  out
 }
 
 geome_field_summary <- function(con) {

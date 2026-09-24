@@ -109,3 +109,17 @@ test_that("a ticked GEOME column resolves in a header template", {
   expect_equal(as.character(stringr::str_glue_data(dat, "{ID} [lat_lon={geome_lat_lon}]")),
                "s1 [lat_lon=17.5 S 149.8 W]")
 })
+
+test_that("a ticked GEOME field with no value joins as empty, not NA", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("s1", "s2"), Taxon = "x"))
+  .geome_ensure_tables(con)
+  DBI::dbAppendTable(con, "geome_records", data.frame(
+    ID = "s1", level = "Event", depth = 2L, bcid = "ark:/1/E", field = "country", value = "Peru"))
+  DBI::dbAppendTable(con, "geome_export_fields", data.frame(key = "combo:lat_lon"))
+  dat <- .geome_join(data.frame(ID = c("s1", "s2"), Taxon = c("x", NA)), con)
+  expect_equal(dat$geome_lat_lon, c("", ""))
+  expect_true(is.na(dat$Taxon[2]))
+  expect_equal(as.character(stringr::str_glue_data(dat[1, ], "[lat_lon={geome_lat_lon}]")), "[lat_lon=]")
+})
