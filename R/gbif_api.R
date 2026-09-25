@@ -3,9 +3,10 @@ GBIF_API <- "https://api.gbif.org/v1"
 #' Normalize GBIF occurrence IDs
 #'
 #' @param x Vector of gbifIDs: digits, numbers, or a gbif.org / api.gbif.org
-#'   occurrence URL.
-#' @return Character vector of digit-only IDs, NA where the input is blank or
-#'   not an occurrence ID.
+#'   occurrence URL. Smithsonian NMNH EZIDs (ark:/65665/3..., n2t.net or
+#'   collections.nmnh.si.edu links) are also accepted.
+#' @return Character vector of digit-only IDs or canonical NMNH ARKs, NA where
+#'   the input is blank or not an occurrence ID.
 #' @export
 gbif_normalize_id <- function(x) {
   x <- trimws(.meta_chr(x))
@@ -13,7 +14,30 @@ gbif_normalize_id <- function(x) {
   x <- sub("^https?://api\\.gbif\\.org/v1/occurrence/", "", x, ignore.case = TRUE)
   x <- sub("/+$", "", x)
   ok <- !is.na(x) & grepl("^[0-9]+$", x)
-  ifelse(ok, x, NA_character_)
+  ark <- .nmnh_normalize_ark(x)
+  ifelse(ok, x, ark)
+}
+
+.nmnh_normalize_ark <- function(x) {
+  m <- regmatches(x, regexpr("ark:/65665/3[0-9a-fA-F-]+", x))
+  out <- rep(NA_character_, length(x))
+  hit <- !is.na(x) & grepl("ark:/65665/3[0-9a-fA-F-]+", x)
+  u <- tolower(gsub("-", "", sub("^ark:/65665/3", "", m)))
+  u <- ifelse(nchar(u) == 32, u, NA_character_)
+  out[hit] <- ifelse(is.na(u), NA_character_, paste0(
+    "ark:/65665/3", substr(u, 1, 8), "-", substr(u, 9, 12), "-", substr(u, 13, 16), "-",
+    substr(u, 17, 20), "-", substr(u, 21, 32)))
+  out
+}
+
+.nmnh_resolve_ark <- function(ark) {
+  q <- utils::URLencode(paste0("http://n2t.net/", ark), reserved = TRUE)
+  res <- .gbif_get(paste0("occurrence/search?limit=2&occurrenceId=", q))$results
+  if (length(res) != 1L) {
+    stop("no GBIF occurrence found for NMNH EZID ", ark,
+         " (GBIF may not have indexed it yet)", call. = FALSE)
+  }
+  .meta_chr(res[[1]]$key)
 }
 
 .gbif_get <- function(path) {
@@ -35,6 +59,7 @@ gbif_normalize_id <- function(x) {
 }
 
 .gbif_fetch_chain <- function(id, cache = new.env()) {
+  if (startsWith(id, "ark:")) id <- .nmnh_resolve_ark(id)
   get <- function(key, path) {
     if (is.null(cache[[key]])) cache[[key]] <- .gbif_get(path)
     cache[[key]]

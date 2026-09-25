@@ -304,7 +304,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
     empty_msg <- list(
       GEOME = paste("This sample has no GEOME BCID. Paste one above and click Fetch, or add a",
                     "GEOME_BCID column to your mapping file (see the Specimen Metadata article)."),
-      GBIF = paste("This sample has no GBIF ID. Paste a gbifID or a gbif.org/occurrence link above",
+      GBIF = paste("This sample has no GBIF ID. Paste a gbifID, a gbif.org/occurrence link, or an NMNH EZID above",
                    "and click Fetch, or add a GBIF_ID column to your mapping file.")
     )
 

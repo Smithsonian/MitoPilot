@@ -8,6 +8,29 @@ test_that("gbif_normalize_id accepts digits, numbers, and gbif.org URLs", {
   expect_equal(gbif_normalize_id(c(6186461308, NA)), c("6186461308", NA))
 })
 
+test_that("gbif_normalize_id accepts NMNH EZIDs", {
+  ark <- "ark:/65665/35921f397-1d82-4c6c-a6ce-808364d17e8d"
+  x <- c("ark:/65665/35921f3971d824c6ca6ce808364d17e8d",
+         "http://n2t.net/ark:/65665/35921f397-1d82-4c6c-a6ce-808364d17e8d",
+         "https://collections.nmnh.si.edu/search/fishes/?ark=ark:/65665/35921F3971D824C6CA6CE808364D17E8D",
+         "ark:/65665/35921f3971d8", "ark:/21547/CXu2MBIO1000.1")
+  expect_equal(gbif_normalize_id(x), c(rep(ark, 3), NA, NA))
+})
+
+test_that(".gbif_fetch_chain resolves an NMNH EZID to its gbifID", {
+  seen <- character()
+  local_mocked_bindings(.gbif_get = function(path) {
+    seen <<- c(seen, path)
+    if (startsWith(path, "occurrence/search")) return(list(results = list(list(key = 6186461308))))
+    gbif_fixture_get(path)
+  })
+  out <- .gbif_fetch_chain("ark:/65665/35921f397-1d82-4c6c-a6ce-808364d17e8d")
+  expect_match(seen[1], "occurrenceId=http%3A%2F%2Fn2t.net%2Fark%3A%2F65665%2F35921f397", fixed = TRUE)
+  expect_equal(unique(out$ref[out$level == "Occurrence"]), "6186461308")
+  local_mocked_bindings(.gbif_get = function(path) list(results = list()))
+  expect_error(.gbif_fetch_chain("ark:/65665/35921f397-1d82-4c6c-a6ce-808364d17e8d"), "no GBIF occurrence")
+})
+
 test_that(".gbif_fetch_chain returns occurrence, dataset, and organization levels", {
   local_mocked_bindings(.gbif_get = gbif_fixture_get)
   out <- .gbif_fetch_chain("6186461308")

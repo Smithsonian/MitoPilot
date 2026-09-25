@@ -8,7 +8,7 @@ META_SOURCES <- list(
   GBIF = list(
     col = "GBIF_ID", label = "GBIF", id_label = "ID", arg = "gbifs",
     normalize = function(x) gbif_normalize_id(x),
-    invalid = function(x) paste0("'", x, "' is not a GBIF occurrence ID (expected digits)"),
+    invalid = function(x) paste0("'", x, "' is not a GBIF occurrence ID (expected digits or an NMNH EZID)"),
     chain = function(ref, cache) .gbif_fetch_chain(ref, cache)
   )
 )

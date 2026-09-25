@@ -270,7 +270,7 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
     raw[is.na(raw)] <- ""
     bad <- nzchar(raw) & is.na(gbif_normalize_id(raw))
     if (any(bad)) {
-      iss$warn("mapping GBIF ID: not a GBIF occurrence ID (digits) for ",
+      iss$warn("mapping GBIF ID: not a GBIF occurrence ID (digits) or NMNH EZID for ",
                .lst(lab[bad]), "; these samples will show a failed GBIF fetch")
     }
   }

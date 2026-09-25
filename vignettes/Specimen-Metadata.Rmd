@@ -84,6 +84,19 @@ https://www.gbif.org/occurrence/6186461308
 https://api.gbif.org/v1/occurrence/6186461308
 ```
 
+Smithsonian NMNH specimens can use their EZID instead. MitoPilot looks up the
+matching GBIF occurrence, so the specimen must already be on GBIF. The bare ARK
+and both link forms work, with or without dashes:
+
+```
+ark:/65665/35921f3971d824c6ca6ce808364d17e8d
+http://n2t.net/ark:/65665/35921f397-1d82-4c6c-a6ce-808364d17e8d
+https://collections.nmnh.si.edu/search/fishes/?ark=ark:/65665/35921f3971d824c6ca6ce808364d17e8d
+```
+
+An EZID never changes, so it is a safer choice than a gbifID for NMNH
+specimens.
+
 <div class="alert alert-note">
 <strong>GBIF IDs can change.</strong> GBIF may give an occurrence a new gbifID
 when its dataset is republished. If an ID that used to work stops resolving,

@@ -8,11 +8,12 @@ gbif_normalize_id(x)
 }
 \arguments{
 \item{x}{Vector of gbifIDs: digits, numbers, or a gbif.org / api.gbif.org
-occurrence URL.}
+occurrence URL. Smithsonian NMNH EZIDs (ark:/65665/3..., n2t.net or
+collections.nmnh.si.edu links) are also accepted.}
 }
 \value{
-Character vector of digit-only IDs, NA where the input is blank or
-  not an occurrence ID.
+Character vector of digit-only IDs or canonical NMNH ARKs, NA where
+  the input is blank or not an occurrence ID.
 }
 \description{
 Normalize GBIF occurrence IDs
