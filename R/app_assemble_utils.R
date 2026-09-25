@@ -926,7 +926,7 @@ assemble_lock_begin <- function(rv, rows, unit = "assembly",
   if (lock_current != 0) {
     rv$lock_pending <- upd |> dplyr::select(ID, assemble_lock)
     n_locked <- sum(upd$assemble_lock %in% 1)
-    mp_confirm(
+    skipped <- mp_confirm(
       session$ns("lock_confirm"),
       title = paste("Unlock", mp_n(n_locked, "sample")),
       text = paste0(
@@ -936,8 +936,10 @@ assemble_lock_begin <- function(rv, rows, unit = "assembly",
       ),
       action_label = "Unlock",
       danger = TRUE,
+      skippable = TRUE,
       session = session
     )
+    if (skipped) assemble_lock_finish(rv, session)
     return(invisible(NULL))
   }
   # Locking hands the sample to WF2, which rebuilds the published output path
