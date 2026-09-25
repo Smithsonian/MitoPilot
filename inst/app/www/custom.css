@@ -136,6 +136,11 @@ p.mp-help-text {
   transform: scale(1.15);
 }
 
+.mp-icon-btn {
+  display: inline-block;
+  color: inherit;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .grow:hover {
     transition: none;

@@ -208,7 +208,8 @@ assemble_server_userAsmb <- function(id) {
               filterable = FALSE,
               cell = rt_dynamicIcon(
                 icons = c(`0` = "fa fa-lock-open", `1` = "fa fa-lock"),
-                labels = c(`0` = "Unlocked", `1` = MP_LOCK_DEF("assemble"))
+                labels = c(`0` = "Unlocked", `1` = MP_LOCK_DEF("assemble")),
+                inputId = ns("lock_row")
               )
             ),
             assemble_switch = colDef(
@@ -222,7 +223,8 @@ assemble_server_userAsmb <- function(id) {
               filterable = FALSE,
               cell = rt_dynamicIcon(
                 icons = mp_state_icons("assemble"),
-                labels = assemble_state_titles("assemble")
+                labels = assemble_state_titles("assemble"),
+                inputId = ns("state_row")
               )
             ),
             ID = colDef(
@@ -578,19 +580,25 @@ assemble_server_userAsmb <- function(id) {
 
     # Set State ----
     init("state")
-    on("state", {
-      req(session$userData$mode == "Assemble")
-      if (!need_selection(length(selected()))) return()
-      if (!need_unlocked(assemble_locked_ids(rv, selected()))) return()
+    open_state <- function(rows) {
+      if (!need_unlocked(assemble_locked_ids(rv, rows))) return()
       rv$updating <- rv$data |>
         dplyr::select(ID, assemble_switch) |>
-        dplyr::slice(selected())
+        dplyr::slice(rows)
       current <- character(0)
       if (length(unique(rv$updating$assemble_switch)) == 1) {
         current <- as.character(rv$updating$assemble_switch[1])
       }
       assemble_state_modal(rv$updating$ID, current)
+    }
+    on("state", {
+      req(session$userData$mode == "Assemble")
+      if (!need_selection(length(selected()))) return()
+      open_state(selected())
     })
+    # Row icons act on their own row only; the table shows filtered_data().
+    row_of <- function(i) match(filtered_data()$ID[as.numeric(i)], rv$data$ID)
+    observeEvent(input$state_row, open_state(row_of(input$state_row)))
     observeEvent(input$update_state, {
       if (!isTruthy(input$new_state)) {
         mp_toast("Choose a state first.", type = "warning")
@@ -625,6 +633,9 @@ assemble_server_userAsmb <- function(id) {
       req(session$userData$mode == "Assemble")
       if (!need_selection(length(selected()))) return()
       assemble_lock_begin(rv, selected(), unit = "contig")
+    })
+    observeEvent(input$lock_row, {
+      assemble_lock_begin(rv, row_of(input$lock_row), unit = "contig")
     })
     observeEvent(input$lock_confirm, {
       if (isTRUE(input$lock_confirm)) assemble_lock_finish(rv)

@@ -304,7 +304,8 @@ annotate_server <- function(id) {
               labels = c(
                 `0` = paste("Unlocked -", MP_LOCK_DEF("annotate")),
                 `1` = paste("Locked -", MP_LOCK_DEF("annotate"))
-              )
+              ),
+              inputId = ns("lock_row")
             )
           ),
           annotate_switch = colDef(
@@ -321,7 +322,8 @@ annotate_server <- function(id) {
               icons  = mp_state_icons("annotate"),
               labels = paste0(mp_state_labels("annotate"), " - ",
                               mp_state_tips("annotate")) |>
-                stats::setNames(MP_STATE_CODES$annotate)
+                stats::setNames(MP_STATE_CODES$annotate),
+              inputId = ns("state_row")
             )
           ),
           ID = colDef(
@@ -665,10 +667,7 @@ annotate_server <- function(id) {
 
     # Set State ----
     init("state")
-    on("state", {
-      req(session$userData$mode == "Annotate")
-      sel <- selected()
-      if (!need_selection(length(sel))) return()
+    open_state <- function(sel) {
       d <- filtered_data()
       if (!need_unlocked(d$ID[sel][d$annotate_lock[sel] == 1], "assembly")) return()
       rv$updating <- d |>
@@ -712,7 +711,14 @@ annotate_server <- function(id) {
           footer = mp_footer(primary = actionButton(ns("update_state"), "Set state"))
         )
       )
+    }
+    on("state", {
+      req(session$userData$mode == "Annotate")
+      if (!need_selection(length(selected()))) return()
+      open_state(selected())
     })
+    # Row icons act on their own row only.
+    observeEvent(input$state_row, open_state(as.numeric(input$state_row)))
     observeEvent(input$update_state, {
       if (!isTruthy(input$new_state)) {
         mp_toast("Choose a state first.", type = "warning")
@@ -770,12 +776,10 @@ annotate_server <- function(id) {
     }
 
     init("lock")
-    on("lock", {
-      req(session$userData$mode == "Annotate")
-      if (!need_selection(length(selected()))) return()
+    toggle_lock <- function(rows) {
       rv$updating <- filtered_data() |>
         dplyr::select(ID, path, scaffold, annotate_lock) |>
-        dplyr::slice(selected())
+        dplyr::slice(rows)
       lock_current <- as.numeric(names(which.max(table(rv$updating$annotate_lock))))
       locking <- as.numeric(!lock_current) == 1
 
@@ -840,7 +844,13 @@ annotate_server <- function(id) {
           danger = TRUE
         )
       }
+    }
+    on("lock", {
+      req(session$userData$mode == "Annotate")
+      if (!need_selection(length(selected()))) return()
+      toggle_lock(selected())
     })
+    observeEvent(input$lock_row, toggle_lock(as.numeric(input$lock_row)))
     observeEvent(input$unlock_confirm, ignoreInit = TRUE, {
       upd <- rv$lock_pending
       n <- rv$lock_pending_n %||% nrow(upd)
