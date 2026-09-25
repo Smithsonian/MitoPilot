@@ -220,6 +220,25 @@ $(document).on('click', '.mp-token-chip', function(e) {
   box.focus();
   $(box).trigger('input').trigger('change');
 });
+// Chips whose column is empty for some records of the chosen export group turn
+// warning-orange, with the count in the tooltip.
+function mpTokenFlags(modal) {
+  var list = modal.find('.mp-token-list');
+  if (!list.length) return;
+  var group = modal.find('select[id$="export_group"]').val();
+  var totals = JSON.parse(list.attr('data-totals') || '{}');
+  var n = totals[group] || 0;
+  list.find('.mp-token-chip').each(function() {
+    var m = JSON.parse(this.getAttribute('data-missing') || '{}')[group] || 0;
+    var base = this.getAttribute('data-title') || '';
+    $(this).toggleClass('mp-token-missing', m > 0);
+    this.title = m > 0 ? base + '\nMissing for ' + m + ' of ' + n + ' records in this group' : base;
+  });
+}
+$(document).on('change', 'select[id$="export_group"]', function() {
+  mpTokenFlags($(this).closest('.modal'));
+});
+$(document).on('shown.bs.modal', function(e) { mpTokenFlags($(e.target)); });
 $(document).on('input', '.mp-token-filter', function() {
   var q = this.value.toLowerCase();
   var list = $(this).closest('.mp-token-list');

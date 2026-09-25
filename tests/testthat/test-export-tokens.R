@@ -41,8 +41,8 @@ test_that("groups with nothing ticked or no extra columns say how to add some", 
   g <- export_token_groups(d, c("ID", "Taxon", "GEOME_BCID", "GBIF_ID"), character())
   expect_false(g$GEOME$open)
   expect_false(g$GBIF$open)
-  expect_match(g$GEOME$hint, "Metadata Export", fixed = TRUE)
-  expect_match(g$GBIF$hint, "Metadata Export", fixed = TRUE)
+  expect_match(g$GEOME$hint, "Set Export Metadata", fixed = TRUE)
+  expect_match(g$GBIF$hint, "Set Export Metadata", fixed = TRUE)
   expect_true(g$`Your mapfile columns`$open)
   expect_match(g$`Your mapfile columns`$hint, "no extra columns", fixed = TRUE)
   expect_equal(nrow(g$`Your mapfile columns`$tokens), 0L)
@@ -65,4 +65,17 @@ test_that("export_token_ui renders chips with insert text, a filter box, and pic
   expect_match(html, "export-token_fields_gbif", fixed = TRUE)
   expect_match(html, "First row: Pond", fixed = TRUE)
   expect_equal(lengths(regmatches(html, gregexpr("<details open", html))), 3L)
+})
+
+test_that("token chips carry missing-value counts per export group", {
+  d <- data.frame(ID = c("a", "b", "c"), Taxon = "x", export_group = c("g1", "g1", "g2"),
+                  site = c("reef", NA, ""))
+  g <- export_token_groups(d, c("ID", "Taxon", "site"), character())
+  site <- g$`Your mapfile columns`$tokens
+  expect_equal(jsonlite::fromJSON(site$missing[site$token == "site"]), list(g1 = 1L, g2 = 1L))
+  ids <- g$Basics$tokens
+  expect_equal(jsonlite::fromJSON(ids$missing[ids$token == "ID"]), list(g1 = 0L, g2 = 0L))
+  html <- as.character(export_token_ui(g, target_id = "x", ns = NS("export"), totals = '{"g1":2,"g2":1}'))
+  expect_match(html, "data-totals=\"{&quot;g1&quot;:2,&quot;g2&quot;:1}\"", fixed = TRUE)
+  expect_match(html, "Columns by type", fixed = TRUE)
 })

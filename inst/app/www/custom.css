@@ -967,14 +967,26 @@ a.mp-link:focus-visible {
 .mp-meta-citation { margin: 4px 0 6px; font-size: var(--mp-fs-meta); }
 
 /* Export Data token chips */
-.mp-token-list { margin: 6px 0; }
+/* The column types sit in one bordered box inside Available columns, each type
+   indented with its chips indented again beneath it. */
+.mp-token-list {
+  margin: 8px 0; padding: 8px 14px 6px; border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius, 4px); background: var(--mp-surface-alt);
+}
 .mp-token-filter { max-width: 260px; margin-bottom: 6px; }
-.mp-token-group > summary { cursor: pointer; font-weight: 600; }
+.mp-token-lead { margin: 4px 0 2px; font-size: var(--mp-fs-meta); color: var(--mp-text-muted); }
+.mp-token-group { margin: 0 0 2px 16px; }
+.mp-token-group > summary {
+  font-size: var(--mp-fs-body); font-weight: 600; border-bottom: none;
+  padding: 2px 0; margin: 2px 0;
+}
+.mp-token-group .mp-token-chips, .mp-token-group .mp-token-hint { margin-left: 18px; }
+.mp-token-chip.mp-token-missing { background: var(--mp-warning-soft); border-color: var(--mp-warning); }
 .mp-token-hint { margin: 2px 0 4px; font-size: var(--mp-fs-meta); }
 .mp-token-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
 .mp-token-chip {
   height: var(--mp-chip-h); padding: 0 8px; border: 1px solid var(--mp-border);
-  border-radius: 12px; background: var(--mp-surface-alt); font-family: monospace;
+  border-radius: 12px; background: var(--mp-surface); font-family: monospace;
   font-size: var(--mp-fs-meta); cursor: pointer;
 }
 .mp-token-chip:hover, .mp-token-chip:focus { border-color: var(--mp-primary); }

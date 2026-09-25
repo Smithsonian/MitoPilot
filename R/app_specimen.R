@@ -237,8 +237,10 @@ specimen_csv_map_ui <- function(ns, current, overrides, choices) {
 #'
 #' @param ns module namespace function
 #' @param geome,gbif `meta_field_summary()` output for each source
+#' @param closed_input namespaced input id set when the modal closes, however
+#'   it closes; NULL to skip
 #' @noRd
-specimen_fields_modal <- function(ns, geome, gbif) {
+specimen_fields_modal <- function(ns, geome, gbif, closed_input = NULL) {
   section <- function(source, s) {
     key <- tolower(source)
     combos <- s[s$kind == "combo", ]
@@ -265,6 +267,11 @@ specimen_fields_modal <- function(ns, geome, gbif) {
     section("GEOME", geome),
     tags$hr(),
     section("GBIF", gbif),
+    if (!is.null(closed_input)) {
+      tags$script(HTML(sprintf(
+        "$('#shiny-modal').one('hidden.bs.modal', function() { Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); });",
+        closed_input)))
+    },
     footer = mp_footer(primary = actionButton(ns("specimen_fields_save"), "Save"), dismiss = "Cancel")
   )
 }

@@ -237,13 +237,27 @@ export_server <- function(id) {
       )
     }
     init("specimen_fields")
-    observeEvent(input$token_fields_geome, trigger("specimen_fields"))
-    observeEvent(input$token_fields_gbif, trigger("specimen_fields"))
+    # Choose fields in Export Data: keep what is on screen, so closing the
+    # fields modal can reopen Export Data as it was.
+    snap_export <- function() {
+      rv$export_snap <- lapply(stats::setNames(nm = c(
+        "export_group", "template_select", "fasta_header", "fasta_header_gene",
+        "include_alignments", "export_genes", "review_outliers", "start_aa",
+        "stop_aa", "ident_pct")), function(id) input[[id]])
+      trigger("specimen_fields")
+    }
+    observeEvent(input$token_fields_geome, snap_export())
+    observeEvent(input$token_fields_gbif, snap_export())
+    observeEvent(input$specimen_fields_closed, {
+      req(rv$export_snap)
+      trigger("export")
+    })
     on("specimen_fields", {
       con <- session$userData$con
       g <- meta_field_summary(con, "GEOME")
       b <- meta_field_summary(con, "GBIF")
-      showModal(specimen_fields_modal(ns, g, b))
+      closed <- if (!is.null(rv$export_snap)) ns("specimen_fields_closed")
+      showModal(specimen_fields_modal(ns, g, b, closed_input = closed))
       output$geome_raw <- reactable::renderReactable(raw_fields_table(g[g$kind == "raw", ]))
       output$gbif_raw <- reactable::renderReactable(raw_fields_table(b[b$kind == "raw", ]))
     })
@@ -672,10 +686,18 @@ export_server <- function(id) {
       # Saved templates + the currently selected one's header strings, plus the
       # columns available to reference
       con <- session$userData$con
+      snap <- rv$export_snap
+      rv$export_snap <- NULL
       tmpl_choices <- list_export_templates(con)
       sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
       rv$export_template <- sel_tmpl
       opts <- get_export_opts(con, sel_tmpl)
+      if (!is.null(snap)) {
+        tmpl_choices <- union(tmpl_choices, snap$template_select)
+        sel_tmpl <- snap$template_select %||% sel_tmpl
+        opts$fasta_header <- snap$fasta_header %||% opts$fasta_header
+        opts$fasta_header_gene <- snap$fasta_header_gene %||% opts$fasta_header_gene
+      }
       # Usable tokens as grouped chips; bookkeeping fields are never offered (T23).
       sample_cols <- tryCatch(
         colnames(dplyr::tbl(con, "samples")),
@@ -686,8 +708,8 @@ export_server <- function(id) {
       token_groups <- export_token_groups(
         rv$data[!is.na(rv$data$export_group), , drop = FALSE], sample_cols, ticked
       )
+      grouped <- rv$data[!is.na(rv$data$export_group), , drop = FALSE]
       cols_help <- tags$details(
-        open = NA,
         tags$summary("Available columns"),
         opts_help(
           "Click a column to insert it at the cursor of the header box you last clicked. ",
@@ -696,10 +718,13 @@ export_server <- function(id) {
           "name MitoPilot gives this assembly: the sample ID, or ",
           tags$code("ID_p<path>_s<scaffold>"), " when one sample exports more ",
           "than one record. Columns from your mapping file work here even ",
-          "when the table does not show them.",
+          "when the table does not show them. Orange columns are empty for ",
+          "some records in the chosen export group; hover one for the count.",
           nested = TRUE
         ),
-        export_token_ui(token_groups, target_id = ns("fasta_header"), ns = ns),
+        export_token_ui(token_groups, target_id = ns("fasta_header"), ns = ns,
+                        totals = jsonlite::toJSON(as.list(table(grouped$export_group)),
+                                                  auto_unbox = TRUE)),
         opts_help(
           tags$code("{completeness}"),
           " expands to \"complete genome\" or \"partial genome\", derived from ",
@@ -711,13 +736,14 @@ export_server <- function(id) {
           nested = TRUE
         )
       )
-      # The status line describes the box above it, so bind the two (WCAG 3.3.1).
+      # The status line sits between the label and the box it describes, and
+      # is bound to it (WCAG 3.3.1).
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
           textAreaInput(ns(id), label, value, width = "100%")
         )$find("textarea")$addAttrs(
           `aria-describedby` = ns(paste0(id, "_status"))
-        )$allTags()
+        )$before(uiOutput(ns(paste0(id, "_status"))))$allTags()
       }
       modalDialog(
         title = mp_modal_title(
@@ -734,6 +760,7 @@ export_server <- function(id) {
               ns("export_group"),
               "Export group:",
               choices = choices,
+              selected = if (isTRUE(snap$export_group %in% choices)) snap$export_group,
               width = "100%"
             )
           ),
@@ -764,22 +791,13 @@ export_server <- function(id) {
           "below: export uses the text on screen, and Save template keeps it ",
           "for next time."
         ),
+        # What pressing Export will do, in the group currently chosen.
+        uiOutput(ns("export_summary")),
         hdr_box("fasta_header", "Mitogenome FASTA header:", opts$fasta_header),
-        uiOutput(ns("fasta_header_status")),
-        cols_help,
-        mp_checkbox(
-          ns("include_alignments"),
-          "Generate group-level PCG alignment summary",
-          value = TRUE
-        ),
-        opts_help(
-          "Writes one HTML page comparing the amino-acid alignment of every ",
-          "protein-coding gene in the group. Needs more than one record."
-        ),
         mp_checkbox(
           ns("export_genes"),
           "Export individual protein-coding and rRNA genes",
-          value = FALSE
+          value = snap$export_genes %||% FALSE
         ),
         opts_help(
           "Writes one FASTA and one feature table per gene, into a genes ",
@@ -791,9 +809,18 @@ export_server <- function(id) {
           ns = ns,
           hdr_box("fasta_header_gene", "Gene FASTA header:",
                   opts$fasta_header_gene),
-          uiOutput(ns("fasta_header_gene_status")),
           opts_help("The gene name is added to this header automatically.",
                     nested = TRUE)
+        ),
+        cols_help,
+        mp_checkbox(
+          ns("include_alignments"),
+          "Generate group-level PCG alignment summary",
+          value = snap$include_alignments %||% TRUE
+        ),
+        opts_help(
+          "Writes one HTML page comparing the amino-acid alignment of every ",
+          "protein-coding gene in the group. Needs more than one record."
         ),
         # PCG outlier review options, separated from the export options above
         tags$hr(style = "border-top: 1px solid var(--mp-border); margin: 1em 0 0.75em;"),
@@ -801,7 +828,7 @@ export_server <- function(id) {
         mp_checkbox(
           ns("review_outliers"),
           "Review PCG annotations for outliers",
-          value = rv$opt_review
+          value = snap$review_outliers %||% rv$opt_review
         ),
         conditionalPanel(
           condition = "input.review_outliers == true",
@@ -816,7 +843,7 @@ export_server <- function(id) {
                   "Flag start offset > (aa):",
                   "Flag genes with start position offset by +/- this many amino acids from the core alignment"
                 ),
-                value = rv$opt_start, min = 1, step = 1, width = "100%"
+                value = snap$start_aa %||% rv$opt_start, min = 1, step = 1, width = "100%"
               )
             ),
             div(
@@ -827,7 +854,7 @@ export_server <- function(id) {
                   "Flag stop offset > (aa):",
                   "Flag genes with stop position offset by +/- this many amino acids from the core alignment"
                 ),
-                value = rv$opt_stop, min = 1, step = 1, width = "100%"
+                value = snap$stop_aa %||% rv$opt_stop, min = 1, step = 1, width = "100%"
               )
             ),
             div(
@@ -838,13 +865,11 @@ export_server <- function(id) {
                   "Flag sequence identity < (%):",
                   "Mean % identity threshold to flag a gene versus all other genes in alignment group"
                 ),
-                value = rv$opt_ident, min = 1, max = 100, step = 1, width = "100%"
+                value = snap$ident_pct %||% rv$opt_ident, min = 1, max = 100, step = 1, width = "100%"
               )
             )
           )
         ),
-        # What pressing Export will do, in the group currently chosen.
-        uiOutput(ns("export_summary")),
         footer = mp_footer(
           primary = actionButton(ns("export_data"), "Export"),
           dismiss = "Cancel"
@@ -902,7 +927,7 @@ export_server <- function(id) {
       }
       div(
         style = paste(
-          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin-top: 12px;",
+          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin: 4px 0 14px;",
           "background: var(--mp-surface-alt);",
           "border-left: 3px solid var(--mp-primary);"
         ),

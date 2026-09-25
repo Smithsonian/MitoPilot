@@ -272,7 +272,7 @@ set_metadata_columns("my_project", sex = "")       # do not compare sex
 ## Using metadata fields at export
 
 Fetched data does not reach your exported files until you choose which fields
-to use. In the Export module, click **Metadata Export** in the toolbar.
+to use. In the Export module, click **Set Export Metadata** in the toolbar.
 
 ![Metadata fields window with GEOME and GBIF sections](figures/specimen_fields.png)
 

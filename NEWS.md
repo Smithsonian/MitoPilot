@@ -2,10 +2,24 @@
 
 ## New Features
 
-- Specimen metadata from GEOME and GBIF: link samples to GEOME BCIDs and GBIF occurrences (`mapping_geome`, `mapping_gbif`, `fetch_geome()`, `fetch_gbif()`), browse the records in the app, and choose fields, including GenBank-ready `lat_lon`, `collection_date`, `geo_loc_name`, and `specimen_voucher`, for export header templates. MitoPilot compares your mapping file, GEOME, and GBIF and flags disagreements (Compare tab, Specimen column, and a warning at export) without ever merging values; `set_metadata_columns()` picks which mapping-file columns are compared. The Export Data window now lists usable columns as grouped chips that insert at the cursor.
+### Sample metadata from GEOME and GBIF
+
+- **Link samples to GEOME and GBIF records.** Add a column of GEOME BCIDs or GBIF occurrence IDs to the mapping file and name it with `mapping_geome` or `mapping_gbif` in `new_project()`, `new_project_userAsmb()`, `add_samples()`, or `update_sample_metadata()`. Records are fetched at setup, or later with `fetch_geome()` and `fetch_gbif()`. Smithsonian NMNH records can be linked by their EZID (an `ark:/65665/...` identifier or a `collections.nmnh.si.edu` link) in place of a gbifID. See the new article [Sample metadata: GEOME and GBIF](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html).
+- **Metadata column.** The Assemble, Annotate, and Export tables have a Metadata column with a GEOME or GBIF logo per linked source and a flag when sources disagree. Click it to open the sample metadata viewer: GEOME and GBIF tabs to view, add, or refresh records, and a Compare tab that checks your mapping file, GEOME, and GBIF against each other (coordinates, dates, country, voucher, taxon, and more). MitoPilot flags disagreements but never merges values. `set_metadata_columns()` or **Mapfile columns...** in the Compare tab picks which mapping-file columns are compared.
+- **Show any metadata field as a table column.** A new **Metadata** button next to each table's Columns picker lists every field with data: your extra mapping-file columns, then GEOME and GBIF fields, searchable and with sample counts and examples. Ticked fields appear as columns in all three tables, with source logos in their headers, resizable widths, and an optional three-line text wrap. Mapping-file fields are shown by default; GEOME and GBIF fields are off. The choice is saved in the project, and the Metadata entry in the Columns picker hides them all at once.
+- **Metadata in exported files.** **Set Export Metadata** in the Export toolbar picks which GEOME and GBIF fields can be used in header templates, including GenBank-ready `lat_lon`, `collection_date`, `geo_loc_name`, and `specimen_voucher`. Export warns when a template uses an item the sources disagree on.
+- **Export Data window.** Usable columns are listed under **Available columns** (collapsed by default), grouped by type in one box (Basics, Your mapfile columns, GEOME, GBIF, Reference, Assembly and annotation), and insert at the cursor. A column turns orange when it is empty for some records in the chosen export group; hover it for the count. The summary of what will be written now sits at the top, the gene export options sit next to the headers, and each header's validity check sits just above its box. **Choose fields** returns to Export Data with everything as you left it.
+
+### Tables
+
+- **# Paths and # Scaffolds report ignored contigs**, for example "1 (2 ignored)", and sort on the kept count. Counts are read from the assembled contigs, so they no longer go stale. A joined scaffold assembly counts its fragments as ignored scaffolds; a multi-path consensus counts its source paths as ignored paths.
+- **All BLAST Hits** sits next to Top BLAST Hit and belongs to the BLAST column group. The All BLAST Hits, Output, and Details buttons are icons only, with tooltips.
+- The Columns picker groups the time stamp and note columns as **Notes**. In Export, the Exported column stays pinned beside Export Group.
+- Pinned column groups on either side of every table have a soft edge shadow where content scrolls under them.
 
 ## Bug Fixes
 
+- **Ignored contigs stay visible in user-assembly projects.** In the Assemble table, an ignored contig's length disappeared from Raw Length instead of being marked in red as in reads-based projects.
 - **Circular user assemblies no longer gain a base.** In a no-reads user-assembly project, a circular assembly that already started at the start gene came out of annotation one base longer, with base 1 copied onto the end. The stored sequence, its length, and every export carried the extra base. Reads-based projects could hit the same bug when an assembly happened to start exactly at the start gene. Re-run annotation on affected samples to correct them.
 - **The app launches from RStudio Server.** 1.5.6 stopped with `cannot coerce type 'closure' to vector of type 'character'` when `MitoPilot()` was run inside RStudio, which sets its own browser handler.
 
