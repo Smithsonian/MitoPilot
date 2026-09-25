@@ -319,7 +319,8 @@ annotate_server <- function(id) {
               labels = c(
                 `0` = paste("Unlocked -", MP_LOCK_DEF("annotate")),
                 `1` = paste("Locked -", MP_LOCK_DEF("annotate"))
-              )
+              ),
+              inputId = ns("lock_row")
             )
           ),
           annotate_switch = colDef(
@@ -336,7 +337,8 @@ annotate_server <- function(id) {
               icons  = mp_state_icons("annotate"),
               labels = paste0(mp_state_labels("annotate"), " - ",
                               mp_state_tips("annotate")) |>
-                stats::setNames(MP_STATE_CODES$annotate)
+                stats::setNames(MP_STATE_CODES$annotate),
+              inputId = ns("state_row")
             )
           ),
           ID = colDef(
@@ -687,10 +689,7 @@ annotate_server <- function(id) {
 
     # Set State ----
     init("state")
-    on("state", {
-      req(session$userData$mode == "Annotate")
-      sel <- selected()
-      if (!need_selection(length(sel))) return()
+    open_state <- function(sel) {
       d <- filtered_data()
       if (!need_unlocked(d$ID[sel][d$annotate_lock[sel] == 1], "assembly")) return()
       rv$updating <- d |>
@@ -734,7 +733,14 @@ annotate_server <- function(id) {
           footer = mp_footer(primary = actionButton(ns("update_state"), "Set state"))
         )
       )
+    }
+    on("state", {
+      req(session$userData$mode == "Annotate")
+      if (!need_selection(length(selected()))) return()
+      open_state(selected())
     })
+    # Row icons act on their own row only.
+    observeEvent(input$state_row, open_state(as.numeric(input$state_row)))
     observeEvent(input$update_state, {
       if (!isTruthy(input$new_state)) {
         mp_toast("Choose a state first.", type = "warning")
@@ -792,12 +798,10 @@ annotate_server <- function(id) {
     }
 
     init("lock")
-    on("lock", {
-      req(session$userData$mode == "Annotate")
-      if (!need_selection(length(selected()))) return()
+    toggle_lock <- function(rows) {
       rv$updating <- filtered_data() |>
         dplyr::select(ID, path, scaffold, annotate_lock) |>
-        dplyr::slice(selected())
+        dplyr::slice(rows)
       lock_current <- as.numeric(names(which.max(table(rv$updating$annotate_lock))))
       locking <- as.numeric(!lock_current) == 1
 
@@ -850,7 +854,7 @@ annotate_server <- function(id) {
       } else {
         rv$lock_pending <- rv$updating
         rv$lock_pending_n <- n_changed
-        mp_confirm(
+        skipped <- mp_confirm(
           "unlock_confirm",
           title = paste("Unlock", mp_n(n_changed, "assembly")),
           text = paste0(
@@ -859,10 +863,21 @@ annotate_server <- function(id) {
             "the next update, replacing your curated results."
           ),
           action_label = "Unlock",
-          danger = TRUE
+          danger = TRUE,
+          skippable = TRUE
         )
+        if (skipped) {
+          rv$lock_pending <- NULL
+          write_lock(rv$updating, n_changed)
+        }
       }
+    }
+    on("lock", {
+      req(session$userData$mode == "Annotate")
+      if (!need_selection(length(selected()))) return()
+      toggle_lock(selected())
     })
+    observeEvent(input$lock_row, toggle_lock(as.numeric(input$lock_row)))
     observeEvent(input$unlock_confirm, ignoreInit = TRUE, {
       upd <- rv$lock_pending
       n <- rv$lock_pending_n %||% nrow(upd)
@@ -934,7 +949,7 @@ annotate_server <- function(id) {
           any(upd$topology == "circular", na.rm = TRUE)) {
         upd$partial <- "yes"
         rv$partial_pending <- upd
-        mp_confirm(
+        skipped <- mp_confirm(
           "partial_circular_confirm",
           title = "Mark a circular assembly as partial",
           text = paste(
@@ -943,8 +958,13 @@ annotate_server <- function(id) {
             "contradictory. Consider using the Linearize button (in the",
             "annotation details view) to break the circle before submission."
           ),
-          action_label = "Mark partial anyway"
+          action_label = "Mark partial anyway",
+          skippable = TRUE
         )
+        if (skipped) {
+          rv$partial_pending <- NULL
+          write_flag(key, upd)
+        }
         return()
       }
       upd[[f$col]] <- nxt
@@ -1160,7 +1180,8 @@ annotate_server <- function(id) {
               mp_n(nrow(rv$updating_indirect), "assembly"),
               "outside the current selection. Editing them changes those too."
             ),
-            action_label = "Edit anyway"
+            action_label = "Edit anyway",
+            skippable = TRUE
           )
         }
       } else {
@@ -1387,7 +1408,8 @@ annotate_server <- function(id) {
               mp_n(nrow(rv$updating_indirect), "assembly"),
               "outside the current selection. Editing them changes those too."
             ),
-            action_label = "Edit anyway"
+            action_label = "Edit anyway",
+            skippable = TRUE
           )
         }
       } else {
@@ -1583,7 +1605,8 @@ annotate_server <- function(id) {
               mp_n(nrow(rv$updating_indirect), "assembly"),
               "outside the current selection. Editing them changes those too."
             ),
-            action_label = "Edit anyway"
+            action_label = "Edit anyway",
+            skippable = TRUE
           )
         }
       } else {

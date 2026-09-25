@@ -3081,7 +3081,7 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
       # Turning partial on: a closed circle is the whole molecule, so say so
       # before flagging it incomplete.
       if (identical(nxt, "yes") && isTRUE(rv$updating$topology == "circular")) {
-        mp_confirm(
+        skipped <- mp_confirm(
           ns("partial_circular_confirm"),
           title = "Mark circular assembly as partial",
           text = paste(
@@ -3089,9 +3089,10 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
             "molecule, so flagging it partial is contradictory. Use Linearize",
             "to break the circle before submission, or mark it partial anyway."
           ),
-          action_label = "Mark partial anyway"
+          action_label = "Mark partial anyway",
+          skippable = TRUE
         )
-        req(F)
+        if (!skipped) req(F)
       }
       write_flag("partial", "partial", nxt)
     })

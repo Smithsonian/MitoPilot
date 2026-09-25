@@ -384,13 +384,15 @@ export_server <- function(id) {
 
     # update table ----
     init("update_export_table")
+    deselect_next <- FALSE
     on("update_export_table", {
       reactable::updateReactable(
         "table",
         data = rv$data,
-        selected = reactable::getReactableState("table", "selected"),
+        selected = if (deselect_next) NA else reactable::getReactableState("table", "selected"),
         page = reactable::getReactableState("table", "page")
       )
+      deselect_next <<- FALSE
     })
 
     # table selection ----
@@ -590,6 +592,7 @@ export_server <- function(id) {
           copy = TRUE,
           by = unit_key
         )
+      deselect_next <<- !all(is.na(groups))
       trigger("update_export_table")
       removeModal()
       n <- nrow(upd)
