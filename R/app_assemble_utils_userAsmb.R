@@ -195,6 +195,7 @@ opts_modal_server <- function(rv, name, fields, label, modal, save,
             " outside the current selection, which this edit will change too."
           ),
           action_label = "Continue",
+          skippable = TRUE,
           session = session
         )
       }

@@ -18,9 +18,32 @@ mp_alert <- function(title, text = NULL, type, html = FALSE,
 #' `confirmSweetAlert()` reads `btn_labels[1]` as the cancel button and
 #' `btn_labels[2]` as the confirm button; `reverseButtons` makes sweetalert2
 #' render that order left to right, so the verb sits right-most.
+#'
+#' `skippable = TRUE` adds a "Don't ask again this session" checkbox. Once it
+#' is ticked the dialog is not shown again and this returns TRUE, so the caller
+#' should act straight away; otherwise it returns FALSE.
 #' @noRd
 mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FALSE,
-                       session = getDefaultReactiveDomain()) {
+                       skippable = FALSE, session = getDefaultReactiveDomain()) {
+  if (isTRUE(skippable)) {
+    skip_id <- paste0(sub(session$ns(""), "", id, fixed = TRUE), "_skip")
+    if (isTRUE(shiny::isolate(session$input[[skip_id]]))) {
+      return(invisible(TRUE))
+    }
+    text <- shiny::tagList(
+      if (html) text else shiny::tags$p(text),
+      shiny::tags$label(
+        style = "font-weight: normal; font-size: 0.9em;",
+        shiny::tags$input(
+          type = "checkbox",
+          onchange = sprintf("Shiny.setInputValue('%s', this.checked)",
+                             session$ns(skip_id))
+        ),
+        " Don't ask again this session"
+      )
+    )
+    html <- TRUE
+  }
   accent <- if (isTRUE(danger)) "danger" else "primary"
   shinyWidgets::confirmSweetAlert(
     session = session, inputId = id, title = title, text = text,
@@ -30,6 +53,7 @@ mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FAL
     html = html,
     reverseButtons = TRUE
   )
+  invisible(FALSE)
 }
 
 #' Two-way choice: both buttons are answers, dismissing is neither.

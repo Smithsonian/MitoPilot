@@ -713,7 +713,8 @@ assemble_server_userAsmb <- function(id) {
               mp_n(nrow(rv$updating_indirect), "sample"),
               " outside the current selection, which this edit will change too."
             ),
-            action_label = "Continue"
+            action_label = "Continue",
+            skippable = TRUE
           )
         }
       } else {

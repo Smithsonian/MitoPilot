@@ -832,7 +832,7 @@ annotate_server <- function(id) {
       } else {
         rv$lock_pending <- rv$updating
         rv$lock_pending_n <- n_changed
-        mp_confirm(
+        skipped <- mp_confirm(
           "unlock_confirm",
           title = paste("Unlock", mp_n(n_changed, "assembly")),
           text = paste0(
@@ -841,8 +841,13 @@ annotate_server <- function(id) {
             "the next update, replacing your curated results."
           ),
           action_label = "Unlock",
-          danger = TRUE
+          danger = TRUE,
+          skippable = TRUE
         )
+        if (skipped) {
+          rv$lock_pending <- NULL
+          write_lock(rv$updating, n_changed)
+        }
       }
     }
     on("lock", {
@@ -922,7 +927,7 @@ annotate_server <- function(id) {
           any(upd$topology == "circular", na.rm = TRUE)) {
         upd$partial <- "yes"
         rv$partial_pending <- upd
-        mp_confirm(
+        skipped <- mp_confirm(
           "partial_circular_confirm",
           title = "Mark a circular assembly as partial",
           text = paste(
@@ -931,8 +936,13 @@ annotate_server <- function(id) {
             "contradictory. Consider using the Linearize button (in the",
             "annotation details view) to break the circle before submission."
           ),
-          action_label = "Mark partial anyway"
+          action_label = "Mark partial anyway",
+          skippable = TRUE
         )
+        if (skipped) {
+          rv$partial_pending <- NULL
+          write_flag(key, upd)
+        }
         return()
       }
       upd[[f$col]] <- nxt
@@ -1148,7 +1158,8 @@ annotate_server <- function(id) {
               mp_n(nrow(rv$updating_indirect), "assembly"),
               "outside the current selection. Editing them changes those too."
             ),
-            action_label = "Edit anyway"
+            action_label = "Edit anyway",
+            skippable = TRUE
           )
         }
       } else {
@@ -1375,7 +1386,8 @@ annotate_server <- function(id) {
               mp_n(nrow(rv$updating_indirect), "assembly"),
               "outside the current selection. Editing them changes those too."
             ),
-            action_label = "Edit anyway"
+            action_label = "Edit anyway",
+            skippable = TRUE
           )
         }
       } else {
@@ -1571,7 +1583,8 @@ annotate_server <- function(id) {
               mp_n(nrow(rv$updating_indirect), "assembly"),
               "outside the current selection. Editing them changes those too."
             ),
-            action_label = "Edit anyway"
+            action_label = "Edit anyway",
+            skippable = TRUE
           )
         }
       } else {
