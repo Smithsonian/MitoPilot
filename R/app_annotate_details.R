@@ -1021,8 +1021,8 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
       session$userData$return_to_review <- TRUE
       close_modal()
     })
-    ## Lock and Close ----
-    observeEvent(input$lock, {
+    ## Lock, and Lock and Close ----
+    lock_unit <- function() {
       if (editing_unsaved()) {
         mp_alert(
           title = "Unsaved edits",
@@ -1038,7 +1038,15 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
           dplyr::rows_update(rv$updating[, c("ID", "path", "scaffold", "annotate_lock")], by = c("ID", "path", "scaffold"))
         mp_toast("1 assembly locked - ready to export.", type = "message")
       }
+    }
+    observeEvent(input$lock, {
+      lock_unit()
       close_modal()
+    })
+    # Lock in place: redraw the window read-only instead of closing it.
+    observeEvent(input$lock_only, {
+      lock_unit()
+      open_modal()
     })
 
     # Snapshot of the sample fields the figures actually use. Updated only when one
@@ -5454,7 +5462,11 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
           actionButton(ns("lock"), "Lock & Close", icon = icon("lock"))
         },
         dismiss = NULL,
-        extra = if (is_locked) NULL else actionButton(ns("close"), "Close")
+        extra = if (is_locked) NULL else tagList(
+          actionButton(ns("close"), "Close"),
+          actionButton(ns("lock_only"), "Lock", icon = icon("lock"),
+                       title = "Lock this assembly and keep the window open")
+        )
       ),
       div(
         class = "mp-table-status mp-sticky-foot",

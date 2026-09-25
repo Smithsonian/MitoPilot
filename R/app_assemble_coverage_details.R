@@ -201,7 +201,11 @@ assembly_coverage_details_server <- function(id, rv) {
             uiOutput(ns("clip")) |> shinyjs::hidden(),
             actionButton(ns("align"), "Align", icon("align-justify"),
                          class = "btn-default") |> shinyjs::hidden(),
-            actionButton(ns("close_modal"), "Close", class = "btn-default")
+            actionButton(ns("close_modal"), "Close", class = "btn-default"),
+            if (!locked()) {
+              actionButton(ns("lock"), "Lock", icon = icon("lock"), class = "btn-default",
+                           title = "Lock this sample and keep the window open")
+            }
           )
         )
       ) |>
@@ -214,6 +218,17 @@ assembly_coverage_details_server <- function(id, rv) {
            Shiny.setInputValue('%s', Date.now(), {priority: 'event'});});}, 0);",
         ns("close_modal")
       ))
+    })
+
+    # Lock this sample with the toolbar's checks, then redraw the window
+    # read-only when the lock went through.
+    observeEvent(input$lock, {
+      id <- rv$updating$ID
+      assemble_lock_begin(rv, match(id, rv$data$ID), unit = "assembly")
+      if (isTRUE(rv$data$assemble_lock[match(id, rv$data$ID)] == 1)) {
+        rv$updating$assemble_lock <- 1
+        trigger("coverage_modal")
+      }
     })
 
     # MapToRef coverage viewer (renders only for MapToRef samples) ----

@@ -10,12 +10,20 @@
 - **Metadata in exported files.** **Set Export Metadata** in the Export toolbar picks which GEOME and GBIF fields can be used in header templates, including GenBank-ready `lat_lon`, `collection_date`, `geo_loc_name`, and `specimen_voucher`. Export warns when a template uses an item the sources disagree on.
 - **Export Data window.** Usable columns are listed under **Available columns** (collapsed by default), grouped by type in one box (Basics, Your mapfile columns, GEOME, GBIF, Reference, Assembly and annotation), and insert at the cursor. A column turns orange when it is empty for some records in the chosen export group; hover it for the count. The summary of what will be written now sits at the top, the gene export options sit next to the headers, and each header's validity check sits just above its box. **Choose fields** returns to Export Data with everything as you left it.
 
-### Tables
+### Tables and app
 
 - **# Paths and # Scaffolds report ignored contigs**, for example "1 (2 ignored)", and sort on the kept count. Counts are read from the assembled contigs, so they no longer go stale. A joined scaffold assembly counts its fragments as ignored scaffolds; a multi-path consensus counts its source paths as ignored paths.
 - **All BLAST Hits** sits next to Top BLAST Hit and belongs to the BLAST column group. The All BLAST Hits, Output, and Details buttons are icons only, with tooltips.
 - The Columns picker groups the time stamp and note columns as **Notes**. In Export, the Exported column stays pinned beside Export Group.
 - Pinned column groups on either side of every table have a soft edge shadow where content scrolls under them.
+- **Row lock and state icons are clickable** in the Assemble and Annotate tables. Clicking a row's lock toggles that row's lock; clicking its state icon opens Set state for that row alone. Neither changes the current selection; the toolbar buttons still handle several rows at once.
+- The Assemble and Annotate details windows have a **Lock** button that locks the sample and keeps the window open, now read-only.
+- **Repeat confirmations can be skipped.** Unlocking, editing options beyond the selection, and marking a circular assembly as partial now offer "Don't ask again this session".
+- Export rows are deselected after assigning an export group, and a "hold tight" message shows while the PCG outlier review is being prepared.
+
+## Changes
+
+- **Feature tables always use the SeqID.** The `.tbl` Feature header now always carries the record's SeqID; a `GenBankAccession` mapping-file column is no longer used there.
 
 ## Bug Fixes
 
