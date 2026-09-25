@@ -24,7 +24,8 @@ mp_alert <- function(title, text = NULL, type, html = FALSE,
 #' should act straight away; otherwise it returns FALSE.
 #' @noRd
 mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FALSE,
-                       skippable = FALSE, session = getDefaultReactiveDomain()) {
+                       skippable = FALSE, width = NULL,
+                       session = getDefaultReactiveDomain()) {
   if (isTRUE(skippable)) {
     skip_id <- paste0(sub(session$ns(""), "", id, fixed = TRUE), "_skip")
     if (isTRUE(shiny::isolate(session$input[[skip_id]]))) {
