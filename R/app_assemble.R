@@ -6,8 +6,7 @@ ASSEMBLE_COL_GROUPS <- list(
                "paths", "scaffolds"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes", "join_notes"),
-  Specimen = c("specimen")
+  Metadata = c("time_stamp", "assemble_notes", "join_notes")
 )
 # Reverse lookup col -> group, used to tag colDefs with a CSS class so the
 # column-group picker can show/hide columns via CSS without re-rendering
@@ -132,10 +131,7 @@ assemble_server <- function(id) {
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(.specimen_default_groups(names(ASSEMBLE_COL_GROUPS), session$userData$con))
-    if (!"Specimen" %in% isolate(col_groups_rv())) {
-      shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
-    }
+    col_groups_rv <- reactiveVal(names(ASSEMBLE_COL_GROUPS))
     observeEvent(input$col_groups, {
       col_groups_rv(input$col_groups %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -269,7 +265,7 @@ assemble_server <- function(id) {
               html = T,
               cell = rt_longtext()
             ),
-            specimen = specimen_col_def(ns("specimen_open"), sticky = "left", class = "mp-grp-Specimen"),
+            specimen = specimen_col_def(ns("specimen_open"), sticky = "left"),
             pre_opts = colDef(
               show = TRUE, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
               name = mp_col_name("pre_opts"),

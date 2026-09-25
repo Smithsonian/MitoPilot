@@ -932,7 +932,7 @@ a.mp-link:focus-visible {
 }
 .mp-token-chip:hover, .mp-token-chip:focus { border-color: var(--mp-primary); }
 
-/* Specimen column: one logo per metadata source, plus a conflict flag */
+/* Metadata column: one logo per metadata source, plus a conflict flag */
 .mp-specimen-cell { display: inline-flex; align-items: center; gap: 4px; }
 .mp-spec-logo { position: relative; display: inline-block; line-height: 0; }
 .mp-spec-icon { width: 18px; height: 18px; }

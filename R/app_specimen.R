@@ -52,7 +52,7 @@ specimen_status <- function(con) {
   out
 }
 
-#' reactable cell renderer for the Specimen column
+#' reactable cell renderer for the Metadata column
 #'
 #' @param inputId namespaced Shiny input id to receive the clicked row's ID
 #' @noRd
@@ -90,41 +90,19 @@ rt_specimen <- function(inputId) {
     htmlwidgets::JS()
 }
 
-#' Shared colDef for the Specimen column
+#' Shared colDef for the Metadata column
 #'
 #' @param inputId namespaced Shiny input id to receive the clicked row's ID
 #' @noRd
-specimen_col_def <- function(inputId, sticky = NULL, class = NULL) {
+specimen_col_def <- function(inputId, sticky = NULL) {
   reactable::colDef(
-    show = TRUE, name = "Specimen", sticky = sticky, width = 90, align = "center",
+    show = TRUE, name = "Metadata", sticky = sticky, width = 90, align = "center",
     html = TRUE, filterable = FALSE, sortable = TRUE,
-    class = class, headerClass = class,
-    header = rt_header("Specimen", paste(
+    header = rt_header("Metadata", paste(
       "GEOME and GBIF metadata for this sample. Click an icon to view, add,",
       "compare, or refresh.")),
     cell = rt_specimen(inputId)
   )
-}
-
-#' TRUE when any sample has a non-blank GEOME BCID or GBIF ID
-#'
-#' @param con database connection
-#' @noRd
-.specimen_project_has_ids <- function(con) {
-  .meta_ensure_tables(con)
-  DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM samples
-                        WHERE (GEOME_BCID IS NOT NULL AND TRIM(GEOME_BCID) != '')
-                           OR (GBIF_ID IS NOT NULL AND TRIM(GBIF_ID) != '')")$n > 0
-}
-
-#' Drop the Specimen group from a default column-group selection when no
-#' sample has a GEOME BCID or GBIF ID
-#'
-#' @param groups character vector of group names
-#' @param con database connection
-#' @noRd
-.specimen_default_groups <- function(groups, con) {
-  if (.specimen_project_has_ids(con)) groups else setdiff(groups, "Specimen")
 }
 
 #' Render one sample's records from one source as level cards

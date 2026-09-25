@@ -172,9 +172,9 @@ Records are fetched when you run these functions, not when the pipeline runs.
 
 ## Viewing records in the app
 
-### The Specimen column
+### The Metadata column
 
-The Assemble, Annotate, and Export tables have a **Specimen** column right after
+The Assemble, Annotate, and Export tables have a **Metadata** column right after
 **Taxon**. It shows one icon for each source the sample has an ID for, plus a
 flag when the sources disagree:
 
@@ -190,16 +190,14 @@ flag when the sources disagree:
 Hovering over an icon lists each source with its status, then any items in
 conflict and any items that were not checked.
 
-![Assemble table with the Specimen column showing fetched, failed, conflict, and empty samples](figures/specimen_column.png)
+![Assemble table with the Metadata column showing fetched, failed, conflict, and empty samples](figures/specimen_column.png)
 
-The column belongs to the **Specimen** entry in each table's **Columns**
-picker. It is on when at least one sample has a BCID or gbifID, and off
-otherwise. To add identifiers from the app in a project that has none yet, tick
-**Specimen** in the Columns picker, then click a sample's plus icon.
+The column is always shown. To add identifiers from the app, click a sample's
+plus icon.
 
 ### The specimen metadata viewer
 
-Click any icon in the Specimen column to open the viewer for that sample.
+Click any icon in the Metadata column to open the viewer for that sample.
 Clicking the icon does not select or deselect the row. The title shows the
 sample ID and its Taxon; **Sample** on the left lists every sample, with
 "(failed)" or "(conflict)" after samples that need attention.
@@ -288,7 +286,7 @@ format GenBank expects for a FASTA source modifier, each with an example and the
 number of samples that have one. Below that, a table lists every raw field found
 in the project's records; use its search box to find a field, and click rows to
 tick them. Nothing is ticked by default. Click **Save** and each ticked field
-becomes a column in the Export table, in the **Specimen** entry of the Columns
+becomes a column in the Export table, in the **Metadata** entry of the Columns
 picker.
 
 ### GEOME combinations

@@ -8,8 +8,7 @@ ANNOTATE_COL_GROUPS <- list(
   Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
   Review   = c("ID_verified", "reviewed", "problematic", "partial", "warnings"),
   Export   = c("export_group", "export_time_stamp"),
-  Metadata = c("time_stamp", "annotate_notes"),
-  Specimen = c("specimen")
+  Metadata = c("time_stamp", "annotate_notes")
 )
 ANNOTATE_COL_GROUP_LOOKUP <- {
   out <- character()
@@ -181,10 +180,7 @@ annotate_server <- function(id) {
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(.specimen_default_groups(names(ANNOTATE_COL_GROUPS), session$userData$con))
-    if (!"Specimen" %in% isolate(col_groups_rv())) {
-      shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
-    }
+    col_groups_rv <- reactiveVal(names(ANNOTATE_COL_GROUPS))
     observeEvent(input$col_groups, {
       col_groups_rv(input$col_groups %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -359,7 +355,7 @@ annotate_server <- function(id) {
             html = TRUE,
             cell = rt_longtext()
           ),
-          specimen = specimen_col_def(ns("specimen_open"), class = "mp-grp-Specimen"),
+          specimen = specimen_col_def(ns("specimen_open")),
           ID_verified = colDef(
             show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
             name = .nm("ID_verified"), header = .hd("ID_verified"),

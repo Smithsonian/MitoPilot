@@ -31,7 +31,7 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
   # no MitoPilot code involved; see task-9-report.md).
   .meta_save_fields(con, c("geome:combo:lat_lon", "geome:raw:Event:country", "gbif:combo:sex"))
 
-  expect_true("Specimen" %in% names(EXPORT_COL_GROUPS))
+  expect_false("Specimen" %in% names(EXPORT_COL_GROUPS))
 
   ms <- shiny::MockShinySession$new()
   ms$userData$con <- con
@@ -48,8 +48,8 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
     cls <- vapply(cols, function(c) c$className %||% "", character(1))
     shown <- vapply(cols, function(c) !isFALSE(c$show), logical(1))
     expect_true(all(c("geome_lat_lon", "geome_Event_country", "gbif_sex") %in% id[shown]))
-    expect_setequal(id[grepl("mp-grp-Specimen", cls)],
-                    c("specimen", "geome_lat_lon", "geome_Event_country", "gbif_sex"))
+    expect_true(all(c("geome_lat_lon", "geome_Event_country", "gbif_sex") %in% id[grepl("mp-grp-Metadata", cls)]))
+    expect_true("specimen" %in% id[shown & !nzchar(cls)])
   })
 })
 
@@ -144,31 +144,16 @@ test_that("specimen logo files ship with the app", {
   }
 })
 
-test_that("specimen_col_def applies the group class to cell and header", {
-  cd <- specimen_col_def("x-specimen_open", class = "mp-grp-Specimen")
-  expect_equal(cd$class, "mp-grp-Specimen")
-  expect_equal(cd$headerClass, "mp-grp-Specimen")
-  expect_equal(cd$name, "Specimen")
+test_that("specimen_col_def is a Metadata column with no group class", {
+  cd <- specimen_col_def("x-specimen_open")
+  expect_null(cd$class)
+  expect_equal(cd$name, "Metadata")
 })
 
-test_that(".specimen_default_groups drops Specimen only when no sample has any ID", {
-  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-  on.exit(DBI::dbDisconnect(con))
-  DBI::dbWriteTable(con, "samples", data.frame(ID = c("a", "b"), Taxon = "x"))
-  grp <- c("Options", "Specimen", "Metadata")
-  expect_false(.specimen_project_has_ids(con))
-  expect_equal(.specimen_default_groups(grp, con), c("Options", "Metadata"))
-  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = '' WHERE ID = 'a'")
-  expect_false(.specimen_project_has_ids(con))
-  DBI::dbExecute(con, "UPDATE samples SET GBIF_ID = '6186461308' WHERE ID = 'b'")
-  expect_true(.specimen_project_has_ids(con))
-  expect_equal(.specimen_default_groups(grp, con), grp)
-})
-
-test_that("every table's column groups include Specimen holding the specimen column", {
+test_that("no table's column groups hold the specimen column", {
   for (g in list(ASSEMBLE_COL_GROUPS, ASSEMBLE_COL_GROUPS_USERASMB, ANNOTATE_COL_GROUPS, EXPORT_COL_GROUPS)) {
-    expect_true("specimen" %in% g$Specimen)
-    expect_false("GEOME" %in% names(g))
+    expect_false("specimen" %in% unlist(g))
+    expect_false(any(c("GEOME", "Specimen") %in% names(g)))
   }
 })
 

@@ -6,9 +6,8 @@ EXPORT_COL_GROUPS <- list(
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage"),
   # filled at render time from the user's mapping file (export_metadata_cols)
-  Metadata = character(0),
-  # specimen + the fields ticked in meta_export_fields, filled at render time
-  Specimen = c("specimen")
+  # plus the fields ticked in meta_export_fields
+  Metadata = character(0)
 )
 EXPORT_COL_GROUP_LOOKUP <- {
   out <- character()
@@ -155,10 +154,7 @@ export_server <- function(id) {
 
     # Mirror the column-group picker so NULL (= user cleared all) is
     # distinguishable from the pre-init state. Default: all groups on.
-    col_groups_rv <- reactiveVal(.specimen_default_groups(names(EXPORT_COL_GROUPS), session$userData$con))
-    if (!"Specimen" %in% isolate(col_groups_rv())) {
-      shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
-    }
+    col_groups_rv <- reactiveVal(names(EXPORT_COL_GROUPS))
     observeEvent(input$col_groups, {
       col_groups_rv(input$col_groups %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -241,7 +237,7 @@ export_server <- function(id) {
       tips <- paste("From", toupper(sub(":.*", "", keys)))
       stats::setNames(lapply(seq_along(cols), function(i) {
         colDef(show = TRUE, name = cols[i], header = rt_header(cols[i], tips[i]),
-               class = "mp-grp-Specimen", headerClass = "mp-grp-Specimen",
+               class = "mp-grp-Metadata", headerClass = "mp-grp-Metadata",
                html = TRUE, cell = rt_longtext(), minWidth = 120)
       }), cols)
     }
@@ -349,7 +345,7 @@ export_server <- function(id) {
           # the ID (no fragmented sample in the project).
           seqid = .cd("seqid", extra_class = "mp-col-seqid", minWidth = 130),
           Taxon = .cd("Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
-          specimen = specimen_col_def(ns("specimen_open"), class = "mp-grp-Specimen"),
+          specimen = specimen_col_def(ns("specimen_open")),
           curate_opts = .cd("curate_opts", width = 110),
           genetic_code = .cd("genetic_code", width = 110, align = "center"),
           blast_ref_status = .cd(

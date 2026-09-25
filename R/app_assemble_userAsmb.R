@@ -9,8 +9,7 @@ ASSEMBLE_COL_GROUPS_USERASMB <- list(
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
   Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
-               "find_mito_notes", "join_notes"),
-  Specimen = c("specimen")
+               "find_mito_notes", "join_notes")
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -116,10 +115,7 @@ assemble_server_userAsmb <- function(id) {
 
     # Column-group / status filters. Mirror the pickers so NULL (= user cleared
     # all) is distinguishable from the pre-init state. Defaults: everything on.
-    col_groups_rv <- reactiveVal(.specimen_default_groups(names(ASSEMBLE_COL_GROUPS_USERASMB), session$userData$con))
-    if (!"Specimen" %in% isolate(col_groups_rv())) {
-      shinyWidgets::updatePickerInput(session, "col_groups", selected = isolate(col_groups_rv()))
-    }
+    col_groups_rv <- reactiveVal(names(ASSEMBLE_COL_GROUPS_USERASMB))
     observeEvent(input$col_groups, {
       col_groups_rv(input$col_groups %||% character(0))
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
@@ -248,7 +244,7 @@ assemble_server_userAsmb <- function(id) {
               html = T,
               cell = rt_longtext()
             ),
-            specimen = specimen_col_def(ns("specimen_open"), sticky = "left", class = "mp-grp-Specimen"),
+            specimen = specimen_col_def(ns("specimen_open"), sticky = "left"),
             topology = colDef(
               show = TRUE, class = paste(.grp("topology"), "mp-note-cell"),
               headerClass = .grp("topology"),
