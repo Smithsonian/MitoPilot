@@ -5,8 +5,7 @@ EXPORT_COL_GROUPS <- list(
   Stats    = c("topology", "structure"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage"),
-  # filled at render time from the user's mapping file (export_metadata_cols)
-  # plus the fields ticked in meta_export_fields
+  # the columns picked with the Metadata button (meta_view_col_defs)
   Metadata = character(0)
 )
 EXPORT_COL_GROUP_LOOKUP <- {
@@ -87,7 +86,8 @@ export_ui <- function(id) {
         mp_filter_picker(
           ns("col_groups"), "Columns:", names(EXPORT_COL_GROUPS),
           width = "150px"
-        )
+        ),
+        meta_view_button(ns)
       )
     ),
     uiOutput(ns("n_selected")),
@@ -114,12 +114,14 @@ export_server <- function(id) {
 
     specimen_viewer_server("specimen", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_export"))
+    meta_view_setup(input, output, session)
+    fetch_data <- function() meta_view_join(fetch_export_data(), session$userData$con)
 
     # Prepare data ----
     rv <- reactiveValues(
       # curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
       #  dplyr::collect(),
-      data = fetch_export_data(),
+      data = fetch_data(),
       updating = NULL,
       outliers = NULL,    # flags tibble from flag_PCG_outliers()
       review_samples = NULL, # named list (by gene) of every unit in the alignment,
@@ -148,8 +150,13 @@ export_server <- function(id) {
     # Refresh ----
     init("refresh_export")
     on("refresh_export", {
-      rv$data <- fetch_export_data()
+      rv$data <- fetch_data()
       trigger("update_export_table")
+    })
+    meta_ver <- reactiveVal(0L)
+    on("meta_view", {
+      rv$data <- fetch_data()
+      meta_ver(meta_ver() + 1L)
     })
 
     # Mirror the column-group picker so NULL (= user cleared all) is
@@ -178,6 +185,7 @@ export_server <- function(id) {
       nm <- name %||% unname(MP_COL_NAMES[[col]])
       tp <- tip %||% (if (col %in% names(MP_COL_TIPS)) unname(MP_COL_TIPS[[col]]) else NULL)
       cls <- c(.grp(col), extra_class)
+      cls <- if (length(cls)) paste(cls, collapse = " ") else NULL
       colDef(show = TRUE, name = nm, header = rt_header(nm, tp),
              class = cls, headerClass = cls, ...)
     }
@@ -212,35 +220,7 @@ export_server <- function(id) {
     # stop re-rendering it after the first pass.
     outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
-    # colDefs for the user's mapping-file columns, toggled as one group. Read
-    # from the samples schema, not rv$data, so the render stays isolated from
-    # data refreshes (updateReactable keeps page and selection).
-    metadata_col_defs <- function(declared) {
-      sample_cols <- tryCatch(colnames(dplyr::tbl(session$userData$con, "samples")),
-                              error = function(e) character(0))
-      cols <- export_metadata_cols(sample_cols, declared)
-      stats::setNames(lapply(cols, function(col) {
-        colDef(show = TRUE, name = col, header = rt_header(col, "From your mapping file"),
-               class = "mp-grp-Metadata", headerClass = "mp-grp-Metadata",
-               html = TRUE, cell = rt_longtext(), minWidth = 120)
-      }), cols)
-    }
-
-    # colDefs for the GEOME and GBIF fields ticked in the Specimen Fields
-    # picker, toggled as one group.
     meta_fields_ver <- reactiveVal(0L)
-    meta_col_defs <- function() {
-      keys <- tryCatch(
-        DBI::dbGetQuery(session$userData$con, "SELECT key FROM meta_export_fields")$key,
-        error = function(e) character(0))
-      cols <- vapply(keys, .meta_key_col, character(1), USE.NAMES = FALSE)
-      tips <- paste("From", toupper(sub(":.*", "", keys)))
-      stats::setNames(lapply(seq_along(cols), function(i) {
-        colDef(show = TRUE, name = cols[i], header = rt_header(cols[i], tips[i]),
-               class = "mp-grp-Metadata", headerClass = "mp-grp-Metadata",
-               html = TRUE, cell = rt_longtext(), minWidth = 120)
-      }), cols)
-    }
 
     # Specimen field picker ----
     raw_fields_table <- function(raw) {
@@ -278,15 +258,14 @@ export_server <- function(id) {
       .meta_save_fields(con, c(input$geome_combos, input$gbif_combos, picked))
       removeModal()
       meta_fields_ver(meta_fields_ver() + 1L)
-      rv$data <- fetch_export_data()
+      rv$data <- fetch_data()
     })
 
     # Render table ----
     output$table <- reactable::renderReactable({
       meta_fields_ver()
-      declared_cols <- declared_cols_fn()
-      metadata_cols <- metadata_col_defs(names(declared_cols))
-      meta_cols <- meta_col_defs()
+      meta_ver()
+      meta_cols <- meta_view_table_defs(session$userData$con, isolate(rv$data))
       reactable::reactable(
         isolate(rv$data),
         compact = TRUE,
@@ -319,21 +298,21 @@ export_server <- function(id) {
         theme = reactable::reactableTheme(
           headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
         ),
-        # A column shows only if it is declared below; the user's mapping-file
-        # columns are added as the Metadata group (see cols after this list).
+        # A column shows only if it is declared below; the Metadata button's
+        # columns are added as the Metadata group.
         defaultColDef = colDef(show = FALSE),
         # Render order comes from the data frame, not this list. See
         # fetch_export_data().
-        columns = c(declared_cols, metadata_cols, meta_cols)
+        columns = c(declared_cols_fn(), meta_cols)
       )
     })
 
-    # Declared MitoPilot columns; metadata_col_defs() appends the user's own.
+    # Declared MitoPilot columns; the Metadata button adds the rest.
     declared_cols_fn <- function() {
         list(
           `.selection` = colDef(show = TRUE, sticky = "left", width = 28, align = "center"),
           # Wide enough for a 16-character ID; the tooltip covers longer ones.
-          ID = .cd("ID", minWidth = 160, sticky = "left", html = TRUE,
+          ID = .cd("ID", extra_class = "mp-sticky-edge-left", minWidth = 160, sticky = "left", html = TRUE,
                    cell = rt_longtext()),
           # One row per assembly unit; the classes let col_css hide these when every
           # unit shares value 1.
@@ -381,8 +360,11 @@ export_server <- function(id) {
             )
           ),
           export_time_stamp = .cd("export_time_stamp", html = TRUE, width = 150,
-                                  filterable = FALSE, align = "center", cell = rt_ts_date()),
-          export_group = .cd("export_group", sticky = "right", minWidth = 140)
+                                  extra_class = c("mp-actions-sticky", "mp-sticky-edge"),
+                                  filterable = FALSE, align = "left", sticky = "right",
+                                  cell = rt_ts_date()),
+          export_group = .cd("export_group", extra_class = "mp-actions-sticky",
+                             sticky = "right", minWidth = 140)
         )
     }
 
@@ -449,7 +431,7 @@ export_server <- function(id) {
         req(length(selected()) > 0)
         rv$data |>
           dplyr::slice(selected()) |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop), -dplyr::starts_with("mv_map_")) |>
           write.csv(file, row.names = FALSE)
       }
     )
@@ -458,7 +440,7 @@ export_server <- function(id) {
       filename = function() paste0("export_all_", Sys.Date(), ".csv"),
       content = function(file) {
         rv$data |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop), -dplyr::starts_with("mv_map_")) |>
           write.csv(file, row.names = FALSE)
       }
     )
@@ -1538,7 +1520,7 @@ export_server <- function(id) {
       if (!is.null(sp) && nrow(sp) > 0) {
         mp_confirm(
           ns("specimen_confirm"),
-          title = "Specimen metadata disagrees",
+          title = "Sample metadata disagrees",
           text = specimen_warning_html(sp),
           action_label = "Export anyway",
           danger = TRUE,

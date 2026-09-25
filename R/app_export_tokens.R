@@ -41,14 +41,14 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
     }
     list(tokens = rbind(plain(id_col), ticked), n = nrow(ticked))
   }
-  pick_hint <- "Nothing ticked yet. Use Specimen Fields in the Export toolbar to add fields."
+  pick_hint <- "Nothing ticked yet. Use Metadata Export in the Export toolbar to add fields."
   csv <- setdiff(export_metadata_cols(sample_cols, character()), EXPORT_TOKEN_BASICS)
   geome <- meta("geome", "GEOME_BCID")
   gbif <- meta("gbif", "GBIF_ID")
   csv_tokens <- plain(csv)
   list(
     Basics = list(open = TRUE, tokens = plain(EXPORT_TOKEN_BASICS), hint = NULL),
-    `Your CSV columns` = list(
+    `Your mapfile columns` = list(
       open = TRUE, tokens = csv_tokens,
       hint = if (!nrow(csv_tokens)) "Your mapping file has no extra columns." else NULL),
     GEOME = list(open = geome$n > 0, tokens = geome$tokens,

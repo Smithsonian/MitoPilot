@@ -288,10 +288,11 @@ rt_ts_date <- function() {
 #'   cell value in the label only, so rows with nothing behind them still
 #'   render no button.
 #' @param title optional tooltip naming the action.
+#' @param icon_only drop the text; the title doubles as the accessible name.
 #'
 #' @noRd
 rt_icon_bttn_text <- function(inputId, icon, text = "", label = NULL,
-                              title = NULL) {
+                              title = NULL, icon_only = FALSE) {
   relabel <- if (is.null(label)) {
     ""
   } else {
@@ -301,6 +302,12 @@ rt_icon_bttn_text <- function(inputId, icon, text = "", label = NULL,
     ""
   } else {
     sprintf(" title='%s'", mp_js_attr(title))
+  }
+  if (icon_only && !is.null(title)) tip <- sprintf("%s aria-label='%s'", tip, mp_js_attr(title))
+  body <- if (icon_only) {
+    sprintf("`<i class='%s' aria-hidden='true'></i>`", sub(" fa-xs", "", icon, fixed = TRUE))
+  } else {
+    sprintf("`<i class='%s' aria-hidden='true' style='margin-right: 4px;'></i>` + `<small>${value}</small>`", icon)
   }
   sprintf(
     "
@@ -315,13 +322,11 @@ rt_icon_bttn_text <- function(inputId, icon, text = "", label = NULL,
         `class='icon-bttn-text grow' ` +
         `id='${index+1}'%s ` +
         `onclick='event.stopPropagation(); Shiny.setInputValue(&#39;%s&#39;, this.id, {priority: &#39;event&#39;})'>` +
-        `<i class='%s' aria-hidden='true' ` +
-        `style='margin-right: 4px;'></i>` +
-        `<small>${value}</small>` +
+        %s +
         `</button>`
     }
     ",
-    mp_js_attr(text), relabel, tip, inputId, icon
+    mp_js_attr(text), relabel, tip, inputId, body
   ) |>
     htmlwidgets::JS()
 }

@@ -105,7 +105,7 @@ app_ui <- function(request) {
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
-                "specimen_fields", "Specimen Fields",
+                "specimen_fields", "Metadata Export",
                 title = "Choose which GEOME and GBIF fields are available at export"
               ),
               mp_toolbar_button(

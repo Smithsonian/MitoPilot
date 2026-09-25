@@ -391,13 +391,23 @@ details summary:hover {
    cell can render underneath it. */
 .mp-actions-sticky {
   background-color: inherit;
+}
+/* One shadow per pinned group: left edge of the right group, right edge of
+   the left group. */
+.mp-sticky-edge {
   box-shadow: -4px 0 6px -4px rgba(0, 0, 0, .15);
+}
+.mp-sticky-edge-left {
+  box-shadow: 4px 0 6px -4px rgba(0, 0, 0, .15);
 }
 
 /* A permanently visible horizontal scrollbar, so "there is more to the
    right" is never invisible. */
 .mp-table-resize .rt-table {
   scrollbar-width: thin;
+  /* scrollbar-width makes Chrome ignore the ::-webkit-scrollbar rules below, so
+     the colors are set here too: a transparent track, not a pale extra column. */
+  scrollbar-color: var(--mp-border) transparent;
 }
 
 .mp-table-resize .rt-table::-webkit-scrollbar {
@@ -544,6 +554,43 @@ details summary:hover {
   margin-left: var(--mp-space-3);
   padding-left: var(--mp-space-4, 16px);
   border-left: 1px solid var(--mp-border);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* "(N ignored)" after a kept path or scaffold count */
+.mp-ignored-note { color: var(--mp-text-muted); font-size: 0.9em; }
+
+/* Metadata button and its column chooser */
+.mp-meta-btn { margin-bottom: 15px; }
+.mp-meta-logo {
+  display: inline-block; width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px;
+  background: center / contain no-repeat;
+}
+.mp-meta-logo-geome { background-image: url("specimen/geome_g.png"); }
+.mp-meta-logo-gbif { background-image: url("specimen/gbif_leaf.png"); }
+.mp-meta-view-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.mp-meta-view-bar .form-group { margin: 0 0 0 auto; }
+.mp-meta-view-bar .checkbox { margin: 0; }
+/* The source buttons drive the Source filter; its input box is not needed. */
+.mp-meta-view-tbl .rt-tr-filters { display: none; }
+
+/* Wrapped metadata cells: up to three lines, full text in the tooltip. The
+   clamp sits on the text, not the cell, so cell padding cannot show a 4th line. */
+.rt-nowrap .mp-meta-wrap .rt-td-inner,
+.rt-nowrap .mp-meta-wrap .rt-text-content {
+  white-space: normal;
+  text-overflow: clip;
+}
+.mp-meta-wrap .mp-abbr {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 15px;
+  word-break: break-word;
 }
 
 /* Step switcher lives in the toolbar as a peer of the action buttons: label

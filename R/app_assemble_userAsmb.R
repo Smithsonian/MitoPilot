@@ -5,11 +5,13 @@
 ASSEMBLE_COL_GROUPS_USERASMB <- list(
   Options  = c("pre_opts", "find_mito_opts", "circularize_opts", "blast_opts"),
   Stats    = c("trimmed_reads", "mean_length", "topology", "length",
-               "ambiguous_bases", "paths", "scaffolds"),
-  BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
+               "ambiguous_bases", "paths_n", "scaffolds_n"),
+  BLAST    = c("blast_accession", "blast_hits", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes", "circularize_notes",
-               "find_mito_notes", "join_notes")
+  Notes    = c("time_stamp", "assemble_notes", "circularize_notes",
+               "find_mito_notes", "join_notes"),
+  # the columns picked with the Metadata button (meta_view_col_defs)
+  Metadata = character(0)
 )
 ASSEMBLE_COL_GROUP_LOOKUP_USERASMB <- {
   out <- character()
@@ -46,7 +48,8 @@ assemble_ui_userAsmb <- function(id) {
       div(
         class = "mp-filter-cols",
         mp_filter_picker(ns("col_groups"), "Columns:",
-                         names(ASSEMBLE_COL_GROUPS_USERASMB), width = "150px")
+                         names(ASSEMBLE_COL_GROUPS_USERASMB), width = "150px"),
+        meta_view_button(ns)
       )
     ),
     uiOutput(ns("n_selected")),
@@ -64,6 +67,8 @@ assemble_server_userAsmb <- function(id) {
 
     specimen_viewer_server("specimen", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_assemble"))
+    meta_view_setup(input, output, session)
+    fetch_data <- function() meta_view_join(fetch_assemble_data_userAsmb(), session$userData$con)
 
     register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
     register_tool_help("blastn", input, reopen = function() blast_opts_modal(rv))
@@ -78,7 +83,7 @@ assemble_server_userAsmb <- function(id) {
         dplyr::collect(),
       find_mito_opts = dplyr::tbl(session$userData$con, "find_mito_opts") |>
         dplyr::collect(),
-      data = fetch_assemble_data_userAsmb(),
+      data = fetch_data(),
       updating = NULL
     )
 
@@ -106,11 +111,16 @@ assemble_server_userAsmb <- function(id) {
     # Refresh ----
     init("refresh_assemble")
     on("refresh_assemble", {
-      rv$data <- fetch_assemble_data_userAsmb()
+      rv$data <- fetch_data()
       updateReactable(
         "table",
         data = filtered_data()
       )
+    })
+    meta_ver <- reactiveVal(0L)
+    on("meta_view", {
+      rv$data <- fetch_data()
+      meta_ver(meta_ver() + 1L)
     })
 
     # Column-group / status filters. Mirror the pickers so NULL (= user cleared
@@ -166,7 +176,9 @@ assemble_server_userAsmb <- function(id) {
     # Render order comes from the data frame, not this list. See
     # fetch_assemble_data_userAsmb().
     output$table <- renderReactable({
+      meta_ver()
       tbl_data <- isolate(req(filtered_data()))
+      meta_cols <- meta_view_table_defs(session$userData$con, tbl_data)
       tbl_data |>
         reactable(
           resizable = TRUE,
@@ -198,7 +210,7 @@ assemble_server_userAsmb <- function(id) {
             )
           ),
           defaultColDef = colDef(show = FALSE),
-          columns = list(
+          columns = c(meta_cols, list(
             `.selection` = colDef(show = T, sticky = "left", width = 28, align = "center"),
             assemble_lock = colDef(
               show = TRUE,
@@ -353,7 +365,7 @@ assemble_server_userAsmb <- function(id) {
               header = mp_col_header("length_raw"),
               filterable = FALSE,
               html = TRUE,
-              cell = rt_longtext()
+              cell = rt_scaffold_lengths()
             ),
             ambiguous_bases = colDef(
               show = TRUE, class = .grp("ambiguous_bases"), headerClass = .grp("ambiguous_bases"),
@@ -363,21 +375,24 @@ assemble_server_userAsmb <- function(id) {
               header = mp_col_header("ambiguous_bases"),
               filterable = FALSE
             ),
-            paths = colDef(
-              show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
-              width = 80,
+            paths_n = colDef(
+              show = TRUE, class = .grp("paths_n"), headerClass = .grp("paths_n"),
+              width = 110,
               align = "center",
               name = mp_col_name("paths"),
               header = mp_col_header("paths"),
-              cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
+              html = TRUE,
+              cell = rt_kept_count("paths_ignored"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
-            scaffolds = colDef(
-              show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
-              width = 95,
+            scaffolds_n = colDef(
+              show = TRUE, class = .grp("scaffolds_n"), headerClass = .grp("scaffolds_n"),
+              width = 120,
               align = "center",
               name = mp_col_name("scaffolds"),
-              header = mp_col_header("scaffolds")
+              header = mp_col_header("scaffolds"),
+              html = TRUE,
+              cell = rt_kept_count("scaffolds_ignored")
             ),
             blast_accession = colDef(
               show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
@@ -451,16 +466,16 @@ assemble_server_userAsmb <- function(id) {
               cell = rt_longtext()
             ),
             blast_hits = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_hits"), headerClass = .grp("blast_hits"),
               name = mp_col_name("blast_hits"),
               filterable = FALSE,
               sortable = FALSE,
               html = TRUE,
-              width = 140,
+              width = 95,
               align = "center",
               cell = rt_icon_bttn_text(
                 ns("all_blast_hits"), "fas fa-list", "All BLAST Hits",
-                title = "Show every BLAST hit for this sample"
+                title = "Show every BLAST hit for this sample", icon_only = TRUE
               )
             ),
             view = colDef(
@@ -472,32 +487,32 @@ assemble_server_userAsmb <- function(id) {
               sortable = FALSE,
               name = mp_col_name("view"),
               html = TRUE,
-              width = 90,
+              width = 70,
               align = "center",
               cell = rt_icon_bttn_text(
                 ns("details"), "fas fa-square-arrow-up-right fa-xs",
                 label = "Details",
-                title = "Open the details window for this sample"
+                title = "Open the details window for this sample", icon_only = TRUE
               )
             ),
             output = colDef(
               show = TRUE,
               sticky = "right",
-              class = "mp-actions-sticky",
-              headerClass = "mp-actions-sticky",
+              class = "mp-actions-sticky mp-sticky-edge",
+              headerClass = "mp-actions-sticky mp-sticky-edge",
               filterable = FALSE,
               sortable = FALSE,
               name = mp_col_name("output"),
               html = TRUE,
-              width = 90,
+              width = 70,
               align = "center",
               cell = rt_icon_bttn_text(
                 ns("output"), "fas fa-folder-open fa-xs",
                 label = "Output",
-                title = "Open the output folder for this sample"
+                title = "Open the output folder for this sample", icon_only = TRUE
               )
             )
-          )
+          ))
         )
     })
 

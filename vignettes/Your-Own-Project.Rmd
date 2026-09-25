@@ -124,13 +124,17 @@ Four columns are required:
 | `R1` | File name of the forward reads (name only, not a path). |
 | `R2` | File name of the reverse reads (name only, not a path). |
 
-Any other columns you add are carried along: they show in the Export table
-(the **Metadata** entry in its Columns picker hides or shows them together) and
+Any other columns you add are carried along: they show in the Assemble,
+Annotate, and Export tables (the **Metadata** button picks which ones, see
+[Sample Metadata](Specimen-Metadata.html#showing-metadata-in-the-tables)) and
 can be pulled into GenBank FASTA headers at export, so this is the place to put
 voucher numbers, BioSample accessions, collection data, and anything else your
 submission needs.
 
-To link samples to GEOME records or GBIF occurrences, add a column of GEOME BCIDs or gbifIDs; see [Specimen metadata](Specimen-Metadata.html).
+To link samples to [GEOME](https://geome-db.org) records or [GBIF](https://www.gbif.org) occurrences, add a column of GEOME
+BCIDs or gbifIDs (Smithsonian NMNH EZIDs work in the gbifID column too), and
+name those columns with the `mapping_geome` and `mapping_gbif` arguments of
+`new_project()`; see [Sample metadata](Specimen-Metadata.html).
 
 ```
 ID,Taxon,R1,R2,Voucher,BioSample

@@ -1,8 +1,8 @@
 ---
-title: "Specimen metadata: GEOME and GBIF"
+title: "Sample metadata: GEOME and GBIF"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Specimen metadata: GEOME and GBIF}
+  %\VignetteIndexEntry{Sample metadata: GEOME and GBIF}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -37,8 +37,8 @@ MitoPilot can link each sample to specimen records in two public databases:
   and project.
 - [GBIF](https://www.gbif.org) (the Global Biodiversity Information Facility)
   publishes occurrence records from museums and other collections. Every
-  occurrence has a gbifID, a number such as `6186461308`. Given a gbifID,
-  MitoPilot fetches the occurrence, the dataset it belongs to, and the
+  occurrence has a gbifID, a number such as `6186461308`. Given a gbifID (or
+  EZID for Smithsonian NMNH records), MitoPilot fetches the occurrence, the dataset it belongs to, and the
   organization that published it.
 
 Everything is stored in the project database, so you can:
@@ -195,29 +195,35 @@ conflict and any items that were not checked.
 The column is always shown. To add identifiers from the app, click a sample's
 plus icon.
 
-### The specimen metadata viewer
+### Showing metadata in the tables
 
-Click any icon in the Metadata column to open the viewer for that sample.
-Clicking the icon does not select or deselect the row. The title shows the
+The **Metadata** button next to each table's **Columns** picker chooses which
+metadata fields appear as table columns. The choice is saved in the project and
+shared by the Assemble, Annotate, and Export tables. You can temporarily hide
+all metadata fields using the `Columns` picker.
+
+The window lists every field that has a value for at least one sample: the
+extra columns from your mapping file, then GEOME fields, then GBIF fields, with
+the number of samples that have each one and an example value. Use the search
+box, or the **Map file**, **GEOME**, and **GBIF** buttons, to narrow the list,
+and click rows to tick them. Mapping-file fields start ticked; GEOME and GBIF
+fields start unticked. **Clear all** unticks everything.
+
+This only changes what you see. What goes into exported files is set with
+**Choose fields** (see [Using metadata fields at export](#using-metadata-fields-at-export)).
+
+### The sample metadata viewer
+
+Click any icon in the Metadata column to open the viewer for that sample. The title shows the
 sample ID and its Taxon; **Sample** on the left lists every sample, with
 "(failed)" or "(conflict)" after samples that need attention.
 
-- **GEOME** shows the GEOME BCID box with **Fetch**, the time of the last fetch
-  or the reason it failed, and the record level by level from Project down to
-  the sample's own record. Each level links to its page on geome-db.org.
-- **GBIF** shows the gbifID box with **Fetch**, then three cards: the
-  **Occurrence**, its **Dataset** (with the citation GBIF asks you to use), and
-  the publishing **Organization**. Each card links to gbif.org. GBIF's data
-  quality flags for the occurrence are shown as badges in the `issues` row.
-- **Compare** puts the sources side by side (see below).
-
-**Expand all** and **Collapse all** open or close every card. Clearing an
-identifier box and clicking **Fetch** removes that link. **Refresh all**
+Clearing an identifier box and clicking **Fetch** removes that link. **Refresh all**
 fetches every sample's GEOME and GBIF records again.
 
-![Specimen viewer, GBIF tab, with the occurrence issues shown as badges](figures/specimen_viewer_gbif.png)
+![Sample metadata viewer, GBIF tab, with the occurrence issues shown as badges](figures/specimen_viewer_gbif.png)
 
-## Comparing sources
+### Comparing sources
 
 The **Compare** tab lists each item MitoPilot checks, with the value from your
 mapping file (and the column it came from), from GEOME, and from GBIF, and a
@@ -226,26 +232,16 @@ status:
 | Status | Meaning |
 |---|---|
 | agree | Every source that has a value agrees. |
-| not checked | MitoPilot does not judge this difference: the values are free text, or a value could not be read. Look at them yourself (shown in grey). |
-| conflict | A real disagreement (shown in orange). |
+| not checked | MitoPilot does not judge this difference: the values are free text, or a value could not be read. |
+| conflict | A real disagreement. |
 | single | Only one source has a value. |
 | - | No source has a value. |
 
 Blanks never conflict: only sources that both have a value are compared.
 
-| Item | Agree when | If not |
-|---|---|---|
-| coordinates | Both parse (decimal, or `17.5 S 149.8 W`) and differ by at most 0.01 degree in each axis | conflict; a value that cannot be read = not checked |
-| collection_date | Equal at the coarser of the two precisions (`2026` agrees with `2026-02-23`) | conflict; a value that cannot be read = not checked |
-| country | Same ISO country code; names such as `USA`, `United States of America`, and `US` all map to the same code | conflict; a name MitoPilot cannot map, compared with a code, = not checked |
-| voucher | Same catalog number after dropping institution and collection prefixes, spaces, and case | conflict |
-| taxon | First two words equal, ignoring case | conflict |
-| locality, collector | Equal ignoring case and extra spaces | not checked |
-| sex, dev_stage | Equal ignoring case | not checked |
-
 ![Compare tab with a country conflict and a collector that was not checked](figures/specimen_compare.png)
 
-### Which mapping-file columns are compared
+#### Which mapping-file columns are compared
 
 MitoPilot finds your mapping-file columns by name (ignoring case):
 
@@ -262,7 +258,7 @@ MitoPilot finds your mapping-file columns by name (ignoring case):
 | taxon | `Taxon` (always) |
 
 If a column has another name, or a matching name holds something else, open
-**CSV columns...** at the bottom of the Compare tab, pick the column for each
+**Mapfile columns...** at the bottom of the Compare tab, pick the column for each
 item (or **(none)** to skip it), and click **Save columns**. Leaving a box
 empty goes back to automatic detection. The same works from R:
 
@@ -273,12 +269,12 @@ set_metadata_columns("my_project", country = NA)   # back to automatic
 set_metadata_columns("my_project", sex = "")       # do not compare sex
 ```
 
-## Using specimen fields at export
+## Using metadata fields at export
 
 Fetched data does not reach your exported files until you choose which fields
-to use. In the Export module, click **Specimen Fields** in the toolbar.
+to use. In the Export module, click **Metadata Export** in the toolbar.
 
-![Specimen Fields window with GEOME and GBIF sections](figures/specimen_fields.png)
+![Metadata fields window with GEOME and GBIF sections](figures/specimen_fields.png)
 
 The window has a **GEOME** section and a **GBIF** section. Each starts with
 **GenBank-ready combinations**: values built from one or more fields in the
@@ -286,8 +282,8 @@ format GenBank expects for a FASTA source modifier, each with an example and the
 number of samples that have one. Below that, a table lists every raw field found
 in the project's records; use its search box to find a field, and click rows to
 tick them. Nothing is ticked by default. Click **Save** and each ticked field
-becomes a column in the Export table, in the **Metadata** entry of the Columns
-picker.
+can be used in export header templates and is written to the sample summary
+CSV. To see a field in the tables, use the **Metadata** button instead.
 
 ### GEOME combinations
 
@@ -341,13 +337,13 @@ Raw fields become columns named `geome_<Level>_<field>` or
 ### Adding columns to a header template
 
 The **Available columns** list in the Export Data window groups every column you
-can use: **Basics**, **Your CSV columns**, **GEOME**, **GBIF**, **Reference
+can use: **Basics**, **Your mapfile columns**, **GEOME**, **GBIF**, **Reference
 (BLAST)**, and **Assembly and annotation**. Click a column to insert it at the
 cursor of the header box you last clicked (the mitogenome FASTA header box if
 you have not clicked one). A GenBank-ready combination inserts the whole source
 modifier, for example `[lat_lon={geome_lat_lon}]`. Hover over a column to see its
 value for the first row of any export group, and type in the filter box to
-find one. **Choose fields** next to GEOME or GBIF opens the Specimen Fields
+find one. **Choose fields** next to GEOME or GBIF opens the Metadata fields
 window (this closes the Export Data window, so save your template first).
 
 ![Export Data window with grouped column chips](figures/export_tokens.png)

@@ -47,9 +47,9 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
     id <- vapply(cols, function(c) c$id, character(1))
     cls <- vapply(cols, function(c) c$className %||% "", character(1))
     shown <- vapply(cols, function(c) !isFALSE(c$show), logical(1))
-    expect_true(all(c("geome_lat_lon", "geome_Event_country", "gbif_sex") %in% id[shown]))
-    expect_true(all(c("geome_lat_lon", "geome_Event_country", "gbif_sex") %in% id[grepl("mp-grp-Metadata", cls)]))
+    # Ticked export fields feed exported files; the Metadata button decides what shows
     expect_true("specimen" %in% id[shown & !nzchar(cls)])
+    expect_false(any(c("geome_lat_lon", "geome_Event_country", "gbif_sex") %in% id[shown]))
   })
 })
 
@@ -64,7 +64,7 @@ test_that("specimen_fields_modal has a GEOME and a GBIF section", {
   .meta_save_fields(con, c("geome:combo:lat_lon", "gbif:combo:sex"))
   html <- as.character(specimen_fields_modal(NS("exp"), meta_field_summary(con, "GEOME"),
                                               meta_field_summary(con, "GBIF")))
-  expect_match(html, "Specimen fields for export", fixed = TRUE)
+  expect_match(html, "Metadata fields for export", fixed = TRUE)
   expect_match(html, "exp-geome_combos", fixed = TRUE)
   expect_match(html, "exp-gbif_combos", fixed = TRUE)
   expect_match(html, "exp-geome_raw", fixed = TRUE)
@@ -236,7 +236,7 @@ test_that("specimen_compare_view marks conflicts and notes and names the CSV col
   expect_match(html, "<tr class=\"text-muted\">", fixed = TRUE)
   expect_match(html, "(geo_loc_name)", fixed = TRUE)
   expect_match(html, "Canada", fixed = TRUE)
-  expect_match(html, "CSV (column)", fixed = TRUE)
+  expect_match(html, "Mapfile (column)", fixed = TRUE)
 })
 
 test_that("specimen_csv_map_ui offers every concept but taxon, with auto and none", {
@@ -246,7 +246,7 @@ test_that("specimen_csv_map_ui offers every concept but taxon, with auto and non
                   taxon = "Taxon")
   html <- as.character(specimen_csv_map_ui(NS("v"), current, c(country = "Where", sex = ""),
                                            c("Latitude", "Longitude", "Where")))
-  expect_match(html, "CSV columns...", fixed = TRUE)
+  expect_match(html, "Mapfile columns...", fixed = TRUE)
   expect_match(html, "v-map_coordinates", fixed = TRUE)
   expect_false(grepl("v-map_taxon", html, fixed = TRUE))
   expect_match(html, "auto: Latitude + Longitude", fixed = TRUE)

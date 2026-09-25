@@ -93,11 +93,13 @@ rt_specimen <- function(inputId) {
 #' Shared colDef for the Metadata column
 #'
 #' @param inputId namespaced Shiny input id to receive the clicked row's ID
+#' @param sticky "left" pins it as the last left-pinned column, with the edge shadow
 #' @noRd
 specimen_col_def <- function(inputId, sticky = NULL) {
+  edge <- if (identical(sticky, "left")) "mp-sticky-edge-left"
   reactable::colDef(
     show = TRUE, name = "Metadata", sticky = sticky, width = 90, align = "center",
-    html = TRUE, filterable = FALSE, sortable = TRUE,
+    html = TRUE, filterable = FALSE, sortable = TRUE, class = edge, headerClass = edge,
     header = rt_header("Metadata", paste(
       "GEOME and GBIF metadata for this sample. Click an icon to view, add,",
       "compare, or refresh.")),
@@ -173,7 +175,7 @@ specimen_compare_view <- function(cf) {
   dash <- function(x) if (is.na(x)) "-" else x
   tags$table(
     class = "table table-sm mp-spec-compare",
-    tags$thead(tags$tr(tags$th("Item"), tags$th("CSV (column)"), tags$th("GEOME"),
+    tags$thead(tags$tr(tags$th("Item"), tags$th("Mapfile (column)"), tags$th("GEOME"),
                        tags$th("GBIF"), tags$th("Status"))),
     tags$tbody(lapply(seq_len(nrow(cf)), function(i) {
       r <- cf[i, ]
@@ -192,7 +194,7 @@ specimen_compare_view <- function(cf) {
   )
 }
 
-#' "CSV columns..." control: pick the mapping-file column per concept
+#' "Mapfile columns..." control: pick the mapping-file column per concept
 #'
 #' @param ns module namespace function
 #' @param current `specimen_csv_columns()` result
@@ -203,7 +205,7 @@ specimen_csv_map_ui <- function(ns, current, overrides, choices) {
   concepts <- setdiff(SPECIMEN_CONCEPTS, "taxon")
   tags$details(
     class = "mp-spec-map",
-    tags$summary("CSV columns..."),
+    tags$summary("Mapfile columns..."),
     opts_help(
       "Pick the mapping-file column MitoPilot compares for each item. Leave a ",
       "box empty to detect the column automatically, or pick (none) to skip ",
@@ -257,7 +259,7 @@ specimen_fields_modal <- function(ns, geome, gbif) {
     )
   }
   modalDialog(
-    title = mp_modal_title("Specimen fields for export",
+    title = mp_modal_title("Metadata fields for export",
                            "Ticked fields become columns you can use in header templates"),
     size = "l", easyClose = TRUE,
     section("GEOME", geome),
@@ -281,9 +283,11 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
     bump <- function() { rv$ver <- rv$ver + 1L; on_change() }
     empty_msg <- list(
       GEOME = paste("This sample has no GEOME BCID. Paste one above and click Fetch, or add a",
-                    "GEOME_BCID column to your mapping file (see the Specimen Metadata article)."),
+                    "GEOME_BCID column to your mapping file and load it into the project with",
+                    "update_sample_metadata() (see the Sample Metadata article)."),
       GBIF = paste("This sample has no GBIF ID. Paste a gbifID, a gbif.org/occurrence link, or an NMNH EZID above",
-                   "and click Fetch, or add a GBIF_ID column to your mapping file.")
+                   "and click Fetch, or add a GBIF_ID column to your mapping file and load it into",
+                   "the project with update_sample_metadata() (see the Sample Metadata article).")
     )
 
     samples <- function() {
@@ -299,7 +303,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
                                  ifelse(mark %in% "conflict", " (conflict)", "")))
       modalDialog(
         title = mp_modal_title(
-          tagList("Specimen metadata: ", textOutput(ns("hdr_id"), inline = TRUE)),
+          tagList("Sample metadata: ", textOutput(ns("hdr_id"), inline = TRUE)),
           subtitle = tagList("Taxon: ", textOutput(ns("hdr_taxon"), inline = TRUE))
         ),
         size = "l", easyClose = TRUE,
@@ -409,7 +413,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
       tryCatch({
         .spec_set_csv_map(con, map)
         bump()
-        showNotification("CSV columns saved", type = "message")
+        showNotification("Mapfile columns saved", type = "message")
       }, error = function(e) showNotification(conditionMessage(e), type = "error"))
     })
 

@@ -28,9 +28,9 @@
   if (length(v)) v[1] else NA_character_
 }
 
-meta_export_cols <- function(con, ids = NULL) {
+meta_export_cols <- function(con, ids = NULL, keys = NULL) {
   .meta_ensure_tables(con)
-  keys <- DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key
+  keys <- keys %||% DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key
   if (!length(keys)) return(NULL)
   recs <- DBI::dbGetQuery(con, "SELECT ID, source, level, depth, field, value FROM meta_records")
   ids <- ids %||% unique(recs$ID)

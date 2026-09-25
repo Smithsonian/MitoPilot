@@ -68,6 +68,13 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     dplyr::collect() |>
     .specimen_status_join(db) |>
     dplyr::left_join(unit_topology, by = "ID") |>
+    dplyr::left_join(assemble_contig_summary(db), by = "ID") |>
+    dplyr::mutate(
+      length = dplyr::coalesce(length_per_scaffold, as.character(length)),
+      paths_n = dplyr::coalesce(paths_n, abs(paths)),
+      scaffolds_n = dplyr::coalesce(scaffolds_n, as.integer(scaffolds))
+    ) |>
+    dplyr::select(-length_per_scaffold) |>
     dplyr::mutate(topology = dplyr::case_when(
       !is.na(unit_topology) ~ unit_topology,
       is.na(topology) ~ NA_character_,
@@ -124,8 +131,10 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
         .default = NA_character_
       )
     ) |>
-    # The three action columns render last and adjacent (theme T19).
-    dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col()) |>
+    # The action columns render last and adjacent (theme T19).
+    dplyr::relocate(output, view, .after = dplyr::last_col()) |>
+    dplyr::relocate(blast_hits, .after = blast_accession) |>
+    dplyr::relocate(paths_n, scaffolds_n, .after = scaffolds) |>
     dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message", "specimen_icons")), .after = Taxon)
 }
 

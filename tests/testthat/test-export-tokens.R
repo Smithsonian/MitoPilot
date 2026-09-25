@@ -15,12 +15,12 @@ tok_cols <- c("ID", "Taxon", "genetic_code", "R1", "R2", "site", "GEOME_BCID", "
 test_that("export_token_groups sorts columns into the six groups", {
   g <- export_token_groups(tok_data(), tok_cols,
                            c("geome:combo:lat_lon", "gbif:raw:Occurrence:countryCode"))
-  expect_equal(names(g), c("Basics", "Your CSV columns", "GEOME", "GBIF",
+  expect_equal(names(g), c("Basics", "Your mapfile columns", "GEOME", "GBIF",
                            "Reference (BLAST)", "Assembly and annotation"))
   expect_equal(g$Basics$tokens$token,
                c("seqid", "ID", "Taxon", "genetic_code", "topology", "completeness", "path", "scaffold"))
   expect_equal(g$Basics$tokens$insert[3], "{Taxon}")
-  expect_equal(g$`Your CSV columns`$tokens$token, "site")
+  expect_equal(g$`Your mapfile columns`$tokens$token, "site")
   expect_equal(g$GEOME$tokens$token, c("GEOME_BCID", "geome_lat_lon"))
   expect_equal(g$GEOME$tokens$insert, c("{GEOME_BCID}", "[lat_lon={geome_lat_lon}]"))
   expect_equal(g$GEOME$tokens$example, c("ark:/1/A", "17.5 S 149.8 W"))
@@ -41,11 +41,11 @@ test_that("groups with nothing ticked or no extra columns say how to add some", 
   g <- export_token_groups(d, c("ID", "Taxon", "GEOME_BCID", "GBIF_ID"), character())
   expect_false(g$GEOME$open)
   expect_false(g$GBIF$open)
-  expect_match(g$GEOME$hint, "Specimen Fields", fixed = TRUE)
-  expect_match(g$GBIF$hint, "Specimen Fields", fixed = TRUE)
-  expect_true(g$`Your CSV columns`$open)
-  expect_match(g$`Your CSV columns`$hint, "no extra columns", fixed = TRUE)
-  expect_equal(nrow(g$`Your CSV columns`$tokens), 0L)
+  expect_match(g$GEOME$hint, "Metadata Export", fixed = TRUE)
+  expect_match(g$GBIF$hint, "Metadata Export", fixed = TRUE)
+  expect_true(g$`Your mapfile columns`$open)
+  expect_match(g$`Your mapfile columns`$hint, "no extra columns", fixed = TRUE)
+  expect_equal(nrow(g$`Your mapfile columns`$tokens), 0L)
   expect_equal(g$GEOME$tokens$token, "GEOME_BCID")
 })
 
