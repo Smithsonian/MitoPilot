@@ -172,7 +172,7 @@ The Assemble, Annotate, and Export tables have a **Specimen** column right after
 | Faint plus | No GEOME BCID or GBIF ID. |
 
 Hovering over an icon lists each source with its status, then any items in
-conflict and any notes.
+conflict and any items that were not checked.
 
 ![Assemble table with the Specimen column showing fetched, failed, conflict, and empty samples](figures/specimen_column.png)
 
@@ -212,7 +212,7 @@ status:
 | Status | Meaning |
 |---|---|
 | agree | Every source that has a value agrees. |
-| note | A minor difference worth a look (shown in grey). |
+| not checked | MitoPilot does not judge this difference: the values are free text, or a value could not be read. Look at them yourself (shown in grey). |
 | conflict | A real disagreement (shown in orange). |
 | single | Only one source has a value. |
 | - | No source has a value. |
@@ -221,15 +221,15 @@ Blanks never conflict: only sources that both have a value are compared.
 
 | Item | Agree when | If not |
 |---|---|---|
-| coordinates | Both parse (decimal, or `17.5 S 149.8 W`) and differ by at most 0.01 degree in each axis | conflict; unparseable value = note |
-| collection_date | Equal at the coarser of the two precisions (`2026` agrees with `2026-02-23`) | conflict; unparseable value = note |
-| country | Same ISO country code; names such as `USA`, `United States of America`, and `US` all map to the same code | conflict; a name MitoPilot cannot map, compared with a code, is a note |
+| coordinates | Both parse (decimal, or `17.5 S 149.8 W`) and differ by at most 0.01 degree in each axis | conflict; a value that cannot be read = not checked |
+| collection_date | Equal at the coarser of the two precisions (`2026` agrees with `2026-02-23`) | conflict; a value that cannot be read = not checked |
+| country | Same ISO country code; names such as `USA`, `United States of America`, and `US` all map to the same code | conflict; a name MitoPilot cannot map, compared with a code, = not checked |
 | voucher | Same catalog number after dropping institution and collection prefixes, spaces, and case | conflict |
 | taxon | First two words equal, ignoring case | conflict |
-| locality, collector | Equal ignoring case and extra spaces | note |
-| sex, dev_stage | Equal ignoring case | note |
+| locality, collector | Equal ignoring case and extra spaces | not checked |
+| sex, dev_stage | Equal ignoring case | not checked |
 
-![Compare tab with a country conflict and a collector note](figures/specimen_compare.png)
+![Compare tab with a country conflict and a collector that was not checked](figures/specimen_compare.png)
 
 ### Which mapping-file columns are compared
 
@@ -359,7 +359,7 @@ use: GEOME and GBIF combinations and raw fields, and mapping-file columns
 matched to an item (including `{Taxon}`). If any sample in the export group has
 a **conflict** on one of those items, a warning lists each sample, item, and the
 differing values. Click **Export anyway** to continue or **Cancel** to go back
-and fix the data or the template. Notes never trigger the warning.
+and fix the data or the template. Items marked not checked never trigger the warning.
 
 ![Export warning listing a country conflict](figures/specimen_export_warning.png)
 

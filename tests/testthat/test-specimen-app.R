@@ -101,7 +101,7 @@ test_that("specimen_status: failed beats conflict beats ok beats none", {
   expect_equal(s$specimen_message[1], "GEOME: fetched")
   expect_equal(s$specimen_message[2], "GBIF: failed (GBIF returned HTTP 503)")
   expect_equal(s$specimen_message[3],
-               "GEOME: fetched\nGBIF: fetched\nConflicts: country\nNotes: collector")
+               "GEOME: fetched\nGBIF: fetched\nConflicts: country\nNot checked: collector")
   expect_equal(s$specimen_message[4], "No GEOME BCID or GBIF ID")
 })
 
@@ -234,7 +234,7 @@ test_that("specimen_compare_view marks conflicts and notes and names the CSV col
                    csv_value = c("USA: Florida", NA, NA, NA),
                    geome_value = c("Canada", "A. B", NA, NA),
                    gbif_value = c(NA, "Ann B", "male", NA),
-                   status = c("conflict", "note", "single", NA))
+                   status = c("conflict", "not checked", "single", NA))
   html <- as.character(specimen_compare_view(cf))
   expect_match(html, "<tr class=\"mp-spec-conflict\">", fixed = TRUE)
   expect_match(html, "<tr class=\"text-muted\">", fixed = TRUE)

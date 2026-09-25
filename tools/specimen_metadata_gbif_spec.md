@@ -137,7 +137,7 @@ Normalization and agreement:
 | sex, dev_stage | lowercased equal | note |
 
 Only sources that both have a value are compared; blanks never conflict. Status per
-concept per sample: `agree`, `note`, `conflict`, or `single` (one source only).
+concept per sample: `agree`, `note`, `conflict`, or `single` (one source only). Displayed status for non-judged differences was renamed from `note` to `not checked` (2026-09-25, user decision).
 
 Engine: `specimen_conflicts(con, ids = NULL)` returns ID, concept, csv_column,
 csv_value, geome_value, gbif_value, status. It is the only comparison code; the icon

@@ -61,7 +61,7 @@ test_that("specimen_conflicts flags agree, note, conflict, single, and empty", {
   expect_equal(st(cf, "s2", "collection_date"), "conflict")
   expect_equal(st(cf, "s2", "country"), "conflict")
   expect_equal(st(cf, "s2", "locality"), "agree")
-  expect_equal(st(cf, "s2", "collector"), "note")
+  expect_equal(st(cf, "s2", "collector"), "not checked")
   expect_equal(st(cf, "s2", "voucher"), NA_character_)
   expect_equal(st(cf, "s2", "coordinates"), "single")
   expect_equal(cf$gbif_value[cf$ID == "s2" & cf$concept == "country"], "AS")
@@ -138,7 +138,7 @@ test_that("specimen_export_warnings keeps only conflicts on used concepts for ex
   cf <- data.frame(ID = c("s1", "s1", "s2", "s3"), concept = c("country", "sex", "country", "country"),
                    csv_column = NA, csv_value = c("USA", "m", "Peru", "Chile"),
                    geome_value = c("Canada", "f", "Peru", "Peru"), gbif_value = NA,
-                   status = c("conflict", "note", "agree", "conflict"))
+                   status = c("conflict", "not checked", "agree", "conflict"))
   w <- specimen_export_warnings(cf, c("country", "sex"), c("s1", "s2"))
   expect_equal(w$ID, "s1")
   expect_equal(w$concept, "country")

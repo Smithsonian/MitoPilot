@@ -1474,8 +1474,8 @@ export_server <- function(id) {
       run_export()
     }
 
-    # Conflicts on the specimen items the active header templates use. Notes
-    # never count, and a template without specimen tokens never warns.
+    # Conflicts on the specimen items the active header templates use.
+    # "not checked" items never count, and a template without specimen tokens never warns.
     specimen_conflict_rows <- function(group) {
       ids <- unique(rv$data$ID[!is.na(rv$data$export_group) & rv$data$export_group == group])
       con <- session$userData$con

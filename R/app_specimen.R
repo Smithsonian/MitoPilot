@@ -2,7 +2,7 @@
 #'
 #' @param con database connection
 #' @return data.frame `ID`, `specimen` ("ok" | "failed" | "conflict" | "none"),
-#'   `specimen_message` (tooltip text, one line per source then conflicts and notes)
+#'   `specimen_message` (tooltip text, one line per source then conflicts and not-checked items)
 #' @noRd
 specimen_status <- function(con) {
   .meta_ensure_tables(con)
@@ -27,9 +27,9 @@ specimen_status <- function(con) {
     }
     k <- cf[cf$ID == id, , drop = FALSE]
     conf <- k$concept[k$status %in% "conflict"]
-    note <- k$concept[k$status %in% "note"]
+    unchecked <- k$concept[k$status %in% "not checked"]
     if (length(conf)) lines <- c(lines, paste("Conflicts:", paste(conf, collapse = ", ")))
-    if (length(note)) lines <- c(lines, paste("Notes:", paste(note, collapse = ", ")))
+    if (length(unchecked)) lines <- c(lines, paste("Not checked:", paste(unchecked, collapse = ", ")))
     state[i] <- if ("failed" %in% states) "failed" else if (length(conf)) "conflict" else
       if ("ok" %in% states) "ok" else "none"
     msg[i] <- if (length(lines)) paste(lines, collapse = "\n") else "No GEOME BCID or GBIF ID"
@@ -186,7 +186,7 @@ specimen_compare_view <- function(cf) {
     tags$tbody(lapply(seq_len(nrow(cf)), function(i) {
       r <- cf[i, ]
       cls <- if (identical(r$status, "conflict")) "mp-spec-conflict" else
-        if (identical(r$status, "note")) "text-muted" else NULL
+        if (identical(r$status, "not checked")) "text-muted" else NULL
       tags$tr(
         class = cls,
         tags$td(r$concept),

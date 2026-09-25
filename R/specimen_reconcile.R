@@ -88,13 +88,13 @@
     coordinates = {
       pa <- .spec_parse_coords(a)
       pb <- .spec_parse_coords(b)
-      if (is.null(pa) || is.null(pb)) "note"
+      if (is.null(pa) || is.null(pb)) "not checked"
       else if (all(abs(pa - pb) <= 0.01 + 1e-9)) "agree" else "conflict"
     },
     collection_date = {
       pa <- .spec_parse_date(a)
       pb <- .spec_parse_date(b)
-      if (is.null(pa) || is.null(pb)) "note"
+      if (is.null(pa) || is.null(pb)) "not checked"
       else if (.spec_same_date(pa, pb)) "agree" else "conflict"
     },
     country = {
@@ -105,15 +105,15 @@
       } else if (.spec_norm_name(sub(":.*", "", a)) == .spec_norm_name(sub(":.*", "", b))) {
         "agree"
       } else {
-        "note"
+        "not checked"
       }
     },
     voucher = if (.spec_norm_voucher(a) == .spec_norm_voucher(b)) "agree" else "conflict",
     taxon = if (.spec_binomial(a) == .spec_binomial(b)) "agree" else "conflict",
     locality = ,
-    collector = if (.spec_squash(a) == .spec_squash(b)) "agree" else "note",
+    collector = if (.spec_squash(a) == .spec_squash(b)) "agree" else "not checked",
     sex = ,
-    dev_stage = if (tolower(trimws(a)) == tolower(trimws(b))) "agree" else "note"
+    dev_stage = if (tolower(trimws(a)) == tolower(trimws(b))) "agree" else "not checked"
   )
 }
 
@@ -123,7 +123,7 @@
   if (length(vals) == 1L) return("single")
   pairs <- utils::combn(length(vals), 2)
   st <- apply(pairs, 2, function(p) .spec_compare(concept, vals[p[1]], vals[p[2]]))
-  if ("conflict" %in% st) "conflict" else if ("note" %in% st) "note" else "agree"
+  if ("conflict" %in% st) "conflict" else if ("not checked" %in% st) "not checked" else "agree"
 }
 
 SPECIMEN_CONCEPTS <- c("coordinates", "collection_date", "country", "locality", "voucher",
