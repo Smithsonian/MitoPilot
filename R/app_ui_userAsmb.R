@@ -105,6 +105,10 @@ app_ui_userAsmb <- function(request) {
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
+                "specimen_fields", "Set Export Metadata",
+                title = "Choose which GEOME and GBIF fields are available at export"
+              ),
+              mp_toolbar_button(
                 "export", "Export Data",
                 emphasis = "primary",
                 title = "Open the export window for the selected assemblies"

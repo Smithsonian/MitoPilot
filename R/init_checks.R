@@ -188,6 +188,8 @@ check_sample_ids <- function(ids, iss = .issues()) {
 #' @param check_assemblies run assembly-file checks at all (the pre-flight only)
 #' @noRd
 check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
+                          mapping_geome = "GEOME_BCID",
+                          mapping_gbif = "GBIF_ID",
                           need_reads = TRUE, user_asmb = FALSE,
                           data_path = NULL, assembly_path = NULL,
                           check_assemblies = FALSE, find_mitogenome = FALSE,
@@ -215,6 +217,18 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
   reserved <- c("genetic_code", if (user_asmb) c("topology", "assembly"))
   if (mapping_id != "ID") reserved <- c(reserved, "ID")
   if (mapping_taxon != "Taxon") reserved <- c(reserved, "Taxon")
+  if (mapping_geome != "GEOME_BCID") {
+    if (mapping_geome %nin% cols) {
+      iss$err("mapping columns: GEOME BCID column '", mapping_geome, "' not found")
+    }
+    reserved <- c(reserved, "GEOME_BCID")
+  }
+  if (mapping_gbif != "GBIF_ID") {
+    if (mapping_gbif %nin% cols) {
+      iss$err("mapping columns: GBIF ID column '", mapping_gbif, "' not found")
+    }
+    reserved <- c(reserved, "GBIF_ID")
+  }
   hit <- intersect(reserved, cols)
   if (length(hit) > 0L) {
     iss$err("mapping columns: reserved names that MitoPilot fills in itself: ",
@@ -236,6 +250,28 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
     miss <- is.na(tx) | !nzchar(tx)
     if (any(miss)) {
       iss$warn("mapping Taxon: empty for ", .lst(lab[miss]))
+    }
+  }
+
+  # GEOME BCIDs ----
+  if (mapping_geome %in% cols) {
+    raw <- trimws(as.character(mapping[[mapping_geome]]))
+    raw[is.na(raw)] <- ""
+    bad <- nzchar(raw) & is.na(geome_normalize_bcid(raw))
+    if (any(bad)) {
+      iss$warn("mapping GEOME BCID: not a GEOME ARK (ark:/NNNNN/...) for ",
+               .lst(lab[bad]), "; these samples will show a failed GEOME fetch")
+    }
+  }
+
+  # GBIF IDs ----
+  if (mapping_gbif %in% cols) {
+    raw <- trimws(.meta_chr(mapping[[mapping_gbif]]))
+    raw[is.na(raw)] <- ""
+    bad <- nzchar(raw) & is.na(gbif_normalize_id(raw))
+    if (any(bad)) {
+      iss$warn("mapping GBIF ID: not a GBIF occurrence ID (digits) or NMNH EZID for ",
+               .lst(lab[bad]), "; these samples will show a failed GBIF fetch")
     }
   }
 
@@ -535,6 +571,8 @@ preflight_project <- function(path, mapping_fn, mapping_id, data_path, no_raw_da
   if (!is.null(mapping)) {
     check_mapping(mapping, mapping_id = mapping_id,
                   mapping_taxon = dots$mapping_taxon %||% "Taxon",
+                  mapping_geome = dots$mapping_geome %||% "GEOME_BCID",
+                  mapping_gbif = dots$mapping_gbif %||% "GBIF_ID",
                   need_reads = !no_raw_data, user_asmb = user_asmb,
                   data_path = if (no_raw_data) NULL else data_path,
                   assembly_path = assembly_path, check_assemblies = user_asmb,
@@ -551,6 +589,20 @@ preflight_project <- function(path, mapping_fn, mapping_id, data_path, no_raw_da
         }
       }, error = function(e) iss$err("mapping Reference: ", conditionMessage(e)))
     }
+  }
+
+  geome_col <- dots$mapping_geome %||% "GEOME_BCID"
+  if (!is.null(mapping) && geome_col %in% colnames(mapping) &&
+      !isFALSE(dots$fetch_geome) &&
+      any(!is.na(geome_normalize_bcid(mapping[[geome_col]])))) {
+    .check_resource("https://api.geome-db.org/docs/geomeAPI.json", "GEOME", iss = iss)
+  }
+
+  gbif_col <- dots$mapping_gbif %||% "GBIF_ID"
+  if (!is.null(mapping) && gbif_col %in% colnames(mapping) &&
+      !isFALSE(dots$fetch_gbif) &&
+      any(!is.na(gbif_normalize_id(mapping[[gbif_col]])))) {
+    .check_resource("https://api.gbif.org/v1/enumeration/country", "GBIF", iss = iss)
   }
 
   # User-assembly extras ----

@@ -63,6 +63,7 @@ assemble_db <- function(assemblies) {
   # Every real assemblies row carries its sequence; tests that do not care about
   # it get a clean one so the ambiguous-base count is 0.
   if (!"sequence" %in% names(assemblies)) assemblies$sequence <- rep("ACGT", nrow(assemblies))
+  if (!"length" %in% names(assemblies)) assemblies$length <- rep(16000L, nrow(assemblies))
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   DBI::dbWriteTable(con, "assemble", data.frame(
     ID = c("mixed", "circ", "fresh"), assemble_lock = 0L, assemble_switch = 2L,

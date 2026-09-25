@@ -12,6 +12,18 @@
 #'   is ignored. May include additional columns with other sample metadata.
 #' @param mapping_id The name of the column in the mapping file that contains
 #'   the unique sample identifiers (default = "ID").
+#' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
+#'   (optional). Stored as `GEOME_BCID`. See `vignette("Specimen-Metadata")`.
+#'   Passed to `new_db_userAsmb()`.
+#' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+#'   Passed to `new_db_userAsmb()`.
+#' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence
+#'   IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.
+#'   Passed to `new_db_userAsmb()`.
+#' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
+#'   Passed to `new_db_userAsmb()`.
 #' @param data_path Path to the directory where the raw data is located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution. Not required
 #'   when `no_raw_data = TRUE`.
@@ -80,6 +92,10 @@ new_project_userAsmb <- function(
     path = ".",
     mapping_fn = NULL,
     mapping_id = "ID",
+    mapping_geome = "GEOME_BCID",
+    fetch_geome = TRUE,
+    mapping_gbif = "GBIF_ID",
+    fetch_gbif = TRUE,
     data_path = NULL,
     no_raw_data = FALSE,
     assembly_path = "NA",
@@ -102,6 +118,10 @@ new_project_userAsmb <- function(
 
   executor <- executor[1]
   dots <- list(...)
+  dots$mapping_geome <- mapping_geome
+  dots$fetch_geome <- fetch_geome
+  dots$mapping_gbif <- mapping_gbif
+  dots$fetch_gbif <- fetch_gbif
   if (no_raw_data) {
     data_path <- "NA"
     message("no_raw_data = TRUE: skipping read mapping and coverage calculation.")
@@ -161,6 +181,10 @@ new_project_userAsmb <- function(
     genetic_code = genetic_code,
     mapping_fn = mapping_out,
     mapping_id = mapping_id,
+    mapping_geome = mapping_geome,
+    fetch_geome = fetch_geome,
+    mapping_gbif = mapping_gbif,
+    fetch_gbif = fetch_gbif,
     assembly_path = assembly_path,
     no_raw_data = no_raw_data,
     attempt_circularization = attempt_circularization,

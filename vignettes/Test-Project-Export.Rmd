@@ -182,6 +182,13 @@ appends the scaffold/path number if that sample is exporting multiple sequences.
 Templates are validated as you type and can be saved by name with
 **Save template** for reuse.
 
+<div class="alert alert-tip">
+<strong>Tip.</strong> Samples linked to GEOME or GBIF records can also use
+<code>{geome_&#46;&#46;&#46;}</code> and <code>{gbif_&#46;&#46;&#46;}</code> columns in the header, such as
+<code>{geome_lat_lon}</code> and <code>{gbif_collection_date}</code>. See
+<a href="Specimen-Metadata.html#using-metadata-fields-at-export">Using metadata fields at export</a>.
+</div>
+
 Other options in the Export Data window:
 
 - **Generate group-level PCG alignment summary** aligns every protein-coding gene

@@ -319,7 +319,8 @@ assembly_coverage_details_server <- function(id, rv) {
               name = MP_COL_NAMES[["view_coverage"]], html = T, width = 90,
               align = "center", sticky = "right",
               sortable = FALSE, filterable = FALSE,
-              class = "mp-actions-sticky", headerClass = "mp-actions-sticky",
+              class = "mp-actions-sticky mp-sticky-edge",
+              headerClass = "mp-actions-sticky mp-sticky-edge",
               cell = rt_icon_bttn_text(
                 ns("view_coverage"), "fas fa-eye fa-xs", "View",
                 title = "Open this scaffold's read-coverage plot (PDF)"

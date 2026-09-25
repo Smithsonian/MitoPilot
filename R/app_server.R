@@ -16,6 +16,7 @@ app_server <- function(input, output, session) {
     )
   }
   session$userData$con <- DBI::dbConnect(RSQLite::SQLite(), dbname = db)
+  .meta_ensure_tables(session$userData$con)
   session$onSessionEnded(function() {
     message("Session ended. Closing DB connection.")
     DBI::dbDisconnect(session$userData$con)
@@ -234,6 +235,9 @@ app_server <- function(input, output, session) {
   })
   observeEvent(input$clear_group, {
     trigger("clear_group")
+  })
+  observeEvent(input$specimen_fields, {
+    trigger("specimen_fields")
   })
   observeEvent(input$export, {
     trigger("export")

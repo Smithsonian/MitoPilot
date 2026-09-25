@@ -3,10 +3,12 @@
 ASSEMBLE_COL_GROUPS <- list(
   Options  = c("pre_opts", "assemble_opts", "maptoref_ref", "blast_opts"),
   Stats    = c("trimmed_reads", "mean_length", "topology", "length",
-               "paths", "scaffolds"),
-  BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
+               "paths_n", "scaffolds_n"),
+  BLAST    = c("blast_accession", "blast_hits", "blast_ref_status", "blast_species",
                "blast_lineage", "blast_pident", "blast_qcovs"),
-  Metadata = c("time_stamp", "assemble_notes", "join_notes")
+  Notes    = c("time_stamp", "assemble_notes", "join_notes"),
+  # the columns picked with the Metadata button (meta_view_col_defs)
+  Metadata = character(0)
 )
 # Reverse lookup col -> group, used to tag colDefs with a CSS class so the
 # column-group picker can show/hide columns via CSS without re-rendering
@@ -55,7 +57,8 @@ assemble_ui <- function(id) {
       div(
         class = "mp-filter-cols",
         mp_filter_picker(ns("col_groups"), "Columns:", names(ASSEMBLE_COL_GROUPS),
-                         width = "150px")
+                         width = "150px"),
+        meta_view_button(ns)
       )
     ),
     uiOutput(ns("n_selected")),
@@ -70,6 +73,11 @@ assemble_ui <- function(id) {
 assemble_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    specimen_viewer_server("specimen", open = reactive(input$specimen_open),
+                        on_change = function() trigger("refresh_assemble"))
+    meta_view_setup(input, output, session)
+    fetch_data <- function() meta_view_join(fetch_assemble_data(), session$userData$con)
 
     # Help-doc icons (one observer per tool, registered once at module init).
     register_tool_help("fastp", input, reopen = function() pre_opts_modal(rv))
@@ -89,7 +97,7 @@ assemble_server <- function(id) {
         dplyr::collect(),
       blast_opts = dplyr::tbl(session$userData$con, "blast_opts") |>
         dplyr::collect(),
-      data = fetch_assemble_data(),
+      data = fetch_data(),
       updating = NULL
     )
 
@@ -119,11 +127,16 @@ assemble_server <- function(id) {
     # Refresh ----
     init("refresh_assemble")
     on("refresh_assemble", {
-      rv$data <- fetch_assemble_data()
+      rv$data <- fetch_data()
       updateReactable(
         "table",
         data = filtered_data()
       )
+    })
+    meta_ver <- reactiveVal(0L)
+    on("meta_view", {
+      rv$data <- fetch_data()
+      meta_ver(meta_ver() + 1L)
     })
 
     # Mirror the column-group picker so NULL (= user cleared all) is
@@ -184,7 +197,9 @@ assemble_server <- function(id) {
     # Render order comes from the data frame, not this list. See
     # fetch_assemble_data().
     output$table <- renderReactable({
+      meta_ver()
       tbl_data <- isolate(req(filtered_data()))
+      meta_cols <- meta_view_table_defs(session$userData$con, tbl_data)
       tbl_data |>
         reactable(
           resizable = TRUE,
@@ -216,7 +231,7 @@ assemble_server <- function(id) {
             )
           ),
           defaultColDef = colDef(show = FALSE),
-          columns = list(
+          columns = c(meta_cols, list(
             `.selection` = colDef(show = T, sticky = "left", width = 28, align = "center"),
             assemble_lock = colDef(
               show = TRUE,
@@ -264,6 +279,7 @@ assemble_server <- function(id) {
               html = T,
               cell = rt_longtext()
             ),
+            specimen = specimen_col_def(ns("specimen_open"), sticky = "left"),
             pre_opts = colDef(
               show = TRUE, class = .grp("pre_opts"), headerClass = .grp("pre_opts"),
               name = mp_col_name("pre_opts"),
@@ -335,40 +351,28 @@ assemble_server <- function(id) {
               header = mp_col_header("length"),
               filterable = FALSE,
               html = TRUE,
-              cell = JS("function(cellInfo) {
-                var val = cellInfo.value;
-                if (!val) return val;
-                var flagsStr = cellInfo.row['ignore_flags'];
-                var flags = flagsStr ? String(flagsStr).split(';') : [];
-                var parts = String(val).split(';');
-                var marked = parts.map(function(p, i) {
-                  if (flags[i] === '1') {
-                    return `<span class='mp-pill mp-pill-danger' ` +
-                      `title='Ignored: left out of annotation and export'>` +
-                      p.trim() + '</span>';
-                  }
-                  return p.trim();
-                });
-                return marked.join('; ');
-              }")
+              cell = rt_scaffold_lengths()
             ),
             min_assembly_length = colDef(show = FALSE),
             ignore_flags = colDef(show = FALSE),
-            paths = colDef(
-              show = TRUE, class = .grp("paths"), headerClass = .grp("paths"),
-              width = 80,
+            paths_n = colDef(
+              show = TRUE, class = .grp("paths_n"), headerClass = .grp("paths_n"),
+              width = 110,
               align = "center",
               name = mp_col_name("paths"),
               header = mp_col_header("paths"),
-              cell = JS("function(cellInfo){if(cellInfo.value<0){return -cellInfo.value };return cellInfo.value}"),
+              html = TRUE,
+              cell = rt_kept_count("paths_ignored"),
               style = JS("function(rowInfo){ if (rowInfo.values.paths < 0) return { backgroundColor: '#00000020' }}")
             ),
-            scaffolds = colDef(
-              show = TRUE, class = .grp("scaffolds"), headerClass = .grp("scaffolds"),
-              width = 95,
+            scaffolds_n = colDef(
+              show = TRUE, class = .grp("scaffolds_n"), headerClass = .grp("scaffolds_n"),
+              width = 120,
               align = "center",
               name = mp_col_name("scaffolds"),
-              header = mp_col_header("scaffolds")
+              header = mp_col_header("scaffolds"),
+              html = TRUE,
+              cell = rt_kept_count("scaffolds_ignored")
             ),
             blast_accession = colDef(
               show = TRUE, class = .grp("blast_accession"), headerClass = .grp("blast_accession"),
@@ -451,16 +455,16 @@ assemble_server <- function(id) {
               cell = rt_longtext()
             ),
             blast_hits = colDef(
-              show = TRUE,
+              show = TRUE, class = .grp("blast_hits"), headerClass = .grp("blast_hits"),
               name = mp_col_name("blast_hits"),
               filterable = FALSE,
               sortable = FALSE,
               html = TRUE,
-              width = 140,
+              width = 95,
               align = "center",
               cell = rt_icon_bttn_text(
                 ns("all_blast_hits"), "fas fa-list", "All BLAST Hits",
-                title = "Show every BLAST hit for this sample"
+                title = "Show every BLAST hit for this sample", icon_only = TRUE
               )
             ),
             view = colDef(
@@ -472,32 +476,32 @@ assemble_server <- function(id) {
               sortable = FALSE,
               name = mp_col_name("view"),
               html = TRUE,
-              width = 90,
+              width = 70,
               align = "center",
               cell = rt_icon_bttn_text(
                 ns("details"), "fas fa-square-arrow-up-right fa-xs",
                 label = "Details",
-                title = "Open the details window for this sample"
+                title = "Open the details window for this sample", icon_only = TRUE
               )
             ),
             output = colDef(
               show = TRUE,
               sticky = "right",
-              class = "mp-actions-sticky",
-              headerClass = "mp-actions-sticky",
+              class = "mp-actions-sticky mp-sticky-edge",
+              headerClass = "mp-actions-sticky mp-sticky-edge",
               filterable = FALSE,
               sortable = FALSE,
               name = mp_col_name("output"),
               html = TRUE,
-              width = 90,
+              width = 70,
               align = "center",
               cell = rt_icon_bttn_text(
                 ns("output"), "fas fa-folder-open fa-xs",
                 label = "Output",
-                title = "Open the output folder for this sample"
+                title = "Open the output folder for this sample", icon_only = TRUE
               )
             )
-          )
+          ))
         )
     })
 
@@ -1112,7 +1116,7 @@ assemble_server <- function(id) {
         )
       # Re-read rather than patch: the set's assembler and the MapToRef ref
       # cell both depend on the new assignment.
-      rv$data <- fetch_assemble_data()
+      rv$data <- fetch_data()
       ## Flag samples with no output under the new parameter set ----
       dir_out <- session$userData$dir_out
       unpublished <- prior |> dplyr::slice(0)

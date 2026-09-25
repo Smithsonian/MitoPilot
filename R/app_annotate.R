@@ -8,7 +8,9 @@ ANNOTATE_COL_GROUPS <- list(
   Counts   = c("PCGCount", "tRNACount", "rRNACount", "ORFCount", "missing", "extra"),
   Review   = c("ID_verified", "reviewed", "problematic", "partial", "warnings"),
   Export   = c("export_group", "export_time_stamp"),
-  Metadata = c("time_stamp", "annotate_notes")
+  Notes    = c("time_stamp", "annotate_notes"),
+  # the columns picked with the Metadata button (meta_view_col_defs)
+  Metadata = character(0)
 )
 ANNOTATE_COL_GROUP_LOOKUP <- {
   out <- character()
@@ -70,7 +72,8 @@ annotate_ui <- function(id) {
       div(
         class = "mp-filter-cols",
         mp_filter_picker(ns("col_groups"), "Columns:", names(ANNOTATE_COL_GROUPS),
-                         width = "150px")
+                         width = "150px"),
+        meta_view_button(ns)
       )
     ),
     uiOutput(ns("n_selected")),
@@ -85,6 +88,11 @@ annotate_ui <- function(id) {
 annotate_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    specimen_viewer_server("specimen", open = reactive(input$specimen_open),
+                        on_change = function() trigger("refresh_annotate"))
+    meta_view_setup(input, output, session)
+    fetch_data <- function() meta_view_join(fetch_annotate_data(), session$userData$con)
 
     # Help-doc icons (one observer per tool, registered once at module init).
     reopen_annotate <- function() annotate_opts_modal(rv)
@@ -104,18 +112,23 @@ annotate_server <- function(id) {
         dplyr::collect(),
       orf_opts = dplyr::tbl(session$userData$con, "orf_opts") |>
         dplyr::collect(),
-      data = fetch_annotate_data(),
+      data = fetch_data(),
       updating = NULL
     )
 
     # Refresh ----
     init("refresh_annotate")
     on("refresh_annotate", {
-      rv$data <- fetch_annotate_data()
+      rv$data <- fetch_data()
       updateReactable(
         "table",
         data = filtered_data()
       )
+    })
+    meta_ver <- reactiveVal(0L)
+    on("meta_view", {
+      rv$data <- fetch_data()
+      meta_ver(meta_ver() + 1L)
     })
 
     # Warning choices, normalised. "12 ambiguous bases in CDS" and "3 ambiguous
@@ -253,7 +266,9 @@ annotate_server <- function(id) {
       # Rendered once; later changes arrive through updateReactable(), so
       # nothing here may read rv$data reactively (that would re-render and
       # drop the selection).
+      meta_ver()
       tbl_data <- isolate(filtered_data())
+      meta_cols <- meta_view_table_defs(session$userData$con, tbl_data)
       reactable(
         data = tbl_data,
         compact = TRUE,
@@ -287,7 +302,7 @@ annotate_server <- function(id) {
         theme = reactable::reactableTheme(
           headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
         ),
-        columns = list(
+        columns = c(meta_cols, list(
           `.selection` = colDef(show = T, sticky = "left", width = 28, align = "center"),
           annotate_lock = colDef(
             show = TRUE,
@@ -331,6 +346,8 @@ annotate_server <- function(id) {
             name = .nm("ID"),
             minWidth = mp_fit_width(tbl_data$ID),
             sticky = "left",
+            class = "mp-sticky-edge-left",
+            headerClass = "mp-sticky-edge-left",
             html = TRUE,
             cell = rt_longtext()
           ),
@@ -354,6 +371,7 @@ annotate_server <- function(id) {
             html = TRUE,
             cell = rt_longtext()
           ),
+          specimen = specimen_col_def(ns("specimen_open")),
           ID_verified = colDef(
             show = TRUE, class = .grp("ID_verified"), headerClass = .grp("ID_verified"),
             name = .nm("ID_verified"), header = .hd("ID_verified"),
@@ -543,32 +561,36 @@ annotate_server <- function(id) {
           view = colDef(
             show = TRUE,
             sticky = "right",
+            class = "mp-actions-sticky",
+            headerClass = "mp-actions-sticky",
             filterable = FALSE,
             sortable = FALSE,
             name = .nm("view"),
             html = TRUE,
-            width = 80,
+            width = 70,
             align = "center",
             cell = rt_icon_bttn_text(
               ns("details"), "fas fa-square-arrow-up-right fa-xs",
-              label = "Details", title = "Open the details window for this assembly"
+              label = "Details", title = "Open the details window for this assembly", icon_only = TRUE
             )
           ),
           output = colDef(
             show = TRUE,
             sticky = "right",
+            class = "mp-actions-sticky mp-sticky-edge",
+            headerClass = "mp-actions-sticky mp-sticky-edge",
             filterable = FALSE,
             sortable = FALSE,
             name = .nm("output"),
             html = TRUE,
-            width = 80,
+            width = 70,
             align = "center",
             cell = rt_icon_bttn_text(
               ns("output"), "fas fa-folder-open fa-xs",
-              label = "Output", title = "Open the output folder for this sample"
+              label = "Output", title = "Open the output folder for this sample", icon_only = TRUE
             )
           )
-        )
+        ))
       )
     })
 

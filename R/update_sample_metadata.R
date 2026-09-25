@@ -8,6 +8,12 @@
 #' @param update_mapping_fn Path to the update mapping CSV file. Must contain columns "ID" and "Taxon"
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
+#' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
+#' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+#' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence IDs
+#' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID
+#'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #'
 #' @export
 #'
@@ -15,7 +21,11 @@ update_sample_metadata <- function(
     path = ".",
     update_mapping_fn = NULL,
     mapping_id = "ID",
-    mapping_taxon = "Taxon"
+    mapping_taxon = "Taxon",
+    mapping_geome = "GEOME_BCID",
+    fetch_geome = TRUE,
+    mapping_gbif = "GBIF_ID",
+    fetch_gbif = TRUE
     ){
 
   # Check if project directory exists ----
@@ -44,6 +54,7 @@ update_sample_metadata <- function(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]]
     )
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
   # convert everything to characters
   mapping <- mapping |>
     dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
@@ -111,6 +122,10 @@ update_sample_metadata <- function(
   # join tables, using updated values from new table
   updated_table <- dplyr::rows_update(sample_table, mapping, by="ID")
 
+  if ("genetic_code" %in% names(updated_table)) {
+    updated_table$genetic_code <- as.integer(updated_table$genetic_code)
+  }
+
   # update SQL database
   dplyr::tbl(con, "samples") |>
     dplyr::rows_upsert(
@@ -119,4 +134,6 @@ update_sample_metadata <- function(
       copy = TRUE,
       by = "ID"
     )
+
+  .meta_sync_changed(con, mapping, sample_table, list(GEOME = fetch_geome, GBIF = fetch_gbif))
 }

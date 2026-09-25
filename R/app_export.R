@@ -5,7 +5,7 @@ EXPORT_COL_GROUPS <- list(
   Stats    = c("topology", "structure"),
   BLAST    = c("blast_accession", "blast_ref_status", "blast_species",
                "blast_lineage"),
-  # filled at render time from the user's mapping file (export_metadata_cols)
+  # the columns picked with the Metadata button (meta_view_col_defs)
   Metadata = character(0)
 )
 EXPORT_COL_GROUP_LOOKUP <- {
@@ -86,7 +86,8 @@ export_ui <- function(id) {
         mp_filter_picker(
           ns("col_groups"), "Columns:", names(EXPORT_COL_GROUPS),
           width = "150px"
-        )
+        ),
+        meta_view_button(ns)
       )
     ),
     uiOutput(ns("n_selected")),
@@ -111,11 +112,16 @@ export_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    specimen_viewer_server("specimen", open = reactive(input$specimen_open),
+                        on_change = function() trigger("refresh_export"))
+    meta_view_setup(input, output, session)
+    fetch_data <- function() meta_view_join(fetch_export_data(), session$userData$con)
+
     # Prepare data ----
     rv <- reactiveValues(
       # curate_opts = dplyr::tbl(session$userData$con, "curate_opts") |>
       #  dplyr::collect(),
-      data = fetch_export_data(),
+      data = fetch_data(),
       updating = NULL,
       outliers = NULL,    # flags tibble from flag_PCG_outliers()
       review_samples = NULL, # named list (by gene) of every unit in the alignment,
@@ -144,8 +150,13 @@ export_server <- function(id) {
     # Refresh ----
     init("refresh_export")
     on("refresh_export", {
-      rv$data <- fetch_export_data()
+      rv$data <- fetch_data()
       trigger("update_export_table")
+    })
+    meta_ver <- reactiveVal(0L)
+    on("meta_view", {
+      rv$data <- fetch_data()
+      meta_ver(meta_ver() + 1L)
     })
 
     # Mirror the column-group picker so NULL (= user cleared all) is
@@ -174,6 +185,7 @@ export_server <- function(id) {
       nm <- name %||% unname(MP_COL_NAMES[[col]])
       tp <- tip %||% (if (col %in% names(MP_COL_TIPS)) unname(MP_COL_TIPS[[col]]) else NULL)
       cls <- c(.grp(col), extra_class)
+      cls <- if (length(cls)) paste(cls, collapse = " ") else NULL
       colDef(show = TRUE, name = nm, header = rt_header(nm, tp),
              class = cls, headerClass = cls, ...)
     }
@@ -208,24 +220,66 @@ export_server <- function(id) {
     # stop re-rendering it after the first pass.
     outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
-    # colDefs for the user's mapping-file columns, toggled as one group. Read
-    # from the samples schema, not rv$data, so the render stays isolated from
-    # data refreshes (updateReactable keeps page and selection).
-    metadata_col_defs <- function(declared) {
-      sample_cols <- tryCatch(colnames(dplyr::tbl(session$userData$con, "samples")),
-                              error = function(e) character(0))
-      cols <- export_metadata_cols(sample_cols, declared)
-      stats::setNames(lapply(cols, function(col) {
-        colDef(show = TRUE, name = col, header = rt_header(col, "From your mapping file"),
-               class = "mp-grp-Metadata", headerClass = "mp-grp-Metadata",
-               html = TRUE, cell = rt_longtext(), minWidth = 120)
-      }), cols)
+    meta_fields_ver <- reactiveVal(0L)
+
+    # Specimen field picker ----
+    raw_fields_table <- function(raw) {
+      reactable::reactable(
+        raw[, c("level", "field", "n_samples", "example", "col")],
+        selection = "multiple", onClick = "select", compact = TRUE, searchable = TRUE,
+        defaultSelected = which(raw$selected), defaultPageSize = 10,
+        columns = list(
+          level = colDef(name = "Level"), field = colDef(name = "Field"),
+          n_samples = colDef(name = "Samples", width = 80),
+          example = colDef(name = "Example", cell = rt_longtext(), html = TRUE),
+          col = colDef(name = "Template token", cell = function(v) paste0("{", v, "}"))
+        )
+      )
     }
+    init("specimen_fields")
+    # Choose fields in Export Data: keep what is on screen, so closing the
+    # fields modal can reopen Export Data as it was.
+    snap_export <- function() {
+      rv$export_snap <- lapply(stats::setNames(nm = c(
+        "export_group", "template_select", "fasta_header", "fasta_header_gene",
+        "include_alignments", "export_genes", "review_outliers", "start_aa",
+        "stop_aa", "ident_pct")), function(id) input[[id]])
+      trigger("specimen_fields")
+    }
+    observeEvent(input$token_fields_geome, snap_export())
+    observeEvent(input$token_fields_gbif, snap_export())
+    observeEvent(input$specimen_fields_closed, {
+      req(rv$export_snap)
+      trigger("export")
+    })
+    on("specimen_fields", {
+      con <- session$userData$con
+      g <- meta_field_summary(con, "GEOME")
+      b <- meta_field_summary(con, "GBIF")
+      closed <- if (!is.null(rv$export_snap)) ns("specimen_fields_closed")
+      showModal(specimen_fields_modal(ns, g, b, closed_input = closed))
+      output$geome_raw <- reactable::renderReactable(raw_fields_table(g[g$kind == "raw", ]))
+      output$gbif_raw <- reactable::renderReactable(raw_fields_table(b[b$kind == "raw", ]))
+    })
+
+    observeEvent(input$specimen_fields_save, {
+      con <- session$userData$con
+      picked <- unlist(lapply(c("GEOME", "GBIF"), function(src) {
+        s <- meta_field_summary(con, src)
+        raw <- s[s$kind == "raw", ]
+        raw$key[reactable::getReactableState(paste0(tolower(src), "_raw"), "selected") %||% integer(0)]
+      }))
+      .meta_save_fields(con, c(input$geome_combos, input$gbif_combos, picked))
+      removeModal()
+      meta_fields_ver(meta_fields_ver() + 1L)
+      rv$data <- fetch_data()
+    })
 
     # Render table ----
     output$table <- reactable::renderReactable({
-      declared_cols <- declared_cols_fn()
-      metadata_cols <- metadata_col_defs(names(declared_cols))
+      meta_fields_ver()
+      meta_ver()
+      meta_cols <- meta_view_table_defs(session$userData$con, isolate(rv$data))
       reactable::reactable(
         isolate(rv$data),
         compact = TRUE,
@@ -258,21 +312,21 @@ export_server <- function(id) {
         theme = reactable::reactableTheme(
           headerStyle = list(whiteSpace = "normal", lineHeight = "1.2")
         ),
-        # A column shows only if it is declared below; the user's mapping-file
-        # columns are added as the Metadata group (see cols after this list).
+        # A column shows only if it is declared below; the Metadata button's
+        # columns are added as the Metadata group.
         defaultColDef = colDef(show = FALSE),
         # Render order comes from the data frame, not this list. See
         # fetch_export_data().
-        columns = c(declared_cols, metadata_cols)
+        columns = c(declared_cols_fn(), meta_cols)
       )
     })
 
-    # Declared MitoPilot columns; metadata_col_defs() appends the user's own.
+    # Declared MitoPilot columns; the Metadata button adds the rest.
     declared_cols_fn <- function() {
         list(
           `.selection` = colDef(show = TRUE, sticky = "left", width = 28, align = "center"),
           # Wide enough for a 16-character ID; the tooltip covers longer ones.
-          ID = .cd("ID", minWidth = 160, sticky = "left", html = TRUE,
+          ID = .cd("ID", extra_class = "mp-sticky-edge-left", minWidth = 160, sticky = "left", html = TRUE,
                    cell = rt_longtext()),
           # One row per assembly unit; the classes let col_css hide these when every
           # unit shares value 1.
@@ -284,6 +338,7 @@ export_server <- function(id) {
           # the ID (no fragmented sample in the project).
           seqid = .cd("seqid", extra_class = "mp-col-seqid", minWidth = 130),
           Taxon = .cd("Taxon", minWidth = 140, html = TRUE, cell = rt_longtext()),
+          specimen = specimen_col_def(ns("specimen_open")),
           curate_opts = .cd("curate_opts", width = 110),
           genetic_code = .cd("genetic_code", width = 110, align = "center"),
           blast_ref_status = .cd(
@@ -319,8 +374,11 @@ export_server <- function(id) {
             )
           ),
           export_time_stamp = .cd("export_time_stamp", html = TRUE, width = 150,
-                                  filterable = FALSE, align = "center", cell = rt_ts_date()),
-          export_group = .cd("export_group", sticky = "right", minWidth = 140)
+                                  extra_class = c("mp-actions-sticky", "mp-sticky-edge"),
+                                  filterable = FALSE, align = "left", sticky = "right",
+                                  cell = rt_ts_date()),
+          export_group = .cd("export_group", extra_class = "mp-actions-sticky",
+                             sticky = "right", minWidth = 140)
         )
     }
 
@@ -377,7 +435,7 @@ export_server <- function(id) {
 
     # CSV Export ----
     .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto",
-                           "annotate_switch")
+                           "annotate_switch", "specimen", "specimen_message", "specimen_icons")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)
@@ -389,7 +447,7 @@ export_server <- function(id) {
         req(length(selected()) > 0)
         rv$data |>
           dplyr::slice(selected()) |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop), -dplyr::starts_with("mv_map_")) |>
           write.csv(file, row.names = FALSE)
       }
     )
@@ -398,7 +456,7 @@ export_server <- function(id) {
       filename = function() paste0("export_all_", Sys.Date(), ".csv"),
       content = function(file) {
         rv$data |>
-          dplyr::select(-dplyr::any_of(.export_cols_drop)) |>
+          dplyr::select(-dplyr::any_of(.export_cols_drop), -dplyr::starts_with("mv_map_")) |>
           write.csv(file, row.names = FALSE)
       }
     )
@@ -631,34 +689,45 @@ export_server <- function(id) {
       # Saved templates + the currently selected one's header strings, plus the
       # columns available to reference
       con <- session$userData$con
+      snap <- rv$export_snap
+      rv$export_snap <- NULL
       tmpl_choices <- list_export_templates(con)
       sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
       rv$export_template <- sel_tmpl
       opts <- get_export_opts(con, sel_tmpl)
-      # One collapsed list of usable tokens, split by where the column came
-      # from. Bookkeeping fields are not offered (T23).
-      bookkeeping <- c("annotate_switch", "blast_accession_auto",
-                       "poor_blast_ref", "export_time_stamp")
+      if (!is.null(snap)) {
+        tmpl_choices <- union(tmpl_choices, snap$template_select)
+        sel_tmpl <- snap$template_select %||% sel_tmpl
+        opts$fasta_header <- snap$fasta_header %||% opts$fasta_header
+        opts$fasta_header_gene <- snap$fasta_header_gene %||% opts$fasta_header_gene
+      }
+      # Usable tokens as grouped chips; bookkeeping fields are never offered (T23).
       sample_cols <- tryCatch(
         colnames(dplyr::tbl(con, "samples")),
         error = function(e) character(0)
       )
-      avail <- setdiff(names(rv$data), bookkeeping)
-      yours <- sort(intersect(avail, sample_cols))
-      ours <- sort(setdiff(avail, yours))
+      ticked <- tryCatch(DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key,
+                         error = function(e) character(0))
+      token_groups <- export_token_groups(
+        rv$data[!is.na(rv$data$export_group), , drop = FALSE], sample_cols, ticked
+      )
+      grouped <- rv$data[!is.na(rv$data$export_group), , drop = FALSE]
       cols_help <- tags$details(
         tags$summary("Available columns"),
         opts_help(
+          "Click a column to insert it at the cursor of the header box you last clicked. ",
           "Write a column name in braces to use its value, for example ",
           tags$code("{Taxon}"), ". ", tags$code("{seqid}"), " is the record ",
           "name MitoPilot gives this assembly: the sample ID, or ",
           tags$code("ID_p<path>_s<scaffold>"), " when one sample exports more ",
           "than one record. Columns from your mapping file work here even ",
-          "when the table does not show them.",
+          "when the table does not show them. Orange columns are empty for ",
+          "some records in the chosen export group; hover one for the count.",
           nested = TRUE
         ),
-        p(tags$b("Your columns: "), paste(yours, collapse = ", ")),
-        p(tags$b("MitoPilot columns: "), paste(ours, collapse = ", ")),
+        export_token_ui(token_groups, target_id = ns("fasta_header"), ns = ns,
+                        totals = jsonlite::toJSON(as.list(table(grouped$export_group)),
+                                                  auto_unbox = TRUE)),
         opts_help(
           tags$code("{completeness}"),
           " expands to \"complete genome\" or \"partial genome\", derived from ",
@@ -670,13 +739,14 @@ export_server <- function(id) {
           nested = TRUE
         )
       )
-      # The status line describes the box above it, so bind the two (WCAG 3.3.1).
+      # The status line sits between the label and the box it describes, and
+      # is bound to it (WCAG 3.3.1).
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
           textAreaInput(ns(id), label, value, width = "100%")
         )$find("textarea")$addAttrs(
           `aria-describedby` = ns(paste0(id, "_status"))
-        )$allTags()
+        )$before(uiOutput(ns(paste0(id, "_status"))))$allTags()
       }
       modalDialog(
         title = mp_modal_title(
@@ -693,6 +763,7 @@ export_server <- function(id) {
               ns("export_group"),
               "Export group:",
               choices = choices,
+              selected = if (isTRUE(snap$export_group %in% choices)) snap$export_group,
               width = "100%"
             )
           ),
@@ -723,22 +794,13 @@ export_server <- function(id) {
           "below: export uses the text on screen, and Save template keeps it ",
           "for next time."
         ),
+        # What pressing Export will do, in the group currently chosen.
+        uiOutput(ns("export_summary")),
         hdr_box("fasta_header", "Mitogenome FASTA header:", opts$fasta_header),
-        uiOutput(ns("fasta_header_status")),
-        cols_help,
-        mp_checkbox(
-          ns("include_alignments"),
-          "Generate group-level PCG alignment summary",
-          value = TRUE
-        ),
-        opts_help(
-          "Writes one HTML page comparing the amino-acid alignment of every ",
-          "protein-coding gene in the group. Needs more than one record."
-        ),
         mp_checkbox(
           ns("export_genes"),
           "Export individual protein-coding and rRNA genes",
-          value = FALSE
+          value = snap$export_genes %||% FALSE
         ),
         opts_help(
           "Writes one FASTA and one feature table per gene, into a genes ",
@@ -750,9 +812,18 @@ export_server <- function(id) {
           ns = ns,
           hdr_box("fasta_header_gene", "Gene FASTA header:",
                   opts$fasta_header_gene),
-          uiOutput(ns("fasta_header_gene_status")),
           opts_help("The gene name is added to this header automatically.",
                     nested = TRUE)
+        ),
+        cols_help,
+        mp_checkbox(
+          ns("include_alignments"),
+          "Generate group-level PCG alignment summary",
+          value = snap$include_alignments %||% TRUE
+        ),
+        opts_help(
+          "Writes one HTML page comparing the amino-acid alignment of every ",
+          "protein-coding gene in the group. Needs more than one record."
         ),
         # PCG outlier review options, separated from the export options above
         tags$hr(style = "border-top: 1px solid var(--mp-border); margin: 1em 0 0.75em;"),
@@ -760,7 +831,7 @@ export_server <- function(id) {
         mp_checkbox(
           ns("review_outliers"),
           "Review PCG annotations for outliers",
-          value = rv$opt_review
+          value = snap$review_outliers %||% rv$opt_review
         ),
         conditionalPanel(
           condition = "input.review_outliers == true",
@@ -775,7 +846,7 @@ export_server <- function(id) {
                   "Flag start offset > (aa):",
                   "Flag genes with start position offset by +/- this many amino acids from the core alignment"
                 ),
-                value = rv$opt_start, min = 1, step = 1, width = "100%"
+                value = snap$start_aa %||% rv$opt_start, min = 1, step = 1, width = "100%"
               )
             ),
             div(
@@ -786,7 +857,7 @@ export_server <- function(id) {
                   "Flag stop offset > (aa):",
                   "Flag genes with stop position offset by +/- this many amino acids from the core alignment"
                 ),
-                value = rv$opt_stop, min = 1, step = 1, width = "100%"
+                value = snap$stop_aa %||% rv$opt_stop, min = 1, step = 1, width = "100%"
               )
             ),
             div(
@@ -797,13 +868,11 @@ export_server <- function(id) {
                   "Flag sequence identity < (%):",
                   "Mean % identity threshold to flag a gene versus all other genes in alignment group"
                 ),
-                value = rv$opt_ident, min = 1, max = 100, step = 1, width = "100%"
+                value = snap$ident_pct %||% rv$opt_ident, min = 1, max = 100, step = 1, width = "100%"
               )
             )
           )
         ),
-        # What pressing Export will do, in the group currently chosen.
-        uiOutput(ns("export_summary")),
         footer = mp_footer(
           primary = actionButton(ns("export_data"), "Export"),
           dismiss = "Cancel"
@@ -861,7 +930,7 @@ export_server <- function(id) {
       }
       div(
         style = paste(
-          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin-top: 12px;",
+          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin: 4px 0 14px;",
           "background: var(--mp-surface-alt);",
           "border-left: 3px solid var(--mp-primary);"
         ),
@@ -1411,6 +1480,42 @@ export_server <- function(id) {
       run_export()
     }
 
+    # Conflicts on the specimen items the active header templates use.
+    # "not checked" items never count, and a template without specimen tokens never warns.
+    specimen_conflict_rows <- function(group) {
+      ids <- unique(rv$data$ID[!is.na(rv$data$export_group) & rv$data$export_group == group])
+      con <- session$userData$con
+      tmpl <- c(input$fasta_header, if (isTRUE(input$export_genes)) input$fasta_header_gene)
+      concepts <- specimen_template_concepts(tmpl, specimen_csv_columns(con))
+      if (!length(concepts)) return(NULL)
+      specimen_export_warnings(specimen_conflicts(con, ids), concepts, ids)
+    }
+
+    fragmented_then_export <- function() {
+      frag <- fragmented_samples(input$export_group)
+      if (length(frag) > 0) {
+        shown <- paste(utils::head(frag, 5), collapse = ", ")
+        if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
+        mp_confirm(
+          ns("fragmented_confirm"),
+          title = "Some samples export as multiple records",
+          text = stringr::str_glue(
+            "{mp_n(length(frag), 'sample')} have more than one assembly and will each ",
+            "produce a SEPARATE GenBank record: {shown}.\n\n",
+            "That is correct when the scaffolds really are different genomes. If a ",
+            "sample is instead ONE genome broken into fragments, each record will ",
+            "be submitted as an incomplete genome. Cancel and use consensus ",
+            "trimming / scaffold joining to combine them, or 'ignore' all but one ",
+            "scaffold."
+          ),
+          action_label = "Export anyway",
+          danger = TRUE
+        )
+        return()
+      }
+      check_overwrite_then_export()
+    }
+
     observeEvent(input$export_data, ignoreInit = T, {
       req(input$export_group)
       # Block export if either header template is invalid (would crash str_glue_data)
@@ -1436,33 +1541,33 @@ export_server <- function(id) {
         )
         return()
       }
-      frag <- fragmented_samples(input$export_group)
-      if (length(frag) > 0) {
-        shown <- paste(utils::head(frag, 5), collapse = ", ")
-        if (length(frag) > 5) shown <- paste0(shown, ", and ", length(frag) - 5, " more")
+      sp <- tryCatch(specimen_conflict_rows(input$export_group), error = function(e) {
+        message("Specimen conflict check failed: ", conditionMessage(e))
+        NULL
+      })
+      if (!is.null(sp) && nrow(sp) > 0) {
         mp_confirm(
-          ns("fragmented_confirm"),
-          title = "Some samples export as multiple records",
-          text = stringr::str_glue(
-            "{mp_n(length(frag), 'sample')} have more than one assembly and will each ",
-            "produce a SEPARATE GenBank record: {shown}.\n\n",
-            "That is correct when the scaffolds really are different genomes. If a ",
-            "sample is instead ONE genome broken into fragments, each record will ",
-            "be submitted as an incomplete genome. Cancel and use consensus ",
-            "trimming / scaffold joining to combine them, or 'ignore' all but one ",
-            "scaffold."
-          ),
+          ns("specimen_confirm"),
+          title = "Sample metadata disagrees",
+          text = specimen_warning_html(sp),
           action_label = "Export anyway",
-          danger = TRUE
+          danger = TRUE,
+          html = TRUE,
+          width = "700px"
         )
         return()
       }
-      check_overwrite_then_export()
+      fragmented_then_export()
     })
 
     observeEvent(input$fragmented_confirm, ignoreInit = T, {
       req(input$fragmented_confirm)
       check_overwrite_then_export()
+    })
+
+    observeEvent(input$specimen_confirm, ignoreInit = TRUE, {
+      req(input$specimen_confirm)
+      fragmented_then_export()
     })
 
     observeEvent(input$overwrite_confirm, ignoreInit = T, {

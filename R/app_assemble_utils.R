@@ -42,17 +42,9 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(ID, dplyr::any_of(blast_cols)) |>
     dplyr::rename_with(~ paste0(.x, "_kept"), dplyr::any_of(blast_cols))
 
-  # Per-scaffold length + ignore (sorted by length desc) so the "Asmb. Length"
-  # cell can color each scaffold red when ignore == 1. Replaces the deduped
-  # length string from assemble_workflow.nf because we need one-to-one mapping
-  # with the ignore vector.
-  length_ignore <- assemblies_tbl |>
-    dplyr::arrange(ID, dplyr::desc(length)) |>
-    dplyr::summarise(
-      length_per_scaffold = paste(length, collapse = ";"),
-      ignore_flags        = paste(ignore, collapse = ";"),
-      .by = "ID"
-    )
+  # Per-scaffold length + ignore flags, and kept/ignored path and scaffold
+  # counts, from the contigs themselves.
+  length_ignore <- assemble_contig_summary(db)
 
   swap_blast <- function(df, col) {
     kept_col <- paste0(col, "_kept")
@@ -71,12 +63,15 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::left_join(taxa, by = "ID") |>
     dplyr::left_join(assemble_opts_tbl, by = "assemble_opts") |>
     dplyr::collect() |>
+    .specimen_status_join(db) |>
     dplyr::left_join(total_counts, by = "ID") |>
     dplyr::left_join(kept_counts, by = "ID") |>
     dplyr::left_join(kept_single, by = "ID") |>
     dplyr::left_join(length_ignore, by = "ID") |>
     dplyr::mutate(
-      length = dplyr::coalesce(length_per_scaffold, length)
+      length = dplyr::coalesce(length_per_scaffold, length),
+      paths_n = dplyr::coalesce(paths_n, abs(paths)),
+      scaffolds_n = dplyr::coalesce(scaffolds_n, as.integer(scaffolds))
     ) |>
     (\(df) purrr::reduce(blast_cols, swap_blast, .init = df))() |>
     dplyr::select(-n_total, -n_kept, -length_per_scaffold,
@@ -126,8 +121,11 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
         .default = NA_character_
       )
     ) |>
-    # The three action columns render last and adjacent (theme T19).
-    dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col())
+    # The action columns render last and adjacent (theme T19).
+    dplyr::relocate(output, view, .after = dplyr::last_col()) |>
+    dplyr::relocate(blast_hits, .after = blast_accession) |>
+    dplyr::relocate(paths_n, scaffolds_n, .after = scaffolds) |>
+    dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message", "specimen_icons")), .after = Taxon)
 }
 
 #' Update the preprocessing options
@@ -783,6 +781,78 @@ get_assembly <- function(ID, path, scaffold = NULL, con) {
     tidyr::unite("seq_name", c(scaffold_name, topology), sep = " ") |>
     dplyr::pull(sequence, name = "seq_name") |>
     Biostrings::DNAStringSet()
+}
+
+#' Per-sample contig lengths and kept/ignored counts for the Assemble tables
+#'
+#' Lengths list every contig, longest first, with a matching ignore flag each so
+#' the table can mark ignored ones. Counts come from the contigs themselves, so
+#' they stay right after contigs are ignored. Paths are alternative versions of
+#' one genome, so scaffolds are counted within a path (the largest kept path),
+#' and a path with nothing kept counts as an ignored path, not as scaffolds.
+#' Path 0 built from a single original path (a scaffold join or trim) stands in
+#' for that path, so its ignored contigs count as ignored scaffolds.
+#'
+#' @param db database connection
+#' @noRd
+assemble_contig_summary <- function(db) {
+  a <- DBI::dbGetQuery(db, "SELECT ID, path, length, ignore FROM assemblies")
+  a <- a[order(a$ID, -a$length), ]
+  a$kept <- a$ignore %in% 0
+  n_orig <- tapply(a$path, a$ID, function(p) length(unique(p[p != 0])))
+  has_p0 <- tapply(a$path, a$ID, function(p) any(p == 0))
+  single <- names(n_orig)[n_orig == 1 & has_p0]
+  a$unit <- ifelse(a$ID %in% single, 0, a$path)
+  per_path <- dplyr::summarise(a, ignored = sum(!kept), kept = sum(kept), .by = c("ID", "unit"))
+  counts <- dplyr::summarise(
+    per_path,
+    paths_n = sum(kept > 0),
+    paths_ignored = sum(kept == 0),
+    scaffolds_n = if (any(kept > 0)) max(kept) else 0L,
+    scaffolds_ignored = sum(ignored[kept > 0]),
+    .by = "ID"
+  )
+  a |>
+    dplyr::summarise(
+      length_per_scaffold = paste(length, collapse = ";"),
+      ignore_flags = paste(as.integer(!kept), collapse = ";"),
+      .by = "ID"
+    ) |>
+    dplyr::left_join(counts, by = "ID")
+}
+
+#' Contig lengths with ignored contigs marked, for the Assemble tables
+#' @noRd
+rt_scaffold_lengths <- function() {
+  htmlwidgets::JS("function(cellInfo) {
+    var val = cellInfo.value;
+    if (!val) return val;
+    var flagsStr = cellInfo.row['ignore_flags'];
+    var flags = flagsStr ? String(flagsStr).split(';') : [];
+    var parts = String(val).split(';');
+    var marked = parts.map(function(p, i) {
+      if (flags[i] === '1') {
+        return `<span class='mp-pill mp-pill-danger' ` +
+          `title='Ignored: left out of annotation and export'>` +
+          p.trim() + '</span>';
+      }
+      return p.trim();
+    });
+    return marked.join('; ');
+  }")
+}
+
+#' Kept count plus "(N ignored)"; the cell value stays the kept count so the
+#' column sorts on it
+#' @param ignored_col column holding the ignored count
+#' @noRd
+rt_kept_count <- function(ignored_col) {
+  htmlwidgets::JS(sprintf("function(cellInfo) {
+    var v = cellInfo.value;
+    if (v === null || v === undefined) return '';
+    var n = cellInfo.row['%s'];
+    return n > 0 ? v + \" <span class='mp-ignored-note'>(\" + n + ' ignored)</span>' : String(v);
+  }", ignored_col))
 }
 
 #' Rewrite a sample's assemble summary from its active contigs

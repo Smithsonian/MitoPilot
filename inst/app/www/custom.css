@@ -396,13 +396,23 @@ details summary:hover {
    cell can render underneath it. */
 .mp-actions-sticky {
   background-color: inherit;
+}
+/* One shadow per pinned group: left edge of the right group, right edge of
+   the left group. */
+.mp-sticky-edge {
   box-shadow: -4px 0 6px -4px rgba(0, 0, 0, .15);
+}
+.mp-sticky-edge-left {
+  box-shadow: 4px 0 6px -4px rgba(0, 0, 0, .15);
 }
 
 /* A permanently visible horizontal scrollbar, so "there is more to the
    right" is never invisible. */
 .mp-table-resize .rt-table {
   scrollbar-width: thin;
+  /* scrollbar-width makes Chrome ignore the ::-webkit-scrollbar rules below, so
+     the colors are set here too: a transparent track, not a pale extra column. */
+  scrollbar-color: var(--mp-border) transparent;
 }
 
 .mp-table-resize .rt-table::-webkit-scrollbar {
@@ -549,6 +559,43 @@ details summary:hover {
   margin-left: var(--mp-space-3);
   padding-left: var(--mp-space-4, 16px);
   border-left: 1px solid var(--mp-border);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* "(N ignored)" after a kept path or scaffold count */
+.mp-ignored-note { color: var(--mp-text-muted); font-size: 0.9em; }
+
+/* Metadata button and its column chooser */
+.mp-meta-btn { margin-bottom: 15px; }
+.mp-meta-logo {
+  display: inline-block; width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px;
+  background: center / contain no-repeat;
+}
+.mp-meta-logo-geome { background-image: url("specimen/geome_g.png"); }
+.mp-meta-logo-gbif { background-image: url("specimen/gbif_leaf.png"); }
+.mp-meta-view-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.mp-meta-view-bar .form-group { margin: 0 0 0 auto; }
+.mp-meta-view-bar .checkbox { margin: 0; }
+/* The source buttons drive the Source filter; its input box is not needed. */
+.mp-meta-view-tbl .rt-tr-filters { display: none; }
+
+/* Wrapped metadata cells: up to three lines, full text in the tooltip. The
+   clamp sits on the text, not the cell, so cell padding cannot show a 4th line. */
+.rt-nowrap .mp-meta-wrap .rt-td-inner,
+.rt-nowrap .mp-meta-wrap .rt-text-content {
+  white-space: normal;
+  text-overflow: clip;
+}
+.mp-meta-wrap .mp-abbr {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 15px;
+  word-break: break-word;
 }
 
 /* Step switcher lives in the toolbar as a peer of the action buttons: label
@@ -919,3 +966,39 @@ a.mp-link:focus-visible {
   border-top: 1px solid var(--mp-border);
 }
 .mp-seqview-reads .mp-seqview-canvas { cursor: default; }
+
+/* Specimen viewer Compare tab */
+.mp-spec-compare tr.mp-spec-conflict > td { background: var(--mp-warning-soft); }
+.mp-meta-citation { margin: 4px 0 6px; font-size: var(--mp-fs-meta); }
+
+/* Export Data token chips */
+/* The column types sit in one bordered box inside Available columns, each type
+   indented with its chips indented again beneath it. */
+.mp-token-list {
+  margin: 8px 0; padding: 8px 14px 6px; border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius, 4px); background: var(--mp-surface-alt);
+}
+.mp-token-filter { max-width: 260px; margin-bottom: 6px; }
+.mp-token-lead { margin: 4px 0 2px; font-size: var(--mp-fs-meta); color: var(--mp-text-muted); }
+.mp-token-group { margin: 0 0 2px 16px; }
+.mp-token-group > summary {
+  font-size: var(--mp-fs-body); font-weight: 600; border-bottom: none;
+  padding: 2px 0; margin: 2px 0;
+}
+.mp-token-group .mp-token-chips, .mp-token-group .mp-token-hint { margin-left: 18px; }
+.mp-token-chip.mp-token-missing { background: var(--mp-warning-soft); border-color: var(--mp-warning); }
+.mp-token-hint { margin: 2px 0 4px; font-size: var(--mp-fs-meta); }
+.mp-token-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.mp-token-chip {
+  height: var(--mp-chip-h); padding: 0 8px; border: 1px solid var(--mp-border);
+  border-radius: 12px; background: var(--mp-surface); font-family: monospace;
+  font-size: var(--mp-fs-meta); cursor: pointer;
+}
+.mp-token-chip:hover, .mp-token-chip:focus { border-color: var(--mp-primary); }
+
+/* Metadata column: one logo per metadata source, plus a conflict flag */
+.mp-specimen-cell { display: inline-flex; align-items: center; gap: 4px; }
+.mp-spec-logo { position: relative; display: inline-block; line-height: 0; }
+.mp-spec-icon { width: 18px; height: 18px; }
+.mp-spec-faded img { filter: grayscale(1); opacity: 0.45; }
+.mp-spec-badge { position: absolute; right: -5px; bottom: -3px; font-size: 10px; line-height: 1; }

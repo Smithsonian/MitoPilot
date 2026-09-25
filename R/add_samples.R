@@ -15,6 +15,12 @@
 #'   as sample metadata, so rename the column if you use it for something else.
 #' @param mapping_id Column name of the update mapping file to use as the primary key
 #' @param mapping_taxon Column name of the update mapping file containing a Taxonomic identifier (eg, species name)
+#' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
+#' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+#' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence IDs
+#' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID
+#'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #'
 #' @export
 #'
@@ -22,7 +28,11 @@ add_samples <- function(
     path = ".",
     update_mapping_fn = NULL,
     mapping_id = "ID",
-    mapping_taxon = "Taxon")
+    mapping_taxon = "Taxon",
+    mapping_geome = "GEOME_BCID",
+    fetch_geome = TRUE,
+    mapping_gbif = "GBIF_ID",
+    fetch_gbif = TRUE)
 {
 
   # Check if project directory exists ----
@@ -96,6 +106,8 @@ add_samples <- function(
         genetic_code = genetic_code
       )
   }
+
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
 
   # convert everything to characters
   mapping <- mapping |>
@@ -228,6 +240,8 @@ add_samples <- function(
   # Fill samples.genetic_code for the new samples from their curation ruleset
   # (default curate_opts target + optional override).
   .sync_sample_genetic_codes(con, ids = mapping$ID)
+
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif))
 
   .mtr_warn_missing_refs(con)
 

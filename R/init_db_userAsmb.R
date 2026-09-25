@@ -9,6 +9,14 @@
 #' @param mapping_id Column name of the mapping file to use as the primary key
 #' @param mapping_taxon Column name of the mapping file containing a Taxonomic
 #'   identifier (eg, species name)
+#' @param mapping_geome Name of the mapping-file column holding GEOME BCIDs
+#'   (optional). Stored as `GEOME_BCID`. See `vignette("Specimen-Metadata")`.
+#' @param fetch_geome Fetch GEOME metadata for samples with a BCID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_geome()] later.
+#' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence
+#'   IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.
+#' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
+#'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #' @param assembly_path Directory holding the user-supplied assembly files. Used
 #'   to count each assembly's contigs so a multi-contig assembly is recorded with
 #'   topology "multi".
@@ -91,6 +99,10 @@ new_db_userAsmb <- function(
     mapping_fn = NULL,
     mapping_id = "ID",
     mapping_taxon = "Taxon",
+    mapping_geome = "GEOME_BCID",
+    fetch_geome = TRUE,
+    mapping_gbif = "GBIF_ID",
+    fetch_gbif = TRUE,
     assembly_path = NULL,
     genetic_code = NULL,
     # Default annotation options
@@ -156,8 +168,9 @@ new_db_userAsmb <- function(
     mapping[[mapping_id]] <- as.character(mapping[[mapping_id]])
   }
   .report_issues(
-    check_mapping(mapping, mapping_id, mapping_taxon, need_reads = !no_raw_data,
-                  user_asmb = TRUE),
+    check_mapping(mapping, mapping_id, mapping_taxon, mapping_geome = mapping_geome,
+                  mapping_gbif = mapping_gbif,
+                  need_reads = !no_raw_data, user_asmb = TRUE),
     "Mapping file"
   )
 
@@ -197,6 +210,7 @@ new_db_userAsmb <- function(
       assembly = .data[["Assembly"]]
     ) |>
     dplyr::select(-dplyr::any_of("Topology"), -Assembly)
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},
@@ -946,6 +960,8 @@ new_db_userAsmb <- function(
       PRIMARY KEY (ID, path, scaffold)
     );"
   )
+
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif))
 
   invisible(return())
 }

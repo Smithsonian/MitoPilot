@@ -441,7 +441,8 @@ export_files <- function(
                         dplyr::any_of(c("blast_accession_auto", "poor_blast_ref"))),
         by = "ID"
       ) |>
-      dplyr::collect()
+      dplyr::collect() |>
+      .meta_join(con)
     # SeqID for glue templates; the FASTA defline and the .tbl >Feature line must
     # agree exactly or table2asn rejects the submission.
     dat$seqid <- .seqid
@@ -1307,7 +1308,8 @@ export_files <- function(
 
   # Per-sample summary CSV, dropped into the export directory
   if (isTRUE(summary_csv)) {
-    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts", "annotate_switch")
+    drop <- c("poor_blast_ref", "blast_ref_status", "curate_opts", "annotate_switch",
+              "specimen", "specimen_message", "specimen_icons")
     # seqid/path/scaffold lead: a sample can contribute several records, so the row
     # identity is the unit, not the ID.
     core <- c("ID", "seqid", "path", "scaffold",
@@ -1499,7 +1501,8 @@ get_export_PCG_annotations <- function(con, group) {
     dat <- dplyr::tbl(con, "samples") |>
       dplyr::select(-dplyr::any_of("topology")) |>
       dplyr::filter(ID == !!u$ID) |>
-      dplyr::collect()
+      dplyr::collect() |>
+      .meta_join(con)
 
     seq <- get_assembly(
       ID = u$ID,

@@ -9,6 +9,10 @@ new_db(
   mapping_fn = NULL,
   mapping_id = "ID",
   mapping_taxon = "Taxon",
+  mapping_geome = "GEOME_BCID",
+  fetch_geome = TRUE,
+  mapping_gbif = "GBIF_ID",
+  fetch_gbif = TRUE,
   genetic_code = NULL,
   dedup = FALSE,
   assemble_cpus = 6,
@@ -62,6 +66,18 @@ new_db(
 
 \item{mapping_taxon}{Column name of the mapping file containing a Taxonomic
 identifier (eg, species name)}
+
+\item{mapping_geome}{Name of the mapping-file column holding GEOME BCIDs
+(optional). Stored as `GEOME_BCID`. See `vignette("Specimen-Metadata")`.}
+
+\item{fetch_geome}{Fetch GEOME metadata for samples with a BCID during setup
+(default TRUE). Set FALSE when offline and run [fetch_geome()] later.}
+
+\item{mapping_gbif}{Name of the mapping-file column holding GBIF occurrence
+IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.}
+
+\item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID during setup
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.}
 
 \item{genetic_code}{Optional NCBI translation table override. Default `NULL`
 auto-selects from the curation ruleset (`curate_target`); a number sets an
