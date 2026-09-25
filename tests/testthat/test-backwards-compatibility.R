@@ -670,6 +670,21 @@ test_that("backwards_compatibility is idempotent (early-exit on already-current 
 })
 
 
+test_that("backwards_compatibility adds the sample metadata tables and columns", {
+  td <- tempfile()
+  dir.create(td)
+  on.exit(unlink(td, recursive = TRUE))
+  create_v100_db(td)
+  make_config(td, version = "1.0.0")
+  expect_message(MitoPilot::backwards_compatibility(path = td, executor = "local"),
+                 regexp = "sample metadata")
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(td, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE, after = FALSE)
+  expect_true(all(c("meta_records", "meta_status", "meta_export_fields", "meta_csv_map",
+                    "meta_view_fields") %in% DBI::dbListTables(con)))
+  expect_true(all(c("GEOME_BCID", "GBIF_ID") %in% DBI::dbListFields(con, "samples")))
+})
+
 test_that("backwards_compatibility stores genetic_code as a number (not TEXT)", {
   td <- tempfile()
   dir.create(td)

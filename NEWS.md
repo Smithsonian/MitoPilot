@@ -1,4 +1,6 @@
-# MitoPilot (development version)
+# MitoPilot 1.5.7
+
+Container: `macguigand/mitopilot:1.5.7`
 
 ## New Features
 
@@ -30,6 +32,11 @@
 - **Ignored contigs stay visible in user-assembly projects.** In the Assemble table, an ignored contig's length disappeared from Raw Length instead of being marked in red as in reads-based projects.
 - **Circular user assemblies no longer gain a base.** In a no-reads user-assembly project, a circular assembly that already started at the start gene came out of annotation one base longer, with base 1 copied onto the end. The stored sequence, its length, and every export carried the extra base. Reads-based projects could hit the same bug when an assembly happened to start exactly at the start gene. Re-run annotation on affected samples to correct them.
 - **The app launches from RStudio Server.** 1.5.6 stopped with `cannot coerce type 'closure' to vector of type 'character'` when `MitoPilot()` was run inside RStudio, which sets its own browser handler.
+
+**Note**
+Existing projects work as they are: the app creates the new sample metadata tables and columns the first time it opens a project. [`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html) adds them too and moves the `container` line in `.config` to `macguigand/mitopilot:1.5.7`.
+
+**Full Changelog**: https://github.com/Smithsonian/MitoPilot/compare/1.5.6...1.5.7
 
 # MitoPilot 1.5.6
 
