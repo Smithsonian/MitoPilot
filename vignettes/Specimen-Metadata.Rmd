@@ -162,13 +162,16 @@ Records are fetched when you run these functions, not when the pipeline runs.
 ### The Specimen column
 
 The Assemble, Annotate, and Export tables have a **Specimen** column right after
-**Taxon**. Each sample gets one icon, and the most serious state wins:
+**Taxon**. It shows one icon for each source the sample has an ID for, plus a
+flag when the sources disagree:
 
 | Icon | Meaning |
 |---|---|
-| Warning triangle | A GEOME or GBIF fetch failed. Hover to see why. |
+| GEOME "G" | The sample has a GEOME BCID and its record was fetched. |
+| GBIF leaf | The sample has a GBIF ID and its record was fetched. |
+| Faded logo | That source has an ID but has not been fetched yet. |
+| Faded logo with a small warning triangle | The fetch from that source failed. Hover to see why. |
 | Orange flag | The sources disagree on at least one item (see [Comparing sources](#comparing-sources)). |
-| Globe | Records fetched, no conflicts. |
 | Faint plus | No GEOME BCID or GBIF ID. |
 
 Hovering over an icon lists each source with its status, then any items in

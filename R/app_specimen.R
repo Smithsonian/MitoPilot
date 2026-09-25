@@ -2,7 +2,8 @@
 #'
 #' @param con database connection
 #' @return data.frame `ID`, `specimen` ("ok" | "failed" | "conflict" | "none"),
-#'   `specimen_message` (tooltip text, one line per source then conflicts and not-checked items)
+#'   `specimen_message` (tooltip text, one line per source then conflicts and not-checked items),
+#'   `specimen_icons` (e.g. "GEOME:ok GBIF:failed conflict"; per-source ok | failed | pending)
 #' @noRd
 specimen_status <- function(con) {
   .meta_ensure_tables(con)
@@ -10,19 +11,21 @@ specimen_status <- function(con) {
   s <- DBI::dbGetQuery(con, paste0("SELECT ID, ", paste(cols, collapse = ", "), " FROM samples"))
   st <- DBI::dbGetQuery(con, "SELECT ID, source, status, message FROM meta_status")
   cf <- specimen_conflicts(con)
-  state <- msg <- character(nrow(s))
+  state <- msg <- icons <- character(nrow(s))
   for (i in seq_len(nrow(s))) {
     id <- s$ID[i]
-    lines <- states <- character()
+    lines <- states <- ic <- character()
     for (src in names(META_SOURCES)) {
       ref <- s[[META_SOURCES[[src]]$col]][i]
       r <- st[st$ID == id & st$source == src, , drop = FALSE]
       if (nrow(r)) {
         states <- c(states, r$status[1])
+        ic <- c(ic, paste0(src, ":", r$status[1]))
         lines <- c(lines, if (r$status[1] == "ok") paste0(src, ": fetched") else
           paste0(src, ": failed (", r$message[1] %|NA|% "unknown error", ")"))
       } else if (!is.na(ref) && nzchar(ref)) {
         lines <- c(lines, paste0(src, ": not fetched yet"))
+        ic <- c(ic, paste0(src, ":pending"))
       }
     }
     k <- cf[cf$ID == id, , drop = FALSE]
@@ -32,9 +35,10 @@ specimen_status <- function(con) {
     if (length(unchecked)) lines <- c(lines, paste("Not checked:", paste(unchecked, collapse = ", ")))
     state[i] <- if ("failed" %in% states) "failed" else if (length(conf)) "conflict" else
       if ("ok" %in% states) "ok" else "none"
+    icons[i] <- paste(c(ic, if (length(conf)) "conflict"), collapse = " ")
     msg[i] <- if (length(lines)) paste(lines, collapse = "\n") else "No GEOME BCID or GBIF ID"
   }
-  data.frame(ID = s$ID, specimen = state, specimen_message = msg)
+  data.frame(ID = s$ID, specimen = state, specimen_message = msg, specimen_icons = icons)
 }
 
 #' Left-join specimen status onto a collected, ID-keyed data frame
@@ -55,21 +59,31 @@ specimen_status <- function(con) {
 rt_specimen <- function(inputId) {
   sprintf(
     "function(cellInfo) {
-      var st = cellInfo.value || 'none';
       var row = cellInfo.row || {};
       var esc = function(s) { return String(s).replace(/&/g, '&amp;').replace(/'/g, '&#39;')
         .replace(/\"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
-      var cls = {
-        ok: 'fa-solid fa-earth-americas',
-        failed: 'fa-solid fa-triangle-exclamation mp-fg-warning',
-        conflict: 'fa-solid fa-flag mp-fg-warning',
-        none: 'fa-regular fa-square-plus text-muted'
-      }[st] || 'fa-regular fa-square-plus text-muted';
+      var codes = String(row['specimen_icons'] || '').split(' ').filter(Boolean);
+      var logos = {GEOME: 'www/specimen/geome_g.png', GBIF: 'www/specimen/gbif_leaf.png'};
+      var html = '';
+      codes.forEach(function(c) {
+        if (c === 'conflict') {
+          html += `<i class='fa-solid fa-flag mp-fg-warning mp-spec-icon' aria-hidden='true'></i>`;
+          return;
+        }
+        var p = c.split(':'), src = p[0], st = p[1];
+        if (!logos[src]) return;
+        html += `<span class='mp-spec-logo${st === 'ok' ? '' : ' mp-spec-faded'}'>` +
+          `<img src='${logos[src]}' alt='' class='mp-spec-icon'>` +
+          (st === 'failed' ? `<i class='fa-solid fa-triangle-exclamation mp-fg-warning mp-spec-badge' aria-hidden='true'></i>` : '') +
+          `</span>`;
+      });
+      var none = html === '';
+      if (none) html = `<i class='fa-regular fa-square-plus text-muted' aria-hidden='true'></i>`;
       var tip = (row['specimen_message'] || 'No GEOME BCID or GBIF ID') +
-        (st === 'none' ? '. Click to add one.' : '\\nClick to view.');
+        (none ? '. Click to add one.' : '\\nClick to view.');
       return `<a href='#' class='mp-specimen-cell' data-id='${esc(row['ID'])}' title='${esc(tip)}' aria-label='${esc(tip)}' ` +
         `onclick=\"event.preventDefault(); event.stopPropagation(); Shiny.setInputValue('%s', this.dataset.id, {priority: 'event'})\">` +
-        `<i class='${cls}' aria-hidden='true'></i></a>`;
+        html + `</a>`;
     }",
     inputId
   ) |>
@@ -82,7 +96,7 @@ rt_specimen <- function(inputId) {
 #' @noRd
 specimen_col_def <- function(inputId, sticky = NULL, class = NULL) {
   reactable::colDef(
-    show = TRUE, name = "Specimen", sticky = sticky, width = 80, align = "center",
+    show = TRUE, name = "Specimen", sticky = sticky, width = 90, align = "center",
     html = TRUE, filterable = FALSE, sortable = TRUE,
     class = class, headerClass = class,
     header = rt_header("Specimen", paste(

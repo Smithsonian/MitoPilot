@@ -129,7 +129,7 @@ fetch_assemble_data <- function(session = getDefaultReactiveDomain()) {
     ) |>
     # The three action columns render last and adjacent (theme T19).
     dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col()) |>
-    dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message")), .after = Taxon)
+    dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message", "specimen_icons")), .after = Taxon)
 }
 
 #' Update the preprocessing options

@@ -441,7 +441,7 @@ export_server <- function(id) {
 
     # CSV Export ----
     .export_cols_drop <- c("poor_blast_ref", "blast_accession_auto",
-                           "annotate_switch", "specimen", "specimen_message")
+                           "annotate_switch", "specimen", "specimen_message", "specimen_icons")
 
     observe({
       shinyjs::toggleState("export_selected", condition = length(selected()) > 0)

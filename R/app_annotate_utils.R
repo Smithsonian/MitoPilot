@@ -75,7 +75,7 @@ fetch_annotate_units <- function(session = getDefaultReactiveDomain()) {
       path,
       scaffold,
       Taxon,
-      dplyr::any_of(c("specimen", "specimen_message")),
+      dplyr::any_of(c("specimen", "specimen_message", "specimen_icons")),
       ID_verified,
       annotate_opts,
       curate_opts,
@@ -159,7 +159,7 @@ fetch_annotate_data <- function(session = getDefaultReactiveDomain()) {
     dplyr::select(
       dplyr::any_of(c(
         "annotate_lock", "annotate_switch", "ID", "path", "scaffold", "Taxon",
-        "specimen", "specimen_message",
+        "specimen", "specimen_message", "specimen_icons",
         "ID_verified", "annotate_opts", "curate_opts", "orf_opts", "length_raw",
         "length", "topology", "scaffolds", "blast_accession", "blast_ref_status",
         "blast_accession_auto", "blast_species", "blast_lineage", "blast_pident",

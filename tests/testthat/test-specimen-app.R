@@ -103,6 +103,7 @@ test_that("specimen_status: failed beats conflict beats ok beats none", {
   expect_equal(s$specimen_message[3],
                "GEOME: fetched\nGBIF: fetched\nConflicts: country\nNot checked: collector")
   expect_equal(s$specimen_message[4], "No GEOME BCID or GBIF ID")
+  expect_equal(s$specimen_icons, c("GEOME:ok", "GBIF:failed", "GEOME:ok GBIF:ok conflict", ""))
 })
 
 test_that("a set but never fetched ID says so", {
@@ -112,6 +113,7 @@ test_that("a set but never fetched ID says so", {
   s <- specimen_status(con)
   expect_equal(s$specimen, "none")
   expect_equal(s$specimen_message, "GBIF: not fetched yet")
+  expect_equal(s$specimen_icons, "GBIF:pending")
 })
 
 test_that(".specimen_status_join adds specimen columns to a collected table", {
@@ -122,14 +124,23 @@ test_that(".specimen_status_join adds specimen columns to a collected table", {
   expect_true(is.na(out$specimen_message[3]))
 })
 
-test_that("rt_specimen sends the row ID and knows all four states", {
+test_that("rt_specimen draws one logo per source, a conflict flag, or a plus", {
   js <- as.character(rt_specimen("assemble-specimen_open"))
   expect_match(js, "assemble-specimen_open", fixed = TRUE)
   expect_match(js, "setInputValue", fixed = TRUE)
   expect_match(js, "dataset.id", fixed = TRUE)
   expect_match(js, "specimen_message", fixed = TRUE)
-  for (cls in c("fa-earth-americas", "fa-triangle-exclamation", "fa-flag", "fa-square-plus")) {
-    expect_match(js, cls, fixed = TRUE)
+  expect_match(js, "specimen_icons", fixed = TRUE)
+  for (x in c("www/specimen/geome_g.png", "www/specimen/gbif_leaf.png", "fa-flag",
+              "fa-square-plus", "fa-triangle-exclamation", "mp-spec-faded")) {
+    expect_match(js, x, fixed = TRUE)
+  }
+  expect_false(grepl("fa-earth-americas", js, fixed = TRUE))
+})
+
+test_that("specimen logo files ship with the app", {
+  for (f in c("geome_g.png", "gbif_leaf.png")) {
+    expect_true(file.exists(app_sys("app/www/specimen", f)))
   }
 })
 

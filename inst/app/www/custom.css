@@ -931,3 +931,10 @@ a.mp-link:focus-visible {
   font-size: var(--mp-fs-meta); cursor: pointer;
 }
 .mp-token-chip:hover, .mp-token-chip:focus { border-color: var(--mp-primary); }
+
+/* Specimen column: one logo per metadata source, plus a conflict flag */
+.mp-specimen-cell { display: inline-flex; align-items: center; gap: 4px; }
+.mp-spec-logo { position: relative; display: inline-block; line-height: 0; }
+.mp-spec-icon { width: 18px; height: 18px; }
+.mp-spec-faded img { filter: grayscale(1); opacity: 0.45; }
+.mp-spec-badge { position: absolute; right: -5px; bottom: -3px; font-size: 10px; line-height: 1; }

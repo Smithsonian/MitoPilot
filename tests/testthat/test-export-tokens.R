@@ -7,7 +7,7 @@ tok_data <- function() {
     geome_lat_lon = c("17.5 S 149.8 W", ""), gbif_Occurrence_countryCode = c("", "US"),
     blast_accession = "NC_1", length = 16500L, annotate_switch = 1L,
     blast_accession_auto = 0L, poor_blast_ref = "ok", export_time_stamp = NA,
-    export_group = "g1", specimen = "ok", specimen_message = "GEOME: fetched"
+    export_group = "g1", specimen = "ok", specimen_message = "GEOME: fetched", specimen_icons = "GEOME:ok"
   )
 }
 tok_cols <- c("ID", "Taxon", "genetic_code", "R1", "R2", "site", "GEOME_BCID", "GBIF_ID")
@@ -32,7 +32,7 @@ test_that("export_token_groups sorts columns into the six groups", {
                c(TRUE, TRUE, TRUE, TRUE, FALSE, FALSE))
   listed <- unlist(lapply(g, function(x) x$tokens$token))
   expect_false(any(c("annotate_switch", "blast_accession_auto", "poor_blast_ref", "export_time_stamp",
-                     "export_group", "specimen", "specimen_message", "R1", "R2") %in% listed))
+                     "export_group", "specimen", "specimen_message", "specimen_icons", "R1", "R2") %in% listed))
   expect_null(g$Basics$hint)
 })
 

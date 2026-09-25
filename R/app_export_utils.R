@@ -415,6 +415,6 @@ fetch_export_data <- function(con = NULL, session = getDefaultReactiveDomain(),
 export_metadata_cols <- function(sample_cols, declared) {
   owned <- c("ID", "Taxon", "genetic_code", "topology", "R1", "R2", "assembly",
              "Assembly", "Topology", "Reference", "Reference_topology", "GEOME_BCID", "GBIF_ID",
-             "specimen", "specimen_message")
+             "specimen", "specimen_message", "specimen_icons")
   sample_cols[!sample_cols %in% c(owned, declared)]
 }

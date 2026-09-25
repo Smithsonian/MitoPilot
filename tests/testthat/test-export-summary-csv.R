@@ -90,5 +90,5 @@ test_that("the summary CSV is unchanged for a locked unit", {
 
 test_that("the summary CSV leaves out the app-only specimen status columns", {
   res <- run_summary_export(annotate_lock = 1L, assemble_lock = 1L)
-  expect_false(any(c("specimen", "specimen_message", "geome", "geome_message") %in% names(res$summary)))
+  expect_false(any(c("specimen", "specimen_message", "specimen_icons", "geome", "geome_message") %in% names(res$summary)))
 })

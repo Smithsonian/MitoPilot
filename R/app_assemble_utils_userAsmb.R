@@ -126,7 +126,7 @@ fetch_assemble_data_userAsmb <- function(session = getDefaultReactiveDomain()) {
     ) |>
     # The three action columns render last and adjacent (theme T19).
     dplyr::relocate(blast_hits, output, view, .after = dplyr::last_col()) |>
-    dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message")), .after = Taxon)
+    dplyr::relocate(dplyr::any_of(c("specimen", "specimen_message", "specimen_icons")), .after = Taxon)
 }
 
 #' Wire up the shared behaviour of an Assemble options modal
