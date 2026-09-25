@@ -1,6 +1,6 @@
 # MitoPilot 1.5.7
 
-Container: `macguigand/mitopilot:1.5.7`
+Released 2026-09-25. Container: `macguigand/mitopilot:1.5.7`
 
 ## New Features
 
