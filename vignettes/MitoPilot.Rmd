@@ -134,7 +134,7 @@ table.state-table p {
 
 MitoPilot takes you from raw Illumina paired-end reads to polished mitogenome records ready
 for submission to NCBI GenBank. The heavy lifting is a
-[Nextflow](https://www.nextflow.io/) pipeline; you drive it from an R Shiny app
+[Nextflow](https://www.nextflow.io/) pipeline; you run it from an R Shiny app
 that shows you every sample, assembly, and annotation. MitoPilot automatically
 curates annotations based on clade-specific rulesets and also allows you
 to manually adjust annotations when needed.
