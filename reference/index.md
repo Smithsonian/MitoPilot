@@ -28,6 +28,16 @@ Create, migrate, edit, and export the project SQLite database.
   : Add samples to project database
 - [`update_sample_metadata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.md)
   : Update project database metadata.
+- [`fetch_geome()`](https://smithsonian.github.io/MitoPilot/reference/fetch_geome.md)
+  : Fetch GEOME metadata for project samples
+- [`fetch_gbif()`](https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.md)
+  : Fetch GBIF occurrence metadata for project samples
+- [`set_metadata_columns()`](https://smithsonian.github.io/MitoPilot/reference/set_metadata_columns.md)
+  : Choose which mapping-file columns are compared with GEOME and GBIF
+- [`geome_normalize_bcid()`](https://smithsonian.github.io/MitoPilot/reference/geome_normalize_bcid.md)
+  : Normalize GEOME BCIDs to bare ARKs
+- [`gbif_normalize_id()`](https://smithsonian.github.io/MitoPilot/reference/gbif_normalize_id.md)
+  : Normalize GBIF occurrence IDs
 - [`update_sample_seqdata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_seqdata.md)
   : Update sequence files for existing project
 - [`set_maptoref_refs()`](https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.md)

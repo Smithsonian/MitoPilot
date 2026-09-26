@@ -30,7 +30,7 @@ MitoPilot release you want (the script and the R package must be the
 same version):
 
 ``` bash
-ver=1.5.6
+ver=1.5.7
 curl -L https://github.com/Smithsonian/MitoPilot/archive/refs/tags/${ver}.tar.gz | tar -xz
 cd MitoPilot-${ver}/inst/native
 ```
@@ -55,7 +55,7 @@ the bundled R. Options:
 | `--no-optional` | Skip MitoFinder, ARWEN, and NCBI ORFfinder (saves about 2 GB; these are off by default in projects anyway) |
 | `--skip-blast-db` | Skip the 289 MB database; reference search falls back to NCBI over the network |
 | `--blast-db-url URL` | Download the database from another location (for example a mirror inside your cluster) |
-| `--mitopilot-ref 1.5.6` | Install a MitoPilot tag from GitHub instead of the source tree the script came from |
+| `--mitopilot-ref 1.5.7` | Install a MitoPilot tag from GitHub instead of the source tree the script came from |
 | `--mitopilot-source PATH` | Install the R package from a local directory or tarball instead |
 | `--skip-mitopilot` | Do not install the MitoPilot R package (you install it yourself, see step 4) |
 | `--dry-run` | Show what would happen |
@@ -272,7 +272,7 @@ directory:
 A module file is the natural wrapper. With Lmod:
 
 ``` bash
--- /apps/modulefiles/mitopilot/1.5.6.lua
+-- /apps/modulefiles/mitopilot/1.5.7.lua
 setenv("MITOPILOT_NATIVE_PREFIX", "<install_dir>")
 setenv("NXF_HOME", pathJoin(os.getenv("HOME"), ".nextflow"))
 execute { cmd = "source <install_dir>/activate.sh", modeA = { "load" } }

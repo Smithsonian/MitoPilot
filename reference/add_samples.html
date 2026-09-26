@@ -11,7 +11,7 @@ Creates a backup of the existing database prior to updating."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,6 +34,7 @@ Creates a backup of the existing database prior to updating."><meta property="og
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME and GBIF</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
@@ -78,7 +79,11 @@ Creates a backup of the existing database prior to updating.</p>
 <span>  path <span class="op">=</span> <span class="st">"."</span>,</span>
 <span>  update_mapping_fn <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mapping_id <span class="op">=</span> <span class="st">"ID"</span>,</span>
-<span>  mapping_taxon <span class="op">=</span> <span class="st">"Taxon"</span></span>
+<span>  mapping_taxon <span class="op">=</span> <span class="st">"Taxon"</span>,</span>
+<span>  mapping_geome <span class="op">=</span> <span class="st">"GEOME_BCID"</span>,</span>
+<span>  fetch_geome <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  mapping_gbif <span class="op">=</span> <span class="st">"GBIF_ID"</span>,</span>
+<span>  fetch_gbif <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -107,6 +112,24 @@ as sample metadata, so rename the column if you use it for something else.</p></
 
 <dt id="arg-mapping-taxon">mapping_taxon<a class="anchor" aria-label="anchor" href="#arg-mapping-taxon"></a></dt>
 <dd><p>Column name of the update mapping file containing a Taxonomic identifier (eg, species name)</p></dd>
+
+
+<dt id="arg-mapping-geome">mapping_geome<a class="anchor" aria-label="anchor" href="#arg-mapping-geome"></a></dt>
+<dd><p>Name of the mapping-file column holding GEOME BCIDs</p></dd>
+
+
+<dt id="arg-fetch-geome">fetch_geome<a class="anchor" aria-label="anchor" href="#arg-fetch-geome"></a></dt>
+<dd><p>Fetch GEOME metadata for samples with a BCID during setup
+(default TRUE). Set FALSE when offline and run [fetch_geome()] later.</p></dd>
+
+
+<dt id="arg-mapping-gbif">mapping_gbif<a class="anchor" aria-label="anchor" href="#arg-mapping-gbif"></a></dt>
+<dd><p>Name of the mapping-file column holding GBIF occurrence IDs</p></dd>
+
+
+<dt id="arg-fetch-gbif">fetch_gbif<a class="anchor" aria-label="anchor" href="#arg-fetch-gbif"></a></dt>
+<dd><p>Fetch GBIF metadata for samples with a GBIF ID
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.</p></dd>
 
 </dl></div>
 

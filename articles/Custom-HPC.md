@@ -43,7 +43,7 @@ A quick vocabulary primer if containers are new to you:
 
 The image tag must match your installed MitoPilot version. Get it with
 `packageVersion("MitoPilot")`, which for this build of the documentation
-is 1.5.6.
+is 1.5.7.
 
 ``` bash
 singularity pull mitopilot.sif docker://macguigand/mitopilot:<version>

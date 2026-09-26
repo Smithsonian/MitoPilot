@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,6 +51,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME and GBIF</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
@@ -202,7 +203,7 @@ single binary) for you</td>
 <p>Download the install script and the environment definitions from the
 MitoPilot release you want (the script and the R package must be the
 same version):</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="va">ver</span><span class="op">=</span>1.5.6</span>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="va">ver</span><span class="op">=</span>1.5.7</span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-L</span> https://github.com/Smithsonian/MitoPilot/archive/refs/tags/<span class="va">${ver}</span>.tar.gz <span class="kw">|</span> <span class="fu">tar</span> <span class="at">-xz</span></span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="bu">cd</span> MitoPilot-<span class="va">${ver}</span>/inst/native</span></code></pre></div>
 <div class="alert alert-tip">
@@ -248,7 +249,7 @@ the network</td>
 inside your cluster)</td>
 </tr>
 <tr class="odd">
-<td><code>--mitopilot-ref 1.5.6</code></td>
+<td><code>--mitopilot-ref 1.5.7</code></td>
 <td>Install a MitoPilot tag from GitHub instead of the source tree the
 script came from</td>
 </tr>
@@ -478,7 +479,7 @@ inside the bundled R; users may also install it in their own R for the
 app.</li>
 </ol>
 <p>A module file is the natural wrapper. With Lmod:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="ex">--</span> /apps/modulefiles/mitopilot/1.5.6.lua</span>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="ex">--</span> /apps/modulefiles/mitopilot/1.5.7.lua</span>
 <span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="ex">setenv</span><span class="er">(</span><span class="st">"MITOPILOT_NATIVE_PREFIX"</span><span class="ex">,</span> <span class="st">"&lt;install_dir&gt;"</span><span class="kw">)</span></span>
 <span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="ex">setenv</span><span class="er">(</span><span class="st">"NXF_HOME"</span><span class="ex">,</span> pathJoin<span class="er">(</span><span class="ex">os.getenv</span><span class="er">(</span><span class="st">"HOME"</span><span class="kw">)</span><span class="ex">,</span> <span class="st">".nextflow"</span><span class="kw">))</span></span>
 <span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="ex">execute</span> { cmd = <span class="st">"source &lt;install_dir&gt;/activate.sh"</span>, modeA = { <span class="st">"load"</span> } }</span></code></pre></div>

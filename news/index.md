@@ -1,5 +1,124 @@
 # Changelog
 
+## MitoPilot 1.5.7
+
+Released 2026-09-25. Container: `macguigand/mitopilot:1.5.7`
+
+### New Features
+
+#### Sample metadata from GEOME and GBIF
+
+- **Link samples to GEOME and GBIF records.** Add a column of GEOME
+  BCIDs or GBIF occurrence IDs to the mapping file and name it with
+  `mapping_geome` or `mapping_gbif` in
+  [`new_project()`](https://smithsonian.github.io/MitoPilot/reference/new_project.md),
+  [`new_project_userAsmb()`](https://smithsonian.github.io/MitoPilot/reference/new_project_userAsmb.md),
+  [`add_samples()`](https://smithsonian.github.io/MitoPilot/reference/add_samples.md),
+  or
+  [`update_sample_metadata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.md).
+  Records are fetched at setup, or later with
+  [`fetch_geome()`](https://smithsonian.github.io/MitoPilot/reference/fetch_geome.md)
+  and
+  [`fetch_gbif()`](https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.md).
+  Smithsonian NMNH records can be linked by their EZID (an
+  `ark:/65665/...` identifier or a `collections.nmnh.si.edu` link) in
+  place of a gbifID. See the new article [Sample metadata: GEOME and
+  GBIF](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html).
+- **Metadata column.** The Assemble, Annotate, and Export tables have a
+  Metadata column with a GEOME or GBIF logo per linked source and a flag
+  when sources disagree. Click it to open the sample metadata viewer:
+  GEOME and GBIF tabs to view, add, or refresh records, and a Compare
+  tab that checks your mapping file, GEOME, and GBIF against each other
+  (coordinates, dates, country, voucher, taxon, and more). MitoPilot
+  flags disagreements but never merges values.
+  [`set_metadata_columns()`](https://smithsonian.github.io/MitoPilot/reference/set_metadata_columns.md)
+  or **Mapfile columns…** in the Compare tab picks which mapping-file
+  columns are compared.
+- **Show any metadata field as a table column.** A new **Metadata**
+  button next to each table’s Columns picker lists every field with
+  data: your extra mapping-file columns, then GEOME and GBIF fields,
+  searchable and with sample counts and examples. Ticked fields appear
+  as columns in all three tables, with source logos in their headers,
+  resizable widths, and an optional three-line text wrap. Mapping-file
+  fields are shown by default; GEOME and GBIF fields are off. The choice
+  is saved in the project, and the Metadata entry in the Columns picker
+  hides them all at once.
+- **Metadata in exported files.** **Set Export Metadata** in the Export
+  toolbar picks which GEOME and GBIF fields can be used in header
+  templates, including GenBank-ready `lat_lon`, `collection_date`,
+  `geo_loc_name`, and `specimen_voucher`. Export warns when a template
+  uses an item the sources disagree on.
+- **Export Data window.** Usable columns are listed under **Available
+  columns** (collapsed by default), grouped by type in one box (Basics,
+  Your mapfile columns, GEOME, GBIF, Reference, Assembly and
+  annotation), and insert at the cursor. A column turns orange when it
+  is empty for some records in the chosen export group; hover it for the
+  count. The summary of what will be written now sits at the top, the
+  gene export options sit next to the headers, and each header’s
+  validity check sits just above its box. **Choose fields** returns to
+  Export Data with everything as you left it.
+
+#### Tables and app
+
+- **\# Paths and \# Scaffolds report ignored contigs**, for example “1
+  (2 ignored)”, and sort on the kept count. Counts are read from the
+  assembled contigs, so they no longer go stale. A joined scaffold
+  assembly counts its fragments as ignored scaffolds; a multi-path
+  consensus counts its source paths as ignored paths.
+- **All BLAST Hits** sits next to Top BLAST Hit and belongs to the BLAST
+  column group. The All BLAST Hits, Output, and Details buttons are
+  icons only, with tooltips.
+- The Columns picker groups the time stamp and note columns as
+  **Notes**. In Export, the Exported column stays pinned beside Export
+  Group.
+- Pinned column groups on either side of every table have a soft edge
+  shadow where content scrolls under them.
+- **Row lock and state icons are clickable** in the Assemble and
+  Annotate tables. Clicking a row’s lock toggles that row’s lock;
+  clicking its state icon opens Set state for that row alone. Neither
+  changes the current selection; the toolbar buttons still handle
+  several rows at once.
+- The Assemble and Annotate details windows have a **Lock** button that
+  locks the sample and keeps the window open, now read-only.
+- **Repeat confirmations can be skipped.** Unlocking, editing options
+  beyond the selection, and marking a circular assembly as partial now
+  offer “Don’t ask again this session”.
+- Export rows are deselected after assigning an export group, and a
+  “hold tight” message shows while the PCG outlier review is being
+  prepared.
+
+### Changes
+
+- **Feature tables always use the SeqID.** The `.tbl` Feature header now
+  always carries the record’s SeqID; a `GenBankAccession` mapping-file
+  column is no longer used there.
+
+### Bug Fixes
+
+- **Ignored contigs stay visible in user-assembly projects.** In the
+  Assemble table, an ignored contig’s length disappeared from Raw Length
+  instead of being marked in red as in reads-based projects.
+- **Circular user assemblies no longer gain a base.** In a no-reads
+  user-assembly project, a circular assembly that already started at the
+  start gene came out of annotation one base longer, with base 1 copied
+  onto the end. The stored sequence, its length, and every export
+  carried the extra base. Reads-based projects could hit the same bug
+  when an assembly happened to start exactly at the start gene. Re-run
+  annotation on affected samples to correct them.
+- **The app launches from RStudio Server.** 1.5.6 stopped with
+  `cannot coerce type 'closure' to vector of type 'character'` when
+  [`MitoPilot()`](https://smithsonian.github.io/MitoPilot/reference/MitoPilot.md)
+  was run inside RStudio, which sets its own browser handler.
+
+**Note** Existing projects work as they are: the app creates the new
+sample metadata tables and columns the first time it opens a project.
+[`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html)
+adds them too and moves the `container` line in `.config` to
+`macguigand/mitopilot:1.5.7`.
+
+**Full Changelog**:
+<https://github.com/Smithsonian/MitoPilot/compare/1.5.6>…1.5.7
+
 ## MitoPilot 1.5.6
 
 Released 2026-09-23. Container: `macguigand/mitopilot:1.5.6`

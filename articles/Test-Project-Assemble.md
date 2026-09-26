@@ -5,6 +5,11 @@ Annotate](https://smithsonian.github.io/MitoPilot/articles/Test-Project-Annotate
 [3.
 Export](https://smithsonian.github.io/MitoPilot/articles/Test-Project-Export.md)
 
+This walkthrough picks up where [Get
+Started](https://smithsonian.github.io/MitoPilot/articles/MitoPilot.md)
+leaves off, so start there if you have not yet set up the test project
+and opened the app.
+
 The Assemble module cleans the reads, builds mitogenome assemblies, maps
 the reads to the assembly to calculate coverage, and BLASTs each
 assembly against a database of metazoan mitogenomes to find its closest

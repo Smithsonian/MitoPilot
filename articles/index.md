@@ -18,6 +18,8 @@
 
 - [Starting Your Own
   Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.md):
+- [Sample metadata: GEOME and
+  GBIF](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.md):
 - [Using Your Own
   Assemblies](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Assemblies.md):
 - [Choosing an Assembly

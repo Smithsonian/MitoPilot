@@ -12,6 +12,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Native-Install.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Annotate.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Assemble.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Test-Project-Export.html</loc></url>
@@ -76,9 +77,13 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_files.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_ref.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_refs.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_geome.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/find_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/flag_PCG_outliers.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/gbif_normalize_id.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/generate_config.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/geome_normalize_bcid.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/get_assembly.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/get_assembly_userAsmb.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/get_top_hits_local.html</loc></url>
@@ -141,6 +146,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/scaffold_join.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/select_mito_contigs.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/set_metadata_columns.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/splice_join_cds.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/tunnel_instructions.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/update_sample_metadata.html</loc></url>

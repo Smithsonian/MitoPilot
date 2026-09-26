@@ -81,6 +81,12 @@ number if that sample is exporting multiple sequences.
 Templates are validated as you type and can be saved by name with **Save
 template** for reuse.
 
+**Tip.** Samples linked to GEOME or GBIF records can also use
+`{geome_...}` and `{gbif_...}` columns in the header, such as
+`{geome_lat_lon}` and `{gbif_collection_date}`. See [Using metadata
+fields at
+export](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html#using-metadata-fields-at-export).
+
 Other options in the Export Data window:
 
 - **Generate group-level PCG alignment summary** aligns every

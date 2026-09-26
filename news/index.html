@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,6 +30,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME and GBIF</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
@@ -61,6 +62,57 @@
       <small>Source: <a href="https://github.com/Smithsonian/MitoPilot/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.5.7" id="mitopilot-157">MitoPilot 1.5.7<a class="anchor" aria-label="anchor" href="#mitopilot-157"></a></h2>
+<p>Released 2026-09-25. Container: <code>macguigand/mitopilot:1.5.7</code></p>
+<div class="section level3">
+<h3 id="new-features-1-5-7">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5-7"></a></h3>
+<div class="section level4">
+<h4 id="sample-metadata-from-geome-and-gbif-1-5-7">Sample metadata from GEOME and GBIF<a class="anchor" aria-label="anchor" href="#sample-metadata-from-geome-and-gbif-1-5-7"></a></h4>
+<ul><li>
+<strong>Link samples to GEOME and GBIF records.</strong> Add a column of GEOME BCIDs or GBIF occurrence IDs to the mapping file and name it with <code>mapping_geome</code> or <code>mapping_gbif</code> in <code><a href="../reference/new_project.html">new_project()</a></code>, <code><a href="../reference/new_project_userAsmb.html">new_project_userAsmb()</a></code>, <code><a href="../reference/add_samples.html">add_samples()</a></code>, or <code><a href="../reference/update_sample_metadata.html">update_sample_metadata()</a></code>. Records are fetched at setup, or later with <code><a href="../reference/fetch_geome.html">fetch_geome()</a></code> and <code><a href="../reference/fetch_gbif.html">fetch_gbif()</a></code>. Smithsonian NMNH records can be linked by their EZID (an <code>ark:/65665/...</code> identifier or a <code>collections.nmnh.si.edu</code> link) in place of a gbifID. See the new article <a href="https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html">Sample metadata: GEOME and GBIF</a>.</li>
+<li>
+<strong>Metadata column.</strong> The Assemble, Annotate, and Export tables have a Metadata column with a GEOME or GBIF logo per linked source and a flag when sources disagree. Click it to open the sample metadata viewer: GEOME and GBIF tabs to view, add, or refresh records, and a Compare tab that checks your mapping file, GEOME, and GBIF against each other (coordinates, dates, country, voucher, taxon, and more). MitoPilot flags disagreements but never merges values. <code><a href="../reference/set_metadata_columns.html">set_metadata_columns()</a></code> or <strong>Mapfile columns…</strong> in the Compare tab picks which mapping-file columns are compared.</li>
+<li>
+<strong>Show any metadata field as a table column.</strong> A new <strong>Metadata</strong> button next to each table’s Columns picker lists every field with data: your extra mapping-file columns, then GEOME and GBIF fields, searchable and with sample counts and examples. Ticked fields appear as columns in all three tables, with source logos in their headers, resizable widths, and an optional three-line text wrap. Mapping-file fields are shown by default; GEOME and GBIF fields are off. The choice is saved in the project, and the Metadata entry in the Columns picker hides them all at once.</li>
+<li>
+<strong>Metadata in exported files.</strong> <strong>Set Export Metadata</strong> in the Export toolbar picks which GEOME and GBIF fields can be used in header templates, including GenBank-ready <code>lat_lon</code>, <code>collection_date</code>, <code>geo_loc_name</code>, and <code>specimen_voucher</code>. Export warns when a template uses an item the sources disagree on.</li>
+<li>
+<strong>Export Data window.</strong> Usable columns are listed under <strong>Available columns</strong> (collapsed by default), grouped by type in one box (Basics, Your mapfile columns, GEOME, GBIF, Reference, Assembly and annotation), and insert at the cursor. A column turns orange when it is empty for some records in the chosen export group; hover it for the count. The summary of what will be written now sits at the top, the gene export options sit next to the headers, and each header’s validity check sits just above its box. <strong>Choose fields</strong> returns to Export Data with everything as you left it.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="tables-and-app-1-5-7">Tables and app<a class="anchor" aria-label="anchor" href="#tables-and-app-1-5-7"></a></h4>
+<ul><li>
+<strong># Paths and # Scaffolds report ignored contigs</strong>, for example “1 (2 ignored)”, and sort on the kept count. Counts are read from the assembled contigs, so they no longer go stale. A joined scaffold assembly counts its fragments as ignored scaffolds; a multi-path consensus counts its source paths as ignored paths.</li>
+<li>
+<strong>All BLAST Hits</strong> sits next to Top BLAST Hit and belongs to the BLAST column group. The All BLAST Hits, Output, and Details buttons are icons only, with tooltips.</li>
+<li>The Columns picker groups the time stamp and note columns as <strong>Notes</strong>. In Export, the Exported column stays pinned beside Export Group.</li>
+<li>Pinned column groups on either side of every table have a soft edge shadow where content scrolls under them.</li>
+<li>
+<strong>Row lock and state icons are clickable</strong> in the Assemble and Annotate tables. Clicking a row’s lock toggles that row’s lock; clicking its state icon opens Set state for that row alone. Neither changes the current selection; the toolbar buttons still handle several rows at once.</li>
+<li>The Assemble and Annotate details windows have a <strong>Lock</strong> button that locks the sample and keeps the window open, now read-only.</li>
+<li>
+<strong>Repeat confirmations can be skipped.</strong> Unlocking, editing options beyond the selection, and marking a circular assembly as partial now offer “Don’t ask again this session”.</li>
+<li>Export rows are deselected after assigning an export group, and a “hold tight” message shows while the PCG outlier review is being prepared.</li>
+</ul></div>
+</div>
+<div class="section level3">
+<h3 id="changes-1-5-7">Changes<a class="anchor" aria-label="anchor" href="#changes-1-5-7"></a></h3>
+<ul><li>
+<strong>Feature tables always use the SeqID.</strong> The <code>.tbl</code> Feature header now always carries the record’s SeqID; a <code>GenBankAccession</code> mapping-file column is no longer used there.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-1-5-7">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-5-7"></a></h3>
+<ul><li>
+<strong>Ignored contigs stay visible in user-assembly projects.</strong> In the Assemble table, an ignored contig’s length disappeared from Raw Length instead of being marked in red as in reads-based projects.</li>
+<li>
+<strong>Circular user assemblies no longer gain a base.</strong> In a no-reads user-assembly project, a circular assembly that already started at the start gene came out of annotation one base longer, with base 1 copied onto the end. The stored sequence, its length, and every export carried the extra base. Reads-based projects could hit the same bug when an assembly happened to start exactly at the start gene. Re-run annotation on affected samples to correct them.</li>
+<li>
+<strong>The app launches from RStudio Server.</strong> 1.5.6 stopped with <code>cannot coerce type 'closure' to vector of type 'character'</code> when <code><a href="../reference/MitoPilot.html">MitoPilot()</a></code> was run inside RStudio, which sets its own browser handler.</li>
+</ul><p><strong>Note</strong> Existing projects work as they are: the app creates the new sample metadata tables and columns the first time it opens a project. <a href="https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html"><code>MitoPilot::backwards_compatibility()</code></a> adds them too and moves the <code>container</code> line in <code>.config</code> to <code>macguigand/mitopilot:1.5.7</code>.</p>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/Smithsonian/MitoPilot/compare/1.5.6" class="external-link uri">https://github.com/Smithsonian/MitoPilot/compare/1.5.6</a>…1.5.7</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.5.6" id="mitopilot-156">MitoPilot 1.5.6<a class="anchor" aria-label="anchor" href="#mitopilot-156"></a></h2>
 <p>Released 2026-09-23. Container: <code>macguigand/mitopilot:1.5.6</code></p>
