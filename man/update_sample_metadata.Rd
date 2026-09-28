@@ -45,9 +45,10 @@ BioSample or SRA accessions (optional). May be the same column as
 value (default TRUE). Set FALSE when offline and run
 [fetch_biosample()] later.}
 
-\item{link_sources}{Follow links between GEOME, GBIF, and NCBI records to
-fill in IDs a sample does not have yet (default FALSE). Saved as the project
-setting. See `vignette("Specimen-Metadata")`.}
+\item{link_sources}{Follow links between GEOME, GBIF, and NCBI records for
+these samples (default FALSE). Linking also runs when the project setting
+is on; this argument does not change the setting. See
+`vignette("Specimen-Metadata")`.}
 }
 \description{
 Update the metadata for an existing project database.

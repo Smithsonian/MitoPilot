@@ -202,3 +202,71 @@ test_that("a link to the record already fetched under another ID form is not a d
   .meta_fetch_into(con, "NCBI", "s1", "SRR1", link = TRUE)
   expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_links WHERE source = 'NCBI'")$n, 0L)
 })
+
+test_that("update_sample_metadata makes a CSV-supplied ID the user's and keeps linked IDs on blanks", {
+  dir <- withr::local_tempdir()
+  m <- data.frame(ID = c("s1", "s2"), Taxon = "x", R1 = "a", R2 = "b", BioSample = c("", ""))
+  utils::write.csv(m, file.path(dir, "m.csv"), row.names = FALSE)
+  suppressMessages(new_db(db_path = file.path(dir, ".sqlite"), mapping_fn = file.path(dir, "m.csv"),
+                          fetch_biosample = FALSE))
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(dir, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "UPDATE samples SET BioSample = 'SAMN1' WHERE ID IN ('s1', 's2')")
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s1', 'NCBI', 'SAMN1', 'GEOME Tissue sequencing record', NULL)")
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s2', 'NCBI', 'SAMN1', 'GEOME Tissue sequencing record', NULL)")
+  m$BioSample <- c("SAMN1", "")
+  utils::write.csv(m[c("ID", "Taxon", "BioSample")], file.path(dir, "m2.csv"), row.names = FALSE)
+  suppressMessages(update_sample_metadata(dir, file.path(dir, "m2.csv"), fetch_biosample = FALSE))
+  expect_equal(DBI::dbGetQuery(con, "SELECT ID FROM meta_links ORDER BY ID")$ID, "s2")
+  expect_equal(DBI::dbGetQuery(con, "SELECT BioSample FROM samples ORDER BY ID")$BioSample, c("SAMN1", "SAMN1"))
+  .meta_remove(con)
+  expect_equal(DBI::dbGetQuery(con, "SELECT BioSample FROM samples ORDER BY ID")$BioSample, c("SAMN1", NA))
+})
+
+test_that("voucher search checks the museum, the total hit count, and odd vouchers", {
+  local_mocked_bindings(.gbif_get = function(path) {
+    if (grepl("occurrenceID=157636", path, fixed = TRUE)) {
+      return(list(count = 1, results = list(c(gocc(9, "Psychrolutes paradoxus", "X"), institutionCode = "KAUM"))))
+    }
+    list(count = 0, results = list())
+  })
+  expect_null(.gbif_find_voucher("UW:157636", "Psychrolutes paradoxus"))
+  local_mocked_bindings(.gbif_get = function(path) {
+    list(count = 120, results = list(c(gocc(5, "Psychrolutes paradoxus", "F"), institutionCode = "UW")))
+  })
+  expect_match(.gbif_find_voucher("UW:157636", "Psychrolutes paradoxus")$note, "too many GBIF matches")
+  n <- 0
+  local_mocked_bindings(.gbif_get = function(path) { n <<- n + 1; list(count = 0, results = list()) })
+  expect_null(.gbif_find_voucher("http://arctos.database.museum/guid/MVZ:Mamm:1", "x y"))
+  expect_equal(n, 0)
+  seen <- character()
+  local_mocked_bindings(.gbif_get = function(path) {
+    seen <<- c(seen, path)
+    list(count = 1, results = list(c(gocc(7, "Aus bus", "Fish"), institutionCode = "MCZ")))
+  })
+  expect_equal(.gbif_find_voucher("MCZ::123", "Aus bus")$ref, "7")
+})
+
+test_that("linking skips costly lookups for databases the sample already has", {
+  con <- link_con()
+  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/21547/T1', GBIF_ID = '77'")
+  n <- new.env()
+  local_mocked_bindings(
+    .gbif_get = function(...) { n$gbif <- (n$gbif %||% 0) + 1; list(count = 0, results = list()) },
+    .geome_get = function(...) { n$geome <- (n$geome %||% 0) + 1; list(children = list()) })
+  r <- data.frame(level = c("Tissue", "Sample"), depth = 0:1, ref = "ark:/21547/T1",
+                  field = c("bcid", "genbankSpecimenVoucher"), value = c("ark:/21547/T1", "UW:1"))
+  .meta_link_candidates("GEOME", r, "x", want = character())
+  expect_null(n$gbif)
+  expect_null(n$geome)
+})
+
+test_that("old link notes clear when linking runs again", {
+  con <- link_con()
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s1', 'GBIF', NULL, NULL, 'old note')")
+  calls <- new.env()
+  local_mocked_bindings(!!!mock_chains(calls))
+  .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
+  expect_false("old note" %in% DBI::dbGetQuery(con, "SELECT note FROM meta_links")$note)
+})

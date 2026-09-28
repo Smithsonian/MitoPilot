@@ -506,8 +506,14 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
         withProgress(message = "Fetching specimen records", value = 0, {
           for (i in seq_len(nrow(jobs))) {
             suppressWarnings(.meta_fetch_into(con, jobs$source[i], jobs$ID[i], jobs$ref[i],
-                                              caches[[jobs$source[i]]], link = .meta_link_enabled(con)))
+                                              caches[[jobs$source[i]]]))
             incProgress(1 / nrow(jobs), detail = paste(jobs$ID[i], jobs$source[i]))
+          }
+          if (.meta_link_enabled(con)) {
+            for (id in unique(jobs$ID)) {
+              incProgress(0, detail = paste(id, "following links"))
+              tryCatch(.meta_link_sample(con, id, caches), error = function(e) NULL)
+            }
           }
         })
         bump()

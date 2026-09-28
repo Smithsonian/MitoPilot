@@ -214,6 +214,18 @@ META_SOURCES <- list(
     } else {
       rep(NA_character_, length(new))
     }
+    ln <- DBI::dbGetQuery(con, "SELECT ID, ref FROM meta_links WHERE source = ? AND ref IS NOT NULL",
+                          params = list(src))
+    lref <- ln$ref[match(mapping$ID, ln$ID)]
+    kept <- is.na(new) & !is.na(lref) & !is.na(prev) & prev == lref
+    for (i in which(kept)) {
+      DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = ? WHERE ID = ?"),
+                     params = list(prev[i], mapping$ID[i]))
+    }
+    new[kept] <- prev[kept]
+    for (id in mapping$ID[!is.na(new) & !kept]) {
+      DBI::dbExecute(con, "DELETE FROM meta_links WHERE ID = ? AND source = ?", params = list(id, src))
+    }
     changed <- xor(is.na(new), is.na(prev)) | (!is.na(new) & !is.na(prev) & new != prev)
     if (any(changed)) .meta_drop(con, src, mapping$ID[changed])
     refetch <- changed & !is.na(new)

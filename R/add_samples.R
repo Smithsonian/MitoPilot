@@ -27,9 +27,10 @@
 #' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
 #'   value (default TRUE). Set FALSE when offline and run
 #'   [fetch_biosample()] later.
-#' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
-#'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
-#'   setting. See `vignette("Specimen-Metadata")`.
+#' @param link_sources Follow links between GEOME, GBIF, and NCBI records for
+#'   these samples (default FALSE). Linking also runs when the project setting
+#'   is on; this argument does not change the setting. See
+#'   `vignette("Specimen-Metadata")`.
 #'
 #' @export
 #'

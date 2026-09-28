@@ -17,20 +17,29 @@
 }
 
 .gbif_find_voucher <- function(voucher, taxon) {
+  if (grepl("^[a-z]+://", voucher, ignore.case = TRUE)) return(NULL)
   p <- trimws(strsplit(voucher, ":", fixed = TRUE)[[1]])
   if (length(p) < 2 || !nzchar(p[1]) || !nzchar(p[length(p)])) return(NULL)
   inst <- p[1]
   cat <- p[length(p)]
-  coll <- if (length(p) >= 3) p[2] else NA_character_
+  coll <- if (length(p) >= 3 && nzchar(p[2])) p[2] else NA_character_
   want <- .link_species(taxon)
   genus_only <- !grepl(" ", want, fixed = TRUE)
   enc <- function(x) utils::URLencode(x, reserved = TRUE)
   queries <- c(paste0("occurrenceID=", enc(cat)),
                paste0("catalogNumber=", enc(paste(inst, cat))),
                paste0("catalogNumber=", enc(cat), "&institutionCode=", enc(inst)))
-  for (q in queries) {
-    res <- tryCatch(.gbif_get(paste0("occurrence/search?limit=50&", q))$results, error = function(e) NULL)
+  for (qi in seq_along(queries)) {
+    got <- tryCatch(.gbif_get(paste0("occurrence/search?limit=50&", queries[qi])), error = function(e) NULL)
+    res <- got$results
     if (!length(res)) next
+    if ((got$count %||% 0) > length(res)) {
+      return(list(note = paste0("too many GBIF matches for ", voucher, "; not linked")))
+    }
+    if (qi == 1L) {
+      res <- res[tolower(vapply(res, function(r) r$institutionCode %||% "", "")) == tolower(inst)]
+      if (!length(res)) next
+    }
     sp <- vapply(res, function(r) .link_species(r$scientificName %||% ""), "")
     keep <- if (genus_only) sub(" .*", "", sp) == want else sp == want
     if (!is.na(coll)) {
@@ -55,7 +64,7 @@
   NA_character_
 }
 
-.meta_link_candidates <- function(source, recs, taxon, cache = new.env()) {
+.meta_link_candidates <- function(source, recs, taxon, cache = new.env(), want = names(META_SOURCES)) {
   out <- list()
   lab <- function(hit) paste(source, hit$level, hit$field)
   ezid <- "ark:/65665/3[0-9a-fA-F-]+"
@@ -71,15 +80,16 @@
     h <- .link_first(recs, "bcid", geome, "BioSample")
     if (!is.null(h)) out$GEOME <- list(ref = h$value, via = lab(h))
     h <- .link_first(recs, c("voucherURI", "catalogNumber"), ezid, "BioSample")
-    out$GBIF <- if (!is.null(h)) list(ref = h$value, via = lab(h)) else
+    out$GBIF <- if (!is.null(h)) list(ref = h$value, via = lab(h)) else if ("GBIF" %in% want)
       voucher_link(c("specimen_voucher", "genbankSpecimenVoucher"), "BioSample")
   }
   if (source == "GEOME" && nrow(recs)) {
     t <- recs[recs$depth == min(recs$depth), , drop = FALSE]
-    bs <- tryCatch(.geome_fastq_biosample(t$ref[1]), error = function(e) NA_character_)
+    bs <- if (!"NCBI" %in% want) NA_character_ else
+      tryCatch(.geome_fastq_biosample(t$ref[1]), error = function(e) NA_character_)
     if (!is.na(bs)) out$NCBI <- list(ref = bs, via = paste("GEOME", t$level[1], "sequencing record"))
     h <- .link_first(recs, c("voucherURI", "catalogNumber"), ezid)
-    out$GBIF <- if (!is.null(h)) list(ref = h$value, via = lab(h)) else
+    out$GBIF <- if (!is.null(h)) list(ref = h$value, via = lab(h)) else if ("GBIF" %in% want)
       voucher_link(c("genbankSpecimenVoucher", "materialSampleID"))
   }
   if (source == "GBIF") {
@@ -95,6 +105,13 @@
 .meta_link_sample <- function(con, id, caches = lapply(META_SOURCES, function(x) new.env())) {
   done <- character()
   taxon <- DBI::dbGetQuery(con, "SELECT Taxon FROM samples WHERE ID = ?", params = list(id))$Taxon[1]
+  DBI::dbExecute(con, "DELETE FROM meta_links WHERE ID = ? AND ref IS NULL", params = list(id))
+  empty <- function() {
+    s <- DBI::dbGetQuery(con, paste0("SELECT ", paste(vapply(META_SOURCES, function(x) x$col, ""),
+                                                      collapse = ", "), " FROM samples WHERE ID = ?"),
+                         params = list(id))
+    names(META_SOURCES)[is.na(unlist(s[1, ]))]
+  }
   for (pass in 1:2) {
     ok <- DBI::dbGetQuery(con, "SELECT source FROM meta_status WHERE ID = ? AND status = 'ok'",
                           params = list(id))$source
@@ -104,7 +121,8 @@
       done <- c(done, src)
       recs <- DBI::dbGetQuery(con, "SELECT level, depth, ref, field, value FROM meta_records
                                     WHERE ID = ? AND source = ?", params = list(id, src))
-      cands <- tryCatch(.meta_link_candidates(src, recs, taxon, caches[[src]]), error = function(e) list())
+      cands <- tryCatch(.meta_link_candidates(src, recs, taxon, caches[[src]], want = empty()),
+                        error = function(e) list())
       for (tgt in names(cands)) {
         cand <- cands[[tgt]]
         col <- META_SOURCES[[tgt]]$col
