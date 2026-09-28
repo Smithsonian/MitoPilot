@@ -2,7 +2,7 @@
 % Please edit documentation in R/specimen_reconcile.R
 \name{set_metadata_columns}
 \alias{set_metadata_columns}
-\title{Choose which mapping-file columns are compared with GEOME and GBIF}
+\title{Choose which mapping-file columns are compared with GEOME, GBIF, and NCBI}
 \usage{
 set_metadata_columns(path = ".", ...)
 }
@@ -22,7 +22,7 @@ Invisibly, a data frame of each concept and the column(s) now used
 \description{
 MitoPilot compares specimen details (coordinates, collection date, country,
 locality, voucher, collector, sex, and life stage) between your mapping file,
-GEOME, and GBIF, and flags disagreements. It finds the mapping-file columns
+GEOME, GBIF, and NCBI, and flags disagreements. It finds the mapping-file columns
 by name; use this function when a column has a name it does not recognize,
 or to stop comparing one. The Taxon column is always compared.
 }
