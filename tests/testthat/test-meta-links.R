@@ -270,3 +270,23 @@ test_that("old link notes clear when linking runs again", {
   .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
   expect_false("old note" %in% DBI::dbGetQuery(con, "SELECT note FROM meta_links")$note)
 })
+
+test_that("a numeric gbifID and the EZID of the same GBIF record are not a disagreement", {
+  con <- link_con()
+  DBI::dbExecute(con, "UPDATE samples SET GBIF_ID = '1321689872'")
+  DBI::dbAppendTable(con, "meta_records", data.frame(
+    ID = "s1", source = "GBIF", level = "Occurrence", depth = 0L, ref = "1321689872",
+    field = "occurrenceID", value = paste0("http://n2t.net/", ezid)))
+  DBI::dbAppendTable(con, "meta_status", data.frame(ID = "s1", source = "GBIF", ref = "1321689872",
+                                                    status = "ok", message = NA_character_, fetched_at = 1L))
+  calls <- new.env()
+  m <- mock_chains(calls)
+  m$.ncbi_fetch_chain <- function(ref, cache) {
+    data.frame(level = "BioSample", depth = 1L, ref = "SAMN1", field = "voucherURI",
+               value = paste0("http://n2t.net/", ezid))
+  }
+  local_mocked_bindings(!!!m)
+  .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_links WHERE source = 'GBIF'")$n, 0L)
+  expect_equal(DBI::dbGetQuery(con, "SELECT GBIF_ID FROM samples")$GBIF_ID, "1321689872")
+})

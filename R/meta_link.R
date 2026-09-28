@@ -102,6 +102,14 @@
   Filter(Negate(is.null), out)
 }
 
+# The found ID names a record already fetched for the sample: one of its refs, or
+# an ID in its fields (a GBIF occurrenceID holding the EZID of a numeric gbifID)
+.meta_link_same <- function(con, id, tgt, ref) {
+  r <- DBI::dbGetQuery(con, "SELECT ref, value FROM meta_records WHERE ID = ? AND source = ?",
+                       params = list(id, tgt))
+  ref %in% r$ref || ref %in% META_SOURCES[[tgt]]$normalize(r$value)
+}
+
 .meta_link_sample <- function(con, id, caches = lapply(META_SOURCES, function(x) new.env())) {
   done <- character()
   taxon <- DBI::dbGetQuery(con, "SELECT Taxon FROM samples WHERE ID = ?", params = list(id))$Taxon[1]
@@ -145,8 +153,7 @@
           DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, ?, ?, NULL)",
                          params = list(id, tgt, ref, cand$via))
           if (!tgt %in% done) suppressWarnings(.meta_fetch_into(con, tgt, id, ref, caches[[tgt]]))
-        } else if (cur != ref && !linked && !ref %in% DBI::dbGetQuery(con,
-                     "SELECT ref FROM meta_records WHERE ID = ? AND source = ?", params = list(id, tgt))$ref) {
+        } else if (cur != ref && !linked && !.meta_link_same(con, id, tgt, ref)) {
           DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, NULL, NULL, ?)", params = list(
             id, tgt, paste0(src, " record links to ", ref, " (", cand$via, "); kept your ID ", cur)))
         }
