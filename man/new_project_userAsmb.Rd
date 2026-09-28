@@ -12,6 +12,8 @@ new_project_userAsmb(
   fetch_geome = TRUE,
   mapping_gbif = "GBIF_ID",
   fetch_gbif = TRUE,
+  mapping_biosample = "BioSample",
+  fetch_biosample = TRUE,
   data_path = NULL,
   no_raw_data = FALSE,
   assembly_path = "NA",
@@ -60,7 +62,15 @@ IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.
 Passed to `new_db_userAsmb()`.}
 
 \item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID during setup
-(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
+(default TRUE). Set FALSE when offline and run [fetch_gbif()] later.}
+
+\item{mapping_biosample}{Name of the mapping-file column holding NCBI
+BioSample or SRA accessions (optional). May be the same column as
+`mapping_id`. Stored as `BioSample`. See `vignette("Specimen-Metadata")`.}
+
+\item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample
+value during setup (default TRUE). Set FALSE when offline and run
+[fetch_biosample()] later.
 Passed to `new_db_userAsmb()`.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be

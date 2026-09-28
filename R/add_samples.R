@@ -21,6 +21,12 @@
 #' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence IDs
 #' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID
 #'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
+#' @param mapping_biosample Name of the mapping-file column holding NCBI
+#'   BioSample or SRA accessions (optional). May be the same column as
+#'   `mapping_id`. Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
+#' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
+#'   value (default TRUE). Set FALSE when offline and run
+#'   [fetch_biosample()] later.
 #'
 #' @export
 #'
@@ -32,7 +38,9 @@ add_samples <- function(
     mapping_geome = "GEOME_BCID",
     fetch_geome = TRUE,
     mapping_gbif = "GBIF_ID",
-    fetch_gbif = TRUE)
+    fetch_gbif = TRUE,
+    mapping_biosample = "BioSample",
+    fetch_biosample = TRUE)
 {
 
   # Check if project directory exists ----
@@ -107,7 +115,7 @@ add_samples <- function(
       )
   }
 
-  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample))
 
   # convert everything to characters
   mapping <- mapping |>
@@ -241,7 +249,7 @@ add_samples <- function(
   # (default curate_opts target + optional override).
   .sync_sample_genetic_codes(con, ids = mapping$ID)
 
-  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif))
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample))
 
   .mtr_warn_missing_refs(con)
 

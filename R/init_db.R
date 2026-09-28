@@ -22,6 +22,12 @@
 #'   IDs (optional). Stored as `GBIF_ID`. See `vignette("Specimen-Metadata")`.
 #' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
+#' @param mapping_biosample Name of the mapping-file column holding NCBI
+#'   BioSample or SRA accessions (optional). May be the same column as
+#'   `mapping_id`. Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
+#' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
+#'   value during setup (default TRUE). Set FALSE when offline and run
+#'   [fetch_biosample()] later.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset (`curate_target`); a number sets an
 #'   override on the default curate_opts set.
@@ -95,6 +101,8 @@ new_db <- function(
     fetch_geome = TRUE,
     mapping_gbif = "GBIF_ID",
     fetch_gbif = TRUE,
+    mapping_biosample = "BioSample",
+    fetch_biosample = TRUE,
     genetic_code = NULL,
     # Default preprocessing options
     dedup = FALSE,
@@ -159,7 +167,8 @@ new_db <- function(
   }
   .report_issues(check_mapping(mapping, mapping_id, mapping_taxon,
                                mapping_geome = mapping_geome,
-                               mapping_gbif = mapping_gbif), "Mapping file")
+                               mapping_gbif = mapping_gbif,
+                               mapping_biosample = mapping_biosample), "Mapping file")
 
   # Validate assembler choice
   if (assembler %nin% c("GetOrganelle", "MitoFinder", "MapToRef")) {
@@ -226,7 +235,7 @@ new_db <- function(
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code
     )
-  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif))
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample))
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},
@@ -869,7 +878,7 @@ new_db <- function(
     );"
   )
 
-  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif))
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample))
 
   .mtr_warn_missing_refs(con)
 

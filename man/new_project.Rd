@@ -12,6 +12,8 @@ new_project(
   fetch_geome = TRUE,
   mapping_gbif = "GBIF_ID",
   fetch_gbif = TRUE,
+  mapping_biosample = "BioSample",
+  fetch_biosample = TRUE,
   data_path = NULL,
   min_depth = 2e+06,
   genetic_code = NULL,
@@ -61,6 +63,16 @@ Passed to `new_db()`.}
 
 \item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID during setup
 (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
+Passed to `new_db()`.}
+
+\item{mapping_biosample}{Name of the mapping-file column holding NCBI
+BioSample or SRA accessions (optional). May be the same column as
+`mapping_id`. Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
+Passed to `new_db()`.}
+
+\item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample
+value during setup (default TRUE). Set FALSE when offline and run
+[fetch_biosample()] later.
 Passed to `new_db()`.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be

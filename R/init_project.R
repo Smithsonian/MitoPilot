@@ -27,6 +27,14 @@
 #' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #'   Passed to `new_db()`.
+#' @param mapping_biosample Name of the mapping-file column holding NCBI
+#'   BioSample or SRA accessions (optional). May be the same column as
+#'   `mapping_id`. Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
+#'   Passed to `new_db()`.
+#' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
+#'   value during setup (default TRUE). Set FALSE when offline and run
+#'   [fetch_biosample()] later.
+#'   Passed to `new_db()`.
 #' @param data_path Path to the directory where the raw data is located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution..
 #' @param min_depth Minimum number of paired sequences after pre-processing to proceed
@@ -69,6 +77,8 @@ new_project <- function(
     fetch_geome = TRUE,
     mapping_gbif = "GBIF_ID",
     fetch_gbif = TRUE,
+    mapping_biosample = "BioSample",
+    fetch_biosample = TRUE,
     data_path = NULL,
     min_depth = 2000000,
     genetic_code = NULL,
@@ -91,6 +101,8 @@ new_project <- function(
   dots$fetch_geome <- fetch_geome
   dots$mapping_gbif <- mapping_gbif
   dots$fetch_gbif <- fetch_gbif
+  dots$mapping_biosample <- mapping_biosample
+  dots$fetch_biosample <- fetch_biosample
   preflight_project(
     path = path, mapping_fn = mapping_fn, mapping_id = mapping_id,
     data_path = data_path, executor = executor, config = config,
@@ -141,6 +153,8 @@ new_project <- function(
     fetch_geome = fetch_geome,
     mapping_gbif = mapping_gbif,
     fetch_gbif = fetch_gbif,
+    mapping_biosample = mapping_biosample,
+    fetch_biosample = fetch_biosample,
     seeds_db = custom_seeds_db,
     labels_db = custom_labels_db,
     ...

@@ -57,4 +57,45 @@ test_that(".meta_take_cols keeps the ID column when it doubles as BioSample", {
   m2 <- data.frame(run = c("SRR1", "SRR2"), ID = c("SRR1", "SRR2"), Taxon = "x")
   out2 <- .meta_take_cols(m2, c(NCBI = "run"))
   expect_equal(out2$BioSample, c("SRR1", "SRR2"))
+  m3 <- data.frame(ID = c("SRR1", "s2"), Taxon = "x")
+  expect_equal(.meta_take_cols(m3, c(NCBI = "ID"))$BioSample, c("SRR1", NA))
+  m4 <- data.frame(ID = c("s1", "s2"), BioSample = c("SRR1", "junk"), Taxon = "x")
+  expect_equal(.meta_take_cols(m4, c(NCBI = "BioSample"))$BioSample, c("SRR1", "junk"))
+})
+
+ncbi_mapping <- function(dir) {
+  m <- data.frame(ID = c("SRR21844202", "s2"), Taxon = "Fundulus majalis",
+                  R1 = c("a_1.fq", "b_1.fq"), R2 = c("a_2.fq", "b_2.fq"))
+  f <- file.path(dir, "mapping.csv")
+  utils::write.csv(m, f, row.names = FALSE)
+  f
+}
+
+test_that("check_mapping validates BioSample values and allows reusing the ID column", {
+  m <- data.frame(ID = c("SRR21844202", "s2"), Taxon = "x", R1 = "a", R2 = "b")
+  iss <- check_mapping(m, mapping_biosample = "ID")
+  expect_match(paste(iss$warnings, collapse = " "), "not BioSample or SRA accessions for s2; no NCBI lookup", fixed = TRUE)
+  expect_false(any(grepl("reserved", iss$errors)))
+  iss2 <- check_mapping(cbind(m, BioSample = "SAMN1"), mapping_biosample = "ID")
+  expect_match(paste(iss2$errors, collapse = " "), "reserved")
+  iss3 <- check_mapping(m, mapping_biosample = "Nope")
+  expect_match(paste(iss3$errors, collapse = " "), "Nope")
+})
+
+test_that("new_db stores BioSample from the ID column and fetches it", {
+  local_mocked_bindings(.ncbi_get = ncbi_fixture_get)
+  d <- withr::local_tempdir()
+  new_db(db_path = file.path(d, ".sqlite"), mapping_fn = ncbi_mapping(d), mapping_biosample = "ID")
+  s <- q(d, "SELECT ID, BioSample FROM samples ORDER BY ID")
+  expect_equal(s$ID, c("SRR21844202", "s2"))
+  expect_equal(s$BioSample, c("SRR21844202", NA))
+  expect_equal(q(d, "SELECT ID, status FROM meta_status WHERE source = 'NCBI'")$status, "ok")
+})
+
+test_that("new_db fetch_biosample = FALSE stores IDs without calling NCBI", {
+  local_mocked_bindings(.ncbi_get = function(...) stop("should not be called"))
+  d <- withr::local_tempdir()
+  new_db(db_path = file.path(d, ".sqlite"), mapping_fn = ncbi_mapping(d), mapping_biosample = "ID",
+         fetch_biosample = FALSE)
+  expect_equal(q(d, "SELECT COUNT(*) n FROM meta_status")$n, 0L)
 })

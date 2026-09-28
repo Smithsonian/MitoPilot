@@ -169,7 +169,10 @@ META_SOURCES <- list(
     col <- cols[[src]]
     std <- META_SOURCES[[src]]$col
     if (col %in% colnames(mapping)) {
-      mapping[[std]] <- .meta_store_value(src, mapping[[col]])
+      is_id <- "ID" %in% colnames(mapping) &&
+        identical(as.character(mapping[[col]]), as.character(mapping$ID))
+      mapping[[std]] <- if (is_id) META_SOURCES[[src]]$normalize(mapping[[col]]) else
+        .meta_store_value(src, mapping[[col]])
       if (col != std && !col %in% c("ID", "Taxon")) mapping[[col]] <- NULL
     }
   }
