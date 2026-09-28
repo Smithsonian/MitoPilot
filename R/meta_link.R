@@ -127,7 +127,8 @@
           DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, ?, ?, NULL)",
                          params = list(id, tgt, ref, cand$via))
           if (!tgt %in% done) suppressWarnings(.meta_fetch_into(con, tgt, id, ref, caches[[tgt]]))
-        } else if (cur != ref && !linked) {
+        } else if (cur != ref && !linked && !ref %in% DBI::dbGetQuery(con,
+                     "SELECT ref FROM meta_records WHERE ID = ? AND source = ?", params = list(id, tgt))$ref) {
           DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, NULL, NULL, ?)", params = list(
             id, tgt, paste0(src, " record links to ", ref, " (", cand$via, "); kept your ID ", cur)))
         }

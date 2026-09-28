@@ -187,3 +187,18 @@ test_that("new_db stores the link switch", {
   on.exit(DBI::dbDisconnect(con))
   expect_true(.meta_link_enabled(con))
 })
+
+test_that("a link to the record already fetched under another ID form is not a disagreement", {
+  con <- link_con()
+  DBI::dbExecute(con, "UPDATE samples SET BioSample = 'SRR1'")
+  calls <- new.env()
+  m <- mock_chains(calls)
+  m$.ncbi_fetch_chain <- function(ref, cache) {
+    data.frame(level = c("SRA", "BioSample"), depth = 0:1, ref = c("SRR1", "SAMN1"),
+               field = c("accession", "bcid"), value = c("SRR1", "https://n2t.net/ark:/21547/T1"))
+  }
+  m$.geome_get <- function(...) list(children = list(list(bioSample = list(accession = "SAMN1"))))
+  do.call(local_mocked_bindings, m)
+  .meta_fetch_into(con, "NCBI", "s1", "SRR1", link = TRUE)
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_links WHERE source = 'NCBI'")$n, 0L)
+})
