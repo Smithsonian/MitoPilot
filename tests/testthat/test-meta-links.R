@@ -122,7 +122,7 @@ mock_chains <- function(calls, geome_err = FALSE) {
 test_that("linking follows NCBI -> GEOME -> GBIF once each and records where IDs came from", {
   con <- link_con()
   calls <- new.env()
-  do.call(local_mocked_bindings, mock_chains(calls))
+  local_mocked_bindings(!!!mock_chains(calls))
   .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
   s <- DBI::dbGetQuery(con, "SELECT GEOME_BCID, GBIF_ID, BioSample FROM samples")
   expect_equal(s$GEOME_BCID, "ark:/21547/T1")
@@ -137,7 +137,7 @@ test_that("linking never overwrites a user ID and leaves a note instead", {
   con <- link_con()
   DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/21547/MINE'")
   calls <- new.env()
-  do.call(local_mocked_bindings, mock_chains(calls))
+  local_mocked_bindings(!!!mock_chains(calls))
   .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
   expect_equal(DBI::dbGetQuery(con, "SELECT GEOME_BCID FROM samples")$GEOME_BCID, "ark:/21547/MINE")
   n <- DBI::dbGetQuery(con, "SELECT ref, note FROM meta_links WHERE source = 'GEOME'")
@@ -149,7 +149,7 @@ test_that("linking never overwrites a user ID and leaves a note instead", {
 test_that("a failing linked fetch does not fail the original fetch", {
   con <- link_con()
   calls <- new.env()
-  do.call(local_mocked_bindings, mock_chains(calls, geome_err = TRUE))
+  local_mocked_bindings(!!!mock_chains(calls, geome_err = TRUE))
   res <- .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
   expect_equal(res$status, "ok")
   st <- DBI::dbGetQuery(con, "SELECT source, status FROM meta_status ORDER BY source")
@@ -160,7 +160,7 @@ test_that("a failing linked fetch does not fail the original fetch", {
 test_that("no linking unless asked; fetch_* follow the project switch", {
   con <- link_con()
   calls <- new.env()
-  do.call(local_mocked_bindings, mock_chains(calls))
+  local_mocked_bindings(!!!mock_chains(calls))
   .meta_fetch_into(con, "NCBI", "s1", "SAMN1")
   expect_null(calls$GEOME)
   dir <- withr::local_tempdir()
@@ -184,7 +184,7 @@ test_that("new_db stores the link switch", {
   suppressWarnings(new_db(db_path = file.path(d, ".sqlite"), mapping_fn = file.path(d, "mapping.csv"),
                           mapping_biosample = "ID", link_sources = TRUE))
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
-  on.exit(DBI::dbDisconnect(con))
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_true(.meta_link_enabled(con))
 })
 
@@ -198,7 +198,7 @@ test_that("a link to the record already fetched under another ID form is not a d
                field = c("accession", "bcid"), value = c("SRR1", "https://n2t.net/ark:/21547/T1"))
   }
   m$.geome_get <- function(...) list(children = list(list(bioSample = list(accession = "SAMN1"))))
-  do.call(local_mocked_bindings, m)
+  local_mocked_bindings(!!!m)
   .meta_fetch_into(con, "NCBI", "s1", "SRR1", link = TRUE)
   expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_links WHERE source = 'NCBI'")$n, 0L)
 })
