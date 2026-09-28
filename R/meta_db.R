@@ -14,6 +14,7 @@ META_SOURCES <- list(
   NCBI = list(
     col = "BioSample", label = "NCBI", id_label = "BioSample or SRA accession", arg = "biosamples",
     normalize = function(x) ncbi_normalize_id(x),
+    normalize_id = function(x) ncbi_normalize_id(x, strict = TRUE),
     invalid = function(x) paste0("'", x, "' is not a BioSample or SRA accession (expected SAMN..., SRR..., or digits)"),
     chain = function(ref, cache) .ncbi_fetch_chain(ref, cache)
   )
@@ -164,18 +165,21 @@ META_SOURCES <- list(
   .meta_fetch_into(con, source, target$ID, target$ref)
 }
 
-.meta_take_cols <- function(mapping, cols) {
+.meta_take_cols <- function(mapping, cols, keep = character()) {
+  used <- character()
   for (src in names(cols)) {
     col <- cols[[src]]
     std <- META_SOURCES[[src]]$col
     if (col %in% colnames(mapping)) {
       is_id <- "ID" %in% colnames(mapping) &&
         identical(as.character(mapping[[col]]), as.character(mapping$ID))
-      mapping[[std]] <- if (is_id) META_SOURCES[[src]]$normalize(mapping[[col]]) else
-        .meta_store_value(src, mapping[[col]])
-      if (col != std && !col %in% c("ID", "Taxon")) mapping[[col]] <- NULL
+      norm <- META_SOURCES[[src]]$normalize_id %||% META_SOURCES[[src]]$normalize
+      mapping[[std]] <- if (is_id) norm(mapping[[col]]) else .meta_store_value(src, mapping[[col]])
+      if (col != std) used <- c(used, col)
     }
   }
+  drop <- setdiff(used, c(keep, "ID", "Taxon", vapply(META_SOURCES, function(s) s$col, "")))
+  mapping[drop] <- NULL
   mapping
 }
 

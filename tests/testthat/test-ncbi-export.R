@@ -54,3 +54,15 @@ test_that("BioSample and BioProject chips insert plain tokens, not defline modif
   expect_true("{ncbi_biosample}" %in% ins)
   expect_true("[lat_lon={ncbi_lat_lon}]" %in% ins)
 })
+
+test_that("missing text in either part of geo_loc_name is blank", {
+  r <- bs_recs(geo_loc_name = "USA: missing")
+  expect_equal(.ncbi_concept_value("country", r), "USA")
+  expect_true(is.na(.ncbi_concept_value("locality", r)))
+})
+
+test_that("more BioSample placeholders count as missing", {
+  for (v in c("Not Recorded", "not available", "unspecified")) {
+    expect_true(is.na(NCBI_COMBOS$sex$fn(bs_recs(sex = v))), info = v)
+  }
+})

@@ -23,7 +23,7 @@ fetch_biosample <- function(path = ".", ids = NULL, biosamples = NULL, from_id =
     .meta_ensure_tables(con)
     s <- DBI::dbGetQuery(con, "SELECT ID FROM samples")$ID
     s <- if (is.null(ids)) s else intersect(s, ids)
-    ok <- !is.na(ncbi_normalize_id(s))
+    ok <- !is.na(ncbi_normalize_id(s, strict = TRUE))
     for (id in s[ok]) .meta_set_ref(con, "NCBI", id, id)
     if (any(!ok)) message("Sample ID is not a BioSample or SRA accession, skipped: ", .lst(s[!ok]))
     ids <- s[ok]

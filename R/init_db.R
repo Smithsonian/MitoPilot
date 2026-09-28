@@ -235,7 +235,8 @@ new_db <- function(
       Taxon = .data[[mapping_taxon]],
       genetic_code = resolved_genetic_code
     )
-  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample))
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample),
+                              keep = c(mapping_id, mapping_taxon))
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},

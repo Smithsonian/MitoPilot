@@ -6,14 +6,17 @@ NCBI_EUTILS <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 #' @param x Vector of BioSample accessions (SAMN, SAMEA, SAMD), BioSample
 #'   numbers, SRA accessions (SRR/ERR/DRR runs, SRX experiments, SRS samples),
 #'   or ncbi.nlm.nih.gov biosample / sra links.
+#' @param strict Reject bare BioSample numbers, for values that are really
+#'   sample IDs (a sample ID `12345` is not a BioSample).
 #' @return Character vector of upper-case IDs, NA where the input is blank or
 #'   not a BioSample or SRA ID.
 #' @export
-ncbi_normalize_id <- function(x) {
+ncbi_normalize_id <- function(x, strict = FALSE) {
   x <- toupper(trimws(.meta_chr(x)))
   x <- sub("^HTTPS?://(WWW\\.)?NCBI\\.NLM\\.NIH\\.GOV/(BIOSAMPLE|SRA)/", "", x)
   x <- sub("/+$", "", x)
-  ok <- !is.na(x) & grepl("^(SAM(N|EA|D)[0-9]+|[0-9]+|[SED]R[RXS][0-9]+)$", x)
+  ok <- !is.na(x) & grepl(if (strict) "^(SAM(N|EA|D)[0-9]+|[SED]R[RXS][0-9]+)$" else
+    "^(SAM(N|EA|D)[0-9]+|[0-9]+|[SED]R[RXS][0-9]+)$", x)
   ifelse(ok, x, NA_character_)
 }
 

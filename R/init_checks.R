@@ -286,7 +286,7 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
   if (mapping_biosample %in% cols) {
     raw <- trimws(.meta_chr(mapping[[mapping_biosample]]))
     raw[is.na(raw)] <- ""
-    bad <- nzchar(raw) & is.na(ncbi_normalize_id(raw))
+    bad <- nzchar(raw) & is.na(ncbi_normalize_id(raw, strict = mapping_biosample == mapping_id))
     if (any(bad) && mapping_biosample == mapping_id) {
       iss$warn("mapping BioSample: sample IDs are not BioSample or SRA accessions for ",
                .lst(lab[bad]), "; no NCBI lookup for these samples")

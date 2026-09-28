@@ -218,7 +218,8 @@ new_db_userAsmb <- function(
       assembly = .data[["Assembly"]]
     ) |>
     dplyr::select(-dplyr::any_of("Topology"), -Assembly)
-  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample))
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample),
+                              keep = c(mapping_id, mapping_taxon))
   glue::glue_sql(
     "CREATE TABLE samples (
      {cols*},

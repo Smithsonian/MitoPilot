@@ -62,7 +62,8 @@ update_sample_metadata <- function(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]]
     )
-  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample))
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample),
+                              keep = c(mapping_id, mapping_taxon))
   # convert everything to characters
   mapping <- mapping |>
     dplyr::mutate(dplyr::across(dplyr::everything(), as.character))

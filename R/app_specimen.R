@@ -432,7 +432,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
     observeEvent(input$ncbi_fetch, fetch_one("NCBI"))
     observeEvent(input$ncbi_use_id, {
       req(rv$id)
-      if (is.na(ncbi_normalize_id(rv$id))) {
+      if (is.na(ncbi_normalize_id(rv$id, strict = TRUE))) {
         return(showNotification(paste0("'", rv$id, "' is not a BioSample or SRA accession"), type = "error"))
       }
       updateTextInput(session, "ncbi_ref", value = rv$id)

@@ -111,3 +111,29 @@ test_that("the NCBI reachability check uses a real request, not HEAD", {
   .check_ncbi_reachable(iss)
   expect_match(iss$warnings, "NCBI: not reachable right now", fixed = TRUE)
 })
+
+test_that("plain-number sample IDs are never used as BioSample numbers", {
+  expect_equal(ncbi_normalize_id(c("12345", "SRR1", "SAMN1"), strict = TRUE), c(NA, "SRR1", "SAMN1"))
+  m <- data.frame(ID = c("12345", "SRR1"), Taxon = "x")
+  expect_equal(.meta_take_cols(m, c(NCBI = "ID"))$BioSample, c(NA, "SRR1"))
+  iss <- check_mapping(data.frame(ID = c("12345", "SRR1"), Taxon = "x", R1 = "a", R2 = "b"),
+                       mapping_biosample = "ID")
+  expect_match(paste(iss$warnings, collapse = " "), "accessions for 12345", fixed = TRUE)
+  local_mocked_bindings(.ncbi_get = function(...) stop("should not be called"))
+  dir <- ncbi_proj(ids = c("12345", "s2"))
+  expect_message(res <- fetch_biosample(dir, from_id = TRUE), "12345")
+  expect_equal(nrow(res), 0L)
+})
+
+test_that(".meta_take_cols keeps a renamed ID column and shared source columns", {
+  m <- data.frame(SampleID = c("SRR1", "SRR2"), Taxon = "x")
+  m$ID <- m$SampleID
+  out <- .meta_take_cols(m, c(NCBI = "SampleID"), keep = "SampleID")
+  expect_true("SampleID" %in% names(out))
+  expect_equal(out$BioSample, c("SRR1", "SRR2"))
+  m2 <- data.frame(ID = "s1", Taxon = "x", Acc = "123")
+  out2 <- .meta_take_cols(m2, c(GBIF = "Acc", NCBI = "Acc"))
+  expect_equal(out2$GBIF_ID, "123")
+  expect_equal(out2$BioSample, "123")
+  expect_false("Acc" %in% names(out2))
+})

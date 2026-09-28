@@ -1,10 +1,13 @@
 .NCBI_MISSING <- c("missing", "not collected", "not applicable", "not provided",
-                   "restricted access", "unknown", "na", "n/a", "none", "-")
+                   "restricted access", "unknown", "na", "n/a", "none", "-",
+                   "not recorded", "not available", "unspecified")
+
+.ncbi_blank <- function(v) {
+  if (is.na(v) || tolower(trimws(sub(":.*", "", v))) %in% .NCBI_MISSING) NA_character_ else trimws(v)
+}
 
 .ncbi_val <- function(recs, field, level = "BioSample") {
-  v <- .geome_pick(recs[recs$level == level, , drop = FALSE], field)
-  if (is.na(v)) return(v)
-  if (tolower(trimws(sub(":.*", "", v))) %in% .NCBI_MISSING) NA_character_ else trimws(v)
+  .ncbi_blank(.geome_pick(recs[recs$level == level, , drop = FALSE], field))
 }
 
 .ncbi_passthrough <- function(field, lower = FALSE) {
@@ -51,9 +54,9 @@ NCBI_COMBOS <- list(
   switch(concept,
     coordinates = NCBI_COMBOS$lat_lon$fn(recs),
     collection_date = NCBI_COMBOS$collection_date$fn(recs),
-    country = if (is.na(geo)) NA_character_ else trimws(sub(":.*", "", geo)),
+    country = if (is.na(geo)) NA_character_ else .ncbi_blank(sub(":.*", "", geo)),
     locality = if (is.na(geo) || !grepl(":", geo, fixed = TRUE)) NA_character_ else
-      trimws(sub("^[^:]*:", "", geo)),
+      .ncbi_blank(sub("^[^:]*:", "", geo)),
     voucher = NCBI_COMBOS$specimen_voucher$fn(recs),
     collector = NCBI_COMBOS$collected_by$fn(recs),
     sex = NCBI_COMBOS$sex$fn(recs),
