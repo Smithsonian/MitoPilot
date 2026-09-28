@@ -1,5 +1,5 @@
 .meta_combos <- function(prefix) {
-  switch(tolower(prefix), geome = GEOME_COMBOS, gbif = GBIF_COMBOS, NULL)
+  switch(tolower(prefix), geome = GEOME_COMBOS, gbif = GBIF_COMBOS, ncbi = NCBI_COMBOS, NULL)
 }
 
 .meta_ymd <- function(y, m, d) {

@@ -12,10 +12,10 @@ tok_data <- function() {
 }
 tok_cols <- c("ID", "Taxon", "genetic_code", "R1", "R2", "site", "GEOME_BCID", "GBIF_ID")
 
-test_that("export_token_groups sorts columns into the six groups", {
+test_that("export_token_groups sorts columns into the seven groups", {
   g <- export_token_groups(tok_data(), tok_cols,
                            c("geome:combo:lat_lon", "gbif:raw:Occurrence:countryCode"))
-  expect_equal(names(g), c("Basics", "Your mapfile columns", "GEOME", "GBIF",
+  expect_equal(names(g), c("Basics", "Your mapfile columns", "GEOME", "GBIF", "NCBI",
                            "Reference (BLAST)", "Assembly and annotation"))
   expect_equal(g$Basics$tokens$token,
                c("seqid", "ID", "Taxon", "genetic_code", "topology", "completeness", "path", "scaffold"))
@@ -29,7 +29,7 @@ test_that("export_token_groups sorts columns into the six groups", {
   expect_equal(g$`Reference (BLAST)`$tokens$token, "blast_accession")
   expect_equal(g$`Assembly and annotation`$tokens$token, "length")
   expect_equal(unname(vapply(g, function(x) x$open, logical(1))),
-               c(TRUE, TRUE, TRUE, TRUE, FALSE, FALSE))
+               c(TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE))
   listed <- unlist(lapply(g, function(x) x$tokens$token))
   expect_false(any(c("annotate_switch", "blast_accession_auto", "poor_blast_ref", "export_time_stamp",
                      "export_group", "specimen", "specimen_message", "specimen_icons", "R1", "R2") %in% listed))
