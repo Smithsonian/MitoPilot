@@ -49,8 +49,8 @@ RULESET_MAP <- list(
 #' NCBI lineages are cached locally so repeat calls work offline.
 #'
 #' @param output_file Path for the generated HTML file. Default is a temporary
-#'   file. The file is fully self-contained (no external dependencies) and can be
-#'   shared or embedded in documentation.
+#'   file. The file is self-contained apart from clade images, which load from
+#'   Wikimedia Commons, and can be shared or embedded in documentation.
 #' @param open Logical, open the result in a browser when done? Default is
 #'   \code{interactive()}.
 #' @param refresh_cache Logical, ignore any cached NCBI lineages and re-fetch?
@@ -96,6 +96,16 @@ ruleset_browser <- function(output_file = tempfile(fileext = ".html"),
     }),
     names(ruleset_map)
   )
+
+  # Attach Wikimedia Commons image + attribution per clade ----
+  imgs <- utils::read.csv(
+    system.file("extdata", "ruleset_images.csv", package = "MitoPilot"),
+    stringsAsFactors = FALSE, fileEncoding = "UTF-8"
+  )
+  for (tgt in names(rules_data)) {
+    hit <- imgs[imgs$ncbi == ruleset_map[[tgt]]$ncbi, , drop = FALSE]
+    if (nrow(hit) == 1) rules_data[[tgt]]$image <- as.list(hit)
+  }
 
   # Fetch NCBI lineages (cached) ----
   message("Fetching NCBI taxonomy lineages...")
@@ -459,7 +469,8 @@ build_ruleset_html <- function(tree, rules_data) {
     "@TRIRIGHT@" = intToUtf8(0x25b8),  # right-pointing triangle (collapsed)
     "@ELLIPSIS@" = intToUtf8(0x2026),  # horizontal ellipsis
     "@EMDASH@"   = intToUtf8(0x2014),  # em dash
-    "@MIDDOT@"   = intToUtf8(0x00b7)   # middle dot
+    "@MIDDOT@"   = intToUtf8(0x00b7),  # middle dot
+    "@MENU@"     = intToUtf8(0x2630)   # trigram (menu)
   )
   for (tok in names(glyphs)) {
     template <- gsub(tok, glyphs[[tok]], template, fixed = TRUE)
@@ -579,14 +590,29 @@ ruleset_html_template <- function() {
     cursor: help; position: relative; vertical-align: middle; flex: none;
   }
   .help:hover { background: var(--accent); }
-  .help:hover::after {
-    content: attr(data-tip); position: absolute; top: 150%; left: 0;
-    z-index: 20; width: 260px; padding: 8px 10px; border-radius: 6px;
-    background: #243137; color: #fff; font-size: 12px; font-weight: 400;
-    line-height: 1.4; text-align: left; text-transform: none; letter-spacing: 0;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.22); pointer-events: none; white-space: normal;
+  .tip {
+    display: none; position: fixed; z-index: 50; max-width: 280px; padding: 8px 10px;
+    border-radius: 6px; background: #243137; color: #fff; font-size: 12px;
+    line-height: 1.4; box-shadow: 0 4px 14px rgba(0,0,0,0.22); pointer-events: none;
   }
-  th .help:hover::after { left: auto; right: 0; }
+  .detail-head { display: flex; gap: 24px; align-items: flex-start; }
+  .detail-info { flex: 1 1 auto; min-width: 0; }
+  figure.clade-img { display: table; margin: 0 0 18px; flex: none; max-width: 280px; }
+  figure.clade-img img {
+    display: block; max-width: 100%; max-height: 240px; border-radius: 8px;
+    background: var(--accent-soft);
+  }
+  figure.clade-img figcaption {
+    display: table-caption; caption-side: bottom; font-size: 11px;
+    color: var(--muted); margin-top: 4px; line-height: 1.4;
+  }
+  figure.clade-img a { color: var(--muted); }
+  .menu-btn {
+    display: none; background: none; border: 1px solid rgba(255,255,255,0.6);
+    color: #fff; border-radius: 5px; font-size: 16px; padding: 2px 9px; cursor: pointer;
+  }
+  .scrim { display: none; }
+  td .lbl { display: none; }
   .globals { display: flex; gap: 26px; margin: 0 0 22px; }
   .globals .g { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; }
   .globals .g .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -603,14 +629,58 @@ ruleset_html_template <- function() {
   }
   table.rules th { background: var(--accent-soft); font-weight: 600; white-space: nowrap; }
   table.rules td.gene { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-  table.rules td.na { color: #c2cace; }
+  table.rules td.na .val { color: #c2cace; }
   details.defaults { margin-top: 4px; }
+  details.defaults { overflow-x: auto; }
+  details.defaults table.rules { width: auto; }
+  details.defaults table.rules th { white-space: normal; }
+  details.defaults table.rules td.gene { white-space: nowrap; }
   details.defaults summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
   code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  @media (max-width: 760px) {
+    header { padding: 10px 12px; align-items: center; }
+    header .sub { display: none; }
+    .menu-btn { display: inline-block; }
+    .layout { display: block; height: auto; }
+    .pane-divider { display: none; }
+    .pane-tree {
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 30;
+      width: 85vw !important; max-width: 360px;
+      transform: translateX(-100%); visibility: hidden;
+      transition: transform 0.2s, visibility 0.2s;
+      box-shadow: 2px 0 14px rgba(0,0,0,0.2);
+    }
+    body.drawer-open .pane-tree { transform: none; visibility: visible; }
+    body.drawer-open .scrim {
+      display: block; position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,0.35);
+    }
+    .pane-detail { padding: 16px; }
+    .detail-head { flex-wrap: wrap; }
+    figure.clade-img { order: -1; max-width: 100%; }
+    .globals { gap: 10px; flex-wrap: wrap; }
+    .gcode { display: flex; flex-wrap: wrap; }
+    table.rules, table.rules tbody, table.rules tr, table.rules td { display: block; }
+    table.rules { background: none; }
+    table.rules thead { display: none; }
+    table.rules tr {
+      background: #fff; border: 1px solid var(--border); border-radius: 8px;
+      margin-bottom: 10px; overflow: hidden;
+    }
+    table.rules td {
+      border: none; border-top: 1px solid #eef1f3;
+      display: flex; justify-content: space-between; gap: 12px;
+    }
+    table.rules td.gene { background: var(--accent-soft); border-top: none; }
+    td .lbl { display: inline-flex; align-items: center; color: var(--muted); flex: none; }
+    td .val { text-align: right; }
+    table.rules td.na { display: none; }
+  }
 </style>
 </head>
 <body>
 <header>
+  <button class="menu-btn" id="menu-btn" aria-label="Browse clades">@MENU@</button>
   <h1>MitoPilot Curation Rulesets</h1>
   <span class="sub">Taxonomy backbone from NCBI. Select a highlighted clade to view its rules.</span>
 </header>
@@ -623,6 +693,7 @@ ruleset_html_template <- function() {
     </div>
     <ul class="tree" id="tree"></ul>
   </div>
+  <div class="scrim" id="scrim"></div>
   <div class="pane-divider" id="pane-divider"></div>
   <div class="pane-detail" id="detail">
     <div class="placeholder">
@@ -632,7 +703,7 @@ ruleset_html_template <- function() {
       <strong style="color:var(--accent)">blue</strong> with a badge are clickable;
       selecting one displays its curation rules here.</p>
       <p>Use the toggles (@TRIRIGHT@/@TRIDOWN@) to expand and collapse clades, or the filter
-      box to find a taxon.</p>
+      box to find a taxon. On small screens, open the tree with the @MENU@ button.</p>
     </div>
   </div>
 </div>
@@ -706,10 +777,16 @@ function buildTree() {
   root.appendChild(renderNode(TREE_DATA));
 }
 
-function cell(val) {
+function cell(val, key) {
   var td = document.createElement("td");
-  if (val == null) { td.textContent = "@EMDASH@"; td.className = "na"; }
-  else { td.textContent = val; }
+  if (key !== "gene") {
+    var lbl = el("span", "lbl", FIELD_LABELS[key] || key);
+    var icon = helpIcon(key);
+    if (icon) lbl.appendChild(icon);
+    td.appendChild(lbl);
+  }
+  td.appendChild(el("span", "val", val == null ? "@EMDASH@" : val));
+  if (val == null) td.className = "na";
   return td;
 }
 
@@ -729,7 +806,7 @@ function renderTable(group) {
   group.rows.forEach(function (r) {
     var tr = el("tr");
     group.columns.forEach(function (c) {
-      var td = cell(r[c]);
+      var td = cell(r[c], c);
       if (c === "gene") td.className = "gene";
       tr.appendChild(td);
     });
@@ -739,7 +816,34 @@ function renderTable(group) {
   return table;
 }
 
+function extLink(href, txt) {
+  var a = document.createElement("a");
+  a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = txt;
+  return a;
+}
+
+function renderImage(img, label) {
+  var fig = el("figure", "clade-img");
+  var a = extLink(img.file_url, "");
+  var im = document.createElement("img");
+  im.src = img.image_url;
+  im.alt = label;
+  im.loading = "lazy";
+  im.onerror = function () { fig.remove(); };
+  a.appendChild(im);
+  fig.appendChild(a);
+  var cap = el("figcaption", null, "Image: ");
+  cap.appendChild(extLink(img.file_url, img.artist || "Wikimedia Commons"));
+  cap.appendChild(document.createTextNode(", "));
+  if (img.license_url) cap.appendChild(extLink(img.license_url, img.license));
+  else cap.appendChild(document.createTextNode(img.license));
+  cap.appendChild(document.createTextNode(", via Wikimedia Commons"));
+  fig.appendChild(cap);
+  return fig;
+}
+
 function selectRuleset(target, row) {
+  document.body.classList.remove("drawer-open");
   if (selectedRow) selectedRow.classList.remove("selected");
   if (row) { row.classList.add("selected"); selectedRow = row; }
 
@@ -747,7 +851,13 @@ function selectRuleset(target, row) {
   var d = document.getElementById("detail");
   d.innerHTML = "";
 
-  d.appendChild(el("h2", "detail-title", data.label));
+  var head = el("div", "detail-head");
+  var info = el("div", "detail-info");
+  head.appendChild(info);
+  if (data.image) head.appendChild(renderImage(data.image, data.label));
+  d.appendChild(head);
+
+  info.appendChild(el("h2", "detail-title", data.label));
   var sub = el("p", "detail-sub", "Ruleset: " + target + "  @MIDDOT@  NCBI anchor: ");
   var ncbiLink = document.createElement("a");
   ncbiLink.href = "https://www.ncbi.nlm.nih.gov/datasets/taxonomy/" + data.taxid + "/";
@@ -755,7 +865,7 @@ function selectRuleset(target, row) {
   ncbiLink.rel = "noopener";
   ncbiLink.textContent = data.ncbi;
   sub.appendChild(ncbiLink);
-  d.appendChild(sub);
+  info.appendChild(sub);
 
   if (data.genetic_code && data.genetic_code.code != null) {
     var gc = el("div", "gcode");
@@ -769,7 +879,7 @@ function selectRuleset(target, row) {
     link.rel = "noopener";
     link.textContent = data.genetic_code.code + " @EMDASH@ " + data.genetic_code.name;
     gc.appendChild(link);
-    d.appendChild(gc);
+    info.appendChild(gc);
   }
 
   var globals = el("div", "globals");
@@ -782,16 +892,17 @@ function selectRuleset(target, row) {
     g.appendChild(el("div", "v", kv[1] == null ? "@EMDASH@" : kv[1]));
     globals.appendChild(g);
   });
-  d.appendChild(globals);
+  info.appendChild(globals);
 
   // Type defaults: at the top, expanded by default
   if (data.defaults && data.defaults.length) {
     var det = el("details", "defaults");
     det.open = true;
     det.appendChild(el("summary", null, "Type defaults (applied unless overridden per gene)"));
-    var cols = ["gene", "count", "min_len", "max_len", "overlap", "start_codons", "stop_codons", "intron"];
+    var cols = ["gene", "count", "min_len", "max_len", "overlap", "start_codons", "stop_codons", "intron"]
+      .filter(function (c) { return data.defaults.some(function (r) { return r[c] != null; }); });
     det.appendChild(renderTable({ columns: cols, rows: data.defaults }));
-    d.appendChild(det);
+    info.appendChild(det);
   }
 
   // Per-type feature tables, each collapsible (expanded by default)
@@ -839,6 +950,37 @@ function runSearch(q) {
 }
 
 buildTree();
+
+var tipEl = el("div", "tip");
+document.body.appendChild(tipEl);
+function showTip(h) {
+  tipEl.textContent = h.getAttribute("data-tip");
+  tipEl.style.display = "block";
+  var r = h.getBoundingClientRect();
+  var x = Math.min(Math.max(8, r.left), window.innerWidth - tipEl.offsetWidth - 8);
+  var y = r.bottom + 6;
+  if (y + tipEl.offsetHeight > window.innerHeight - 8) y = r.top - tipEl.offsetHeight - 6;
+  tipEl.style.left = x + "px";
+  tipEl.style.top = y + "px";
+}
+function hideTip() { tipEl.style.display = "none"; }
+document.addEventListener("mouseover", function (e) {
+  var h = e.target.closest(".help");
+  if (h) showTip(h); else hideTip();
+});
+document.addEventListener("click", function (e) {
+  var h = e.target.closest(".help");
+  if (h) showTip(h); else hideTip();
+});
+document.addEventListener("scroll", hideTip, true);
+
+document.getElementById("menu-btn").addEventListener("click", function () {
+  document.body.classList.toggle("drawer-open");
+});
+document.getElementById("scrim").addEventListener("click", function () {
+  document.body.classList.remove("drawer-open");
+});
+if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("drawer-open");
 document.getElementById("expand-all").addEventListener("click", function () { setCollapsedAll(false); });
 document.getElementById("collapse-all").addEventListener("click", function () { setCollapsedAll(true); });
 document.getElementById("search").addEventListener("input", function (e) { runSearch(e.target.value); });

@@ -13,8 +13,8 @@ ruleset_browser(
 }
 \arguments{
 \item{output_file}{Path for the generated HTML file. Default is a temporary
-file. The file is fully self-contained (no external dependencies) and can be
-shared or embedded in documentation.}
+file. The file is self-contained apart from clade images, which load from
+Wikimedia Commons, and can be shared or embedded in documentation.}
 
 \item{open}{Logical, open the result in a browser when done? Default is
 \code{interactive()}.}
