@@ -1,0 +1,59 @@
+<?xml version="1.0" ?>
+<RecordSet><DocumentSummary uid="1422759">
+    <Project>
+        <ProjectID>
+            <ArchiveID accession="PRJNA1422759" archive="NCBI" id="1422759"/>
+            <LocalID>bp0</LocalID>
+            <LocalID>bp0</LocalID>
+        </ProjectID>
+        <ProjectDescr>
+            <Name>Zoarces americanus</Name>
+            <Title>Zoarces americanus (ocean pout) genomic and transcriptomic data</Title>
+            <Description>This project collects the genomic and transcriptomic data generated for the ocean pout (Zoarces americanus), to facilitate genome assembly and annotation as part of the Canadian BioGenome Project (https: //www.earthbiogenome.ca/) provided by CGEn - Canada's national platform for genome sequencing and analysis, and its partners. The data under this project are made available subject to the Canadian BioGenome Project Open Data Release Policy.</Description>
+            <Relevance>
+                <Environmental>yes</Environmental>
+            </Relevance>
+        </ProjectDescr>
+        <ProjectType>
+            <ProjectTypeSubmission>
+                <Target capture="eWhole" material="eGenome" sample_scope="eMonoisolate">
+                    <Organism species="8199" taxID="8199">
+                        <OrganismName>Zoarces americanus</OrganismName>
+                        <Supergroup>eEukaryotes</Supergroup>
+                    </Organism>
+                </Target>
+                <Method method_type="eSequencing"/>
+                <Objectives>
+                    <Data data_type="eRawSequenceReads"/>
+                </Objectives>
+                <IntendedDataTypeSet>
+                    <DataType>raw sequence reads</DataType>
+                </IntendedDataTypeSet>
+                <ProjectDataTypeSet>
+                    <DataType>raw sequence reads</DataType>
+                </ProjectDataTypeSet>
+            </ProjectTypeSubmission>
+        </ProjectType>
+    </Project>
+    <Submission last_update="2026-02-11" submission_id="SUB16001499" submitted="2026-02-11">
+        <Description>
+            <!-- Submitter information has been removed -->
+            <Organization org_id="29271" role="owner" type="institute" url="http://earthbiogenome.ca/">
+                <Name abbr="Canadian BioGenome">Canada's national platform for genome sequencing and analysis</Name>
+                <!-- Contact information has been removed -->
+            </Organization>
+            <Access>public</Access>
+        </Description>
+        <Action action_id="SUB16001499-bp0"/>
+    </Submission>
+    <ProjectLinks>
+        <Link>
+            <ProjectIDRef archive="NCBI" id="1422759" accession="PRJNA1422759"/>
+            <Hierarchical type="TopAdmin">
+                <MemberID archive="NCBI" id="1422710" accession="PRJNA1422710"/>
+            </Hierarchical>
+        </Link>
+    </ProjectLinks>
+</DocumentSummary>
+
+</RecordSet>

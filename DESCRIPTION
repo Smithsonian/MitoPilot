@@ -60,6 +60,7 @@ Imports:
     tidyr,
     utils,
     waiter,
+    xml2,
     zoo,
     pwalign,
     cli,
