@@ -136,3 +136,53 @@
   }
   invisible(NULL)
 }
+
+.meta_remove <- function(con, sources = names(META_SOURCES), ids = NULL) {
+  .meta_ensure_tables(con)
+  bad <- setdiff(sources, names(META_SOURCES))
+  if (length(bad)) {
+    stop("unknown source(s): ", .lst(bad), "; use ", .lst(names(META_SOURCES)), call. = FALSE)
+  }
+  all_ids <- DBI::dbGetQuery(con, "SELECT ID FROM samples")$ID
+  if (is.null(ids)) {
+    ids <- all_ids
+  } else {
+    unknown <- setdiff(ids, all_ids)
+    if (length(unknown)) stop("sample(s) not in this project: ", .lst(unknown), call. = FALSE)
+  }
+  DBI::dbWithTransaction(con, {
+    for (src in sources) {
+      col <- META_SOURCES[[src]]$col
+      for (id in ids) {
+        ln <- DBI::dbGetQuery(con, "SELECT ref FROM meta_links WHERE ID = ? AND source = ?",
+                              params = list(id, src))$ref
+        if (length(ln) && !is.na(ln[1])) {
+          DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = NULL WHERE ID = ? AND ", col, " = ?"),
+                         params = list(id, ln[1]))
+        }
+        DBI::dbExecute(con, "DELETE FROM meta_links WHERE ID = ? AND source = ?", params = list(id, src))
+      }
+      .meta_drop(con, src, ids)
+    }
+  })
+  invisible(NULL)
+}
+
+#' Remove fetched GEOME, GBIF, and NCBI metadata
+#'
+#' Deletes the records MitoPilot fetched from GEOME, GBIF, or NCBI, and any IDs
+#' it found by following links between them. Your mapping-file columns, the IDs
+#' you supplied (in the mapping file, in the app, or with `fetch_*()`), and your
+#' export and table field choices are kept, so the data can be fetched again at
+#' any time.
+#'
+#' @param path Path to the project directory (default = current working directory)
+#' @param sources Sources to remove: any of `"GEOME"`, `"GBIF"`, `"NCBI"` (default all).
+#' @param ids Sample IDs to remove data for. Default: every sample.
+#' @return Invisibly, NULL.
+#' @export
+remove_metadata <- function(path = ".", sources = names(META_SOURCES), ids = NULL) {
+  con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con))
+  .meta_remove(con, sources, ids)
+}
