@@ -160,3 +160,10 @@ ncbi_normalize_id <- function(x) {
   }
   do.call(rbind, out)
 }
+
+# eutils answers HEAD with 405, so .check_resource() cannot be used
+.check_ncbi_reachable <- function(iss) {
+  ok <- tryCatch({ .ncbi_get("einfo", list()); TRUE }, error = function(e) FALSE)
+  if (!ok) iss$warn("NCBI: not reachable right now: ", NCBI_EUTILS)
+  invisible(NULL)
+}

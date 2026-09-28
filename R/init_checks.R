@@ -631,7 +631,7 @@ preflight_project <- function(path, mapping_fn, mapping_id, data_path, no_raw_da
   if (!is.null(mapping) && ncbi_col %in% colnames(mapping) &&
       !isFALSE(dots$fetch_biosample) &&
       any(!is.na(ncbi_normalize_id(mapping[[ncbi_col]])))) {
-    .check_resource("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/einfo.fcgi", "NCBI", iss = iss)
+    .check_ncbi_reachable(iss)
   }
 
   # User-assembly extras ----

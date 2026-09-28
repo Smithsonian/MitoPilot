@@ -99,3 +99,15 @@ test_that("new_db fetch_biosample = FALSE stores IDs without calling NCBI", {
          fetch_biosample = FALSE)
   expect_equal(q(d, "SELECT COUNT(*) n FROM meta_status")$n, 0L)
 })
+
+test_that("the NCBI reachability check uses a real request, not HEAD", {
+  seen <- NULL
+  local_mocked_bindings(.ncbi_get = function(endpoint, query) { seen <<- endpoint; "<eInfoResult/>" })
+  iss <- .issues()
+  .check_ncbi_reachable(iss)
+  expect_equal(seen, "einfo")
+  expect_length(iss$warnings, 0)
+  local_mocked_bindings(.ncbi_get = function(...) stop("could not reach NCBI (timeout)", call. = FALSE))
+  .check_ncbi_reachable(iss)
+  expect_match(iss$warnings, "NCBI: not reachable right now", fixed = TRUE)
+})
