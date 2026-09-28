@@ -33,7 +33,7 @@ meta_export_cols <- function(con, ids = NULL, keys = NULL) {
   keys <- keys %||% DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key
   if (!length(keys)) return(NULL)
   recs <- DBI::dbGetQuery(con, "SELECT ID, source, level, depth, field, value FROM meta_records")
-  ids <- ids %||% unique(recs$ID)
+  if (is.null(ids)) ids <- unique(recs$ID)
   out <- data.frame(ID = ids)
   for (k in keys) {
     r <- recs[recs$source == toupper(sub(":.*", "", k)), ]
