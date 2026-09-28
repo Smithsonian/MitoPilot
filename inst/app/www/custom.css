@@ -575,6 +575,7 @@ details summary:hover {
 }
 .mp-meta-logo-geome { background-image: url("specimen/geome_g.png"); }
 .mp-meta-logo-gbif { background-image: url("specimen/gbif_leaf.png"); }
+.mp-meta-logo-ncbi { background-image: url("specimen/ncbi_helix.png"); }
 .mp-meta-view-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .mp-meta-view-bar .form-group { margin: 0 0 0 auto; }
 .mp-meta-view-bar .checkbox { margin: 0; }

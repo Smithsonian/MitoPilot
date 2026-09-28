@@ -36,7 +36,7 @@ specimen_status <- function(con) {
     state[i] <- if ("failed" %in% states) "failed" else if (length(conf)) "conflict" else
       if ("ok" %in% states) "ok" else "none"
     icons[i] <- paste(c(ic, if (length(conf)) "conflict"), collapse = " ")
-    msg[i] <- if (length(lines)) paste(lines, collapse = "\n") else "No GEOME BCID or GBIF ID"
+    msg[i] <- if (length(lines)) paste(lines, collapse = "\n") else "No GEOME, GBIF, or NCBI ID"
   }
   data.frame(ID = s$ID, specimen = state, specimen_message = msg, specimen_icons = icons)
 }
@@ -63,7 +63,8 @@ rt_specimen <- function(inputId) {
       var esc = function(s) { return String(s).replace(/&/g, '&amp;').replace(/'/g, '&#39;')
         .replace(/\"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
       var codes = String(row['specimen_icons'] || '').split(' ').filter(Boolean);
-      var logos = {GEOME: 'www/specimen/geome_g.png', GBIF: 'www/specimen/gbif_leaf.png'};
+      var logos = {GEOME: 'www/specimen/geome_g.png', GBIF: 'www/specimen/gbif_leaf.png',
+                   NCBI: 'www/specimen/ncbi_helix.png'};
       var html = '';
       codes.forEach(function(c) {
         if (c === 'conflict') {
@@ -79,7 +80,7 @@ rt_specimen <- function(inputId) {
       });
       var none = html === '';
       if (none) html = `<i class='fa-regular fa-square-plus text-muted' aria-hidden='true'></i>`;
-      var tip = (row['specimen_message'] || 'No GEOME BCID or GBIF ID') +
+      var tip = (row['specimen_message'] || 'No GEOME, GBIF, or NCBI ID') +
         (none ? '. Click to add one.' : '\\nClick to view.');
       return `<a href='#' class='mp-specimen-cell' data-id='${esc(row['ID'])}' title='${esc(tip)}' aria-label='${esc(tip)}' ` +
         `onclick=\"event.preventDefault(); event.stopPropagation(); Shiny.setInputValue('%s', this.dataset.id, {priority: 'event'})\">` +
@@ -101,7 +102,7 @@ specimen_col_def <- function(inputId, sticky = NULL) {
     show = TRUE, name = "Metadata", sticky = sticky, width = 90, align = "center",
     html = TRUE, filterable = FALSE, sortable = TRUE, class = edge, headerClass = edge,
     header = rt_header("Metadata", paste(
-      "GEOME and GBIF metadata for this sample. Click an icon to view, add,",
+      "GEOME, GBIF, and NCBI metadata for this sample. Click an icon to view, add,",
       "compare, or refresh.")),
     cell = rt_specimen(inputId)
   )
@@ -109,10 +110,11 @@ specimen_col_def <- function(inputId, sticky = NULL) {
 
 #' Render one sample's records from one source as level cards
 #'
-#' GEOME levels run root first; GBIF runs Occurrence, Dataset, Organization.
+#' GEOME levels run root first; GBIF runs Occurrence, Dataset, Organization;
+#' NCBI runs SRA, BioSample, BioProject.
 #'
 #' @param recs `meta_records` rows for one sample and source (level, depth, ref, field, value)
-#' @param source "GEOME" or "GBIF"
+#' @param source "GEOME", "GBIF", or "NCBI"
 #' @param box_id DOM id of the scroll box holding the cards
 #' @noRd
 meta_record_view <- function(recs, source, box_id) {
@@ -127,6 +129,13 @@ meta_record_view <- function(recs, source, box_id) {
   link <- function(level, ref) {
     if (is.na(ref)) return(NULL)
     if (source == "GEOME") return(paste0("https://geome-db.org/record/", ref))
+    if (source == "NCBI") {
+      return(switch(level,
+        SRA = paste0("https://www.ncbi.nlm.nih.gov/sra/", ref),
+        BioSample = paste0("https://www.ncbi.nlm.nih.gov/biosample/", ref),
+        BioProject = paste0("https://www.ncbi.nlm.nih.gov/bioproject/", ref),
+        NULL))
+    }
     switch(level,
       Occurrence = paste0("https://www.gbif.org/occurrence/", ref),
       Dataset = paste0("https://www.gbif.org/dataset/", ref),
@@ -166,17 +175,17 @@ meta_record_view <- function(recs, source, box_id) {
   )
 }
 
-#' Compare tab table: one row per concept across CSV, GEOME, and GBIF
+#' Compare tab table: one row per concept across the CSV and every source
 #'
 #' @param cf `specimen_conflicts()` rows for one sample
 #' @noRd
 specimen_compare_view <- function(cf) {
   if (!nrow(cf)) return(p(class = "text-muted", "No sample selected."))
-  dash <- function(x) if (is.na(x)) "-" else x
+  dash <- function(x) if (!length(x) || is.na(x)) "-" else x
   tags$table(
     class = "table table-sm mp-spec-compare",
-    tags$thead(tags$tr(tags$th("Item"), tags$th("Mapfile (column)"), tags$th("GEOME"),
-                       tags$th("GBIF"), tags$th("Status"))),
+    tags$thead(tags$tr(tags$th("Item"), tags$th("Mapfile (column)"),
+                       lapply(names(META_SOURCES), tags$th), tags$th("Status"))),
     tags$tbody(lapply(seq_len(nrow(cf)), function(i) {
       r <- cf[i, ]
       cls <- if (identical(r$status, "conflict")) "mp-spec-conflict" else
@@ -186,8 +195,7 @@ specimen_compare_view <- function(cf) {
         tags$td(r$concept),
         tags$td(dash(r$csv_value),
                 if (!is.na(r$csv_column)) span(class = "text-muted", paste0(" (", r$csv_column, ")"))),
-        tags$td(dash(r$geome_value)),
-        tags$td(dash(r$gbif_value)),
+        lapply(names(META_SOURCES), function(s) tags$td(dash(r[[paste0(tolower(s), "_value")]]))),
         tags$td(dash(r$status))
       )
     }))
@@ -233,14 +241,14 @@ specimen_csv_map_ui <- function(ns, current, overrides, choices) {
   )
 }
 
-#' Modal listing GEOME and GBIF fields available at export
+#' Modal listing each source's fields available at export
 #'
 #' @param ns module namespace function
-#' @param geome,gbif `meta_field_summary()` output for each source
+#' @param summaries named list of `meta_field_summary()` output, one per source
 #' @param closed_input namespaced input id set when the modal closes, however
 #'   it closes; NULL to skip
 #' @noRd
-specimen_fields_modal <- function(ns, geome, gbif, closed_input = NULL) {
+specimen_fields_modal <- function(ns, summaries, closed_input = NULL) {
   section <- function(source, s) {
     key <- tolower(source)
     combos <- s[s$kind == "combo", ]
@@ -264,9 +272,8 @@ specimen_fields_modal <- function(ns, geome, gbif, closed_input = NULL) {
     title = mp_modal_title("Metadata fields for export",
                            "Ticked fields become columns you can use in header templates"),
     size = "l", easyClose = TRUE,
-    section("GEOME", geome),
-    tags$hr(),
-    section("GBIF", gbif),
+    lapply(seq_along(summaries), function(i) tagList(
+      if (i > 1) tags$hr(), section(names(summaries)[i], summaries[[i]]))),
     if (!is.null(closed_input)) {
       tags$script(HTML(sprintf(
         "$('#shiny-modal').one('hidden.bs.modal', function() { Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); });",
@@ -276,7 +283,7 @@ specimen_fields_modal <- function(ns, geome, gbif, closed_input = NULL) {
   )
 }
 
-#' Specimen metadata viewer: GEOME, GBIF, and Compare tabs
+#' Specimen metadata viewer: GEOME, GBIF, NCBI, and Compare tabs
 #'
 #' @param id module id
 #' @param open reactive yielding the sample ID to open (from a `specimen_open` input)
@@ -294,11 +301,16 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
                     "update_sample_metadata() (see the Sample Metadata article)."),
       GBIF = paste("This sample has no GBIF ID. Paste a gbifID, a gbif.org/occurrence link, or an NMNH EZID above",
                    "and click Fetch, or add a GBIF_ID column to your mapping file and load it into",
-                   "the project with update_sample_metadata() (see the Sample Metadata article).")
+                   "the project with update_sample_metadata() (see the Sample Metadata article)."),
+      NCBI = paste("This sample has no BioSample. Paste a BioSample (SAMN...) or SRA accession",
+                   "(SRR..., SRX..., SRS...) above and click Fetch, click Use sample ID if the sample",
+                   "ID is one, or add a BioSample column to your mapping file and load it into the",
+                   "project with update_sample_metadata() (see the Sample Metadata article).")
     )
 
     samples <- function() {
-      DBI::dbGetQuery(con, "SELECT ID, Taxon, GEOME_BCID, GBIF_ID FROM samples ORDER BY ID")
+      DBI::dbGetQuery(con, paste0("SELECT ID, Taxon, ",
+        paste(vapply(META_SOURCES, function(s) s$col, ""), collapse = ", "), " FROM samples ORDER BY ID"))
     }
 
     observeEvent(open(), {
@@ -325,13 +337,14 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
               id = ns("tab"),
               tabPanel("GEOME", uiOutput(ns("geome_detail"))),
               tabPanel("GBIF", uiOutput(ns("gbif_detail"))),
+              tabPanel("NCBI", uiOutput(ns("ncbi_detail"))),
               tabPanel("Compare", uiOutput(ns("compare")))
             )
           )
         ),
         footer = mp_footer(
           extra = actionButton(ns("refresh_all"), "Refresh all",
-                               title = "Fetch every sample's GEOME and GBIF records again"),
+                               title = "Fetch every sample's GEOME, GBIF, and NCBI records again"),
           dismiss = "Close"
         )
       ) |> showModal()
@@ -370,9 +383,14 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
       tagList(
         div(class = "mp-meta-ref",
           textInput(ns(paste0(key, "_ref")), paste(source, src$id_label), value = ref %|NA|% "",
-                    placeholder = if (source == "GEOME") "ark:/21547/..." else "6186461308",
+                    placeholder = switch(source, GEOME = "ark:/21547/...", GBIF = "6186461308",
+                                         NCBI = "SAMN29555051 or SRR21844202"),
                     width = "420px"),
-          actionButton(ns(paste0(key, "_fetch")), "Fetch", icon = icon("arrows-rotate"))
+          actionButton(ns(paste0(key, "_fetch")), "Fetch", icon = icon("arrows-rotate")),
+          if (source == "NCBI") {
+            actionButton(ns("ncbi_use_id"), "Use sample ID",
+                         title = "Use this sample's ID as its BioSample or SRA accession and fetch")
+          }
         ),
         if (nrow(st)) p(class = if (st$status == "failed") "mp-fg-warning" else "text-muted",
           if (st$status == "failed") paste("Last fetch failed:", st$message) else "Fetched",
@@ -383,6 +401,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
     }
     output$geome_detail <- renderUI(source_detail("GEOME"))
     output$gbif_detail <- renderUI(source_detail("GBIF"))
+    output$ncbi_detail <- renderUI(source_detail("NCBI"))
 
     output$compare <- renderUI({
       rv$ver
@@ -395,10 +414,10 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
       )
     })
 
-    fetch_one <- function(source) {
+    fetch_one <- function(source, ref = input[[paste0(tolower(source), "_ref")]]) {
       req(rv$id)
       tryCatch({
-        val <- .meta_set_ref(con, source, rv$id, input[[paste0(tolower(source), "_ref")]])
+        val <- .meta_set_ref(con, source, rv$id, ref)
         if (!is.na(val)) {
           withProgress(message = paste("Fetching from", source), {
             res <- suppressWarnings(.meta_fetch_into(con, source, rv$id, val))
@@ -410,6 +429,15 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
     }
     observeEvent(input$geome_fetch, fetch_one("GEOME"))
     observeEvent(input$gbif_fetch, fetch_one("GBIF"))
+    observeEvent(input$ncbi_fetch, fetch_one("NCBI"))
+    observeEvent(input$ncbi_use_id, {
+      req(rv$id)
+      if (is.na(ncbi_normalize_id(rv$id))) {
+        return(showNotification(paste0("'", rv$id, "' is not a BioSample or SRA accession"), type = "error"))
+      }
+      updateTextInput(session, "ncbi_ref", value = rv$id)
+      fetch_one("NCBI", rv$id)
+    })
 
     observeEvent(input$map_save, {
       concepts <- setdiff(SPECIMEN_CONCEPTS, "taxon")
@@ -432,7 +460,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
         data.frame(ID = s$ID[keep], source = rep(src, sum(keep)), ref = ref[keep])
       }))
       if (!nrow(jobs)) {
-        return(showNotification("No samples have a GEOME BCID or GBIF ID", type = "message"))
+        return(showNotification("No samples have a GEOME, GBIF, or NCBI ID", type = "message"))
       }
       caches <- lapply(META_SOURCES, function(x) new.env())
       tryCatch({

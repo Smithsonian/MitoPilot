@@ -43,14 +43,14 @@ meta_view_modal <- function(ns, fields, wrap) {
       "the Export header template."),
     if (!nrow(fields)) {
       p(class = "mp-empty-state", "No metadata yet. Add columns to your mapping file and load",
-        "them into the project with update_sample_metadata(), or fetch GEOME or GBIF",
+        "them into the project with update_sample_metadata(), or fetch GEOME, GBIF, or NCBI",
         "records from the Metadata column.")
     } else {
       tagList(
         div(
           class = "mp-meta-view-bar",
           src_btn("All", NA), src_btn("Map file", "Map file"),
-          src_btn("GEOME", "GEOME"), src_btn("GBIF", "GBIF"),
+          src_btn("GEOME", "GEOME"), src_btn("GBIF", "GBIF"), src_btn("NCBI", "NCBI"),
           tags$button(type = "button", class = "btn btn-default btn-sm",
                       onclick = sprintf("Reactable.getInstance('%s').toggleAllRowsSelected(false)", tbl),
                       "Clear all"),

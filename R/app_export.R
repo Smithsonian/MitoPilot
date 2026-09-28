@@ -248,28 +248,32 @@ export_server <- function(id) {
     }
     observeEvent(input$token_fields_geome, snap_export())
     observeEvent(input$token_fields_gbif, snap_export())
+    observeEvent(input$token_fields_ncbi, snap_export())
     observeEvent(input$specimen_fields_closed, {
       req(rv$export_snap)
       trigger("export")
     })
     on("specimen_fields", {
       con <- session$userData$con
-      g <- meta_field_summary(con, "GEOME")
-      b <- meta_field_summary(con, "GBIF")
+      sm <- lapply(stats::setNames(nm = names(META_SOURCES)), function(s) meta_field_summary(con, s))
       closed <- if (!is.null(rv$export_snap)) ns("specimen_fields_closed")
-      showModal(specimen_fields_modal(ns, g, b, closed_input = closed))
-      output$geome_raw <- reactable::renderReactable(raw_fields_table(g[g$kind == "raw", ]))
-      output$gbif_raw <- reactable::renderReactable(raw_fields_table(b[b$kind == "raw", ]))
+      showModal(specimen_fields_modal(ns, sm, closed_input = closed))
+      for (s in names(sm)) local({
+        src <- s
+        output[[paste0(tolower(src), "_raw")]] <- reactable::renderReactable(
+          raw_fields_table(sm[[src]][sm[[src]]$kind == "raw", ]))
+      })
     })
 
     observeEvent(input$specimen_fields_save, {
       con <- session$userData$con
-      picked <- unlist(lapply(c("GEOME", "GBIF"), function(src) {
+      picked <- unlist(lapply(names(META_SOURCES), function(src) {
         s <- meta_field_summary(con, src)
         raw <- s[s$kind == "raw", ]
         raw$key[reactable::getReactableState(paste0(tolower(src), "_raw"), "selected") %||% integer(0)]
       }))
-      .meta_save_fields(con, c(input$geome_combos, input$gbif_combos, picked))
+      combos <- unlist(lapply(names(META_SOURCES), function(s) input[[paste0(tolower(s), "_combos")]]))
+      .meta_save_fields(con, c(combos, picked))
       removeModal()
       meta_fields_ver(meta_fields_ver() + 1L)
       rv$data <- fetch_data()
