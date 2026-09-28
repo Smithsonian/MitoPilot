@@ -347,7 +347,7 @@ wins over a sample value, which wins over an event value).
 | `geome_lat_lon` | `decimalLatitude`, `decimalLongitude` | `17.48260 S 149.89990 W` |
 | `geome_collection_date` | `yearCollected`, `monthCollected`, `dayCollected` | `2006-03-18`, `2009-11`, or `2009` |
 | `geome_geo_loc_name` | `country`, then `stateProvince` and `locality` | `French Polynesia: Moorea` |
-| `geome_specimen_voucher` | `catalogNumber` (required), `institutionCode` (optional prefix) | `UF:12345` |
+| `geome_specimen_voucher` | `catalogNumber` (required; skipped if it is a web address or ARK), `institutionCode` (optional prefix) | `UF:12345` |
 | `geome_collected_by` | `collectorList` | as in GEOME |
 | `geome_tissue_type` | `tissueType` | as in GEOME |
 | `geome_sex` | `sex` | as in GEOME |

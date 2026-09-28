@@ -77,3 +77,9 @@ test_that(".geome_get maps HTTP status to readable errors", {
   expect_equal(msg(403), "record is private or needs a GEOME login")
   expect_equal(msg(418), "GEOME returned HTTP 418")
 })
+
+test_that("geome_normalize_bcid accepts colons, which GEOME tissue BCIDs use", {
+  expect_equal(geome_normalize_bcid(c("https://n2t.net/ark:/21547/FDZ2USNM:Biorepository:AH1TZ01",
+                                      "ark:/21547/FDZ2UW:157636.1")),
+               c("ark:/21547/FDZ2USNM:Biorepository:AH1TZ01", "ark:/21547/FDZ2UW:157636.1"))
+})
