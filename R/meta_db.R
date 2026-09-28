@@ -10,6 +10,12 @@ META_SOURCES <- list(
     normalize = function(x) gbif_normalize_id(x),
     invalid = function(x) paste0("'", x, "' is not a GBIF occurrence ID (expected digits or an NMNH EZID)"),
     chain = function(ref, cache) .gbif_fetch_chain(ref, cache)
+  ),
+  NCBI = list(
+    col = "BioSample", label = "NCBI", id_label = "BioSample or SRA accession", arg = "biosamples",
+    normalize = function(x) ncbi_normalize_id(x),
+    invalid = function(x) paste0("'", x, "' is not a BioSample or SRA accession (expected SAMN..., SRR..., or digits)"),
+    chain = function(ref, cache) .ncbi_fetch_chain(ref, cache)
   )
 )
 
@@ -164,7 +170,7 @@ META_SOURCES <- list(
     std <- META_SOURCES[[src]]$col
     if (col %in% colnames(mapping)) {
       mapping[[std]] <- .meta_store_value(src, mapping[[col]])
-      if (col != std) mapping[[col]] <- NULL
+      if (col != std && !col %in% c("ID", "Taxon")) mapping[[col]] <- NULL
     }
   }
   mapping
