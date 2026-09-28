@@ -1,0 +1,12 @@
+test_that("link switch and provenance tables", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
+  .meta_ensure_tables(con)
+  expect_false(.meta_link_enabled(con))
+  .meta_set_link_enabled(con, TRUE)
+  expect_true(.meta_link_enabled(con))
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s1', 'GBIF', '123', 'NCBI BioSample voucherURI', NULL)")
+  .meta_set_ref(con, "GBIF", "s1", "456")
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_links")$n, 0L)
+})

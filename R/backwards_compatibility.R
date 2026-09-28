@@ -97,7 +97,7 @@ backwards_compatibility <- function(
   # columns, and no leftover pre-1.5.7 geome_* tables.
   meta_tables <- DBI::dbListTables(con)
   meta_current <- all(c("meta_records", "meta_status", "meta_export_fields",
-                        "meta_csv_map", "meta_view_fields") %in% meta_tables) &&
+                        "meta_csv_map", "meta_view_fields", "meta_options", "meta_links") %in% meta_tables) &&
     all(c("GEOME_BCID", "GBIF_ID", "BioSample") %in% names(samples_table)) &&
     !any(c("geome_records", "geome_status", "geome_export_fields") %in% meta_tables)
 

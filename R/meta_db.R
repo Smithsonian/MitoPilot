@@ -48,6 +48,10 @@ META_SOURCES <- list(
     key TEXT NOT NULL, PRIMARY KEY (key))")
   DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS meta_csv_map (
     concept TEXT NOT NULL, column TEXT, PRIMARY KEY (concept))")
+  DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS meta_options (
+    key TEXT NOT NULL, value TEXT, PRIMARY KEY (key))")
+  DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS meta_links (
+    ID TEXT NOT NULL, source TEXT NOT NULL, ref TEXT, via TEXT, note TEXT, PRIMARY KEY (ID, source))")
   if (DBI::dbExistsTable(con, "samples")) {
     have <- DBI::dbListFields(con, "samples")
     for (s in META_SOURCES) {
@@ -99,6 +103,7 @@ META_SOURCES <- list(
   val <- .meta_store_value(source, raw)
   changed <- xor(is.na(old), is.na(val)) || (!is.na(old) && !is.na(val) && old != val)
   DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = ? WHERE ID = ?"), params = list(val, id))
+  DBI::dbExecute(con, "DELETE FROM meta_links WHERE ID = ? AND source = ?", params = list(id, source))
   if (changed) .meta_drop(con, source, id)
   val
 }
@@ -213,4 +218,16 @@ META_SOURCES <- list(
     }
   }
   invisible(NULL)
+}
+
+.meta_link_enabled <- function(con) {
+  .meta_ensure_tables(con)
+  isTRUE(DBI::dbGetQuery(con, "SELECT value FROM meta_options WHERE key = 'link_sources'")$value[1] == "1")
+}
+
+.meta_set_link_enabled <- function(con, on) {
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_options VALUES ('link_sources', ?)",
+                 params = list(if (isTRUE(on)) "1" else "0"))
+  invisible(isTRUE(on))
 }
