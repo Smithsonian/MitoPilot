@@ -1,5 +1,13 @@
 # Changelog
 
+## MitoPilot (development version)
+
+- **Curation ruleset browser tweaks.** Each clade now shows a
+  representative image from Wikipedia, credited to its author and
+  license with links to the Wikimedia Commons file. Help tooltips are no
+  longer cut off by the taxonomy tree. On phones, the tree opens from a
+  menu button and rule tables become one card per gene.
+
 ## MitoPilot 1.5.7
 
 Released 2026-09-25. Container: `macguigand/mitopilot:1.5.7`

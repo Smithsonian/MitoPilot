@@ -22,8 +22,8 @@ ruleset_browser(
 - output_file:
 
   Path for the generated HTML file. Default is a temporary file. The
-  file is fully self-contained (no external dependencies) and can be
-  shared or embedded in documentation.
+  file is self-contained apart from clade images, which load from
+  Wikimedia Commons, and can be shared or embedded in documentation.
 
 - open:
 
