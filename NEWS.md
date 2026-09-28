@@ -1,5 +1,7 @@
 # MitoPilot (development version)
 
+- **NCBI BioSample metadata.** Samples can now be linked to an NCBI BioSample, directly or through an SRA accession (SRR, ERR, DRR, SRX, or SRS), with `mapping_biosample` at setup, `fetch_biosample()`, or the new NCBI tab in the sample metadata viewer. MitoPilot stores every BioSample attribute plus the linked BioProjects, adds NCBI to the Compare tab and the export conflict warning, and offers GenBank-ready `ncbi_*` fields at export. When sample IDs are SRA runs, `mapping_biosample = "ID"`, `fetch_biosample(from_id = TRUE)`, or **Use sample ID** links them without a separate column. See [Sample metadata](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html).
+
 - **Curation ruleset browser tweaks.** Each clade now shows a representative image from Wikipedia, credited to its author and license with links to the Wikimedia Commons file. Help tooltips are no longer cut off by the taxonomy tree. On phones, the tree opens from a menu button and rule tables become one card per gene.
 
 # MitoPilot 1.5.7

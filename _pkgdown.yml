@@ -90,9 +90,11 @@ reference:
   - update_sample_metadata
   - fetch_geome
   - fetch_gbif
+  - fetch_biosample
   - set_metadata_columns
   - geome_normalize_bcid
   - gbif_normalize_id
+  - ncbi_normalize_id
   - update_sample_seqdata
   - set_maptoref_refs
   - backwards_compatibility
