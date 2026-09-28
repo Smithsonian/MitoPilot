@@ -1003,3 +1003,10 @@ a.mp-link:focus-visible {
 .mp-spec-icon { width: 18px; height: 18px; }
 .mp-spec-faded img { filter: grayscale(1); opacity: 0.45; }
 .mp-spec-badge { position: absolute; right: -5px; bottom: -3px; font-size: 10px; line-height: 1; }
+
+/* Sample metadata viewer: remove panel and link switch */
+.mp-spec-remove { margin-top: 12px; }
+.mp-spec-remove summary { cursor: pointer; color: var(--mp-text-muted); }
+.mp-spec-remove .form-group { margin-bottom: 4px; }
+.mp-spec-link { display: inline-block; margin-right: 12px; vertical-align: middle; }
+.mp-spec-link .checkbox, .mp-spec-link .form-group { margin: 0; }

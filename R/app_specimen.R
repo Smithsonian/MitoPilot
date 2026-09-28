@@ -10,6 +10,7 @@ specimen_status <- function(con) {
   cols <- vapply(META_SOURCES, function(s) s$col, character(1))
   s <- DBI::dbGetQuery(con, paste0("SELECT ID, ", paste(cols, collapse = ", "), " FROM samples"))
   st <- DBI::dbGetQuery(con, "SELECT ID, source, status, message FROM meta_status")
+  ln <- DBI::dbGetQuery(con, "SELECT ID, source, via FROM meta_links WHERE ref IS NOT NULL")
   cf <- specimen_conflicts(con)
   state <- msg <- icons <- character(nrow(s))
   for (i in seq_len(nrow(s))) {
@@ -21,8 +22,10 @@ specimen_status <- function(con) {
       if (nrow(r)) {
         states <- c(states, r$status[1])
         ic <- c(ic, paste0(src, ":", r$status[1]))
-        lines <- c(lines, if (r$status[1] == "ok") paste0(src, ": fetched") else
-          paste0(src, ": failed (", r$message[1] %|NA|% "unknown error", ")"))
+        via <- ln$via[ln$ID == id & ln$source == src]
+        lines <- c(lines, paste0(if (r$status[1] == "ok") paste0(src, ": fetched") else
+          paste0(src, ": failed (", r$message[1] %|NA|% "unknown error", ")"),
+          if (length(via)) paste0(" (linked from ", via[1], ")")))
       } else if (!is.na(ref) && nzchar(ref)) {
         lines <- c(lines, paste0(src, ": not fetched yet"))
         ic <- c(ic, paste0(src, ":pending"))
@@ -330,7 +333,17 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
           column(3,
             selectInput(ns("sample"), "Sample", choices = stats::setNames(s$ID, lab),
                         selected = rv$id, width = "100%", selectize = FALSE, size = 15),
-            uiOutput(ns("failed"))
+            uiOutput(ns("failed")),
+            tags$details(
+              class = "mp-spec-remove",
+              tags$summary("Remove fetched data..."),
+              checkboxGroupInput(ns("remove_sources"), NULL, choices = names(META_SOURCES),
+                                 selected = names(META_SOURCES), inline = TRUE),
+              radioButtons(ns("remove_scope"), NULL, c("This sample" = "sample", "All samples" = "all")),
+              p(class = "text-muted", "Mapping-file columns and the IDs you entered are kept.",
+                "You can fetch again at any time."),
+              actionButton(ns("remove_go"), "Remove", class = "btn-danger btn-sm")
+            )
           ),
           column(9,
             tabsetPanel(
@@ -343,8 +356,15 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
           )
         ),
         footer = mp_footer(
-          extra = actionButton(ns("refresh_all"), "Refresh all",
-                               title = "Fetch every sample's GEOME, GBIF, and NCBI records again"),
+          extra = tagList(
+            div(class = "mp-spec-link",
+                title = paste("When a fetched record names a record in another database, add and fetch",
+                              "it too (only for samples without an ID there)"),
+                checkboxInput(ns("link_sources"), "Follow links between databases",
+                              value = .meta_link_enabled(con))),
+            actionButton(ns("refresh_all"), "Refresh all",
+                         title = "Fetch every sample's GEOME, GBIF, and NCBI records again")
+          ),
           dismiss = "Close"
         )
       ) |> showModal()
@@ -380,6 +400,8 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
                                   WHERE ID = ? AND source = ?", params = list(rv$id, source))
       recs <- DBI::dbGetQuery(con, "SELECT level, depth, ref, field, value FROM meta_records
                                     WHERE ID = ? AND source = ?", params = list(rv$id, source))
+      ln <- DBI::dbGetQuery(con, "SELECT ref, via, note FROM meta_links WHERE ID = ? AND source = ?",
+                            params = list(rv$id, source))
       tagList(
         div(class = "mp-meta-ref",
           textInput(ns(paste0(key, "_ref")), paste(source, src$id_label), value = ref %|NA|% "",
@@ -395,6 +417,8 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
         if (nrow(st)) p(class = if (st$status == "failed") "mp-fg-warning" else "text-muted",
           if (st$status == "failed") paste("Last fetch failed:", st$message) else "Fetched",
           " ", format(as.POSIXct(st$fetched_at, origin = "1970-01-01"), "%Y-%m-%d %H:%M")),
+        if (nrow(ln) && !is.na(ln$ref[1])) p(class = "text-muted", paste("Found through", ln$via[1])),
+        if (nrow(ln) && !is.na(ln$note[1])) p(class = "mp-fg-warning", ln$note[1]),
         if (is.na(ref) && !nrow(recs)) p(class = "text-muted", empty_msg[[source]]),
         meta_record_view(recs, source, box_id = ns(paste0(key, "_records")))
       )
@@ -420,7 +444,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
         val <- .meta_set_ref(con, source, rv$id, ref)
         if (!is.na(val)) {
           withProgress(message = paste("Fetching from", source), {
-            res <- suppressWarnings(.meta_fetch_into(con, source, rv$id, val))
+            res <- suppressWarnings(.meta_fetch_into(con, source, rv$id, val, link = .meta_link_enabled(con)))
           })
           if (res$status == "failed") showNotification(res$message, type = "warning")
         }
@@ -437,6 +461,21 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
       }
       updateTextInput(session, "ncbi_ref", value = rv$id)
       fetch_one("NCBI", rv$id)
+    })
+
+    observeEvent(input$link_sources, .meta_set_link_enabled(con, input$link_sources))
+
+    observeEvent(input$remove_go, {
+      srcs <- input$remove_sources
+      if (!length(srcs)) return(showNotification("Tick at least one source to remove", type = "message"))
+      one <- identical(input$remove_scope, "sample")
+      req(!one || !is.null(rv$id))
+      tryCatch({
+        .meta_remove(con, srcs, if (one) rv$id)
+        bump()
+        showNotification(paste0("Removed ", paste(srcs, collapse = ", "), " data for ",
+                                if (one) rv$id else "all samples"), type = "message")
+      }, error = function(e) showNotification(conditionMessage(e), type = "error"))
     })
 
     observeEvent(input$map_save, {
@@ -467,7 +506,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
         withProgress(message = "Fetching specimen records", value = 0, {
           for (i in seq_len(nrow(jobs))) {
             suppressWarnings(.meta_fetch_into(con, jobs$source[i], jobs$ID[i], jobs$ref[i],
-                                              caches[[jobs$source[i]]]))
+                                              caches[[jobs$source[i]]], link = .meta_link_enabled(con)))
             incProgress(1 / nrow(jobs), detail = paste(jobs$ID[i], jobs$source[i]))
           }
         })

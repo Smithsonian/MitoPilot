@@ -315,3 +315,65 @@ test_that("the viewer NCBI tab has an ID box and a Use sample ID button", {
     expect_match(html, "This sample has no BioSample", fixed = TRUE)
   })
 })
+
+viewer_con <- function(envir = parent.frame()) {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  withr::defer(DBI::dbDisconnect(con), envir = envir)
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("s1", "s2"), Taxon = "x", country = "USA"))
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "UPDATE samples SET BioSample = 'SAMN1', GBIF_ID = '77' WHERE ID = 's1'")
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s1', 'GBIF', '77', 'NCBI BioSample voucherURI', NULL)")
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s1', 'GEOME', NULL, NULL, '2 possible GBIF matches; not linked')")
+  for (src in c("NCBI", "GBIF")) {
+    DBI::dbAppendTable(con, "meta_records", data.frame(ID = "s1", source = src, level = "L", depth = 0L,
+                                                       ref = "r", field = "f", value = "v"))
+    DBI::dbAppendTable(con, "meta_status", data.frame(ID = "s1", source = src, ref = "r", status = "ok",
+                                                      message = NA_character_, fetched_at = 1L))
+  }
+  con
+}
+
+test_that("the viewer shows where a linked ID came from and link notes", {
+  con <- viewer_con()
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  open <- shiny::reactiveVal(NULL)
+  shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
+    open("s1")
+    session$flushReact()
+    expect_match(output$gbif_detail$html, "Found through NCBI BioSample voucherURI", fixed = TRUE)
+    expect_match(output$geome_detail$html, "2 possible GBIF matches; not linked", fixed = TRUE)
+  })
+  st <- specimen_status(con)
+  expect_match(st$specimen_message[st$ID == "s1"], "GBIF: fetched (linked from NCBI BioSample voucherURI)", fixed = TRUE)
+})
+
+test_that("the viewer's remove panel deletes only the chosen fetched data", {
+  con <- viewer_con()
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  open <- shiny::reactiveVal(NULL)
+  shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
+    open("s1")
+    session$flushReact()
+    session$setInputs(remove_sources = "GBIF", remove_scope = "sample")
+    session$setInputs(remove_go = 1)
+  })
+  left <- DBI::dbGetQuery(con, "SELECT source FROM meta_records")$source
+  expect_equal(left, "NCBI")
+  s <- DBI::dbGetQuery(con, "SELECT * FROM samples WHERE ID = 's1'")
+  expect_true(is.na(s$GBIF_ID))
+  expect_equal(s$BioSample, "SAMN1")
+  expect_equal(s$country, "USA")
+})
+
+test_that("the link checkbox saves the project switch", {
+  con <- viewer_con()
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  open <- shiny::reactiveVal(NULL)
+  shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
+    session$setInputs(link_sources = TRUE)
+  })
+  expect_true(.meta_link_enabled(con))
+})
