@@ -4,7 +4,7 @@
 \alias{fetch_gbif}
 \title{Fetch GBIF occurrence metadata for project samples}
 \usage{
-fetch_gbif(path = ".", ids = NULL, gbifs = NULL)
+fetch_gbif(path = ".", ids = NULL, gbifs = NULL, link_sources = NULL)
 }
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
@@ -14,6 +14,10 @@ fetch_gbif(path = ".", ids = NULL, gbifs = NULL)
 \item{gbifs}{Optional GBIF occurrence IDs (or gbif.org occurrence links) to
 set for `ids` first (same length as `ids`). A blank value removes that
 sample's GBIF ID and its GBIF data.}
+
+\item{link_sources}{Follow links to GEOME, GBIF, or NCBI records named in the
+fetched records, filling in IDs a sample does not have yet. NULL (default)
+uses the project setting.}
 }
 \value{
 Invisibly, a data frame of `ID`, `status`, and `message`.

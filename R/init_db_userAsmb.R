@@ -23,6 +23,9 @@
 #' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
 #'   value during setup (default TRUE). Set FALSE when offline and run
 #'   [fetch_biosample()] later.
+#' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
+#'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
+#'   setting. See `vignette("Specimen-Metadata")`.
 #' @param assembly_path Directory holding the user-supplied assembly files. Used
 #'   to count each assembly's contigs so a multi-contig assembly is recorded with
 #'   topology "multi".
@@ -111,6 +114,7 @@ new_db_userAsmb <- function(
     fetch_gbif = TRUE,
     mapping_biosample = "BioSample",
     fetch_biosample = TRUE,
+    link_sources = FALSE,
     assembly_path = NULL,
     genetic_code = NULL,
     # Default annotation options
@@ -970,7 +974,9 @@ new_db_userAsmb <- function(
     );"
   )
 
-  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample))
+  if (isTRUE(link_sources)) .meta_set_link_enabled(con, TRUE)
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample),
+                  link = isTRUE(link_sources))
 
   invisible(return())
 }

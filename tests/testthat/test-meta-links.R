@@ -88,3 +88,102 @@ test_that("a failing lookup gives no candidate instead of an error", {
              lrecs("Sample", "genbankSpecimenVoucher", "UW:1", 1L))
   expect_equal(.meta_link_candidates("GEOME", r, "x"), list())
 })
+
+link_con <- function(envir = parent.frame()) {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  withr::defer(DBI::dbDisconnect(con), envir = envir)
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "Fundulus majalis"))
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "UPDATE samples SET BioSample = 'SAMN1'")
+  con
+}
+ezid <- "ark:/65665/3dd003c5a-d734-480a-9670-918173b14bd3"
+mock_chains <- function(calls, geome_err = FALSE) {
+  list(
+    .ncbi_fetch_chain = function(ref, cache) {
+      calls$NCBI <- (calls$NCBI %||% 0L) + 1L
+      data.frame(level = "BioSample", depth = 1L, ref = "SAMN1", field = "bcid",
+                 value = "https://n2t.net/ark:/21547/T1")
+    },
+    .geome_fetch_chain = function(ref, cache) {
+      calls$GEOME <- (calls$GEOME %||% 0L) + 1L
+      if (geome_err) stop("could not reach GEOME")
+      data.frame(level = c("Tissue", "Sample"), depth = 0:1, ref = c("ark:/21547/T1", "ark:/21547/S1"),
+                 field = c("bcid", "voucherURI"), value = c("ark:/21547/T1", paste0("http://n2t.net/", ezid)))
+    },
+    .gbif_fetch_chain = function(ref, cache) {
+      calls$GBIF <- (calls$GBIF %||% 0L) + 1L
+      data.frame(level = "Occurrence", depth = 0L, ref = "77", field = "associatedSequences", value = "SAMN1")
+    },
+    .geome_get = function(...) list(children = list())
+  )
+}
+
+test_that("linking follows NCBI -> GEOME -> GBIF once each and records where IDs came from", {
+  con <- link_con()
+  calls <- new.env()
+  do.call(local_mocked_bindings, mock_chains(calls))
+  .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
+  s <- DBI::dbGetQuery(con, "SELECT GEOME_BCID, GBIF_ID, BioSample FROM samples")
+  expect_equal(s$GEOME_BCID, "ark:/21547/T1")
+  expect_equal(s$GBIF_ID, ezid)
+  expect_equal(c(calls$NCBI, calls$GEOME, calls$GBIF), c(1L, 1L, 1L))
+  l <- DBI::dbGetQuery(con, "SELECT source, via FROM meta_links ORDER BY source")
+  expect_equal(l$source, c("GBIF", "GEOME"))
+  expect_equal(l$via, c("GEOME Sample voucherURI", "NCBI BioSample bcid"))
+})
+
+test_that("linking never overwrites a user ID and leaves a note instead", {
+  con <- link_con()
+  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/21547/MINE'")
+  calls <- new.env()
+  do.call(local_mocked_bindings, mock_chains(calls))
+  .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
+  expect_equal(DBI::dbGetQuery(con, "SELECT GEOME_BCID FROM samples")$GEOME_BCID, "ark:/21547/MINE")
+  n <- DBI::dbGetQuery(con, "SELECT ref, note FROM meta_links WHERE source = 'GEOME'")
+  expect_true(is.na(n$ref))
+  expect_match(n$note, "ark:/21547/T1.*kept your ID ark:/21547/MINE")
+  expect_null(calls$GEOME)
+})
+
+test_that("a failing linked fetch does not fail the original fetch", {
+  con <- link_con()
+  calls <- new.env()
+  do.call(local_mocked_bindings, mock_chains(calls, geome_err = TRUE))
+  res <- .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
+  expect_equal(res$status, "ok")
+  st <- DBI::dbGetQuery(con, "SELECT source, status FROM meta_status ORDER BY source")
+  expect_equal(st$status[st$source == "GEOME"], "failed")
+  expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_links WHERE source = 'GEOME'")$n, 1L)
+})
+
+test_that("no linking unless asked; fetch_* follow the project switch", {
+  con <- link_con()
+  calls <- new.env()
+  do.call(local_mocked_bindings, mock_chains(calls))
+  .meta_fetch_into(con, "NCBI", "s1", "SAMN1")
+  expect_null(calls$GEOME)
+  dir <- withr::local_tempdir()
+  db <- DBI::dbConnect(RSQLite::SQLite(), file.path(dir, ".sqlite"))
+  DBI::dbWriteTable(db, "samples", data.frame(ID = "s1", Taxon = "Fundulus majalis", BioSample = "SAMN1"))
+  .meta_ensure_tables(db)
+  .meta_set_link_enabled(db, TRUE)
+  DBI::dbDisconnect(db)
+  fetch_biosample(dir)
+  expect_equal(calls$GEOME, 1L)
+  fetch_biosample(dir, link_sources = FALSE)
+  expect_equal(calls$GEOME, 1L)
+})
+
+test_that("new_db stores the link switch", {
+  local_mocked_bindings(.ncbi_get = ncbi_fixture_get, .geome_get = function(...) stop("offline"),
+                        .gbif_get = function(...) stop("offline"))
+  d <- withr::local_tempdir()
+  m <- data.frame(ID = "SRR21844202", Taxon = "Fundulus majalis", R1 = "a_1.fq", R2 = "a_2.fq")
+  utils::write.csv(m, file.path(d, "mapping.csv"), row.names = FALSE)
+  suppressWarnings(new_db(db_path = file.path(d, ".sqlite"), mapping_fn = file.path(d, "mapping.csv"),
+                          mapping_biosample = "ID", link_sources = TRUE))
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con))
+  expect_true(.meta_link_enabled(con))
+})

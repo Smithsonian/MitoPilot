@@ -14,6 +14,7 @@ new_project(
   fetch_gbif = TRUE,
   mapping_biosample = "BioSample",
   fetch_biosample = TRUE,
+  link_sources = FALSE,
   data_path = NULL,
   min_depth = 2e+06,
   genetic_code = NULL,
@@ -73,6 +74,11 @@ Passed to `new_db()`.}
 \item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample
 value during setup (default TRUE). Set FALSE when offline and run
 [fetch_biosample()] later.
+Passed to `new_db()`.}
+
+\item{link_sources}{Follow links between GEOME, GBIF, and NCBI records to
+fill in IDs a sample does not have yet (default FALSE). Saved as the project
+setting. See `vignette("Specimen-Metadata")`.
 Passed to `new_db()`.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be

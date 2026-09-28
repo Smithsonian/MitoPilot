@@ -29,6 +29,9 @@
 #' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
 #'   value during setup (default TRUE). Set FALSE when offline and run
 #'   [fetch_biosample()] later.
+#' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
+#'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
+#'   setting. See `vignette("Specimen-Metadata")`.
 #'   Passed to `new_db_userAsmb()`.
 #' @param data_path Path to the directory where the raw data is located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution. Not required
@@ -104,6 +107,7 @@ new_project_userAsmb <- function(
     fetch_gbif = TRUE,
     mapping_biosample = "BioSample",
     fetch_biosample = TRUE,
+    link_sources = FALSE,
     data_path = NULL,
     no_raw_data = FALSE,
     assembly_path = "NA",
@@ -132,6 +136,7 @@ new_project_userAsmb <- function(
   dots$fetch_gbif <- fetch_gbif
   dots$mapping_biosample <- mapping_biosample
   dots$fetch_biosample <- fetch_biosample
+  dots$link_sources <- link_sources
   if (no_raw_data) {
     data_path <- "NA"
     message("no_raw_data = TRUE: skipping read mapping and coverage calculation.")
@@ -197,6 +202,7 @@ new_project_userAsmb <- function(
     fetch_gbif = fetch_gbif,
     mapping_biosample = mapping_biosample,
     fetch_biosample = fetch_biosample,
+    link_sources = link_sources,
     assembly_path = assembly_path,
     no_raw_data = no_raw_data,
     attempt_circularization = attempt_circularization,

@@ -14,6 +14,7 @@ new_project_userAsmb(
   fetch_gbif = TRUE,
   mapping_biosample = "BioSample",
   fetch_biosample = TRUE,
+  link_sources = FALSE,
   data_path = NULL,
   no_raw_data = FALSE,
   assembly_path = "NA",
@@ -70,7 +71,11 @@ BioSample or SRA accessions (optional). May be the same column as
 
 \item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample
 value during setup (default TRUE). Set FALSE when offline and run
-[fetch_biosample()] later.
+[fetch_biosample()] later.}
+
+\item{link_sources}{Follow links between GEOME, GBIF, and NCBI records to
+fill in IDs a sample does not have yet (default FALSE). Saved as the project
+setting. See `vignette("Specimen-Metadata")`.
 Passed to `new_db_userAsmb()`.}
 
 \item{data_path}{Path to the directory where the raw data is located. Can be

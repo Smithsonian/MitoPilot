@@ -108,7 +108,7 @@ META_SOURCES <- list(
   val
 }
 
-.meta_fetch_into <- function(con, source, ids, refs, cache = new.env()) {
+.meta_fetch_into <- function(con, source, ids, refs, cache = new.env(), link = FALSE) {
   .meta_ensure_tables(con)
   src <- META_SOURCES[[source]]
   status <- character(length(ids))
@@ -137,6 +137,9 @@ META_SOURCES <- list(
                      params = list(ids[i], source, r, status[i], msg[i], as.integer(Sys.time())))
     })
   }
+  if (isTRUE(link)) {
+    for (id in ids[status == "ok"]) tryCatch(.meta_link_sample(con, id), error = function(e) NULL)
+  }
   out <- data.frame(ID = ids, status = status, message = msg)
   bad <- out$status == "failed"
   if (any(bad)) {
@@ -146,7 +149,7 @@ META_SOURCES <- list(
   invisible(out)
 }
 
-.meta_fetch_project <- function(path, source, ids = NULL, refs = NULL) {
+.meta_fetch_project <- function(path, source, ids = NULL, refs = NULL, link = NULL) {
   src <- META_SOURCES[[source]]
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
   on.exit(DBI::dbDisconnect(con))
@@ -167,7 +170,8 @@ META_SOURCES <- list(
     message("No samples with a ", src$label, " ", src$id_label, " to fetch")
     return(invisible(data.frame(ID = character(), status = character(), message = character())))
   }
-  .meta_fetch_into(con, source, target$ID, target$ref)
+  .meta_fetch_into(con, source, target$ID, target$ref,
+                   link = if (is.null(link)) .meta_link_enabled(con) else isTRUE(link))
 }
 
 .meta_take_cols <- function(mapping, cols, keep = character()) {
@@ -188,18 +192,18 @@ META_SOURCES <- list(
   mapping
 }
 
-.meta_fetch_new <- function(con, mapping, fetch) {
+.meta_fetch_new <- function(con, mapping, fetch, link = FALSE) {
   .meta_ensure_tables(con)
   for (src in names(fetch)) {
     col <- META_SOURCES[[src]]$col
     if (!isTRUE(fetch[[src]]) || !col %in% colnames(mapping)) next
     has <- !is.na(mapping[[col]])
-    if (any(has)) .meta_fetch_into(con, src, mapping$ID[has], mapping[[col]][has])
+    if (any(has)) .meta_fetch_into(con, src, mapping$ID[has], mapping[[col]][has], link = link)
   }
   invisible(NULL)
 }
 
-.meta_sync_changed <- function(con, mapping, old, fetch) {
+.meta_sync_changed <- function(con, mapping, old, fetch, link = FALSE) {
   for (src in names(fetch)) {
     col <- META_SOURCES[[src]]$col
     if (!col %in% colnames(mapping)) next
@@ -214,7 +218,7 @@ META_SOURCES <- list(
     if (any(changed)) .meta_drop(con, src, mapping$ID[changed])
     refetch <- changed & !is.na(new)
     if (isTRUE(fetch[[src]]) && any(refetch)) {
-      .meta_fetch_into(con, src, mapping$ID[refetch], new[refetch])
+      .meta_fetch_into(con, src, mapping$ID[refetch], new[refetch], link = link)
     }
   }
   invisible(NULL)

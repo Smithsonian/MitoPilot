@@ -91,3 +91,48 @@
   }
   Filter(Negate(is.null), out)
 }
+
+.meta_link_sample <- function(con, id, caches = lapply(META_SOURCES, function(x) new.env())) {
+  done <- character()
+  taxon <- DBI::dbGetQuery(con, "SELECT Taxon FROM samples WHERE ID = ?", params = list(id))$Taxon[1]
+  for (pass in 1:2) {
+    ok <- DBI::dbGetQuery(con, "SELECT source FROM meta_status WHERE ID = ? AND status = 'ok'",
+                          params = list(id))$source
+    todo <- setdiff(ok, done)
+    if (!length(todo)) break
+    for (src in todo) {
+      done <- c(done, src)
+      recs <- DBI::dbGetQuery(con, "SELECT level, depth, ref, field, value FROM meta_records
+                                    WHERE ID = ? AND source = ?", params = list(id, src))
+      cands <- tryCatch(.meta_link_candidates(src, recs, taxon, caches[[src]]), error = function(e) list())
+      for (tgt in names(cands)) {
+        cand <- cands[[tgt]]
+        col <- META_SOURCES[[tgt]]$col
+        cur <- DBI::dbGetQuery(con, paste0("SELECT ", col, " AS v FROM samples WHERE ID = ?"),
+                               params = list(id))$v[1]
+        linked <- DBI::dbGetQuery(con, "SELECT ref FROM meta_links WHERE ID = ? AND source = ?",
+                                  params = list(id, tgt))$ref
+        linked <- length(linked) && !is.na(linked[1])
+        if (!is.null(cand$note)) {
+          if (is.na(cur)) {
+            DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, NULL, NULL, ?)",
+                           params = list(id, tgt, cand$note))
+          }
+          next
+        }
+        ref <- META_SOURCES[[tgt]]$normalize(cand$ref)
+        if (is.na(ref)) next
+        if (is.na(cur)) {
+          DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = ? WHERE ID = ?"), params = list(ref, id))
+          DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, ?, ?, NULL)",
+                         params = list(id, tgt, ref, cand$via))
+          if (!tgt %in% done) suppressWarnings(.meta_fetch_into(con, tgt, id, ref, caches[[tgt]]))
+        } else if (cur != ref && !linked) {
+          DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, NULL, NULL, ?)", params = list(
+            id, tgt, paste0(src, " record links to ", ref, " (", cand$via, "); kept your ID ", cur)))
+        }
+      }
+    }
+  }
+  invisible(NULL)
+}

@@ -28,6 +28,9 @@
 #' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
 #'   value during setup (default TRUE). Set FALSE when offline and run
 #'   [fetch_biosample()] later.
+#' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
+#'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
+#'   setting. See `vignette("Specimen-Metadata")`.
 #' @param genetic_code Optional NCBI translation table override. Default `NULL`
 #'   auto-selects from the curation ruleset (`curate_target`); a number sets an
 #'   override on the default curate_opts set.
@@ -103,6 +106,7 @@ new_db <- function(
     fetch_gbif = TRUE,
     mapping_biosample = "BioSample",
     fetch_biosample = TRUE,
+    link_sources = FALSE,
     genetic_code = NULL,
     # Default preprocessing options
     dedup = FALSE,
@@ -879,7 +883,9 @@ new_db <- function(
     );"
   )
 
-  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample))
+  if (isTRUE(link_sources)) .meta_set_link_enabled(con, TRUE)
+  .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample),
+                  link = isTRUE(link_sources))
 
   .mtr_warn_missing_refs(con)
 

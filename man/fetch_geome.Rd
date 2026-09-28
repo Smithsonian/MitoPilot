@@ -4,7 +4,7 @@
 \alias{fetch_geome}
 \title{Fetch GEOME metadata for project samples}
 \usage{
-fetch_geome(path = ".", ids = NULL, bcids = NULL)
+fetch_geome(path = ".", ids = NULL, bcids = NULL, link_sources = NULL)
 }
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
@@ -13,6 +13,10 @@ fetch_geome(path = ".", ids = NULL, bcids = NULL)
 
 \item{bcids}{Optional BCIDs to set for `ids` first (same length as `ids`).
 A blank value removes that sample's BCID and its GEOME data.}
+
+\item{link_sources}{Follow links to GEOME, GBIF, or NCBI records named in the
+fetched records, filling in IDs a sample does not have yet. NULL (default)
+uses the project setting.}
 }
 \value{
 Invisibly, a data frame of `ID`, `status`, and `message`.

@@ -14,7 +14,8 @@ add_samples(
   mapping_gbif = "GBIF_ID",
   fetch_gbif = TRUE,
   mapping_biosample = "BioSample",
-  fetch_biosample = TRUE
+  fetch_biosample = TRUE,
+  link_sources = FALSE
 )
 }
 \arguments{
@@ -50,6 +51,10 @@ BioSample or SRA accessions (optional). May be the same column as
 \item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample
 value (default TRUE). Set FALSE when offline and run
 [fetch_biosample()] later.}
+
+\item{link_sources}{Follow links between GEOME, GBIF, and NCBI records to
+fill in IDs a sample does not have yet (default FALSE). Saved as the project
+setting. See `vignette("Specimen-Metadata")`.}
 }
 \description{
 Add new samples to an existing project database.

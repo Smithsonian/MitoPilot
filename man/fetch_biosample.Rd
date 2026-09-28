@@ -4,7 +4,13 @@
 \alias{fetch_biosample}
 \title{Fetch NCBI BioSample and BioProject metadata for project samples}
 \usage{
-fetch_biosample(path = ".", ids = NULL, biosamples = NULL, from_id = FALSE)
+fetch_biosample(
+  path = ".",
+  ids = NULL,
+  biosamples = NULL,
+  from_id = FALSE,
+  link_sources = NULL
+)
 }
 \arguments{
 \item{path}{Path to the project directory (default = current working directory)}
@@ -18,6 +24,10 @@ its NCBI data.}
 \item{from_id}{Use each sample's own ID as its BioSample value when that ID
 is a BioSample or SRA accession (for example an SRR run used as the sample
 ID). Samples whose ID is not one are left unchanged.}
+
+\item{link_sources}{Follow links to GEOME, GBIF, or NCBI records named in the
+fetched records, filling in IDs a sample does not have yet. NULL (default)
+uses the project setting.}
 }
 \value{
 Invisibly, a data frame of `ID`, `status`, and `message`.

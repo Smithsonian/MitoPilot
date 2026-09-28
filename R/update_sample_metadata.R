@@ -20,6 +20,9 @@
 #' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
 #'   value (default TRUE). Set FALSE when offline and run
 #'   [fetch_biosample()] later.
+#' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
+#'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
+#'   setting. See `vignette("Specimen-Metadata")`.
 #'
 #' @export
 #'
@@ -33,7 +36,8 @@ update_sample_metadata <- function(
     mapping_gbif = "GBIF_ID",
     fetch_gbif = TRUE,
     mapping_biosample = "BioSample",
-    fetch_biosample = TRUE
+    fetch_biosample = TRUE,
+    link_sources = FALSE
     ){
 
   # Check if project directory exists ----
@@ -144,5 +148,6 @@ update_sample_metadata <- function(
       by = "ID"
     )
 
-  .meta_sync_changed(con, mapping, sample_table, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample))
+  .meta_sync_changed(con, mapping, sample_table, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample),
+                     link = isTRUE(link_sources) || .meta_link_enabled(con))
 }

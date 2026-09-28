@@ -35,6 +35,10 @@
 #'   value during setup (default TRUE). Set FALSE when offline and run
 #'   [fetch_biosample()] later.
 #'   Passed to `new_db()`.
+#' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
+#'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
+#'   setting. See `vignette("Specimen-Metadata")`.
+#'   Passed to `new_db()`.
 #' @param data_path Path to the directory where the raw data is located. Can be
 #'   a AWS s3 bucket even if not using AWS for pipeline execution..
 #' @param min_depth Minimum number of paired sequences after pre-processing to proceed
@@ -79,6 +83,7 @@ new_project <- function(
     fetch_gbif = TRUE,
     mapping_biosample = "BioSample",
     fetch_biosample = TRUE,
+    link_sources = FALSE,
     data_path = NULL,
     min_depth = 2000000,
     genetic_code = NULL,
@@ -103,6 +108,7 @@ new_project <- function(
   dots$fetch_gbif <- fetch_gbif
   dots$mapping_biosample <- mapping_biosample
   dots$fetch_biosample <- fetch_biosample
+  dots$link_sources <- link_sources
   preflight_project(
     path = path, mapping_fn = mapping_fn, mapping_id = mapping_id,
     data_path = data_path, executor = executor, config = config,
@@ -155,6 +161,7 @@ new_project <- function(
     fetch_gbif = fetch_gbif,
     mapping_biosample = mapping_biosample,
     fetch_biosample = fetch_biosample,
+    link_sources = link_sources,
     seeds_db = custom_seeds_db,
     labels_db = custom_labels_db,
     ...
