@@ -213,6 +213,80 @@ GBIF fetch failed for FISH02 (GBIF occurrence not found (IDs can change when a d
 
 Records are fetched when you run these functions, not when the pipeline runs.
 
+## Resolving records across databases
+
+The three databases often point at each other. A BioSample submitted through
+GEOME names its GEOME tissue record; a GEOME record names the museum voucher,
+which is on GBIF; a Smithsonian GBIF record lists the BioSample and SRA runs
+sequenced from it. With linking turned on, MitoPilot reads each record it
+fetches for IDs of the other databases, adds the ones a sample does not have
+yet, and fetches those too. One column of SRA runs can then bring in all three
+records for every sample.
+
+Linking is off by default, because it makes extra requests and fills in IDs you
+did not type. Turn it on for a project at setup, for one fetch, or in the app:
+
+```r
+new_project(path = "my_project", mapping_fn = "mapping.csv", data_path = "reads/",
+            mapping_biosample = "ID", link_sources = TRUE)
+fetch_biosample("my_project", link_sources = TRUE)   # this fetch only
+```
+
+In the sample metadata viewer, tick **Follow links between databases** next to
+**Refresh all**. The setting is saved in the project: `link_sources = TRUE` at
+setup and the checkbox both turn it on for later fetches, and `fetch_*()`
+follow it unless you pass `link_sources = TRUE` or `FALSE`.
+
+![How MitoPilot links records across databases. Each arrow reads the record at its tail and fills in the ID at its head.](figures/link_overview.svg)
+
+| From | To | Where the link is read |
+|---|---|---|
+| NCBI BioSample | GEOME | the `bcid` attribute (samples submitted to the SRA through GEOME) |
+| NCBI BioSample | GBIF | a Smithsonian EZID in `voucherURI` or `catalogNumber`; otherwise a search for the `specimen_voucher` (see below) |
+| GEOME | NCBI | the tissue's sequencing record, which names its BioSample (one extra GEOME request) |
+| GEOME | GBIF | a Smithsonian EZID in `voucherURI` or `catalogNumber`; otherwise a search for `genbankSpecimenVoucher` or `materialSampleID` |
+| GBIF | NCBI | a BioSample (or else an SRA run) listed in `associatedSequences` |
+| GBIF | GEOME | a GEOME ARK in `occurrenceID` or `materialSampleID` (datasets GEOME publishes to GBIF) |
+
+Rules that keep linking safe:
+
+- **Your IDs always win.** MitoPilot only fills a database a sample has no ID
+  for. If a record points to a different ID than the one you gave, yours is
+  kept and the viewer shows a note such as "NCBI record links to ark:/...; kept
+  your ID ark:/...".
+- **Each database is fetched at most once per sample**, so links cannot loop.
+- **A failed linked fetch never fails the fetch that found it.** The linked
+  source simply shows as failed, like any other fetch.
+- **Every linked ID says where it came from.** The viewer tab shows, for
+  example, "Found through NCBI BioSample voucherURI", and the Metadata column
+  tooltip adds "(linked from ...)".
+
+### Matching a voucher to a GBIF record
+
+Only Smithsonian specimens carry an EZID that points straight at a GBIF record.
+For other museums MitoPilot searches GBIF for the voucher, which GenBank writes
+as `institution:collection:catalog` (for example `UW:157636`,
+`USNM:FISH:419933`). GBIF stores catalog numbers in several forms, so it tries
+three queries in turn, then filters the hits strictly and links only when
+exactly one specimen is left:
+
+![How a voucher is matched to one GBIF record](figures/link_gbif_voucher.svg)
+
+The species check matters: one catalog number can belong to many specimens (a
+museum lot such as `SIO 09-320` holds 27 species, and `USNM 419933` exists in
+the fish, herpetology, and mammal collections). When several specimens still
+match, nothing is linked and the viewer says "N possible GBIF matches for
+...; not linked"; paste the right gbifID yourself. Vouchers without an
+institution code, or specimens the museum has not published to GBIF, cannot be
+matched.
+
+<div class="alert alert-note">
+<strong>Records can disagree about sequencing runs.</strong> GEOME's sequencing
+record may name a different SRA run than the one you assembled (for example
+when a tissue was sequenced twice). MitoPilot links by BioSample, which both
+runs share, so the NCBI record is still the right one.
+</div>
+
 ## Viewing records in the app
 
 ### The Metadata column
@@ -263,7 +337,9 @@ sample ID and its Taxon; **Sample** on the left lists every sample, with
 "(failed)" or "(conflict)" after samples that need attention.
 
 Clearing an identifier box and clicking **Fetch** removes that link. **Refresh all**
-fetches every sample's GEOME, GBIF, and NCBI records again.
+fetches every sample's GEOME, GBIF, and NCBI records again. Tick **Follow links
+between databases** to let fetches fill in IDs for the other databases (see
+[Resolving records across databases](#resolving-records-across-databases)).
 
 The **NCBI** tab has a **Use sample ID** button: when the sample ID is an SRA
 run or BioSample, it copies the ID into the box and fetches. Records are shown
@@ -320,6 +396,29 @@ set_metadata_columns("my_project", country = "Country_Name",
 set_metadata_columns("my_project", country = NA)   # back to automatic
 set_metadata_columns("my_project", sex = "")       # do not compare sex
 ```
+
+## Removing fetched data
+
+**Remove fetched data...** under the sample list in the viewer deletes records
+MitoPilot fetched. Tick the sources to remove (GEOME, GBIF, NCBI; all are
+ticked to start), choose **This sample** or **All samples**, and click
+**Remove**. The same from R:
+
+```r
+remove_metadata("my_project")                             # everything fetched
+remove_metadata("my_project", sources = "GBIF")           # one source
+remove_metadata("my_project", sources = c("GEOME", "GBIF"), ids = "FISH02")
+```
+
+Only fetched data goes: the stored records, their fetch status, and IDs that
+linking filled in. These are always kept:
+
+- every column of your mapping file,
+- the IDs you supplied, in the mapping file, in the app, or with `fetch_*()`
+  (including the ID column used as `BioSample`), so **Refresh all** or
+  `fetch_*()` brings the data back,
+- the fields ticked in **Set Export Metadata** and the **Metadata** button;
+  they stay empty until you fetch again.
 
 ## Using metadata fields at export
 
@@ -483,3 +582,5 @@ Messages you may see in the viewer, on a warning icon, or in a fetch warning:
 | `could not reach NCBI (...)` | No connection to `eutils.ncbi.nlm.nih.gov`. Try again later with `fetch_biosample()` or **Refresh all**. |
 | `'x' is not a BioSample or SRA accession (...)` | The value is not a BioSample accession, BioSample number, or SRA accession. |
 | `NCBI returned HTTP ...` | Any other error from NCBI, for example when it is busy. Set `ENTREZ_KEY` if you fetch many samples. |
+| `N possible GBIF matches for ...; not linked` | Linking found several GBIF specimens for a voucher after all filters. Paste the right gbifID in the GBIF tab. |
+| `... record links to ...; kept your ID ...` | A fetched record names a different ID than the one you set. MitoPilot kept yours; check which is right. |

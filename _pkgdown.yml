@@ -91,6 +91,7 @@ reference:
   - fetch_geome
   - fetch_gbif
   - fetch_biosample
+  - remove_metadata
   - set_metadata_columns
   - geome_normalize_bcid
   - gbif_normalize_id
