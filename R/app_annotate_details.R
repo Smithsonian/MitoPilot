@@ -3414,10 +3414,10 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
 
     ## Edit start-add ----
     # Step magnitude (codons per click) comes from a numeric box (separate for
-    # START and STOP); clamp to [1, 50] and fall back to 1 for empty/invalid.
+    # START and STOP); clamp to [1, 100] and fall back to 1 for empty/invalid.
     edit_step_size <- function(id) {
       n <- suppressWarnings(as.integer(input[[id]]))
-      if (length(n) == 0 || is.na(n) || n < 1L) 1L else min(n, 50L)
+      if (length(n) == 0 || is.na(n) || n < 1L) 1L else min(n, 100L)
     }
     # "Hold tight" overlay during a start/stop edit + re-alignment, so rapid
     # repeated +/- clicks don't queue up while the alignment recomputes. Hidden
@@ -3449,14 +3449,14 @@ annotations_details_server <- function(id, rv, table_id = NULL) {
         }
       )
     }
-    # Keep the displayed box value inside [1, 50] when the user types directly.
+    # Keep the displayed box value inside [1, 100] when the user types directly.
     for (.id in c("start_step_size", "stop_step_size")) {
       local({
         id <- .id
         observeEvent(input[[id]], {
           n <- input[[id]]
           if (length(n) == 0 || is.na(n)) return()
-          clamped <- max(1, min(as.integer(n), 50))
+          clamped <- max(1, min(as.integer(n), 100))
           if (!identical(as.integer(n), as.integer(clamped))) {
             updateNumericInput(session, id, value = clamped)
           }
@@ -5279,7 +5279,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
             class = "mp-edit-ctrls",
             style = "display: flex; flex-flow: row nowrap; align-items: center; gap: 1.5em;",
             # Separate step boxes (codons per click) for START and STOP, each
-            # clamped to [1, 50] both in the UI and server-side. The - / +
+            # clamped to [1, 100] both in the UI and server-side. The - / +
             # buttons sit to the left of each box; all on a single row.
             # Zero the numericInput's default bottom margin and the pretty
             # checkbox's vertical margin so every element lines up vertically.
@@ -5332,7 +5332,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
                   label = NULL,
                   value = 1,
                   min = 1,
-                  max = 50,
+                  max = 100,
                   step = 1,
                   width = "48px"
                 ) |> mp_named_input("Codons per click")
@@ -5380,7 +5380,7 @@ annotate_details_modal <- function(rv, session = getDefaultReactiveDomain(), tab
                   label = NULL,
                   value = 1,
                   min = 1,
-                  max = 50,
+                  max = 100,
                   step = 1,
                   width = "48px"
                 ) |> mp_named_input("Codons per click")
