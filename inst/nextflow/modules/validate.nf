@@ -104,7 +104,7 @@ process write_curated_result {
         conn.autoCommit = false
         def pragma = conn.prepareStatement("PRAGMA busy_timeout=30000"); pragma.execute(); pragma.close()
 
-        // ---- assemblies: reconstruct per-scaffold sequence from coverageStats ----
+        // ---- assemblies: sequence from the curated FASTA, tracks from coverageStats ----
         def covLines = new File(coverage_fn.toString()).readLines()
         def ch = covLines[0].split(',', -1); def ci = [:]; ch.eachWithIndex { h, i -> ci[h.trim()] = i }
         def groups = [:]  // SeqId -> rows
@@ -123,10 +123,25 @@ process write_curated_result {
         def updAsm = conn.prepareStatement(
             "UPDATE assemblies SET sequence = ?, length = ?, depth = ?, gc = ?, errors = ?, " +
             "time_stamp = ? WHERE ID = ? AND path = ? AND scaffold = ?")
+        // The curated FASTA is what the annotation coordinates were computed on
+        def seqSb = null; def inTarget = false
+        new File(assembly_fn.toString()).readLines().each { l ->
+            if (l.startsWith('>')) {
+                inTarget = l.substring(1).split(/\s+/, 2)[0] == targetSid
+                if (inTarget) seqSb = new StringBuilder()
+            } else if (inTarget) { seqSb.append(l.trim()) }
+        }
         groups.each { sid, rows ->
             if (sid != targetSid) return  // only this unit's row
             rows.sort { a, b -> (a[ci['Position']] as int) <=> (b[ci['Position']] as int) }
-            def seq    = rows.collect { it[ci['Call']] }.join('')
+            if (seqSb == null) throw new RuntimeException("no FASTA record '${sid}' in ${assembly_fn}")
+            def seq = seqSb.toString()
+            // Tracks are per base: refuse to pair them with a sequence they do not describe
+            def calls = rows.collect { it[ci['Call']] }.join('')
+            def posOk = (0..<rows.size()).every { (rows[it][ci['Position']] as int) == it + 1 }
+            if (rows.size() != seq.length() || !posOk || !calls.equalsIgnoreCase(seq))
+                throw new RuntimeException("coverage for '${sid}' does not match its assembly " +
+                    "(${rows.size()} coverage rows, ${seq.length()} bp in ${assembly_fn})")
             def depth  = rows.collect { it[ci['MeanDepth']] }.join(' ')
             def gc     = rows.collect { it[ci['GC']] }.join(' ')
             def errors = rows.collect { it[ci['ErrorRate']] }.join(' ')

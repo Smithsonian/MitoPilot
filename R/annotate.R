@@ -99,7 +99,7 @@ annotate <- function(
   # Load coverage stats (always, when available - used for trimming and output)
   coverage <- NULL
   if (length(coverage_fn) == 1L && file.exists(coverage_fn)) {
-    coverage <- read.csv(coverage_fn) |>
+    coverage <- .coverage_read_complete(coverage_fn, assembly) |>
       dplyr::arrange(SeqId, Position) |>
       dplyr::mutate(
         mask = stringr::str_detect(MeanDepth, "^#") |

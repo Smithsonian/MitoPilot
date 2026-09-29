@@ -102,42 +102,14 @@ coverage <- function(
       ErrorRate = dplyr::if_else(Depth == 0, NA_real_, (Depth - Correct) / Depth)
     )
 
-  # Add missing coverage at start ----
-  for(id in unique(coverage$SeqId)){
-    if(coverage$Position[coverage$SeqId == id][1] != 1) {
-      end <- coverage$Position[coverage$SeqId == id][1] - 1
-      to_add <- data.frame(
-        SeqId = id,
-        Position = 1:end,
-        Call = as.character(Biostrings::subseq(assembly[id], 1, end)) |>
-          stringr::str_split("") |> unlist(),
-        Depth = 0,
-        Correct = 0
-      )
-      coverage <- dplyr::bind_rows(to_add, coverage)
-    }
-  }
-
   # Reform circular assembly ---
   coverage <- .coverage_reform_circular(coverage, assembly_len, circular_ids)
 
-  # Add missing coverage at end ----
-  for(id in unique(coverage$SeqId)){
-    if(max(coverage$Position[coverage$SeqId == id]) < assembly_len[[id]]) {
-      start <- max(coverage$Position[coverage$SeqId == id]) + 1
-      end <- assembly_len[[id]]
-      to_add <- data.frame(
-        SeqId = id,
-        Position = start:end,
-        Call = as.character(Biostrings::subseq(assembly[[id]], start, end)) |>
-          stringr::str_split("") |> unlist(),
-        Depth = 0,
-        Correct = 0,
-        ErrorRate = NA_real_
-      )
-      coverage <- dplyr::bind_rows(to_add, coverage)
-    }
-  }
+  # bam-readcount skips uncovered positions (start, end, and internal runs such
+  # as map-to-ref N gaps); downstream steps expect one row per base
+  coverage <- .coverage_fill_positions(
+    coverage, Biostrings::subseq(assembly, 1, assembly_len[names(assembly)])
+  )
   }
 
   coverage <- coverage |>
@@ -224,6 +196,68 @@ coverage <- function(
   )
 
   return(invisible(stats_out))
+}
+
+#' Complete a per-base coverage table to one row per assembly position
+#'
+#' Missing positions get the assembly base, Depth 0, Correct 0 and ErrorRate NA.
+#' Only scaffolds that already have rows are completed; a scaffold no read mapped
+#' to stays absent so the no-coverage handling downstream still sees it.
+#'
+#' @param coverage data.frame with SeqId, Position, Call, Depth, Correct, ErrorRate
+#' @param assembly named DNAStringSet (names = SeqId)
+#' @noRd
+.coverage_fill_positions <- function(coverage, assembly) {
+  ids <- intersect(names(assembly), unique(coverage$SeqId))
+  full <- purrr::map_dfr(ids, function(id) {
+    calls <- strsplit(as.character(assembly[[id]]), "")[[1]]
+    data.frame(SeqId = id, Position = seq_along(calls), Base = calls)
+  })
+  full |>
+    dplyr::left_join(
+      dplyr::select(coverage, "SeqId", "Position", "Call", "Depth", "Correct", "ErrorRate"),
+      by = c("SeqId", "Position")
+    ) |>
+    dplyr::mutate(
+      filled = is.na(Depth),
+      Call = dplyr::if_else(filled, Base, Call),
+      Depth = dplyr::if_else(filled, 0, as.numeric(Depth)),
+      Correct = dplyr::if_else(filled, 0, as.numeric(Correct))
+    ) |>
+    dplyr::select("SeqId", "Position", "Call", "Depth", "Correct", "ErrorRate")
+}
+
+#' Read a coverageStats CSV, completing any scaffold that is missing positions
+#'
+#' Coverage written before [.coverage_fill_positions()] existed lacks rows for
+#' internal zero-coverage runs. Those scaffolds are completed and their rolling
+#' stats recomputed, exactly as [coverage()] now writes them; complete files are
+#' returned as read.
+#'
+#' @param coverage_fn path to a `*_coverageStats.csv`
+#' @param assembly DNAStringSet whose names start with the SeqId
+#' @noRd
+.coverage_read_complete <- function(coverage_fn, assembly) {
+  coverage <- read.csv(coverage_fn)
+  assembly <- stats::setNames(assembly, sub("\\s.*$", "", names(assembly)))
+  gappy <- vapply(names(assembly), function(id) {
+    p <- coverage$Position[coverage$SeqId == id]
+    length(p) > 0 && !identical(sort(as.integer(p)), seq_len(Biostrings::width(assembly[id])))
+  }, logical(1))
+  if (!any(gappy)) {
+    return(coverage)
+  }
+  fix <- names(assembly)[gappy]
+  fixed <- coverage[coverage$SeqId %in% fix, ] |>
+    dplyr::mutate(ErrorRate = dplyr::if_else(Depth == 0, NA_real_, (Depth - Correct) / Depth)) |>
+    .coverage_fill_positions(assembly[fix]) |>
+    .coverage_rolling_stats() |>
+    .coverage_stats_to_output()
+  dplyr::bind_rows(
+    fixed,
+    dplyr::mutate(coverage[!coverage$SeqId %in% fix, ],
+                  dplyr::across(c("MeanDepth", "ErrorRate"), as.character))
+  )
 }
 
 #' Scaffold ids whose FASTA description marks them circular
