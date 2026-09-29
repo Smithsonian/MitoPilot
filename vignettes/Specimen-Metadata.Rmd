@@ -244,6 +244,11 @@ Rules that keep linking safe:
   for. If a record points to a different ID than the one you gave, yours is
   kept and the viewer shows a note such as "NCBI record links to ark:/...; kept
   your ID ark:/...".
+- **The first link wins when two records disagree.** Records are read in the
+  order GEOME, GBIF, NCBI. If two of them name different records in the third
+  database, the first one is linked and the viewer notes the other, for example
+  "NCBI record links to ark:/...; kept ark:/... found through GEOME Sample
+  voucherURI". Check the Compare tab, and paste the right ID if the link is wrong.
 - **Each database is fetched at most once per sample**, so links cannot loop.
 - **A failed linked fetch never fails the fetch that found it.** The linked
   source simply shows as failed, like any other fetch.
