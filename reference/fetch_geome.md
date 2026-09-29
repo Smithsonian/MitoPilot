@@ -8,7 +8,7 @@ at export.
 ## Usage
 
 ``` r
-fetch_geome(path = ".", ids = NULL, bcids = NULL)
+fetch_geome(path = ".", ids = NULL, bcids = NULL, link_sources = NULL)
 ```
 
 ## Arguments
@@ -25,6 +25,12 @@ fetch_geome(path = ".", ids = NULL, bcids = NULL)
 
   Optional BCIDs to set for \`ids\` first (same length as \`ids\`). A
   blank value removes that sample's BCID and its GEOME data.
+
+- link_sources:
+
+  Follow links to GEOME, GBIF, or NCBI records named in the fetched
+  records, filling in IDs a sample does not have yet. NULL (default)
+  uses the project setting.
 
 ## Value
 

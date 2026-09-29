@@ -32,12 +32,19 @@ Create, migrate, edit, and export the project SQLite database.
   : Fetch GEOME metadata for project samples
 - [`fetch_gbif()`](https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.md)
   : Fetch GBIF occurrence metadata for project samples
+- [`fetch_biosample()`](https://smithsonian.github.io/MitoPilot/reference/fetch_biosample.md)
+  : Fetch NCBI BioSample and BioProject metadata for project samples
+- [`remove_metadata()`](https://smithsonian.github.io/MitoPilot/reference/remove_metadata.md)
+  : Remove fetched GEOME, GBIF, and NCBI metadata
 - [`set_metadata_columns()`](https://smithsonian.github.io/MitoPilot/reference/set_metadata_columns.md)
-  : Choose which mapping-file columns are compared with GEOME and GBIF
+  : Choose which mapping-file columns are compared with GEOME, GBIF, and
+  NCBI
 - [`geome_normalize_bcid()`](https://smithsonian.github.io/MitoPilot/reference/geome_normalize_bcid.md)
   : Normalize GEOME BCIDs to bare ARKs
 - [`gbif_normalize_id()`](https://smithsonian.github.io/MitoPilot/reference/gbif_normalize_id.md)
   : Normalize GBIF occurrence IDs
+- [`ncbi_normalize_id()`](https://smithsonian.github.io/MitoPilot/reference/ncbi_normalize_id.md)
+  : Normalize NCBI BioSample or SRA accessions
 - [`update_sample_seqdata()`](https://smithsonian.github.io/MitoPilot/reference/update_sample_seqdata.md)
   : Update sequence files for existing project
 - [`set_maptoref_refs()`](https://smithsonian.github.io/MitoPilot/reference/set_maptoref_refs.md)

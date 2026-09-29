@@ -9,7 +9,7 @@ previous data and shows a failed fetch.
 ## Usage
 
 ``` r
-fetch_gbif(path = ".", ids = NULL, gbifs = NULL)
+fetch_gbif(path = ".", ids = NULL, gbifs = NULL, link_sources = NULL)
 ```
 
 ## Arguments
@@ -27,6 +27,12 @@ fetch_gbif(path = ".", ids = NULL, gbifs = NULL)
   Optional GBIF occurrence IDs (or gbif.org occurrence links) to set for
   \`ids\` first (same length as \`ids\`). A blank value removes that
   sample's GBIF ID and its GBIF data.
+
+- link_sources:
+
+  Follow links to GEOME, GBIF, or NCBI records named in the fetched
+  records, filling in IDs a sample does not have yet. NULL (default)
+  uses the project setting.
 
 ## Value
 

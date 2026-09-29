@@ -1,12 +1,61 @@
 # Changelog
 
-## MitoPilot (development version)
+## MitoPilot 1.5.8
 
+Released 2026-09-29. Container: `macguigand/mitopilot:1.5.8`
+
+### New Features
+
+- **NCBI BioSample metadata.** Samples can now be linked to an NCBI
+  BioSample, directly or through an SRA accession (SRR, ERR, DRR, SRX,
+  or SRS), with `mapping_biosample` at setup,
+  [`fetch_biosample()`](https://smithsonian.github.io/MitoPilot/reference/fetch_biosample.md),
+  or the new NCBI tab in the sample metadata viewer. MitoPilot stores
+  every BioSample attribute plus the linked BioProjects, adds NCBI to
+  the Compare tab and the export conflict warning, and offers
+  GenBank-ready `ncbi_*` fields at export. See [Sample
+  metadata](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html).
+- **Follow links between GEOME, GBIF, and NCBI.** With
+  `link_sources = TRUE` at setup (or **Follow links between databases**
+  in the sample metadata viewer), each fetched record is read for IDs of
+  the other databases, and missing ones are added and fetched: BioSample
+  to GEOME tissue and Smithsonian voucher, GEOME to BioSample and
+  voucher, GBIF to BioSample. Other museums’ vouchers are matched to
+  GBIF by catalog number, and only linked when exactly one specimen of
+  the right species is found. Your own IDs are never replaced, and every
+  linked ID shows where it came from.
+- **Remove fetched metadata.** **Remove fetched data…** in the sample
+  metadata viewer, or
+  [`remove_metadata()`](https://smithsonian.github.io/MitoPilot/reference/remove_metadata.md),
+  deletes fetched GEOME, GBIF, or NCBI records for one sample or all.
+  Mapping-file columns and the IDs you supplied are always kept.
 - **Curation ruleset browser tweaks.** Each clade now shows a
   representative image from Wikipedia, credited to its author and
-  license with links to the Wikimedia Commons file. Help tooltips are no
-  longer cut off by the taxonomy tree. On phones, the tree opens from a
-  menu button and rule tables become one card per gene.
+  license with links to the Wikimedia Commons file
+
+### Bug Fixes
+
+- **Assemblies keep their N gaps after annotation.** Bases with no read
+  coverage, mostly the runs of N that map-to-reference assembly produces
+  where no reads map, were dropped from the saved sequence when
+  annotation finished. Gene coordinates stayed on the full sequence, so
+  every feature after the first dropped run of Ns had incorrect
+  annotation coordinates. The coverage table now has one row per base
+  (depth 0 over gaps), the saved sequence comes from the curated
+  assembly the annotations were built on, and annotation stops with an
+  error instead of saving a sequence that does not match its coverage.
+  Coverage files from earlier versions are completed automatically when
+  annotation runs, so Assemble does not need to be re-run. Re-run
+  annotation on affected samples and re-export them.
+
+**Note** To update older MitoPilot projects, please run
+[`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html).
+This will add any missing fields to the SQL database and attempt to
+update the Docker/Singularity container version in your project
+`.config` file.
+
+**Full Changelog**:
+<https://github.com/Smithsonian/MitoPilot/compare/1.5.7>…1.5.8
 
 ## MitoPilot 1.5.7
 

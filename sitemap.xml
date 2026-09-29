@@ -75,6 +75,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/custom_curation_db.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_db_to_csv.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_files.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_biosample.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_ref.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_refs.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.html</loc></url>
@@ -99,6 +100,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/mitopilot_config_dir.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/native_check.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/native_setup.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/ncbi_normalize_id.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_db.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_db_userAsmb.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/new_project.html</loc></url>
@@ -140,6 +142,7 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_thecostraca_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/params_turtle_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/patch_blast_ref_meta.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/remove_metadata.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/rotate_asmb.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/ruleset_browser.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/run_scaffold_join.html</loc></url>

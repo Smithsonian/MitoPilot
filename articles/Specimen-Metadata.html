@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Sample metadata: GEOME and GBIF • MitoPilot</title>
+<title>Sample metadata: GEOME, GBIF, and NCBI • MitoPilot</title>
 <!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
 <link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
@@ -16,7 +16,7 @@
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
-<meta property="og:title" content="Sample metadata: GEOME and GBIF">
+<meta property="og:title" content="Sample metadata: GEOME, GBIF, and NCBI">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,7 +51,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
-    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME and GBIF</a></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
@@ -88,7 +88,7 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-      <img src="../logo.png" class="logo" alt=""><h1>Sample metadata: GEOME and GBIF</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>Sample metadata: GEOME, GBIF, and NCBI</h1>
             
       
       <small class="dont-index">Source: <a href="https://github.com/Smithsonian/MitoPilot/blob/main/vignettes/Specimen-Metadata.Rmd" class="external-link"><code>vignettes/Specimen-Metadata.Rmd</code></a></small>
@@ -113,7 +113,7 @@ strong { font-weight: bold; }
 <div class="section level2">
 <h2 id="what-mitopilot-pulls-and-from-where">What MitoPilot pulls, and from where<a class="anchor" aria-label="anchor" href="#what-mitopilot-pulls-and-from-where"></a>
 </h2>
-<p>MitoPilot can link each sample to specimen records in two public
+<p>MitoPilot can link each sample to specimen records in three public
 databases:</p>
 <ul>
 <li>
@@ -131,11 +131,20 @@ other collections. Every occurrence has a gbifID, a number such as
 <code>6186461308</code>. Given a gbifID (or EZID for Smithsonian NMNH
 records), MitoPilot fetches the occurrence, the dataset it belongs to,
 and the organization that published it.</li>
+<li>
+<a href="https://www.ncbi.nlm.nih.gov/biosample" class="external-link">NCBI BioSample</a>
+describes the biological material behind sequence data in GenBank and
+the SRA. Every BioSample has an accession such as
+<code>SAMN29555051</code>. Given a BioSample, or an SRA accession such
+as <code>SRR21844202</code> that links to one, MitoPilot fetches the
+BioSample with all of its attributes and the BioProject(s) it belongs
+to.</li>
 </ul>
 <p>Everything is stored in the project database, so you can:</p>
 <ul>
 <li>browse the full records for each sample in the app,</li>
-<li>see where your mapping file, GEOME, and GBIF disagree, and</li>
+<li>see where your mapping file, GEOME, GBIF, and NCBI disagree,
+and</li>
 <li>pick fields, including GenBank-ready source modifiers such as
 <code>lat_lon</code> and <code>collection_date</code>, to use in FASTA
 headers at export.</li>
@@ -143,13 +152,13 @@ headers at export.</li>
 <p>MitoPilot never merges values or picks one source over another. Each
 source keeps its own fields, and you decide which ones go into your
 headers.</p>
-<p>Both links are optional. Projects without BCIDs or gbifIDs work
-exactly as before.</p>
+<p>All links are optional. Projects without BCIDs, gbifIDs, or
+BioSamples work exactly as before.</p>
 <div class="alert alert-warning">
 <p><strong>Public records only.</strong> MitoPilot reads public GEOME
-records and public GBIF occurrences. Private GEOME projects are not
-supported yet, because logging in to GEOME from another program needs
-credentials issued by the GEOME team.</p>
+records and public GBIF occurrences and public NCBI BioSamples. Private
+GEOME projects are not supported yet, because logging in to GEOME from
+another program needs credentials issued by the GEOME team.</p>
 </div>
 </div>
 <div class="section level2">
@@ -188,34 +197,50 @@ ID.</p>
 <p>Some GEOME projects also publish to GBIF. Their GBIF occurrences
 carry the GEOME ARK in <code>occurrenceID</code> or
 <code>catalogNumber</code>, and their publisher is “The Genomic
-Observatories Metadatabase (GeOMe)”. MitoPilot does not link the two
-automatically; add both IDs if you want both.</p>
+Observatories Metadatabase (GeOMe)”. With linking turned on, MitoPilot
+fills in one from the other; see <a href="#resolving-records-across-databases">Resolving records across
+databases</a>.</p>
+<p><strong>NCBI BioSample or SRA accession.</strong> Copy the BioSample
+accession from <a href="https://www.ncbi.nlm.nih.gov/biosample" class="external-link">NCBI
+BioSample</a>, or the SRA accession of your reads. Upper or lower case,
+bare BioSample numbers, and NCBI links all work:</p>
+<pre><code>SAMN29555051
+29555051
+https://www.ncbi.nlm.nih.gov/biosample/SAMN29555051
+SRR21844202                 (an SRA run; ERR and DRR runs work too)
+SRX17832658                 (an SRA experiment)
+SRS14384543                 (an SRA sample)</code></pre>
+<p>For an SRA accession, MitoPilot finds its linked BioSample and also
+stores the SRA details (run, experiment, study, platform, and
+library).</p>
 </div>
 <div class="section level2">
 <h2 id="adding-identifiers-at-project-setup">Adding identifiers at project setup<a class="anchor" aria-label="anchor" href="#adding-identifiers-at-project-setup"></a>
 </h2>
-<p>Add a column of BCIDs, a column of gbifIDs, or both to your mapping
-file (see <a href="Your-Own-Project.html#the-mapping-file">Running Your
-Own Project</a>), and name them with <code>mapping_geome</code> and
-<code>mapping_gbif</code>:</p>
+<p>Add a column of BCIDs, gbifIDs, or BioSample/SRA accessions (any or
+all) to your mapping file (see <a href="Your-Own-Project.html#the-mapping-file">Running Your Own
+Project</a>), and name them with <code>mapping_geome</code>,
+<code>mapping_gbif</code>, and <code>mapping_biosample</code>:</p>
 <pre><code>ID,Taxon,R1,R2,Tissue_BCID,Occurrence
 FISH01,Psenes pellucidus,FISH01_R1.fastq.gz,FISH01_R2.fastq.gz,ark:/21547/CXu2MBIO1000.1,
 FISH02,Notemigonus crysoleucas,FISH02_R1.fastq.gz,FISH02_R2.fastq.gz,,6186461308
 FISH03,Conger oceanicus,FISH03_R1.fastq.gz,FISH03_R2.fastq.gz,,</code></pre>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span>path <span class="op">=</span> <span class="st">"my_project"</span>, mapping_fn <span class="op">=</span> <span class="st">"mapping.csv"</span>,</span>
 <span>            mapping_geome <span class="op">=</span> <span class="st">"Tissue_BCID"</span>, mapping_gbif <span class="op">=</span> <span class="st">"Occurrence"</span>,</span>
 <span>            data_path <span class="op">=</span> <span class="st">"reads/"</span><span class="op">)</span></span></code></pre></div>
 <ul>
-<li>The columns are stored in the project as <code>GEOME_BCID</code> and
-<code>GBIF_ID</code>. If your columns already have those names, leave
-out <code>mapping_geome</code> and <code>mapping_gbif</code>.</li>
+<li>The columns are stored in the project as <code>GEOME_BCID</code>,
+<code>GBIF_ID</code>, and <code>BioSample</code>. If your columns
+already have those names, leave out <code>mapping_geome</code>,
+<code>mapping_gbif</code>, and <code>mapping_biosample</code>.</li>
 <li>Blank cells are fine: those samples simply have no link.</li>
 <li>MitoPilot fetches the records during setup, which needs an internet
 connection. When setting up offline, pass
-<code>fetch_geome = FALSE</code> and <code>fetch_gbif = FALSE</code>,
-then run <code><a href="../reference/fetch_geome.html">fetch_geome()</a></code> and <code><a href="../reference/fetch_gbif.html">fetch_gbif()</a></code>
-later.</li>
+<code>fetch_geome = FALSE</code>, <code>fetch_gbif = FALSE</code>, and
+<code>fetch_biosample = FALSE</code>, then run
+<code><a href="../reference/fetch_geome.html">fetch_geome()</a></code>, <code><a href="../reference/fetch_gbif.html">fetch_gbif()</a></code>, and
+<code><a href="../reference/fetch_biosample.html">fetch_biosample()</a></code> later.</li>
 </ul>
 <p><code><a href="../reference/new_project_userAsmb.html">new_project_userAsmb()</a></code> takes the same arguments.</p>
 </div>
@@ -224,12 +249,13 @@ later.</li>
 </h2>
 <p><code><a href="../reference/add_samples.html">add_samples()</a></code> and <code><a href="../reference/update_sample_metadata.html">update_sample_metadata()</a></code>
 accept <code>mapping_geome</code>, <code>mapping_gbif</code>,
-<code>fetch_geome</code>, and <code>fetch_gbif</code> too. With
+<code>mapping_biosample</code>, <code>fetch_geome</code>,
+<code>fetch_gbif</code>, and <code>fetch_biosample</code> too. With
 <code><a href="../reference/update_sample_metadata.html">update_sample_metadata()</a></code>, samples whose identifier changed
 (or was added) are fetched again, and a blank cell removes that sample’s
 link and its data for that source only.</p>
 <p>To fetch again without touching the mapping file:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/fetch_geome.html">fetch_geome</a></span><span class="op">(</span><span class="st">"my_project"</span><span class="op">)</span>                     <span class="co"># refresh every BCID</span></span>
 <span><span class="fu"><a href="../reference/fetch_gbif.html">fetch_gbif</a></span><span class="op">(</span><span class="st">"my_project"</span><span class="op">)</span>                      <span class="co"># refresh every gbifID</span></span>
 <span><span class="fu"><a href="../reference/fetch_gbif.html">fetch_gbif</a></span><span class="op">(</span><span class="st">"my_project"</span>, ids <span class="op">=</span> <span class="st">"FISH02"</span><span class="op">)</span>      <span class="co"># refresh one sample</span></span>
@@ -237,13 +263,159 @@ link and its data for that source only.</p>
 <span>           gbifs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2336663130"</span>, <span class="st">"6186461308"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The last form sets (or replaces) the gbifIDs of those samples before
 fetching; <code><a href="../reference/fetch_geome.html">fetch_geome()</a></code> does the same with
-<code>bcids</code>. A blank value removes the link.</p>
+<code>bcids</code>, and <code><a href="../reference/fetch_biosample.html">fetch_biosample()</a></code> with
+<code>biosamples</code>. A blank value removes the link.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/fetch_biosample.html">fetch_biosample</a></span><span class="op">(</span><span class="st">"my_project"</span>, ids <span class="op">=</span> <span class="st">"FISH03"</span>, biosamples <span class="op">=</span> <span class="st">"SAMN29555051"</span><span class="op">)</span></span></code></pre></div>
+<p>NCBI allows three requests per second. For larger projects, get a
+free <a href="https://www.ncbi.nlm.nih.gov/books/NBK25497/" class="external-link">NCBI API
+key</a> and set it before fetching, for example in your
+<code>.Renviron</code> file: <code>ENTREZ_KEY=your_key</code>. MitoPilot
+then makes up to ten requests per second.</p>
 <p>When some fetches fail, the functions finish the rest and then give
 one warning listing each failed sample with the reason, for example:</p>
 <pre><code>Warning message:
 GBIF fetch failed for FISH02 (GBIF occurrence not found (IDs can change when a dataset is republished))</code></pre>
 <p>Records are fetched when you run these functions, not when the
 pipeline runs.</p>
+</div>
+<div class="section level2">
+<h2 id="resolving-records-across-databases">Resolving records across databases<a class="anchor" aria-label="anchor" href="#resolving-records-across-databases"></a>
+</h2>
+<p>GEOME, GBIF, and NCBI often have linked records. MitoPilot allows you
+to fetch metadata from each database by exploring these links. For
+example, one column containing NCBI SRA accessions can also import
+metadata from the appropriate GEOME and GBIF records.</p>
+<p>Cross-database linking is off by default, because it makes extra
+requests and fills in IDs you did not type. You can turn it on for a
+project during setup:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span>path <span class="op">=</span> <span class="st">"my_project"</span>, mapping_fn <span class="op">=</span> <span class="st">"mapping.csv"</span>, data_path <span class="op">=</span> <span class="st">"reads/"</span>,</span>
+<span>            link_sources <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/fetch_biosample.html">fetch_biosample</a></span><span class="op">(</span><span class="st">"my_project"</span>, link_sources <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>   <span class="co"># this fetch only</span></span></code></pre></div>
+<p>Or you can turn on database linking in the MitoPilot app. In the
+sample metadata viewer, tick <strong>Follow links between
+databases</strong> next to the <strong>Fetch</strong> button on the
+GEOME, GBIF, or NCBI tab. The setting is saved in the project:
+<code>link_sources = TRUE</code> at setup and the checkbox both turn it
+on for later fetches, and <code>fetch_*()</code> follow it unless you
+pass <code>link_sources = TRUE</code> or <code>FALSE</code>.</p>
+<div class="float">
+<img src="figures/link_overview.svg" alt="How MitoPilot links records across databases. Each arrow reads the record at its tail and fills in the ID at its head."><div class="figcaption">How MitoPilot links records across databases.
+Each arrow reads the record at its tail and fills in the ID at its
+head.</div>
+</div>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>From</th>
+<th>To</th>
+<th>Where the link is read</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>NCBI BioSample</td>
+<td>GEOME</td>
+<td>the <code>bcid</code> attribute (samples submitted to the SRA
+through GEOME)</td>
+</tr>
+<tr class="even">
+<td>NCBI BioSample</td>
+<td>GBIF</td>
+<td>a Smithsonian EZID in <code>voucherURI</code> or
+<code>catalogNumber</code>; otherwise a search for the
+<code>specimen_voucher</code> (see below)</td>
+</tr>
+<tr class="odd">
+<td>GEOME</td>
+<td>NCBI</td>
+<td>the tissue’s sequencing record, which names its BioSample (one extra
+GEOME request)</td>
+</tr>
+<tr class="even">
+<td>GEOME</td>
+<td>GBIF</td>
+<td>a Smithsonian EZID in <code>voucherURI</code> or
+<code>catalogNumber</code>; otherwise a search for
+<code>genbankSpecimenVoucher</code> or
+<code>materialSampleID</code>
+</td>
+</tr>
+<tr class="odd">
+<td>GBIF</td>
+<td>NCBI</td>
+<td>a BioSample (or else an SRA run) listed in
+<code>associatedSequences</code>
+</td>
+</tr>
+<tr class="even">
+<td>GBIF</td>
+<td>GEOME</td>
+<td>a GEOME ARK in <code>occurrenceID</code> or
+<code>materialSampleID</code> (datasets GEOME publishes to GBIF)</td>
+</tr>
+</tbody>
+</table>
+<p>Rules that keep linking safe:</p>
+<ul>
+<li>
+<strong>Your IDs always win.</strong> MitoPilot only fills a
+database a sample has no ID for. If a record points to a different ID
+than the one you gave, yours is kept and the viewer shows a note such as
+“NCBI record links to ark:/…; kept your ID ark:/…”.</li>
+<li>
+<strong>The first link wins when two records disagree.</strong>
+Records are read in the order GEOME, GBIF, NCBI. If two of them name
+different records in the third database, the first one is linked and the
+viewer notes the other, for example “NCBI record links to ark:/…; kept
+ark:/… found through GEOME Sample voucherURI”. Check the Compare tab,
+and paste the right ID if the link is wrong.</li>
+<li>
+<strong>Each database is fetched at most once per sample</strong>,
+so links cannot loop.</li>
+<li>
+<strong>A failed linked fetch never fails the fetch that found
+it.</strong> The linked source simply shows as failed, like any other
+fetch.</li>
+<li>
+<strong>Every linked ID says where it came from.</strong> The viewer
+tab shows, for example, “Found through NCBI BioSample voucherURI”, and
+the Metadata column tooltip adds “(linked from …)”.</li>
+</ul>
+<div class="section level3">
+<h3 id="matching-a-voucher-to-a-gbif-record">Matching a voucher to a GBIF record<a class="anchor" aria-label="anchor" href="#matching-a-voucher-to-a-gbif-record"></a>
+</h3>
+<p>Only Smithsonian specimens carry an EZID that points straight at a
+GBIF record. For other museums MitoPilot searches GBIF for the voucher,
+which GenBank writes as <code>institution:collection:catalog</code> (for
+example <code>UW:157636</code>, <code>USNM:FISH:419933</code>). GBIF
+stores catalog numbers in several forms, so it tries three queries in
+turn, then filters the hits strictly and links only when exactly one
+specimen is left:</p>
+<div class="float">
+<img src="figures/link_gbif_voucher.svg" alt="How a voucher is matched to one GBIF record"><div class="figcaption">How a voucher is matched to one GBIF
+record</div>
+</div>
+<p>The species check matters: one catalog number can belong to many
+specimens (a museum lot such as <code>SIO 09-320</code> holds 27
+species, and <code>USNM 419933</code> exists in the fish, herpetology,
+and mammal collections). When several specimens still match, nothing is
+linked and the viewer says “N possible GBIF matches for …; not linked”;
+paste the right gbifID yourself. Vouchers without an institution code,
+or specimens the museum has not published to GBIF, cannot be
+matched.</p>
+<div class="alert alert-note">
+<p><strong>Records can disagree about sequencing runs.</strong> GEOME’s
+sequencing record may name a different SRA run than the one you
+assembled (for example when a tissue was sequenced twice). MitoPilot
+links by BioSample, which both runs share, so the NCBI record is still
+the right one.</p>
+</div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="viewing-records-in-the-app">Viewing records in the app<a class="anchor" aria-label="anchor" href="#viewing-records-in-the-app"></a>
@@ -274,20 +446,25 @@ when the sources disagree:</p>
 <td>The sample has a GBIF ID and its record was fetched.</td>
 </tr>
 <tr class="odd">
+<td>NCBI helix</td>
+<td>The sample has a BioSample or SRA accession and its record was
+fetched.</td>
+</tr>
+<tr class="even">
 <td>Faded logo</td>
 <td>That source has an ID but has not been fetched yet.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Faded logo with a small warning triangle</td>
 <td>The fetch from that source failed. Hover to see why.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Orange flag</td>
 <td>The sources disagree on at least one item (see <a href="#comparing-sources">Comparing sources</a>).</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Faint plus</td>
-<td>No GEOME BCID or GBIF ID.</td>
+<td>No GEOME BCID, GBIF ID, or BioSample.</td>
 </tr>
 </tbody>
 </table>
@@ -309,13 +486,13 @@ table columns. The choice is saved in the project and shared by the
 Assemble, Annotate, and Export tables. You can temporarily hide all
 metadata fields using the <code>Columns</code> picker.</p>
 <p>The window lists every field that has a value for at least one
-sample: the extra columns from your mapping file, then GEOME fields,
-then GBIF fields, with the number of samples that have each one and an
+sample: the extra columns from your mapping file, then GEOME, GBIF, and
+NCBI fields, with the number of samples that have each one and an
 example value. Use the search box, or the <strong>Map file</strong>,
-<strong>GEOME</strong>, and <strong>GBIF</strong> buttons, to narrow the
-list, and click rows to tick them. Mapping-file fields start ticked;
-GEOME and GBIF fields start unticked. <strong>Clear all</strong> unticks
-everything.</p>
+<strong>GEOME</strong>, <strong>GBIF</strong>, and <strong>NCBI</strong>
+buttons, to narrow the list, and click rows to tick them. Mapping-file
+fields start ticked; GEOME, GBIF, and NCBI fields start unticked.
+<strong>Clear all</strong> unticks everything.</p>
 <p>This only changes what you see. What goes into exported files is set
 with <strong>Choose fields</strong> (see <a href="#using-metadata-fields-at-export">Using metadata fields at
 export</a>).</p>
@@ -329,7 +506,15 @@ sample. The title shows the sample ID and its Taxon;
 or “(conflict)” after samples that need attention.</p>
 <p>Clearing an identifier box and clicking <strong>Fetch</strong>
 removes that link. <strong>Refresh all</strong> fetches every sample’s
-GEOME and GBIF records again.</p>
+GEOME, GBIF, and NCBI records again. Tick <strong>Follow links between
+databases</strong> to let fetches fill in IDs for the other databases
+(see <a href="#resolving-records-across-databases">Resolving records
+across databases</a>). Type in the <strong>Filter field names</strong>
+box, to the right of the tabs, to show only the fields whose names
+match.</p>
+<p>On the <strong>NCBI</strong> tab, records are shown as SRA (when you
+gave an SRA accession), BioSample, and BioProject cards, each linked to
+its NCBI page.</p>
 <div class="float">
 <img src="figures/specimen_viewer_gbif.png" alt="Sample metadata viewer, GBIF tab, with the occurrence issues shown as badges"><div class="figcaption">Sample metadata viewer, GBIF tab, with the
 occurrence issues shown as badges</div>
@@ -340,7 +525,7 @@ occurrence issues shown as badges</div>
 </h3>
 <p>The <strong>Compare</strong> tab lists each item MitoPilot checks,
 with the value from your mapping file (and the column it came from),
-from GEOME, and from GBIF, and a status:</p>
+from GEOME, from GBIF, and from NCBI, and a status:</p>
 <table class="table">
 <colgroup>
 <col width="50%">
@@ -375,7 +560,11 @@ or a value could not be read.</td>
 </tbody>
 </table>
 <p>Blanks never conflict: only sources that both have a value are
-compared.</p>
+compared. BioSample placeholders such as <code>missing</code>,
+<code>not collected</code>, <code>not applicable</code>, or
+<code>restricted access</code> count as blank. NCBI’s country and
+locality come from the two parts of <code>geo_loc_name</code>, and its
+taxon from the BioSample organism.</p>
 <div class="float">
 <img src="figures/specimen_compare.png" alt="Compare tab with a country conflict and a collector that was not checked"><div class="figcaption">Compare tab with a country conflict and a
 collector that was not checked</div>
@@ -457,13 +646,38 @@ else, open <strong>Mapfile columns…</strong> at the bottom of the
 Compare tab, pick the column for each item (or <strong>(none)</strong>
 to skip it), and click <strong>Save columns</strong>. Leaving a box
 empty goes back to automatic detection. The same works from R:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/set_metadata_columns.html">set_metadata_columns</a></span><span class="op">(</span><span class="st">"my_project"</span>, country <span class="op">=</span> <span class="st">"Country_Name"</span>,</span>
 <span>                     coordinates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Lat_DD"</span>, <span class="st">"Long_DD"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/set_metadata_columns.html">set_metadata_columns</a></span><span class="op">(</span><span class="st">"my_project"</span>, country <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span>   <span class="co"># back to automatic</span></span>
 <span><span class="fu"><a href="../reference/set_metadata_columns.html">set_metadata_columns</a></span><span class="op">(</span><span class="st">"my_project"</span>, sex <span class="op">=</span> <span class="st">""</span><span class="op">)</span>       <span class="co"># do not compare sex</span></span></code></pre></div>
 </div>
 </div>
+</div>
+<div class="section level2">
+<h2 id="removing-fetched-data">Removing fetched data<a class="anchor" aria-label="anchor" href="#removing-fetched-data"></a>
+</h2>
+<p><strong>Remove fetched data…</strong> under the sample list in the
+viewer deletes records MitoPilot fetched. Tick the sources to remove
+(GEOME, GBIF, NCBI; all are ticked to start), choose <strong>This
+sample</strong> or <strong>All samples</strong>, and click
+<strong>Remove</strong>. The same from R:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/remove_metadata.html">remove_metadata</a></span><span class="op">(</span><span class="st">"my_project"</span><span class="op">)</span>                             <span class="co"># everything fetched</span></span>
+<span><span class="fu"><a href="../reference/remove_metadata.html">remove_metadata</a></span><span class="op">(</span><span class="st">"my_project"</span>, sources <span class="op">=</span> <span class="st">"GBIF"</span><span class="op">)</span>           <span class="co"># one source</span></span>
+<span><span class="fu"><a href="../reference/remove_metadata.html">remove_metadata</a></span><span class="op">(</span><span class="st">"my_project"</span>, sources <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"GEOME"</span>, <span class="st">"GBIF"</span><span class="op">)</span>, ids <span class="op">=</span> <span class="st">"FISH02"</span><span class="op">)</span></span></code></pre></div>
+<p>Only fetched data goes: the stored records, their fetch status, and
+IDs that linking filled in. These are always kept:</p>
+<ul>
+<li>every column of your mapping file,</li>
+<li>the IDs you supplied, in the mapping file, in the app, or with
+<code>fetch_*()</code> (including the ID column used as
+<code>BioSample</code>), so <strong>Refresh all</strong> or
+<code>fetch_*()</code> brings the data back,</li>
+<li>the fields ticked in <strong>Set Export Metadata</strong> and the
+<strong>Metadata</strong> button; they stay empty until you fetch
+again.</li>
+</ul>
 </div>
 <div class="section level2">
 <h2 id="using-metadata-fields-at-export">Using metadata fields at export<a class="anchor" aria-label="anchor" href="#using-metadata-fields-at-export"></a>
@@ -475,8 +689,8 @@ Metadata</strong> in the toolbar.</p>
 <img src="figures/specimen_fields.png" alt="Metadata fields window with GEOME and GBIF sections"><div class="figcaption">Metadata fields window with GEOME and GBIF
 sections</div>
 </div>
-<p>The window has a <strong>GEOME</strong> section and a
-<strong>GBIF</strong> section. Each starts with <strong>GenBank-ready
+<p>The window has a <strong>GEOME</strong>, a <strong>GBIF</strong>, and
+an <strong>NCBI</strong> section. Each starts with <strong>GenBank-ready
 combinations</strong>: values built from one or more fields in the
 format GenBank expects for a FASTA source modifier, each with an example
 and the number of samples that have one. Below that, a table lists every
@@ -532,8 +746,8 @@ value).</p>
 <tr class="even">
 <td><code>geome_specimen_voucher</code></td>
 <td>
-<code>catalogNumber</code> (required), <code>institutionCode</code>
-(optional prefix)</td>
+<code>catalogNumber</code> (required; skipped if it is a web address
+or ARK), <code>institutionCode</code> (optional prefix)</td>
 <td><code>UF:12345</code></td>
 </tr>
 <tr class="odd">
@@ -648,11 +862,92 @@ is a web address or an ARK rather than a real catalog number.</li>
 (<code>United States of America</code>), which is not always the name
 GenBank expects (<code>USA</code>). Check <code>geo_loc_name</code>
 values against GenBank’s country list before submitting.</p>
+</div>
+<div class="section level3">
+<h3 id="ncbi-combinations">NCBI combinations<a class="anchor" aria-label="anchor" href="#ncbi-combinations"></a>
+</h3>
+<p>BioSample attributes already use GenBank’s source-modifier names, so
+most NCBI combinations pass the BioSample value through. Placeholders
+such as <code>missing</code> or <code>not collected</code> (including
+forms like <code>missing: control sample</code>) give an empty
+value.</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>Column</th>
+<th>Built from</th>
+<th>Example</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>ncbi_lat_lon</code></td>
+<td>
+<code>lat_lon</code> (a decimal pair is converted)</td>
+<td><code>44.5 N 63.1 W</code></td>
+</tr>
+<tr class="even">
+<td><code>ncbi_collection_date</code></td>
+<td><code>collection_date</code></td>
+<td><code>2024-06-27</code></td>
+</tr>
+<tr class="odd">
+<td><code>ncbi_geo_loc_name</code></td>
+<td><code>geo_loc_name</code></td>
+<td><code>Canada: Nova Scotia</code></td>
+</tr>
+<tr class="even">
+<td><code>ncbi_specimen_voucher</code></td>
+<td><code>specimen_voucher</code></td>
+<td>as in NCBI</td>
+</tr>
+<tr class="odd">
+<td><code>ncbi_collected_by</code></td>
+<td><code>collected_by</code></td>
+<td>as in NCBI</td>
+</tr>
+<tr class="even">
+<td><code>ncbi_identified_by</code></td>
+<td><code>identified_by</code></td>
+<td>as in NCBI</td>
+</tr>
+<tr class="odd">
+<td><code>ncbi_sex</code></td>
+<td><code>sex</code></td>
+<td>lowercased</td>
+</tr>
+<tr class="even">
+<td><code>ncbi_dev_stage</code></td>
+<td><code>dev_stage</code></td>
+<td>lowercased</td>
+</tr>
+<tr class="odd">
+<td><code>ncbi_biosample</code></td>
+<td>BioSample accession</td>
+<td><code>SAMN29555051</code></td>
+</tr>
+<tr class="even">
+<td><code>ncbi_bioproject</code></td>
+<td>first BioProject accession</td>
+<td><code>PRJNA720393</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>ncbi_biosample</code> and <code>ncbi_bioproject</code> are not
+FASTA source modifiers, so their chips insert a plain column such as
+<code>{ncbi_biosample}</code>; use them in the sample summary or in your
+own notes. GenBank links a submission to its BioSample and BioProject in
+the submission form, not in the FASTA header.</p>
 <p>Raw fields become columns named
-<code>geome_&lt;Level&gt;_&lt;field&gt;</code> or
-<code>gbif_&lt;Level&gt;_&lt;field&gt;</code>, for example
-<code>geome_Tissue_tissueType</code> or
-<code>gbif_Occurrence_occurrenceID</code>.</p>
+<code>geome_&lt;Level&gt;_&lt;field&gt;</code>,
+<code>gbif_&lt;Level&gt;_&lt;field&gt;</code>, or
+<code>ncbi_&lt;Level&gt;_&lt;field&gt;</code>, for example
+<code>geome_Tissue_tissueType</code>,
+<code>gbif_Occurrence_occurrenceID</code>, or
+<code>ncbi_BioSample_isolate</code>.</p>
 </div>
 <div class="section level3">
 <h3 id="adding-columns-to-a-header-template">Adding columns to a header template<a class="anchor" aria-label="anchor" href="#adding-columns-to-a-header-template"></a>
@@ -660,15 +955,16 @@ values against GenBank’s country list before submitting.</p>
 <p>The <strong>Available columns</strong> list in the Export Data window
 groups every column you can use: <strong>Basics</strong>, <strong>Your
 mapfile columns</strong>, <strong>GEOME</strong>, <strong>GBIF</strong>,
-<strong>Reference (BLAST)</strong>, and <strong>Assembly and
-annotation</strong>. Click a column to insert it at the cursor of the
-header box you last clicked (the mitogenome FASTA header box if you have
-not clicked one). A GenBank-ready combination inserts the whole source
-modifier, for example <code>[lat_lon={geome_lat_lon}]</code>. Hover over
-a column to see its value for the first row of any export group, and
-type in the filter box to find one. <strong>Choose fields</strong> next
-to GEOME or GBIF opens the Metadata fields window (this closes the
-Export Data window, so save your template first).</p>
+<strong>NCBI</strong>, <strong>Reference (BLAST)</strong>, and
+<strong>Assembly and annotation</strong>. Click a column to insert it at
+the cursor of the header box you last clicked (the mitogenome FASTA
+header box if you have not clicked one). A GenBank-ready combination
+inserts the whole source modifier, for example
+<code>[lat_lon={geome_lat_lon}]</code>. Hover over a column to see its
+value for the first row of any export group, and type in the filter box
+to find one. <strong>Choose fields</strong> next to GEOME, GBIF, or NCBI
+opens the Metadata fields window (this closes the Export Data window, so
+save your template first).</p>
 <div class="float">
 <img src="figures/export_tokens.png" alt="Export Data window with grouped column chips"><div class="figcaption">Export Data window with grouped column
 chips</div>
@@ -687,8 +983,8 @@ for it. MitoPilot never changes your templates on its own.</p>
 <h3 id="the-conflict-warning-at-export">The conflict warning at export<a class="anchor" aria-label="anchor" href="#the-conflict-warning-at-export"></a>
 </h3>
 <p>When you click <strong>Export</strong>, MitoPilot checks which items
-your header templates use: GEOME and GBIF combinations and raw fields,
-and mapping-file columns matched to an item (including
+your header templates use: GEOME, GBIF, and NCBI combinations and raw
+fields, and mapping-file columns matched to an item (including
 <code>{Taxon}</code>). If any sample in the export group has a
 <strong>conflict</strong> on one of those items, a warning lists each
 sample, item, and the differing values. Click <strong>Export
@@ -710,8 +1006,8 @@ warning.</p>
 <strong>Public records only</strong> (see above).</li>
 <li>
 <strong>Internet access is needed</strong> by the machine running R
-or the app, since that is where GEOME and GBIF are contacted. Compute
-nodes running the pipeline never contact them.</li>
+or the app, since that is where GEOME, GBIF, and NCBI are contacted.
+Compute nodes running the pipeline never contact them.</li>
 <li>
 <strong>A failed refresh of the same identifier keeps the previous
 data.</strong> Only the status changes to failed. Changing a sample to a
@@ -776,6 +1072,45 @@ gbif.org.</td>
 <td><code>GBIF returned HTTP ...</code></td>
 <td>Any other error from GBIF, for example when it is busy. Try again
 later.</td>
+</tr>
+<tr class="odd">
+<td><code>BioSample ... not found</code></td>
+<td>NCBI has no BioSample with that accession or number.</td>
+</tr>
+<tr class="even">
+<td><code>SRA accession ... not found</code></td>
+<td>NCBI has no SRA record with that accession.</td>
+</tr>
+<tr class="odd">
+<td><code>SRA accession ... has no linked BioSample</code></td>
+<td>The SRA record exists but is not linked to a BioSample. Add the
+BioSample accession instead.</td>
+</tr>
+<tr class="even">
+<td><code>could not reach NCBI (...)</code></td>
+<td>No connection to <code>eutils.ncbi.nlm.nih.gov</code>. Try again
+later with <code><a href="../reference/fetch_biosample.html">fetch_biosample()</a></code> or <strong>Refresh
+all</strong>.</td>
+</tr>
+<tr class="odd">
+<td><code>'x' is not a BioSample or SRA accession (...)</code></td>
+<td>The value is not a BioSample accession, BioSample number, or SRA
+accession.</td>
+</tr>
+<tr class="even">
+<td><code>NCBI returned HTTP ...</code></td>
+<td>Any other error from NCBI, for example when it is busy. Set
+<code>ENTREZ_KEY</code> if you fetch many samples.</td>
+</tr>
+<tr class="odd">
+<td><code>N possible GBIF matches for ...; not linked</code></td>
+<td>Linking found several GBIF specimens for a voucher after all
+filters. Paste the right gbifID in the GBIF tab.</td>
+</tr>
+<tr class="even">
+<td><code>... record links to ...; kept your ID ...</code></td>
+<td>A fetched record names a different ID than the one you set.
+MitoPilot kept yours; check which is right.</td>
 </tr>
 </tbody>
 </table>

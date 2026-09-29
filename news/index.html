@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,7 +30,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
-    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME and GBIF</a></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
@@ -63,10 +63,27 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="mitopilot-development-version">MitoPilot (development version)<a class="anchor" aria-label="anchor" href="#mitopilot-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="1.5.8" id="mitopilot-158">MitoPilot 1.5.8<a class="anchor" aria-label="anchor" href="#mitopilot-158"></a></h2>
+<p>Released 2026-09-29. Container: <code>macguigand/mitopilot:1.5.8</code></p>
+<div class="section level3">
+<h3 id="new-features-1-5-8">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5-8"></a></h3>
 <ul><li>
-<strong>Curation ruleset browser tweaks.</strong> Each clade now shows a representative image from Wikipedia, credited to its author and license with links to the Wikimedia Commons file. Help tooltips are no longer cut off by the taxonomy tree. On phones, the tree opens from a menu button and rule tables become one card per gene.</li>
+<strong>NCBI BioSample metadata.</strong> Samples can now be linked to an NCBI BioSample, directly or through an SRA accession (SRR, ERR, DRR, SRX, or SRS), with <code>mapping_biosample</code> at setup, <code><a href="../reference/fetch_biosample.html">fetch_biosample()</a></code>, or the new NCBI tab in the sample metadata viewer. MitoPilot stores every BioSample attribute plus the linked BioProjects, adds NCBI to the Compare tab and the export conflict warning, and offers GenBank-ready <code>ncbi_*</code> fields at export. See <a href="https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html">Sample metadata</a>.</li>
+<li>
+<strong>Follow links between GEOME, GBIF, and NCBI.</strong> With <code>link_sources = TRUE</code> at setup (or <strong>Follow links between databases</strong> in the sample metadata viewer), each fetched record is read for IDs of the other databases, and missing ones are added and fetched: BioSample to GEOME tissue and Smithsonian voucher, GEOME to BioSample and voucher, GBIF to BioSample. Other museums’ vouchers are matched to GBIF by catalog number, and only linked when exactly one specimen of the right species is found. Your own IDs are never replaced, and every linked ID shows where it came from.</li>
+<li>
+<strong>Remove fetched metadata.</strong> <strong>Remove fetched data…</strong> in the sample metadata viewer, or <code><a href="../reference/remove_metadata.html">remove_metadata()</a></code>, deletes fetched GEOME, GBIF, or NCBI records for one sample or all. Mapping-file columns and the IDs you supplied are always kept.</li>
+<li>
+<strong>Curation ruleset browser tweaks.</strong> Each clade now shows a representative image from Wikipedia, credited to its author and license with links to the Wikimedia Commons file</li>
 </ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-1-5-8">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-5-8"></a></h3>
+<ul><li>
+<strong>Assemblies keep their N gaps after annotation.</strong> Bases with no read coverage, mostly the runs of N that map-to-reference assembly produces where no reads map, were dropped from the saved sequence when annotation finished. Gene coordinates stayed on the full sequence, so every feature after the first dropped run of Ns had incorrect annotation coordinates. The coverage table now has one row per base (depth 0 over gaps), the saved sequence comes from the curated assembly the annotations were built on, and annotation stops with an error instead of saving a sequence that does not match its coverage. Coverage files from earlier versions are completed automatically when annotation runs, so Assemble does not need to be re-run. Re-run annotation on affected samples and re-export them.</li>
+</ul><p><strong>Note</strong> To update older MitoPilot projects, please run <a href="https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html"><code>MitoPilot::backwards_compatibility()</code></a>. This will add any missing fields to the SQL database and attempt to update the Docker/Singularity container version in your project <code>.config</code> file.</p>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/Smithsonian/MitoPilot/compare/1.5.7" class="external-link uri">https://github.com/Smithsonian/MitoPilot/compare/1.5.7</a>…1.5.8</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.5.7" id="mitopilot-157">MitoPilot 1.5.7<a class="anchor" aria-label="anchor" href="#mitopilot-157"></a></h2>
 <p>Released 2026-09-25. Container: <code>macguigand/mitopilot:1.5.7</code></p>

@@ -1,11 +1,11 @@
-# Choose which mapping-file columns are compared with GEOME and GBIF
+# Choose which mapping-file columns are compared with GEOME, GBIF, and NCBI
 
 MitoPilot compares specimen details (coordinates, collection date,
 country, locality, voucher, collector, sex, and life stage) between your
-mapping file, GEOME, and GBIF, and flags disagreements. It finds the
-mapping-file columns by name; use this function when a column has a name
-it does not recognize, or to stop comparing one. The Taxon column is
-always compared.
+mapping file, GEOME, GBIF, and NCBI, and flags disagreements. It finds
+the mapping-file columns by name; use this function when a column has a
+name it does not recognize, or to stop comparing one. The Taxon column
+is always compared.
 
 ## Usage
 

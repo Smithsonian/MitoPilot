@@ -14,6 +14,9 @@ new_project_userAsmb(
   fetch_geome = TRUE,
   mapping_gbif = "GBIF_ID",
   fetch_gbif = TRUE,
+  mapping_biosample = "BioSample",
+  fetch_biosample = TRUE,
+  link_sources = FALSE,
   data_path = NULL,
   no_raw_data = FALSE,
   assembly_path = "NA",
@@ -78,8 +81,26 @@ new_project_userAsmb(
 - fetch_gbif:
 
   Fetch GBIF metadata for samples with a GBIF ID during setup (default
-  TRUE). Set FALSE when offline and run \[fetch_gbif()\] later. Passed
-  to \`new_db_userAsmb()\`.
+  TRUE). Set FALSE when offline and run \[fetch_gbif()\] later.
+
+- mapping_biosample:
+
+  Name of the mapping-file column holding NCBI BioSample or SRA
+  accessions (optional). Must not be the sample ID column. Stored as
+  \`BioSample\`. See \`vignette("Specimen-Metadata")\`.
+
+- fetch_biosample:
+
+  Fetch NCBI metadata for samples with a BioSample value during setup
+  (default TRUE). Set FALSE when offline and run \[fetch_biosample()\]
+  later.
+
+- link_sources:
+
+  Follow links between GEOME, GBIF, and NCBI records to fill in IDs a
+  sample does not have yet (default FALSE). Saved as the project
+  setting. See \`vignette("Specimen-Metadata")\`. Passed to
+  \`new_db_userAsmb()\`.
 
 - data_path:
 

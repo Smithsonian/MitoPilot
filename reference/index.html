@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,7 +30,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
-    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME and GBIF</a></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
@@ -159,10 +159,24 @@
 
         <dt>
 
+          <code><a href="fetch_biosample.html">fetch_biosample()</a></code>
+
+        </dt>
+        <dd>Fetch NCBI BioSample and BioProject metadata for project samples</dd>
+
+        <dt>
+
+          <code><a href="remove_metadata.html">remove_metadata()</a></code>
+
+        </dt>
+        <dd>Remove fetched GEOME, GBIF, and NCBI metadata</dd>
+
+        <dt>
+
           <code><a href="set_metadata_columns.html">set_metadata_columns()</a></code>
 
         </dt>
-        <dd>Choose which mapping-file columns are compared with GEOME and GBIF</dd>
+        <dd>Choose which mapping-file columns are compared with GEOME, GBIF, and NCBI</dd>
 
         <dt>
 
@@ -177,6 +191,13 @@
 
         </dt>
         <dd>Normalize GBIF occurrence IDs</dd>
+
+        <dt>
+
+          <code><a href="ncbi_normalize_id.html">ncbi_normalize_id()</a></code>
+
+        </dt>
+        <dd>Normalize NCBI BioSample or SRA accessions</dd>
 
         <dt>
 
