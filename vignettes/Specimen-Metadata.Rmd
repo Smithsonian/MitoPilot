@@ -112,8 +112,9 @@ catalog number help) and paste the new ID.
 
 Some GEOME projects also publish to GBIF. Their GBIF occurrences carry the
 GEOME ARK in `occurrenceID` or `catalogNumber`, and their publisher is "The
-Genomic Observatories Metadatabase (GeOMe)". MitoPilot does not link the two
-automatically; add both IDs if you want both.
+Genomic Observatories Metadatabase (GeOMe)". With linking turned on, MitoPilot
+fills in one from the other; see
+[Resolving records across databases](#resolving-records-across-databases).
 
 **NCBI BioSample or SRA accession.** Copy the BioSample accession from
 [NCBI BioSample](https://www.ncbi.nlm.nih.gov/biosample), or the SRA accession
@@ -130,8 +131,7 @@ SRS14384543                 (an SRA sample)
 ```
 
 For an SRA accession, MitoPilot finds its linked BioSample and also stores the
-SRA details (run, experiment, study, platform, and library). If your sample IDs
-are SRA runs, you do not need a separate column; see below.
+SRA details (run, experiment, study, platform, and library).
 
 ## Adding identifiers at project setup
 
@@ -156,8 +156,6 @@ new_project(path = "my_project", mapping_fn = "mapping.csv",
 - The columns are stored in the project as `GEOME_BCID`, `GBIF_ID`, and
   `BioSample`. If your columns already have those names, leave out
   `mapping_geome`, `mapping_gbif`, and `mapping_biosample`.
-- The identifier columns must be separate from the sample ID column. If your
-  sample IDs are SRA runs, copy them into a `BioSample` column.
 - Blank cells are fine: those samples simply have no link.
 - MitoPilot fetches the records during setup, which needs an internet
   connection. When setting up offline, pass `fetch_geome = FALSE`,
