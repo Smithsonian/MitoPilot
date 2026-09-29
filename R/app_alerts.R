@@ -24,7 +24,7 @@ mp_alert <- function(title, text = NULL, type, html = FALSE,
 #' should act straight away; otherwise it returns FALSE.
 #' @noRd
 mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FALSE,
-                       skippable = FALSE, width = NULL,
+                       skippable = FALSE, width = NULL, cancel_label = "Cancel",
                        session = getDefaultReactiveDomain()) {
   if (isTRUE(skippable)) {
     skip_id <- paste0(sub(session$ns(""), "", id, fixed = TRUE), "_skip")
@@ -49,7 +49,7 @@ mp_confirm <- function(id, title, text, action_label, danger = FALSE, html = FAL
   shinyWidgets::confirmSweetAlert(
     session = session, inputId = id, title = title, text = text,
     type = if (isTRUE(danger)) "warning" else "question",
-    btn_labels = c("Cancel", action_label),
+    btn_labels = c(cancel_label, action_label),
     btn_colors = unname(MP_COLORS[c("grey", accent)]),
     html = html,
     reverseButtons = TRUE,

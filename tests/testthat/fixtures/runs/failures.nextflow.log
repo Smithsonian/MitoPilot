@@ -1,0 +1,11 @@
+Sep-22 15:38:36.437 [main] DEBUG nextflow.cli.Launcher - $> nextflow -log .logs/nextflow.log run /lib/MitoPilot/nextflow -c .config -entry WF1 -ansi-log false
+Sep-22 15:38:36.470 [main] INFO  nextflow.cli.CmdRun - N E X T F L O W  ~  version 25.10.6
+Sep-22 15:38:37.457 [main] INFO  nextflow.cli.CmdRun - Launching `/lib/MitoPilot/nextflow/main.nf` [mighty_bernard] DSL2 - revision: 23ea965887
+Sep-22 15:38:37.478 [main] DEBUG nextflow.Session - Run name: mighty_bernard
+Sep-22 15:38:40.389 [Task submitter] INFO  nextflow.Session - [f2/6ecdba] Submitted process > WF1:PREPROCESS:preprocess (t2_MG676469_1)
+Sep-22 15:39:54.128 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 1; name: WF1:PREPROCESS:preprocess (t2_MG676469_1); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/f2/6ecdba037fe8f7c4aa9d4ebd74e7bf]
+Sep-22 15:39:54.175 [Task submitter] INFO  nextflow.Session - [d2/72503c] Submitted process > WF1:ASSEMBLE:assemble (t2_MG676469_1)
+Sep-22 15:46:24.110 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 2; name: WF1:ASSEMBLE:assemble (t2_MG676469_1); status: COMPLETED; exit: 2; error: -; workDir: /proj/work/d2/72503c679596dd6924b430de3fc501]
+Sep-22 15:46:24.115 [TaskFinalizer-2] INFO  nextflow.processor.TaskProcessor - [d2/72503c] NOTE: Process `WF1:ASSEMBLE:assemble (t2_MG676469_1)` terminated with an error exit status (2) -- Error is ignored
+Sep-22 15:46:24.206 [main] DEBUG n.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=1; failedCount=1; ignoredCount=1; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=4m 55s; failedDuration=38m 59s; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=1; peakCpus=6; peakMemory=24 GB; ]
+Sep-22 15:46:24.224 [main] DEBUG nextflow.script.ScriptRunner - > Execution complete -- Goodbye

@@ -1,0 +1,7 @@
+Sep-03 17:49:40.242 [main] DEBUG nextflow.cli.Launcher - $> nextflow -log .logs/nextflow.log run /lib/MitoPilot/nextflow -c .config -entry WF1 -resume
+Sep-03 17:49:40.294 [main] DEBUG nextflow.cli.CmdRun - N E X T F L O W  ~  version 25.10.6
+Sep-03 17:49:41.295 [main] DEBUG nextflow.cli.CmdRun - Launching `/lib/MitoPilot/nextflow/main.nf` [insane_curran] DSL2 - revision: 23ea965887
+Sep-03 17:49:41.316 [main] DEBUG nextflow.Session - Run name: insane_curran
+Sep-03 17:49:43.862 [main] DEBUG nextflow.Session - Session aborted -- Cause: Missing process or function getAt([0])
+Sep-03 17:49:43.874 [main] DEBUG n.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+Sep-03 17:49:44.032 [main] ERROR nextflow.cli.Launcher - @unknown

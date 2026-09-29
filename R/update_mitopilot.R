@@ -6,13 +6,16 @@
 #' @param source Nextflow script source. By default, this will be in the
 #'   `nextflow/` subdirectory of the package installation.
 #' @param userAsmbs User supplied assemblies, TRUE/FALSE? (default = FALSE)
+#' @param base Run name used for the log file,
+#'   `<path>/.runs/nextflow/<base>.nextflow.log`.
 #'
 #' @export
 nextflow_cmd <- function(
     workflow = c("assemble", "annotate"),
     path = NULL,
     source = app_sys("nextflow"),
-    userAsmbs = FALSE) {
+    userAsmbs = FALSE,
+    base = run_basename(workflow)) {
   path <- path %||% dirname(getOption("MitoPilot.db") %||% normalizePath(".sqlite"))
   workflow <- tolower(workflow[1])
 
@@ -29,12 +32,12 @@ nextflow_cmd <- function(
   }
 
   cmd <- c(
-    "-log", "{file.path(path, '.logs', 'nextflow.log')}",
+    "-log", "{file.path(path, '.runs', 'nextflow', paste0(base, '.nextflow.log'))}",
     "run", "{source}",
     #"-ansi-log", "false",
     "-c", "{file.path(path, '.config')}",
     "-entry", "{entry}",
-    "{ifelse(file.exists(file.path(path, '.logs', 'nextflow.log')), '-resume', '')}"
+    "{ifelse(dir.exists(file.path(path, '.nextflow', 'cache')), '-resume', '')}"
   ) |> purrr::map_chr(~ stringr::str_glue(.x))
 
   return(invisible(cmd))
@@ -151,8 +154,10 @@ submission_script <- function(executor, queue, full_nf_cmd, job_name, log_file,
     # Pin the Nextflow engine to a MitoPilot-compatible version.
     if (!is.na(nxf_ver)) paste0("export NXF_VER=", nxf_ver),
     full_nf_cmd,
+    nf_exit_trailer()[1:2],
     "",
-    'echo "--- MitoPilot job done: `date` ---"'
+    'echo "--- MitoPilot job done: `date` ---"',
+    nf_exit_trailer()[3]
   )
 }
 
@@ -253,11 +258,24 @@ hydra_submission_script <- function(full_nf_cmd, job_name, log_file,
     # Pin the Nextflow engine to a MitoPilot-compatible version.
     if (!is.na(nxf_ver)) paste0("export NXF_VER=", nxf_ver),
     full_nf_cmd,
+    nf_exit_trailer()[1:2],
     "",
     'echo "---"',
     'echo "= `date` job $JOB_NAME done"',
-    'echo "---"'
+    'echo "---"',
+    nf_exit_trailer()[3]
   )
+}
+
+#' Shell lines that record Nextflow's exit status in the scheduler log
+#'
+#' Goes right after the Nextflow command: capture status, echo it, and (last
+#' line) exit with it. `read_exit_trailer()` reads the echoed line back.
+#' @noRd
+nf_exit_trailer <- function() {
+  c("status=$?",
+    'echo "[MitoPilot] nextflow exited with status $status"',
+    "exit $status")
 }
 
 #' Cluster submit command for an executor
@@ -288,16 +306,16 @@ submit_template_path <- function(work_dir) {
 #'
 #' Lets a user's edited submission script (resource directives, module loads,
 #' etc.) be saved and reused while the job name, log path, and Nextflow command
-#' are regenerated each run. `log_file` is substituted before `job_name` because
-#' the log path contains the job name as a substring.
+#' are regenerated each run. The Nextflow command goes first, then `log_file`,
+#' then `job_name`, because both the command and the log path contain the job name.
 #'
 #' @param lines Character vector of script lines.
 #' @param full_nf_cmd,job_name,log_file Run-specific values.
 #' @noRd
 tokenize_submit_script <- function(lines, full_nf_cmd, job_name, log_file) {
+  lines <- gsub(full_nf_cmd, "<<NEXTFLOW_CMD>>", lines, fixed = TRUE)
   lines <- gsub(log_file, "<<LOG_FILE>>", lines, fixed = TRUE)
-  lines <- gsub(job_name, "<<JOB_NAME>>", lines, fixed = TRUE)
-  gsub(full_nf_cmd, "<<NEXTFLOW_CMD>>", lines, fixed = TRUE)
+  gsub(job_name, "<<JOB_NAME>>", lines, fixed = TRUE)
 }
 
 #' @rdname tokenize_submit_script
@@ -320,6 +338,7 @@ build_submit_script <- function(work_dir, executor, queue, full_nf_cmd, job_name
   if (file.exists(tmpl)) {
     return(fill_submit_template(readLines(tmpl), full_nf_cmd, job_name, log_file))
   }
+  full_nf_cmd <- paste("cd", shQuote(work_dir, type = "sh"), "&&", full_nf_cmd)
   env_setup <- read_config_executor(file.path(work_dir, ".config"))$native_activate
   nxf_ver <- if (is.null(env_setup)) nf_pin_version() else native_nf_pin(native_env(env_setup))
   if (is_hydra_cluster()) {

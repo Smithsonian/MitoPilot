@@ -84,6 +84,7 @@ app_server <- function(input, output, session) {
       html = TRUE,
       type = "info"
     )
+    session$userData$startup_alert <- TRUE
   }
 
   # Migrate: add BLAST result columns to assemble table for pre-existing databases
@@ -157,6 +158,7 @@ app_server <- function(input, output, session) {
         html = TRUE,
         type = "warning"
       )
+      session$userData$startup_alert <- TRUE
     }
   }, error = function(e) NULL)
 
@@ -261,4 +263,5 @@ app_server <- function(input, output, session) {
   annotate_server("annotate")
   export_server("export")
   workdir_browser_server("workdir_browser")
+  run_reports_server("run_reports")
 }

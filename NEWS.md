@@ -1,3 +1,10 @@
+# MitoPilot (development version)
+
+## New Features
+
+- **Run reports.** After every Assemble or Annotate run, MitoPilot writes a plain-language report: the result, task counts, failed tasks with a likely cause (for example, out of memory), and samples that failed with their notes. This works for runs started in the app and for runs submitted to a cluster or run in the background from a saved script. A "New run reports available" message appears when new reports are ready, and the **Run Reports** button (next to **Work Dirs**) lists every run for the active panel. Click a run to read its report, copy it, or open its folder.
+- **Tidier run files.** Each run's submission script, scheduler log, Nextflow log, and report now share one name and live under a hidden `.runs/` folder in the project, instead of loose files in the project folder. Older projects keep working; their existing logs stay where they are.
+
 # MitoPilot 1.5.8
 
 Released 2026-09-29. Container: `macguigand/mitopilot:1.5.8`

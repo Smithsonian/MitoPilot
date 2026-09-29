@@ -1,0 +1,12 @@
+Sep-17 09:32:34.208 [main] DEBUG nextflow.cli.Launcher - $> nextflow -log .logs/nextflow.log run /lib/MitoPilot/nextflow -c .config -entry WF2 -resume -ansi-log
+Sep-17 09:32:34.251 [main] DEBUG nextflow.cli.CmdRun - N E X T F L O W  ~  version 25.10.6
+Sep-17 09:32:35.205 [main] DEBUG nextflow.cli.CmdRun - Launching `/lib/MitoPilot/nextflow/main.nf` [nice_colden] DSL2 - revision: 23ea965887
+Sep-17 09:32:35.234 [main] DEBUG nextflow.Session - Run name: nice_colden
+Sep-17 09:32:38.981 [Task submitter] INFO  nextflow.Session - [18/730f95] Submitted process > WF2:ANNOTATE:prepare_ref_db (1)
+Sep-17 09:32:40.277 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 1; name: WF2:ANNOTATE:prepare_ref_db (1); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/18/730f95314115828ffdbb3f17a77856]
+Sep-17 09:32:40.355 [Task submitter] INFO  nextflow.Session - [51/c48ce3] Submitted process > WF2:ANNOTATE:annotate (SRR22396640.1.1)
+Sep-17 09:35:44.680 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 12; name: WF2:ANNOTATE:annotate (SRR22396640.1.1); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/51/c48ce3877406d470339e6584a57684]
+Sep-17 09:35:44.684 [Task submitter] INFO  nextflow.Session - [0e/684091] Submitted process > WF2:ANNOTATE:annotate (SCAFFJOIN.1.1)
+Sep-17 09:35:46.689 [Task submitter] INFO  nextflow.Session - [bd/8e15f2] Submitted process > WF2:CURATE:prepare_ref_db (1)
+Sep-17 09:35:47.691 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 20; name: WF2:CURATE:prepare_ref_db (1); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/bd/8e15f26d40198588e34a53904de92d]
+Sep-17 09:35:48.696 [Task submitter] INFO  nextflow.Session - [3a/59174c] Submitted process > WF2:CURATE:curate (SRR22396640.1.1)

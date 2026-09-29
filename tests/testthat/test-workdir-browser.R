@@ -21,3 +21,18 @@ test_that("find_workdirs keeps every workflow's tasks for a sample", {
   expect_equal(nrow(out), 5L)
   expect_false(any(basename(out$workdir) %in% c("f1", "g1", "e1")))
 })
+
+test_that("find_workdirs reads both old .logs and new .runs/nextflow logs", {
+  d <- withr::local_tempdir()
+  th <- function(name, wd) sprintf(
+    "Sep-11 00:00:00.000 [x] DEBUG n.p.TaskProcessor - Task completed > TaskHandler[id: 1; name: %s; status: COMPLETED; exit: 0; error: -; workDir: %s]",
+    name, wd)
+  expect_equal(nrow(find_workdirs(d, "S1")), 0L)
+  dir.create(file.path(d, ".runs", "nextflow"), recursive = TRUE)
+  writeLines(th("WF1:ASSEMBLE:assemble (S1)", "/w/new"),
+    file.path(d, ".runs", "nextflow", "assemble_2026-09-29_10-00-00.nextflow.log"))
+  expect_equal(basename(find_workdirs(d, "S1")$workdir), "new")
+  dir.create(file.path(d, ".logs"))
+  writeLines(th("WF1:ASSEMBLE:assemble (S1)", "/w/old"), file.path(d, ".logs", "nextflow.log.1"))
+  expect_setequal(basename(find_workdirs(d, "S1")$workdir), c("new", "old"))
+})
