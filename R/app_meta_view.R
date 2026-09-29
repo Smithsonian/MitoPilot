@@ -11,7 +11,7 @@ meta_view_button <- function(ns) {
 meta_view_picker_table <- function(fields) {
   reactable::reactable(
     fields[, c("source", "level", "field", "n_samples", "example")],
-    selection = "multiple", onClick = "select", compact = TRUE, searchable = TRUE,
+    selection = "multiple", onClick = "select", compact = TRUE,
     defaultSelected = which(fields$shown), pagination = FALSE, height = 420,
     striped = TRUE, resizable = TRUE, class = "mp-meta-view-tbl",
     columns = list(
@@ -20,7 +20,7 @@ meta_view_picker_table <- function(fields) {
         cell = function(v) htmltools::tagList(meta_view_logo(v), v)
       ),
       level = reactable::colDef(name = "Level", minWidth = 110),
-      field = reactable::colDef(name = "Field", minWidth = 160),
+      field = reactable::colDef(name = "Field", minWidth = 160, filterable = TRUE),
       n_samples = reactable::colDef(name = "Samples", width = 80, align = "center"),
       example = reactable::colDef(name = "Example", minWidth = 180, html = TRUE, cell = rt_longtext())
     )
@@ -51,6 +51,9 @@ meta_view_modal <- function(ns, fields, wrap) {
           class = "mp-meta-view-bar",
           src_btn("All", NA), src_btn("Map file", "Map file"),
           src_btn("GEOME", "GEOME"), src_btn("GBIF", "GBIF"), src_btn("NCBI", "NCBI"),
+          tags$input(type = "search", class = "form-control input-sm mp-meta-view-search",
+                     placeholder = "Filter field names", `aria-label` = "Filter field names",
+                     oninput = sprintf("Reactable.setFilter('%s', 'field', this.value || undefined)", tbl)),
           tags$button(type = "button", class = "btn btn-default btn-sm",
                       onclick = sprintf("Reactable.getInstance('%s').toggleAllRowsSelected(false)", tbl),
                       "Clear all"),

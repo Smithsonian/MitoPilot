@@ -306,9 +306,9 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
                    "and click Fetch, or add a GBIF_ID column to your mapping file and load it into",
                    "the project with update_sample_metadata() (see the Sample Metadata article)."),
       NCBI = paste("This sample has no BioSample. Paste a BioSample (SAMN...) or SRA accession",
-                   "(SRR..., SRX..., SRS...) above and click Fetch, click Use sample ID if the sample",
-                   "ID is one, or add a BioSample column to your mapping file and load it into the",
-                   "project with update_sample_metadata() (see the Sample Metadata article).")
+                   "(SRR..., SRX..., SRS...) above and click Fetch, or add a BioSample column to your",
+                   "mapping file and load it into the project with update_sample_metadata() (see the",
+                   "Sample Metadata article).")
     )
 
     samples <- function() {
@@ -345,26 +345,44 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
               actionButton(ns("remove_go"), "Remove", class = "btn-danger btn-sm")
             )
           ),
-          column(9,
+          column(9, class = "mp-spec-tabs",
+            tags$input(type = "search", id = ns("field_filter"),
+                       class = "form-control input-sm mp-spec-filter",
+                       placeholder = "Filter field names", `aria-label` = "Filter field names",
+                       oninput = "mpSpecFilter(this.value)"),
             tabsetPanel(
               id = ns("tab"),
               tabPanel("GEOME", uiOutput(ns("geome_detail"))),
               tabPanel("GBIF", uiOutput(ns("gbif_detail"))),
               tabPanel("NCBI", uiOutput(ns("ncbi_detail"))),
               tabPanel("Compare", uiOutput(ns("compare")))
-            )
+            ),
+            tags$script(HTML(sprintf(
+              "window.mpSpecFilter = function(q) {
+                 q = (q || '').trim().toLowerCase();
+                 document.querySelectorAll('.modal .mp-meta-level').forEach(function(d) {
+                   var n = 0;
+                   d.querySelectorAll('tr').forEach(function(tr) {
+                     var th = tr.querySelector('th');
+                     var ok = !q || (th && th.textContent.toLowerCase().indexOf(q) >= 0);
+                     tr.style.display = ok ? '' : 'none';
+                     if (ok) n++;
+                   });
+                   d.style.display = n ? '' : 'none';
+                   if (q && n) d.open = true;
+                 });
+               };
+               $(document).off('shiny:value.mpspec').on('shiny:value.mpspec', function(e) {
+                 if (/_detail$/.test(e.name)) setTimeout(function() {
+                   var el = document.getElementById('%s');
+                   if (el) mpSpecFilter(el.value);
+                 }, 0);
+               });", ns("field_filter"))))
           )
         ),
         footer = mp_footer(
-          extra = tagList(
-            div(class = "mp-spec-link",
-                title = paste("When a fetched record names a record in another database, add and fetch",
-                              "it too (only for samples without an ID there)"),
-                checkboxInput(ns("link_sources"), "Follow links between databases",
-                              value = .meta_link_enabled(con))),
-            actionButton(ns("refresh_all"), "Refresh all",
-                         title = "Fetch every sample's GEOME, GBIF, and NCBI records again")
-          ),
+          extra = actionButton(ns("refresh_all"), "Refresh all",
+                               title = "Fetch every sample's GEOME, GBIF, and NCBI records again"),
           dismiss = "Close"
         )
       ) |> showModal()
@@ -409,10 +427,11 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
                                          NCBI = "SAMN29555051 or SRR21844202"),
                     width = "420px"),
           actionButton(ns(paste0(key, "_fetch")), "Fetch", icon = icon("arrows-rotate")),
-          if (source == "NCBI") {
-            actionButton(ns("ncbi_use_id"), "Use sample ID",
-                         title = "Use this sample's ID as its BioSample or SRA accession and fetch")
-          }
+          div(class = "mp-spec-link",
+              title = paste("When a fetched record names a record in another database, add and fetch",
+                            "it too (only for samples without an ID there)"),
+              checkboxInput(ns(paste0(key, "_link")), "Follow links between databases",
+                            value = .meta_link_enabled(con)))
         ),
         if (nrow(st)) p(class = if (st$status == "failed") "mp-fg-warning" else "text-muted",
           if (st$status == "failed") paste("Last fetch failed:", st$message) else "Fetched",
@@ -438,8 +457,9 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
       )
     })
 
-    fetch_one <- function(source, ref = input[[paste0(tolower(source), "_ref")]]) {
+    fetch_one <- function(source) {
       req(rv$id)
+      ref <- input[[paste0(tolower(source), "_ref")]]
       tryCatch({
         val <- .meta_set_ref(con, source, rv$id, ref)
         if (!is.na(val)) {
@@ -454,16 +474,14 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
     observeEvent(input$geome_fetch, fetch_one("GEOME"))
     observeEvent(input$gbif_fetch, fetch_one("GBIF"))
     observeEvent(input$ncbi_fetch, fetch_one("NCBI"))
-    observeEvent(input$ncbi_use_id, {
-      req(rv$id)
-      if (is.na(ncbi_normalize_id(rv$id, strict = TRUE))) {
-        return(showNotification(paste0("'", rv$id, "' is not a BioSample or SRA accession"), type = "error"))
-      }
-      updateTextInput(session, "ncbi_ref", value = rv$id)
-      fetch_one("NCBI", rv$id)
-    })
 
-    observeEvent(input$link_sources, .meta_set_link_enabled(con, input$link_sources))
+    link_keys <- tolower(names(META_SOURCES))
+    lapply(link_keys, function(k) observeEvent(input[[paste0(k, "_link")]], {
+      v <- input[[paste0(k, "_link")]]
+      if (identical(v, .meta_link_enabled(con))) return()
+      .meta_set_link_enabled(con, v)
+      for (o in setdiff(link_keys, k)) updateCheckboxInput(session, paste0(o, "_link"), value = v)
+    }))
 
     observeEvent(input$remove_go, {
       srcs <- input$remove_sources

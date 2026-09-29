@@ -67,8 +67,8 @@ Passed to `new_db()`.}
 Passed to `new_db()`.}
 
 \item{mapping_biosample}{Name of the mapping-file column holding NCBI
-BioSample or SRA accessions (optional). May be the same column as
-`mapping_id`. Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
+BioSample or SRA accessions (optional). Must not be the sample ID column.
+Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
 Passed to `new_db()`.}
 
 \item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample

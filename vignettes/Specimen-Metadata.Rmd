@@ -156,9 +156,8 @@ new_project(path = "my_project", mapping_fn = "mapping.csv",
 - The columns are stored in the project as `GEOME_BCID`, `GBIF_ID`, and
   `BioSample`. If your columns already have those names, leave out
   `mapping_geome`, `mapping_gbif`, and `mapping_biosample`.
-- When your sample IDs are SRA runs (or BioSamples), point `mapping_biosample`
-  at the ID column: `mapping_biosample = "ID"`. Samples whose ID is not a
-  BioSample or SRA accession are simply left without an NCBI link.
+- The identifier columns must be separate from the sample ID column. If your
+  sample IDs are SRA runs, copy them into a `BioSample` column.
 - Blank cells are fine: those samples simply have no link.
 - MitoPilot fetches the records during setup, which needs an internet
   connection. When setting up offline, pass `fetch_geome = FALSE`,
@@ -190,11 +189,7 @@ The last form sets (or replaces) the gbifIDs of those samples before fetching;
 `fetch_geome()` does the same with `bcids`, and `fetch_biosample()` with
 `biosamples`. A blank value removes the link.
 
-For NCBI, `from_id = TRUE` uses each sample's own ID as its BioSample value
-when that ID is a BioSample or SRA accession, then fetches:
-
 ```r
-fetch_biosample("my_project", from_id = TRUE)        # every sample with an SRR/SAMN ID
 fetch_biosample("my_project", ids = "FISH03", biosamples = "SAMN29555051")
 ```
 
@@ -215,25 +210,22 @@ Records are fetched when you run these functions, not when the pipeline runs.
 
 ## Resolving records across databases
 
-The three databases often point at each other. A BioSample submitted through
-GEOME names its GEOME tissue record; a GEOME record names the museum voucher,
-which is on GBIF; a Smithsonian GBIF record lists the BioSample and SRA runs
-sequenced from it. With linking turned on, MitoPilot reads each record it
-fetches for IDs of the other databases, adds the ones a sample does not have
-yet, and fetches those too. One column of SRA runs can then bring in all three
-records for every sample.
+GEOME, GBIF, and NCBI often have linked records. MitoPilot allows you to fetch metadata
+from each database by exploring these links. For example, one column containing NCBI SRA 
+accessions can also import metadata from the appropriate GEOME and GBIF records.
 
-Linking is off by default, because it makes extra requests and fills in IDs you
-did not type. Turn it on for a project at setup, for one fetch, or in the app:
+Cross-database linking is off by default, because it makes extra requests and fills in IDs you
+did not type. You can turn it on for a project during setup:
 
 ```r
 new_project(path = "my_project", mapping_fn = "mapping.csv", data_path = "reads/",
-            mapping_biosample = "ID", link_sources = TRUE)
+            link_sources = TRUE)
 fetch_biosample("my_project", link_sources = TRUE)   # this fetch only
 ```
 
+Or you can turn on database linking in the MitoPilot app.
 In the sample metadata viewer, tick **Follow links between databases** next to
-**Refresh all**. The setting is saved in the project: `link_sources = TRUE` at
+the **Fetch** button on the GEOME, GBIF, or NCBI tab. The setting is saved in the project: `link_sources = TRUE` at
 setup and the checkbox both turn it on for later fetches, and `fetch_*()`
 follow it unless you pass `link_sources = TRUE` or `FALSE`.
 
@@ -340,11 +332,11 @@ Clearing an identifier box and clicking **Fetch** removes that link. **Refresh a
 fetches every sample's GEOME, GBIF, and NCBI records again. Tick **Follow links
 between databases** to let fetches fill in IDs for the other databases (see
 [Resolving records across databases](#resolving-records-across-databases)).
+Type in the **Filter field names** box, to the right of the tabs, to show only
+the fields whose names match.
 
-The **NCBI** tab has a **Use sample ID** button: when the sample ID is an SRA
-run or BioSample, it copies the ID into the box and fetches. Records are shown
-as SRA (when you gave an SRA accession), BioSample, and BioProject cards, each
-linked to its NCBI page.
+On the **NCBI** tab, records are shown as SRA (when you gave an SRA accession),
+BioSample, and BioProject cards, each linked to its NCBI page.
 
 ![Sample metadata viewer, GBIF tab, with the occurrence issues shown as badges](figures/specimen_viewer_gbif.png)
 

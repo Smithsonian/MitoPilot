@@ -11,29 +11,11 @@
 #' @param biosamples Optional BioSample or SRA accessions to set for `ids` first
 #'   (same length as `ids`). A blank value removes that sample's BioSample and
 #'   its NCBI data.
-#' @param from_id Use each sample's own ID as its BioSample value when that ID
-#'   is a BioSample or SRA accession (for example an SRR run used as the sample
-#'   ID). Samples whose ID is not one are left unchanged.
 #' @param link_sources Follow links to GEOME, GBIF, or NCBI records named in the
 #'   fetched records, filling in IDs a sample does not have yet. NULL (default)
 #'   uses the project setting.
 #' @return Invisibly, a data frame of `ID`, `status`, and `message`.
 #' @export
-fetch_biosample <- function(path = ".", ids = NULL, biosamples = NULL, from_id = FALSE,
-                            link_sources = NULL) {
-  if (isTRUE(from_id)) {
-    con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
-    on.exit(DBI::dbDisconnect(con))
-    .meta_ensure_tables(con)
-    s <- DBI::dbGetQuery(con, "SELECT ID FROM samples")$ID
-    s <- if (is.null(ids)) s else intersect(s, ids)
-    ok <- !is.na(ncbi_normalize_id(s, strict = TRUE))
-    for (id in s[ok]) .meta_set_ref(con, "NCBI", id, id)
-    if (any(!ok)) message("Sample ID is not a BioSample or SRA accession, skipped: ", .lst(s[!ok]))
-    ids <- s[ok]
-    if (!length(ids)) {
-      return(invisible(data.frame(ID = character(), status = character(), message = character())))
-    }
-  }
+fetch_biosample <- function(path = ".", ids = NULL, biosamples = NULL, link_sources = NULL) {
   .meta_fetch_project(path, "NCBI", ids, biosamples, link = link_sources)
 }

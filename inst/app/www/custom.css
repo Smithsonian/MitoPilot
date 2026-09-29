@@ -579,6 +579,7 @@ details summary:hover {
 .mp-meta-view-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .mp-meta-view-bar .form-group { margin: 0 0 0 auto; }
 .mp-meta-view-bar .checkbox { margin: 0; }
+.mp-meta-view-search { width: 180px; }
 /* The source buttons drive the Source filter; its input box is not needed. */
 .mp-meta-view-tbl .rt-tr-filters { display: none; }
 
@@ -1010,3 +1011,5 @@ a.mp-link:focus-visible {
 .mp-spec-remove .form-group { margin-bottom: 4px; }
 .mp-spec-link { display: inline-block; margin-right: 12px; vertical-align: middle; }
 .mp-spec-link .checkbox, .mp-spec-link .form-group { margin: 0; }
+.mp-spec-tabs { position: relative; }
+.mp-spec-filter { position: absolute; top: 4px; right: 15px; width: 200px; z-index: 2; }

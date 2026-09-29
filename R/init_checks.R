@@ -214,6 +214,11 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
   if (user_asmb && "Assembly" %nin% cols) {
     iss$err("mapping columns: 'Assembly' column not found")
   }
+  src_cols <- c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample)
+  for (src in names(src_cols)[src_cols == mapping_id]) {
+    iss$err("mapping columns: the sample ID column '", mapping_id, "' can't also be the ",
+            src, " ID column; copy the IDs into their own column")
+  }
   # Columns new_db() computes; a same-named metadata column would be overwritten.
   reserved <- c("genetic_code", if (user_asmb) c("topology", "assembly"))
   if (mapping_id != "ID") reserved <- c(reserved, "ID")
@@ -286,11 +291,8 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
   if (mapping_biosample %in% cols) {
     raw <- trimws(.meta_chr(mapping[[mapping_biosample]]))
     raw[is.na(raw)] <- ""
-    bad <- nzchar(raw) & is.na(ncbi_normalize_id(raw, strict = mapping_biosample == mapping_id))
-    if (any(bad) && mapping_biosample == mapping_id) {
-      iss$warn("mapping BioSample: sample IDs are not BioSample or SRA accessions for ",
-               .lst(lab[bad]), "; no NCBI lookup for these samples")
-    } else if (any(bad)) {
+    bad <- nzchar(raw) & is.na(ncbi_normalize_id(raw))
+    if (any(bad)) {
       iss$warn("mapping BioSample: not a BioSample or SRA accession for ",
                .lst(lab[bad]), "; these samples will show a failed NCBI fetch")
     }

@@ -38,7 +38,10 @@ NCBI_COMBOS <- list(
   lat_lon = list(label = "lat_lon", sources = "lat_lon", fn = .ncbi_lat_lon),
   collection_date = .ncbi_passthrough("collection_date"),
   geo_loc_name = .ncbi_passthrough("geo_loc_name"),
-  specimen_voucher = .ncbi_passthrough("specimen_voucher"),
+  specimen_voucher = list(label = "specimen_voucher",
+                          sources = c("specimen_voucher", "genbankSpecimenVoucher"),
+                          fn = function(recs) .ncbi_val(recs, "specimen_voucher") %|NA|%
+                            .ncbi_val(recs, "genbankSpecimenVoucher")),
   collected_by = .ncbi_passthrough("collected_by"),
   identified_by = .ncbi_passthrough("identified_by"),
   sex = .ncbi_passthrough("sex", lower = TRUE),

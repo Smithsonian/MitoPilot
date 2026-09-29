@@ -21,6 +21,14 @@ test_that("NCBI combos pass GenBank values through and drop missing text", {
   expect_true(is.na(f("bioproject")))
 })
 
+test_that("NCBI voucher falls back to GEOME's genbankSpecimenVoucher", {
+  f <- NCBI_COMBOS$specimen_voucher$fn
+  expect_equal(f(bs_recs(genbankSpecimenVoucher = "USNM:Fish:454742")), "USNM:Fish:454742")
+  expect_equal(f(bs_recs(specimen_voucher = "ROM:1", genbankSpecimenVoucher = "USNM:Fish:2")), "ROM:1")
+  expect_equal(f(bs_recs(specimen_voucher = "missing", genbankSpecimenVoucher = "USNM:Fish:2")),
+               "USNM:Fish:2")
+})
+
 test_that("ncbi lat_lon converts decimal pairs and rejects junk", {
   f <- function(x) NCBI_COMBOS$lat_lon$fn(bs_recs(lat_lon = x))
   expect_equal(f("44.5, -63.1"), "44.5 N 63.1 W")

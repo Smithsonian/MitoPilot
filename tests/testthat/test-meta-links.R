@@ -179,10 +179,11 @@ test_that("new_db stores the link switch", {
   local_mocked_bindings(.ncbi_get = ncbi_fixture_get, .geome_get = function(...) stop("offline"),
                         .gbif_get = function(...) stop("offline"))
   d <- withr::local_tempdir()
-  m <- data.frame(ID = "SRR21844202", Taxon = "Fundulus majalis", R1 = "a_1.fq", R2 = "a_2.fq")
+  m <- data.frame(ID = "SRR21844202", Taxon = "Fundulus majalis", R1 = "a_1.fq", R2 = "a_2.fq",
+                  BioSample = "SRR21844202")
   utils::write.csv(m, file.path(d, "mapping.csv"), row.names = FALSE)
   suppressWarnings(new_db(db_path = file.path(d, ".sqlite"), mapping_fn = file.path(d, "mapping.csv"),
-                          mapping_biosample = "ID", link_sources = TRUE))
+                          link_sources = TRUE))
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   expect_true(.meta_link_enabled(con))

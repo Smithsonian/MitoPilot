@@ -24,8 +24,8 @@
 #' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #' @param mapping_biosample Name of the mapping-file column holding NCBI
-#'   BioSample or SRA accessions (optional). May be the same column as
-#'   `mapping_id`. Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
+#'   BioSample or SRA accessions (optional). Must not be the sample ID column.
+#'   Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
 #' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
 #'   value during setup (default TRUE). Set FALSE when offline and run
 #'   [fetch_biosample()] later.

@@ -135,8 +135,8 @@ To link samples to [GEOME](https://geome-db.org) records, [GBIF](https://www.gbi
 [NCBI BioSamples](https://www.ncbi.nlm.nih.gov/biosample), add a column of GEOME BCIDs, gbifIDs
 (Smithsonian NMNH EZIDs work there too), or BioSample/SRA accessions, and name
 those columns with the `mapping_geome`, `mapping_gbif`, and `mapping_biosample`
-arguments of `new_project()`. If your sample IDs are SRA runs, use
-`mapping_biosample = "ID"`. Add `link_sources = TRUE` to fill in the other
+arguments of `new_project()`. These must be separate from the sample ID column;
+if your sample IDs are SRA runs, copy them into a `BioSample` column. Add `link_sources = TRUE` to fill in the other
 databases from whichever ID you have; see [Sample metadata](Specimen-Metadata.html).
 
 ```

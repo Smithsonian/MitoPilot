@@ -298,7 +298,7 @@ test_that("the compare view has an NCBI column", {
   expect_match(html, "<td>Canada</td>", fixed = TRUE)
 })
 
-test_that("the viewer NCBI tab has an ID box and a Use sample ID button", {
+test_that("the viewer NCBI tab has an ID box", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
   DBI::dbWriteTable(con, "samples", data.frame(ID = "SRR21844202", Taxon = "x"))
@@ -310,7 +310,7 @@ test_that("the viewer NCBI tab has an ID box and a Use sample ID button", {
     open("SRR21844202")
     session$flushReact()
     html <- output$ncbi_detail$html
-    expect_match(html, "Use sample ID", fixed = TRUE)
+    expect_no_match(html, "Use sample ID", fixed = TRUE)
     expect_match(html, "SAMN29555051 or SRR21844202", fixed = TRUE)
     expect_match(html, "This sample has no BioSample", fixed = TRUE)
   })
@@ -373,7 +373,7 @@ test_that("the link checkbox saves the project switch", {
   ms$userData$con <- con
   open <- shiny::reactiveVal(NULL)
   shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
-    session$setInputs(link_sources = TRUE)
+    session$setInputs(gbif_link = TRUE)
   })
   expect_true(.meta_link_enabled(con))
 })

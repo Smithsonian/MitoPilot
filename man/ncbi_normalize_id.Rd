@@ -4,15 +4,12 @@
 \alias{ncbi_normalize_id}
 \title{Normalize NCBI BioSample or SRA accessions}
 \usage{
-ncbi_normalize_id(x, strict = FALSE)
+ncbi_normalize_id(x)
 }
 \arguments{
 \item{x}{Vector of BioSample accessions (SAMN, SAMEA, SAMD), BioSample
 numbers, SRA accessions (SRR/ERR/DRR runs, SRX experiments, SRS samples),
 or ncbi.nlm.nih.gov biosample / sra links.}
-
-\item{strict}{Reject bare BioSample numbers, for values that are really
-sample IDs (a sample ID `12345` is not a BioSample).}
 }
 \value{
 Character vector of upper-case IDs, NA where the input is blank or
