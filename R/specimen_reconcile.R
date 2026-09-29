@@ -178,6 +178,7 @@ specimen_csv_columns <- function(con) {
 
 .spec_source_value <- function(concept, source, recs) {
   if (!nrow(recs)) return(NA_character_)
+  if (source == "NCBI") return(.ncbi_concept_value(concept, recs))
   combos <- .meta_combos(source)
   pick <- if (source == "GBIF") .gbif_occ else .geome_pick
   switch(concept,
@@ -203,38 +204,34 @@ specimen_conflicts <- function(con, ids = NULL) {
   empty <- recs[0, ]
   nk <- length(SPECIMEN_CONCEPTS)
   n <- nrow(s) * nk
-  csv_v <- geome_v <- gbif_v <- status <- rep(NA_character_, n)
+  srcs <- names(META_SOURCES)
+  csv_v <- status <- rep(NA_character_, n)
+  sv <- matrix(NA_character_, n, length(srcs), dimnames = list(NULL, srcs))
   j <- 0L
   for (i in seq_len(nrow(s))) {
     row <- s[i, , drop = FALSE]
     r <- by_id[[s$ID[i]]] %||% empty
     no_meta <- !nrow(r)
-    g <- r[r$source == "GEOME", , drop = FALSE]
-    b <- r[r$source == "GBIF", , drop = FALSE]
     for (k in SPECIMEN_CONCEPTS) {
       j <- j + 1L
       cv <- .spec_csv_value(row, cols[[k]])
+      csv_v[j] <- cv
       if (no_meta) {
-        # no GEOME/GBIF records for this sample: only the CSV value can exist,
-        # so status can only be "single" or NA, skip the source comparisons
-        csv_v[j] <- cv
         status[j] <- if (!is.na(cv) && nzchar(cv)) "single" else NA_character_
         next
       }
-      v <- c(cv, .spec_source_value(k, "GEOME", g),
-             .spec_source_value(k, "GBIF", b))
-      csv_v[j] <- v[1]
-      geome_v[j] <- v[2]
-      gbif_v[j] <- v[3]
-      status[j] <- .spec_status(k, v)
+      for (src in srcs) sv[j, src] <- .spec_source_value(k, src, r[r$source == src, , drop = FALSE])
+      status[j] <- .spec_status(k, c(cv, sv[j, ]))
     }
   }
   csv_col <- vapply(SPECIMEN_CONCEPTS, function(k) {
     if (length(cols[[k]])) paste(cols[[k]], collapse = " + ") else NA_character_
   }, character(1), USE.NAMES = FALSE)
-  data.frame(ID = rep(s$ID, each = nk), concept = rep(SPECIMEN_CONCEPTS, nrow(s)),
-             csv_column = rep(csv_col, nrow(s)), csv_value = csv_v, geome_value = geome_v,
-             gbif_value = gbif_v, status = status)
+  out <- data.frame(ID = rep(s$ID, each = nk), concept = rep(SPECIMEN_CONCEPTS, nrow(s)),
+                    csv_column = rep(csv_col, nrow(s)), csv_value = csv_v)
+  for (src in srcs) out[[paste0(tolower(src), "_value")]] <- sv[, src]
+  out$status <- status
+  out
 }
 
 .spec_set_csv_map <- function(con, map) {
@@ -267,11 +264,11 @@ specimen_conflicts <- function(con, ids = NULL) {
   invisible(NULL)
 }
 
-#' Choose which mapping-file columns are compared with GEOME and GBIF
+#' Choose which mapping-file columns are compared with GEOME, GBIF, and NCBI
 #'
 #' MitoPilot compares specimen details (coordinates, collection date, country,
 #' locality, voucher, collector, sex, and life stage) between your mapping file,
-#' GEOME, and GBIF, and flags disagreements. It finds the mapping-file columns
+#' GEOME, GBIF, and NCBI, and flags disagreements. It finds the mapping-file columns
 #' by name; use this function when a column has a name it does not recognize,
 #' or to stop comparing one. The Taxon column is always compared.
 #'
@@ -309,7 +306,9 @@ set_metadata_columns <- function(path = ".", ...) {
   country = "country", countryCode = "country", locality = "locality",
   catalogNumber = "voucher", institutionCode = "voucher", collectionCode = "voucher",
   collectorList = "collector", recordedBy = "collector", sex = "sex", lifeStage = "dev_stage",
-  scientificName = "taxon"
+  scientificName = "taxon", lat_lon = "coordinates", collection_date = "collection_date",
+  geo_loc_name = "country", specimen_voucher = "voucher", collected_by = "collector",
+  dev_stage = "dev_stage", organism = "taxon"
 )
 
 # Concepts an exported header template touches: through a {geome_*}/{gbif_*}
@@ -320,7 +319,8 @@ specimen_template_concepts <- function(templates, csv_cols) {
   toks <- unique(trimws(gsub("^\\{|\\}$", "", toks)))
   out <- character()
   for (t in toks) {
-    m <- regmatches(t, regexec("^(geome|gbif)_(.+)$", t))[[1]]
+    m <- regmatches(t, regexec(paste0("^(", paste(tolower(names(META_SOURCES)), collapse = "|"),
+                                      ")_(.+)$"), t))[[1]]
     if (length(m)) {
       if (m[3] %in% names(.SPEC_COMBO_CONCEPTS)) {
         out <- c(out, .SPEC_COMBO_CONCEPTS[[m[3]]])
@@ -337,16 +337,21 @@ specimen_template_concepts <- function(templates, csv_cols) {
 
 specimen_export_warnings <- function(conflicts, concepts, ids) {
   keep <- conflicts$status %in% "conflict" & conflicts$concept %in% concepts & conflicts$ID %in% ids
-  out <- conflicts[keep, c("ID", "concept", "csv_value", "geome_value", "gbif_value"), drop = FALSE]
+  vcols <- paste0(tolower(names(META_SOURCES)), "_value")
+  out <- conflicts[keep, c("ID", "concept", "csv_value", intersect(vcols, names(conflicts))), drop = FALSE]
   rownames(out) <- NULL
   out
 }
 
 specimen_warning_html <- function(rows) {
   cell <- function(x) ifelse(is.na(x), "-", htmltools::htmlEscape(as.character(x)))
+  srcs <- names(META_SOURCES)
+  srcs <- srcs[paste0(tolower(srcs), "_value") %in% names(rows)]
+  src_cells <- if (length(srcs)) {
+    do.call(paste0, lapply(srcs, function(x) paste0("<td>", cell(rows[[paste0(tolower(x), "_value")]]), "</td>")))
+  } else ""
   body <- paste0("<tr><td>", cell(rows$ID), "</td><td>", cell(rows$concept), "</td><td>",
-                 cell(rows$csv_value), "</td><td>", cell(rows$geome_value), "</td><td>",
-                 cell(rows$gbif_value), "</td></tr>", collapse = "")
+                 cell(rows$csv_value), "</td>", src_cells, "</tr>", collapse = "")
   n <- length(unique(rows$ID))
   htmltools::HTML(paste0(
     "<p>", mp_n(n, "sample"), " in this group ", if (n == 1) "has" else "have",
@@ -354,7 +359,8 @@ specimen_warning_html <- function(rows) {
     "MitoPilot does not pick a value; check which one is right before submitting.</p>",
     "<div style=\"max-height: 260px; overflow-y: auto;\">",
     "<table class=\"table table-sm\" style=\"text-align: left; font-size: var(--mp-fs-meta);\">",
-    "<thead><tr><th>Sample</th><th>Item</th><th>CSV</th><th>GEOME</th><th>GBIF</th></tr></thead>",
+    "<thead><tr><th>Sample</th><th>Item</th><th>CSV</th>", paste0("<th>", srcs, "</th>", collapse = ""),
+    "</tr></thead>",
     "<tbody>", body, "</tbody></table></div>"
   ))
 }

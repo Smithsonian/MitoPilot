@@ -575,9 +575,11 @@ details summary:hover {
 }
 .mp-meta-logo-geome { background-image: url("specimen/geome_g.png"); }
 .mp-meta-logo-gbif { background-image: url("specimen/gbif_leaf.png"); }
+.mp-meta-logo-ncbi { background-image: url("specimen/ncbi_helix.png"); }
 .mp-meta-view-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .mp-meta-view-bar .form-group { margin: 0 0 0 auto; }
 .mp-meta-view-bar .checkbox { margin: 0; }
+.mp-meta-view-search { width: 180px; }
 /* The source buttons drive the Source filter; its input box is not needed. */
 .mp-meta-view-tbl .rt-tr-filters { display: none; }
 
@@ -1002,3 +1004,12 @@ a.mp-link:focus-visible {
 .mp-spec-icon { width: 18px; height: 18px; }
 .mp-spec-faded img { filter: grayscale(1); opacity: 0.45; }
 .mp-spec-badge { position: absolute; right: -5px; bottom: -3px; font-size: 10px; line-height: 1; }
+
+/* Sample metadata viewer: remove panel and link switch */
+.mp-spec-remove { margin-top: 12px; }
+.mp-spec-remove summary { cursor: pointer; color: var(--mp-text-muted); }
+.mp-spec-remove .form-group { margin-bottom: 4px; }
+.mp-spec-link { display: inline-block; margin-right: 12px; vertical-align: middle; }
+.mp-spec-link .checkbox, .mp-spec-link .form-group { margin: 0; }
+.mp-spec-tabs { position: relative; }
+.mp-spec-filter { position: absolute; top: 4px; right: 15px; width: 200px; z-index: 2; }

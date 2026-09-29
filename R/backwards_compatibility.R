@@ -93,12 +93,12 @@ backwards_compatibility <- function(
   # The circularization and mitogenome-search schema only belongs to
   # user-assembly projects, whose mapping file carries an "assembly" column.
   user_asmb <- is_user_asmb(con)
-  # Sample metadata (GEOME/GBIF): source-keyed meta_* tables, the per-sample ID
+  # Sample metadata (GEOME/GBIF/NCBI): source-keyed meta_* tables, the per-sample ID
   # columns, and no leftover pre-1.5.7 geome_* tables.
   meta_tables <- DBI::dbListTables(con)
   meta_current <- all(c("meta_records", "meta_status", "meta_export_fields",
-                        "meta_csv_map", "meta_view_fields") %in% meta_tables) &&
-    all(c("GEOME_BCID", "GBIF_ID") %in% names(samples_table)) &&
+                        "meta_csv_map", "meta_view_fields", "meta_options", "meta_links") %in% meta_tables) &&
+    all(c("GEOME_BCID", "GBIF_ID", "BioSample") %in% names(samples_table)) &&
     !any(c("geome_records", "geome_status", "geome_export_fields") %in% meta_tables)
 
   user_asmb_current <- !user_asmb || (
@@ -2251,7 +2251,7 @@ backwards_compatibility <- function(
   if (!meta_current) {
     .meta_ensure_tables(con)
     .meta_view_ensure(con)
-    message("added sample metadata (GEOME/GBIF) tables and columns")
+    message("added sample metadata (GEOME/GBIF/NCBI) tables and columns")
   }
 
   # Regenerate the .config from the chosen executor's template (port project

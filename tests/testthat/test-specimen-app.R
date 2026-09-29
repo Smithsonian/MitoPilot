@@ -62,8 +62,8 @@ test_that("specimen_fields_modal has a GEOME and a GBIF section", {
     ID = "s1", source = c("GEOME", "GBIF"), level = c("Event", "Occurrence"), depth = 0L,
     ref = "r", field = c("country", "countryCode"), value = c("Peru", "PE")))
   .meta_save_fields(con, c("geome:combo:lat_lon", "gbif:combo:sex"))
-  html <- as.character(specimen_fields_modal(NS("exp"), meta_field_summary(con, "GEOME"),
-                                              meta_field_summary(con, "GBIF")))
+  html <- as.character(specimen_fields_modal(NS("exp"), list(GEOME = meta_field_summary(con, "GEOME"),
+                                                             GBIF = meta_field_summary(con, "GBIF"))))
   expect_match(html, "Metadata fields for export", fixed = TRUE)
   expect_match(html, "exp-geome_combos", fixed = TRUE)
   expect_match(html, "exp-gbif_combos", fixed = TRUE)
@@ -102,7 +102,7 @@ test_that("specimen_status: failed beats conflict beats ok beats none", {
   expect_equal(s$specimen_message[2], "GBIF: failed (GBIF returned HTTP 503)")
   expect_equal(s$specimen_message[3],
                "GEOME: fetched\nGBIF: fetched\nConflicts: country\nNot checked: collector")
-  expect_equal(s$specimen_message[4], "No GEOME BCID or GBIF ID")
+  expect_equal(s$specimen_message[4], "No GEOME, GBIF, or NCBI ID")
   expect_equal(s$specimen_icons, c("GEOME:ok", "GBIF:failed", "GEOME:ok GBIF:ok conflict", ""))
 })
 
@@ -185,6 +185,7 @@ test_that("panel module servers start outside a reactive context, with specimen 
       for (f in c("goto_annotate", "reopen_outlier_review", "run_modal")) gargoyle::init(f, session = ms)
       # not testServer: it runs the module inside isolate(), hiding reads that crash the real app
       expect_no_error(shiny::withReactiveDomain(ms, get(srv)("m")), message = srv)
+      ms$close()
     }
   }
   start(function(...) new_test_project(n = 2, ...), c("assemble_server", "annotate_server", "export_server"))
@@ -253,4 +254,126 @@ test_that("specimen_csv_map_ui offers every concept but taxon, with auto and non
   expect_match(html, "__none__", fixed = TRUE)
   expect_match(html, "\"maxItems\":2", fixed = TRUE)
   expect_match(html, "v-map_save", fixed = TRUE)
+})
+
+test_that("specimen_status and the column renderer know the NCBI source", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("s1", "s2"), Taxon = "x"))
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "UPDATE samples SET BioSample = 'SAMN1' WHERE ID = 's1'")
+  st <- specimen_status(con)
+  expect_equal(st$specimen_icons[st$ID == "s1"], "NCBI:pending")
+  expect_match(st$specimen_message[st$ID == "s2"], "NCBI")
+  expect_match(as.character(rt_specimen("x")), "ncbi_helix.png", fixed = TRUE)
+  expect_equal(meta_view_logo("NCBI")$attribs$class, "mp-meta-logo mp-meta-logo-ncbi")
+  expect_true(file.exists(app_sys("app", "www", "specimen", "ncbi_helix.png")))
+})
+
+test_that("specimen_fields_modal has a section per source", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
+  .meta_ensure_tables(con)
+  sm <- lapply(stats::setNames(nm = names(META_SOURCES)), function(s) meta_field_summary(con, s))
+  html <- as.character(specimen_fields_modal(shiny::NS("x"), sm))
+  for (s in c("GEOME", "GBIF", "NCBI")) expect_match(html, paste0("<h4>", s, "</h4>"), fixed = TRUE)
+  expect_match(html, "x-ncbi_combos", fixed = TRUE)
+})
+
+test_that("meta_record_view links NCBI levels in SRA, BioSample, BioProject order", {
+  recs <- data.frame(level = c("BioProject", "SRA", "BioSample"), depth = c(2L, 0L, 1L),
+                     ref = c("PRJNA1", "SRR1", "SAMN1"), field = "accession",
+                     value = c("PRJNA1", "SRR1", "SAMN1"))
+  html <- as.character(meta_record_view(recs, "NCBI", "m-ncbi_records"))
+  expect_lt(regexpr("sra/SRR1", html), regexpr("biosample/SAMN1", html))
+  expect_lt(regexpr("biosample/SAMN1", html), regexpr("bioproject/PRJNA1", html))
+})
+
+test_that("the compare view has an NCBI column", {
+  cf <- data.frame(ID = "s1", concept = "country", csv_column = NA, csv_value = "USA",
+                   geome_value = NA, gbif_value = NA, ncbi_value = "Canada", status = "conflict")
+  html <- as.character(specimen_compare_view(cf))
+  expect_match(html, "<th>NCBI</th>", fixed = TRUE)
+  expect_match(html, "<td>Canada</td>", fixed = TRUE)
+})
+
+test_that("the viewer NCBI tab has an ID box", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "SRR21844202", Taxon = "x"))
+  .meta_ensure_tables(con)
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  open <- shiny::reactiveVal(NULL)
+  shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
+    open("SRR21844202")
+    session$flushReact()
+    html <- output$ncbi_detail$html
+    expect_no_match(html, "Use sample ID", fixed = TRUE)
+    expect_match(html, "SAMN29555051 or SRR21844202", fixed = TRUE)
+    expect_match(html, "This sample has no BioSample", fixed = TRUE)
+  })
+})
+
+viewer_con <- function(envir = parent.frame()) {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  withr::defer(DBI::dbDisconnect(con), envir = envir)
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("s1", "s2"), Taxon = "x", country = "USA"))
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "UPDATE samples SET BioSample = 'SAMN1', GBIF_ID = '77' WHERE ID = 's1'")
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s1', 'GBIF', '77', 'NCBI BioSample voucherURI', NULL)")
+  DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s1', 'GEOME', NULL, NULL, '2 possible GBIF matches; not linked')")
+  for (src in c("NCBI", "GBIF")) {
+    DBI::dbAppendTable(con, "meta_records", data.frame(ID = "s1", source = src, level = "L", depth = 0L,
+                                                       ref = "r", field = "f", value = "v"))
+    DBI::dbAppendTable(con, "meta_status", data.frame(ID = "s1", source = src, ref = "r", status = "ok",
+                                                      message = NA_character_, fetched_at = 1L))
+  }
+  con
+}
+
+test_that("the viewer shows where a linked ID came from and link notes", {
+  con <- viewer_con()
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  open <- shiny::reactiveVal(NULL)
+  shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
+    open("s1")
+    session$flushReact()
+    expect_match(output$gbif_detail$html, "Found through NCBI BioSample voucherURI", fixed = TRUE)
+    expect_match(output$geome_detail$html, "2 possible GBIF matches; not linked", fixed = TRUE)
+  })
+  st <- specimen_status(con)
+  expect_match(st$specimen_message[st$ID == "s1"], "GBIF: fetched (linked from NCBI BioSample voucherURI)", fixed = TRUE)
+})
+
+test_that("the viewer's remove panel deletes only the chosen fetched data", {
+  con <- viewer_con()
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  open <- shiny::reactiveVal(NULL)
+  shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
+    open("s1")
+    session$flushReact()
+    session$setInputs(remove_sources = "GBIF", remove_scope = "sample")
+    session$setInputs(remove_go = 1)
+  })
+  left <- DBI::dbGetQuery(con, "SELECT source FROM meta_records")$source
+  expect_equal(left, "NCBI")
+  s <- DBI::dbGetQuery(con, "SELECT * FROM samples WHERE ID = 's1'")
+  expect_true(is.na(s$GBIF_ID))
+  expect_equal(s$BioSample, "SAMN1")
+  expect_equal(s$country, "USA")
+})
+
+test_that("the link checkbox saves the project switch", {
+  con <- viewer_con()
+  ms <- shiny::MockShinySession$new()
+  ms$userData$con <- con
+  open <- shiny::reactiveVal(NULL)
+  shiny::testServer(specimen_viewer_server, args = list(open = open), session = ms, {
+    session$setInputs(gbif_link = TRUE)
+  })
+  expect_true(.meta_link_enabled(con))
 })

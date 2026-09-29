@@ -1,0 +1,57 @@
+<?xml version="1.0" ?>
+<RecordSet><DocumentSummary uid="720393">
+    <Project>
+        <ProjectID>
+            <ArchiveID accession="PRJNA720393" archive="NCBI" id="720393"/>
+            <LocalID>bp0</LocalID>
+            <LocalID>bp0</LocalID>
+        </ProjectID>
+        <ProjectDescr>
+            <Name>Metazoa</Name>
+            <Title>NOAA Genome Skimming of Marine animals inhabiting the US Exclusive Economic Zone</Title>
+            <Description>This project aims to create a multi-locus genetic barcode reference library for marine species of interest to NOAA's National Marine Fisheries Science Centers. Each sample is voucher-based using curated and well identified specimens residing in museum collections. Reference sequences, e.g., annotated complete mitochondrial genomes and ribosomal repeats, will be derived by skimming from whole genome sequencing. These sequences will be critical for detecting marine species within environmental samples, many of which are being taken by different practitioners with varying aims.</Description>
+            <Relevance>
+                <Environmental>yes</Environmental>
+            </Relevance>
+        </ProjectDescr>
+        <ProjectType>
+            <ProjectTypeSubmission>
+                <Target capture="eWhole" material="eGenome" sample_scope="eMultispecies">
+                    <Description>Various marine animals inhabiting the US Exclusive Economic Zone</Description>
+                </Target>
+                <Method method_type="eSequencing"/>
+                <Objectives>
+                    <Data data_type="eRawSequenceReads"/>
+                </Objectives>
+                <IntendedDataTypeSet>
+                    <DataType>genome sequencing and assembly</DataType>
+                    <DataType>raw sequence reads</DataType>
+                </IntendedDataTypeSet>
+                <ProjectDataTypeSet>
+                    <DataType>genome sequencing and assembly</DataType>
+                </ProjectDataTypeSet>
+            </ProjectTypeSubmission>
+        </ProjectType>
+    </Project>
+    <Submission last_update="2021-04-07" submission_id="SUB9443074" submitted="2021-04-07">
+        <Description>
+            <!-- Submitter information has been removed -->
+            <Organization role="owner" type="institute">
+                <Name>Smithsonian National Museum of Natural History</Name>
+                <!-- Contact information has been removed -->
+            </Organization>
+            <Access>public</Access>
+        </Description>
+        <Action action_id="SUB9443074-bp0"/>
+    </Submission>
+    <ProjectLinks>
+        <Link>
+            <ProjectIDRef archive="NCBI" id="720393" accession="PRJNA720393"/>
+            <Hierarchical type="TopAdmin">
+                <MemberID archive="NCBI" id="81359" accession="PRJNA81359"/>
+            </Hierarchical>
+        </Link>
+    </ProjectLinks>
+</DocumentSummary>
+
+</RecordSet>

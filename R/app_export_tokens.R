@@ -45,6 +45,7 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
     ticked <- if (length(cols)) {
       combo <- grepl(":combo:", keys, fixed = TRUE)
       label <- sub("^[^:]+:combo:", "", keys)
+      combo <- combo & !vapply(label, function(l) isTRUE(.meta_combos(prefix)[[l]]$plain), logical(1))
       tok(cols, ifelse(combo, paste0("[", label, "={", cols, "}]"), paste0("{", cols, "}")))
     } else {
       tok(character(), character())
@@ -55,6 +56,7 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
   csv <- setdiff(export_metadata_cols(sample_cols, character()), EXPORT_TOKEN_BASICS)
   geome <- meta("geome", "GEOME_BCID")
   gbif <- meta("gbif", "GBIF_ID")
+  ncbi <- meta("ncbi", "BioSample")
   csv_tokens <- plain(csv)
   list(
     Basics = list(open = TRUE, tokens = plain(EXPORT_TOKEN_BASICS), hint = NULL),
@@ -65,6 +67,8 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
                  hint = if (!geome$n) pick_hint else NULL),
     GBIF = list(open = gbif$n > 0, tokens = gbif$tokens,
                 hint = if (!gbif$n) pick_hint else NULL),
+    NCBI = list(open = ncbi$n > 0, tokens = ncbi$tokens,
+                hint = if (!ncbi$n) pick_hint else NULL),
     `Reference (BLAST)` = list(open = FALSE, tokens = plain(EXPORT_TOKEN_REFERENCE), hint = NULL),
     `Assembly and annotation` = list(open = FALSE, tokens = plain(EXPORT_TOKEN_ASSEMBLY), hint = NULL)
   )
@@ -84,7 +88,7 @@ export_token_ui <- function(groups, target_id, ns, totals = "{}") {
     p(class = "mp-token-lead", "Columns by type:"),
     lapply(names(groups), function(g) {
       x <- groups[[g]]
-      link <- if (g %in% c("GEOME", "GBIF")) {
+      link <- if (g %in% names(META_SOURCES)) {
         tagList(" ", actionLink(ns(paste0("token_fields_", tolower(g))), "Choose fields"))
       }
       tags$details(

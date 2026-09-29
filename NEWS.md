@@ -1,5 +1,12 @@
 # MitoPilot (development version)
 
+- **Follow links between GEOME, GBIF, and NCBI.** With `link_sources = TRUE` at setup (or **Follow links between databases** in the sample metadata viewer), each fetched record is read for IDs of the other databases, and missing ones are added and fetched: BioSample to GEOME tissue and Smithsonian voucher, GEOME to BioSample and voucher, GBIF to BioSample. Other museums' vouchers are matched to GBIF by catalog number, and only linked when exactly one specimen of the right species is found. Your own IDs are never replaced, and every linked ID shows where it came from.
+- **Remove fetched metadata.** **Remove fetched data...** in the sample metadata viewer, or `remove_metadata()`, deletes fetched GEOME, GBIF, or NCBI records for one sample or all. Mapping-file columns and the IDs you supplied are always kept.
+- GEOME BCIDs containing colons (such as tissue IDs `ark:/21547/...USNM:Biorepository:...`) are now accepted, and a GEOME catalog number that is a web link no longer produces a `geome_specimen_voucher`.
+- Showing a metadata field in a table with no rows no longer crashes the app.
+
+- **NCBI BioSample metadata.** Samples can now be linked to an NCBI BioSample, directly or through an SRA accession (SRR, ERR, DRR, SRX, or SRS), with `mapping_biosample` at setup, `fetch_biosample()`, or the new NCBI tab in the sample metadata viewer. MitoPilot stores every BioSample attribute plus the linked BioProjects, adds NCBI to the Compare tab and the export conflict warning, and offers GenBank-ready `ncbi_*` fields at export. See [Sample metadata](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html).
+
 - **Curation ruleset browser tweaks.** Each clade now shows a representative image from Wikipedia, credited to its author and license with links to the Wikimedia Commons file. Help tooltips are no longer cut off by the taxonomy tree. On phones, the tree opens from a menu button and rule tables become one card per gene.
 
 # MitoPilot 1.5.7

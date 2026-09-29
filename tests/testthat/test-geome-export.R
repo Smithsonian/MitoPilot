@@ -121,3 +121,14 @@ test_that("a ticked GEOME field with no value joins as empty, not NA", {
   expect_true(is.na(dat$Taxon[2]))
   expect_equal(as.character(stringr::str_glue_data(dat[1, ], "[lat_lon={geome_lat_lon}]")), "[lat_lon=]")
 })
+
+test_that("geome_specimen_voucher skips a catalog number that is a link or ARK", {
+  recs <- data.frame(level = "Sample", depth = 1L, ref = "ark:/1/S",
+                     field = c("catalogNumber", "institutionCode"),
+                     value = c("http://n2t.net/ark:/65665/3416cb256-76ed-41e0-98d3-8ff6d80d910d", "Smithsonian"))
+  expect_true(is.na(GEOME_COMBOS$specimen_voucher$fn(recs)))
+  recs$value[1] <- "ark:/65665/3416cb256"
+  expect_true(is.na(GEOME_COMBOS$specimen_voucher$fn(recs)))
+  recs$value[1] <- "12345"
+  expect_equal(GEOME_COMBOS$specimen_voucher$fn(recs), "Smithsonian:12345")
+})

@@ -8,8 +8,11 @@
 #' @param ids Sample IDs to fetch. Default: every sample with a BCID.
 #' @param bcids Optional BCIDs to set for `ids` first (same length as `ids`).
 #'   A blank value removes that sample's BCID and its GEOME data.
+#' @param link_sources Follow links to GEOME, GBIF, or NCBI records named in the
+#'   fetched records, filling in IDs a sample does not have yet. NULL (default)
+#'   uses the project setting.
 #' @return Invisibly, a data frame of `ID`, `status`, and `message`.
 #' @export
-fetch_geome <- function(path = ".", ids = NULL, bcids = NULL) {
-  .meta_fetch_project(path, "GEOME", ids, bcids)
+fetch_geome <- function(path = ".", ids = NULL, bcids = NULL, link_sources = NULL) {
+  .meta_fetch_project(path, "GEOME", ids, bcids, link = link_sources)
 }

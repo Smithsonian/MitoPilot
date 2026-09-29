@@ -46,7 +46,7 @@ GEOME_COMBOS <- list(
     label = "specimen_voucher", sources = c("institutionCode", "catalogNumber"),
     fn = function(recs) {
       cat <- .geome_pick(recs, "catalogNumber")
-      if (is.na(cat)) return(NA_character_)
+      if (is.na(cat) || grepl("^[a-z]+://|ark:/", cat, ignore.case = TRUE)) return(NA_character_)
       inst <- .geome_pick(recs, "institutionCode")
       if (is.na(inst)) cat else paste0(inst, ":", cat)
     }

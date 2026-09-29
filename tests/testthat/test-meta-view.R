@@ -80,3 +80,18 @@ test_that("every table offers a Metadata column group", {
     expect_true("Metadata" %in% names(g))
   }
 })
+
+test_that("showing source fields on an empty table does not crash", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("s1", "s2"), Taxon = "x"))
+  .meta_ensure_tables(con)
+  DBI::dbAppendTable(con, "meta_records", data.frame(
+    ID = c("s1", "s2"), source = "NCBI", level = "BioSample", depth = 1L, ref = "SAMN1",
+    field = "sex", value = "female"))
+  f <- meta_view_fields(con)
+  f$shown <- TRUE
+  out <- meta_view_join(data.frame(ID = character(), x = character()), con, f)
+  expect_equal(nrow(out), 0L)
+  expect_equal(nrow(meta_export_cols(con, ids = character(), keys = "ncbi:combo:sex")), 0L)
+})

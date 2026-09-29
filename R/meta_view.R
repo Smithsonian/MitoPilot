@@ -1,7 +1,7 @@
 # On-screen metadata columns shared by the Assemble, Annotate, and Export
 # tables. Separate from meta_export_fields, which drives exported files.
 
-META_VIEW_SOURCES <- c("Map file", "GEOME", "GBIF")
+META_VIEW_SOURCES <- c("Map file", "GEOME", "GBIF", "NCBI")
 # Columns the metadata block is placed before, first one present wins
 META_VIEW_ANCHORS <- c("time_stamp", "assemble_notes", "annotate_notes", "export_time_stamp",
                        "export_group", "output", "view")
@@ -40,7 +40,7 @@ meta_view_fields <- function(con) {
                example = vapply(vals, function(v) if (length(v)) v[1] else NA_character_, ""),
                col = paste0("mv_map_", gsub("[^A-Za-z0-9_]", "_", mc)))
   }
-  specimen <- lapply(c("GEOME", "GBIF"), function(src) {
+  specimen <- lapply(names(META_SOURCES), function(src) {
     s <- meta_field_summary(con, src)
     if (!nrow(s)) return(NULL)
     data.frame(source = src, key = s$key,
@@ -64,7 +64,7 @@ meta_view_fields <- function(con) {
 
 #' Save which metadata fields are shown, and the wrap setting
 #'
-#' Map file fields are stored when hidden, GEOME/GBIF fields when shown, so a
+#' Map file fields are stored when hidden, source fields when shown, so a
 #' new map file column appears and a newly fetched field stays off.
 #' @noRd
 meta_view_save <- function(con, fields, shown_keys, wrap) {
@@ -116,10 +116,10 @@ meta_view_join <- function(dat, con, fields = meta_view_fields(con)) {
   out
 }
 
-#' Source logo drawn by CSS (mp-meta-logo-geome / -gbif), NULL for map file
+#' Source logo drawn by CSS (mp-meta-logo-geome / -gbif / -ncbi), NULL for map file
 #' @noRd
 meta_view_logo <- function(src) {
-  if (!src %in% c("GEOME", "GBIF")) return(NULL)
+  if (!src %in% names(META_SOURCES)) return(NULL)
   htmltools::tags$span(class = paste0("mp-meta-logo mp-meta-logo-", tolower(src)),
                        role = "img", `aria-label` = src)
 }

@@ -104,7 +104,7 @@ Want to skip straight to using MitoPilot with your own data? Head on
 over to [Starting Your Own
 Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.html).
 
-Sample metadata can be imported directly from GEOME or GBIF; see
+Sample metadata can be imported directly from GEOME, GBIF, or NCBI BioSample records; see
 [Sample
 Metadata](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html).
 

@@ -183,9 +183,9 @@ Templates are validated as you type and can be saved by name with
 **Save template** for reuse.
 
 <div class="alert alert-tip">
-<strong>Tip.</strong> Samples linked to GEOME or GBIF records can also use
-<code>{geome_&#46;&#46;&#46;}</code> and <code>{gbif_&#46;&#46;&#46;}</code> columns in the header, such as
-<code>{geome_lat_lon}</code> and <code>{gbif_collection_date}</code>. See
+<strong>Tip.</strong> Samples linked to GEOME, GBIF, or NCBI records can also use
+<code>{geome_&#46;&#46;&#46;}</code>, <code>{gbif_&#46;&#46;&#46;}</code>, and <code>{ncbi_&#46;&#46;&#46;}</code> columns in the header, such as
+<code>{geome_lat_lon}</code>, <code>{gbif_collection_date}</code>, and <code>{ncbi_geo_loc_name}</code>. See
 <a href="Specimen-Metadata.html#using-metadata-fields-at-export">Using metadata fields at export</a>.
 </div>
 

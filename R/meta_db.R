@@ -10,6 +10,12 @@ META_SOURCES <- list(
     normalize = function(x) gbif_normalize_id(x),
     invalid = function(x) paste0("'", x, "' is not a GBIF occurrence ID (expected digits or an NMNH EZID)"),
     chain = function(ref, cache) .gbif_fetch_chain(ref, cache)
+  ),
+  NCBI = list(
+    col = "BioSample", label = "NCBI", id_label = "BioSample or SRA accession", arg = "biosamples",
+    normalize = function(x) ncbi_normalize_id(x),
+    invalid = function(x) paste0("'", x, "' is not a BioSample or SRA accession (expected SAMN..., SRR..., or digits)"),
+    chain = function(ref, cache) .ncbi_fetch_chain(ref, cache)
   )
 )
 
@@ -41,6 +47,10 @@ META_SOURCES <- list(
     key TEXT NOT NULL, PRIMARY KEY (key))")
   DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS meta_csv_map (
     concept TEXT NOT NULL, column TEXT, PRIMARY KEY (concept))")
+  DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS meta_options (
+    key TEXT NOT NULL, value TEXT, PRIMARY KEY (key))")
+  DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS meta_links (
+    ID TEXT NOT NULL, source TEXT NOT NULL, ref TEXT, via TEXT, note TEXT, PRIMARY KEY (ID, source))")
   if (DBI::dbExistsTable(con, "samples")) {
     have <- DBI::dbListFields(con, "samples")
     for (s in META_SOURCES) {
@@ -92,11 +102,12 @@ META_SOURCES <- list(
   val <- .meta_store_value(source, raw)
   changed <- xor(is.na(old), is.na(val)) || (!is.na(old) && !is.na(val) && old != val)
   DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = ? WHERE ID = ?"), params = list(val, id))
+  DBI::dbExecute(con, "DELETE FROM meta_links WHERE ID = ? AND source = ?", params = list(id, source))
   if (changed) .meta_drop(con, source, id)
   val
 }
 
-.meta_fetch_into <- function(con, source, ids, refs, cache = new.env()) {
+.meta_fetch_into <- function(con, source, ids, refs, cache = new.env(), link = FALSE) {
   .meta_ensure_tables(con)
   src <- META_SOURCES[[source]]
   status <- character(length(ids))
@@ -125,6 +136,9 @@ META_SOURCES <- list(
                      params = list(ids[i], source, r, status[i], msg[i], as.integer(Sys.time())))
     })
   }
+  if (isTRUE(link)) {
+    for (id in ids[status == "ok"]) tryCatch(.meta_link_sample(con, id), error = function(e) NULL)
+  }
   out <- data.frame(ID = ids, status = status, message = msg)
   bad <- out$status == "failed"
   if (any(bad)) {
@@ -134,7 +148,7 @@ META_SOURCES <- list(
   invisible(out)
 }
 
-.meta_fetch_project <- function(path, source, ids = NULL, refs = NULL) {
+.meta_fetch_project <- function(path, source, ids = NULL, refs = NULL, link = NULL) {
   src <- META_SOURCES[[source]]
   con <- DBI::dbConnect(RSQLite::SQLite(), dbname = file.path(path, ".sqlite"))
   on.exit(DBI::dbDisconnect(con))
@@ -155,33 +169,41 @@ META_SOURCES <- list(
     message("No samples with a ", src$label, " ", src$id_label, " to fetch")
     return(invisible(data.frame(ID = character(), status = character(), message = character())))
   }
-  .meta_fetch_into(con, source, target$ID, target$ref)
+  .meta_fetch_into(con, source, target$ID, target$ref,
+                   link = if (is.null(link)) .meta_link_enabled(con) else isTRUE(link))
 }
 
-.meta_take_cols <- function(mapping, cols) {
+.meta_take_cols <- function(mapping, cols, keep = character()) {
+  used <- character()
   for (src in names(cols)) {
     col <- cols[[src]]
     std <- META_SOURCES[[src]]$col
+    if (col %in% c("ID", keep)) {
+      stop("mapping column '", col, "' holds sample IDs or taxa; it can't also be the ", src,
+           " ID column", call. = FALSE)
+    }
     if (col %in% colnames(mapping)) {
       mapping[[std]] <- .meta_store_value(src, mapping[[col]])
-      if (col != std) mapping[[col]] <- NULL
+      if (col != std) used <- c(used, col)
     }
   }
+  drop <- setdiff(used, c(keep, "Taxon", vapply(META_SOURCES, function(s) s$col, "")))
+  mapping[drop] <- NULL
   mapping
 }
 
-.meta_fetch_new <- function(con, mapping, fetch) {
+.meta_fetch_new <- function(con, mapping, fetch, link = FALSE) {
   .meta_ensure_tables(con)
   for (src in names(fetch)) {
     col <- META_SOURCES[[src]]$col
     if (!isTRUE(fetch[[src]]) || !col %in% colnames(mapping)) next
     has <- !is.na(mapping[[col]])
-    if (any(has)) .meta_fetch_into(con, src, mapping$ID[has], mapping[[col]][has])
+    if (any(has)) .meta_fetch_into(con, src, mapping$ID[has], mapping[[col]][has], link = link)
   }
   invisible(NULL)
 }
 
-.meta_sync_changed <- function(con, mapping, old, fetch) {
+.meta_sync_changed <- function(con, mapping, old, fetch, link = FALSE) {
   for (src in names(fetch)) {
     col <- META_SOURCES[[src]]$col
     if (!col %in% colnames(mapping)) next
@@ -192,12 +214,36 @@ META_SOURCES <- list(
     } else {
       rep(NA_character_, length(new))
     }
+    ln <- DBI::dbGetQuery(con, "SELECT ID, ref FROM meta_links WHERE source = ? AND ref IS NOT NULL",
+                          params = list(src))
+    lref <- ln$ref[match(mapping$ID, ln$ID)]
+    kept <- is.na(new) & !is.na(lref) & !is.na(prev) & prev == lref
+    for (i in which(kept)) {
+      DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = ? WHERE ID = ?"),
+                     params = list(prev[i], mapping$ID[i]))
+    }
+    new[kept] <- prev[kept]
+    for (id in mapping$ID[!is.na(new) & !kept]) {
+      DBI::dbExecute(con, "DELETE FROM meta_links WHERE ID = ? AND source = ?", params = list(id, src))
+    }
     changed <- xor(is.na(new), is.na(prev)) | (!is.na(new) & !is.na(prev) & new != prev)
     if (any(changed)) .meta_drop(con, src, mapping$ID[changed])
     refetch <- changed & !is.na(new)
     if (isTRUE(fetch[[src]]) && any(refetch)) {
-      .meta_fetch_into(con, src, mapping$ID[refetch], new[refetch])
+      .meta_fetch_into(con, src, mapping$ID[refetch], new[refetch], link = link)
     }
   }
   invisible(NULL)
+}
+
+.meta_link_enabled <- function(con) {
+  .meta_ensure_tables(con)
+  isTRUE(DBI::dbGetQuery(con, "SELECT value FROM meta_options WHERE key = 'link_sources'")$value[1] == "1")
+}
+
+.meta_set_link_enabled <- function(con, on) {
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_options VALUES ('link_sources', ?)",
+                 params = list(if (isTRUE(on)) "1" else "0"))
+  invisible(isTRUE(on))
 }

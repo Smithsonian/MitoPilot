@@ -49,7 +49,7 @@ test_that("specimen_conflicts flags agree, note, conflict, single, and empty", {
   con <- spec_db()
   cf <- specimen_conflicts(con)
   expect_equal(nrow(cf), 3L * length(SPECIMEN_CONCEPTS))
-  expect_equal(names(cf), c("ID", "concept", "csv_column", "csv_value", "geome_value", "gbif_value", "status"))
+  expect_equal(names(cf), c("ID", "concept", "csv_column", "csv_value", "geome_value", "gbif_value", "ncbi_value", "status"))
   expect_equal(st(cf, "s1", "coordinates"), "agree")
   expect_equal(cf$csv_column[cf$ID == "s1" & cf$concept == "coordinates"], "Latitude + Longitude")
   expect_equal(cf$csv_value[cf$ID == "s1" & cf$concept == "coordinates"], "28.5378, -81.3332")
@@ -158,4 +158,34 @@ test_that("a raw-token template triggers the warning end to end", {
   expect_equal(w$concept, "country")
   expect_equal(nrow(specimen_export_warnings(
     cf, specimen_template_concepts("{seqid} {completeness}", specimen_csv_columns(con)), "s2")), 0L)
+})
+
+test_that("NCBI values join the comparison and missing text never conflicts", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "Zoarces americanus",
+                                               country = "USA", sex = "male"))
+  .meta_ensure_tables(con)
+  DBI::dbAppendTable(con, "meta_records", data.frame(
+    ID = "s1", source = "NCBI", level = "BioSample", depth = 1L, ref = "SAMN1",
+    field = c("geo_loc_name", "organism", "sex"),
+    value = c("Canada: Nova Scotia", "Zoarces americanus", "not collected")))
+  cf <- specimen_conflicts(con)
+  expect_true("ncbi_value" %in% names(cf))
+  row <- function(k) cf[cf$concept == k, ]
+  expect_equal(row("country")$ncbi_value, "Canada")
+  expect_equal(row("country")$status, "conflict")
+  expect_equal(row("taxon")$status, "agree")
+  expect_true(is.na(row("sex")$ncbi_value))
+  expect_equal(row("sex")$status, "single")
+})
+
+test_that("ncbi tokens map to concepts and warnings carry an NCBI column", {
+  expect_setequal(specimen_template_concepts("[lat_lon={ncbi_lat_lon}] {ncbi_BioSample_organism}", list()),
+                  c("coordinates", "taxon"))
+  cf <- data.frame(ID = "s1", concept = "country", csv_value = "USA", geome_value = NA,
+                   gbif_value = NA, ncbi_value = "Canada", status = "conflict")
+  w <- specimen_export_warnings(cf, "country", "s1")
+  expect_equal(w$ncbi_value, "Canada")
+  expect_match(as.character(specimen_warning_html(w)), "<th>NCBI</th>", fixed = TRUE)
 })

@@ -10,7 +10,7 @@ GEOME_API <- "https://api.geome-db.org"
 geome_normalize_bcid <- function(x) {
   x <- trimws(as.character(x))
   x <- sub("^https?://[^/]+/(record/)?", "", x)
-  ok <- !is.na(x) & grepl("^ark:/[0-9]+/[A-Za-z0-9._~-]+$", x)
+  ok <- !is.na(x) & grepl("^ark:/[0-9]+/[A-Za-z0-9._~:-]+$", x)
   ifelse(ok, x, NA_character_)
 }
 
