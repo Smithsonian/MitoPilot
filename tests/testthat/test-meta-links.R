@@ -291,3 +291,23 @@ test_that("a numeric gbifID and the EZID of the same GBIF record are not a disag
   expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM meta_links WHERE source = 'GBIF'")$n, 0L)
   expect_equal(DBI::dbGetQuery(con, "SELECT GBIF_ID FROM samples")$GBIF_ID, "1321689872")
 })
+
+test_that("two sources naming different records for a linked ID leave a note", {
+  con <- link_con()
+  DBI::dbExecute(con, "UPDATE samples SET GEOME_BCID = 'ark:/21547/T1'")
+  calls <- new.env()
+  m <- mock_chains(calls)
+  m$.ncbi_fetch_chain <- function(ref, cache) {
+    data.frame(level = "BioSample", depth = 1L, ref = "SAMN1", field = c("bcid", "voucherURI"),
+               value = c("https://n2t.net/ark:/21547/T1", "http://n2t.net/ark:/65665/3bc380cef-b981-48ea-ac5f-0283b239833a"))
+  }
+  local_mocked_bindings(!!!m)
+  .meta_fetch_into(con, "GEOME", "s1", "ark:/21547/T1")
+  .meta_fetch_into(con, "NCBI", "s1", "SAMN1", link = TRUE)
+  expect_equal(DBI::dbGetQuery(con, "SELECT GBIF_ID FROM samples")$GBIF_ID, ezid)
+  l <- DBI::dbGetQuery(con, "SELECT ref, via, note FROM meta_links WHERE source = 'GBIF'")
+  expect_equal(l$via, "GEOME Sample voucherURI")
+  expect_match(l$note, "NCBI record links to ark:/65665/3bc380cef-b981-48ea-ac5f-0283b239833a.*kept ark:/65665/3dd003c5a")
+  .meta_link_sample(con, "s1")
+  expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM meta_links WHERE source = 'GBIF' AND note IS NOT NULL")), 1L)
+})
