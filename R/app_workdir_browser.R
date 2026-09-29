@@ -207,9 +207,10 @@ find_workdirs <- function(project_dir, sample_id) {
     stringsAsFactors = FALSE
   )
   if (is.null(project_dir) || is.null(sample_id) || !nzchar(sample_id)) return(empty)
-  logs <- list.files(
-    file.path(project_dir, ".logs"),
-    pattern = "^nextflow\\.log", full.names = TRUE
+  logs <- c(
+    list.files(file.path(project_dir, ".logs"), pattern = "^nextflow\\.log", full.names = TRUE),
+    list.files(file.path(project_dir, ".runs", "nextflow"), pattern = "\\.nextflow\\.log$",
+               full.names = TRUE)
   )
   if (length(logs) == 0) return(empty)
   lines <- unlist(lapply(logs, function(f) {

@@ -1,0 +1,17 @@
+Sep-08 12:51:07.555 [main] DEBUG nextflow.cli.Launcher - $> nextflow -log .logs/nextflow.log run /lib/MitoPilot/nextflow -c .config -entry WF1 -ansi-log false
+Sep-08 12:51:07.607 [main] INFO  nextflow.cli.CmdRun - N E X T F L O W  ~  version 25.10.6
+Sep-08 12:51:09.099 [main] INFO  nextflow.cli.CmdRun - Launching `/lib/MitoPilot/nextflow/main.nf` [suspicious_boltzmann] DSL2 - revision: 23ea965887
+Sep-08 12:51:09.134 [main] DEBUG nextflow.Session - Run name: suspicious_boltzmann
+Sep-08 12:51:13.321 [Task submitter] INFO  nextflow.Session - [a7/8fd59c] Submitted process > WF1:PREPROCESS:preprocess (SRR22396640)
+Sep-08 12:51:13.330 [Task submitter] INFO  nextflow.Session - [27/614924] Submitted process > WF1:PREPROCESS:preprocess (SRR22396668)
+Sep-08 12:51:13.337 [Task submitter] INFO  nextflow.Session - [31/7e50dd] Submitted process > WF1:PREPROCESS:preprocess (SRR22396940)
+Sep-08 12:51:14.293 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 11; name: WF1:PREPROCESS:preprocess (SRR22396668); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/27/61492481ef483818581a76c4a0d026]
+Sep-08 12:51:14.297 [Task submitter] INFO  nextflow.Session - [60/9b877a] Submitted process > WF1:PREPROCESS:preprocess (SCAFFJOIN)
+Sep-08 12:51:14.333 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 3; name: WF1:PREPROCESS:preprocess (SRR22396940); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/31/7e50ddcd53a5ec2eab0621dfa5b2ab]
+Sep-08 12:51:14.336 [Task submitter] INFO  nextflow.Session - [47/23f932] Submitted process > WF1:PREPROCESS:preprocess (SRR22396732)
+Sep-08 12:51:14.437 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 6; name: WF1:PREPROCESS:preprocess (SRR22396640); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/a7/8fd59c649f711661cea5f2281c2abb]
+Sep-08 12:51:14.444 [Task submitter] INFO  nextflow.Session - [e9/fb1136] Submitted process > WF1:PREPROCESS:preprocess (SRR21843972)
+Sep-08 12:51:14.976 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 15; name: WF1:PREPROCESS:preprocess (SCAFFJOIN); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/60/9b877a83074d31d04d2bd03f4e8e2e]
+Sep-08 13:00:56.983 [Task monitor] DEBUG n.processor.TaskPollingMonitor - Task completed > TaskHandler[id: 150; name: WF1:BLAST_REF_FETCH:blast_ref_stamp (SRR22396865); status: COMPLETED; exit: 0; error: -; workDir: /proj/work/26/15cccc811e6b28028dc377d83fabc6]
+Sep-08 13:00:57.091 [main] DEBUG n.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=152; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=1h 42m 22s; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=15; peakCpus=16; peakMemory=60 GB; ]
+Sep-08 13:00:57.110 [main] DEBUG nextflow.script.ScriptRunner - > Execution complete -- Goodbye

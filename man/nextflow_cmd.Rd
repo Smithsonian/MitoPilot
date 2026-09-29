@@ -8,7 +8,8 @@ nextflow_cmd(
   workflow = c("assemble", "annotate"),
   path = NULL,
   source = app_sys("nextflow"),
-  userAsmbs = FALSE
+  userAsmbs = FALSE,
+  base = run_basename(workflow)
 )
 }
 \arguments{
@@ -21,6 +22,9 @@ nextflow_cmd(
 `nextflow/` subdirectory of the package installation.}
 
 \item{userAsmbs}{User supplied assemblies, TRUE/FALSE? (default = FALSE)}
+
+\item{base}{Run name used for the log file,
+`<path>/.runs/nextflow/<base>.nextflow.log`.}
 }
 \description{
 Generate Nextflow command to run pipline

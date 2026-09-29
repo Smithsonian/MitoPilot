@@ -114,7 +114,12 @@ app_ui_userAsmb <- function(request) {
                 title = "Open the export window for the selected assemblies"
               )
             ),
-            workdir_browser_ui("workdir_browser")
+            div(
+              class = "mp-toolbar",
+              style = "margin-left: auto;",
+              run_reports_ui("run_reports"),
+              workdir_browser_ui("workdir_browser")
+            )
           )
         ),
         tags$main(
